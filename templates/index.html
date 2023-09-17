@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Document</title>
+        <script src="/vendored/htmx.min.js"></script>
+
+        <style>
+            body {
+                font-family: sans-serif;
+                font-size: 1.2em;
+            }
+        </style>
+    </head>
+    <body>
+        <div hx-get="/test" hx-trigger="click[ctrlKey]">
+            Control Click Me
+        </div>
+    </body>
+</html>
