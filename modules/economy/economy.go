@@ -1,4 +1,4 @@
-package economy_db
+package economy
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 
 // -------------- Structs --------------
 
-type User struct {
+type EcoUser struct {
 	ID         string         `json:"_id"`
 	UserID     string         `json:"userID"`
 	Currencies map[string]int `json:"currencies"`
@@ -26,23 +26,23 @@ type User struct {
 // -------------- Functions --------------
 
 // Get User from DB
-func getUserFromDB(userID string) (User, error) {
+func getUserFromDB(userID string) (EcoUser, error) {
 	var result bson.M
 	coll := database.MongoClient.Database("economy-db").Collection("currencies")
 	err := coll.FindOne(context.TODO(), bson.D{{Key: "userID", Value: userID}}).Decode(&result)
 	if err == mongo.ErrNoDocuments {
-		return User{}, errors.New("user not found")
+		return EcoUser{}, errors.New("user not found")
 	} else if err != nil {
 		fmt.Println(err.Error())
-		return User{}, errors.New("internal server error")
+		return EcoUser{}, errors.New("internal server error")
 	}
 
-	var user User
+	var user EcoUser
 	bsonBytes, _ := bson.Marshal(result)
 	err = bson.Unmarshal(bsonBytes, &user)
 	if err != nil {
 		fmt.Println(err.Error())
-		return User{}, errors.New("internal server error")
+		return EcoUser{}, errors.New("internal server error")
 	}
 
 	return user, nil

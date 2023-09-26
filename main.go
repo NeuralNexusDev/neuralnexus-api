@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 	"pop-vinyl/modules/database"
-	"pop-vinyl/modules/economy_db"
+	economy_db "pop-vinyl/modules/economy"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/mongo"
