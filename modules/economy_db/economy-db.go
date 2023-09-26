@@ -1,59 +1,16 @@
-package main
+package economy_db
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
-	"os"
+	"pop-vinyl/modules/database"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
-
-// -------------- Global Variables --------------
-var mongoClient *mongo.Client
-
-// -------------- Main --------------
-func main() {
-	// Get IP from env
-	ip := os.Getenv("IP_ADDRESS")
-	if ip == "" {
-		ip = "0.0.0.0"
-	}
-
-	// Get port from env
-	port := os.Getenv("REST_PORT")
-	if port == "" {
-		port = "8080"
-	}
-
-	// Connect to MongoDB
-	uri := os.Getenv("MONGODB_URI")
-	if uri == "" {
-		log.Fatal("You must set your 'MONGODB_URI' environment variable. See\n\t https://www.mongodb.com/docs/drivers/go/current/usage-examples/#environment-variable")
-	}
-	var err error
-	mongoClient, err = mongo.Connect(context.TODO(), options.Client().ApplyURI(uri))
-	if err != nil {
-		panic(err)
-	}
-
-	// Create router
-	var router *gin.Engine = gin.Default()
-
-	// Routes
-	router.GET("/:userID/currencies", getCurrencies)
-	router.GET("/:userID/currencies/:currencyID", getCurrency)
-	router.POST("/:userID/currencies/:currencyID/:ammount", updateCurrency)
-	router.GET("/:userID/owned", getOwnedCurrencies)
-	router.PUT("/:userID/owned/:currencyID", createCurrency)
-
-	router.Run(ip + ":" + port)
-}
 
 // -------------- Structs --------------
 
@@ -71,7 +28,7 @@ type User struct {
 // Get User from DB
 func getUserFromDB(userID string) (User, error) {
 	var result bson.M
-	coll := mongoClient.Database("economy-db").Collection("currencies")
+	coll := database.MongoClient.Database("economy-db").Collection("currencies")
 	err := coll.FindOne(context.TODO(), bson.D{{Key: "userID", Value: userID}}).Decode(&result)
 	if err == mongo.ErrNoDocuments {
 		return User{}, errors.New("user not found")
@@ -129,7 +86,7 @@ func updateCurrencyInDB(userID string, currencyID string, currencyAmmount int) e
 	// Update the currency ammount
 	filter := bson.D{{Key: "userID", Value: userID}}
 	update := bson.D{{Key: "$set", Value: bson.D{{Key: "currencies", Value: user.Currencies}}}}
-	coll := mongoClient.Database("economy-db").Collection("currencies")
+	coll := database.MongoClient.Database("economy-db").Collection("currencies")
 	updateResult, err := coll.UpdateOne(context.TODO(), filter, update)
 	if err != nil {
 		fmt.Println(err.Error())
@@ -168,7 +125,7 @@ func createCurrencyInDB(userID string, currencyID string) error {
 	// Update the user's owned currencies
 	filter := bson.D{{Key: "userID", Value: userID}}
 	update := bson.D{{Key: "$set", Value: bson.D{{Key: "owned", Value: user.Owned}}}}
-	coll := mongoClient.Database("economy-db").Collection("currencies")
+	coll := database.MongoClient.Database("economy-db").Collection("currencies")
 	updateResult, err := coll.UpdateOne(context.TODO(), filter, update)
 	if err != nil {
 		fmt.Println(err.Error())
@@ -181,7 +138,7 @@ func createCurrencyInDB(userID string, currencyID string) error {
 // -------------- Handlers --------------
 
 // Get User's currencies
-func getCurrencies(c *gin.Context) {
+func GetCurrencies(c *gin.Context) {
 	userID := c.Param("userID")
 
 	currencies, err := getCurrenciesFromDB(userID)
@@ -206,7 +163,7 @@ func getCurrencies(c *gin.Context) {
 }
 
 // Get User's ammount of a currency
-func getCurrency(c *gin.Context) {
+func GetCurrency(c *gin.Context) {
 	userID := c.Param("userID")
 	currencyID := c.Param("currencyID")
 
@@ -233,7 +190,7 @@ func getCurrency(c *gin.Context) {
 
 // TODO: Add authentication
 // Update User's ammount of a currency
-func updateCurrency(c *gin.Context) {
+func UpdateCurrency(c *gin.Context) {
 	userID := c.Param("userID")
 	currencyID := c.Param("currencyID")
 	currencyAmmount, err := strconv.Atoi(c.Param("ammount"))
@@ -266,7 +223,7 @@ func updateCurrency(c *gin.Context) {
 }
 
 // Get User's owned currencies
-func getOwnedCurrencies(c *gin.Context) {
+func GetOwnedCurrencies(c *gin.Context) {
 	userID := c.Param("userID")
 
 	ownedCurrencies, err := getOwnedCurrenciesFromDB(userID)
@@ -292,7 +249,7 @@ func getOwnedCurrencies(c *gin.Context) {
 
 // TODO: Add authentication
 // Create new Currency for User
-func createCurrency(c *gin.Context) {
+func CreateCurrency(c *gin.Context) {
 	userID := c.Param("userID")
 	currencyID := c.Param("currencyID")
 

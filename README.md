@@ -1,13 +1,14 @@
 # NeuralNexus API
 
-## economy-db
+## Economy DB
 
 A cross platform currency/economy database for use across various platforms.
 
 ## Database Schema
 
 ```json
-"UserID": {
+{
+    "UserID": "0000-0000-0000-0000",
     "currencies": {
         "CurencyID": 0
     },
@@ -18,3 +19,7 @@ A cross platform currency/economy database for use across various platforms.
 ```
 
 Where `CurencyID` = `{OwnerID}_{CurrencyName}`
+
+## Auth API
+
+The main Auth API for NeuralNexus' APIs.
