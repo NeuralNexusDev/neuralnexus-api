@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"pop-vinyl/modules/database"
+	"neuralnexus-api/modules/database"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -15,10 +15,10 @@ import (
 // -------------- Structs --------------
 
 type EcoUser struct {
-	ID         string         `json:"_id"`
-	UserID     string         `json:"userID"`
-	Currencies map[string]int `json:"currencies"`
-	Owned      []string       `json:"owned"`
+	ID         string         `json:"_id"`        // Internal ID
+	UserID     string         `json:"userID"`     // User ID
+	Currencies map[string]int `json:"currencies"` // Currencies
+	Owned      []string       `json:"owned"`      // Owned currencies
 }
 
 // -------------- Enums --------------

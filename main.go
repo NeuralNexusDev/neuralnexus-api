@@ -3,9 +3,9 @@ package main
 import (
 	"context"
 	"log"
+	"neuralnexus-api/modules/database"
+	economy_db "neuralnexus-api/modules/economy"
 	"os"
-	"pop-vinyl/modules/database"
-	economy_db "pop-vinyl/modules/economy"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/mongo"

@@ -1,4 +1,4 @@
-module pop-vinyl
+module neuralnexus-api
 
 go 1.21.0
 
