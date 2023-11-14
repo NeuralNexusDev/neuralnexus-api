@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"neuralnexus-api/modules/authentication"
 	"neuralnexus-api/modules/database"
 	economy_db "neuralnexus-api/modules/economy"
 	"os"
@@ -36,6 +37,9 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
+	// Get JWT signing key from env
+	authentication.JwtKey = os.Getenv("JWT_KEY")
 
 	// Create router
 	var router *gin.Engine = gin.Default()
