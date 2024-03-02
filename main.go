@@ -1,16 +1,10 @@
 package main
 
 import (
-	"context"
-	"log"
-	"neuralnexus-api/modules/authentication"
-	"neuralnexus-api/modules/database"
-	economy_db "neuralnexus-api/modules/economy"
+	"neuralnexus-api/modules/projects"
 	"os"
 
-	"github.com/gin-gonic/gin"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"github.com/labstack/echo/v4"
 )
 
 // -------------- Main --------------
@@ -27,32 +21,38 @@ func main() {
 		port = "8080"
 	}
 
+	e := echo.New()
+	e.GET("/projects/releases/:group/:project", func(c echo.Context) error {
+		return projects.GetReleasesHandler(c)
+	})
+	e.Logger.Fatal(e.Start(ip + ":" + port))
+
 	// Connect to MongoDB
-	uri := os.Getenv("MONGODB_URI")
-	if uri == "" {
-		log.Fatal("You must set your 'MONGODB_URI' environment variable. See\n\t https://www.mongodb.com/docs/drivers/go/current/usage-examples/#environment-variable")
-	}
-	var err error
-	database.MongoClient, err = mongo.Connect(context.TODO(), options.Client().ApplyURI(uri))
-	if err != nil {
-		panic(err)
-	}
+	// uri := os.Getenv("MONGODB_URI")
+	// if uri == "" {
+	// log.Fatal("You must set your 'MONGODB_URI' environment variable. See\n\t https://www.mongodb.com/docs/drivers/go/current/usage-examples/#environment-variable")
+	// }
+	// var err error
+	// database.MongoClient, err = mongo.Connect(context.TODO(), options.Client().ApplyURI(uri))
+	// if err != nil {
+	// panic(err)
+	// }
 
 	// Get JWT signing key from env
-	authentication.JwtKey = os.Getenv("JWT_KEY")
+	// authentication.JwtKey = os.Getenv("JWT_KEY")
 
 	// Create router
-	var router *gin.Engine = gin.Default()
+	// var router *gin.Engine = gin.Default()
 
 	// Routes
 	// Economy DB
-	router.GET("/:userID/currencies", economy_db.GetCurrencies)
-	router.GET("/:userID/currencies/:currencyID", economy_db.GetCurrency)
-	router.POST("/:userID/currencies/:currencyID/:ammount", economy_db.UpdateCurrency)
-	router.GET("/:userID/owned", economy_db.GetOwnedCurrencies)
-	router.PUT("/:userID/owned/:currencyID", economy_db.CreateCurrency)
+	// router.GET("/:userID/currencies", economy_db.GetCurrencies)
+	// router.GET("/:userID/currencies/:currencyID", economy_db.GetCurrency)
+	// router.POST("/:userID/currencies/:currencyID/:ammount", economy_db.UpdateCurrency)
+	// router.GET("/:userID/owned", economy_db.GetOwnedCurrencies)
+	// router.PUT("/:userID/owned/:currencyID", economy_db.CreateCurrency)
 
-	router.Run(ip + ":" + port)
+	// router.Run(ip + ":" + port)
 }
 
 // -------------- Structs --------------
