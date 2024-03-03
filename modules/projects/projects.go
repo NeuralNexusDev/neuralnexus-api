@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 )
@@ -109,7 +110,8 @@ func ConvertToForgeModUpdates(gitHubReleasesURL string, releases []Release) map[
 
 	releaseMap := make(map[string]string)
 	for _, release := range releases {
-		releaseMap[release.TagName] = release.URL
+		versionTagName := strings.Split(release.TagName, "v")[1]
+		releaseMap[versionTagName] = release.URL
 	}
 
 	promosMap := make(map[string]string)
@@ -140,7 +142,7 @@ func GetReleasesHandler(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, err.Error())
 	}
 
-	if format == "forge-mod-updates" {
+	if format == "fml" {
 		gitHubReleasesURL := "https://github.com/" + group + "/" + project + "/releases"
 		forgeModUpdates := ConvertToForgeModUpdates(gitHubReleasesURL, releases)
 		return c.JSON(http.StatusOK, forgeModUpdates)
