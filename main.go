@@ -22,9 +22,7 @@ func main() {
 	}
 
 	e := echo.New()
-	e.GET("/projects/releases/:group/:project", func(c echo.Context) error {
-		return projects.GetReleasesHandler(c)
-	})
+	e.GET("/projects/releases/:group/:project", projects.GetReleasesHandler)
 	e.Logger.Fatal(e.Start(ip + ":" + port))
 
 	// Connect to MongoDB
