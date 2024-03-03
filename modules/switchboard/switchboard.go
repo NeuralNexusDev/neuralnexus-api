@@ -2,7 +2,7 @@ package switchboard
 
 import (
 	"encoding/json"
-	"fmt"
+	"log"
 	"neuralnexus-api/modules/encryption"
 
 	"github.com/gorilla/websocket"
@@ -99,9 +99,16 @@ func EncryptMessage(message Message, key string) ([]byte, error) {
 func DecryptMessage(encryptedMessage []byte, key string) (Message, error) {
 	// Decrypt message
 	decryptedMessage, err := encryption.DecryptAES(encryptedMessage, key)
+
 	if err != nil {
 		return Message{}, err
 	}
+
+	// Take off the padding at the front of the byte array
+	// Thanks google common for having nice byte buffers that add padding,
+	// In which case I forgot about it and it took me 2 hours to figure out why the message was not decrypting
+	// TODO: Convert Java-side to just plain ol byte arrays with no fancy helper classes
+	decryptedMessage = decryptedMessage[2:]
 
 	// Convert message from JSON
 	var message Message
@@ -125,16 +132,43 @@ func WebSocketRelayHandler(c echo.Context) error {
 
 	for {
 		// Write
-		err := ws.WriteMessage(websocket.TextMessage, []byte("Hello, Client!"))
+		message := Message{
+			Sender: MessageSender{
+				Name:        "NeuralNexus",
+				Prefix:      "§7",
+				Suffix:      "§r",
+				DisplayName: "NeuralNexus",
+				UUID:        "00000000-0000-0000-0000-000000000000",
+				Server: SimpleServer{
+					Name: "NeuralNexus",
+				},
+			},
+			Channel: MessageType("PLAYER_MESSAGE"),
+			Message: "Hello, world!",
+		}
+		encryptedMessage, err := EncryptMessage(message, "dgwjgsemfouvauxc")
 		if err != nil {
-			c.Logger().Error(err)
+			log.Println(err.Error())
+		}
+
+		err = ws.WriteMessage(websocket.BinaryMessage, encryptedMessage)
+		if err != nil {
+			log.Println(err.Error())
 		}
 
 		// Read
-		_, msg, err := ws.ReadMessage()
+		msgType, msg, err := ws.ReadMessage()
+
 		if err != nil {
-			c.Logger().Error(err)
+			log.Println(err.Error())
+		} else if msgType != websocket.BinaryMessage {
+			log.Println("Message type is not binary")
 		}
-		fmt.Printf("%s\n", msg)
+
+		message, err = DecryptMessage(msg, "dgwjgsemfouvauxc")
+		if err != nil {
+			log.Println(err.Error())
+		}
+		log.Println(message.Message)
 	}
 }

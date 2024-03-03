@@ -4,7 +4,6 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
-	"io"
 )
 
 // -------------- Globals --------------
@@ -15,50 +14,90 @@ var (
 
 // -------------- Functions --------------
 
-// EncryptAES encrypts a string using AES, returns the encrypted byte array with the IV appended
+// Code from Java
+// public byte[] encrypt(Message message) throws GeneralSecurityException {
+// 	byte[] initializationVector = new byte[IV_LENGTH];
+// 	SecureRandom random = new SecureRandom();
+// 	random.nextBytes(initializationVector);
+// 	cipher.init(
+// 			Cipher.ENCRYPT_MODE,
+// 			secretKey,
+// 			new GCMParameterSpec(IV_LENGTH * 8, initializationVector));
+// 	byte[] encryptedData = cipher.doFinal(message.toByteArray());
+// 	byte[] result = new byte[encryptedData.length + IV_LENGTH];
+// 	System.arraycopy(encryptedData, 0, result, 0, encryptedData.length);
+// 	System.arraycopy(initializationVector, 0, result, encryptedData.length, IV_LENGTH);
+// 	return result;
+// }
+
+// public Message decrypt(byte[] cypher) throws GeneralSecurityException {
+// 	byte[] initializationVector = new byte[IV_LENGTH];
+// 	byte[] encryptedData = new byte[cypher.length - IV_LENGTH];
+// 	System.arraycopy(cypher, 0, encryptedData, 0, encryptedData.length);
+// 	System.arraycopy(cypher, encryptedData.length, initializationVector, 0, IV_LENGTH);
+// 	cipher.init(
+// 			Cipher.DECRYPT_MODE,
+// 			secretKey,
+// 			new GCMParameterSpec(IV_LENGTH * 8, initializationVector));
+// 	byte[] decryptedData = cipher.doFinal(encryptedData);
+// 	return Message.fromByteArray(decryptedData);
+// }
+
+// Code for Golang/Go
+
+// EncryptAES encrypts a string using AES, returns the encrypted byte array with the IV added to the end
+// Uses AES/GCM/NoPadding
 func EncryptAES(input []byte, key string) ([]byte, error) {
-	// Generate a new AES cipher using our 32 byte long key
-	block, err := aes.NewCipher([]byte(key))
+	// Create new IV
+	initializationVector := make([]byte, IV_LENGTH)
+	_, err := rand.Read(initializationVector)
 	if err != nil {
 		return nil, err
 	}
 
-	// Create a new byte array the size of the IV
-	iv := make([]byte, IV_LENGTH)
-
-	// Fill the IV with random data
-	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
+	// Encrypt message
+	c, err := aes.NewCipher([]byte(key))
+	if err != nil {
 		return nil, err
 	}
 
-	// Create a new AES CBC encrypter
-	cfb := cipher.NewCFBEncrypter(block, iv)
+	gcm, err := cipher.NewGCMWithNonceSize(c, IV_LENGTH)
+	if err != nil {
+		return nil, err
+	}
 
-	// Encrypt the input
-	cfb.XORKeyStream(input, input)
+	encryptedData := gcm.Seal(nil, initializationVector, input, nil)
 
-	// Append the IV to the encrypted data
-	encryptedData := append(iv, input...)
+	// Add IV to end of encrypted data
+	encryptedData = append(encryptedData, initializationVector...)
 
 	return encryptedData, nil
 }
 
-// DecryptAES decrypts a byte array using AES, returns the decrypted string
+// DecryptAES decrypts a byte array using AES, returns the decrypted byte array
+// Uses AES/GCM/NoPadding
 func DecryptAES(input []byte, key string) ([]byte, error) {
-	// Generate a new AES cipher using our 32 byte long key
-	block, err := aes.NewCipher([]byte(key))
+	// Get IV
+	encryptedData := make([]byte, len(input)-IV_LENGTH)
+	initializationVector := make([]byte, IV_LENGTH)
+	copy(encryptedData, input[:len(encryptedData)])
+	copy(initializationVector, input[len(encryptedData):])
+
+	// Decrypt message
+	c, err := aes.NewCipher([]byte(key))
 	if err != nil {
 		return nil, err
 	}
 
-	// Get the IV from the input
-	iv := input[:IV_LENGTH]
+	gcm, err := cipher.NewGCMWithNonceSize(c, IV_LENGTH)
+	if err != nil {
+		return nil, err
+	}
 
-	// Create a new AES CBC decrypter
-	cfb := cipher.NewCFBDecrypter(block, iv)
+	decryptedData, err := gcm.Open(encryptedData[:0], initializationVector, encryptedData, nil)
+	if err != nil {
+		return nil, err
+	}
 
-	// Decrypt the input
-	cfb.XORKeyStream(input[IV_LENGTH:], input[IV_LENGTH:])
-
-	return input[IV_LENGTH:], nil
+	return decryptedData, nil
 }

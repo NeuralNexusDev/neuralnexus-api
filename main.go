@@ -29,7 +29,8 @@ func main() {
 	e.GET("/api/v1/projects/releases/:group/:project", projects.GetReleasesHandler)
 
 	// Switchboard
-	e.GET("/ws/v1/switchboard/relay", switchboard.WebSocketRelayHandler)
+	// e.GET("/ws/v1/switchboard/relay", switchboard.WebSocketRelayHandler)
+	e.GET("/websocket/:id", switchboard.WebSocketRelayHandler)
 
 	e.Logger.Fatal(e.Start(ip + ":" + port))
 
