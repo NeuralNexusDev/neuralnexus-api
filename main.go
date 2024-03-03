@@ -2,6 +2,7 @@ package main
 
 import (
 	"neuralnexus-api/modules/projects"
+	"neuralnexus-api/modules/switchboard"
 	"os"
 
 	"github.com/labstack/echo/v4"
@@ -22,7 +23,14 @@ func main() {
 	}
 
 	e := echo.New()
-	e.GET("/projects/releases/:group/:project", projects.GetReleasesHandler)
+
+	// -------------- Routes --------------
+	// Projects
+	e.GET("/api/v1/projects/releases/:group/:project", projects.GetReleasesHandler)
+
+	// Switchboard
+	e.GET("/ws/v1/switchboard/relay", switchboard.WebSocketRelayHandler)
+
 	e.Logger.Fatal(e.Start(ip + ":" + port))
 
 	// Connect to MongoDB
