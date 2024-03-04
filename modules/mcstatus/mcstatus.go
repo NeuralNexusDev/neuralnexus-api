@@ -8,10 +8,8 @@ import (
 	"image"
 	"image/png"
 	"io"
-	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -25,7 +23,7 @@ import (
 var (
 	SERVER_URL string = "https://api.neuralnexus.dev/api/v1/mcstatus"
 
-	defaultIcon, _ = loadImgFromFile("modules/mcstatus/icons/default.png")
+	defaultIcon, _ = loadImgFromFile("static/mcstatus/icons/default.png")
 
 	offlineJavaResponse StausResponse = StausResponse{
 		Name:          "Server Offline",
@@ -39,7 +37,7 @@ var (
 		ServerType:    "java",
 	}
 
-	bedrockIcon, _ = loadImgFromFile("modules/mcstatus/icons/bedrock.png")
+	bedrockIcon, _ = loadImgFromFile("static/mcstatus/icons/bedrock.png")
 
 	offlineBedrockResponse StausResponse = StausResponse{
 		Name:          "Server Offline",
@@ -107,24 +105,6 @@ func imgToBase64(i image.Image) string {
 
 // Load image from file
 func loadImgFromFile(path string) (image.Image, error) {
-	ex, err := os.Executable()
-	if err != nil {
-		panic(err)
-	}
-	exPath := filepath.Dir(ex)
-	fmt.Println(exPath)
-
-	// list files in directory
-	files, err := os.ReadDir("./modules/mcstatus/icons")
-	if err != nil {
-		log.Println(err)
-	}
-	for _, file := range files {
-		log.Println(file.Name())
-	}
-
-	// ------------------------------
-
 	// Open the file
 	iconFile, err := os.Open(path)
 	if err != nil {
@@ -408,7 +388,7 @@ func GetRoot(c echo.Context) error {
 	}
 
 	// Read the html file
-	html, err := os.ReadFile("modules/mcstatus/templates/index.html")
+	html, err := os.ReadFile("static/mcstatus/templates/index.html")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Succes: false, Error: err.Error()})
 	}
@@ -419,7 +399,7 @@ func GetRoot(c echo.Context) error {
 
 	// Serve the html
 	c.Request().Header.Set("Content-Type", "text/html")
-	c.String(http.StatusOK, htmlString)
+	c.HTML(http.StatusOK, htmlString)
 
 	return nil
 }
@@ -493,7 +473,7 @@ func GetServerStatus(c echo.Context) error {
 		c.JSON(status, resp)
 		return nil
 	} else if strings.Split(c.Request().Header.Get("Accept"), ",")[0] == "text/html" {
-		html, err := os.ReadFile("modules/mcstatus/templates/status.html")
+		html, err := os.ReadFile("static/mcstatus/templates/status.html")
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, ErrorResponse{Succes: false, Error: err.Error()})
 		}
@@ -509,10 +489,10 @@ func GetServerStatus(c echo.Context) error {
 
 		// Serve the html
 		c.Request().Header.Set("Content-Type", "text/html")
-		c.String(status, htmlString)
+		c.HTML(status, htmlString)
 		return nil
 	} else {
-		html, err := os.ReadFile("modules/mcstatus/templates/embed.html")
+		html, err := os.ReadFile("static/mcstatus/templates/embed.html")
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, ErrorResponse{Succes: false, Error: err.Error()})
 		}
@@ -556,7 +536,7 @@ func GetServerStatus(c echo.Context) error {
 
 		// Serve the html
 		c.Request().Header.Set("Content-Type", "text/html")
-		c.String(status, htmlString)
+		c.HTML(status, htmlString)
 	}
 	return nil
 }
