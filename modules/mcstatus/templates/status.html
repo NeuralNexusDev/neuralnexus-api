@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+
+<head>
+    <meta charset="utf-8">
+    <script src="https://cdn.jsdelivr.net/gh/nailujx86/mcmotdparser@master/dist/motdparserweb.js" type="text/javascript"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/nailujx86/mcmotdparser@master/dist/mcmotd.css" />
+
+    <title>{{ADDRESS}}</title>
+    <link rel="icon" href="{{FAVICON}}" type="image/png" />
+
+    <style>
+        body {
+            font-family: sans-serif;
+            font-size: 1.2em;
+            background-color: #303030;
+        }
+        .center {
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+    </style>
+</head>
+
+<script>
+    // Delay the execution of the script to allow the DOM to load
+    setTimeout(function() {
+        var motd = "{{MOTD}}";
+        motdParser.toHtml(motd, function(err, res) {
+            var motdDiv = document.getElementById("motd");
+            res = res.replace("div class=\"mc\"", "div");
+            motdDiv.innerHTML = res;
+        });
+    }, 0);
+</script>
+
+<body>
+    <div style="text-align: center;" id="motd"></div>
+    <br>
+    <img class="center" src="{{FAVICON}}" alt="Server Icon" />
+    <p style="text-align: center;">Players: {{ONLINE_PLAYERS}}/{{MAX_PLAYERS}}</p>
+</body>

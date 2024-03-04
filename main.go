@@ -1,6 +1,7 @@
 package main
 
 import (
+	"neuralnexus-api/modules/mcstatus"
 	"neuralnexus-api/modules/projects"
 	"neuralnexus-api/modules/switchboard"
 	"os"
@@ -25,6 +26,11 @@ func main() {
 	e := echo.New()
 
 	// -------------- Routes --------------
+	// MC Status
+	e.GET("/api/v1/mcstatus", mcstatus.GetRoot)
+	e.GET("/api/v1/mcstatus/:address", mcstatus.GetServerStatus)
+	e.GET("/api/v1/mcstatus/icon/:address", mcstatus.GetIcon)
+
 	// Projects
 	e.GET("/api/v1/projects/releases/:group/:project", projects.GetReleasesHandler)
 

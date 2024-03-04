@@ -5,9 +5,16 @@ go 1.21.0
 require github.com/gin-gonic/gin v1.9.1
 
 require (
+	github.com/ZeroErrors/go-bedrockping v1.0.0 // indirect
+	github.com/google/uuid v1.6.0 // indirect
+	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
+)
+
+require (
 	github.com/bytedance/sonic v1.10.0 // indirect
 	github.com/chenzhuoyu/base64x v0.0.0-20230717121745-296ad89f973d // indirect
 	github.com/chenzhuoyu/iasm v0.9.0 // indirect
+	github.com/dreamscached/minequery/v2 v2.5.0
 	github.com/gabriel-vasile/mimetype v1.4.2 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
