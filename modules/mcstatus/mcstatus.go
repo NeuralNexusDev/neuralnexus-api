@@ -399,9 +399,7 @@ func GetRoot(c echo.Context) error {
 
 	// Serve the html
 	c.Request().Header.Set("Content-Type", "text/html")
-	c.HTML(http.StatusOK, htmlString)
-
-	return nil
+	return c.HTML(http.StatusOK, htmlString)
 }
 
 // Route that returns the server icon as a PNG (base64 encoded string didn't work for some reason)

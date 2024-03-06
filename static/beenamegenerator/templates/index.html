@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Bee Name Generator</title>
+    <style>
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <h1>Bee Name Generator</h1>
+    <a href="https://github.com/p0t4t0sandwich/bee-name-generator">GitHub Repository</a>
+    <br>
+    <p>Get a bee name: </p>
+    <a href="{{SERVER_URL}}/name">GET {{SERVER_URL}}/name</a>
+    <br>
+    <p>Upload a bee name (Authentication Required): </p>
+    <a href="{{SERVER_URL}}/name">POST {{SERVER_URL}}/name</a>
+    <br>
+    <iframe name="dummyframe" id="dummyframe" style="display: none;"></iframe>
+    <p>Submit a bee name (it can make sense, or you can be punny with it): </p>
+    <form action="{{SERVER_URL}}/suggestion" method="post" target="dummyframe">
+        <input type="text" name="name" placeholder="Bee Name">
+        <input type="submit" value="Submit">
+    </form>
+    <p>Get bee name suggestions (Authentication Required): </p>
+    <a href="{{SERVER_URL}}/suggestion">GET {{SERVER_URL}}/suggestion</a>
+    <br>
+    <p>Accept a bee name suggestion (Authentication Required): </p>
+    <a href="{{SERVER_URL}}/suggestion">PUT {{SERVER_URL}}/suggestion</a>
+    <br>
+    <p>Reject a bee name suggestion (Authentication Required): </p>
+    <a href="{{SERVER_URL}}/suggestion">DELETE {{SERVER_URL}}/suggestion</a>
+</body>
+</html>

@@ -50,7 +50,7 @@ type Release struct {
 }
 
 // Functions
-func GetReleases(group string, project string) ([]Release, error) {
+func getReleases(group string, project string) ([]Release, error) {
 	if githubToken == "" {
 		return nil, errors.New("GITHUB_TOKEN is not set")
 	}
@@ -113,7 +113,7 @@ func GetReleasesHandler(c echo.Context) error {
 
 	format := c.QueryParam("format")
 
-	releases, err := GetReleases(group, project)
+	releases, err := getReleases(group, project)
 	if err != nil {
 		log.Println(err.Error())
 		return c.JSON(http.StatusInternalServerError, err.Error())

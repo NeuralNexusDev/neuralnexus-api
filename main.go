@@ -28,12 +28,37 @@ func main() {
 
 	// -------------- Routes --------------
 
-	// Bee Name Generator
-	// e.GET("/api/v1/bee-name-generator", beenamegenerator.GetBeeNameHandler)
-	e.GET("/api/v1/bee-name-generator/name", beenamegenerator.GetBeeNameHandler)
-	e.POST("/api/v1/bee-name-generator/name", beenamegenerator.Not)
+	// -------------- Bee Name Generator --------------
+	e.GET("/api/v1/bee-name-generator", beenamegenerator.GetRoot)
 
-	// MC Status
+	// Get a bee name
+	e.GET("/api/v1/bee-name-generator/name", beenamegenerator.GetBeeNameHandler)
+
+	// Upload a bee name
+	e.POST("/api/v1/bee-name-generator/name", beenamegenerator.UploadBeeNameHandler)
+	e.POST("/api/v1/bee-name-generator/name/:name", beenamegenerator.UploadBeeNameHandler)
+
+	// Delete a bee name
+	e.DELETE("/api/v1/bee-name-generator/name", beenamegenerator.DeleteBeeNameHandler)
+	e.DELETE("/api/v1/bee-name-generator/name/:name", beenamegenerator.DeleteBeeNameHandler)
+
+	// Submit a bee name
+	e.POST("/api/v1/bee-name-generator/suggestion", beenamegenerator.SubmitBeeNameHandler)
+	e.POST("/api/v1/bee-name-generator/suggestion/:name", beenamegenerator.SubmitBeeNameHandler)
+
+	// Get bee name suggestions
+	e.GET("/api/v1/bee-name-generator/suggestion", beenamegenerator.GetBeeNameSuggestionsHandler)
+	e.GET("/api/v1/bee-name-generator/suggestion/:amount", beenamegenerator.GetBeeNameSuggestionsHandler)
+
+	// Accept a bee name suggestion
+	e.PUT("/api/v1/bee-name-generator/suggestion", beenamegenerator.AcceptBeeNameSuggestionHandler)
+	e.PUT("/api/v1/bee-name-generator/suggestion/:name", beenamegenerator.AcceptBeeNameSuggestionHandler)
+
+	// Reject a bee name suggestion
+	e.DELETE("/api/v1/bee-name-generator/suggestion", beenamegenerator.RejectBeeNameSuggestionHandler)
+	e.DELETE("/api/v1/bee-name-generator/suggestion/:name", beenamegenerator.RejectBeeNameSuggestionHandler)
+
+	// -------------- MC Status --------------
 	e.GET("/api/v1/mcstatus", mcstatus.GetRoot)
 	e.GET("/api/v1/mcstatus/:address", mcstatus.GetServerStatus)
 	e.GET("/api/v1/mcstatus/icon/:address", mcstatus.GetIcon)
