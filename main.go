@@ -1,6 +1,7 @@
 package main
 
 import (
+	"neuralnexus-api/modules/beenamegenerator"
 	"neuralnexus-api/modules/mcstatus"
 	"neuralnexus-api/modules/projects"
 	"neuralnexus-api/modules/switchboard"
@@ -26,6 +27,12 @@ func main() {
 	e := echo.New()
 
 	// -------------- Routes --------------
+
+	// Bee Name Generator
+	// e.GET("/api/v1/bee-name-generator", beenamegenerator.GetBeeNameHandler)
+	e.GET("/api/v1/bee-name-generator/name", beenamegenerator.GetBeeNameHandler)
+	e.POST("/api/v1/bee-name-generator/name", beenamegenerator.Not)
+
 	// MC Status
 	e.GET("/api/v1/mcstatus", mcstatus.GetRoot)
 	e.GET("/api/v1/mcstatus/:address", mcstatus.GetServerStatus)
