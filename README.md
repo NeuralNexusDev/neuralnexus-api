@@ -64,3 +64,9 @@ General user account management and linkage.
     }
 }
 ```
+
+## Minecraft Status API
+
+## Switchboard Websocket API
+
+## ComputerCraft Turtle Websocket API
