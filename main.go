@@ -72,6 +72,7 @@ func main() {
 	e.GET("/websocket/:id", switchboard.WebSocketRelayHandler)
 
 	// -------------- CCT Turtle --------------
+	e.GET("/ws/v1/cct-turtle/:id", cct_turtle.WebSocketTurtleHandler)
 	e.GET("/api/v1/cct-turtle/startup.lua", cct_turtle.GetTurtleCode)
 
 	e.Logger.Fatal(e.Start(ip + ":" + port))

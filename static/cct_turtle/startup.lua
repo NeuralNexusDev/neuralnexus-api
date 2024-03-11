@@ -213,7 +213,7 @@ end
 
 --------------------------------------------------------------------------  Start of Turtle Bot
 --------- Utils ---------
-function rename()
+local function rename()
     if os.getComputerLabel() == nil then
         str=""
         --all = {"0","1","2","3","4","5","6","7","8","9","a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z"}
@@ -223,7 +223,7 @@ function rename()
     end
 end
 
-function initNewTurtle()
+local function initNewTurtle()
     turtle.select(1)
     turtle.place()
     turtle.select(2)
@@ -233,7 +233,7 @@ function initNewTurtle()
     peripheral.call("front","turnOn")
 end
 
-function get_facing(x1,z1,x2,z2)
+local function get_facing(x1,z1,x2,z2)
     --    north = 0 = z = -1
     --    east = 270 = x = 1
     --    south = 180 = z = 1
@@ -254,31 +254,31 @@ function get_facing(x1,z1,x2,z2)
     end
 end
 
-function update_rotation(func_string)
+local function update_rotation(func_string)
     if string.find(func_string, "Left") then
-        if facing == 0 then
-            facing = 90
-        elseif facing == 90 then
-            facing = 180
-        elseif facing == 180 then
-            facing = 270
-        elseif facing == 270 then
-            facing = 0
+        if Facing == 0 then
+            Facing = 90
+        elseif Facing == 90 then
+            Facing = 180
+        elseif Facing == 180 then
+            Facing = 270
+        elseif Facing == 270 then
+            Facing = 0
         end
     elseif string.find(func_string, "Right") then
-        if facing == 0 then
-            facing = 270
-        elseif facing == 90 then
-            facing = 0
-        elseif facing == 180 then
-            facing = 90
-        elseif facing == 270 then
-            facing = 180
+        if Facing == 0 then
+            Facing = 270
+        elseif Facing == 90 then
+            Facing = 0
+        elseif Facing == 180 then
+            Facing = 90
+        elseif Facing == 270 then
+            Facing = 180
         end
     end
 end
 
-function get_turtle()
+local function get_turtle()
     -- Current xyz pos
     local x,z,y = gps.locate(5)
 
@@ -286,7 +286,7 @@ function get_turtle()
     return "\"turtle\":{\"label\":\""..os.getComputerLabel().."\",\"id\":"..tostring(os.getComputerID())..",\"fuel\":\""..tostring(turtle.getFuelLevel()).."\",\"position\":\""..tostring(x)..","..tostring(y)..","..tostring(z).."\",\"facing\":\""..tostring(facing).."\"}"
 end
 
-function observe()
+local function observe()
     -- observe the world
     local if_up, up = turtle.inspectUp() 
     local if_front, front = turtle.inspect()
@@ -404,53 +404,60 @@ end
 
 --------- Start of Program ---------
 
-rename()
+Facing = 0
+local function main()
+	rename()
 
-local if_front, front = turtle.inspect()
+	local if_front, front = turtle.inspect()
 
-if not (front.name == "computercraft:turtle_advanced") then 
-    x1,z1,y1 = gps.locate(5)
-    digMoveForward()
-    x2,z2,y2 = gps.locate(5)
-    turtle.back()
-    facing = get_facing(x1, z1, x2, z2)
+	local x1,y1,z1 = gps.locate(5)
+	digMoveForward()
+	local x2,y2,z2 = gps.locate(5)
+	turtle.back()
+	Facing = get_facing(x1, z1, x2, z2)
+
+	local label = os.getComputerLabel()
+
+	local ws, err = http.websocket("wss://api.neuralnexus.dev/ws/v1/cct-turtle/"..label)
+	if ws then
+		print("> Connected")
+		ws.send("{"..get_turtle()..","..observe()..","..get_inv().."}")
+		while true do
+			local msg = ws.receive()
+			local response = "{"
+			print(msg)
+			local v, obj = pcall(decode(msg))
+			if not v then
+				print("Error: "..obj)
+			elseif obj and obj["func"] then
+				if string.find(obj["func"], "safeDigUp") then
+					safeDigUp()
+				elseif string.find(obj["func"], "safeDigDown") then
+					safeDigDown()
+				elseif string.find(obj["func"], "safeDig") then
+					safeDig()
+				elseif string.find(obj["func"], "digMoveForward") then
+					digMoveForward()
+				elseif string.find(obj["func"], "digMoveUp") then
+					digMoveUp()
+				elseif string.find(obj["func"], "digMoveDown") then
+					digMoveDown()
+				elseif string.find(obj["func"], "dumpInventory") then
+					response = response..dumpInventory()..","
+				elseif string.find(obj["func"], "initNewTurtle") then
+					initNewTurtle()
+				else
+					local func = loadstring(obj["func"])
+					if func then
+						func()
+					end
+				end
+				update_rotation(obj["func"])
+				ws.send(response..get_turtle()..","..observe()..","..get_inv().."}")
+			end
+		end
+	end
 end
-label = os.getComputerLabel()
 
-local ws,err = http.websocket("ws://172.16.1.133:8081/"..label)
-if ws then
-    print("> Connected")
-    ws.send("{"..get_turtle()..","..observe()..","..get_inv().."}")
-    while true do
-        local msg = ws.receive()
-		local response = "{"
-        print(msg)
-        local obj = decode(msg)
-        if obj and obj["func"] then
-			if string.find(obj["func"], "safeDigUp") then
-				safeDigUp()
-			elseif string.find(obj["func"], "safeDigDown") then
-				safeDigDown()
-			elseif string.find(obj["func"], "safeDig") then
-				safeDig()
-            elseif string.find(obj["func"], "digMoveForward") then
-                digMoveForward()
-            elseif string.find(obj["func"], "digMoveUp") then
-                digMoveUp()
-            elseif string.find(obj["func"], "digMoveDown") then
-                digMoveDown()
-			elseif string.find(obj["func"], "dumpInventory") then
-				response = response..dumpInventory()..","
-            elseif string.find(obj["func"], "initNewTurtle") then
-                initNewTurtle()
-            else
-                local func = loadstring(obj["func"])
-                if func then
-                    func()
-                end
-            end
-			update_rotation(obj["func"])
-            ws.send(response..get_turtle()..","..observe()..","..get_inv().."}")
-        end
-    end
-end
+main()
+-- system.reboot()

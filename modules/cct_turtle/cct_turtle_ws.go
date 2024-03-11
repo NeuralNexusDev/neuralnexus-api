@@ -1,6 +1,8 @@
 package cct_turtle
 
 import (
+	"log"
+
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
 )
@@ -28,5 +30,15 @@ func WebSocketTurtleHandler(c echo.Context) error {
 		if err != nil {
 			return err
 		}
+
+		// Read
+		msgType, msg, err := ws.ReadMessage()
+		if err != nil {
+			log.Println(err.Error())
+		} else if msgType != websocket.TextMessage {
+			log.Println("Message type is not text")
+		}
+		// Print the message
+		log.Println(string(msg))
 	}
 }
