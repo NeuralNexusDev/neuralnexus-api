@@ -14,5 +14,5 @@ import (
 
 // GetTurtleCode - Get the turtle code
 func GetTurtleCode(c echo.Context) error {
-	return c.File("modules/cct_turtle/startup.lua")
+	return c.File("static/cct_turtle/startup.lua")
 }
