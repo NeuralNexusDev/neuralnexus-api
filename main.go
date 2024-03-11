@@ -2,6 +2,7 @@ package main
 
 import (
 	"neuralnexus-api/modules/beenamegenerator"
+	"neuralnexus-api/modules/cct_turtle"
 	"neuralnexus-api/modules/mcstatus"
 	"neuralnexus-api/modules/projects"
 	"neuralnexus-api/modules/switchboard"
@@ -63,12 +64,15 @@ func main() {
 	e.GET("/api/v1/mcstatus/:address", mcstatus.GetServerStatus)
 	e.GET("/api/v1/mcstatus/icon/:address", mcstatus.GetIcon)
 
-	// Projects
+	// -------------- Projects --------------
 	e.GET("/api/v1/projects/releases/:group/:project", projects.GetReleasesHandler)
 
-	// Switchboard
+	// -------------- Switchboard --------------
 	// e.GET("/ws/v1/switchboard/relay", switchboard.WebSocketRelayHandler)
 	e.GET("/websocket/:id", switchboard.WebSocketRelayHandler)
+
+	// -------------- CCT Turtle --------------
+	e.GET("/api/v1/cct-turtle/startup.lua", cct_turtle.GetTurtleCode)
 
 	e.Logger.Fatal(e.Start(ip + ":" + port))
 
