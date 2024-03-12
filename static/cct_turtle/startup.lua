@@ -333,7 +333,7 @@ end
 
 function dumpInventory()
 	if turtle.detectDown() then
-        safeDigDown()
+        turtle.digDown()
     end
 	turtle.select(1)
 	turtle.placeDown()
@@ -366,39 +366,18 @@ function dumpInventory()
 end
 
 --------- Actions ---------
-function safeDig()
-	local if_front, front = turtle.inspect()
-	if not (front.name == "computercraft:turtle_advanced") then
-		turtle.dig()
-	end
-end
-
-function safeDigUp()
-	local if_up, up = turtle.inspectUp()
-	if not (up.name == "computercraft:turtle_advanced") then
-		turtle.digUp()
-	end
-end
-
-function safeDigDown()
-	local if_down, down = turtle.inspectDown()
-	if not (down.name == "computercraft:turtle_advanced") then
-		turtle.digDown()
-	end
-end
-
 function digMoveForward()
-    safeDig()
+    turtle.dig()
     turtle.forward()
 end
 
 function digMoveUp()
-    safeDigUp()
+    turtle.digUp()
     turtle.up()
 end
 
 function digMoveDown()
-    safeDigDown()
+    turtle.digDown()
     turtle.down()
 end
 
@@ -408,11 +387,19 @@ Facing = 0
 local function main()
 	rename()
 
-	local if_front, front = turtle.inspect()
+	local x1, _ ,z1 = gps.locate(5)
+	if not x1 then
+		print("No GPS Signal")
+		return
+	end
 
-	local x1,y1,z1 = gps.locate(5)
 	digMoveForward()
-	local x2,y2,z2 = gps.locate(5)
+	local x2, _ ,z2 = gps.locate(5)
+	if not x2 then
+		print("No GPS Signal")
+		return
+	end
+
 	turtle.back()
 	Facing = get_facing(x1, z1, x2, z2)
 
@@ -426,17 +413,10 @@ local function main()
 			local msg = ws.receive()
 			local response = "{"
 			print(msg)
-			local v, obj = pcall(decode(msg))
-			if not v then
-				print("Error: "..obj)
-			elseif obj and obj["func"] then
-				if string.find(obj["func"], "safeDigUp") then
-					safeDigUp()
-				elseif string.find(obj["func"], "safeDigDown") then
-					safeDigDown()
-				elseif string.find(obj["func"], "safeDig") then
-					safeDig()
-				elseif string.find(obj["func"], "digMoveForward") then
+			local obj = decode(msg)
+
+			if obj and obj["func"] then
+				if string.find(obj["func"], "digMoveForward") then
 					digMoveForward()
 				elseif string.find(obj["func"], "digMoveUp") then
 					digMoveUp()

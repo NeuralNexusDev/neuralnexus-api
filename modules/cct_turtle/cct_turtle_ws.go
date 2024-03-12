@@ -2,6 +2,7 @@ package cct_turtle
 
 import (
 	"log"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
@@ -10,7 +11,22 @@ import (
 // -------------- Globals --------------
 var (
 	upgrader = websocket.Upgrader{}
+
+	pongTimeout = 55 * time.Second
 )
+
+// -------------- Structs --------------
+
+// Instruction - An instruction
+type Instruction struct {
+	Label string `json:"label"`
+	Func  string `json:"func"`
+}
+
+// InstructionQueue - The instruction queue
+type InstructionQueue struct {
+	Instructions []Instruction
+}
 
 // -------------- Functions --------------
 
@@ -23,9 +39,18 @@ func WebSocketTurtleHandler(c echo.Context) error {
 	}
 	defer ws.Close()
 
+	_ = ws.SetWriteDeadline(time.Now().Add(pongTimeout))
+	ws.SetPongHandler(func(string) error {
+		err = ws.SetWriteDeadline(time.Now().Add(pongTimeout))
+		if err != nil {
+			log.Println(err.Error())
+		}
+		return nil
+	})
+
 	for {
 		// Write
-		message := "Hello, world!"
+		message := "{\"label\":\"" + c.Param("id") + "\",\"func\":\"return " + "turtle.forward()" + "\"}"
 		err = ws.WriteMessage(websocket.TextMessage, []byte(message))
 		if err != nil {
 			return err

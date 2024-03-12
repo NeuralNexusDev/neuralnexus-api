@@ -70,3 +70,6 @@ General user account management and linkage.
 ## Switchboard Websocket API
 
 ## ComputerCraft Turtle Websocket API
+
+- local position = vector.new(gps.locate(5))
+- use fuel check to see whether a moment was successful
