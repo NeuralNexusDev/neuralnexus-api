@@ -13,6 +13,9 @@ var (
 	upgrader = websocket.Upgrader{}
 
 	pongTimeout = 55 * time.Second
+
+	// A map of InstructionQueues
+	queue = make(map[string][]Instruction)
 )
 
 // -------------- Structs --------------
@@ -23,12 +26,45 @@ type Instruction struct {
 	Func  string `json:"func"`
 }
 
-// InstructionQueue - The instruction queue
-type InstructionQueue struct {
-	Instructions []Instruction
+// -------------- Functions --------------
+
+// AddInstruction - Add an instruction to the queue
+func AddInstruction(label string, instruction Instruction) {
+	// If the queue doesn't exist, create it
+	if _, ok := queue[label]; !ok {
+		queue[label] = make([]Instruction, 0)
+	}
+
+	// Add the instruction to the queue
+	queue[label] = append(queue[label], instruction)
 }
 
-// -------------- Functions --------------
+// GetInstruction - Get the next instruction from the queue
+func GetInstruction(label string) Instruction {
+	// If the queue doesn't exist, return an empty instruction
+	if _, ok := queue[label]; !ok {
+		return Instruction{}
+	}
+
+	// Get the instruction from the queue
+	instruction := queue[label][0]
+
+	// Remove the instruction from the queue
+	queue[label] = queue[label][1:]
+
+	return instruction
+}
+
+// RemoveInstruction - Remove an instruction from the queue
+func RemoveInstruction(label string, index int) {
+	// If the queue doesn't exist, return
+	if _, ok := queue[label]; !ok {
+		return
+	}
+
+	// Remove the instruction from the queue
+	queue[label] = append(queue[label][:index], queue[label][index+1:]...)
+}
 
 // -------------- Handlers --------------
 
