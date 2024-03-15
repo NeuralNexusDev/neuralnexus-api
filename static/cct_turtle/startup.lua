@@ -410,12 +410,21 @@ local function main()
 		print("> Connected")
 		ws.send("{"..get_turtle()..","..observe()..","..get_inv().."}")
 		while true do
-			local msg = ws.receive()
+			local ok, msg = pcall(ws.receive)
+			if not ok then
+				print("Error: > Disconnected")
+				break
+			end
 			local response = "{"
 			print(msg)
-			local obj = decode(msg)
-
-			if obj and obj["func"] then
+			local ok, obj = pcall(decode, msg)
+			if not ok then
+				if not msg then
+					print("Error: nil message")
+				else 
+					print("Error: "..msg)
+				end
+			elseif obj and obj["func"] then
 				if string.find(obj["func"], "digMoveForward") then
 					digMoveForward()
 				elseif string.find(obj["func"], "digMoveUp") then
