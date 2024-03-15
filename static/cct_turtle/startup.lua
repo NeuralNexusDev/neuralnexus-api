@@ -449,4 +449,5 @@ local function main()
 end
 
 main()
--- system.reboot()
+os.sleep(5)
+os.reboot()

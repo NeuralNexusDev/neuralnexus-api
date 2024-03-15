@@ -60,6 +60,11 @@ func GetTurtleCode(c echo.Context) error {
 	return c.File("static/cct_turtle/startup.lua")
 }
 
+// GetTurtleUpdatingCode - Get the turtle updating code
+func GetTurtleUpdatingCode(c echo.Context) error {
+	return c.File("static/cct_turtle/updating_startup.lua")
+}
+
 // GetTurtleStatus - Get the turtle status
 func GetTurtleStatus(c echo.Context) error {
 	return c.JSON(200, Turtle{

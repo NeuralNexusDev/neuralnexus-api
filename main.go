@@ -74,6 +74,7 @@ func main() {
 	// -------------- CCT Turtle --------------
 	e.GET("/ws/v1/cct-turtle/:label", cct_turtle.WebSocketTurtleHandler)
 	e.GET("/api/v1/cct-turtle/startup.lua", cct_turtle.GetTurtleCode)
+	e.GET("/api/v1/cct-turtle/updating_startup.lua", cct_turtle.GetTurtleUpdatingCode)
 	// e.GET("/api/v1/cct-turtle/status", cct_turtle.GetTurtleStatus)
 	// e.GET("/api/v1/cct-turtle/status/:label", cct_turtle.GetTurtleStatus)
 	e.GET("/api/v1/cct-turtle/forward", cct_turtle.MoveTurtleForward)
