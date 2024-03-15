@@ -77,9 +77,6 @@ func (iq *InstructionQueue) GetInstruction(label string) Instruction {
 	}
 	instruction := iq.queue[label][0]
 
-	// Remove the instruction from the queue
-	iq.queue[label] = iq.queue[label][1:]
-
 	return instruction
 }
 
@@ -97,6 +94,7 @@ func (iq *InstructionQueue) RemoveInstruction(label string, index int) {
 		iq.queue[label] = make([]Instruction, 0)
 		return
 	}
+
 	iq.queue[label] = append(iq.queue[label][:index], iq.queue[label][index+1:]...)
 }
 
@@ -111,6 +109,7 @@ func (iq *InstructionQueue) GetStatus(label string) bool {
 	if len(iq.queue[label]) == 0 {
 		return false
 	}
+
 	return iq.queue[label][0].Status
 }
 
@@ -140,6 +139,7 @@ func (iq *InstructionQueue) GetResponse(label string) string {
 	if len(iq.queue[label]) == 0 {
 		return ""
 	}
+
 	return iq.queue[label][0].Response
 }
 
@@ -195,10 +195,12 @@ func RemoveWebSocket(label string) {
 
 func WebSocketTurtleHandler(c echo.Context) error {
 	label := c.Param("label")
+
 	ws, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
 	if err != nil {
 		return err
 	}
+	defer RemoveWebSocket(label)
 	defer ws.Close()
 
 	_ = ws.SetWriteDeadline(time.Now().Add(pongTimeout))
@@ -213,7 +215,6 @@ func WebSocketTurtleHandler(c echo.Context) error {
 	AddWebSocket(label, ws)
 
 	for {
-		// Read
 		msgType, msg, err := ws.ReadMessage()
 		if err != nil {
 			log.Println(err.Error())
@@ -225,8 +226,5 @@ func WebSocketTurtleHandler(c echo.Context) error {
 		// Get the instruction from the queue
 		Queue.SetStatus(label, true)
 		Queue.SetResponse(label, string(msg))
-
-		// Print the message
-		log.Println(string(msg))
 	}
 }
