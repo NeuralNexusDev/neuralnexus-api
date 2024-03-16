@@ -215,9 +215,9 @@ end
 --------- Utils ---------
 local function rename()
     if os.getComputerLabel() == nil then
-        str=""
+        local str=""
         --all = {"0","1","2","3","4","5","6","7","8","9","a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z"}
-        all = {"a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z"}
+        local all = {"a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z"}
         for i=1, 10 do str = str..all[math.random(1, #all)] end
         os.setComputerLabel(str)
     end
@@ -283,7 +283,7 @@ local function get_turtle()
     local x,z,y = gps.locate(5)
 
     -- formatted json string output
-    return "\"turtle\":{\"label\":\""..os.getComputerLabel().."\",\"id\":"..tostring(os.getComputerID())..",\"fuel\":\""..tostring(turtle.getFuelLevel()).."\",\"position\":\""..tostring(x)..","..tostring(y)..","..tostring(z).."\",\"facing\":\""..tostring(facing).."\"}"
+    return "\"turtle\":{\"label\":\""..os.getComputerLabel().."\",\"id\":"..tostring(os.getComputerID())..",\"fuel\":\""..tostring(turtle.getFuelLevel()).."\",\"position\":\""..tostring(x)..","..tostring(y)..","..tostring(z).."\",\"facing\":\""..tostring(Facing).."\"}"
 end
 
 local function observe()
@@ -296,15 +296,7 @@ local function observe()
     return "\"blocks\":{\"up\":{\"name\":\""..tostring(up.name).."\",\"metadata\":\""..tostring(up.metadata).."\",\"state\":\""..tostring(up.state).."\"},\"front\":{\"name\":\""..tostring(front.name).."\",\"metadata\":\""..tostring(front.metadata).."\",\"state\":\""..tostring(up.state).."\"},\"down\":{\"name\":\""..tostring(down.name).."\",\"metadata\":\""..tostring(down.metadata).."\",\"state\":\""..tostring(up.state).."\"}}"
 end
 
-function if_observe(func_string)
-    if string.find(func_string, "dig") or string.find(func_string, "Dig") or string.find(func_string, "forward") or string.find(func_string, "Forward") or string.find(func_string, "back") or string.find(func_string, "Left") or string.find(func_string, "Right") or string.find(func_string, "up") or string.find(func_string, "Up") or string.find(func_string, "down") or string.find(func_string, "Down") then
-        return ","..observe()
-    else
-        return ""
-    end
-end
-
-function get_inv()
+local function get_inv()
 	local inv = "\"inventory\":["
 	for i = 1,15 do
 		local item = turtle.getItemDetail(i)
@@ -323,7 +315,7 @@ function get_inv()
 	return inv.."]"
 end
 
-function if_get_inv(func_string)
+local function if_get_inv(func_string)
 	if string.find(func_string, "dig") or string.find(func_string, "Dig") or string.find(func_string, "suck") or string.find(func_string, "Suck") or string.find(func_string, "drop") or string.find(func_string, "Drop") or string.find(func_string, "place") or string.find(func_string, "Place") then
         return ","..get_inv()
     else
@@ -331,7 +323,7 @@ function if_get_inv(func_string)
     end
 end
 
-function dumpInventory()
+local function dumpInventory()
 	if turtle.detectDown() then
         turtle.digDown()
     end
@@ -366,17 +358,17 @@ function dumpInventory()
 end
 
 --------- Actions ---------
-function digMoveForward()
+local function digMoveForward()
     turtle.dig()
     turtle.forward()
 end
 
-function digMoveUp()
+local function digMoveUp()
     turtle.digUp()
     turtle.up()
 end
 
-function digMoveDown()
+local function digMoveDown()
     turtle.digDown()
     turtle.down()
 end
