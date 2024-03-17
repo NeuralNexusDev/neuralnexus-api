@@ -65,6 +65,7 @@ func GetTurtleUpdatingCode(c echo.Context) error {
 	return c.File("static/cct_turtle/updating_startup.lua")
 }
 
+// TODO: pull from DB
 // GetTurtleStatus - Get the turtle status
 func GetTurtleStatus(c echo.Context) error {
 	return c.JSON(200, Turtle{

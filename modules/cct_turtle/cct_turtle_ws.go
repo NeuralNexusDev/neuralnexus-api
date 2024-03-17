@@ -223,6 +223,8 @@ func WebSocketTurtleHandler(c echo.Context) error {
 			log.Println("Message type is not text")
 		}
 
+		// TODO: update turtle status in DB
+
 		// Get the instruction from the queue
 		Queue.SetStatus(label, true)
 		Queue.SetResponse(label, string(msg))
