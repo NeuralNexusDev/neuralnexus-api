@@ -1,6 +1,8 @@
 package cct_turtle
 
 import (
+	"encoding/json"
+	"errors"
 	"log"
 	"time"
 
@@ -25,12 +27,20 @@ var (
 
 // -------------- Structs --------------
 
+type InstructionState string
+
+const (
+	Waiting    InstructionState = "waiting"
+	InProgress InstructionState = "in_progress"
+	Complete   InstructionState = "complete"
+)
+
 // Instruction - An instruction
 type Instruction struct {
-	Label    string `json:"label"`
-	Func     string `json:"func"`
-	Status   bool   `json:"status"`
-	Response string `json:"response"`
+	Label    string           `json:"label"`
+	Func     string           `json:"func"`
+	State    InstructionState `json:"state"`
+	Response string           `json:"response,omitempty"`
 }
 
 // NewInstruction - Create a new instruction
@@ -38,7 +48,7 @@ func NewInstruction(label string, function string) Instruction {
 	return Instruction{
 		Label:    label,
 		Func:     function,
-		Status:   false,
+		State:    Waiting,
 		Response: "",
 	}
 }
@@ -98,49 +108,55 @@ func (iq *InstructionQueue) RemoveInstruction(label string, index int) {
 	iq.queue[label] = append(iq.queue[label][:index], iq.queue[label][index+1:]...)
 }
 
-// GetStatus - Get the status of the instruction
-func (iq *InstructionQueue) GetStatus(label string) bool {
-	// If the queue doesn't exist, return false
-	if _, ok := iq.queue[label]; !ok {
-		return false
-	}
-
-	// Get the status of the instruction
-	if len(iq.queue[label]) == 0 {
-		return false
-	}
-
-	return iq.queue[label][0].Status
-}
-
-// SetStatus - Set the status of the instruction
-func (iq *InstructionQueue) SetStatus(label string, status bool) {
-	// If the queue doesn't exist, return
-	if _, ok := iq.queue[label]; !ok {
-		return
-	}
-
-	// Set the status of the instruction
-	if len(iq.queue[label]) == 0 {
-		return
-	}
-
-	iq.queue[label][0].Status = status
-}
-
-// GetResponse - Get the response of the instruction
-func (iq *InstructionQueue) GetResponse(label string) string {
+// GetState - Get the state of the instruction
+func (iq *InstructionQueue) GetState(label string) InstructionState {
 	// If the queue doesn't exist, return an empty string
 	if _, ok := iq.queue[label]; !ok {
 		return ""
 	}
 
-	// Get the response of the instruction
+	// Get the state of the instruction
 	if len(iq.queue[label]) == 0 {
 		return ""
 	}
 
-	return iq.queue[label][0].Response
+	return iq.queue[label][0].State
+}
+
+// SetState - Set the state of the instruction
+func (iq *InstructionQueue) SetState(label string, state InstructionState) {
+	// If the queue doesn't exist, return
+	if _, ok := iq.queue[label]; !ok {
+		return
+	}
+
+	// Set the state of the instruction
+	if len(iq.queue[label]) == 0 {
+		return
+	}
+
+	iq.queue[label][0].State = state
+}
+
+// GetResponse - Get the response of the instruction
+func (iq *InstructionQueue) GetResponse(label string) (TurtleStatus, error) {
+	// If the queue doesn't exist, return an empty string
+	if _, ok := iq.queue[label]; !ok {
+		return TurtleStatus{}, errors.New("queue does not exist")
+	}
+
+	// Get the response of the instruction
+	if len(iq.queue[label]) == 0 {
+		return TurtleStatus{}, errors.New("queue is empty")
+	}
+
+	var status TurtleStatus
+	err := json.Unmarshal([]byte(iq.queue[label][0].Response), &status)
+	if err != nil {
+		return TurtleStatus{}, err
+	}
+
+	return status, nil
 }
 
 // SetResponse - Set the response of the instruction
@@ -226,7 +242,7 @@ func WebSocketTurtleHandler(c echo.Context) error {
 		// TODO: update turtle status in DB
 
 		// Get the instruction from the queue
-		Queue.SetStatus(label, true)
+		Queue.SetState(label, Complete)
 		Queue.SetResponse(label, string(msg))
 	}
 }

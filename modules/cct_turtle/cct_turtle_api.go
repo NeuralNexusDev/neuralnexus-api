@@ -1,7 +1,6 @@
 package cct_turtle
 
 import (
-	"encoding/json"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -87,12 +86,11 @@ func TurtleHelper(c echo.Context, function string) error {
 	Queue.AddNewInstruction(label, function)
 	Queue.SendInstruction(label)
 	var retries int = 0
-	for !Queue.GetStatus(label) && retries < 100 {
+	for Queue.GetState(label) != Complete && retries < 100 {
 		time.Sleep(30 * time.Millisecond)
 		retries++
 	}
-	var status TurtleStatus
-	err := json.Unmarshal([]byte(Queue.GetResponse(label)), &status)
+	status, err := Queue.GetResponse(label)
 	if err != nil {
 		return c.JSON(500, err.Error())
 	}
