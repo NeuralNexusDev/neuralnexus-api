@@ -43,13 +43,13 @@ var (
 	}
 )
 
-// Structs
+// -------------- Structs --------------
 type Release struct {
 	TagName string `json:"tag_name"`
 	URL     string `json:"html_url"`
 }
 
-// Functions
+// -------------- Functions --------------
 func getReleases(group string, project string) ([]Release, error) {
 	if githubToken == "" {
 		return nil, errors.New("GITHUB_TOKEN is not set")
@@ -106,7 +106,7 @@ func ConvertToFMLFormat(gitHubReleasesURL string, releases []Release) map[string
 	return fmlFormat
 }
 
-// Handlers
+// -------------- Handlers --------------
 func GetReleasesHandler(c echo.Context) error {
 	group := c.Param("group")
 	project := c.Param("project")
@@ -125,4 +125,29 @@ func GetReleasesHandler(c echo.Context) error {
 		return c.JSON(http.StatusOK, forgeModUpdates)
 	}
 	return c.JSON(http.StatusOK, releases)
+}
+
+func NewGetReleasesHandler(w http.ResponseWriter, r *http.Request) {
+	group := r.PathValue("group")
+	project := r.PathValue("project")
+
+	format := r.URL.Query().Get("format")
+
+	releases, err := getReleases(group, project)
+	if err != nil {
+		log.Println(err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	if format == "fml" {
+		gitHubReleasesURL := "https://github.com/" + group + "/" + project + "/releases"
+		forgeModUpdates := ConvertToFMLFormat(gitHubReleasesURL, releases)
+		json.NewEncoder(w).Encode(forgeModUpdates)
+		return
+	}
+	json.NewEncoder(w).Encode(releases)
 }

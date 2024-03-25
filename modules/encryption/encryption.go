@@ -14,37 +14,6 @@ var (
 
 // -------------- Functions --------------
 
-// Code from Java
-// public byte[] encrypt(Message message) throws GeneralSecurityException {
-// 	byte[] initializationVector = new byte[IV_LENGTH];
-// 	SecureRandom random = new SecureRandom();
-// 	random.nextBytes(initializationVector);
-// 	cipher.init(
-// 			Cipher.ENCRYPT_MODE,
-// 			secretKey,
-// 			new GCMParameterSpec(IV_LENGTH * 8, initializationVector));
-// 	byte[] encryptedData = cipher.doFinal(message.toByteArray());
-// 	byte[] result = new byte[encryptedData.length + IV_LENGTH];
-// 	System.arraycopy(encryptedData, 0, result, 0, encryptedData.length);
-// 	System.arraycopy(initializationVector, 0, result, encryptedData.length, IV_LENGTH);
-// 	return result;
-// }
-
-// public Message decrypt(byte[] cypher) throws GeneralSecurityException {
-// 	byte[] initializationVector = new byte[IV_LENGTH];
-// 	byte[] encryptedData = new byte[cypher.length - IV_LENGTH];
-// 	System.arraycopy(cypher, 0, encryptedData, 0, encryptedData.length);
-// 	System.arraycopy(cypher, encryptedData.length, initializationVector, 0, IV_LENGTH);
-// 	cipher.init(
-// 			Cipher.DECRYPT_MODE,
-// 			secretKey,
-// 			new GCMParameterSpec(IV_LENGTH * 8, initializationVector));
-// 	byte[] decryptedData = cipher.doFinal(encryptedData);
-// 	return Message.fromByteArray(decryptedData);
-// }
-
-// Code for Golang/Go
-
 // EncryptAES encrypts a string using AES, returns the encrypted byte array with the IV added to the end
 // Uses AES/GCM/NoPadding
 func EncryptAES(input []byte, key string) ([]byte, error) {

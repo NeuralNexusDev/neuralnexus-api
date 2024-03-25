@@ -98,6 +98,15 @@ func main() {
 
 	e.Logger.Fatal(e.Start(ip + ":" + port))
 
+	// router := http.NewServeMux()
+	// router.HandleFunc("GET /api/v1/projects/releases/{group}/{project}", projects.NewGetReleasesHandler)
+
+	// server := http.Server{
+	// 	Addr:    ip + ":" + "8081",
+	// 	Handler: router,
+	// }
+	// log.Fatal(server.ListenAndServe())
+
 	// Connect to MongoDB
 	// uri := os.Getenv("MONGODB_URI")
 	// if uri == "" {
