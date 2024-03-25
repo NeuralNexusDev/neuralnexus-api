@@ -3,8 +3,8 @@ package switchboard
 import (
 	"encoding/json"
 	"log"
-	"neuralnexus-api/modules/encryption"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/encryption"
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
 )

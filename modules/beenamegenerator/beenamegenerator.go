@@ -3,11 +3,11 @@ package beenamegenerator
 import (
 	"context"
 	"net/http"
-	"neuralnexus-api/modules/database"
 	"os"
 	"strconv"
 	"strings"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/labstack/echo/v4"
 )
 

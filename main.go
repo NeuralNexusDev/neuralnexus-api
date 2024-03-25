@@ -1,13 +1,13 @@
 package main
 
 import (
-	"neuralnexus-api/modules/beenamegenerator"
-	"neuralnexus-api/modules/cct_turtle"
-	"neuralnexus-api/modules/mcstatus"
-	"neuralnexus-api/modules/projects"
-	"neuralnexus-api/modules/switchboard"
 	"os"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/beenamegenerator"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/cct_turtle"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/mcstatus"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/projects"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/switchboard"
 	"github.com/labstack/echo/v4"
 )
 

@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"neuralnexus-api/modules/database"
 	"strconv"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"

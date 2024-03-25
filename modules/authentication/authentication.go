@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"neuralnexus-api/modules/database"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/golang-jwt/jwt/v5"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"

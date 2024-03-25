@@ -1,6 +1,6 @@
-module neuralnexus-api
+module github.com/NeuralNexusDev/neuralnexus-api
 
-go 1.21.0
+go 1.22.1
 
 require github.com/gin-gonic/gin v1.9.1
 
