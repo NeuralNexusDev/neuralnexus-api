@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-
-	"github.com/labstack/echo/v4"
 )
 
 // -------------- Globals --------------
@@ -107,27 +105,7 @@ func ConvertToFMLFormat(gitHubReleasesURL string, releases []Release) map[string
 }
 
 // -------------- Handlers --------------
-func GetReleasesHandler(c echo.Context) error {
-	group := c.Param("group")
-	project := c.Param("project")
-
-	format := c.QueryParam("format")
-
-	releases, err := getReleases(group, project)
-	if err != nil {
-		log.Println(err.Error())
-		return c.JSON(http.StatusInternalServerError, err.Error())
-	}
-
-	if format == "fml" {
-		gitHubReleasesURL := "https://github.com/" + group + "/" + project + "/releases"
-		forgeModUpdates := ConvertToFMLFormat(gitHubReleasesURL, releases)
-		return c.JSON(http.StatusOK, forgeModUpdates)
-	}
-	return c.JSON(http.StatusOK, releases)
-}
-
-func NewGetReleasesHandler(w http.ResponseWriter, r *http.Request) {
+func GetReleasesHandler(w http.ResponseWriter, r *http.Request) {
 	group := r.PathValue("group")
 	project := r.PathValue("project")
 

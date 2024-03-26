@@ -2,13 +2,13 @@ package beenamegenerator
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
-	"github.com/labstack/echo/v4"
 )
 
 // -------------- Globals --------------
@@ -28,7 +28,7 @@ var (
 
 // General API response struct
 type Response struct {
-	Success bool   `json:"success"`
+	Success bool   `json:"success,omitempty"`
 	Message string `json:"message,omitempty"`
 	Error   string `json:"error,omitempty"`
 }
@@ -147,6 +147,7 @@ func submitBeeName(beeName string) database.Response[string] {
 }
 
 // getBeeNameSuggestions returns a list of bee name suggestions
+// TODO: Check if suggestions are getting stored properly
 func getBeeNameSuggestions(amount int64) database.Response[[]string] {
 	db := database.GetDB("bee_name_generator")
 	var beeNames []string
@@ -233,11 +234,12 @@ func rejectBeeNameSuggestion(beeName string) database.Response[string] {
 // -------------- Handlers --------------
 
 // GetRoot get a simple docs/examples page
-func GetRoot(c echo.Context) error {
+func GetRoot(w http.ResponseWriter, r *http.Request) {
 	// Read the html file
 	html, err := os.ReadFile("static/beenamegenerator/templates/index.html")
 	if err != nil {
-		return c.String(500, "Failed to read index.html: "+err.Error())
+		http.Error(w, "Failed to read index.html: "+err.Error(), 500)
+		return
 	}
 
 	// Replace the server url
@@ -245,142 +247,197 @@ func GetRoot(c echo.Context) error {
 	htmlString = strings.ReplaceAll(htmlString, "{{SERVER_URL}}", SERVER_URL)
 
 	// Serve the html
-	c.Request().Header.Set("Content-Type", "text/html")
-	return c.HTML(http.StatusOK, htmlString)
+	w.Header().Set("Content-Type", "text/html")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(htmlString))
 }
 
 // GetBeeNameHandler
-func GetBeeNameHandler(c echo.Context) error {
+func GetBeeNameHandler(w http.ResponseWriter, r *http.Request) {
 	beeName := getBeeName()
 	if !beeName.Success {
-		return c.JSON(500, NewFailedNameResponse("Failed to get bee name", beeName.Message))
+		http.Error(w, "Failed to get bee name: "+beeName.Message, 500)
+		return
 	}
-	return c.JSON(200, NewSuccessfulNameResponse(beeName.Data))
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"name":"` + beeName.Data + `"}`))
 }
 
 // UploadBeeNameHandler Upload a bee name (authenticated)
-func UploadBeeNameHandler(c echo.Context) error {
-	if c.Request().Header.Get("Authorization") != "Bearer "+BNG_AUTH_TOKEN {
-		return c.JSON(401, unauthorizedResponse)
+func UploadBeeNameHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Authorization") != "Bearer "+BNG_AUTH_TOKEN {
+		http.Error(w, "Unauthorized", 401)
+		return
 	}
 
-	beeName := c.Param("name")
+	beeName := r.PathValue("name")
 	if beeName == "" {
-		beeName = c.QueryParam("name")
+		var nameResponse NameResponse
+		err := json.NewDecoder(r.Body).Decode(&nameResponse)
+		if err == nil {
+			beeName = nameResponse.Name
+		}
+	}
+	if beeName == "" {
+		http.Error(w, "Invalid name", 400)
+		return
 	}
 	upload := uploadBeeName(beeName)
 	if !upload.Success {
-		return c.JSON(500, NewFailedNameResponse("Failed to upload bee name", upload.Message))
+		http.Error(w, "Failed to upload bee name: "+upload.Message, 500)
+		return
 	}
-	return c.JSON(200, NewSuccessfulNameResponse(beeName))
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"name":"` + beeName + `"}`))
 }
 
 // DeleteBeeName Delete a bee name (authenticated)
-func DeleteBeeNameHandler(c echo.Context) error {
-	if c.Request().Header.Get("Authorization") != "Bearer "+BNG_AUTH_TOKEN {
-		return c.JSON(401, unauthorizedResponse)
+func DeleteBeeNameHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Authorization") != "Bearer "+BNG_AUTH_TOKEN {
+		http.Error(w, "Unauthorized", 401)
+		return
 	}
 
-	beeName := c.Param("name")
+	beeName := r.PathValue("name")
 	if beeName == "" {
-		beeName = c.QueryParam("name")
+		var nameResponse NameResponse
+		err := json.NewDecoder(r.Body).Decode(&nameResponse)
+		if err == nil {
+			beeName = nameResponse.Name
+		}
+	}
+	if beeName == "" {
+		http.Error(w, "Invalid name", 400)
+		return
 	}
 	delete := deleteBeeName(beeName)
 	if !delete.Success {
-		return c.JSON(500, delete)
+		http.Error(w, "Failed to delete bee name: "+delete.Message, 500)
+		return
 	}
-	return c.JSON(200, delete)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"name":"` + beeName + `"}`))
 }
 
 // SubmitBeeNameHandler Submit a bee name suggestion
-func SubmitBeeNameHandler(c echo.Context) error {
-	beeName := c.Param("name")
+func SubmitBeeNameHandler(w http.ResponseWriter, r *http.Request) {
+	beeName := r.PathValue("name")
 	if beeName == "" {
-		beeName = c.QueryParam("name")
+		var nameResponse NameResponse
+		err := json.NewDecoder(r.Body).Decode(&nameResponse)
+		if err == nil {
+			beeName = nameResponse.Name
+		}
 	}
-
+	if beeName == "" {
+		http.Error(w, "Invalid name", 400)
+		return
+	}
 	submit := submitBeeName(beeName)
 	if !submit.Success {
-		return c.JSON(500, submit)
+		http.Error(w, "Failed to submit bee name: "+submit.Message, 500)
+		return
 	}
-	return c.JSON(200, submit)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"name":"` + beeName + `"}`))
 }
 
 // GetBeeNameSuggestions Get a list of bee name suggestions (authenticated)
-func GetBeeNameSuggestionsHandler(c echo.Context) error {
-	if c.Request().Header.Get("Authorization") != "Bearer "+BNG_AUTH_TOKEN {
-		return c.JSON(401, unauthorizedResponse)
+func GetBeeNameSuggestionsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Authorization") != "Bearer "+BNG_AUTH_TOKEN {
+		http.Error(w, "Unauthorized", 401)
+		return
 	}
 
-	amount := c.Param("amount")
+	amount := r.PathValue("amount")
 	if amount == "" {
-		amount = c.QueryParam("amount")
+		r.ParseForm()
+		amount = r.FormValue("amount")
 	}
 	if amount == "" {
 		amount = "1"
 	}
 	amountInt, err := strconv.ParseInt(amount, 10, 64)
 	if err != nil {
-		return c.JSON(400, SuggestionsResponse{
-			Response: Response{
-				Success: false,
-				Message: "Invalid amount",
-				Error:   err.Error(),
-			},
-			Suggestions: []string{},
-		})
+		http.Error(w, "Invalid amount", 400)
+		return
 	}
 
 	suggestions := getBeeNameSuggestions(amountInt)
 	if !suggestions.Success {
-		return c.JSON(500, SuggestionsResponse{
-			Response: Response{
-				Success: false,
-				Message: "Failed to get bee name suggestions",
-				Error:   suggestions.Message,
-			},
-			Suggestions: []string{},
-		})
+		http.Error(w, "Failed to get bee name suggestions: "+suggestions.Message, 500)
+		return
 	}
 
-	return c.JSON(200, SuggestionsResponse{
-		Response:    Response{Success: true, Message: "", Error: ""},
-		Suggestions: suggestions.Data,
-	})
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"suggestions":[` + strings.Join(suggestions.Data, ",") + `]}`))
 }
 
 // AcceptBeeNameSuggestionHandler Accept a bee name suggestion (authenticated)
-func AcceptBeeNameSuggestionHandler(c echo.Context) error {
-	if c.Request().Header.Get("Authorization") != "Bearer "+BNG_AUTH_TOKEN {
-		return c.JSON(401, unauthorizedResponse)
+func AcceptBeeNameSuggestionHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Authorization") != "Bearer "+BNG_AUTH_TOKEN {
+		http.Error(w, "Unauthorized", 401)
+		return
 	}
 
-	beeName := c.Param("name")
+	beeName := r.PathValue("name")
 	if beeName == "" {
-		beeName = c.QueryParam("name")
+		var nameResponse NameResponse
+		err := json.NewDecoder(r.Body).Decode(&nameResponse)
+		if err == nil {
+			beeName = nameResponse.Name
+		}
 	}
-
+	if beeName == "" {
+		http.Error(w, "Invalid name", 400)
+		return
+	}
 	accept := acceptBeeNameSuggestion(beeName)
 	if !accept.Success {
-		return c.JSON(500, NewFailedNameResponse("Failed to accept bee name suggestion", accept.Message))
+		http.Error(w, "Failed to accept bee name suggestion: "+accept.Message, 500)
+		return
 	}
-	return c.JSON(200, NewSuccessfulNameResponse(beeName))
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"name":"` + beeName + `"}`))
 }
 
 // RejectBeeNameSuggestionHandler Reject a bee name suggestion (authenticated)
-func RejectBeeNameSuggestionHandler(c echo.Context) error {
-	if c.Request().Header.Get("Authorization") != "Bearer "+BNG_AUTH_TOKEN {
-		return c.JSON(401, "Unauthorized")
+func RejectBeeNameSuggestionHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Authorization") != "Bearer "+BNG_AUTH_TOKEN {
+		http.Error(w, "Unauthorized", 401)
+		return
 	}
 
-	beeName := c.Param("name")
+	beeName := r.PathValue("name")
 	if beeName == "" {
-		beeName = c.QueryParam("name")
+		var nameResponse NameResponse
+		err := json.NewDecoder(r.Body).Decode(&nameResponse)
+		if err == nil {
+			beeName = nameResponse.Name
+		}
 	}
-
+	if beeName == "" {
+		http.Error(w, "Invalid name", 400)
+		return
+	}
 	reject := rejectBeeNameSuggestion(beeName)
 	if !reject.Success {
-		return c.JSON(500, NewFailedNameResponse("Failed to reject bee name suggestion", reject.Message))
+		http.Error(w, "Failed to reject bee name suggestion: "+reject.Message, 500)
+		return
 	}
-	return c.JSON(200, NewSuccessfulNameResponse(beeName))
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"name":"` + beeName + `"}`))
 }

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"log"
+	"net/http"
 	"os"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/beenamegenerator"
@@ -29,43 +31,10 @@ func main() {
 
 	// -------------- Routes --------------
 
-	// -------------- Bee Name Generator --------------
-	e.GET("/api/v1/bee-name-generator", beenamegenerator.GetRoot)
-
-	// Get a bee name
-	e.GET("/api/v1/bee-name-generator/name", beenamegenerator.GetBeeNameHandler)
-
-	// Upload a bee name
-	e.POST("/api/v1/bee-name-generator/name", beenamegenerator.UploadBeeNameHandler)
-	e.POST("/api/v1/bee-name-generator/name/:name", beenamegenerator.UploadBeeNameHandler)
-
-	// Delete a bee name
-	e.DELETE("/api/v1/bee-name-generator/name", beenamegenerator.DeleteBeeNameHandler)
-	e.DELETE("/api/v1/bee-name-generator/name/:name", beenamegenerator.DeleteBeeNameHandler)
-
-	// Submit a bee name
-	e.POST("/api/v1/bee-name-generator/suggestion", beenamegenerator.SubmitBeeNameHandler)
-	e.POST("/api/v1/bee-name-generator/suggestion/:name", beenamegenerator.SubmitBeeNameHandler)
-
-	// Get bee name suggestions
-	e.GET("/api/v1/bee-name-generator/suggestion", beenamegenerator.GetBeeNameSuggestionsHandler)
-	e.GET("/api/v1/bee-name-generator/suggestion/:amount", beenamegenerator.GetBeeNameSuggestionsHandler)
-
-	// Accept a bee name suggestion
-	e.PUT("/api/v1/bee-name-generator/suggestion", beenamegenerator.AcceptBeeNameSuggestionHandler)
-	e.PUT("/api/v1/bee-name-generator/suggestion/:name", beenamegenerator.AcceptBeeNameSuggestionHandler)
-
-	// Reject a bee name suggestion
-	e.DELETE("/api/v1/bee-name-generator/suggestion", beenamegenerator.RejectBeeNameSuggestionHandler)
-	e.DELETE("/api/v1/bee-name-generator/suggestion/:name", beenamegenerator.RejectBeeNameSuggestionHandler)
-
 	// -------------- MC Status --------------
 	e.GET("/api/v1/mcstatus", mcstatus.GetRoot)
 	e.GET("/api/v1/mcstatus/:address", mcstatus.GetServerStatus)
 	e.GET("/api/v1/mcstatus/icon/:address", mcstatus.GetIcon)
-
-	// -------------- Projects --------------
-	e.GET("/api/v1/projects/releases/:group/:project", projects.GetReleasesHandler)
 
 	// -------------- Switchboard --------------
 	// e.GET("/ws/v1/switchboard/relay", switchboard.WebSocketRelayHandler)
@@ -96,16 +65,34 @@ func main() {
 	e.GET("/api/v1/cct-turtle/dig-down", cct_turtle.DigTurtleDown)
 	e.GET("/api/v1/cct-turtle/dig-down/:label", cct_turtle.DigTurtleDown)
 
-	e.Logger.Fatal(e.Start(ip + ":" + port))
+	// e.Logger.Fatal(e.Start(ip + ":" + port))
 
-	// router := http.NewServeMux()
-	// router.HandleFunc("GET /api/v1/projects/releases/{group}/{project}", projects.NewGetReleasesHandler)
+	router := http.NewServeMux()
 
-	// server := http.Server{
-	// 	Addr:    ip + ":" + "8081",
-	// 	Handler: router,
-	// }
-	// log.Fatal(server.ListenAndServe())
+	// -------------- Bee Name Generator --------------
+	router.HandleFunc("GET /api/v1/bee-name-generator", beenamegenerator.GetRoot)
+	router.HandleFunc("GET /api/v1/bee-name-generator/name", beenamegenerator.GetBeeNameHandler)
+	router.HandleFunc("POST /api/v1/bee-name-generator/name", beenamegenerator.UploadBeeNameHandler)
+	router.HandleFunc("POST /api/v1/bee-name-generator/name/{name}", beenamegenerator.UploadBeeNameHandler)
+	router.HandleFunc("DELETE /api/v1/bee-name-generator/name", beenamegenerator.DeleteBeeNameHandler)
+	router.HandleFunc("DELETE /api/v1/bee-name-generator/name/{name}", beenamegenerator.DeleteBeeNameHandler)
+	router.HandleFunc("POST /api/v1/bee-name-generator/suggestion", beenamegenerator.SubmitBeeNameHandler)
+	router.HandleFunc("POST /api/v1/bee-name-generator/suggestion/{name}", beenamegenerator.SubmitBeeNameHandler)
+	router.HandleFunc("GET /api/v1/bee-name-generator/suggestion", beenamegenerator.GetBeeNameSuggestionsHandler)
+	router.HandleFunc("GET /api/v1/bee-name-generator/suggestion/{amount}", beenamegenerator.GetBeeNameSuggestionsHandler)
+	router.HandleFunc("PUT /api/v1/bee-name-generator/suggestion", beenamegenerator.AcceptBeeNameSuggestionHandler)
+	router.HandleFunc("PUT /api/v1/bee-name-generator/suggestion/{name}", beenamegenerator.AcceptBeeNameSuggestionHandler)
+	router.HandleFunc("DELETE /api/v1/bee-name-generator/suggestion", beenamegenerator.RejectBeeNameSuggestionHandler)
+	router.HandleFunc("DELETE /api/v1/bee-name-generator/suggestion/{name}", beenamegenerator.RejectBeeNameSuggestionHandler)
+
+	// -------------- Projects --------------
+	router.HandleFunc("GET /api/v1/projects/releases/{group}/{project}", projects.GetReleasesHandler)
+
+	server := http.Server{
+		Addr:    ip + ":" + "8081",
+		Handler: router,
+	}
+	log.Fatal(server.ListenAndServe())
 
 	// Connect to MongoDB
 	// uri := os.Getenv("MONGODB_URI")
