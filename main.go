@@ -31,11 +31,6 @@ func main() {
 
 	// -------------- Routes --------------
 
-	// -------------- MC Status --------------
-	e.GET("/api/v1/mcstatus", mcstatus.GetRoot)
-	e.GET("/api/v1/mcstatus/:address", mcstatus.GetServerStatus)
-	e.GET("/api/v1/mcstatus/icon/:address", mcstatus.GetIcon)
-
 	// -------------- Switchboard --------------
 	// e.GET("/ws/v1/switchboard/relay", switchboard.WebSocketRelayHandler)
 	e.GET("/websocket/:id", switchboard.WebSocketRelayHandler)
@@ -85,11 +80,16 @@ func main() {
 	router.HandleFunc("DELETE /api/v1/bee-name-generator/suggestion", beenamegenerator.RejectBeeNameSuggestionHandler)
 	router.HandleFunc("DELETE /api/v1/bee-name-generator/suggestion/{name}", beenamegenerator.RejectBeeNameSuggestionHandler)
 
+	// -------------- MC Status --------------
+	router.HandleFunc("GET /api/v1/mcstatus", mcstatus.GetRoot)
+	router.HandleFunc("GET /api/v1/mcstatus/{address}", mcstatus.GetServerStatus)
+	router.HandleFunc("GET /api/v1/mcstatus/icon/{address}", mcstatus.GetIcon)
+
 	// -------------- Projects --------------
 	router.HandleFunc("GET /api/v1/projects/releases/{group}/{project}", projects.GetReleasesHandler)
 
 	server := http.Server{
-		Addr:    ip + ":" + "8081",
+		Addr:    ip + ":" + port,
 		Handler: router,
 	}
 	log.Fatal(server.ListenAndServe())

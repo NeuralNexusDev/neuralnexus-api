@@ -16,7 +16,6 @@ import (
 
 	"github.com/ZeroErrors/go-bedrockping"
 	"github.com/dreamscached/minequery/v2"
-	"github.com/labstack/echo/v4"
 )
 
 // -------------- Globals --------------
@@ -122,24 +121,24 @@ func loadImgFromFile(path string) (image.Image, error) {
 }
 
 // Get params
-func getServerInfo(c echo.Context) ServerInfo {
+func getServerInfo(r *http.Request) ServerInfo {
 	// Get is_bedrock from params
-	is_bedrock, err := strconv.ParseBool(c.QueryParam("is_bedrock"))
+	is_bedrock, err := strconv.ParseBool(r.URL.Query().Get("is_bedrock"))
 	if err != nil {
 		is_bedrock = false
 	}
 
 	// Get enable_query from params
-	enable_query, err := strconv.ParseBool(c.QueryParam("enable_query"))
+	enable_query, err := strconv.ParseBool(r.URL.Query().Get("enable_query"))
 	if err != nil {
 		enable_query = true
 	}
 
 	// Get port from params
-	portString := c.Param("port")
+	portString := r.URL.Query().Get("port")
 
 	// Get slug from params
-	var address string = c.Param("address")
+	var address string = r.PathValue("address")
 
 	// Check if the address contains a colon anywhere
 	if strings.Contains(address, ":") {
@@ -160,7 +159,7 @@ func getServerInfo(c echo.Context) ServerInfo {
 	}
 
 	// Get query port from params
-	query_port, err := strconv.Atoi(c.QueryParam("query_port"))
+	query_port, err := strconv.Atoi(r.URL.Query().Get("query_port"))
 	if err != nil {
 		query_port = port
 	}
@@ -175,7 +174,7 @@ func getServerInfo(c echo.Context) ServerInfo {
 	}
 
 	// Get the request body
-	body, err := io.ReadAll(c.Request().Body)
+	body, err := io.ReadAll(r.Body)
 	if err == nil {
 		bodyString := string(body)
 
@@ -381,16 +380,18 @@ func ServerStatus(serverInfo ServerInfo) (StausResponse, image.Image, error) {
 // -------------- Routes --------------
 
 // Route that returns general API info
-func GetRoot(c echo.Context) error {
+func GetRoot(w http.ResponseWriter, r *http.Request) {
 	// Check the request type
-	if strings.Split(c.Request().Header.Get("Accept"), ",")[0] == "application/json" {
-		return GetServerStatus(c)
+	if strings.Split(r.Header.Get("Content-Type"), ",")[0] == "application/json" {
+		GetServerStatus(w, r)
+		return
 	}
 
 	// Read the html file
 	html, err := os.ReadFile("static/mcstatus/templates/index.html")
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Succes: false, Error: err.Error()})
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	// Replace the server url
@@ -398,14 +399,14 @@ func GetRoot(c echo.Context) error {
 	htmlString = strings.ReplaceAll(htmlString, "{{SERVER_URL}}", SERVER_URL)
 
 	// Serve the html
-	c.Request().Header.Set("Content-Type", "text/html")
-	return c.HTML(http.StatusOK, htmlString)
+	w.Header().Set("Content-Type", "text/html")
+	w.Write([]byte(htmlString))
 }
 
 // Route that returns the server icon as a PNG (base64 encoded string didn't work for some reason)
-func GetIcon(c echo.Context) error {
+func GetIcon(w http.ResponseWriter, r *http.Request) {
 	// Get the query params
-	serverInfo := getServerInfo(c)
+	serverInfo := getServerInfo(r)
 	serverInfo.EnableQuery = false
 
 	var icon image.Image
@@ -431,25 +432,18 @@ func GetIcon(c echo.Context) error {
 	}
 
 	// Set the content type as image/png
-	c.Request().Header.Set("Content-Type", "image/png")
-	png.Encode(c.Response().Writer, icon)
-	c.Response().Status = status
-
-	return nil
+	w.Header().Set("Content-Type", "image/png")
+	w.WriteHeader(status)
+	png.Encode(w, icon)
 }
 
 // Route that returns the server status
-func GetServerStatus(c echo.Context) error {
-	// Check if the address is icon
-	if c.Param("address") == "icon" {
-		return GetIcon(c)
-	}
-
+func GetServerStatus(w http.ResponseWriter, r *http.Request) {
 	// Get the query params
-	serverInfo := getServerInfo(c)
+	serverInfo := getServerInfo(r)
 
 	// Disable query if there is no accept header (assume embed)
-	if strings.Split(c.Request().Header.Get("Accept"), ",")[0] == "" {
+	if strings.Split(r.Header.Get("Accept"), ",")[0] == "" {
 		serverInfo.EnableQuery = false
 	}
 
@@ -462,18 +456,18 @@ func GetServerStatus(c echo.Context) error {
 	}
 
 	// Check the request type
-	if strings.Split(c.Request().Header.Get("Accept"), ",")[0] == "application/json" {
+	if strings.Split(r.Header.Get("Content-Type"), ",")[0] == "application/json" {
 		// Serve the json
-		c.Request().Header.Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json")
 		if resp.Name == "Server Offline" {
 			status = http.StatusNotFound
 		}
-		c.JSON(status, resp)
-		return nil
-	} else if strings.Split(c.Request().Header.Get("Accept"), ",")[0] == "text/html" {
+		json.NewEncoder(w).Encode(resp)
+		return
+	} else if strings.Split(r.Header.Get("Accept"), ",")[0] == "text/html" {
 		html, err := os.ReadFile("static/mcstatus/templates/status.html")
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, ErrorResponse{Succes: false, Error: err.Error()})
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 
 		// Replace the placeholders
@@ -486,13 +480,13 @@ func GetServerStatus(c echo.Context) error {
 		htmlString = strings.ReplaceAll(htmlString, "{{MAX_PLAYERS}}", fmt.Sprint(resp.MaxPlayers))
 
 		// Serve the html
-		c.Request().Header.Set("Content-Type", "text/html")
-		c.HTML(status, htmlString)
-		return nil
+		w.Header().Set("Content-Type", "text/html")
+		w.Write([]byte(htmlString))
+		return
 	} else {
 		html, err := os.ReadFile("static/mcstatus/templates/embed.html")
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, ErrorResponse{Succes: false, Error: err.Error()})
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 
 		// Build response address string
@@ -529,12 +523,12 @@ func GetServerStatus(c echo.Context) error {
 		}
 		htmlString = strings.ReplaceAll(htmlString, "{{MOTD_TEXT2}}", motd2String)
 		htmlString = strings.ReplaceAll(htmlString, "{{VERSION}}", resp.Version)
-		htmlString = strings.ReplaceAll(htmlString, "{{ADDRESS_STR}}", c.Param("address")+queryParamsString)
+		htmlString = strings.ReplaceAll(htmlString, "{{ADDRESS_STR}}", serverInfo.Address+queryParamsString)
 		htmlString = strings.ReplaceAll(htmlString, "{{FAVICON}}", resp.Favicon)
 
 		// Serve the html
-		c.Request().Header.Set("Content-Type", "text/html")
-		c.HTML(status, htmlString)
+		w.WriteHeader(status)
+		w.Header().Set("Content-Type", "text/html")
+		w.Write([]byte(htmlString))
 	}
-	return nil
 }
