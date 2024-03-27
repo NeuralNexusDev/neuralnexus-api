@@ -61,6 +61,12 @@ func NewFailedNameResponse(message, error string) NameResponse {
 	return NewNameResponse("", false, message, error)
 }
 
+// AmountResponse struct (extends Response)
+type AmountResponse struct {
+	Response
+	Amount int64 `json:"amount"`
+}
+
 // SuggestionsResponse struct
 type SuggestionsResponse struct {
 	Response
@@ -147,7 +153,6 @@ func submitBeeName(beeName string) database.Response[string] {
 }
 
 // getBeeNameSuggestions returns a list of bee name suggestions
-// TODO: Check if suggestions are getting stored properly
 func getBeeNameSuggestions(amount int64) database.Response[[]string] {
 	db := database.GetDB("bee_name_generator")
 	var beeNames []string
@@ -335,13 +340,14 @@ func SubmitBeeNameHandler(w http.ResponseWriter, r *http.Request) {
 			beeName = nameResponse.Name
 		}
 	}
+
 	if beeName == "" {
 		http.Error(w, "Invalid name", 400)
 		return
 	}
 	submit := submitBeeName(beeName)
 	if !submit.Success {
-		http.Error(w, "Failed to submit bee name: "+submit.Message, 500)
+		http.Error(w, submit.Message, 500)
 		return
 	}
 
@@ -359,12 +365,16 @@ func GetBeeNameSuggestionsHandler(w http.ResponseWriter, r *http.Request) {
 
 	amount := r.PathValue("amount")
 	if amount == "" {
-		r.ParseForm()
-		amount = r.FormValue("amount")
+		var amountResponse AmountResponse
+		err := json.NewDecoder(r.Body).Decode(&amountResponse)
+		if err == nil {
+			amount = strconv.FormatInt(amountResponse.Amount, 10)
+		}
 	}
-	if amount == "" {
+	if amount == "" || amount == "0" {
 		amount = "1"
 	}
+
 	amountInt, err := strconv.ParseInt(amount, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid amount", 400)
@@ -379,7 +389,7 @@ func GetBeeNameSuggestionsHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"suggestions":[` + strings.Join(suggestions.Data, ",") + `]}`))
+	w.Write([]byte(`{"suggestions":["` + strings.Join(suggestions.Data, "\",\"") + `"]}`))
 }
 
 // AcceptBeeNameSuggestionHandler Accept a bee name suggestion (authenticated)
