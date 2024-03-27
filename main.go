@@ -31,10 +31,6 @@ func main() {
 
 	// -------------- Routes --------------
 
-	// -------------- Switchboard --------------
-	// e.GET("/ws/v1/switchboard/relay", switchboard.WebSocketRelayHandler)
-	e.GET("/websocket/:id", switchboard.WebSocketRelayHandler)
-
 	// -------------- CCT Turtle --------------
 	e.GET("/ws/v1/cct-turtle/:label", cct_turtle.WebSocketTurtleHandler)
 	e.GET("/api/v1/cct-turtle/startup.lua", cct_turtle.GetTurtleCode)
@@ -87,6 +83,10 @@ func main() {
 
 	// -------------- Projects --------------
 	router.HandleFunc("GET /api/v1/projects/releases/{group}/{project}", projects.GetReleasesHandler)
+
+	// -------------- Switchboard --------------
+	// router.HandleFunc("GET /ws/v1/switchboard/relay", switchboard.WebSocketRelayHandler)
+	router.HandleFunc("GET /websocket/:id", switchboard.WebSocketRelayHandler)
 
 	server := http.Server{
 		Addr:    ip + ":" + port,

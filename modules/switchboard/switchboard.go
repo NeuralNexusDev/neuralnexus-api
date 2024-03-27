@@ -3,10 +3,10 @@ package switchboard
 import (
 	"encoding/json"
 	"log"
+	"net/http"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/encryption"
 	"github.com/gorilla/websocket"
-	"github.com/labstack/echo/v4"
 )
 
 // -------------- Globals --------------
@@ -123,10 +123,11 @@ func DecryptMessage(encryptedMessage []byte, key string) (Message, error) {
 // -------------- Handlers --------------
 
 // WebSocketRelayHandler relays switchboard messages
-func WebSocketRelayHandler(c echo.Context) error {
-	ws, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
+func WebSocketRelayHandler(w http.ResponseWriter, r *http.Request) {
+	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		return err
+		log.Println(err.Error())
+		return
 	}
 	defer ws.Close()
 
