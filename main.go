@@ -10,7 +10,6 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/mcstatus"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/projects"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/switchboard"
-	"github.com/labstack/echo/v4"
 )
 
 // -------------- Main --------------
@@ -27,38 +26,9 @@ func main() {
 		port = "8080"
 	}
 
-	e := echo.New()
+	router := http.NewServeMux()
 
 	// -------------- Routes --------------
-
-	// -------------- CCT Turtle --------------
-	e.GET("/ws/v1/cct-turtle/:label", cct_turtle.WebSocketTurtleHandler)
-	e.GET("/api/v1/cct-turtle/startup.lua", cct_turtle.GetTurtleCode)
-	e.GET("/api/v1/cct-turtle/updating_startup.lua", cct_turtle.GetTurtleUpdatingCode)
-	// e.GET("/api/v1/cct-turtle/status", cct_turtle.GetTurtleStatus)
-	// e.GET("/api/v1/cct-turtle/status/:label", cct_turtle.GetTurtleStatus)
-	e.GET("/api/v1/cct-turtle/forward", cct_turtle.MoveTurtleForward)
-	e.GET("/api/v1/cct-turtle/forward/:label", cct_turtle.MoveTurtleForward)
-	e.GET("/api/v1/cct-turtle/back", cct_turtle.MoveTurtleBackward)
-	e.GET("/api/v1/cct-turtle/back/:label", cct_turtle.MoveTurtleBackward)
-	e.GET("/api/v1/cct-turtle/up", cct_turtle.MoveTurtleUp)
-	e.GET("/api/v1/cct-turtle/up/:label", cct_turtle.MoveTurtleUp)
-	e.GET("/api/v1/cct-turtle/down", cct_turtle.MoveTurtleDown)
-	e.GET("/api/v1/cct-turtle/down/:label", cct_turtle.MoveTurtleDown)
-	e.GET("/api/v1/cct-turtle/left", cct_turtle.TurnTurtleLeft)
-	e.GET("/api/v1/cct-turtle/left/:label", cct_turtle.TurnTurtleLeft)
-	e.GET("/api/v1/cct-turtle/right", cct_turtle.TurnTurtleRight)
-	e.GET("/api/v1/cct-turtle/right/:label", cct_turtle.TurnTurtleRight)
-	e.GET("/api/v1/cct-turtle/dig", cct_turtle.DigTurtle)
-	e.GET("/api/v1/cct-turtle/dig/:label", cct_turtle.DigTurtle)
-	e.GET("/api/v1/cct-turtle/dig-up", cct_turtle.DigTurtleUp)
-	e.GET("/api/v1/cct-turtle/dig-up/:label", cct_turtle.DigTurtleUp)
-	e.GET("/api/v1/cct-turtle/dig-down", cct_turtle.DigTurtleDown)
-	e.GET("/api/v1/cct-turtle/dig-down/:label", cct_turtle.DigTurtleDown)
-
-	// e.Logger.Fatal(e.Start(ip + ":" + port))
-
-	router := http.NewServeMux()
 
 	// -------------- Bee Name Generator --------------
 	router.HandleFunc("GET /api/v1/bee-name-generator", beenamegenerator.GetRoot)
@@ -76,6 +46,31 @@ func main() {
 	router.HandleFunc("DELETE /api/v1/bee-name-generator/suggestion", beenamegenerator.RejectBeeNameSuggestionHandler)
 	router.HandleFunc("DELETE /api/v1/bee-name-generator/suggestion/{name}", beenamegenerator.RejectBeeNameSuggestionHandler)
 
+	// -------------- CCT Turtle --------------
+	router.HandleFunc("GET /ws/v1/cct-turtle/{label}", cct_turtle.WebSocketTurtleHandler)
+	// e.GET("/api/v1/cct-turtle/status", cct_turtle.GetTurtleStatus)
+	// e.GET("/api/v1/cct-turtle/status/:label", cct_turtle.GetTurtleStatus)
+	router.HandleFunc("GET /api/v1/cct-turtle/startup.lua", cct_turtle.GetTurtleCode)
+	router.HandleFunc("GET /api/v1/cct-turtle/updating_startup.lua", cct_turtle.GetTurtleUpdatingCode)
+	router.HandleFunc("GET /api/v1/cct-turtle/forward", cct_turtle.MoveTurtleForward)
+	router.HandleFunc("GET /api/v1/cct-turtle/forward/{label}", cct_turtle.MoveTurtleForward)
+	router.HandleFunc("GET /api/v1/cct-turtle/back", cct_turtle.MoveTurtleBackward)
+	router.HandleFunc("GET /api/v1/cct-turtle/back/{label}", cct_turtle.MoveTurtleBackward)
+	router.HandleFunc("GET /api/v1/cct-turtle/up", cct_turtle.MoveTurtleUp)
+	router.HandleFunc("GET /api/v1/cct-turtle/up/{label}", cct_turtle.MoveTurtleUp)
+	router.HandleFunc("GET /api/v1/cct-turtle/down", cct_turtle.MoveTurtleDown)
+	router.HandleFunc("GET /api/v1/cct-turtle/down/{label}", cct_turtle.MoveTurtleDown)
+	router.HandleFunc("GET /api/v1/cct-turtle/left", cct_turtle.TurnTurtleLeft)
+	router.HandleFunc("GET /api/v1/cct-turtle/left/{label}", cct_turtle.TurnTurtleLeft)
+	router.HandleFunc("GET /api/v1/cct-turtle/right", cct_turtle.TurnTurtleRight)
+	router.HandleFunc("GET /api/v1/cct-turtle/right/{label}", cct_turtle.TurnTurtleRight)
+	router.HandleFunc("GET /api/v1/cct-turtle/dig", cct_turtle.DigTurtle)
+	router.HandleFunc("GET /api/v1/cct-turtle/dig/{label}", cct_turtle.DigTurtle)
+	router.HandleFunc("GET /api/v1/cct-turtle/dig-up", cct_turtle.DigTurtleUp)
+	router.HandleFunc("GET /api/v1/cct-turtle/dig-up/{label}", cct_turtle.DigTurtleUp)
+	router.HandleFunc("GET /api/v1/cct-turtle/dig-down", cct_turtle.DigTurtleDown)
+	router.HandleFunc("GET /api/v1/cct-turtle/dig-down/{label}", cct_turtle.DigTurtleDown)
+
 	// -------------- MC Status --------------
 	router.HandleFunc("GET /api/v1/mcstatus", mcstatus.GetRoot)
 	router.HandleFunc("GET /api/v1/mcstatus/{address}", mcstatus.GetServerStatus)
@@ -86,7 +81,7 @@ func main() {
 
 	// -------------- Switchboard --------------
 	// router.HandleFunc("GET /ws/v1/switchboard/relay", switchboard.WebSocketRelayHandler)
-	router.HandleFunc("GET /websocket/:id", switchboard.WebSocketRelayHandler)
+	router.HandleFunc("GET /websocket/{id}", switchboard.WebSocketRelayHandler)
 
 	server := http.Server{
 		Addr:    ip + ":" + port,

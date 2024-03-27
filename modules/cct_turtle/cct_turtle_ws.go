@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"net/http"
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/labstack/echo/v4"
 )
 
 // -------------- Globals --------------
@@ -209,12 +209,13 @@ func RemoveWebSocket(label string) {
 
 // -------------- Handlers --------------
 
-func WebSocketTurtleHandler(c echo.Context) error {
-	label := c.Param("label")
+func WebSocketTurtleHandler(w http.ResponseWriter, r *http.Request) {
+	label := r.PathValue("label")
 
-	ws, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
+	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		return err
+		log.Println(err.Error())
+		return
 	}
 	defer RemoveWebSocket(label)
 	defer ws.Close()
@@ -234,7 +235,7 @@ func WebSocketTurtleHandler(c echo.Context) error {
 		msgType, msg, err := ws.ReadMessage()
 		if err != nil {
 			log.Println(err.Error())
-			return err
+			return
 		} else if msgType != websocket.TextMessage {
 			log.Println("Message type is not text")
 		}

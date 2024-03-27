@@ -1,9 +1,9 @@
 package cct_turtle
 
 import (
+	"encoding/json"
+	"net/http"
 	"time"
-
-	"github.com/labstack/echo/v4"
 )
 
 // -------------- Globals --------------
@@ -55,32 +55,34 @@ type Item struct {
 // -------------- Handlers --------------
 
 // GetTurtleCode - Get the turtle code
-func GetTurtleCode(c echo.Context) error {
-	return c.File("static/cct_turtle/startup.lua")
+func GetTurtleCode(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, "static/cct_turtle/startup.lua")
 }
 
 // GetTurtleUpdatingCode - Get the turtle updating code
-func GetTurtleUpdatingCode(c echo.Context) error {
-	return c.File("static/cct_turtle/updating_startup.lua")
+func GetTurtleUpdatingCode(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, "static/cct_turtle/updating_startup.lua")
 }
 
 // TODO: pull from DB
 // GetTurtleStatus - Get the turtle status
-func GetTurtleStatus(c echo.Context) error {
-	return c.JSON(200, Turtle{
+func GetTurtleStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	turtleStatus := Turtle{
 		Label:    "Turtle",
 		ID:       1,
 		Fuel:     "100",
 		Position: "0, 0, 0",
 		Facing:   "North",
-	})
+	}
+	json.NewEncoder(w).Encode(turtleStatus)
 }
 
 // TurtleHelper - The turtle helper
-func TurtleHelper(c echo.Context, function string) error {
-	label := c.Param("label")
+func TurtleHelper(w http.ResponseWriter, r *http.Request, function string) {
+	label := r.URL.Query().Get("label")
 	if label == "" {
-		label = c.QueryParam("label")
+		label = r.PathValue("label")
 	}
 
 	Queue.AddNewInstruction(label, function)
@@ -92,53 +94,54 @@ func TurtleHelper(c echo.Context, function string) error {
 	}
 	status, err := Queue.GetResponse(label)
 	if err != nil {
-		return c.JSON(500, err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 	Queue.RemoveInstruction(label, 0)
-	return c.JSON(200, status)
+	json.NewEncoder(w).Encode(status)
 }
 
 // MoveTurtleForward - Move the turtle forward
-func MoveTurtleForward(c echo.Context) error {
-	return TurtleHelper(c, "turtle.forward()")
+func MoveTurtleForward(w http.ResponseWriter, r *http.Request) {
+	TurtleHelper(w, r, "turtle.forward()")
 }
 
 // MoveTurtleBackward - Move the turtle backward
-func MoveTurtleBackward(c echo.Context) error {
-	return TurtleHelper(c, "turtle.back()")
+func MoveTurtleBackward(w http.ResponseWriter, r *http.Request) {
+	TurtleHelper(w, r, "turtle.back()")
 }
 
 // MoveTurtleUp - Move the turtle up
-func MoveTurtleUp(c echo.Context) error {
-	return TurtleHelper(c, "turtle.up()")
+func MoveTurtleUp(w http.ResponseWriter, r *http.Request) {
+	TurtleHelper(w, r, "turtle.up()")
 }
 
 // MoveTurtleDown - Move the turtle down
-func MoveTurtleDown(c echo.Context) error {
-	return TurtleHelper(c, "turtle.down()")
+func MoveTurtleDown(w http.ResponseWriter, r *http.Request) {
+	TurtleHelper(w, r, "turtle.down()")
 }
 
 // TurnTurtleLeft - Turn the turtle left
-func TurnTurtleLeft(c echo.Context) error {
-	return TurtleHelper(c, "turtle.turnLeft()")
+func TurnTurtleLeft(w http.ResponseWriter, r *http.Request) {
+	TurtleHelper(w, r, "turtle.turnLeft()")
 }
 
 // TurnTurtleRight - Turn the turtle right
-func TurnTurtleRight(c echo.Context) error {
-	return TurtleHelper(c, "turtle.turnRight()")
+func TurnTurtleRight(w http.ResponseWriter, r *http.Request) {
+	TurtleHelper(w, r, "turtle.turnRight()")
 }
 
 // DigTurtle - Dig with the turtle
-func DigTurtle(c echo.Context) error {
-	return TurtleHelper(c, "turtle.dig()")
+func DigTurtle(w http.ResponseWriter, r *http.Request) {
+	TurtleHelper(w, r, "turtle.dig()")
 }
 
 // DigTurtleUp - Dig up with the turtle
-func DigTurtleUp(c echo.Context) error {
-	return TurtleHelper(c, "turtle.digUp()")
+func DigTurtleUp(w http.ResponseWriter, r *http.Request) {
+	TurtleHelper(w, r, "turtle.digUp()")
 }
 
 // DigTurtleDown - Dig down with the turtle
-func DigTurtleDown(c echo.Context) error {
-	return TurtleHelper(c, "turtle.digDown()")
+func DigTurtleDown(w http.ResponseWriter, r *http.Request) {
+	TurtleHelper(w, r, "turtle.digDown()")
 }
