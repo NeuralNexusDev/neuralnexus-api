@@ -1,6 +1,6 @@
 FROM alpine:3.14
 
 COPY static /static
-COPY ./build/neuralnexus-api .
+COPY ./neuralnexus-api .
 
 CMD ["./neuralnexus-api"]
