@@ -10,6 +10,7 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/mcstatus"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/projects"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/switchboard"
+	"github.com/rs/cors"
 )
 
 // -------------- Main --------------
@@ -85,7 +86,7 @@ func main() {
 
 	server := http.Server{
 		Addr:    ip + ":" + port,
-		Handler: router,
+		Handler: cors.Default().Handler(router),
 	}
 	log.Fatal(server.ListenAndServe())
 
