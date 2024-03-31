@@ -74,11 +74,9 @@ func (s *APIServer) Run() error {
 	router.HandleFunc("GET /cct-turtle/dig-down/{label}", cct_turtle.DigTurtleDown)
 
 	// -------------- MC Status --------------
-	mcstatusRouter := http.NewServeMux()
-	mcstatusRouter.Handle("/mcstatus/", http.StripPrefix("/mcstatus", router))
-	mcstatusRouter.HandleFunc("GET /", mcstatus.GetRoot)
-	mcstatusRouter.HandleFunc("GET /{address}", mcstatus.GetServerStatus)
-	mcstatusRouter.HandleFunc("GET /icon/{address}", mcstatus.GetIcon)
+	router.HandleFunc("GET /mcstatus", mcstatus.GetRoot)
+	router.HandleFunc("GET /mcstatus/{address}", mcstatus.GetServerStatus)
+	router.HandleFunc("GET /mcstatus/icon/{address}", mcstatus.GetIcon)
 
 	// -------------- Projects --------------
 	router.HandleFunc("GET /projects/releases/{group}/{project}", projects.GetReleasesHandler)
