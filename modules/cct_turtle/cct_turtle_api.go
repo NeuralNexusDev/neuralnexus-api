@@ -52,7 +52,34 @@ type Item struct {
 
 // -------------- Functions --------------
 
-// -------------- Handlers --------------
+// -------------- Routes --------------
+// ApplyRoutes - Apply the routes
+func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
+	mux.HandleFunc("GET /ws/v1/cct-turtle/{label}", WebSocketTurtleHandler)
+	// e.GET("/cct-turtle/status", GetTurtleStatus)
+	// e.GET("/cct-turtle/status/:label", GetTurtleStatus)
+	mux.HandleFunc("GET /cct-turtle/startup.lua", GetTurtleCode)
+	mux.HandleFunc("GET /cct-turtle/updating_startup.lua", GetTurtleUpdatingCode)
+	mux.HandleFunc("GET /cct-turtle/forward", MoveTurtleForward)
+	mux.HandleFunc("GET /cct-turtle/forward/{label}", MoveTurtleForward)
+	mux.HandleFunc("GET /cct-turtle/back", MoveTurtleBackward)
+	mux.HandleFunc("GET /cct-turtle/back/{label}", MoveTurtleBackward)
+	mux.HandleFunc("GET /cct-turtle/up", MoveTurtleUp)
+	mux.HandleFunc("GET /cct-turtle/up/{label}", MoveTurtleUp)
+	mux.HandleFunc("GET /cct-turtle/down", MoveTurtleDown)
+	mux.HandleFunc("GET /cct-turtle/down/{label}", MoveTurtleDown)
+	mux.HandleFunc("GET /cct-turtle/left", TurnTurtleLeft)
+	mux.HandleFunc("GET /cct-turtle/left/{label}", TurnTurtleLeft)
+	mux.HandleFunc("GET /cct-turtle/right", TurnTurtleRight)
+	mux.HandleFunc("GET /cct-turtle/right/{label}", TurnTurtleRight)
+	mux.HandleFunc("GET /cct-turtle/dig", DigTurtle)
+	mux.HandleFunc("GET /cct-turtle/dig/{label}", DigTurtle)
+	mux.HandleFunc("GET /cct-turtle/dig-up", DigTurtleUp)
+	mux.HandleFunc("GET /cct-turtle/dig-up/{label}", DigTurtleUp)
+	mux.HandleFunc("GET /cct-turtle/dig-down", DigTurtleDown)
+	mux.HandleFunc("GET /cct-turtle/dig-down/{label}", DigTurtleDown)
+	return mux
+}
 
 // GetTurtleCode - Get the turtle code
 func GetTurtleCode(w http.ResponseWriter, r *http.Request) {

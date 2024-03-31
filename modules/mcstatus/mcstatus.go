@@ -379,6 +379,14 @@ func ServerStatus(serverInfo ServerInfo) (StausResponse, image.Image, error) {
 
 // -------------- Routes --------------
 
+// ApplyRoutes - Apply the routes
+func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
+	mux.HandleFunc("/mcstatus", GetRoot)
+	mux.HandleFunc("/mcstatus/{address}", GetServerStatus)
+	mux.HandleFunc("/mcstatus/icon/{address}", GetIcon)
+	return mux
+}
+
 // Route that returns general API info
 func GetRoot(w http.ResponseWriter, r *http.Request) {
 	// Check the request type

@@ -236,7 +236,26 @@ func rejectBeeNameSuggestion(beeName string) database.Response[string] {
 	}
 }
 
-// -------------- Handlers --------------
+// -------------- Routes --------------
+
+// ApplyRoutes - Apply the routes
+func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
+	mux.HandleFunc("GET /bee-name-generator", GetRoot)
+	mux.HandleFunc("GET /bee-name-generator/name", GetBeeNameHandler)
+	mux.HandleFunc("POST /bee-name-generator/name", UploadBeeNameHandler)
+	mux.HandleFunc("POST /bee-name-generator/name/{name}", UploadBeeNameHandler)
+	mux.HandleFunc("DELETE /bee-name-generator/name", DeleteBeeNameHandler)
+	mux.HandleFunc("DELETE /bee-name-generator/name/{name}", DeleteBeeNameHandler)
+	mux.HandleFunc("POST /bee-name-generator/suggestion", SubmitBeeNameHandler)
+	mux.HandleFunc("POST /bee-name-generator/suggestion/{name}", SubmitBeeNameHandler)
+	mux.HandleFunc("GET /bee-name-generator/suggestion", GetBeeNameSuggestionsHandler)
+	mux.HandleFunc("GET /bee-name-generator/suggestion/{amount}", GetBeeNameSuggestionsHandler)
+	mux.HandleFunc("PUT /bee-name-generator/suggestion", AcceptBeeNameSuggestionHandler)
+	mux.HandleFunc("PUT /bee-name-generator/suggestion/{name}", AcceptBeeNameSuggestionHandler)
+	mux.HandleFunc("DELETE /bee-name-generator/suggestion", RejectBeeNameSuggestionHandler)
+	mux.HandleFunc("DELETE /bee-name-generator/suggestion/{name}", RejectBeeNameSuggestionHandler)
+	return mux
+}
 
 // GetRoot get a simple docs/examples page
 func GetRoot(w http.ResponseWriter, r *http.Request) {

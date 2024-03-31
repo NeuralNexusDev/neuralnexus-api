@@ -120,7 +120,13 @@ func DecryptMessage(encryptedMessage []byte, key string) (Message, error) {
 	return message, nil
 }
 
-// -------------- Handlers --------------
+// -------------- Routes --------------
+// ApplyRoutes - Apply the routes
+func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
+	// mux.HandleFunc("GET /ws/v1/switchboard/relay", ebSocketRelayHandler)
+	mux.HandleFunc("GET /websocket/{id}", WebSocketRelayHandler)
+	return mux
+}
 
 // WebSocketRelayHandler relays switchboard messages
 func WebSocketRelayHandler(w http.ResponseWriter, r *http.Request) {
