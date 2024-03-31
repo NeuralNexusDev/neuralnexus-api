@@ -85,17 +85,17 @@ func (s *APIServer) Run() error {
 	// router.HandleFunc("GET /ws/v1/switchboard/relay", switchboard.WebSocketRelayHandler)
 	router.HandleFunc("GET /websocket/{id}", switchboard.WebSocketRelayHandler)
 
-	v1 := http.NewServeMux()
-	v1.Handle("/api/v1/", http.StripPrefix("/api/v1", router))
-
 	middlewareChain := middleware.CreateStack(
 		middleware.RequestLoggerMiddleware,
 		cors.Default().Handler,
 	)
 
+	v1 := http.NewServeMux()
+	v1.Handle("/api/v1/", http.StripPrefix("/api/v1", router))
+
 	server := http.Server{
 		Addr:    s.Address,
-		Handler: middlewareChain(router),
+		Handler: middlewareChain(v1),
 	}
 
 	log.Printf("API Server listening on %s", s.Address)
