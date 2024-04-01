@@ -5,7 +5,10 @@ import (
 	"net/http"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/middleware"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/beenamegenerator"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/cct_turtle"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/mcstatus"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/switchboard"
 	"github.com/NeuralNexusDev/neuralnexus-api/routes"
 	"github.com/rs/cors"
 )
@@ -25,10 +28,10 @@ func NewAPIServer(address string) *APIServer {
 // Run - Start the API server
 func (s *APIServer) Run() error {
 	routerStack := routes.CreateStack(
-		// beenamegenerator.ApplyRoutes,
-		// cct_turtle.ApplyRoutes,
+		beenamegenerator.ApplyRoutes,
+		cct_turtle.ApplyRoutes,
 		mcstatus.ApplyRoutes,
-		// switchboard.ApplyRoutes,
+		switchboard.ApplyRoutes,
 	)
 
 	middlewareStack := middleware.CreateStack(
