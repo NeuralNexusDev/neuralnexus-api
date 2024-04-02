@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -66,9 +67,16 @@ type Pet struct {
 	Name string `json:"name"`
 }
 
+// APIResponse - API response struct
+type APIResponse[T Pet | PetPicture] struct {
+	Success bool   `json:"success"`
+	Message string `json:"message,omitempty"`
+	Data    T      `json:"data,omitempty"`
+}
+
 // -------------- DB Functions --------------
 // createPet - Create a new pet
-func createPet(name string) (Pet, error) {
+func createPet(name string) database.Response[Pet] {
 	db := database.GetDB("pet_pictures")
 	defer db.Close()
 
@@ -78,14 +86,21 @@ func createPet(name string) (Pet, error) {
 		name,
 	).Scan(&pet.ID, &pet.Name)
 	if err != nil {
-		return Pet{}, err
+		log.Println("Unable to create pet:", err)
+		return database.Response[Pet]{
+			Success: false,
+			Message: "Unable to create pet (pet may already exist)",
+		}
 	}
 
-	return pet, nil
+	return database.Response[Pet]{
+		Success: true,
+		Data:    pet,
+	}
 }
 
 // getPet - Get a pet by ID
-func getPet(id int) (Pet, error) {
+func getPet(id int) database.Response[Pet] {
 	db := database.GetDB("pet_pictures")
 	defer db.Close()
 
@@ -95,14 +110,21 @@ func getPet(id int) (Pet, error) {
 		id,
 	).Scan(&pet.ID, &pet.Name)
 	if err != nil {
-		return Pet{}, err
+		log.Println("Unable to get pet:", err)
+		return database.Response[Pet]{
+			Success: false,
+			Message: "Unable to get pet",
+		}
 	}
 
-	return pet, nil
+	return database.Response[Pet]{
+		Success: true,
+		Data:    pet,
+	}
 }
 
 // getPetByName - Get a pet by name
-func getPetByName(name string) (Pet, error) {
+func getPetByName(name string) database.Response[Pet] {
 	db := database.GetDB("pet_pictures")
 	defer db.Close()
 
@@ -112,14 +134,21 @@ func getPetByName(name string) (Pet, error) {
 		name,
 	).Scan(&pet.ID, &pet.Name)
 	if err != nil {
-		return Pet{}, err
+		log.Println("Unable to get pet:", err)
+		return database.Response[Pet]{
+			Success: false,
+			Message: "Unable to get pet",
+		}
 	}
 
-	return pet, nil
+	return database.Response[Pet]{
+		Success: true,
+		Data:    pet,
+	}
 }
 
 // updatePet - Update a pet
-func updatePet(id int, name string, picture UUID) (Pet, error) {
+func updatePet(id int, name string, picture UUID) database.Response[Pet] {
 	db := database.GetDB("pet_pictures")
 	defer db.Close()
 
@@ -129,14 +158,21 @@ func updatePet(id int, name string, picture UUID) (Pet, error) {
 		name, picture, id,
 	).Scan(&pet.ID, &pet.Name)
 	if err != nil {
-		return Pet{}, err
+		log.Println("Unable to update pet:", err)
+		return database.Response[Pet]{
+			Success: false,
+			Message: "Unable to update pet",
+		}
 	}
 
-	return pet, nil
+	return database.Response[Pet]{
+		Success: true,
+		Data:    pet,
+	}
 }
 
 // createPetPicture - Create a new pet picture
-func createPetPicture(md5 string, fileExt string, subjects []int, aliases []string) (PetPicture, error) {
+func createPetPicture(md5 string, fileExt string, subjects []int, aliases []string) database.Response[PetPicture] {
 	db := database.GetDB("pet_pictures")
 	defer db.Close()
 
@@ -146,14 +182,21 @@ func createPetPicture(md5 string, fileExt string, subjects []int, aliases []stri
 		md5, fileExt, subjects, aliases,
 	).Scan(&petPicture.ID, &petPicture.MD5, &petPicture.FileExt, &petPicture.Subjects, &petPicture.Aliases, &petPicture.Created)
 	if err != nil {
-		return PetPicture{}, err
+		log.Println("Unable to create pet picture:", err)
+		return database.Response[PetPicture]{
+			Success: false,
+			Message: "Unable to create pet picture",
+		}
 	}
 
-	return petPicture, nil
+	return database.Response[PetPicture]{
+		Success: true,
+		Data:    petPicture,
+	}
 }
 
 // getRandPetPicture - Get a random pet picture
-func getRandPetPicture() (PetPicture, error) {
+func getRandPetPicture() database.Response[PetPicture] {
 	db := database.GetDB("pet_pictures")
 	defer db.Close()
 
@@ -162,14 +205,21 @@ func getRandPetPicture() (PetPicture, error) {
 		"SELECT id, md5, subjects, aliases, created_at FROM pictures ORDER BY random() LIMIT 1",
 	).Scan(&petPicture.ID, &petPicture.MD5, &petPicture.Subjects, &petPicture.Aliases, &petPicture.Created)
 	if err != nil {
-		return PetPicture{}, err
+		log.Println("Unable to get random pet picture:", err)
+		return database.Response[PetPicture]{
+			Success: false,
+			Message: "Unable to get random pet picture",
+		}
 	}
 
-	return petPicture, nil
+	return database.Response[PetPicture]{
+		Success: true,
+		Data:    petPicture,
+	}
 }
 
 // getPetPicture - Get a pet picture by ID
-func getPetPicture(id UUID) (PetPicture, error) {
+func getPetPicture(id UUID) database.Response[PetPicture] {
 	db := database.GetDB("pet_pictures")
 	defer db.Close()
 
@@ -179,14 +229,21 @@ func getPetPicture(id UUID) (PetPicture, error) {
 		id,
 	).Scan(&petPicture.ID, &petPicture.MD5, &petPicture.Subjects, &petPicture.Aliases, &petPicture.Created)
 	if err != nil {
-		return PetPicture{}, err
+		log.Println("Unable to get pet picture:", err)
+		return database.Response[PetPicture]{
+			Success: false,
+			Message: "Unable to get pet picture",
+		}
 	}
 
-	return petPicture, nil
+	return database.Response[PetPicture]{
+		Success: true,
+		Data:    petPicture,
+	}
 }
 
 // getPetPictureByMD5 - Get a pet picture by MD5
-func getPetPictureByMD5(md5 string) (PetPicture, error) {
+func getPetPictureByMD5(md5 string) database.Response[PetPicture] {
 	db := database.GetDB("pet_pictures")
 	defer db.Close()
 
@@ -196,14 +253,21 @@ func getPetPictureByMD5(md5 string) (PetPicture, error) {
 		md5,
 	).Scan(&petPicture.ID, &petPicture.MD5, &petPicture.Subjects, &petPicture.Aliases, &petPicture.Created)
 	if err != nil {
-		return PetPicture{}, err
+		log.Println("Unable to get pet picture:", err)
+		return database.Response[PetPicture]{
+			Success: false,
+			Message: "Unable to get pet picture",
+		}
 	}
 
-	return petPicture, nil
+	return database.Response[PetPicture]{
+		Success: true,
+		Data:    petPicture,
+	}
 }
 
 // updatePetPicture - Update a pet picture
-func updatePetPicture(id UUID, md5 string, fileExt string, subjects []int, aliases []string) (PetPicture, error) {
+func updatePetPicture(id UUID, md5 string, fileExt string, subjects []int, aliases []string) database.Response[PetPicture] {
 	db := database.GetDB("pet_pictures")
 	defer db.Close()
 
@@ -213,41 +277,63 @@ func updatePetPicture(id UUID, md5 string, fileExt string, subjects []int, alias
 		md5, fileExt, subjects, aliases, id,
 	).Scan(&petPicture.ID, &petPicture.MD5, &petPicture.FileExt, &petPicture.Subjects, &petPicture.Aliases, &petPicture.Created)
 	if err != nil {
-		return PetPicture{}, err
+		log.Println("Unable to update pet picture:", err)
+		return database.Response[PetPicture]{
+			Success: false,
+			Message: "Unable to update pet picture",
+		}
 	}
 
-	return petPicture, nil
+	return database.Response[PetPicture]{
+		Success: true,
+		Data:    petPicture,
+	}
 }
 
 // -------------- Functions --------------
 
 // UploadPetPicture - Upload a pet picture
-func UploadPetPicture(file *os.File, subjects []int, aliases []string) (PetPicture, error) {
+func UploadPetPicture(file *os.File, subjects []int, aliases []string) APIResponse[PetPicture] {
 	// Get MD5 hash
 	hash := md5.New()
 	if _, err := io.Copy(hash, file); err != nil {
-		return PetPicture{}, err
+		log.Println("Unable to get MD5 hash:", err)
+		return APIResponse[PetPicture]{
+			Success: false,
+			Message: "Unable to get MD5 hash",
+		}
 	}
 	md5 := hex.EncodeToString(hash.Sum(nil))
 
 	splitName := strings.Split(file.Name(), ".")
 	fileExt := splitName[len(splitName)-1]
 
-	petPicture, err := createPetPicture(md5, fileExt, subjects, aliases)
-	if err != nil {
-		return PetPicture{}, err
+	petPictureResponse := createPetPicture(md5, fileExt, subjects, aliases)
+	if !petPictureResponse.Success {
+		return APIResponse[PetPicture]{
+			Success: false,
+			Message: petPictureResponse.Message,
+		}
 	}
+	petPicture := petPictureResponse.Data
 
 	// Update file name
 	newFileName := string(petPicture.ID) + "." + fileExt
 	if err := os.Rename(file.Name(), newFileName); err != nil {
-		return PetPicture{}, err
+		log.Println("Unable to rename file:", err)
+		return APIResponse[PetPicture]{
+			Success: false,
+			Message: "Unable to rename file",
+		}
 	}
 
 	// Create a new request
 	req, err := http.NewRequest(http.MethodPost, CDN_URL+"/upload", nil)
 	if err != nil {
-		return PetPicture{}, err
+		return APIResponse[PetPicture]{
+			Success: false,
+			Message: "Unable to create request",
+		}
 	}
 
 	// Create a new multipart writer
@@ -261,12 +347,18 @@ func UploadPetPicture(file *os.File, subjects []int, aliases []string) (PetPictu
 	// Create a new form file
 	part, err := writer.CreateFormFile("file", newFileName)
 	if err != nil {
-		return PetPicture{}, err
+		return APIResponse[PetPicture]{
+			Success: false,
+			Message: "Unable to create form file",
+		}
 	}
 
 	// Copy the file to the form file
 	if _, err := io.Copy(part, file); err != nil {
-		return PetPicture{}, err
+		return APIResponse[PetPicture]{
+			Success: false,
+			Message: "Unable to copy form file",
+		}
 	}
 	writer.Close()
 
@@ -277,10 +369,16 @@ func UploadPetPicture(file *os.File, subjects []int, aliases []string) (PetPictu
 	client := &http.Client{}
 	_, err = client.Do(req)
 	if err != nil {
-		return PetPicture{}, err
+		return APIResponse[PetPicture]{
+			Success: false,
+			Message: "Unable to send request",
+		}
 	}
 
-	return petPicture, nil
+	return APIResponse[PetPicture]{
+		Success: true,
+		Data:    petPicture,
+	}
 }
 
 // -------------- Routes --------------
@@ -305,5 +403,16 @@ func CreatePetHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid pet name", http.StatusBadRequest)
 		return
 	}
-	// TODO: Finish this and use database type to return errors
+
+	petResponse := createPet(petName)
+	if !petResponse.Success {
+		http.Error(w, petResponse.Message, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(APIResponse[Pet]{
+		Success: true,
+		Data:    petResponse.Data,
+	})
 }
