@@ -1,4 +1,4 @@
-package problemresponses
+package responses
 
 // -------------- Structs --------------
 // ProblemResponse -- Defined by https://www.rfc-editor.org/rfc/rfc9457.html#section-3

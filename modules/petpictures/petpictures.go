@@ -6,7 +6,6 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
-	"encoding/xml"
 	"io"
 	"log"
 	"mime/multipart"
@@ -15,7 +14,7 @@ import (
 	"strings"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
-	"github.com/NeuralNexusDev/neuralnexus-api/problemresponses"
+	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
 // CREATE TABLE pictures(
@@ -402,23 +401,15 @@ func CreatePetHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if petName == "" {
-		problem := problemresponses.NewProblemResponse(
+		problem := responses.NewProblemResponse(
 			"invalid_input",
 			"Invalid input",
 			"Pet name is required",
 			// TODO: Add instance
 			"TODO: Add instance",
 		)
-		w.WriteHeader(http.StatusBadRequest)
-		if r.Header.Get("Content-Type") == "application/json" {
-			w.Header().Set("Content-Type", "application/problem+json")
-			json.NewEncoder(w).Encode(problem)
-		} else if r.Header.Get("Content-Type") == "application/xml" {
-			w.Header().Set("Content-Type", "application/problem+xml")
-			xml.NewEncoder(w).Encode(problem)
-		} else {
-			http.Error(w, "Pet name is required", http.StatusBadRequest)
-		}
+		responses.SendAndEncodeProblem(w, r, http.StatusBadRequest, problem)
+		return
 	}
 
 	petResponse := createPet(petName)
@@ -427,19 +418,5 @@ func CreatePetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	apiResponse := APIResponse[Pet]{
-		Success: true,
-		Data:    petResponse.Data,
-	}
-
-	w.WriteHeader(http.StatusCreated)
-	if r.Header.Get("Content-Type") == "application/json" {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(apiResponse)
-	} else if r.Header.Get("Content-Type") == "application/xml" {
-		w.Header().Set("Content-Type", "application/xml")
-		xml.NewEncoder(w).Encode(apiResponse)
-	} else {
-		w.Write([]byte("Pet created: " + petResponse.Data.Name + " (ID: " + string(petResponse.Data.ID) + ")"))
-	}
+	responses.SendAndEncodeStruct(w, r, http.StatusCreated, petResponse.Data)
 }
