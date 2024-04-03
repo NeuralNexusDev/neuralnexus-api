@@ -8,7 +8,7 @@ import (
 
 // -------------- Functions --------------
 // SendAndEncodeStruct -- Send a struct as JSON or XML
-func SendAndEncodeStruct(w http.ResponseWriter, r *http.Request, statusCode int, data interface{}) {
+func SendAndEncodeStruct[T any](w http.ResponseWriter, r *http.Request, statusCode int, data T) {
 	w.WriteHeader(statusCode)
 	if r.Header.Get("Content-Type") == "application/xml" {
 		w.Header().Set("Content-Type", "application/xml")
@@ -29,4 +29,12 @@ func SendAndEncodeProblem(w http.ResponseWriter, r *http.Request, statusCode int
 		w.Header().Set("Content-Type", "application/problem+json")
 		json.NewEncoder(w).Encode(problem)
 	}
+}
+
+// DecodeStruct -- Decode a struct from JSON or XML
+func DecodeStruct[T any](r *http.Request, data T) error {
+	if r.Header.Get("Content-Type") == "application/xml" {
+		return xml.NewDecoder(r.Body).Decode(data)
+	}
+	return json.NewDecoder(r.Body).Decode(data)
 }

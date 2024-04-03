@@ -3,14 +3,14 @@ package petpictures
 import (
 	"bytes"
 	"context"
-	"crypto/md5"
+	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"io"
 	"log"
 	"mime/multipart"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
@@ -18,20 +18,19 @@ import (
 )
 
 // CREATE TABLE pictures(
-//     id uuid not null primary key default gen_random_uuid(),
-//     md5 text not null,
+//     id text not null primary key,
 //     file_ext text not null,
 //     subjects integer[] not null,
 //     aliases text[],
 //     created_at timestamp with time zone default current_timestamp,
-//     CONSTRAINT md5_check UNIQUE ( md5 ),
+//     CONSTRAINT id_check UNIQUE ( id ),
 //     CONSTRAINT subjects_check CHECK ( subjects <> '{}' )
 // );
 
 // CREATE TABLE pets(
 //     id serial not null primary key,
 //     name text not null,
-//     profile_picture uuid,
+//     profile_picture text default null,
 //     created_at timestamp with time zone default current_timestamp,
 //     CONSTRAINT name_check UNIQUE ( name )
 // );
@@ -44,13 +43,9 @@ var (
 )
 
 // -------------- Structs --------------
-// UUID - UUID type alias
-type UUID string
-
 // PetPicture - Pet picture struct
 type PetPicture struct {
-	ID       UUID     `json:"id"`
-	MD5      string   `json:"md5"`
+	ID       string   `json:"id"`
 	FileExt  string   `json:"file_ext"`
 	Subjects []int    `json:"subjects"`
 	Aliases  []string `json:"aliases"`
@@ -64,8 +59,9 @@ func (p *PetPicture) GetPetPictureURL() string {
 
 // Pet - Pet struct
 type Pet struct {
-	ID   int    `json:"id"`
-	Name string `json:"name"`
+	ID             int    `json:"id"`
+	Name           string `json:"name"`
+	ProfilePicture string `json:"profile_picture"`
 }
 
 // APIResponse - API response struct
@@ -149,7 +145,7 @@ func getPetByName(name string) database.Response[Pet] {
 }
 
 // updatePet - Update a pet
-func updatePet(id int, name string, picture UUID) database.Response[Pet] {
+func updatePet(id int, name string, picture string) database.Response[Pet] {
 	db := database.GetDB("pet_pictures")
 	defer db.Close()
 
@@ -179,9 +175,9 @@ func createPetPicture(md5 string, fileExt string, subjects []int, aliases []stri
 
 	var petPicture PetPicture
 	err := db.QueryRow(context.Background(),
-		"INSERT INTO pictures (md5, file_ext, subjects, aliases) VALUES ($1, $2, $3, $4) RETURNING id, md5, file_ext, subjects, aliases, created_at",
+		"INSERT INTO pictures (id, file_ext, subjects, aliases) VALUES ($1, $2, $3, $4) RETURNING id, file_ext, subjects, aliases, created_at",
 		md5, fileExt, subjects, aliases,
-	).Scan(&petPicture.ID, &petPicture.MD5, &petPicture.FileExt, &petPicture.Subjects, &petPicture.Aliases, &petPicture.Created)
+	).Scan(&petPicture.ID, &petPicture.FileExt, &petPicture.Subjects, &petPicture.Aliases, &petPicture.Created)
 	if err != nil {
 		log.Println("Unable to create pet picture:", err)
 		return database.Response[PetPicture]{
@@ -203,8 +199,8 @@ func getRandPetPicture() database.Response[PetPicture] {
 
 	var petPicture PetPicture
 	err := db.QueryRow(context.Background(),
-		"SELECT id, md5, subjects, aliases, created_at FROM pictures ORDER BY random() LIMIT 1",
-	).Scan(&petPicture.ID, &petPicture.MD5, &petPicture.Subjects, &petPicture.Aliases, &petPicture.Created)
+		"SELECT id, subjects, aliases, created_at FROM pictures ORDER BY random() LIMIT 1",
+	).Scan(&petPicture.ID, &petPicture.Subjects, &petPicture.Aliases, &petPicture.Created)
 	if err != nil {
 		log.Println("Unable to get random pet picture:", err)
 		return database.Response[PetPicture]{
@@ -220,39 +216,15 @@ func getRandPetPicture() database.Response[PetPicture] {
 }
 
 // getPetPicture - Get a pet picture by ID
-func getPetPicture(id UUID) database.Response[PetPicture] {
+func getPetPicture(id string) database.Response[PetPicture] {
 	db := database.GetDB("pet_pictures")
 	defer db.Close()
 
 	var petPicture PetPicture
 	err := db.QueryRow(context.Background(),
-		"SELECT id, md5, subjects, aliases, created_at FROM pictures WHERE id = $1",
+		"SELECT id, subjects, aliases, created_at FROM pictures WHERE id = $1",
 		id,
-	).Scan(&petPicture.ID, &petPicture.MD5, &petPicture.Subjects, &petPicture.Aliases, &petPicture.Created)
-	if err != nil {
-		log.Println("Unable to get pet picture:", err)
-		return database.Response[PetPicture]{
-			Success: false,
-			Message: "Unable to get pet picture",
-		}
-	}
-
-	return database.Response[PetPicture]{
-		Success: true,
-		Data:    petPicture,
-	}
-}
-
-// getPetPictureByMD5 - Get a pet picture by MD5
-func getPetPictureByMD5(md5 string) database.Response[PetPicture] {
-	db := database.GetDB("pet_pictures")
-	defer db.Close()
-
-	var petPicture PetPicture
-	err := db.QueryRow(context.Background(),
-		"SELECT id, md5, subjects, aliases, created_at FROM pictures WHERE md5 = $1",
-		md5,
-	).Scan(&petPicture.ID, &petPicture.MD5, &petPicture.Subjects, &petPicture.Aliases, &petPicture.Created)
+	).Scan(&petPicture.ID, &petPicture.Subjects, &petPicture.Aliases, &petPicture.Created)
 	if err != nil {
 		log.Println("Unable to get pet picture:", err)
 		return database.Response[PetPicture]{
@@ -268,15 +240,15 @@ func getPetPictureByMD5(md5 string) database.Response[PetPicture] {
 }
 
 // updatePetPicture - Update a pet picture
-func updatePetPicture(id UUID, md5 string, fileExt string, subjects []int, aliases []string) database.Response[PetPicture] {
+func updatePetPicture(id string, fileExt string, subjects []int, aliases []string) database.Response[PetPicture] {
 	db := database.GetDB("pet_pictures")
 	defer db.Close()
 
 	var petPicture PetPicture
 	err := db.QueryRow(context.Background(),
-		"UPDATE pictures SET md5 = $1, file_ext = $2, subjects = $3, aliases = $4 WHERE id = $5 RETURNING id, md5, file_ext, subjects, aliases, created_at",
-		md5, fileExt, subjects, aliases, id,
-	).Scan(&petPicture.ID, &petPicture.MD5, &petPicture.FileExt, &petPicture.Subjects, &petPicture.Aliases, &petPicture.Created)
+		"UPDATE pictures SET id = $1, file_ext = $2, subjects = $3, aliases = $4 WHERE id = $5 RETURNING id, file_ext, subjects, aliases, created_at",
+		id, fileExt, subjects, aliases, id,
+	).Scan(&petPicture.ID, &petPicture.FileExt, &petPicture.Subjects, &petPicture.Aliases, &petPicture.Created)
 	if err != nil {
 		log.Println("Unable to update pet picture:", err)
 		return database.Response[PetPicture]{
@@ -291,25 +263,49 @@ func updatePetPicture(id UUID, md5 string, fileExt string, subjects []int, alias
 	}
 }
 
+// deletePetPicture - Delete a pet picture
+func deletePetPicture(id string) database.Response[PetPicture] {
+	db := database.GetDB("pet_pictures")
+	defer db.Close()
+
+	var petPicture PetPicture
+	err := db.QueryRow(context.Background(),
+		"DELETE FROM pictures WHERE id = $1 RETURNING id, file_ext, subjects, aliases, created_at",
+		id,
+	).Scan(&petPicture.ID, &petPicture.FileExt, &petPicture.Subjects, &petPicture.Aliases, &petPicture.Created)
+	if err != nil {
+		log.Println("Unable to delete pet picture:", err)
+		return database.Response[PetPicture]{
+			Success: false,
+			Message: "Unable to delete pet picture",
+		}
+	}
+
+	return database.Response[PetPicture]{
+		Success: true,
+		Data:    petPicture,
+	}
+}
+
 // -------------- Functions --------------
 
 // UploadPetPicture - Upload a pet picture
 func UploadPetPicture(file *os.File, subjects []int, aliases []string) APIResponse[PetPicture] {
-	// Get MD5 hash
-	hash := md5.New()
+	// Get SHA1 hash
+	hash := sha256.New()
 	if _, err := io.Copy(hash, file); err != nil {
-		log.Println("Unable to get MD5 hash:", err)
+		log.Println("Unable to get SHA256 hash:", err)
 		return APIResponse[PetPicture]{
 			Success: false,
-			Message: "Unable to get MD5 hash",
+			Message: "Unable to get SHA256 hash",
 		}
 	}
-	md5 := hex.EncodeToString(hash.Sum(nil))
+	sha := hex.EncodeToString(hash.Sum(nil))
 
 	splitName := strings.Split(file.Name(), ".")
 	fileExt := splitName[len(splitName)-1]
 
-	petPictureResponse := createPetPicture(md5, fileExt, subjects, aliases)
+	petPictureResponse := createPetPicture(sha, fileExt, subjects, aliases)
 	if !petPictureResponse.Success {
 		return APIResponse[PetPicture]{
 			Success: false,
@@ -387,6 +383,16 @@ func UploadPetPicture(file *os.File, subjects []int, aliases []string) APIRespon
 // ApplyRoutes - Apply routes to the router
 func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 	mux.HandleFunc("POST /petpictures/pets/{name}", CreatePetHandler)
+	mux.HandleFunc("POST /petpictures/pets", CreatePetHandler)
+	mux.HandleFunc("GET /petpictures/pets/{id}", GetPetHandler)
+	mux.HandleFunc("GET /petpictures/pets", GetPetHandler)
+	mux.HandleFunc("PUT /petpictures/pets", UpdatePetHandler)
+	mux.HandleFunc("GET /petpictures/pictures/random", GetRandPetPictureHandler)
+	mux.HandleFunc("GET /petpictures/pictures/{id}", GetPetPictureHandler)
+	mux.HandleFunc("GET /petpictures/pictures", GetPetPictureHandler)
+	mux.HandleFunc("PUT /petpictures/pictures", UpdatePetPictureHandler)
+	mux.HandleFunc("DELETE /petpictures/pictures/{id}", DeletePetPictureHandler)
+	mux.HandleFunc("DELETE /petpictures/pictures", DeletePetPictureHandler)
 	return mux
 }
 
@@ -395,7 +401,7 @@ func CreatePetHandler(w http.ResponseWriter, r *http.Request) {
 	petName := r.PathValue("name")
 	if petName == "" {
 		var pet Pet
-		err := json.NewDecoder(r.Body).Decode(&pet)
+		err := responses.DecodeStruct(r, &pet)
 		if err == nil {
 			petName = pet.Name
 		}
@@ -414,9 +420,222 @@ func CreatePetHandler(w http.ResponseWriter, r *http.Request) {
 
 	petResponse := createPet(petName)
 	if !petResponse.Success {
-		http.Error(w, petResponse.Message, http.StatusInternalServerError)
+		problem := responses.NewProblemResponse(
+			"unable_to_create_pet",
+			"Unable to create pet",
+			petResponse.Message,
+			// TODO: Add instance
+			"TODO: Add instance",
+		)
+		responses.SendAndEncodeProblem(w, r, http.StatusInternalServerError, problem)
 		return
 	}
 
 	responses.SendAndEncodeStruct(w, r, http.StatusCreated, petResponse.Data)
+}
+
+// GetPetHandler - Get a pet by ID
+func GetPetHandler(w http.ResponseWriter, r *http.Request) {
+	var petID int
+	stringPetID := r.PathValue("id")
+	if stringPetID != "" {
+		var err error
+		petID, err = strconv.Atoi(stringPetID)
+		if err != nil {
+			petID = 0
+		}
+	}
+	if petID == 0 {
+		var pet Pet
+		err := responses.DecodeStruct(r, &pet)
+		if err == nil {
+			petID = pet.ID
+		}
+	}
+
+	if petID == 0 {
+		problem := responses.NewProblemResponse(
+			"invalid_input",
+			"Invalid input",
+			"Pet ID is required",
+			// TODO: Add instance
+			"TODO: Add instance",
+		)
+		responses.SendAndEncodeProblem(w, r, http.StatusBadRequest, problem)
+		return
+	}
+
+	petResponse := getPet(petID)
+	if !petResponse.Success {
+		problem := responses.NewProblemResponse(
+			"not_found",
+			"Pet not found",
+			petResponse.Message,
+			// TODO: Add instance
+			"TODO: Add instance",
+		)
+		responses.SendAndEncodeProblem(w, r, http.StatusNotFound, problem)
+		return
+	}
+
+	responses.SendAndEncodeStruct(w, r, http.StatusOK, petResponse.Data)
+}
+
+// UpdatePetHandler - Update a pet
+func UpdatePetHandler(w http.ResponseWriter, r *http.Request) {
+	var pet Pet
+	err := responses.DecodeStruct(r, &pet)
+	if err != nil {
+		problem := responses.NewProblemResponse(
+			"invalid_input",
+			"Invalid input",
+			"Invalid input",
+			// TODO: Add instance
+			"TODO: Add instance",
+		)
+		responses.SendAndEncodeProblem(w, r, http.StatusBadRequest, problem)
+		return
+	}
+
+	petResponse := updatePet(pet.ID, pet.Name, pet.ProfilePicture)
+	if !petResponse.Success {
+		problem := responses.NewProblemResponse(
+			"unable_to_update_pet",
+			"Unable to update pet",
+			petResponse.Message,
+			// TODO: Add instance
+			"TODO: Add instance",
+		)
+		responses.SendAndEncodeProblem(w, r, http.StatusInternalServerError, problem)
+		return
+	}
+
+	responses.SendAndEncodeStruct(w, r, http.StatusOK, petResponse.Data)
+}
+
+// GetRandPetPictureHandler - Get a random pet picture
+func GetRandPetPictureHandler(w http.ResponseWriter, r *http.Request) {
+	petPictureResponse := getRandPetPicture()
+	if !petPictureResponse.Success {
+		problem := responses.NewProblemResponse(
+			"not_found",
+			"Pet picture not found",
+			petPictureResponse.Message,
+			// TODO: Add instance
+			"TODO: Add instance",
+		)
+		responses.SendAndEncodeProblem(w, r, http.StatusNotFound, problem)
+		return
+	}
+
+	responses.SendAndEncodeStruct(w, r, http.StatusOK, petPictureResponse.Data)
+}
+
+// GetPetPictureHandler - Get a pet picture by ID
+func GetPetPictureHandler(w http.ResponseWriter, r *http.Request) {
+	petPictureID := r.PathValue("id")
+	if petPictureID == "" {
+		var petPicture PetPicture
+		err := responses.DecodeStruct(r, &petPicture)
+		if err == nil {
+			petPictureID = string(petPicture.ID)
+		}
+	}
+	if petPictureID == "" {
+		problem := responses.NewProblemResponse(
+			"invalid_input",
+			"Invalid input",
+			"Pet picture ID is required",
+			// TODO: Add instance
+			"TODO: Add instance",
+		)
+		responses.SendAndEncodeProblem(w, r, http.StatusBadRequest, problem)
+		return
+	}
+
+	petPictureResponse := getPetPicture(petPictureID)
+	if !petPictureResponse.Success {
+		problem := responses.NewProblemResponse(
+			"not_found",
+			"Pet picture not found",
+			petPictureResponse.Message,
+			// TODO: Add instance
+			"TODO: Add instance",
+		)
+		responses.SendAndEncodeProblem(w, r, http.StatusNotFound, problem)
+		return
+	}
+
+	responses.SendAndEncodeStruct(w, r, http.StatusOK, petPictureResponse.Data)
+}
+
+// UpdatePetPictureHandler - Update a pet picture
+func UpdatePetPictureHandler(w http.ResponseWriter, r *http.Request) {
+	var petPicture PetPicture
+	err := responses.DecodeStruct(r, &petPicture)
+	if err != nil {
+		problem := responses.NewProblemResponse(
+			"invalid_input",
+			"Invalid input",
+			"Invalid input",
+			// TODO: Add instance
+			"TODO: Add instance",
+		)
+		responses.SendAndEncodeProblem(w, r, http.StatusBadRequest, problem)
+		return
+	}
+
+	petPictureResponse := updatePetPicture(petPicture.ID, petPicture.FileExt, petPicture.Subjects, petPicture.Aliases)
+	if !petPictureResponse.Success {
+		problem := responses.NewProblemResponse(
+			"unable_to_update_pet_picture",
+			"Unable to update pet picture",
+			petPictureResponse.Message,
+			// TODO: Add instance
+			"TODO: Add instance",
+		)
+		responses.SendAndEncodeProblem(w, r, http.StatusInternalServerError, problem)
+		return
+	}
+
+	responses.SendAndEncodeStruct(w, r, http.StatusOK, petPictureResponse.Data)
+}
+
+// DeletePetPictureHandler - Delete a pet picture
+func DeletePetPictureHandler(w http.ResponseWriter, r *http.Request) {
+	petPictureID := r.PathValue("id")
+	if petPictureID == "" {
+		var petPicture PetPicture
+		err := responses.DecodeStruct(r, &petPicture)
+		if err == nil {
+			petPictureID = string(petPicture.ID)
+		}
+	}
+	if petPictureID == "" {
+		problem := responses.NewProblemResponse(
+			"invalid_input",
+			"Invalid input",
+			"Pet picture ID is required",
+			// TODO: Add instance
+			"TODO: Add instance",
+		)
+		responses.SendAndEncodeProblem(w, r, http.StatusBadRequest, problem)
+		return
+	}
+
+	petPictureResponse := deletePetPicture(petPictureID)
+
+	if !petPictureResponse.Success {
+		problem := responses.NewProblemResponse(
+			"unable_to_delete_pet_picture",
+			"Unable to delete pet picture",
+			petPictureResponse.Message,
+			// TODO: Add instance
+			"TODO: Add instance",
+		)
+		responses.SendAndEncodeProblem(w, r, http.StatusInternalServerError, problem)
+		return
+	}
+
+	responses.SendAndEncodeStruct(w, r, http.StatusOK, petPictureResponse.Data)
 }
