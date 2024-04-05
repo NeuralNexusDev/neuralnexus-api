@@ -256,12 +256,13 @@ func ApplyRoutes(mux *http.ServeMux, authedMux *http.ServeMux) (*http.ServeMux, 
 func SendAndEncodeInvalidName(w http.ResponseWriter, r *http.Request) {
 	problem := responses.NewProblemResponse(
 		"invalid_name",
+		http.StatusBadRequest,
 		"Invalid name",
 		"No name provided",
 		// TODO: Add instance
 		"TODO: Add instance",
 	)
-	responses.SendAndEncodeProblem(w, r, http.StatusBadRequest, problem)
+	responses.SendAndEncodeProblem(w, r, problem)
 }
 
 // GetRoot get a simple docs/examples page
@@ -272,12 +273,13 @@ func GetRoot(w http.ResponseWriter, r *http.Request) {
 		log.Println("Failed to read index.html: " + err.Error())
 		problem := responses.NewProblemResponse(
 			"file_error",
+			http.StatusInternalServerError,
 			"Failed to read file",
 			"Failed to read index.html",
 			// TODO: Add instance
 			"TODO: Add instance",
 		)
-		responses.SendAndEncodeProblem(w, r, http.StatusInternalServerError, problem)
+		responses.SendAndEncodeProblem(w, r, problem)
 		return
 	}
 
@@ -297,12 +299,13 @@ func GetBeeNameHandler(w http.ResponseWriter, r *http.Request) {
 	if !beeName.Success {
 		problem := responses.NewProblemResponse(
 			"get_bee_name_error",
+			http.StatusInternalServerError,
 			"Failed to get bee name",
 			beeName.Message,
 			// TODO: Add instance
 			"TODO: Add instance",
 		)
-		responses.SendAndEncodeProblem(w, r, http.StatusInternalServerError, problem)
+		responses.SendAndEncodeProblem(w, r, problem)
 		return
 	}
 
@@ -333,12 +336,13 @@ func UploadBeeNameHandler(w http.ResponseWriter, r *http.Request) {
 	if !upload.Success {
 		problem := responses.NewProblemResponse(
 			"upload_bee_name_error",
+			http.StatusInternalServerError,
 			"Failed to upload bee name",
 			upload.Message,
 			// TODO: Add instance
 			"TODO: Add instance",
 		)
-		responses.SendAndEncodeProblem(w, r, http.StatusInternalServerError, problem)
+		responses.SendAndEncodeProblem(w, r, problem)
 		return
 	}
 
@@ -369,12 +373,13 @@ func DeleteBeeNameHandler(w http.ResponseWriter, r *http.Request) {
 	if !delete.Success {
 		problem := responses.NewProblemResponse(
 			"delete_bee_name_error",
+			http.StatusInternalServerError,
 			"Failed to delete bee name",
 			delete.Message,
 			// TODO: Add instance
 			"TODO: Add instance",
 		)
-		responses.SendAndEncodeProblem(w, r, http.StatusInternalServerError, problem)
+		responses.SendAndEncodeProblem(w, r, problem)
 		return
 	}
 
@@ -399,12 +404,13 @@ func SubmitBeeNameHandler(w http.ResponseWriter, r *http.Request) {
 	if !submit.Success {
 		problem := responses.NewProblemResponse(
 			"submit_bee_name_error",
+			http.StatusInternalServerError,
 			"Failed to submit bee name",
 			submit.Message,
 			// TODO: Add instance
 			"TODO: Add instance",
 		)
-		responses.SendAndEncodeProblem(w, r, http.StatusInternalServerError, problem)
+		responses.SendAndEncodeProblem(w, r, problem)
 		return
 	}
 
@@ -435,12 +441,13 @@ func GetBeeNameSuggestionsHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		problem := responses.NewProblemResponse(
 			"invalid_amount",
+			http.StatusBadRequest,
 			"Invalid amount",
 			"Invalid amount provided",
 			// TODO: Add instance
 			"TODO: Add instance",
 		)
-		responses.SendAndEncodeProblem(w, r, http.StatusBadRequest, problem)
+		responses.SendAndEncodeProblem(w, r, problem)
 		return
 	}
 
@@ -448,12 +455,13 @@ func GetBeeNameSuggestionsHandler(w http.ResponseWriter, r *http.Request) {
 	if !suggestions.Success {
 		problem := responses.NewProblemResponse(
 			"get_bee_name_suggestions_error",
+			http.StatusInternalServerError,
 			"Failed to get bee name suggestions",
 			suggestions.Message,
 			// TODO: Add instance
 			"TODO: Add instance",
 		)
-		responses.SendAndEncodeProblem(w, r, http.StatusInternalServerError, problem)
+		responses.SendAndEncodeProblem(w, r, problem)
 		return
 	}
 
@@ -484,12 +492,13 @@ func AcceptBeeNameSuggestionHandler(w http.ResponseWriter, r *http.Request) {
 	if !accept.Success {
 		problem := responses.NewProblemResponse(
 			"accept_bee_name_suggestion_error",
+			http.StatusInternalServerError,
 			"Failed to accept bee name suggestion",
 			accept.Message,
 			// TODO: Add instance
 			"TODO: Add instance",
 		)
-		responses.SendAndEncodeProblem(w, r, http.StatusInternalServerError, problem)
+		responses.SendAndEncodeProblem(w, r, problem)
 		return
 	}
 
@@ -520,12 +529,13 @@ func RejectBeeNameSuggestionHandler(w http.ResponseWriter, r *http.Request) {
 	if !reject.Success {
 		problem := responses.NewProblemResponse(
 			"reject_bee_name_suggestion_error",
+			http.StatusInternalServerError,
 			"Failed to reject bee name suggestion",
 			reject.Message,
 			// TODO: Add instance
 			"TODO: Add instance",
 		)
-		responses.SendAndEncodeProblem(w, r, http.StatusInternalServerError, problem)
+		responses.SendAndEncodeProblem(w, r, problem)
 		return
 	}
 

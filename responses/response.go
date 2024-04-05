@@ -20,8 +20,8 @@ func SendAndEncodeStruct[T any](w http.ResponseWriter, r *http.Request, statusCo
 }
 
 // SendAndEncodeProblem -- Send a ProblemResponse as JSON or XML
-func SendAndEncodeProblem(w http.ResponseWriter, r *http.Request, statusCode int, problem *ProblemResponse) {
-	w.WriteHeader(statusCode)
+func SendAndEncodeProblem(w http.ResponseWriter, r *http.Request, problem *ProblemResponse) {
+	w.WriteHeader(problem.Status)
 	if r.Header.Get("Content-Type") == "application/xml" {
 		w.Header().Set("Content-Type", "application/problem+xml")
 		xml.NewEncoder(w).Encode(problem)
@@ -35,12 +35,13 @@ func SendAndEncodeProblem(w http.ResponseWriter, r *http.Request, statusCode int
 func SendAndEncodeForbidden(w http.ResponseWriter, r *http.Request) {
 	problem := NewProblemResponse(
 		"forbidden",
+		http.StatusForbidden,
 		"Forbidden",
 		"User does not have permission",
 		// TODO: Add instance
 		"TODO: Add instance",
 	)
-	SendAndEncodeProblem(w, r, http.StatusForbidden, problem)
+	SendAndEncodeProblem(w, r, problem)
 }
 
 // DecodeStruct -- Decode a struct from JSON or XML

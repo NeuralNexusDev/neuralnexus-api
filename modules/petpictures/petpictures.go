@@ -409,12 +409,13 @@ func CreatePetHandler(w http.ResponseWriter, r *http.Request) {
 	if petName == "" {
 		problem := responses.NewProblemResponse(
 			"invalid_input",
+			http.StatusBadRequest,
 			"Invalid input",
 			"Pet name is required",
 			// TODO: Add instance
 			"TODO: Add instance",
 		)
-		responses.SendAndEncodeProblem(w, r, http.StatusBadRequest, problem)
+		responses.SendAndEncodeProblem(w, r, problem)
 		return
 	}
 
@@ -422,12 +423,13 @@ func CreatePetHandler(w http.ResponseWriter, r *http.Request) {
 	if !petResponse.Success {
 		problem := responses.NewProblemResponse(
 			"unable_to_create_pet",
+			http.StatusInternalServerError,
 			"Unable to create pet",
 			petResponse.Message,
 			// TODO: Add instance
 			"TODO: Add instance",
 		)
-		responses.SendAndEncodeProblem(w, r, http.StatusInternalServerError, problem)
+		responses.SendAndEncodeProblem(w, r, problem)
 		return
 	}
 
@@ -456,12 +458,13 @@ func GetPetHandler(w http.ResponseWriter, r *http.Request) {
 	if petID == 0 {
 		problem := responses.NewProblemResponse(
 			"invalid_input",
+			http.StatusBadRequest,
 			"Invalid input",
 			"Pet ID is required",
 			// TODO: Add instance
 			"TODO: Add instance",
 		)
-		responses.SendAndEncodeProblem(w, r, http.StatusBadRequest, problem)
+		responses.SendAndEncodeProblem(w, r, problem)
 		return
 	}
 
@@ -469,12 +472,13 @@ func GetPetHandler(w http.ResponseWriter, r *http.Request) {
 	if !petResponse.Success {
 		problem := responses.NewProblemResponse(
 			"not_found",
+			http.StatusNotFound,
 			"Pet not found",
 			petResponse.Message,
 			// TODO: Add instance
 			"TODO: Add instance",
 		)
-		responses.SendAndEncodeProblem(w, r, http.StatusNotFound, problem)
+		responses.SendAndEncodeProblem(w, r, problem)
 		return
 	}
 
@@ -488,12 +492,13 @@ func UpdatePetHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		problem := responses.NewProblemResponse(
 			"invalid_input",
+			http.StatusBadRequest,
 			"Invalid input",
 			"Invalid input",
 			// TODO: Add instance
 			"TODO: Add instance",
 		)
-		responses.SendAndEncodeProblem(w, r, http.StatusBadRequest, problem)
+		responses.SendAndEncodeProblem(w, r, problem)
 		return
 	}
 
@@ -501,12 +506,13 @@ func UpdatePetHandler(w http.ResponseWriter, r *http.Request) {
 	if !petResponse.Success {
 		problem := responses.NewProblemResponse(
 			"unable_to_update_pet",
+			http.StatusInternalServerError,
 			"Unable to update pet",
 			petResponse.Message,
 			// TODO: Add instance
 			"TODO: Add instance",
 		)
-		responses.SendAndEncodeProblem(w, r, http.StatusInternalServerError, problem)
+		responses.SendAndEncodeProblem(w, r, problem)
 		return
 	}
 
@@ -519,12 +525,13 @@ func GetRandPetPictureHandler(w http.ResponseWriter, r *http.Request) {
 	if !petPictureResponse.Success {
 		problem := responses.NewProblemResponse(
 			"not_found",
+			http.StatusNotFound,
 			"Pet picture not found",
 			petPictureResponse.Message,
 			// TODO: Add instance
 			"TODO: Add instance",
 		)
-		responses.SendAndEncodeProblem(w, r, http.StatusNotFound, problem)
+		responses.SendAndEncodeProblem(w, r, problem)
 		return
 	}
 
@@ -544,12 +551,13 @@ func GetPetPictureHandler(w http.ResponseWriter, r *http.Request) {
 	if petPictureID == "" {
 		problem := responses.NewProblemResponse(
 			"invalid_input",
+			http.StatusBadRequest,
 			"Invalid input",
 			"Pet picture ID is required",
 			// TODO: Add instance
 			"TODO: Add instance",
 		)
-		responses.SendAndEncodeProblem(w, r, http.StatusBadRequest, problem)
+		responses.SendAndEncodeProblem(w, r, problem)
 		return
 	}
 
@@ -557,12 +565,13 @@ func GetPetPictureHandler(w http.ResponseWriter, r *http.Request) {
 	if !petPictureResponse.Success {
 		problem := responses.NewProblemResponse(
 			"not_found",
+			http.StatusNotFound,
 			"Pet picture not found",
 			petPictureResponse.Message,
 			// TODO: Add instance
 			"TODO: Add instance",
 		)
-		responses.SendAndEncodeProblem(w, r, http.StatusNotFound, problem)
+		responses.SendAndEncodeProblem(w, r, problem)
 		return
 	}
 
@@ -576,12 +585,13 @@ func UpdatePetPictureHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		problem := responses.NewProblemResponse(
 			"invalid_input",
+			http.StatusBadRequest,
 			"Invalid input",
 			"Invalid input",
 			// TODO: Add instance
 			"TODO: Add instance",
 		)
-		responses.SendAndEncodeProblem(w, r, http.StatusBadRequest, problem)
+		responses.SendAndEncodeProblem(w, r, problem)
 		return
 	}
 
@@ -589,12 +599,13 @@ func UpdatePetPictureHandler(w http.ResponseWriter, r *http.Request) {
 	if !petPictureResponse.Success {
 		problem := responses.NewProblemResponse(
 			"unable_to_update_pet_picture",
+			http.StatusInternalServerError,
 			"Unable to update pet picture",
 			petPictureResponse.Message,
 			// TODO: Add instance
 			"TODO: Add instance",
 		)
-		responses.SendAndEncodeProblem(w, r, http.StatusInternalServerError, problem)
+		responses.SendAndEncodeProblem(w, r, problem)
 		return
 	}
 
@@ -614,12 +625,13 @@ func DeletePetPictureHandler(w http.ResponseWriter, r *http.Request) {
 	if petPictureID == "" {
 		problem := responses.NewProblemResponse(
 			"invalid_input",
+			http.StatusBadRequest,
 			"Invalid input",
 			"Pet picture ID is required",
 			// TODO: Add instance
 			"TODO: Add instance",
 		)
-		responses.SendAndEncodeProblem(w, r, http.StatusBadRequest, problem)
+		responses.SendAndEncodeProblem(w, r, problem)
 		return
 	}
 
@@ -628,12 +640,13 @@ func DeletePetPictureHandler(w http.ResponseWriter, r *http.Request) {
 	if !petPictureResponse.Success {
 		problem := responses.NewProblemResponse(
 			"unable_to_delete_pet_picture",
+			http.StatusInternalServerError,
 			"Unable to delete pet picture",
 			petPictureResponse.Message,
 			// TODO: Add instance
 			"TODO: Add instance",
 		)
-		responses.SendAndEncodeProblem(w, r, http.StatusInternalServerError, problem)
+		responses.SendAndEncodeProblem(w, r, problem)
 		return
 	}
 
