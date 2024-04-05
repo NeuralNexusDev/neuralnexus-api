@@ -300,7 +300,7 @@ func GetBeeNameHandler(w http.ResponseWriter, r *http.Request) {
 // UploadBeeNameHandler Upload a bee name (authenticated)
 func UploadBeeNameHandler(w http.ResponseWriter, r *http.Request) {
 	session := r.Context().Value(middleware.SessionKey).(auth.Session)
-	if !session.HasPermission(auth.ScopeBeeNameGenerator.Name) {
+	if !session.HasPermission(auth.ScopeAdminBeeNameGenerator) {
 		responses.SendAndEncodeForbidden(w, r, "You do not have permission to upload bee names")
 		return
 	}
@@ -336,7 +336,7 @@ func UploadBeeNameHandler(w http.ResponseWriter, r *http.Request) {
 // DeleteBeeName Delete a bee name (authenticated)
 func DeleteBeeNameHandler(w http.ResponseWriter, r *http.Request) {
 	session := r.Context().Value(middleware.SessionKey).(auth.Session)
-	if !session.HasPermission(auth.ScopeBeeNameGenerator.Name) {
+	if !session.HasPermission(auth.ScopeAdminBeeNameGenerator) {
 		responses.SendAndEncodeForbidden(w, r, "You do not have permission to delete bee names")
 		return
 	}
@@ -402,7 +402,7 @@ func SubmitBeeNameHandler(w http.ResponseWriter, r *http.Request) {
 // GetBeeNameSuggestions Get a list of bee name suggestions (authenticated)
 func GetBeeNameSuggestionsHandler(w http.ResponseWriter, r *http.Request) {
 	session := r.Context().Value(middleware.SessionKey).(auth.Session)
-	if !session.HasPermission(auth.ScopeBeeNameGenerator.Name) {
+	if !session.HasPermission(auth.ScopeAdminBeeNameGenerator) {
 		responses.SendAndEncodeForbidden(w, r, "You do not have permission to get bee name suggestions")
 		return
 	}
@@ -442,7 +442,7 @@ func GetBeeNameSuggestionsHandler(w http.ResponseWriter, r *http.Request) {
 // AcceptBeeNameSuggestionHandler Accept a bee name suggestion (authenticated)
 func AcceptBeeNameSuggestionHandler(w http.ResponseWriter, r *http.Request) {
 	session := r.Context().Value(middleware.SessionKey).(auth.Session)
-	if !session.HasPermission(auth.ScopeBeeNameGenerator.Name) {
+	if !session.HasPermission(auth.ScopeAdminBeeNameGenerator) {
 		responses.SendAndEncodeForbidden(w, r, "You do not have permission to accept bee name suggestions")
 		return
 	}
@@ -478,7 +478,7 @@ func AcceptBeeNameSuggestionHandler(w http.ResponseWriter, r *http.Request) {
 // RejectBeeNameSuggestionHandler Reject a bee name suggestion (authenticated)
 func RejectBeeNameSuggestionHandler(w http.ResponseWriter, r *http.Request) {
 	session := r.Context().Value(middleware.SessionKey).(auth.Session)
-	if !session.HasPermission(auth.ScopeBeeNameGenerator.Name) {
+	if !session.HasPermission(auth.ScopeAdminBeeNameGenerator) {
 		responses.SendAndEncodeForbidden(w, r, "You do not have permission to reject bee name suggestions")
 		return
 	}

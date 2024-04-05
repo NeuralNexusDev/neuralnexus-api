@@ -7,42 +7,54 @@ import "errors"
 type Scope struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
+	Value       string `json:"value"`
 }
 
 var (
-	ScopeBeeNameGenerator = Scope{
+	ScopeAdminBeeNameGenerator = Scope{
 		Name:        "beenamegenerator",
 		Description: "Bee name generator",
+		Value:       "*",
 	}
 
-	ScopePetPictures = Scope{
+	ScopeAdminPetPictures = Scope{
 		Name:        "petpictures",
 		Description: "Pet pictures",
+		Value:       "*",
 	}
 )
 
+// ScopePetPictures -- Pet pictures
+func ScopePetPictures(value string) Scope {
+	return Scope{
+		Name:        "petpictures",
+		Description: "Pet pictures",
+		Value:       value,
+	}
+}
+
 type Role struct {
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	Permissions []string `json:"permissions"`
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	Permissions []Scope `json:"permissions"`
 }
 
 var (
 	RoleSystem = Role{
 		Name:        "RoleSystem",
 		Description: "System role",
-		Permissions: []string{
-			ScopeBeeNameGenerator.Name,
-			ScopePetPictures.Name,
+		Permissions: []Scope{
+			ScopeAdminBeeNameGenerator,
+			ScopeAdminPetPictures,
 		},
 	}
 
 	RoleOwner = Role{
 		Name:        "RoleOwner",
 		Description: "Owner role",
-		Permissions: []string{
-			ScopeBeeNameGenerator.Name,
-			ScopePetPictures.Name,
+		Permissions: []Scope{
+			ScopeAdminBeeNameGenerator,
+			ScopeAdminPetPictures,
 		},
 	}
 )

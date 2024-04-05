@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/middleware"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
@@ -398,6 +400,12 @@ func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 
 // CreatePetHandler - Create a new pet
 func CreatePetHandler(w http.ResponseWriter, r *http.Request) {
+	session := r.Context().Value(middleware.SessionKey).(auth.Session)
+	if !session.HasPermission(auth.ScopeAdminPetPictures) {
+		responses.SendAndEncodeForbidden(w, r, "You do not have permission to create a pet")
+		return
+	}
+
 	petName := r.PathValue("name")
 	if petName == "" {
 		var pet Pet
@@ -466,6 +474,12 @@ func UpdatePetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	session := r.Context().Value(middleware.SessionKey).(auth.Session)
+	if !session.HasPermission(auth.ScopePetPictures(pet.Name)) {
+		responses.SendAndEncodeForbidden(w, r, "You do not have permission to update this pet")
+		return
+	}
+
 	petResponse := updatePet(pet.ID, pet.Name, pet.ProfilePicture)
 	if !petResponse.Success {
 		problem := responses.NewProblemResponse(
@@ -522,6 +536,13 @@ func UpdatePetPictureHandler(w http.ResponseWriter, r *http.Request) {
 		responses.SendAndEncodeBadRequest(w, r, "Invalid input, unable to parse body")
 		return
 	}
+
+	// TODO: Sort this out
+	// session := r.Context().Value(middleware.SessionKey).(auth.Session)
+	// if !session.HasPermission(auth.ScopePetPictures(petPicture.ID)) {
+	// 	responses.SendAndEncodeForbidden(w, r, "You do not have permission to update this pet")
+	// 	return
+	// }
 
 	petPictureResponse := updatePetPicture(petPicture.ID, petPicture.FileExt, petPicture.Subjects, petPicture.Aliases)
 	if !petPictureResponse.Success {
