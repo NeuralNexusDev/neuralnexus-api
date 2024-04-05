@@ -8,20 +8,14 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/middleware"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 )
 
 // -------------- Globals --------------
-var (
-	BNG_AUTH_TOKEN = os.Getenv("BNG_AUTH_TOKEN")
-
+const (
 	SERVER_URL string = "https://api.neuralnexus.dev/api/v1/bee-name-generator"
-
-	unauthorizedResponse = Response{
-		Success: false,
-		Message: "Unauthorized",
-		Error:   "",
-	}
 )
 
 // -------------- Structs --------------
@@ -239,22 +233,22 @@ func rejectBeeNameSuggestion(beeName string) database.Response[string] {
 // -------------- Routes --------------
 
 // ApplyRoutes - Apply the routes
-func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
+func ApplyRoutes(mux *http.ServeMux, authedMux *http.ServeMux) (*http.ServeMux, *http.ServeMux) {
 	mux.HandleFunc("GET /bee-name-generator", GetRoot)
 	mux.HandleFunc("GET /bee-name-generator/name", GetBeeNameHandler)
-	mux.HandleFunc("POST /bee-name-generator/name", UploadBeeNameHandler)
-	mux.HandleFunc("POST /bee-name-generator/name/{name}", UploadBeeNameHandler)
-	mux.HandleFunc("DELETE /bee-name-generator/name", DeleteBeeNameHandler)
-	mux.HandleFunc("DELETE /bee-name-generator/name/{name}", DeleteBeeNameHandler)
+	authedMux.HandleFunc("POST /bee-name-generator/name", UploadBeeNameHandler)
+	authedMux.HandleFunc("POST /bee-name-generator/name/{name}", UploadBeeNameHandler)
+	authedMux.HandleFunc("DELETE /bee-name-generator/name", DeleteBeeNameHandler)
+	authedMux.HandleFunc("DELETE /bee-name-generator/name/{name}", DeleteBeeNameHandler)
 	mux.HandleFunc("POST /bee-name-generator/suggestion", SubmitBeeNameHandler)
 	mux.HandleFunc("POST /bee-name-generator/suggestion/{name}", SubmitBeeNameHandler)
-	mux.HandleFunc("GET /bee-name-generator/suggestion", GetBeeNameSuggestionsHandler)
-	mux.HandleFunc("GET /bee-name-generator/suggestion/{amount}", GetBeeNameSuggestionsHandler)
-	mux.HandleFunc("PUT /bee-name-generator/suggestion", AcceptBeeNameSuggestionHandler)
-	mux.HandleFunc("PUT /bee-name-generator/suggestion/{name}", AcceptBeeNameSuggestionHandler)
-	mux.HandleFunc("DELETE /bee-name-generator/suggestion", RejectBeeNameSuggestionHandler)
-	mux.HandleFunc("DELETE /bee-name-generator/suggestion/{name}", RejectBeeNameSuggestionHandler)
-	return mux
+	authedMux.HandleFunc("GET /bee-name-generator/suggestion", GetBeeNameSuggestionsHandler)
+	authedMux.HandleFunc("GET /bee-name-generator/suggestion/{amount}", GetBeeNameSuggestionsHandler)
+	authedMux.HandleFunc("PUT /bee-name-generator/suggestion", AcceptBeeNameSuggestionHandler)
+	authedMux.HandleFunc("PUT /bee-name-generator/suggestion/{name}", AcceptBeeNameSuggestionHandler)
+	authedMux.HandleFunc("DELETE /bee-name-generator/suggestion", RejectBeeNameSuggestionHandler)
+	authedMux.HandleFunc("DELETE /bee-name-generator/suggestion/{name}", RejectBeeNameSuggestionHandler)
+	return mux, authedMux
 }
 
 // GetRoot get a simple docs/examples page
@@ -291,8 +285,9 @@ func GetBeeNameHandler(w http.ResponseWriter, r *http.Request) {
 
 // UploadBeeNameHandler Upload a bee name (authenticated)
 func UploadBeeNameHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("Authorization") != "Bearer "+BNG_AUTH_TOKEN {
-		http.Error(w, "Unauthorized", 401)
+	session := r.Context().Value(middleware.SessionKey).(auth.Session)
+	if !session.HasPermission(auth.ScopeBeeNameGenerator.Name) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
@@ -321,8 +316,9 @@ func UploadBeeNameHandler(w http.ResponseWriter, r *http.Request) {
 
 // DeleteBeeName Delete a bee name (authenticated)
 func DeleteBeeNameHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("Authorization") != "Bearer "+BNG_AUTH_TOKEN {
-		http.Error(w, "Unauthorized", 401)
+	session := r.Context().Value(middleware.SessionKey).(auth.Session)
+	if !session.HasPermission(auth.ScopeBeeNameGenerator.Name) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
@@ -377,8 +373,9 @@ func SubmitBeeNameHandler(w http.ResponseWriter, r *http.Request) {
 
 // GetBeeNameSuggestions Get a list of bee name suggestions (authenticated)
 func GetBeeNameSuggestionsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("Authorization") != "Bearer "+BNG_AUTH_TOKEN {
-		http.Error(w, "Unauthorized", 401)
+	session := r.Context().Value(middleware.SessionKey).(auth.Session)
+	if !session.HasPermission(auth.ScopeBeeNameGenerator.Name) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
@@ -413,8 +410,9 @@ func GetBeeNameSuggestionsHandler(w http.ResponseWriter, r *http.Request) {
 
 // AcceptBeeNameSuggestionHandler Accept a bee name suggestion (authenticated)
 func AcceptBeeNameSuggestionHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("Authorization") != "Bearer "+BNG_AUTH_TOKEN {
-		http.Error(w, "Unauthorized", 401)
+	session := r.Context().Value(middleware.SessionKey).(auth.Session)
+	if !session.HasPermission(auth.ScopeBeeNameGenerator.Name) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
@@ -443,8 +441,9 @@ func AcceptBeeNameSuggestionHandler(w http.ResponseWriter, r *http.Request) {
 
 // RejectBeeNameSuggestionHandler Reject a bee name suggestion (authenticated)
 func RejectBeeNameSuggestionHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("Authorization") != "Bearer "+BNG_AUTH_TOKEN {
-		http.Error(w, "Unauthorized", 401)
+	session := r.Context().Value(middleware.SessionKey).(auth.Session)
+	if !session.HasPermission(auth.ScopeBeeNameGenerator.Name) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 

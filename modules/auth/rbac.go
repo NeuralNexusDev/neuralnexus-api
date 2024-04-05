@@ -1,4 +1,6 @@
-package authentication
+package auth
+
+import "errors"
 
 // -------------- Structs --------------
 
@@ -44,3 +46,17 @@ var (
 		},
 	}
 )
+
+// -------------- Functions --------------
+
+// GetRoleByName gets a role by name
+func GetRoleByName(name string) (Role, error) {
+	switch name {
+	case RoleSystem.Name:
+		return RoleSystem, nil
+	case RoleOwner.Name:
+		return RoleOwner, nil
+	default:
+		return Role{}, errors.New("Role not found")
+	}
+}

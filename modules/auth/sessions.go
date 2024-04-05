@@ -1,7 +1,8 @@
-package authentication
+package auth
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
@@ -32,7 +33,11 @@ type Session struct {
 // NewSession creates a new session
 func (a *Account) NewSession(expiresAt int64) Session {
 	permissions := []string{}
-	for _, role := range a.Roles {
+	for _, r := range a.Roles {
+		role, err := GetRoleByName(r)
+		if err != nil {
+			continue
+		}
 		permissions = append(permissions, role.Permissions...)
 	}
 
@@ -66,15 +71,36 @@ func (s *Session) IsValid() bool {
 
 // -------------- Functions --------------
 
-// GetSessionByID gets a session by ID
-func GetSessionByID(id uuid.UUID) database.Response[Session] {
+// CreateSession creates a session and inserts it into the database
+func CreateSession(session Session) database.Response[Session] {
+	db := database.GetDB("neuralnexus")
+	_, err := db.Exec(context.Background(),
+		"INSERT INTO sessions (session_id, user_id, permissions, iat, lua, exp) VALUES ($1, $2, $3, $4, $5, $6)",
+		session.ID, session.UserID, session.Permissions, session.IssuedAt, session.LastUsedAt, session.ExpiresAt,
+	)
+	if err != nil {
+		return database.Response[Session]{
+			Success: false,
+			Message: "Unable to insert session",
+		}
+	}
+
+	return database.Response[Session]{
+		Success: true,
+		Data:    session,
+	}
+}
+
+// GetSession gets a session by ID
+func GetSession(id uuid.UUID) database.Response[Session] {
 	db := database.GetDB("neuralnexus")
 	var session Session
 	err := db.QueryRow(context.Background(),
-		"SELECT session_id, user_id, permissions, iat, lua, exp FROM sessions WHERE id = $1",
+		"SELECT session_id, user_id, permissions, iat, lua, exp FROM sessions WHERE session_id = $1",
 		id,
 	).Scan(&session.ID, &session.UserID, &session.Permissions, &session.IssuedAt, &session.LastUsedAt, &session.ExpiresAt)
 	if err != nil {
+		log.Println(err)
 		return database.Response[Session]{
 			Success: false,
 			Message: "Unable to retreive session",
@@ -87,8 +113,8 @@ func GetSessionByID(id uuid.UUID) database.Response[Session] {
 	}
 }
 
-// DeleteSessionByID deletes a session by ID
-func DeleteSessionByID(id uuid.UUID) database.Response[Session] {
+// DeleteSession deletes a session by ID
+func DeleteSession(id uuid.UUID) database.Response[Session] {
 	db := database.GetDB("nedatabaseuralnexus")
 	_, err := db.Exec(context.Background(),
 		"DELETE FROM sessions WHERE session_id = $1",

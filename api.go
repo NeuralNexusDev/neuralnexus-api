@@ -40,9 +40,12 @@ func (s *APIServer) Run() error {
 	)
 
 	router := http.NewServeMux()
+	authedRouter := http.NewServeMux()
+	router, authedRouter = routerStack(router, authedRouter)
+	router.Handle("/", middleware.AuthMiddleware(authedRouter))
 
 	v1 := http.NewServeMux()
-	v1.Handle("/api/v1/", http.StripPrefix("/api/v1", routerStack(router)))
+	v1.Handle("/api/v1/", http.StripPrefix("/api/v1", router))
 
 	server := http.Server{
 		Addr:    s.Address,
