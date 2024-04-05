@@ -17,6 +17,12 @@ type WrappedWriter struct {
 	statusCode int
 }
 
+// WriteHeader - Write the header
+func (w *WrappedWriter) WriteHeader(statusCode int) {
+	w.ResponseWriter.WriteHeader(statusCode)
+	w.statusCode = statusCode
+}
+
 // Middleware - Middleware type
 type Middleware func(http.Handler) http.Handler
 
@@ -42,7 +48,7 @@ func CreateStack(middlewares ...Middleware) Middleware {
 func RequestLoggerMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		wrapped := WrappedWriter{w, http.StatusOK}
+		wrapped := &WrappedWriter{w, http.StatusOK}
 		next.ServeHTTP(wrapped, r)
 		log.Printf("%s %d %s %s %s", r.RemoteAddr, wrapped.statusCode, r.Method, r.URL.Path, time.Since(start))
 	})
