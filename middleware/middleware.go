@@ -56,24 +56,32 @@ func AuthMiddleware(next http.Handler) http.Handler {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
+
 		authStrings := strings.Split(authHeader, "Bearer ")
 		if len(authStrings) != 2 {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		}
+
 		sessionID, err := uuid.Parse(authStrings[1])
 		if err != nil {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
+
 		session := auth.GetSession(sessionID)
 		if !session.Success {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
+
 		if !session.Data.IsValid() {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
+
+		session.Data.LastUsedAt = time.Now().Unix()
+		auth.UpdateSession(session.Data)
+
 		ctx := r.Context()
 		ctx = context.WithValue(ctx, SessionKey, session.Data)
 		next.ServeHTTP(w, r.WithContext(ctx))

@@ -131,3 +131,23 @@ func DeleteSession(id uuid.UUID) database.Response[Session] {
 		Success: true,
 	}
 }
+
+// UpdateSession updates a session
+func UpdateSession(session Session) database.Response[Session] {
+	db := database.GetDB("neuralnexus")
+	_, err := db.Exec(context.Background(),
+		"UPDATE sessions SET user_id = $2, permissions = $3, iat = $4, lua = $5, exp = $6 WHERE session_id = $1",
+		session.ID, session.UserID, session.Permissions, session.IssuedAt, session.LastUsedAt, session.ExpiresAt,
+	)
+	if err != nil {
+		return database.Response[Session]{
+			Success: false,
+			Message: "Unable to update session",
+		}
+	}
+
+	return database.Response[Session]{
+		Success: true,
+		Data:    session,
+	}
+}
