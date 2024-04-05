@@ -2,7 +2,7 @@ package beenamegenerator
 
 import (
 	"context"
-	"encoding/json"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -11,6 +11,7 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
+	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
 // -------------- Globals --------------
@@ -20,51 +21,40 @@ const (
 
 // -------------- Structs --------------
 
-// General API response struct
-type Response struct {
-	Success bool   `json:"success,omitempty"`
-	Message string `json:"message,omitempty"`
-	Error   string `json:"error,omitempty"`
-}
-
 // NameResponse struct (extends Response)
 type NameResponse struct {
-	Response
-	Name string `json:"name"`
+	Name string `json:"name" xml:"name"`
 }
 
-// Creates a new NameResponse struct
-func NewNameResponse(name string, success bool, message, error string) NameResponse {
+// NewNameResponse - Create a new NameResponse
+func NewNameResponse(name string) NameResponse {
 	return NameResponse{
-		Response: Response{
-			Success: success,
-			Message: message,
-			Error:   error,
-		},
 		Name: name,
 	}
 }
 
-// Creates a new successful or failed NameResponse struct
-func NewSuccessfulNameResponse(name string) NameResponse {
-	return NewNameResponse(name, true, "", "")
-}
-
-// Creates a new failed NameResponse struct
-func NewFailedNameResponse(message, error string) NameResponse {
-	return NewNameResponse("", false, message, error)
-}
-
 // AmountResponse struct (extends Response)
 type AmountResponse struct {
-	Response
-	Amount int64 `json:"amount"`
+	Amount int64 `json:"amount" xml:"amount"`
+}
+
+// NewAmountResponse - Create a new AmountResponse
+func NewAmountResponse(amount int64) AmountResponse {
+	return AmountResponse{
+		Amount: amount,
+	}
 }
 
 // SuggestionsResponse struct
 type SuggestionsResponse struct {
-	Response
-	Suggestions []string `json:"suggestions"`
+	Suggestions []string `json:"suggestions" xml:"suggestions"`
+}
+
+// NewSuggestionsResponse - Create a new SuggestionsResponse
+func NewSuggestionsResponse(suggestions []string) SuggestionsResponse {
+	return SuggestionsResponse{
+		Suggestions: suggestions,
+	}
 }
 
 // -------------- Functions --------------
@@ -72,16 +62,17 @@ type SuggestionsResponse struct {
 // getBeeName returns a random bee name from the database
 func getBeeName() database.Response[string] {
 	db := database.GetDB("bee_name_generator")
+	defer db.Close()
 	var beeName string
 
 	err := db.QueryRow(context.Background(), "SELECT name FROM bee_name ORDER BY random() LIMIT 1").Scan(&beeName)
 	if err != nil {
+		log.Println("Failed to get bee name: " + err.Error())
 		return database.Response[string]{
 			Success: false,
-			Message: "Failed to get bee name: " + err.Error(),
+			Message: "Failed to get bee name",
 		}
 	}
-	defer db.Close()
 
 	return database.Response[string]{
 		Success: true,
@@ -92,15 +83,16 @@ func getBeeName() database.Response[string] {
 // uploadBeeName uploads a bee name to the database
 func uploadBeeName(beeName string) database.Response[string] {
 	db := database.GetDB("bee_name_generator")
+	defer db.Close()
 
 	_, err := db.Exec(context.Background(), "INSERT INTO bee_name (name) VALUES ($1)", beeName)
 	if err != nil {
+		log.Println("Failed to upload bee name: " + err.Error())
 		return database.Response[string]{
 			Success: false,
-			Message: "Failed to upload bee name: " + err.Error(),
+			Message: "Failed to upload bee name",
 		}
 	}
-	defer db.Close()
 
 	return database.Response[string]{
 		Success: true,
@@ -111,15 +103,16 @@ func uploadBeeName(beeName string) database.Response[string] {
 // deleteBeeName deletes a bee name from the database
 func deleteBeeName(beeName string) database.Response[string] {
 	db := database.GetDB("bee_name_generator")
+	defer db.Close()
 
 	_, err := db.Exec(context.Background(), "DELETE FROM bee_name WHERE name = $1", beeName)
 	if err != nil {
+		log.Println("Failed to delete bee name: " + err.Error())
 		return database.Response[string]{
 			Success: false,
-			Message: "Failed to delete bee name: " + err.Error(),
+			Message: "Failed to delete bee name",
 		}
 	}
-	defer db.Close()
 
 	return database.Response[string]{
 		Success: true,
@@ -130,15 +123,16 @@ func deleteBeeName(beeName string) database.Response[string] {
 // submitBeeName submits a bee name to the suggestion database
 func submitBeeName(beeName string) database.Response[string] {
 	db := database.GetDB("bee_name_generator")
+	defer db.Close()
 
 	_, err := db.Exec(context.Background(), "INSERT INTO bee_name_suggestion (name) VALUES ($1)", beeName)
 	if err != nil {
+		log.Println("Failed to submit bee name: " + err.Error())
 		return database.Response[string]{
 			Success: false,
-			Message: "Failed to submit bee name: " + err.Error(),
+			Message: "Failed to submit bee name",
 		}
 	}
-	defer db.Close()
 
 	return database.Response[string]{
 		Success: true,
@@ -149,13 +143,15 @@ func submitBeeName(beeName string) database.Response[string] {
 // getBeeNameSuggestions returns a list of bee name suggestions
 func getBeeNameSuggestions(amount int64) database.Response[[]string] {
 	db := database.GetDB("bee_name_generator")
+	defer db.Close()
 	var beeNames []string
 
 	rows, err := db.Query(context.Background(), "SELECT name FROM bee_name_suggestion ORDER BY random() LIMIT $1", amount)
 	if err != nil {
+		log.Println("Failed to get bee name suggestions: " + err.Error())
 		return database.Response[[]string]{
 			Success: false,
-			Message: "Failed to get bee name suggestions: " + err.Error(),
+			Message: "Failed to get bee name suggestions",
 		}
 	}
 	defer rows.Close()
@@ -164,15 +160,17 @@ func getBeeNameSuggestions(amount int64) database.Response[[]string] {
 		var beeName string
 		err := rows.Scan(&beeName)
 		if err != nil {
+			log.Println("Failed to get bee name suggestions: " + err.Error())
 			return database.Response[[]string]{
 				Success: false,
-				Message: "Failed to get bee name suggestions: " + err.Error(),
+				Message: "Failed to get bee name suggestions",
 			}
 		}
 		beeNames = append(beeNames, beeName)
 	}
 
 	if len(beeNames) == 0 {
+		log.Println("No bee name suggestions found")
 		return database.Response[[]string]{
 			Success: false,
 			Message: "No bee name suggestions found",
@@ -188,22 +186,24 @@ func getBeeNameSuggestions(amount int64) database.Response[[]string] {
 // acceptBeeNameSuggestion accepts a bee name suggestion
 func acceptBeeNameSuggestion(beeName string) database.Response[string] {
 	db := database.GetDB("bee_name_generator")
+	defer db.Close()
 
 	_, err := db.Exec(context.Background(), "INSERT INTO bee_name (name) VALUES ($1)", beeName)
 	if err != nil {
+		log.Println("Failed to accept bee name suggestion: " + err.Error())
 		return database.Response[string]{
 			Success: false,
-			Message: "Failed to accept bee name suggestion: " + err.Error(),
+			Message: "Failed to accept bee name suggestion",
 		}
 	}
 	_, err = db.Exec(context.Background(), "DELETE FROM bee_name_suggestion WHERE name = $1", beeName)
 	if err != nil {
+		log.Println("Failed to accept bee name suggestion: " + err.Error())
 		return database.Response[string]{
 			Success: false,
-			Message: "Failed to accept bee name suggestion: " + err.Error(),
+			Message: "Failed to accept bee name suggestion",
 		}
 	}
-	defer db.Close()
 
 	return database.Response[string]{
 		Success: true,
@@ -214,15 +214,16 @@ func acceptBeeNameSuggestion(beeName string) database.Response[string] {
 // rejectBeeNameSuggestion rejects a bee name suggestion
 func rejectBeeNameSuggestion(beeName string) database.Response[string] {
 	db := database.GetDB("bee_name_generator")
+	defer db.Close()
 
 	_, err := db.Exec(context.Background(), "DELETE FROM bee_name_suggestion WHERE name = $1", beeName)
 	if err != nil {
+		log.Println("Failed to reject bee name suggestion: " + err.Error())
 		return database.Response[string]{
 			Success: false,
-			Message: "Failed to reject bee name suggestion: " + err.Error(),
+			Message: "Failed to reject bee name suggestion",
 		}
 	}
-	defer db.Close()
 
 	return database.Response[string]{
 		Success: true,
@@ -251,12 +252,32 @@ func ApplyRoutes(mux *http.ServeMux, authedMux *http.ServeMux) (*http.ServeMux, 
 	return mux, authedMux
 }
 
+// SendAndEncodeInvalidName - Send an invalid name response
+func SendAndEncodeInvalidName(w http.ResponseWriter, r *http.Request) {
+	problem := responses.NewProblemResponse(
+		"invalid_name",
+		"Invalid name",
+		"No name provided",
+		// TODO: Add instance
+		"TODO: Add instance",
+	)
+	responses.SendAndEncodeProblem(w, r, http.StatusBadRequest, problem)
+}
+
 // GetRoot get a simple docs/examples page
 func GetRoot(w http.ResponseWriter, r *http.Request) {
 	// Read the html file
 	html, err := os.ReadFile("static/beenamegenerator/templates/index.html")
 	if err != nil {
-		http.Error(w, "Failed to read index.html: "+err.Error(), 500)
+		log.Println("Failed to read index.html: " + err.Error())
+		problem := responses.NewProblemResponse(
+			"file_error",
+			"Failed to read file",
+			"Failed to read index.html",
+			// TODO: Add instance
+			"TODO: Add instance",
+		)
+		responses.SendAndEncodeProblem(w, r, http.StatusInternalServerError, problem)
 		return
 	}
 
@@ -274,75 +295,90 @@ func GetRoot(w http.ResponseWriter, r *http.Request) {
 func GetBeeNameHandler(w http.ResponseWriter, r *http.Request) {
 	beeName := getBeeName()
 	if !beeName.Success {
-		http.Error(w, "Failed to get bee name: "+beeName.Message, 500)
+		problem := responses.NewProblemResponse(
+			"get_bee_name_error",
+			"Failed to get bee name",
+			beeName.Message,
+			// TODO: Add instance
+			"TODO: Add instance",
+		)
+		responses.SendAndEncodeProblem(w, r, http.StatusInternalServerError, problem)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"name":"` + beeName.Data + `"}`))
+	responses.SendAndEncodeStruct(w, r, http.StatusOK, NewNameResponse(beeName.Data))
 }
 
 // UploadBeeNameHandler Upload a bee name (authenticated)
 func UploadBeeNameHandler(w http.ResponseWriter, r *http.Request) {
 	session := r.Context().Value(middleware.SessionKey).(auth.Session)
 	if !session.HasPermission(auth.ScopeBeeNameGenerator.Name) {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		responses.SendAndEncodeForbidden(w, r)
 		return
 	}
 
 	beeName := r.PathValue("name")
 	if beeName == "" {
 		var nameResponse NameResponse
-		err := json.NewDecoder(r.Body).Decode(&nameResponse)
+		err := responses.DecodeStruct(r, &nameResponse)
 		if err == nil {
 			beeName = nameResponse.Name
 		}
 	}
 	if beeName == "" {
-		http.Error(w, "Invalid name", 400)
+		SendAndEncodeInvalidName(w, r)
 		return
 	}
 	upload := uploadBeeName(beeName)
 	if !upload.Success {
-		http.Error(w, "Failed to upload bee name: "+upload.Message, 500)
+		problem := responses.NewProblemResponse(
+			"upload_bee_name_error",
+			"Failed to upload bee name",
+			upload.Message,
+			// TODO: Add instance
+			"TODO: Add instance",
+		)
+		responses.SendAndEncodeProblem(w, r, http.StatusInternalServerError, problem)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"name":"` + beeName + `"}`))
+	responses.SendAndEncodeStruct(w, r, http.StatusOK, NewNameResponse(beeName))
 }
 
 // DeleteBeeName Delete a bee name (authenticated)
 func DeleteBeeNameHandler(w http.ResponseWriter, r *http.Request) {
 	session := r.Context().Value(middleware.SessionKey).(auth.Session)
 	if !session.HasPermission(auth.ScopeBeeNameGenerator.Name) {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		responses.SendAndEncodeForbidden(w, r)
 		return
 	}
 
 	beeName := r.PathValue("name")
 	if beeName == "" {
 		var nameResponse NameResponse
-		err := json.NewDecoder(r.Body).Decode(&nameResponse)
+		err := responses.DecodeStruct(r, &nameResponse)
 		if err == nil {
 			beeName = nameResponse.Name
 		}
 	}
 	if beeName == "" {
-		http.Error(w, "Invalid name", 400)
+		SendAndEncodeInvalidName(w, r)
 		return
 	}
 	delete := deleteBeeName(beeName)
 	if !delete.Success {
-		http.Error(w, "Failed to delete bee name: "+delete.Message, 500)
+		problem := responses.NewProblemResponse(
+			"delete_bee_name_error",
+			"Failed to delete bee name",
+			delete.Message,
+			// TODO: Add instance
+			"TODO: Add instance",
+		)
+		responses.SendAndEncodeProblem(w, r, http.StatusInternalServerError, problem)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"name":"` + beeName + `"}`))
+	responses.SendAndEncodeStruct(w, r, http.StatusOK, NewNameResponse(beeName))
 }
 
 // SubmitBeeNameHandler Submit a bee name suggestion
@@ -350,39 +386,43 @@ func SubmitBeeNameHandler(w http.ResponseWriter, r *http.Request) {
 	beeName := r.PathValue("name")
 	if beeName == "" {
 		var nameResponse NameResponse
-		err := json.NewDecoder(r.Body).Decode(&nameResponse)
+		err := responses.DecodeStruct(r, &nameResponse)
 		if err == nil {
 			beeName = nameResponse.Name
 		}
 	}
-
 	if beeName == "" {
-		http.Error(w, "Invalid name", 400)
+		SendAndEncodeInvalidName(w, r)
 		return
 	}
 	submit := submitBeeName(beeName)
 	if !submit.Success {
-		http.Error(w, submit.Message, 500)
+		problem := responses.NewProblemResponse(
+			"submit_bee_name_error",
+			"Failed to submit bee name",
+			submit.Message,
+			// TODO: Add instance
+			"TODO: Add instance",
+		)
+		responses.SendAndEncodeProblem(w, r, http.StatusInternalServerError, problem)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"name":"` + beeName + `"}`))
+	responses.SendAndEncodeStruct(w, r, http.StatusOK, NewNameResponse(beeName))
 }
 
 // GetBeeNameSuggestions Get a list of bee name suggestions (authenticated)
 func GetBeeNameSuggestionsHandler(w http.ResponseWriter, r *http.Request) {
 	session := r.Context().Value(middleware.SessionKey).(auth.Session)
 	if !session.HasPermission(auth.ScopeBeeNameGenerator.Name) {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		responses.SendAndEncodeForbidden(w, r)
 		return
 	}
 
 	amount := r.PathValue("amount")
 	if amount == "" {
 		var amountResponse AmountResponse
-		err := json.NewDecoder(r.Body).Decode(&amountResponse)
+		err := responses.DecodeStruct(r, &amountResponse)
 		if err == nil {
 			amount = strconv.FormatInt(amountResponse.Amount, 10)
 		}
@@ -393,79 +433,101 @@ func GetBeeNameSuggestionsHandler(w http.ResponseWriter, r *http.Request) {
 
 	amountInt, err := strconv.ParseInt(amount, 10, 64)
 	if err != nil {
-		http.Error(w, "Invalid amount", 400)
+		problem := responses.NewProblemResponse(
+			"invalid_amount",
+			"Invalid amount",
+			"Invalid amount provided",
+			// TODO: Add instance
+			"TODO: Add instance",
+		)
+		responses.SendAndEncodeProblem(w, r, http.StatusBadRequest, problem)
 		return
 	}
 
 	suggestions := getBeeNameSuggestions(amountInt)
 	if !suggestions.Success {
-		http.Error(w, "Failed to get bee name suggestions: "+suggestions.Message, 500)
+		problem := responses.NewProblemResponse(
+			"get_bee_name_suggestions_error",
+			"Failed to get bee name suggestions",
+			suggestions.Message,
+			// TODO: Add instance
+			"TODO: Add instance",
+		)
+		responses.SendAndEncodeProblem(w, r, http.StatusInternalServerError, problem)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"suggestions":["` + strings.Join(suggestions.Data, "\",\"") + `"]}`))
+	responses.SendAndEncodeStruct(w, r, http.StatusOK, NewSuggestionsResponse(suggestions.Data))
 }
 
 // AcceptBeeNameSuggestionHandler Accept a bee name suggestion (authenticated)
 func AcceptBeeNameSuggestionHandler(w http.ResponseWriter, r *http.Request) {
 	session := r.Context().Value(middleware.SessionKey).(auth.Session)
 	if !session.HasPermission(auth.ScopeBeeNameGenerator.Name) {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		responses.SendAndEncodeForbidden(w, r)
 		return
 	}
 
 	beeName := r.PathValue("name")
 	if beeName == "" {
 		var nameResponse NameResponse
-		err := json.NewDecoder(r.Body).Decode(&nameResponse)
+		err := responses.DecodeStruct(r, &nameResponse)
 		if err == nil {
 			beeName = nameResponse.Name
 		}
 	}
 	if beeName == "" {
-		http.Error(w, "Invalid name", 400)
+		SendAndEncodeInvalidName(w, r)
 		return
 	}
 	accept := acceptBeeNameSuggestion(beeName)
 	if !accept.Success {
-		http.Error(w, "Failed to accept bee name suggestion: "+accept.Message, 500)
+		problem := responses.NewProblemResponse(
+			"accept_bee_name_suggestion_error",
+			"Failed to accept bee name suggestion",
+			accept.Message,
+			// TODO: Add instance
+			"TODO: Add instance",
+		)
+		responses.SendAndEncodeProblem(w, r, http.StatusInternalServerError, problem)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"name":"` + beeName + `"}`))
+	responses.SendAndEncodeStruct(w, r, http.StatusOK, NewNameResponse(beeName))
 }
 
 // RejectBeeNameSuggestionHandler Reject a bee name suggestion (authenticated)
 func RejectBeeNameSuggestionHandler(w http.ResponseWriter, r *http.Request) {
 	session := r.Context().Value(middleware.SessionKey).(auth.Session)
 	if !session.HasPermission(auth.ScopeBeeNameGenerator.Name) {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		responses.SendAndEncodeForbidden(w, r)
 		return
 	}
 
 	beeName := r.PathValue("name")
 	if beeName == "" {
 		var nameResponse NameResponse
-		err := json.NewDecoder(r.Body).Decode(&nameResponse)
+		err := responses.DecodeStruct(r, &nameResponse)
 		if err == nil {
 			beeName = nameResponse.Name
 		}
 	}
 	if beeName == "" {
-		http.Error(w, "Invalid name", 400)
+		SendAndEncodeInvalidName(w, r)
 		return
 	}
 	reject := rejectBeeNameSuggestion(beeName)
 	if !reject.Success {
-		http.Error(w, "Failed to reject bee name suggestion: "+reject.Message, 500)
+		problem := responses.NewProblemResponse(
+			"reject_bee_name_suggestion_error",
+			"Failed to reject bee name suggestion",
+			reject.Message,
+			// TODO: Add instance
+			"TODO: Add instance",
+		)
+		responses.SendAndEncodeProblem(w, r, http.StatusInternalServerError, problem)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"name":"` + beeName + `"}`))
+	responses.SendAndEncodeStruct(w, r, http.StatusOK, NewNameResponse(beeName))
 }
