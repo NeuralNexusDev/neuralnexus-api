@@ -7,6 +7,7 @@ import (
 )
 
 // -------------- Functions --------------
+
 // SendAndEncodeStruct -- Send a struct as JSON or XML
 func SendAndEncodeStruct[T any](w http.ResponseWriter, r *http.Request, statusCode int, data T) {
 	w.WriteHeader(statusCode)
@@ -32,14 +33,43 @@ func SendAndEncodeProblem(w http.ResponseWriter, r *http.Request, problem *Probl
 }
 
 // SendAndEncodeForbidden -- Send a ForbiddenResponse as JSON or XML
-func SendAndEncodeForbidden(w http.ResponseWriter, r *http.Request) {
+func SendAndEncodeForbidden(w http.ResponseWriter, r *http.Request, message string) {
+	if message == "" {
+		message = "You do not have permission to access this resource."
+	}
 	problem := NewProblemResponse(
-		"forbidden",
+		"about:blank",
 		http.StatusForbidden,
 		"Forbidden",
-		"User does not have permission",
-		// TODO: Add instance
-		"TODO: Add instance",
+		message,
+		"https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403",
+	)
+	SendAndEncodeProblem(w, r, problem)
+}
+
+// SendAndEncodeNotFound -- Send a NotFoundResponse as JSON or XML
+func SendAndEncodeNotFound(w http.ResponseWriter, r *http.Request, message string) {
+	if message == "" {
+		message = "The requested resource could not be found."
+	}
+	problem := NewProblemResponse(
+		"about:blank",
+		http.StatusNotFound,
+		"Not Found",
+		message,
+		"https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404",
+	)
+	SendAndEncodeProblem(w, r, problem)
+}
+
+// SendAndEncodeBadRequest - Send and encode an invalid input problem
+func SendAndEncodeBadRequest(w http.ResponseWriter, r *http.Request, message string) {
+	problem := NewProblemResponse(
+		"about:blank",
+		http.StatusBadRequest,
+		"Bad Request",
+		message,
+		"https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400",
 	)
 	SendAndEncodeProblem(w, r, problem)
 }

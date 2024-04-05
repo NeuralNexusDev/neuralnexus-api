@@ -252,19 +252,7 @@ func ApplyRoutes(mux *http.ServeMux, authedMux *http.ServeMux) (*http.ServeMux, 
 	return mux, authedMux
 }
 
-// SendAndEncodeInvalidName - Send an invalid name response
-func SendAndEncodeInvalidName(w http.ResponseWriter, r *http.Request) {
-	problem := responses.NewProblemResponse(
-		"invalid_name",
-		http.StatusBadRequest,
-		"Invalid name",
-		"No name provided",
-		// TODO: Add instance
-		"TODO: Add instance",
-	)
-	responses.SendAndEncodeProblem(w, r, problem)
-}
-
+// TODO: Deprecate this in favor of the actual web page
 // GetRoot get a simple docs/examples page
 func GetRoot(w http.ResponseWriter, r *http.Request) {
 	// Read the html file
@@ -276,7 +264,6 @@ func GetRoot(w http.ResponseWriter, r *http.Request) {
 			http.StatusInternalServerError,
 			"Failed to read file",
 			"Failed to read index.html",
-			// TODO: Add instance
 			"TODO: Add instance",
 		)
 		responses.SendAndEncodeProblem(w, r, problem)
@@ -298,17 +285,15 @@ func GetBeeNameHandler(w http.ResponseWriter, r *http.Request) {
 	beeName := getBeeName()
 	if !beeName.Success {
 		problem := responses.NewProblemResponse(
-			"get_bee_name_error",
+			"https://api.neuralnexus.dev/probs/bee-name-generator/get-bee-name",
 			http.StatusInternalServerError,
 			"Failed to get bee name",
 			beeName.Message,
-			// TODO: Add instance
-			"TODO: Add instance",
+			"https://api.neuralnexus.dev/api/v1/bee-name-generator/name",
 		)
 		responses.SendAndEncodeProblem(w, r, problem)
 		return
 	}
-
 	responses.SendAndEncodeStruct(w, r, http.StatusOK, NewNameResponse(beeName.Data))
 }
 
@@ -316,7 +301,7 @@ func GetBeeNameHandler(w http.ResponseWriter, r *http.Request) {
 func UploadBeeNameHandler(w http.ResponseWriter, r *http.Request) {
 	session := r.Context().Value(middleware.SessionKey).(auth.Session)
 	if !session.HasPermission(auth.ScopeBeeNameGenerator.Name) {
-		responses.SendAndEncodeForbidden(w, r)
+		responses.SendAndEncodeForbidden(w, r, "You do not have permission to upload bee names")
 		return
 	}
 
@@ -329,23 +314,22 @@ func UploadBeeNameHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if beeName == "" {
-		SendAndEncodeInvalidName(w, r)
+		responses.SendAndEncodeBadRequest(w, r, "Invalid name")
 		return
 	}
+
 	upload := uploadBeeName(beeName)
 	if !upload.Success {
 		problem := responses.NewProblemResponse(
-			"upload_bee_name_error",
+			"https://api.neuralnexus.dev/probs/bee-name-generator/upload-bee-name",
 			http.StatusInternalServerError,
 			"Failed to upload bee name",
 			upload.Message,
-			// TODO: Add instance
-			"TODO: Add instance",
+			"https://api.neuralnexus.dev/api/v1/bee-name-generator/name/"+beeName,
 		)
 		responses.SendAndEncodeProblem(w, r, problem)
 		return
 	}
-
 	responses.SendAndEncodeStruct(w, r, http.StatusOK, NewNameResponse(beeName))
 }
 
@@ -353,7 +337,7 @@ func UploadBeeNameHandler(w http.ResponseWriter, r *http.Request) {
 func DeleteBeeNameHandler(w http.ResponseWriter, r *http.Request) {
 	session := r.Context().Value(middleware.SessionKey).(auth.Session)
 	if !session.HasPermission(auth.ScopeBeeNameGenerator.Name) {
-		responses.SendAndEncodeForbidden(w, r)
+		responses.SendAndEncodeForbidden(w, r, "You do not have permission to delete bee names")
 		return
 	}
 
@@ -366,23 +350,22 @@ func DeleteBeeNameHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if beeName == "" {
-		SendAndEncodeInvalidName(w, r)
+		responses.SendAndEncodeBadRequest(w, r, "Invalid name")
 		return
 	}
+
 	delete := deleteBeeName(beeName)
 	if !delete.Success {
 		problem := responses.NewProblemResponse(
-			"delete_bee_name_error",
+			"https://api.neuralnexus.dev/probs/bee-name-generator/delete-bee-name",
 			http.StatusInternalServerError,
 			"Failed to delete bee name",
 			delete.Message,
-			// TODO: Add instance
-			"TODO: Add instance",
+			"https://api.neuralnexus.dev/api/v1/bee-name-generator/name/"+beeName,
 		)
 		responses.SendAndEncodeProblem(w, r, problem)
 		return
 	}
-
 	responses.SendAndEncodeStruct(w, r, http.StatusOK, NewNameResponse(beeName))
 }
 
@@ -397,23 +380,22 @@ func SubmitBeeNameHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if beeName == "" {
-		SendAndEncodeInvalidName(w, r)
+		responses.SendAndEncodeBadRequest(w, r, "Invalid name")
 		return
 	}
+
 	submit := submitBeeName(beeName)
 	if !submit.Success {
 		problem := responses.NewProblemResponse(
-			"submit_bee_name_error",
+			"https://api.neuralnexus.dev/probs/bee-name-generator/submit-bee-name",
 			http.StatusInternalServerError,
 			"Failed to submit bee name",
 			submit.Message,
-			// TODO: Add instance
-			"TODO: Add instance",
+			"https://api.neuralnexus.dev/api/v1/bee-name-generator/suggestion/"+beeName,
 		)
 		responses.SendAndEncodeProblem(w, r, problem)
 		return
 	}
-
 	responses.SendAndEncodeStruct(w, r, http.StatusOK, NewNameResponse(beeName))
 }
 
@@ -421,7 +403,7 @@ func SubmitBeeNameHandler(w http.ResponseWriter, r *http.Request) {
 func GetBeeNameSuggestionsHandler(w http.ResponseWriter, r *http.Request) {
 	session := r.Context().Value(middleware.SessionKey).(auth.Session)
 	if !session.HasPermission(auth.ScopeBeeNameGenerator.Name) {
-		responses.SendAndEncodeForbidden(w, r)
+		responses.SendAndEncodeForbidden(w, r, "You do not have permission to get bee name suggestions")
 		return
 	}
 
@@ -436,35 +418,24 @@ func GetBeeNameSuggestionsHandler(w http.ResponseWriter, r *http.Request) {
 	if amount == "" || amount == "0" {
 		amount = "1"
 	}
-
 	amountInt, err := strconv.ParseInt(amount, 10, 64)
 	if err != nil {
-		problem := responses.NewProblemResponse(
-			"invalid_amount",
-			http.StatusBadRequest,
-			"Invalid amount",
-			"Invalid amount provided",
-			// TODO: Add instance
-			"TODO: Add instance",
-		)
-		responses.SendAndEncodeProblem(w, r, problem)
+		responses.SendAndEncodeBadRequest(w, r, "Invalid amount provided")
 		return
 	}
 
 	suggestions := getBeeNameSuggestions(amountInt)
 	if !suggestions.Success {
 		problem := responses.NewProblemResponse(
-			"get_bee_name_suggestions_error",
+			"https://api.neuralnexus.dev/probs/bee-name-generator/get-bee-name-suggestions",
 			http.StatusInternalServerError,
 			"Failed to get bee name suggestions",
 			suggestions.Message,
-			// TODO: Add instance
-			"TODO: Add instance",
+			"https://api.neuralnexus.dev/api/v1/bee-name-generator/suggestion/"+amount,
 		)
 		responses.SendAndEncodeProblem(w, r, problem)
 		return
 	}
-
 	responses.SendAndEncodeStruct(w, r, http.StatusOK, NewSuggestionsResponse(suggestions.Data))
 }
 
@@ -472,7 +443,7 @@ func GetBeeNameSuggestionsHandler(w http.ResponseWriter, r *http.Request) {
 func AcceptBeeNameSuggestionHandler(w http.ResponseWriter, r *http.Request) {
 	session := r.Context().Value(middleware.SessionKey).(auth.Session)
 	if !session.HasPermission(auth.ScopeBeeNameGenerator.Name) {
-		responses.SendAndEncodeForbidden(w, r)
+		responses.SendAndEncodeForbidden(w, r, "You do not have permission to accept bee name suggestions")
 		return
 	}
 
@@ -485,23 +456,22 @@ func AcceptBeeNameSuggestionHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if beeName == "" {
-		SendAndEncodeInvalidName(w, r)
+		responses.SendAndEncodeBadRequest(w, r, "Invalid name")
 		return
 	}
+
 	accept := acceptBeeNameSuggestion(beeName)
 	if !accept.Success {
 		problem := responses.NewProblemResponse(
-			"accept_bee_name_suggestion_error",
+			"https://api.neuralnexus.dev/probs/bee-name-generator/accept-bee-name-suggestion",
 			http.StatusInternalServerError,
 			"Failed to accept bee name suggestion",
 			accept.Message,
-			// TODO: Add instance
-			"TODO: Add instance",
+			"https://api.neuralnexus.dev/api/v1/bee-name-generator/suggestion/"+beeName,
 		)
 		responses.SendAndEncodeProblem(w, r, problem)
 		return
 	}
-
 	responses.SendAndEncodeStruct(w, r, http.StatusOK, NewNameResponse(beeName))
 }
 
@@ -509,7 +479,7 @@ func AcceptBeeNameSuggestionHandler(w http.ResponseWriter, r *http.Request) {
 func RejectBeeNameSuggestionHandler(w http.ResponseWriter, r *http.Request) {
 	session := r.Context().Value(middleware.SessionKey).(auth.Session)
 	if !session.HasPermission(auth.ScopeBeeNameGenerator.Name) {
-		responses.SendAndEncodeForbidden(w, r)
+		responses.SendAndEncodeForbidden(w, r, "You do not have permission to reject bee name suggestions")
 		return
 	}
 
@@ -522,22 +492,21 @@ func RejectBeeNameSuggestionHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if beeName == "" {
-		SendAndEncodeInvalidName(w, r)
+		responses.SendAndEncodeBadRequest(w, r, "Invalid name")
 		return
 	}
+
 	reject := rejectBeeNameSuggestion(beeName)
 	if !reject.Success {
 		problem := responses.NewProblemResponse(
-			"reject_bee_name_suggestion_error",
+			"https://api.neuralnexus.dev/probs/bee-name-generator/reject-bee-name-suggestion",
 			http.StatusInternalServerError,
 			"Failed to reject bee name suggestion",
 			reject.Message,
-			// TODO: Add instance
-			"TODO: Add instance",
+			"https://api.neuralnexus.dev/api/v1/bee-name-generator/suggestion/"+beeName,
 		)
 		responses.SendAndEncodeProblem(w, r, problem)
 		return
 	}
-
 	responses.SendAndEncodeStruct(w, r, http.StatusOK, NewNameResponse(beeName))
 }

@@ -382,17 +382,17 @@ func UploadPetPicture(file *os.File, subjects []int, aliases []string) APIRespon
 
 // ApplyRoutes - Apply routes to the router
 func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
-	mux.HandleFunc("POST /petpictures/pets/{name}", CreatePetHandler)
-	mux.HandleFunc("POST /petpictures/pets", CreatePetHandler)
-	mux.HandleFunc("GET /petpictures/pets/{id}", GetPetHandler)
-	mux.HandleFunc("GET /petpictures/pets", GetPetHandler)
-	mux.HandleFunc("PUT /petpictures/pets", UpdatePetHandler)
-	mux.HandleFunc("GET /petpictures/pictures/random", GetRandPetPictureHandler)
-	mux.HandleFunc("GET /petpictures/pictures/{id}", GetPetPictureHandler)
-	mux.HandleFunc("GET /petpictures/pictures", GetPetPictureHandler)
-	mux.HandleFunc("PUT /petpictures/pictures", UpdatePetPictureHandler)
-	mux.HandleFunc("DELETE /petpictures/pictures/{id}", DeletePetPictureHandler)
-	mux.HandleFunc("DELETE /petpictures/pictures", DeletePetPictureHandler)
+	mux.HandleFunc("POST /pet-pictures/pets/{name}", CreatePetHandler)
+	mux.HandleFunc("POST /pet-pictures/pets", CreatePetHandler)
+	mux.HandleFunc("GET /pet-pictures/pets/{id}", GetPetHandler)
+	mux.HandleFunc("GET /pet-pictures/pets", GetPetHandler)
+	mux.HandleFunc("PUT /pet-pictures/pets", UpdatePetHandler)
+	mux.HandleFunc("GET /pet-pictures/pictures/random", GetRandPetPictureHandler)
+	mux.HandleFunc("GET /pet-pictures/pictures/{id}", GetPetPictureHandler)
+	mux.HandleFunc("GET /pet-pictures/pictures", GetPetPictureHandler)
+	mux.HandleFunc("PUT /pet-pictures/pictures", UpdatePetPictureHandler)
+	mux.HandleFunc("DELETE /pet-pictures/pictures/{id}", DeletePetPictureHandler)
+	mux.HandleFunc("DELETE /pet-pictures/pictures", DeletePetPictureHandler)
 	return mux
 }
 
@@ -407,32 +407,22 @@ func CreatePetHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if petName == "" {
-		problem := responses.NewProblemResponse(
-			"invalid_input",
-			http.StatusBadRequest,
-			"Invalid input",
-			"Pet name is required",
-			// TODO: Add instance
-			"TODO: Add instance",
-		)
-		responses.SendAndEncodeProblem(w, r, problem)
+		responses.SendAndEncodeBadRequest(w, r, "Pet name is required")
 		return
 	}
 
 	petResponse := createPet(petName)
 	if !petResponse.Success {
 		problem := responses.NewProblemResponse(
-			"unable_to_create_pet",
+			"https://api.neuralnexus.dev/probs/pet-pictures/create-pet",
 			http.StatusInternalServerError,
 			"Unable to create pet",
 			petResponse.Message,
-			// TODO: Add instance
-			"TODO: Add instance",
+			"https://api.neuralnexus.dev/api/v1/pet-pictures/pets/"+petName,
 		)
 		responses.SendAndEncodeProblem(w, r, problem)
 		return
 	}
-
 	responses.SendAndEncodeStruct(w, r, http.StatusCreated, petResponse.Data)
 }
 
@@ -454,34 +444,16 @@ func GetPetHandler(w http.ResponseWriter, r *http.Request) {
 			petID = pet.ID
 		}
 	}
-
 	if petID == 0 {
-		problem := responses.NewProblemResponse(
-			"invalid_input",
-			http.StatusBadRequest,
-			"Invalid input",
-			"Pet ID is required",
-			// TODO: Add instance
-			"TODO: Add instance",
-		)
-		responses.SendAndEncodeProblem(w, r, problem)
+		responses.SendAndEncodeBadRequest(w, r, "Pet ID is required")
 		return
 	}
 
 	petResponse := getPet(petID)
 	if !petResponse.Success {
-		problem := responses.NewProblemResponse(
-			"not_found",
-			http.StatusNotFound,
-			"Pet not found",
-			petResponse.Message,
-			// TODO: Add instance
-			"TODO: Add instance",
-		)
-		responses.SendAndEncodeProblem(w, r, problem)
+		responses.SendAndEncodeNotFound(w, r, petResponse.Message)
 		return
 	}
-
 	responses.SendAndEncodeStruct(w, r, http.StatusOK, petResponse.Data)
 }
 
@@ -490,32 +462,22 @@ func UpdatePetHandler(w http.ResponseWriter, r *http.Request) {
 	var pet Pet
 	err := responses.DecodeStruct(r, &pet)
 	if err != nil {
-		problem := responses.NewProblemResponse(
-			"invalid_input",
-			http.StatusBadRequest,
-			"Invalid input",
-			"Invalid input",
-			// TODO: Add instance
-			"TODO: Add instance",
-		)
-		responses.SendAndEncodeProblem(w, r, problem)
+		responses.SendAndEncodeBadRequest(w, r, "Invalid input, unable to parse body")
 		return
 	}
 
 	petResponse := updatePet(pet.ID, pet.Name, pet.ProfilePicture)
 	if !petResponse.Success {
 		problem := responses.NewProblemResponse(
-			"unable_to_update_pet",
+			"https://api.neuralnexus.dev/probs/pet-pictures/update-pet",
 			http.StatusInternalServerError,
 			"Unable to update pet",
 			petResponse.Message,
-			// TODO: Add instance
-			"TODO: Add instance",
+			"https://api.neuralnexus.dev/api/v1/pet-pictures/pets/"+strconv.Itoa(pet.ID),
 		)
 		responses.SendAndEncodeProblem(w, r, problem)
 		return
 	}
-
 	responses.SendAndEncodeStruct(w, r, http.StatusOK, petResponse.Data)
 }
 
@@ -523,18 +485,9 @@ func UpdatePetHandler(w http.ResponseWriter, r *http.Request) {
 func GetRandPetPictureHandler(w http.ResponseWriter, r *http.Request) {
 	petPictureResponse := getRandPetPicture()
 	if !petPictureResponse.Success {
-		problem := responses.NewProblemResponse(
-			"not_found",
-			http.StatusNotFound,
-			"Pet picture not found",
-			petPictureResponse.Message,
-			// TODO: Add instance
-			"TODO: Add instance",
-		)
-		responses.SendAndEncodeProblem(w, r, problem)
+		responses.SendAndEncodeNotFound(w, r, petPictureResponse.Message)
 		return
 	}
-
 	responses.SendAndEncodeStruct(w, r, http.StatusOK, petPictureResponse.Data)
 }
 
@@ -549,32 +502,15 @@ func GetPetPictureHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if petPictureID == "" {
-		problem := responses.NewProblemResponse(
-			"invalid_input",
-			http.StatusBadRequest,
-			"Invalid input",
-			"Pet picture ID is required",
-			// TODO: Add instance
-			"TODO: Add instance",
-		)
-		responses.SendAndEncodeProblem(w, r, problem)
+		responses.SendAndEncodeBadRequest(w, r, "Pet picture ID is required")
 		return
 	}
 
 	petPictureResponse := getPetPicture(petPictureID)
 	if !petPictureResponse.Success {
-		problem := responses.NewProblemResponse(
-			"not_found",
-			http.StatusNotFound,
-			"Pet picture not found",
-			petPictureResponse.Message,
-			// TODO: Add instance
-			"TODO: Add instance",
-		)
-		responses.SendAndEncodeProblem(w, r, problem)
+		responses.SendAndEncodeNotFound(w, r, petPictureResponse.Message)
 		return
 	}
-
 	responses.SendAndEncodeStruct(w, r, http.StatusOK, petPictureResponse.Data)
 }
 
@@ -583,32 +519,22 @@ func UpdatePetPictureHandler(w http.ResponseWriter, r *http.Request) {
 	var petPicture PetPicture
 	err := responses.DecodeStruct(r, &petPicture)
 	if err != nil {
-		problem := responses.NewProblemResponse(
-			"invalid_input",
-			http.StatusBadRequest,
-			"Invalid input",
-			"Invalid input",
-			// TODO: Add instance
-			"TODO: Add instance",
-		)
-		responses.SendAndEncodeProblem(w, r, problem)
+		responses.SendAndEncodeBadRequest(w, r, "Invalid input, unable to parse body")
 		return
 	}
 
 	petPictureResponse := updatePetPicture(petPicture.ID, petPicture.FileExt, petPicture.Subjects, petPicture.Aliases)
 	if !petPictureResponse.Success {
 		problem := responses.NewProblemResponse(
-			"unable_to_update_pet_picture",
+			"https://api.neuralnexus.dev/probs/pet-pictures/update-pet-picture",
 			http.StatusInternalServerError,
 			"Unable to update pet picture",
 			petPictureResponse.Message,
-			// TODO: Add instance
-			"TODO: Add instance",
+			"https://api.neuralnexus.dev/api/v1/pet-pictures/pictures/"+petPicture.ID,
 		)
 		responses.SendAndEncodeProblem(w, r, problem)
 		return
 	}
-
 	responses.SendAndEncodeStruct(w, r, http.StatusOK, petPictureResponse.Data)
 }
 
@@ -623,32 +549,21 @@ func DeletePetPictureHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if petPictureID == "" {
-		problem := responses.NewProblemResponse(
-			"invalid_input",
-			http.StatusBadRequest,
-			"Invalid input",
-			"Pet picture ID is required",
-			// TODO: Add instance
-			"TODO: Add instance",
-		)
-		responses.SendAndEncodeProblem(w, r, problem)
+		responses.SendAndEncodeBadRequest(w, r, "Pet picture ID is required")
 		return
 	}
 
 	petPictureResponse := deletePetPicture(petPictureID)
-
 	if !petPictureResponse.Success {
 		problem := responses.NewProblemResponse(
-			"unable_to_delete_pet_picture",
+			"https://api.neuralnexus.dev/probs/pet-pictures/delete-pet-picture",
 			http.StatusInternalServerError,
 			"Unable to delete pet picture",
 			petPictureResponse.Message,
-			// TODO: Add instance
-			"TODO: Add instance",
+			"https://api.neuralnexus.dev/api/v1/pet-pictures/pictures/"+petPictureID,
 		)
 		responses.SendAndEncodeProblem(w, r, problem)
 		return
 	}
-
 	responses.SendAndEncodeStruct(w, r, http.StatusOK, petPictureResponse.Data)
 }

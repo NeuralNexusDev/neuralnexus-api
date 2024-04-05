@@ -1,5 +1,19 @@
 # NeuralNexus API
 
+## Problem Docs Needed
+
+- bee-name-generator/get-bee-name
+- bee-name-generator/upload-bee-name
+- bee-name-generator/delete-bee-name
+- bee-name-generator/submit-bee-name
+- bee-name-generator/get-bee-name-suggestions
+- bee-name-generator/accept-bee-name-suggestion
+- bee-name-generator/reject-bee-name-suggestion
+- pet-pictures/create-pet
+- pet-pictures/update-pet
+- pet-pictures/update-pet-picture
+- pet-pictures/delete-pet-picture
+
 ## Economy API
 
 A cross platform currency/economy database for use across various platforms.
