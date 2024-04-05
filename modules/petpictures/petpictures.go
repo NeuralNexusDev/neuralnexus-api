@@ -17,7 +17,7 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
-// CREATE TABLE pictures(
+// CREATE TABLE pictures (
 //     id text not null primary key,
 //     file_ext text not null,
 //     subjects integer[] not null,
@@ -27,7 +27,7 @@ import (
 //     CONSTRAINT subjects_check CHECK ( subjects <> '{}' )
 // );
 
-// CREATE TABLE pets(
+// CREATE TABLE pets (
 //     id serial not null primary key,
 //     name text not null,
 //     profile_picture text default null,

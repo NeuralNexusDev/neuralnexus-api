@@ -1,16 +1,27 @@
 package authentication
 
 import (
+	"context"
 	"time"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/google/uuid"
 )
+
+// CREATE TABLE sessions (
+// 	session_id UUID PRIMARY KEY NOT NULL,
+// 	user_id UUID NOT NULL,
+// 	permissions TEXT[] NOT NULL,
+// 	iat BIGINT NOT NULL,
+// 	lua BIGINT NOT NULL,
+// 	exp BIGINT NOT NULL
+// );
 
 // -------------- Structs --------------
 
 // Session struct
 type Session struct {
-	ID          uuid.UUID `json:"id"`          // Session ID
+	ID          uuid.UUID `json:"session_id"`  // Session ID
 	UserID      uuid.UUID `json:"user_id"`     // User ID
 	Permissions []string  `json:"permissions"` // Permissions -- Roles squashed into an array
 	IssuedAt    int64     `json:"iat"`         // Created at
@@ -46,9 +57,51 @@ func (s *Session) HasPermission(permission string) bool {
 }
 
 // IsExpired checks if a session is expired
-func (s *Session) IsExpired() bool {
+func (s *Session) IsValid() bool {
 	if s.ExpiresAt == 0 {
-		return false
+		return true
 	}
-	return time.Now().Unix() > s.ExpiresAt
+	return time.Now().Unix() < s.ExpiresAt
+}
+
+// -------------- Functions --------------
+
+// GetSessionByID gets a session by ID
+func GetSessionByID(id uuid.UUID) database.Response[Session] {
+	db := database.GetDB("neuralnexus")
+	var session Session
+	err := db.QueryRow(context.Background(),
+		"SELECT session_id, user_id, permissions, iat, lua, exp FROM sessions WHERE id = $1",
+		id,
+	).Scan(&session.ID, &session.UserID, &session.Permissions, &session.IssuedAt, &session.LastUsedAt, &session.ExpiresAt)
+	if err != nil {
+		return database.Response[Session]{
+			Success: false,
+			Message: "Unable to retreive session",
+		}
+	}
+
+	return database.Response[Session]{
+		Success: true,
+		Data:    session,
+	}
+}
+
+// DeleteSessionByID deletes a session by ID
+func DeleteSessionByID(id uuid.UUID) database.Response[Session] {
+	db := database.GetDB("nedatabaseuralnexus")
+	_, err := db.Exec(context.Background(),
+		"DELETE FROM sessions WHERE session_id = $1",
+		id,
+	)
+	if err != nil {
+		return database.Response[Session]{
+			Success: false,
+			Message: "Unable to delete session",
+		}
+	}
+
+	return database.Response[Session]{
+		Success: true,
+	}
 }
