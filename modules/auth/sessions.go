@@ -22,23 +22,26 @@ import (
 
 // Session struct
 type Session struct {
-	ID          uuid.UUID `json:"session_id"`  // Session ID
-	UserID      uuid.UUID `json:"user_id"`     // User ID
-	Permissions []Scope   `json:"permissions"` // Permissions -- Roles squashed into an array
-	IssuedAt    int64     `json:"iat"`         // Created at
-	LastUsedAt  int64     `json:"lua"`         // Last used at
-	ExpiresAt   int64     `json:"exp"`         // Expires at -- set to 0 for no expiration
+	ID          uuid.UUID `json:"session_id" xml:"session_id"`   // Session ID
+	UserID      uuid.UUID `json:"user_id" xml:"user_id"`         // User ID
+	Permissions []string  `json:"permissions" xml:"permissions"` // Permissions -- Roles squashed into an array
+	IssuedAt    int64     `json:"iat" xml:"iat"`                 // Created at
+	LastUsedAt  int64     `json:"lua" xml:"lua"`                 // Last used at
+	ExpiresAt   int64     `json:"exp" xml:"exp"`                 // Expires at -- set to 0 for no expiration
 }
 
 // NewSession creates a new session
 func (a *Account) NewSession(expiresAt int64) Session {
-	permissions := []Scope{}
+	permissions := []string{}
 	for _, r := range a.Roles {
 		role, err := GetRoleByName(r)
 		if err != nil {
+			log.Println(err)
 			continue
 		}
-		permissions = append(permissions, role.Permissions...)
+		for _, p := range role.Permissions {
+			permissions = append(permissions, p.Name+"|"+p.Value)
+		}
 	}
 
 	return Session{
@@ -54,10 +57,8 @@ func (a *Account) NewSession(expiresAt int64) Session {
 // HasPermission checks if a session has a permission
 func (s *Session) HasPermission(permission Scope) bool {
 	for _, p := range s.Permissions {
-		if p.Name == permission.Name {
-			if p.Value == "*" || p.Value == permission.Value {
-				return true
-			}
+		if p == permission.Name+"|"+permission.Value {
+			return true
 		}
 	}
 	return false

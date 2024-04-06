@@ -5,9 +5,9 @@ import "errors"
 // -------------- Structs --------------
 
 type Scope struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Value       string `json:"value"`
+	Name        string `json:"name" xml:"name"`
+	Description string `json:"description,omitempty" xml:"description,omitempty"`
+	Value       string `json:"value,omitempty" xml:"value,omitempty"`
 }
 
 var (
@@ -34,9 +34,9 @@ func ScopePetPictures(value string) Scope {
 }
 
 type Role struct {
-	Name        string  `json:"name"`
-	Description string  `json:"description"`
-	Permissions []Scope `json:"permissions"`
+	Name        string  `json:"name" xml:"name"`
+	Description string  `json:"description,omitempty" xml:"description,omitempty"`
+	Permissions []Scope `json:"permissions" xml:"permissions"`
 }
 
 var (

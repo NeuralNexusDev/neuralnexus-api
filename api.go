@@ -8,6 +8,7 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/beenamegenerator"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/cct_turtle"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/mcstatus"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/petpictures"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/switchboard"
 	"github.com/NeuralNexusDev/neuralnexus-api/routes"
 	"github.com/rs/cors"
@@ -31,6 +32,7 @@ func (s *APIServer) Run() error {
 		beenamegenerator.ApplyRoutes,
 		cct_turtle.ApplyRoutes,
 		mcstatus.ApplyRoutes,
+		petpictures.ApplyRoutes,
 		switchboard.ApplyRoutes,
 	)
 
