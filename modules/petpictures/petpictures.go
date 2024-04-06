@@ -17,6 +17,7 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
+	"github.com/jackc/pgx/v5"
 )
 
 // CREATE TABLE pictures (
@@ -62,16 +63,16 @@ func (p *PetPicture) GetPetPictureURL() string {
 
 // Pet - Pet struct
 type Pet struct {
-	ID             int    `json:"id"`
-	Name           string `json:"name"`
-	ProfilePicture string `json:"profile_picture"`
+	ID             int    `json:"id" xml:"id" db:"id"`
+	Name           string `json:"name" xml:"name" db:"name"`
+	ProfilePicture string `json:"profile_picture" xml:"profile_picture" db:"profile_picture"`
 }
 
 // APIResponse - API response struct
 type APIResponse[T Pet | PetPicture] struct {
-	Success bool   `json:"success"`
-	Message string `json:"message,omitempty"`
-	Data    T      `json:"data,omitempty"`
+	Success bool
+	Message string
+	Data    T
 }
 
 // -------------- DB Functions --------------
@@ -82,9 +83,8 @@ func createPet(name string) database.Response[Pet] {
 
 	var pet Pet
 	err := db.QueryRow(context.Background(),
-		"INSERT INTO pets (name) VALUES ($1) RETURNING id, name, profile_picture",
-		name,
-	).Scan(&pet.ID, &pet.Name)
+		"INSERT INTO pets (name) VALUES ($1) RETURNING id, name, profile_picture", name,
+	).Scan(&pet.ID, &pet.Name, &pet.ProfilePicture)
 	if err != nil {
 		log.Println("Unable to create pet:", err)
 		return database.Response[Pet]{
@@ -105,10 +105,7 @@ func getPet(id int) database.Response[Pet] {
 	defer db.Close()
 
 	var pet Pet
-	err := db.QueryRow(context.Background(),
-		"SELECT id, name, profile_picture FROM pets WHERE id = $1",
-		id,
-	).Scan(&pet.ID, &pet.Name)
+	err := db.QueryRow(context.Background(), "SELECT * FROM pets WHERE id = $1", id).Scan(&pet.ID, &pet.Name, &pet.ProfilePicture)
 	if err != nil {
 		log.Println("Unable to get pet:", err)
 		return database.Response[Pet]{
@@ -129,10 +126,7 @@ func getPetByName(name string) database.Response[Pet] {
 	defer db.Close()
 
 	var pet Pet
-	err := db.QueryRow(context.Background(),
-		"SELECT id, name, profile_picture FROM pets WHERE name = $1",
-		name,
-	).Scan(&pet.ID, &pet.Name)
+	err := db.QueryRow(context.Background(), "SELECT id, name, profile_picture FROM pets WHERE name = $1", name).Scan(&pet.ID, &pet.Name, &pet.ProfilePicture)
 	if err != nil {
 		log.Println("Unable to get pet:", err)
 		return database.Response[Pet]{
@@ -148,15 +142,11 @@ func getPetByName(name string) database.Response[Pet] {
 }
 
 // updatePet - Update a pet
-func updatePet(id int, name string, picture string) database.Response[Pet] {
+func updatePet(pet Pet) database.Response[Pet] {
 	db := database.GetDB("pet_pictures")
 	defer db.Close()
 
-	var pet Pet
-	err := db.QueryRow(context.Background(),
-		"UPDATE pets SET name = $1, profile_picture = $2 WHERE id = $3 RETURNING id, name, profile_picture",
-		name, picture, id,
-	).Scan(&pet.ID, &pet.Name)
+	_, err := db.Query(context.Background(), "UPDATE pets SET name = $1, profile_picture = $2 WHERE id = $3", pet.Name, pet.ProfilePicture, pet.ID)
 	if err != nil {
 		log.Println("Unable to update pet:", err)
 		return database.Response[Pet]{
@@ -176,11 +166,10 @@ func createPetPicture(id string, fileExt string, primarySubject int, othersSubje
 	db := database.GetDB("pet_pictures")
 	defer db.Close()
 
-	var petPicture PetPicture
-	err := db.QueryRow(context.Background(),
-		"INSERT INTO pictures (id, file_ext, prime_subj, othr_subj, aliases) VALUES ($1, $2, $3, $4, $5) RETURNING id, file_ext, prime_subj, othr_subj, aliases, created_at",
+	_, err := db.Query(context.Background(),
+		"INSERT INTO pictures (id, file_ext, prime_subj, othr_subj, aliases) VALUES ($1, $2, $3, $4, $5)",
 		id, fileExt, primarySubject, othersSubjects, aliases,
-	).Scan(&petPicture.ID, &petPicture.FileExt, &petPicture.PrimarySubject, &petPicture.OthersSubjects, &petPicture.Aliases, &petPicture.Created)
+	)
 	if err != nil {
 		log.Println("Unable to create pet picture:", err)
 		return database.Response[PetPicture]{
@@ -191,7 +180,13 @@ func createPetPicture(id string, fileExt string, primarySubject int, othersSubje
 
 	return database.Response[PetPicture]{
 		Success: true,
-		Data:    petPicture,
+		Data: PetPicture{
+			ID:             id,
+			FileExt:        fileExt,
+			PrimarySubject: primarySubject,
+			OthersSubjects: othersSubjects,
+			Aliases:        aliases,
+		},
 	}
 }
 
@@ -208,11 +203,18 @@ func getRandPetPictureByName(name string) database.Response[PetPicture] {
 	db := database.GetDB("pet_pictures")
 	defer db.Close()
 
-	var petPicture PetPicture
-	err := db.QueryRow(context.Background(),
-		"SELECT id, file_ext, prime_subj, othr_subj, aliases, created_at FROM pictures WHERE prime_subj = $1 OR $2 = ANY(othr_subj) ORDER BY random() LIMIT 1",
-		pet.Data.ID, pet.Data.ID,
-	).Scan(&petPicture.ID, &petPicture.FileExt, &petPicture.PrimarySubject, &petPicture.OthersSubjects, &petPicture.Aliases, &petPicture.Created)
+	rows, err := db.Query(context.Background(),
+		"SELECT * FROM pictures WHERE prime_subj = $1 OR $2 = ANY(othr_subj) ORDER BY random() LIMIT 1", pet.Data.ID, pet.Data.ID)
+	if err != nil {
+		log.Println("Unable to get random pet picture by name:", err)
+		return database.Response[PetPicture]{
+			Success: false,
+			Message: "Unable to get random pet picture by name",
+		}
+	}
+
+	var picture *PetPicture
+	picture, err = pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[PetPicture])
 	if err != nil {
 		log.Println("Unable to get random pet picture by name:", err)
 		return database.Response[PetPicture]{
@@ -223,7 +225,7 @@ func getRandPetPictureByName(name string) database.Response[PetPicture] {
 
 	return database.Response[PetPicture]{
 		Success: true,
-		Data:    petPicture,
+		Data:    *picture,
 	}
 }
 
@@ -232,11 +234,17 @@ func getPetPicture(id string) database.Response[PetPicture] {
 	db := database.GetDB("pet_pictures")
 	defer db.Close()
 
-	var petPicture PetPicture
-	err := db.QueryRow(context.Background(),
-		"SELECT id, file_ext, prime_subj, othr_subj, aliases, created_at FROM pictures WHERE id = $1",
-		id,
-	).Scan(&petPicture.ID, &petPicture.FileExt, &petPicture.PrimarySubject, &petPicture.OthersSubjects, &petPicture.Aliases, &petPicture.Created)
+	rows, err := db.Query(context.Background(), "SELECT * FROM pictures WHERE id = $1", id)
+	if err != nil {
+		log.Println("Unable to get pet picture:", err)
+		return database.Response[PetPicture]{
+			Success: false,
+			Message: "Unable to get pet picture",
+		}
+	}
+
+	var picture *PetPicture
+	picture, err = pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[PetPicture])
 	if err != nil {
 		log.Println("Unable to get pet picture:", err)
 		return database.Response[PetPicture]{
@@ -247,20 +255,20 @@ func getPetPicture(id string) database.Response[PetPicture] {
 
 	return database.Response[PetPicture]{
 		Success: true,
-		Data:    petPicture,
+		Data:    *picture,
 	}
 }
 
 // updatePetPicture - Update a pet picture
-func updatePetPicture(updatedPic PetPicture) database.Response[PetPicture] {
+func updatePetPicture(picture PetPicture) database.Response[PetPicture] {
 	db := database.GetDB("pet_pictures")
 	defer db.Close()
 
 	var petPicture PetPicture
-	err := db.QueryRow(context.Background(),
-		"UPDATE pictures SET file_ext = $1, prime_subj = $2, othr_subj = $3, aliases = $4 WHERE id = $5 RETURNING id, file_ext, prime_subj, othr_subj, aliases, created_at",
-		updatedPic.FileExt, updatedPic.PrimarySubject, updatedPic.OthersSubjects, updatedPic.Aliases, updatedPic.ID,
-	).Scan(&petPicture.ID, &petPicture.FileExt, &petPicture.PrimarySubject, &petPicture.OthersSubjects, &petPicture.Aliases, &petPicture.Created)
+	_, err := db.Query(context.Background(),
+		"UPDATE pictures SET file_ext = $1, prime_subj = $2, othr_subj = $3, aliases = $4 WHERE id = $5",
+		picture.FileExt, picture.PrimarySubject, picture.OthersSubjects, picture.Aliases, picture.ID,
+	)
 	if err != nil {
 		log.Println("Unable to update pet picture:", err)
 		return database.Response[PetPicture]{
@@ -280,11 +288,7 @@ func deletePetPicture(id string) database.Response[PetPicture] {
 	db := database.GetDB("pet_pictures")
 	defer db.Close()
 
-	var petPicture PetPicture
-	err := db.QueryRow(context.Background(),
-		"DELETE FROM pictures WHERE id = $1 RETURNING id, file_ext, prime_subj, othr_subj, aliases, created_at",
-		id,
-	).Scan(&petPicture.ID, &petPicture.FileExt, &petPicture.PrimarySubject, &petPicture.OthersSubjects, &petPicture.Aliases, &petPicture.Created)
+	_, err := db.Query(context.Background(), "DELETE FROM pictures WHERE id = $1", id)
 	if err != nil {
 		log.Println("Unable to delete pet picture:", err)
 		return database.Response[PetPicture]{
@@ -295,7 +299,7 @@ func deletePetPicture(id string) database.Response[PetPicture] {
 
 	return database.Response[PetPicture]{
 		Success: true,
-		Data:    petPicture,
+		Data:    PetPicture{ID: id},
 	}
 }
 
@@ -490,7 +494,7 @@ func UpdatePetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	petResponse := updatePet(pet.ID, pet.Name, pet.ProfilePicture)
+	petResponse := updatePet(pet)
 	if !petResponse.Success {
 		problem := responses.NewProblemResponse(
 			"https://api.neuralnexus.dev/probs/pet-pictures/update-pet",

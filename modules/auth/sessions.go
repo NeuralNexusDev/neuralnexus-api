@@ -7,6 +7,7 @@ import (
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 // CREATE TABLE sessions (
@@ -22,12 +23,12 @@ import (
 
 // Session struct
 type Session struct {
-	ID          uuid.UUID `json:"session_id" xml:"session_id"`   // Session ID
-	UserID      uuid.UUID `json:"user_id" xml:"user_id"`         // User ID
-	Permissions []string  `json:"permissions" xml:"permissions"` // Permissions -- Roles squashed into an array
-	IssuedAt    int64     `json:"iat" xml:"iat"`                 // Created at
-	LastUsedAt  int64     `json:"lua" xml:"lua"`                 // Last used at
-	ExpiresAt   int64     `json:"exp" xml:"exp"`                 // Expires at -- set to 0 for no expiration
+	ID          uuid.UUID `json:"session_id" xml:"session_id" db:"session_id"`
+	UserID      uuid.UUID `json:"user_id" xml:"user_id" db:"user_id"`
+	Permissions []string  `json:"permissions" xml:"permissions" db:"permissions"`
+	IssuedAt    int64     `json:"iat" xml:"iat" db:"iat"`
+	LastUsedAt  int64     `json:"lua" xml:"lua" db:"lua"`
+	ExpiresAt   int64     `json:"exp" xml:"exp" db:"exp"`
 }
 
 // NewSession creates a new session
@@ -77,6 +78,8 @@ func (s *Session) IsValid() bool {
 // CreateSession creates a session and inserts it into the database
 func CreateSession(session Session) database.Response[Session] {
 	db := database.GetDB("neuralnexus")
+	defer db.Close()
+
 	_, err := db.Exec(context.Background(),
 		"INSERT INTO sessions (session_id, user_id, permissions, iat, lua, exp) VALUES ($1, $2, $3, $4, $5, $6)",
 		session.ID, session.UserID, session.Permissions, session.IssuedAt, session.LastUsedAt, session.ExpiresAt,
@@ -97,11 +100,22 @@ func CreateSession(session Session) database.Response[Session] {
 // GetSession gets a session by ID
 func GetSession(id uuid.UUID) database.Response[Session] {
 	db := database.GetDB("neuralnexus")
-	var session Session
-	err := db.QueryRow(context.Background(),
+	defer db.Close()
+
+	var session *Session
+	rows, err := db.Query(context.Background(),
 		"SELECT session_id, user_id, permissions, iat, lua, exp FROM sessions WHERE session_id = $1",
 		id,
-	).Scan(&session.ID, &session.UserID, &session.Permissions, &session.IssuedAt, &session.LastUsedAt, &session.ExpiresAt)
+	)
+	if err != nil {
+		log.Println(err)
+		return database.Response[Session]{
+			Success: false,
+			Message: "Unable to retreive session",
+		}
+	}
+
+	session, err = pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Session])
 	if err != nil {
 		log.Println(err)
 		return database.Response[Session]{
@@ -112,13 +126,15 @@ func GetSession(id uuid.UUID) database.Response[Session] {
 
 	return database.Response[Session]{
 		Success: true,
-		Data:    session,
+		Data:    *session,
 	}
 }
 
 // DeleteSession deletes a session by ID
 func DeleteSession(id uuid.UUID) database.Response[Session] {
 	db := database.GetDB("nedatabaseuralnexus")
+	defer db.Close()
+
 	_, err := db.Exec(context.Background(),
 		"DELETE FROM sessions WHERE session_id = $1",
 		id,

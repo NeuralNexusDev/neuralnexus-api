@@ -7,6 +7,7 @@ import (
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/argon2"
 )
 
@@ -23,12 +24,12 @@ import (
 
 // Account struct
 type Account struct {
-	UserID       uuid.UUID `json:"user_id"`       // User ID
-	Username     string    `json:"username"`      // Username
-	Email        string    `json:"email"`         // Email
-	HashedSecret []byte    `json:"hashed_secret"` // Hashed secret
-	Salt         []byte    `json:"salt"`          // Salt
-	Roles        []string  `json:"roles"`         // Roles
+	UserID       uuid.UUID `db:"user_id"`
+	Username     string    `db:"username"`
+	Email        string    `db:"email"`
+	HashedSecret []byte    `db:"hashed_secret"`
+	Salt         []byte    `db:"salt"`
+	Roles        []string  `db:"roles"`
 }
 
 // NewAccount creates a new account
@@ -74,6 +75,8 @@ func (user *Account) AddRole(role string) {
 // CreateAccountInDB creates an account in the database
 func CreateAccountInDB(account Account) database.Response[Account] {
 	db := database.GetDB("neuralnexus")
+	defer db.Close()
+
 	_, err := db.Exec(context.Background(),
 		"INSERT INTO accounts (user_id, username, email, hashed_secret, salt, roles) VALUES ($1, $2, $3, $4, $5, $6)",
 		account.UserID, account.Username, account.Email, account.HashedSecret, account.Salt, account.Roles,
@@ -95,10 +98,19 @@ func CreateAccountInDB(account Account) database.Response[Account] {
 // GetAccountByID gets an account by ID
 func GetAccountByID(userID uuid.UUID) database.Response[Account] {
 	db := database.GetDB("neuralnexus")
-	row := db.QueryRow(context.Background(), "SELECT * FROM accounts WHERE user_id = $1", userID)
+	defer db.Close()
 
-	account := Account{}
-	err := row.Scan(&account.UserID, &account.Username, &account.Email, &account.HashedSecret, &account.Salt, &account.Roles)
+	rows, err := db.Query(context.Background(), "SELECT * FROM accounts WHERE user_id = $1", userID)
+	if err != nil {
+		log.Println(err)
+		return database.Response[Account]{
+			Success: false,
+			Message: "Unable to get account",
+		}
+	}
+
+	var account *Account
+	account, err = pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Account])
 	if err != nil {
 		log.Println(err)
 		return database.Response[Account]{
@@ -109,17 +121,26 @@ func GetAccountByID(userID uuid.UUID) database.Response[Account] {
 
 	return database.Response[Account]{
 		Success: true,
-		Data:    account,
+		Data:    *account,
 	}
 }
 
 // GetAccountByUsername gets an account by username
 func GetAccountByUsername(username string) database.Response[Account] {
 	db := database.GetDB("neuralnexus")
-	row := db.QueryRow(context.Background(), "SELECT * FROM accounts WHERE username = $1", username)
+	defer db.Close()
 
-	account := Account{}
-	err := row.Scan(&account.UserID, &account.Username, &account.Email, &account.HashedSecret, &account.Salt, &account.Roles)
+	rows, err := db.Query(context.Background(), "SELECT * FROM accounts WHERE username = $1", username)
+	if err != nil {
+		log.Println(err)
+		return database.Response[Account]{
+			Success: false,
+			Message: "Unable to get account",
+		}
+	}
+
+	var account *Account
+	account, err = pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Account])
 	if err != nil {
 		log.Println(err)
 		return database.Response[Account]{
@@ -130,6 +151,6 @@ func GetAccountByUsername(username string) database.Response[Account] {
 
 	return database.Response[Account]{
 		Success: true,
-		Data:    account,
+		Data:    *account,
 	}
 }
