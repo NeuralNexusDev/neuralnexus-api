@@ -38,6 +38,8 @@ func ErrorResponse[T any](message string) Response[T] {
 }
 
 // -------------- Functions --------------
+
+// GetDB - Get a connection pool to the database
 func GetDB(database string) *pgxpool.Pool {
 	if DATABASE_URL == "" {
 		log.Println("DATABASE_URL is not set")
@@ -49,6 +51,5 @@ func GetDB(database string) *pgxpool.Pool {
 		log.Println("Unable to create connection pool:", err)
 		return nil
 	}
-
 	return PgPool
 }
