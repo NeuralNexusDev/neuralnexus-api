@@ -48,12 +48,12 @@ var (
 // -------------- Structs --------------
 // PetPicture - Pet picture struct
 type PetPicture struct {
-	ID             string   `json:"id" xml:"id"`
-	FileExt        string   `json:"file_ext" xml:"file_ext"`
-	PrimarySubject int      `json:"prime_subj" xml:"prime_subj"`
-	OthersSubjects []int    `json:"othr_subj" xml:"othr_subj"`
-	Aliases        []string `json:"aliases" xml:"aliases"`
-	Created        string   `json:"created" xml:"created"`
+	ID             string   `json:"id" xml:"id" db:"id"`
+	FileExt        string   `json:"file_ext" xml:"file_ext" db:"file_ext"`
+	PrimarySubject int      `json:"prime_subj" xml:"prime_subj" db:"prime_subj"`
+	OthersSubjects []int    `json:"othr_subj" xml:"othr_subj" db:"othr_subj"`
+	Aliases        []string `json:"aliases" xml:"aliases" db:"aliases"`
+	Created        string   `json:"created" xml:"created" db:"created"`
 }
 
 // GetPetPictureURL - Get the URL for a pet picture
@@ -75,7 +75,25 @@ type APIResponse[T Pet | PetPicture] struct {
 	Data    T
 }
 
+// APISuccessResponse - Create a new API success response
+func APISuccessResponse[T Pet | PetPicture](data T) APIResponse[T] {
+	return APIResponse[T]{
+		Success: true,
+		Data:    data,
+	}
+}
+
+// APIErrorResponse - Create a new API error response
+func APIErrorResponse[T Pet | PetPicture](message string) APIResponse[T] {
+	log.Println(message + ":\n")
+	return APIResponse[T]{
+		Success: false,
+		Message: message,
+	}
+}
+
 // -------------- DB Functions --------------
+
 // createPet - Create a new pet
 func createPet(name string) database.Response[Pet] {
 	db := database.GetDB("pet_pictures")
@@ -86,17 +104,9 @@ func createPet(name string) database.Response[Pet] {
 		"INSERT INTO pets (name) VALUES ($1) RETURNING id, name, profile_picture", name,
 	).Scan(&pet.ID, &pet.Name, &pet.ProfilePicture)
 	if err != nil {
-		log.Println("Unable to create pet:", err)
-		return database.Response[Pet]{
-			Success: false,
-			Message: "Unable to create pet (pet may already exist)",
-		}
+		return database.ErrorResponse[Pet]("Unable to create pet (pet may already exist)")
 	}
-
-	return database.Response[Pet]{
-		Success: true,
-		Data:    pet,
-	}
+	return database.SuccessResponse(pet)
 }
 
 // getPet - Get a pet by ID
@@ -107,17 +117,9 @@ func getPet(id int) database.Response[Pet] {
 	var pet Pet
 	err := db.QueryRow(context.Background(), "SELECT * FROM pets WHERE id = $1", id).Scan(&pet.ID, &pet.Name, &pet.ProfilePicture)
 	if err != nil {
-		log.Println("Unable to get pet:", err)
-		return database.Response[Pet]{
-			Success: false,
-			Message: "Unable to get pet",
-		}
+		return database.ErrorResponse[Pet]("Unable to get pet")
 	}
-
-	return database.Response[Pet]{
-		Success: true,
-		Data:    pet,
-	}
+	return database.SuccessResponse(pet)
 }
 
 // getPetByName - Get a pet by name
@@ -128,17 +130,9 @@ func getPetByName(name string) database.Response[Pet] {
 	var pet Pet
 	err := db.QueryRow(context.Background(), "SELECT id, name, profile_picture FROM pets WHERE name = $1", name).Scan(&pet.ID, &pet.Name, &pet.ProfilePicture)
 	if err != nil {
-		log.Println("Unable to get pet:", err)
-		return database.Response[Pet]{
-			Success: false,
-			Message: "Unable to get pet",
-		}
+		return database.ErrorResponse[Pet]("Unable to get pet")
 	}
-
-	return database.Response[Pet]{
-		Success: true,
-		Data:    pet,
-	}
+	return database.SuccessResponse(pet)
 }
 
 // updatePet - Update a pet
@@ -148,17 +142,9 @@ func updatePet(pet Pet) database.Response[Pet] {
 
 	_, err := db.Query(context.Background(), "UPDATE pets SET name = $1, profile_picture = $2 WHERE id = $3", pet.Name, pet.ProfilePicture, pet.ID)
 	if err != nil {
-		log.Println("Unable to update pet:", err)
-		return database.Response[Pet]{
-			Success: false,
-			Message: "Unable to update pet",
-		}
+		return database.ErrorResponse[Pet]("Unable to update pet")
 	}
-
-	return database.Response[Pet]{
-		Success: true,
-		Data:    pet,
-	}
+	return database.SuccessResponse(pet)
 }
 
 // createPetPicture - Create a new pet picture
@@ -171,23 +157,15 @@ func createPetPicture(id string, fileExt string, primarySubject int, othersSubje
 		id, fileExt, primarySubject, othersSubjects, aliases,
 	)
 	if err != nil {
-		log.Println("Unable to create pet picture:", err)
-		return database.Response[PetPicture]{
-			Success: false,
-			Message: "Unable to create pet picture",
-		}
+		return database.ErrorResponse[PetPicture]("Unable to create pet picture")
 	}
-
-	return database.Response[PetPicture]{
-		Success: true,
-		Data: PetPicture{
-			ID:             id,
-			FileExt:        fileExt,
-			PrimarySubject: primarySubject,
-			OthersSubjects: othersSubjects,
-			Aliases:        aliases,
-		},
-	}
+	return database.SuccessResponse(PetPicture{
+		ID:             id,
+		FileExt:        fileExt,
+		PrimarySubject: primarySubject,
+		OthersSubjects: othersSubjects,
+		Aliases:        aliases,
+	})
 }
 
 // getRandPetPictureByName - Get a random pet picture by name
@@ -206,27 +184,15 @@ func getRandPetPictureByName(name string) database.Response[PetPicture] {
 	rows, err := db.Query(context.Background(),
 		"SELECT * FROM pictures WHERE prime_subj = $1 OR $2 = ANY(othr_subj) ORDER BY random() LIMIT 1", pet.Data.ID, pet.Data.ID)
 	if err != nil {
-		log.Println("Unable to get random pet picture by name:", err)
-		return database.Response[PetPicture]{
-			Success: false,
-			Message: "Unable to get random pet picture by name",
-		}
+		return database.ErrorResponse[PetPicture]("Unable to get random pet picture by name")
 	}
 
 	var picture *PetPicture
 	picture, err = pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[PetPicture])
 	if err != nil {
-		log.Println("Unable to get random pet picture by name:", err)
-		return database.Response[PetPicture]{
-			Success: false,
-			Message: "Unable to get random pet picture by name",
-		}
+		return database.ErrorResponse[PetPicture]("Unable to get random pet picture by name")
 	}
-
-	return database.Response[PetPicture]{
-		Success: true,
-		Data:    *picture,
-	}
+	return database.SuccessResponse(*picture)
 }
 
 // getPetPicture - Get a pet picture by ID
@@ -236,27 +202,15 @@ func getPetPicture(id string) database.Response[PetPicture] {
 
 	rows, err := db.Query(context.Background(), "SELECT * FROM pictures WHERE id = $1", id)
 	if err != nil {
-		log.Println("Unable to get pet picture:", err)
-		return database.Response[PetPicture]{
-			Success: false,
-			Message: "Unable to get pet picture",
-		}
+		return database.ErrorResponse[PetPicture]("Unable to get pet picture")
 	}
 
 	var picture *PetPicture
 	picture, err = pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[PetPicture])
 	if err != nil {
-		log.Println("Unable to get pet picture:", err)
-		return database.Response[PetPicture]{
-			Success: false,
-			Message: "Unable to get pet picture",
-		}
+		return database.ErrorResponse[PetPicture]("Unable to get pet picture")
 	}
-
-	return database.Response[PetPicture]{
-		Success: true,
-		Data:    *picture,
-	}
+	return database.SuccessResponse(*picture)
 }
 
 // updatePetPicture - Update a pet picture
@@ -270,11 +224,7 @@ func updatePetPicture(picture PetPicture) database.Response[PetPicture] {
 		picture.FileExt, picture.PrimarySubject, picture.OthersSubjects, picture.Aliases, picture.ID,
 	)
 	if err != nil {
-		log.Println("Unable to update pet picture:", err)
-		return database.Response[PetPicture]{
-			Success: false,
-			Message: "Unable to update pet picture",
-		}
+		return database.ErrorResponse[PetPicture]("Unable to update pet picture")
 	}
 
 	return database.Response[PetPicture]{
@@ -290,17 +240,9 @@ func deletePetPicture(id string) database.Response[PetPicture] {
 
 	_, err := db.Query(context.Background(), "DELETE FROM pictures WHERE id = $1", id)
 	if err != nil {
-		log.Println("Unable to delete pet picture:", err)
-		return database.Response[PetPicture]{
-			Success: false,
-			Message: "Unable to delete pet picture",
-		}
+		return database.ErrorResponse[PetPicture]("Unable to delete pet picture")
 	}
-
-	return database.Response[PetPicture]{
-		Success: true,
-		Data:    PetPicture{ID: id},
-	}
+	return database.SuccessResponse(PetPicture{ID: id})
 }
 
 // -------------- Functions --------------
@@ -310,11 +252,7 @@ func UploadPetPicture(file *os.File, primarySubject int, othersSubjects []int, a
 	// Get SHA1 hash
 	hash := sha256.New()
 	if _, err := io.Copy(hash, file); err != nil {
-		log.Println("Unable to get SHA256 hash:", err)
-		return APIResponse[PetPicture]{
-			Success: false,
-			Message: "Unable to get SHA256 hash",
-		}
+		return APIErrorResponse[PetPicture]("Unable to get SHA256 hash")
 	}
 	sha := hex.EncodeToString(hash.Sum(nil))
 
@@ -323,30 +261,20 @@ func UploadPetPicture(file *os.File, primarySubject int, othersSubjects []int, a
 
 	petPictureResponse := createPetPicture(sha, fileExt, primarySubject, othersSubjects, aliases)
 	if !petPictureResponse.Success {
-		return APIResponse[PetPicture]{
-			Success: false,
-			Message: petPictureResponse.Message,
-		}
+		return APIErrorResponse[PetPicture](petPictureResponse.Message)
 	}
 	petPicture := petPictureResponse.Data
 
 	// Update file name
 	newFileName := string(petPicture.ID) + "." + fileExt
 	if err := os.Rename(file.Name(), newFileName); err != nil {
-		log.Println("Unable to rename file:", err)
-		return APIResponse[PetPicture]{
-			Success: false,
-			Message: "Unable to rename file",
-		}
+		return APIErrorResponse[PetPicture]("Unable to rename file")
 	}
 
 	// Create a new request
 	req, err := http.NewRequest(http.MethodPost, CDN_URL+"/upload", nil)
 	if err != nil {
-		return APIResponse[PetPicture]{
-			Success: false,
-			Message: "Unable to create request",
-		}
+		return APIErrorResponse[PetPicture]("Unable to create request")
 	}
 
 	// Create a new multipart writer
@@ -360,18 +288,12 @@ func UploadPetPicture(file *os.File, primarySubject int, othersSubjects []int, a
 	// Create a new form file
 	part, err := writer.CreateFormFile("file", newFileName)
 	if err != nil {
-		return APIResponse[PetPicture]{
-			Success: false,
-			Message: "Unable to create form file",
-		}
+		return APIErrorResponse[PetPicture]("Unable to create form file")
 	}
 
 	// Copy the file to the form file
 	if _, err := io.Copy(part, file); err != nil {
-		return APIResponse[PetPicture]{
-			Success: false,
-			Message: "Unable to copy form file",
-		}
+		return APIErrorResponse[PetPicture]("Unable to copy file")
 	}
 	writer.Close()
 
@@ -382,16 +304,9 @@ func UploadPetPicture(file *os.File, primarySubject int, othersSubjects []int, a
 	client := &http.Client{}
 	_, err = client.Do(req)
 	if err != nil {
-		return APIResponse[PetPicture]{
-			Success: false,
-			Message: "Unable to send request",
-		}
+		return APIErrorResponse[PetPicture]("Unable to send request")
 	}
-
-	return APIResponse[PetPicture]{
-		Success: true,
-		Data:    petPicture,
-	}
+	return APISuccessResponse(petPicture)
 }
 
 // -------------- Routes --------------

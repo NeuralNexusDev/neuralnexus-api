@@ -85,16 +85,9 @@ func CreateSession(session Session) database.Response[Session] {
 		session.ID, session.UserID, session.Permissions, session.IssuedAt, session.LastUsedAt, session.ExpiresAt,
 	)
 	if err != nil {
-		return database.Response[Session]{
-			Success: false,
-			Message: "Unable to insert session",
-		}
+		return database.ErrorResponse[Session]("Unable to insert session")
 	}
-
-	return database.Response[Session]{
-		Success: true,
-		Data:    session,
-	}
+	return database.SuccessResponse(session)
 }
 
 // GetSession gets a session by ID
@@ -103,31 +96,16 @@ func GetSession(id uuid.UUID) database.Response[Session] {
 	defer db.Close()
 
 	var session *Session
-	rows, err := db.Query(context.Background(),
-		"SELECT session_id, user_id, permissions, iat, lua, exp FROM sessions WHERE session_id = $1",
-		id,
-	)
+	rows, err := db.Query(context.Background(), "SELECT session_id, user_id, permissions, iat, lua, exp FROM sessions WHERE session_id = $1", id)
 	if err != nil {
-		log.Println(err)
-		return database.Response[Session]{
-			Success: false,
-			Message: "Unable to retreive session",
-		}
+		return database.ErrorResponse[Session]("Unable to retreive session")
 	}
 
 	session, err = pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Session])
 	if err != nil {
-		log.Println(err)
-		return database.Response[Session]{
-			Success: false,
-			Message: "Unable to retreive session",
-		}
+		return database.ErrorResponse[Session]("Unable to retreive session")
 	}
-
-	return database.Response[Session]{
-		Success: true,
-		Data:    *session,
-	}
+	return database.SuccessResponse(*session)
 }
 
 // DeleteSession deletes a session by ID
@@ -135,38 +113,24 @@ func DeleteSession(id uuid.UUID) database.Response[Session] {
 	db := database.GetDB("nedatabaseuralnexus")
 	defer db.Close()
 
-	_, err := db.Exec(context.Background(),
-		"DELETE FROM sessions WHERE session_id = $1",
-		id,
-	)
+	_, err := db.Exec(context.Background(), "DELETE FROM sessions WHERE session_id = $1", id)
 	if err != nil {
-		return database.Response[Session]{
-			Success: false,
-			Message: "Unable to delete session",
-		}
+		return database.ErrorResponse[Session]("Unable to delete session")
 	}
-
-	return database.Response[Session]{
-		Success: true,
-	}
+	return database.SuccessResponse(Session{})
 }
 
 // UpdateSession updates a session
 func UpdateSession(session Session) database.Response[Session] {
 	db := database.GetDB("neuralnexus")
+	defer db.Close()
+
 	_, err := db.Exec(context.Background(),
 		"UPDATE sessions SET user_id = $2, permissions = $3, iat = $4, lua = $5, exp = $6 WHERE session_id = $1",
 		session.ID, session.UserID, session.Permissions, session.IssuedAt, session.LastUsedAt, session.ExpiresAt,
 	)
 	if err != nil {
-		return database.Response[Session]{
-			Success: false,
-			Message: "Unable to update session",
-		}
+		return database.ErrorResponse[Session]("Unable to update session")
 	}
-
-	return database.Response[Session]{
-		Success: true,
-		Data:    session,
-	}
+	return database.SuccessResponse(session)
 }

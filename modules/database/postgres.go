@@ -20,6 +20,23 @@ type Response[T any] struct {
 	Data    T
 }
 
+// SuccessResponse - Create a new success response
+func SuccessResponse[T any](data T) Response[T] {
+	return Response[T]{
+		Success: true,
+		Data:    data,
+	}
+}
+
+// ErrorResponse - Create a new error response
+func ErrorResponse[T any](message string) Response[T] {
+	log.Println(message + ":\n")
+	return Response[T]{
+		Success: false,
+		Message: message,
+	}
+}
+
 // -------------- Functions --------------
 func GetDB(database string) *pgxpool.Pool {
 	if DATABASE_URL == "" {

@@ -3,7 +3,6 @@ package auth
 import (
 	"context"
 	"crypto/rand"
-	"log"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/google/uuid"
@@ -82,17 +81,9 @@ func CreateAccountInDB(account Account) database.Response[Account] {
 		account.UserID, account.Username, account.Email, account.HashedSecret, account.Salt, account.Roles,
 	)
 	if err != nil {
-		log.Println(err)
-		return database.Response[Account]{
-			Success: false,
-			Message: "Unable to create account",
-		}
+		return database.ErrorResponse[Account]("Unable to create account")
 	}
-
-	return database.Response[Account]{
-		Success: true,
-		Data:    account,
-	}
+	return database.SuccessResponse(account)
 }
 
 // GetAccountByID gets an account by ID
@@ -102,27 +93,15 @@ func GetAccountByID(userID uuid.UUID) database.Response[Account] {
 
 	rows, err := db.Query(context.Background(), "SELECT * FROM accounts WHERE user_id = $1", userID)
 	if err != nil {
-		log.Println(err)
-		return database.Response[Account]{
-			Success: false,
-			Message: "Unable to get account",
-		}
+		return database.ErrorResponse[Account]("Unable to get account")
 	}
 
 	var account *Account
 	account, err = pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Account])
 	if err != nil {
-		log.Println(err)
-		return database.Response[Account]{
-			Success: false,
-			Message: "Unable to get account",
-		}
+		return database.ErrorResponse[Account]("Unable to get account")
 	}
-
-	return database.Response[Account]{
-		Success: true,
-		Data:    *account,
-	}
+	return database.SuccessResponse(*account)
 }
 
 // GetAccountByUsername gets an account by username
@@ -132,25 +111,13 @@ func GetAccountByUsername(username string) database.Response[Account] {
 
 	rows, err := db.Query(context.Background(), "SELECT * FROM accounts WHERE username = $1", username)
 	if err != nil {
-		log.Println(err)
-		return database.Response[Account]{
-			Success: false,
-			Message: "Unable to get account",
-		}
+		return database.ErrorResponse[Account]("Unable to get account")
 	}
 
 	var account *Account
 	account, err = pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Account])
 	if err != nil {
-		log.Println(err)
-		return database.Response[Account]{
-			Success: false,
-			Message: "Unable to get account",
-		}
+		return database.ErrorResponse[Account]("Unable to get account")
 	}
-
-	return database.Response[Account]{
-		Success: true,
-		Data:    *account,
-	}
+	return database.SuccessResponse(*account)
 }
