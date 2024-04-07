@@ -5,9 +5,9 @@ import "errors"
 // -------------- Structs --------------
 
 type Scope struct {
-	Name        string `json:"name" xml:"name"`
-	Description string `json:"description,omitempty" xml:"description,omitempty"`
-	Value       string `json:"value,omitempty" xml:"value,omitempty"`
+	Name        string
+	Description string
+	Value       string
 }
 
 var (
@@ -17,10 +17,12 @@ var (
 		Value:       "*",
 	}
 
-	ScopeAdminPetPictures = Scope{
-		Name:        "petpictures",
-		Description: "Pet pictures",
-		Value:       "*",
+	ScopeAdminPetPictures = ScopePetPictures("*")
+
+	ScopeAdminRateLimit = Scope{
+		Name:        "ratelimit",
+		Description: "Rate limit",
+		Value:       "1000",
 	}
 )
 
@@ -34,27 +36,29 @@ func ScopePetPictures(value string) Scope {
 }
 
 type Role struct {
-	Name        string  `json:"name" xml:"name"`
-	Description string  `json:"description,omitempty" xml:"description,omitempty"`
-	Permissions []Scope `json:"permissions" xml:"permissions"`
+	Name        string
+	Description string
+	Permissions []Scope
 }
 
 var (
 	RoleSystem = Role{
-		Name:        "RoleSystem",
-		Description: "System role",
+		Name:        "system",
+		Description: "System",
 		Permissions: []Scope{
 			ScopeAdminBeeNameGenerator,
 			ScopeAdminPetPictures,
+			ScopeAdminRateLimit,
 		},
 	}
 
 	RoleOwner = Role{
-		Name:        "RoleOwner",
-		Description: "Owner role",
+		Name:        "owner",
+		Description: "Owner",
 		Permissions: []Scope{
 			ScopeAdminBeeNameGenerator,
 			ScopeAdminPetPictures,
+			ScopeAdminRateLimit,
 		},
 	}
 )
