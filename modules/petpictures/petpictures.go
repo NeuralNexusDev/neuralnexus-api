@@ -350,14 +350,7 @@ func CreatePetHandler(w http.ResponseWriter, r *http.Request) {
 
 	petResponse := createPet(petName)
 	if !petResponse.Success {
-		problem := responses.NewProblemResponse(
-			"https://api.neuralnexus.dev/probs/pet-pictures/create-pet",
-			http.StatusInternalServerError,
-			"Unable to create pet",
-			petResponse.Message,
-			"https://api.neuralnexus.dev/api/v1/pet-pictures/pets/"+petName,
-		)
-		responses.SendAndEncodeProblem(w, r, problem)
+		responses.SendAndEncodeInternalServerError(w, r, "Unable to create pet")
 		return
 	}
 	responses.SendAndEncodeStruct(w, r, http.StatusCreated, petResponse.Data)
@@ -411,14 +404,7 @@ func UpdatePetHandler(w http.ResponseWriter, r *http.Request) {
 
 	petResponse := updatePet(pet)
 	if !petResponse.Success {
-		problem := responses.NewProblemResponse(
-			"https://api.neuralnexus.dev/probs/pet-pictures/update-pet",
-			http.StatusInternalServerError,
-			"Unable to update pet",
-			petResponse.Message,
-			"https://api.neuralnexus.dev/api/v1/pet-pictures/pets/"+strconv.Itoa(pet.ID),
-		)
-		responses.SendAndEncodeProblem(w, r, problem)
+		responses.SendAndEncodeInternalServerError(w, r, "Unable to update pet")
 		return
 	}
 	responses.SendAndEncodeStruct(w, r, http.StatusOK, petResponse.Data)
@@ -493,14 +479,7 @@ func UpdatePetPictureHandler(w http.ResponseWriter, r *http.Request) {
 
 	petPictureResponse := updatePetPicture(petPicture)
 	if !petPictureResponse.Success {
-		problem := responses.NewProblemResponse(
-			"https://api.neuralnexus.dev/probs/pet-pictures/update-pet-picture",
-			http.StatusInternalServerError,
-			"Unable to update pet picture",
-			petPictureResponse.Message,
-			"https://api.neuralnexus.dev/api/v1/pet-pictures/pictures/"+petPicture.ID,
-		)
-		responses.SendAndEncodeProblem(w, r, problem)
+		responses.SendAndEncodeInternalServerError(w, r, "Unable to update pet picture")
 		return
 	}
 	responses.SendAndEncodeStruct(w, r, http.StatusOK, petPictureResponse.Data)
@@ -541,14 +520,7 @@ func DeletePetPictureHandler(w http.ResponseWriter, r *http.Request) {
 
 	petPictureResponse := deletePetPicture(petPictureID)
 	if !petPictureResponse.Success {
-		problem := responses.NewProblemResponse(
-			"https://api.neuralnexus.dev/probs/pet-pictures/delete-pet-picture",
-			http.StatusInternalServerError,
-			"Unable to delete pet picture",
-			petPictureResponse.Message,
-			"https://api.neuralnexus.dev/api/v1/pet-pictures/pictures/"+petPictureID,
-		)
-		responses.SendAndEncodeProblem(w, r, problem)
+		responses.SendAndEncodeInternalServerError(w, r, "Unable to delete pet picture")
 		return
 	}
 	responses.SendAndEncodeStruct(w, r, http.StatusOK, petPictureResponse.Data)

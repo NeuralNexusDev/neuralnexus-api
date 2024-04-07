@@ -3,8 +3,10 @@ package auth
 import (
 	"context"
 	"crypto/rand"
+	"net/http"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
+	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/argon2"
@@ -120,4 +122,68 @@ func GetAccountByUsername(username string) database.Response[Account] {
 		return database.ErrorResponse[Account]("Unable to get account")
 	}
 	return database.SuccessResponse(*account)
+}
+
+// GetAccountByEmail gets an account by email
+func GetAccountByEmail(email string) database.Response[Account] {
+	db := database.GetDB("neuralnexus")
+	defer db.Close()
+
+	rows, err := db.Query(context.Background(), "SELECT * FROM accounts WHERE email = $1", email)
+	if err != nil {
+		return database.ErrorResponse[Account]("Unable to get account")
+	}
+
+	var account *Account
+	account, err = pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Account])
+	if err != nil {
+		return database.ErrorResponse[Account]("Unable to get account")
+	}
+	return database.SuccessResponse(*account)
+}
+
+// -------------- Routes --------------
+
+// Path: /auth/login
+// Method: POST
+// Body: { "username | email": string, "password": string }
+
+// LoginHandler handles the login route
+func LoginHandler(w http.ResponseWriter, r *http.Request) {
+	var login struct {
+		Username string `json:"username" xml:"username" validate:"required_without=Email"`
+		Email    string `json:"email" xml:"email" validate:"required_without=Username"`
+		Password string `json:"password" xml:"password" validate:"required"`
+	}
+	err := responses.DecodeStruct(r, &login)
+	if err != nil {
+		responses.SendAndEncodeBadRequest(w, r, "Invalid request body")
+		return
+	}
+
+	var account database.Response[Account]
+	if login.Username != "" {
+		account = GetAccountByUsername(login.Username)
+	} else {
+		account = GetAccountByEmail(login.Email)
+	}
+	if !account.Success {
+		responses.SendAndEncodeBadRequest(w, r, "Invalid username or email")
+		return
+	}
+
+	if !account.Data.ValidateUser(login.Password) {
+		responses.SendAndEncodeBadRequest(w, r, "Invalid password")
+		return
+	}
+
+	session := CreateSession(Session{
+		UserID:      account.Data.UserID,
+		Permissions: account.Data.Roles,
+	})
+	if !session.Success {
+		responses.SendAndEncodeInternalServerError(w, r, "Unable to create session")
+		return
+	}
+	responses.SendAndEncodeStruct(w, r, http.StatusAccepted, session.Data)
 }

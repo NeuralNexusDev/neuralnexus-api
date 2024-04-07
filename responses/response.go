@@ -20,6 +20,14 @@ func SendAndEncodeStruct[T any](w http.ResponseWriter, r *http.Request, statusCo
 	}
 }
 
+// DecodeStruct -- Decode a struct from JSON or XML
+func DecodeStruct[T any](r *http.Request, data *T) error {
+	if r.Header.Get("Content-Type") == "application/xml" {
+		return xml.NewDecoder(r.Body).Decode(data)
+	}
+	return json.NewDecoder(r.Body).Decode(data)
+}
+
 // SendAndEncodeProblem -- Send a ProblemResponse as JSON or XML
 func SendAndEncodeProblem(w http.ResponseWriter, r *http.Request, problem *ProblemResponse) {
 	w.WriteHeader(problem.Status)
@@ -30,6 +38,18 @@ func SendAndEncodeProblem(w http.ResponseWriter, r *http.Request, problem *Probl
 		w.Header().Set("Content-Type", "application/problem+json")
 		json.NewEncoder(w).Encode(problem)
 	}
+}
+
+// SendAndEncodeBadRequest - Send and encode an invalid input problem
+func SendAndEncodeBadRequest(w http.ResponseWriter, r *http.Request, message string) {
+	problem := NewProblemResponse(
+		"about:blank",
+		http.StatusBadRequest,
+		"Bad Request",
+		message,
+		"https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400",
+	)
+	SendAndEncodeProblem(w, r, problem)
 }
 
 // SendAndEncodeForbidden -- Send a ForbiddenResponse as JSON or XML
@@ -62,22 +82,17 @@ func SendAndEncodeNotFound(w http.ResponseWriter, r *http.Request, message strin
 	SendAndEncodeProblem(w, r, problem)
 }
 
-// SendAndEncodeBadRequest - Send and encode an invalid input problem
-func SendAndEncodeBadRequest(w http.ResponseWriter, r *http.Request, message string) {
+// SendAndEncodeInternalServerError -- Send an InternalServerErrorResponse as JSON or XML
+func SendAndEncodeInternalServerError(w http.ResponseWriter, r *http.Request, message string) {
+	if message == "" {
+		message = "An internal server error occurred."
+	}
 	problem := NewProblemResponse(
 		"about:blank",
-		http.StatusBadRequest,
-		"Bad Request",
+		http.StatusInternalServerError,
+		"Internal Server Error",
 		message,
-		"https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400",
+		"https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/500",
 	)
 	SendAndEncodeProblem(w, r, problem)
-}
-
-// DecodeStruct -- Decode a struct from JSON or XML
-func DecodeStruct[T any](r *http.Request, data *T) error {
-	if r.Header.Get("Content-Type") == "application/xml" {
-		return xml.NewDecoder(r.Body).Decode(data)
-	}
-	return json.NewDecoder(r.Body).Decode(data)
 }

@@ -192,14 +192,7 @@ func GetRoot(w http.ResponseWriter, r *http.Request) {
 	html, err := os.ReadFile("static/beenamegenerator/templates/index.html")
 	if err != nil {
 		log.Println("Failed to read index.html: " + err.Error())
-		problem := responses.NewProblemResponse(
-			"file_error",
-			http.StatusInternalServerError,
-			"Failed to read file",
-			"Failed to read index.html",
-			"TODO: Add instance",
-		)
-		responses.SendAndEncodeProblem(w, r, problem)
+		responses.SendAndEncodeInternalServerError(w, r, "Failed to read index.html")
 		return
 	}
 
@@ -217,14 +210,7 @@ func GetRoot(w http.ResponseWriter, r *http.Request) {
 func GetBeeNameHandler(w http.ResponseWriter, r *http.Request) {
 	beeName := getBeeName()
 	if !beeName.Success {
-		problem := responses.NewProblemResponse(
-			"https://api.neuralnexus.dev/probs/bee-name-generator/get-bee-name",
-			http.StatusInternalServerError,
-			"Failed to get bee name",
-			beeName.Message,
-			"https://api.neuralnexus.dev/api/v1/bee-name-generator/name",
-		)
-		responses.SendAndEncodeProblem(w, r, problem)
+		responses.SendAndEncodeInternalServerError(w, r, "Failed to get bee name")
 		return
 	}
 	responses.SendAndEncodeStruct(w, r, http.StatusOK, NewNameResponse(beeName.Data))
@@ -253,14 +239,7 @@ func UploadBeeNameHandler(w http.ResponseWriter, r *http.Request) {
 
 	upload := uploadBeeName(beeName)
 	if !upload.Success {
-		problem := responses.NewProblemResponse(
-			"https://api.neuralnexus.dev/probs/bee-name-generator/upload-bee-name",
-			http.StatusInternalServerError,
-			"Failed to upload bee name",
-			upload.Message,
-			"https://api.neuralnexus.dev/api/v1/bee-name-generator/name/"+beeName,
-		)
-		responses.SendAndEncodeProblem(w, r, problem)
+		responses.SendAndEncodeInternalServerError(w, r, "Failed to upload bee name")
 		return
 	}
 	responses.SendAndEncodeStruct(w, r, http.StatusOK, NewNameResponse(beeName))
@@ -289,14 +268,7 @@ func DeleteBeeNameHandler(w http.ResponseWriter, r *http.Request) {
 
 	delete := deleteBeeName(beeName)
 	if !delete.Success {
-		problem := responses.NewProblemResponse(
-			"https://api.neuralnexus.dev/probs/bee-name-generator/delete-bee-name",
-			http.StatusInternalServerError,
-			"Failed to delete bee name",
-			delete.Message,
-			"https://api.neuralnexus.dev/api/v1/bee-name-generator/name/"+beeName,
-		)
-		responses.SendAndEncodeProblem(w, r, problem)
+		responses.SendAndEncodeInternalServerError(w, r, "Failed to delete bee name")
 		return
 	}
 	responses.SendAndEncodeStruct(w, r, http.StatusOK, NewNameResponse(beeName))
@@ -319,14 +291,7 @@ func SubmitBeeNameHandler(w http.ResponseWriter, r *http.Request) {
 
 	submit := submitBeeName(beeName)
 	if !submit.Success {
-		problem := responses.NewProblemResponse(
-			"https://api.neuralnexus.dev/probs/bee-name-generator/submit-bee-name",
-			http.StatusInternalServerError,
-			"Failed to submit bee name",
-			submit.Message,
-			"https://api.neuralnexus.dev/api/v1/bee-name-generator/suggestion/"+beeName,
-		)
-		responses.SendAndEncodeProblem(w, r, problem)
+		responses.SendAndEncodeInternalServerError(w, r, "Failed to submit bee name")
 		return
 	}
 	responses.SendAndEncodeStruct(w, r, http.StatusOK, NewNameResponse(beeName))
@@ -359,14 +324,7 @@ func GetBeeNameSuggestionsHandler(w http.ResponseWriter, r *http.Request) {
 
 	suggestions := getBeeNameSuggestions(amountInt)
 	if !suggestions.Success {
-		problem := responses.NewProblemResponse(
-			"https://api.neuralnexus.dev/probs/bee-name-generator/get-bee-name-suggestions",
-			http.StatusInternalServerError,
-			"Failed to get bee name suggestions",
-			suggestions.Message,
-			"https://api.neuralnexus.dev/api/v1/bee-name-generator/suggestion/"+amount,
-		)
-		responses.SendAndEncodeProblem(w, r, problem)
+		responses.SendAndEncodeInternalServerError(w, r, "Failed to get bee name suggestions")
 		return
 	}
 	responses.SendAndEncodeStruct(w, r, http.StatusOK, NewSuggestionsResponse(suggestions.Data))
@@ -395,14 +353,7 @@ func AcceptBeeNameSuggestionHandler(w http.ResponseWriter, r *http.Request) {
 
 	accept := acceptBeeNameSuggestion(beeName)
 	if !accept.Success {
-		problem := responses.NewProblemResponse(
-			"https://api.neuralnexus.dev/probs/bee-name-generator/accept-bee-name-suggestion",
-			http.StatusInternalServerError,
-			"Failed to accept bee name suggestion",
-			accept.Message,
-			"https://api.neuralnexus.dev/api/v1/bee-name-generator/suggestion/"+beeName,
-		)
-		responses.SendAndEncodeProblem(w, r, problem)
+		responses.SendAndEncodeInternalServerError(w, r, "Failed to accept bee name suggestion")
 		return
 	}
 	responses.SendAndEncodeStruct(w, r, http.StatusOK, NewNameResponse(beeName))
@@ -431,14 +382,7 @@ func RejectBeeNameSuggestionHandler(w http.ResponseWriter, r *http.Request) {
 
 	reject := rejectBeeNameSuggestion(beeName)
 	if !reject.Success {
-		problem := responses.NewProblemResponse(
-			"https://api.neuralnexus.dev/probs/bee-name-generator/reject-bee-name-suggestion",
-			http.StatusInternalServerError,
-			"Failed to reject bee name suggestion",
-			reject.Message,
-			"https://api.neuralnexus.dev/api/v1/bee-name-generator/suggestion/"+beeName,
-		)
-		responses.SendAndEncodeProblem(w, r, problem)
+		responses.SendAndEncodeInternalServerError(w, r, "Failed to reject bee name suggestion")
 		return
 	}
 	responses.SendAndEncodeStruct(w, r, http.StatusOK, NewNameResponse(beeName))

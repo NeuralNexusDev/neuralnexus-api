@@ -96,7 +96,7 @@ func GetSession(id uuid.UUID) database.Response[Session] {
 	defer db.Close()
 
 	var session *Session
-	rows, err := db.Query(context.Background(), "SELECT session_id, user_id, permissions, iat, lua, exp FROM sessions WHERE session_id = $1", id)
+	rows, err := db.Query(context.Background(), "SELECT * FROM sessions WHERE session_id = $1", id)
 	if err != nil {
 		return database.ErrorResponse[Session]("Unable to retreive session")
 	}
@@ -110,14 +110,14 @@ func GetSession(id uuid.UUID) database.Response[Session] {
 
 // DeleteSession deletes a session by ID
 func DeleteSession(id uuid.UUID) database.Response[Session] {
-	db := database.GetDB("nedatabaseuralnexus")
+	db := database.GetDB("neuralnexus")
 	defer db.Close()
 
 	_, err := db.Exec(context.Background(), "DELETE FROM sessions WHERE session_id = $1", id)
 	if err != nil {
 		return database.ErrorResponse[Session]("Unable to delete session")
 	}
-	return database.SuccessResponse(Session{})
+	return database.SuccessResponse(Session{ID: id})
 }
 
 // UpdateSession updates a session
