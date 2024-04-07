@@ -67,7 +67,7 @@ func getBeeName() database.Response[string] {
 	var beeName string
 	err := db.QueryRow(context.Background(), "SELECT name FROM bee_name ORDER BY random() LIMIT 1").Scan(&beeName)
 	if err != nil {
-		return database.ErrorResponse[string]("Failed to get bee name")
+		return database.ErrorResponse[string]("Failed to get bee name", err)
 	}
 	return database.SuccessResponse(beeName)
 }
@@ -79,7 +79,7 @@ func uploadBeeName(beeName string) database.Response[string] {
 
 	_, err := db.Exec(context.Background(), "INSERT INTO bee_name (name) VALUES ($1)", beeName)
 	if err != nil {
-		return database.ErrorResponse[string]("Failed to upload bee name")
+		return database.ErrorResponse[string]("Failed to upload bee name", err)
 	}
 	return database.SuccessResponse(beeName)
 }
@@ -91,7 +91,7 @@ func deleteBeeName(beeName string) database.Response[string] {
 
 	_, err := db.Exec(context.Background(), "DELETE FROM bee_name WHERE name = $1", beeName)
 	if err != nil {
-		return database.ErrorResponse[string]("Failed to delete bee name")
+		return database.ErrorResponse[string]("Failed to delete bee name", err)
 	}
 	return database.SuccessResponse(beeName)
 }
@@ -103,7 +103,7 @@ func submitBeeName(beeName string) database.Response[string] {
 
 	_, err := db.Exec(context.Background(), "INSERT INTO bee_name_suggestion (name) VALUES ($1)", beeName)
 	if err != nil {
-		return database.ErrorResponse[string]("Failed to submit bee name")
+		return database.ErrorResponse[string]("Failed to submit bee name", err)
 	}
 	return database.SuccessResponse(beeName)
 }
@@ -116,7 +116,7 @@ func getBeeNameSuggestions(amount int64) database.Response[[]string] {
 	var beeNames []string
 	rows, err := db.Query(context.Background(), "SELECT name FROM bee_name_suggestion ORDER BY random() LIMIT $1", amount)
 	if err != nil {
-		return database.ErrorResponse[[]string]("Failed to get bee name suggestions")
+		return database.ErrorResponse[[]string]("Failed to get bee name suggestions", err)
 	}
 	defer rows.Close()
 
@@ -124,13 +124,13 @@ func getBeeNameSuggestions(amount int64) database.Response[[]string] {
 		var beeName string
 		err := rows.Scan(&beeName)
 		if err != nil {
-			return database.ErrorResponse[[]string]("Failed to get bee name suggestions")
+			return database.ErrorResponse[[]string]("Failed to get bee name suggestions", err)
 		}
 		beeNames = append(beeNames, beeName)
 	}
 
 	if len(beeNames) == 0 {
-		return database.ErrorResponse[[]string]("No bee name suggestions found")
+		return database.ErrorResponse[[]string]("No bee name suggestions found", err)
 	}
 	return database.SuccessResponse(beeNames)
 }
@@ -142,12 +142,12 @@ func acceptBeeNameSuggestion(beeName string) database.Response[string] {
 
 	_, err := db.Exec(context.Background(), "INSERT INTO bee_name (name) VALUES ($1)", beeName)
 	if err != nil {
-		return database.ErrorResponse[string]("Failed to accept bee name suggestion")
+		return database.ErrorResponse[string]("Failed to accept bee name suggestion", err)
 	}
 
 	_, err = db.Exec(context.Background(), "DELETE FROM bee_name_suggestion WHERE name = $1", beeName)
 	if err != nil {
-		return database.ErrorResponse[string]("Failed to accept bee name suggestion")
+		return database.ErrorResponse[string]("Failed to accept bee name suggestion", err)
 	}
 	return database.SuccessResponse(beeName)
 }
@@ -159,7 +159,7 @@ func rejectBeeNameSuggestion(beeName string) database.Response[string] {
 
 	_, err := db.Exec(context.Background(), "DELETE FROM bee_name_suggestion WHERE name = $1", beeName)
 	if err != nil {
-		return database.ErrorResponse[string]("Failed to reject bee name suggestion")
+		return database.ErrorResponse[string]("Failed to reject bee name suggestion", err)
 	}
 	return database.SuccessResponse(beeName)
 }

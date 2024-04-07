@@ -85,7 +85,7 @@ func APISuccessResponse[T Pet | PetPicture](data T) APIResponse[T] {
 
 // APIErrorResponse - Create a new API error response
 func APIErrorResponse[T Pet | PetPicture](message string) APIResponse[T] {
-	log.Println(message + ":\n")
+	log.Println(message + ":")
 	return APIResponse[T]{
 		Success: false,
 		Message: message,
@@ -104,7 +104,7 @@ func createPet(name string) database.Response[Pet] {
 		"INSERT INTO pets (name) VALUES ($1) RETURNING id, name, profile_picture", name,
 	).Scan(&pet.ID, &pet.Name, &pet.ProfilePicture)
 	if err != nil {
-		return database.ErrorResponse[Pet]("Unable to create pet (pet may already exist)")
+		return database.ErrorResponse[Pet]("Unable to create pet (pet may already exist)", err)
 	}
 	return database.SuccessResponse(pet)
 }
@@ -117,7 +117,7 @@ func getPet(id int) database.Response[Pet] {
 	var pet Pet
 	err := db.QueryRow(context.Background(), "SELECT * FROM pets WHERE id = $1", id).Scan(&pet.ID, &pet.Name, &pet.ProfilePicture)
 	if err != nil {
-		return database.ErrorResponse[Pet]("Unable to get pet")
+		return database.ErrorResponse[Pet]("Unable to get pet", err)
 	}
 	return database.SuccessResponse(pet)
 }
@@ -130,7 +130,7 @@ func getPetByName(name string) database.Response[Pet] {
 	var pet Pet
 	err := db.QueryRow(context.Background(), "SELECT id, name, profile_picture FROM pets WHERE name = $1", name).Scan(&pet.ID, &pet.Name, &pet.ProfilePicture)
 	if err != nil {
-		return database.ErrorResponse[Pet]("Unable to get pet")
+		return database.ErrorResponse[Pet]("Unable to get pet", err)
 	}
 	return database.SuccessResponse(pet)
 }
@@ -142,7 +142,7 @@ func updatePet(pet Pet) database.Response[Pet] {
 
 	_, err := db.Query(context.Background(), "UPDATE pets SET name = $1, profile_picture = $2 WHERE id = $3", pet.Name, pet.ProfilePicture, pet.ID)
 	if err != nil {
-		return database.ErrorResponse[Pet]("Unable to update pet")
+		return database.ErrorResponse[Pet]("Unable to update pet", err)
 	}
 	return database.SuccessResponse(pet)
 }
@@ -157,7 +157,7 @@ func createPetPicture(id string, fileExt string, primarySubject int, othersSubje
 		id, fileExt, primarySubject, othersSubjects, aliases,
 	)
 	if err != nil {
-		return database.ErrorResponse[PetPicture]("Unable to create pet picture")
+		return database.ErrorResponse[PetPicture]("Unable to create pet picture", err)
 	}
 	return database.SuccessResponse(PetPicture{
 		ID:             id,
@@ -184,13 +184,13 @@ func getRandPetPictureByName(name string) database.Response[PetPicture] {
 	rows, err := db.Query(context.Background(),
 		"SELECT * FROM pictures WHERE prime_subj = $1 OR $2 = ANY(othr_subj) ORDER BY random() LIMIT 1", pet.Data.ID, pet.Data.ID)
 	if err != nil {
-		return database.ErrorResponse[PetPicture]("Unable to get random pet picture by name")
+		return database.ErrorResponse[PetPicture]("Unable to get random pet picture by name", err)
 	}
 
 	var picture *PetPicture
 	picture, err = pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[PetPicture])
 	if err != nil {
-		return database.ErrorResponse[PetPicture]("Unable to get random pet picture by name")
+		return database.ErrorResponse[PetPicture]("Unable to get random pet picture by name", err)
 	}
 	return database.SuccessResponse(*picture)
 }
@@ -202,13 +202,13 @@ func getPetPicture(id string) database.Response[PetPicture] {
 
 	rows, err := db.Query(context.Background(), "SELECT * FROM pictures WHERE id = $1", id)
 	if err != nil {
-		return database.ErrorResponse[PetPicture]("Unable to get pet picture")
+		return database.ErrorResponse[PetPicture]("Unable to get pet picture", err)
 	}
 
 	var picture *PetPicture
 	picture, err = pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[PetPicture])
 	if err != nil {
-		return database.ErrorResponse[PetPicture]("Unable to get pet picture")
+		return database.ErrorResponse[PetPicture]("Unable to get pet picture", err)
 	}
 	return database.SuccessResponse(*picture)
 }
@@ -224,7 +224,7 @@ func updatePetPicture(picture PetPicture) database.Response[PetPicture] {
 		picture.FileExt, picture.PrimarySubject, picture.OthersSubjects, picture.Aliases, picture.ID,
 	)
 	if err != nil {
-		return database.ErrorResponse[PetPicture]("Unable to update pet picture")
+		return database.ErrorResponse[PetPicture]("Unable to update pet picture", err)
 	}
 
 	return database.Response[PetPicture]{
@@ -240,7 +240,7 @@ func deletePetPicture(id string) database.Response[PetPicture] {
 
 	_, err := db.Query(context.Background(), "DELETE FROM pictures WHERE id = $1", id)
 	if err != nil {
-		return database.ErrorResponse[PetPicture]("Unable to delete pet picture")
+		return database.ErrorResponse[PetPicture]("Unable to delete pet picture", err)
 	}
 	return database.SuccessResponse(PetPicture{ID: id})
 }

@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/middleware"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/authroutes"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/beenamegenerator"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/cct_turtle"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/mcstatus"
@@ -29,6 +30,7 @@ func NewAPIServer(address string) *APIServer {
 // Run - Start the API server
 func (s *APIServer) Run() error {
 	routerStack := routes.CreateStack(
+		authroutes.ApplyRoutes,
 		beenamegenerator.ApplyRoutes,
 		cct_turtle.ApplyRoutes,
 		mcstatus.ApplyRoutes,

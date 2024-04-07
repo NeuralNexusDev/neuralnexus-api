@@ -3,10 +3,9 @@ package auth
 import (
 	"context"
 	"crypto/rand"
-	"net/http"
+	"time"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
-	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/argon2"
@@ -19,6 +18,9 @@ import (
 // 	hashed_secret BYTEA NOT NULL,
 // 	salt BYTEA NOT NULL,
 // 	roles TEXT[]
+//  created_at timestamp with time zone default current_timestamp,
+//  CONSTRAINT username_unique UNIQUE (username),
+//  CONSTRAINT email_unique UNIQUE (email)
 // );
 
 // -------------- Structs --------------
@@ -31,6 +33,7 @@ type Account struct {
 	HashedSecret []byte    `db:"hashed_secret"`
 	Salt         []byte    `db:"salt"`
 	Roles        []string  `db:"roles"`
+	CreatedAt    time.Time `db:"created_at"`
 }
 
 // NewAccount creates a new account
@@ -71,6 +74,16 @@ func (user *Account) AddRole(role string) {
 	user.Roles = append(user.Roles, role)
 }
 
+// RemoveRole removes a role from an account
+func (user *Account) RemoveRole(role string) {
+	for i, r := range user.Roles {
+		if r == role {
+			user.Roles = append(user.Roles[:i], user.Roles[i+1:]...)
+			break
+		}
+	}
+}
+
 // -------------- Functions --------------
 
 // CreateAccountInDB creates an account in the database
@@ -83,7 +96,7 @@ func CreateAccountInDB(account Account) database.Response[Account] {
 		account.UserID, account.Username, account.Email, account.HashedSecret, account.Salt, account.Roles,
 	)
 	if err != nil {
-		return database.ErrorResponse[Account]("Unable to create account")
+		return database.ErrorResponse[Account]("Unable to create account", err)
 	}
 	return database.SuccessResponse(account)
 }
@@ -95,13 +108,13 @@ func GetAccountByID(userID uuid.UUID) database.Response[Account] {
 
 	rows, err := db.Query(context.Background(), "SELECT * FROM accounts WHERE user_id = $1", userID)
 	if err != nil {
-		return database.ErrorResponse[Account]("Unable to get account")
+		return database.ErrorResponse[Account]("Unable to get account", err)
 	}
 
 	var account *Account
 	account, err = pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Account])
 	if err != nil {
-		return database.ErrorResponse[Account]("Unable to get account")
+		return database.ErrorResponse[Account]("Unable to get account", err)
 	}
 	return database.SuccessResponse(*account)
 }
@@ -113,13 +126,13 @@ func GetAccountByUsername(username string) database.Response[Account] {
 
 	rows, err := db.Query(context.Background(), "SELECT * FROM accounts WHERE username = $1", username)
 	if err != nil {
-		return database.ErrorResponse[Account]("Unable to get account")
+		return database.ErrorResponse[Account]("Unable to get account", err)
 	}
 
 	var account *Account
 	account, err = pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Account])
 	if err != nil {
-		return database.ErrorResponse[Account]("Unable to get account")
+		return database.ErrorResponse[Account]("Unable to get account", err)
 	}
 	return database.SuccessResponse(*account)
 }
@@ -131,59 +144,13 @@ func GetAccountByEmail(email string) database.Response[Account] {
 
 	rows, err := db.Query(context.Background(), "SELECT * FROM accounts WHERE email = $1", email)
 	if err != nil {
-		return database.ErrorResponse[Account]("Unable to get account")
+		return database.ErrorResponse[Account]("Unable to get account", err)
 	}
 
 	var account *Account
 	account, err = pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Account])
 	if err != nil {
-		return database.ErrorResponse[Account]("Unable to get account")
+		return database.ErrorResponse[Account]("Unable to get account", err)
 	}
 	return database.SuccessResponse(*account)
-}
-
-// -------------- Routes --------------
-
-// Path: /auth/login
-// Method: POST
-// Body: { "username | email": string, "password": string }
-
-// LoginHandler handles the login route
-func LoginHandler(w http.ResponseWriter, r *http.Request) {
-	var login struct {
-		Username string `json:"username" xml:"username" validate:"required_without=Email"`
-		Email    string `json:"email" xml:"email" validate:"required_without=Username"`
-		Password string `json:"password" xml:"password" validate:"required"`
-	}
-	err := responses.DecodeStruct(r, &login)
-	if err != nil {
-		responses.SendAndEncodeBadRequest(w, r, "Invalid request body")
-		return
-	}
-
-	var account database.Response[Account]
-	if login.Username != "" {
-		account = GetAccountByUsername(login.Username)
-	} else {
-		account = GetAccountByEmail(login.Email)
-	}
-	if !account.Success {
-		responses.SendAndEncodeBadRequest(w, r, "Invalid username or email")
-		return
-	}
-
-	if !account.Data.ValidateUser(login.Password) {
-		responses.SendAndEncodeBadRequest(w, r, "Invalid password")
-		return
-	}
-
-	session := CreateSession(Session{
-		UserID:      account.Data.UserID,
-		Permissions: account.Data.Roles,
-	})
-	if !session.Success {
-		responses.SendAndEncodeInternalServerError(w, r, "Unable to create session")
-		return
-	}
-	responses.SendAndEncodeStruct(w, r, http.StatusAccepted, session.Data)
 }

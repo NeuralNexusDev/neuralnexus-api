@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"time"
 
@@ -73,10 +74,10 @@ func (s *Session) IsValid() bool {
 	return time.Now().Unix() < s.ExpiresAt
 }
 
-// -------------- Functions --------------
+// -------------- DB Functions --------------
 
-// CreateSession creates a session and inserts it into the database
-func CreateSession(session Session) database.Response[Session] {
+// AddSessionToDB creates a session and inserts it into the database
+func AddSessionToDB(session Session) database.Response[Session] {
 	db := database.GetDB("neuralnexus")
 	defer db.Close()
 
@@ -85,43 +86,43 @@ func CreateSession(session Session) database.Response[Session] {
 		session.ID, session.UserID, session.Permissions, session.IssuedAt, session.LastUsedAt, session.ExpiresAt,
 	)
 	if err != nil {
-		return database.ErrorResponse[Session]("Unable to insert session")
+		return database.ErrorResponse[Session]("Unable to insert session", err)
 	}
 	return database.SuccessResponse(session)
 }
 
-// GetSession gets a session by ID
-func GetSession(id uuid.UUID) database.Response[Session] {
+// GetSessionFromDB gets a session by ID
+func GetSessionFromDB(id uuid.UUID) database.Response[Session] {
 	db := database.GetDB("neuralnexus")
 	defer db.Close()
 
 	var session *Session
 	rows, err := db.Query(context.Background(), "SELECT * FROM sessions WHERE session_id = $1", id)
 	if err != nil {
-		return database.ErrorResponse[Session]("Unable to retreive session")
+		return database.ErrorResponse[Session]("Unable to retreive session", err)
 	}
 
 	session, err = pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Session])
 	if err != nil {
-		return database.ErrorResponse[Session]("Unable to retreive session")
+		return database.ErrorResponse[Session]("Unable to retreive session", err)
 	}
 	return database.SuccessResponse(*session)
 }
 
-// DeleteSession deletes a session by ID
-func DeleteSession(id uuid.UUID) database.Response[Session] {
+// DeleteSessionInDB deletes a session by ID
+func DeleteSessionInDB(id uuid.UUID) database.Response[Session] {
 	db := database.GetDB("neuralnexus")
 	defer db.Close()
 
 	_, err := db.Exec(context.Background(), "DELETE FROM sessions WHERE session_id = $1", id)
 	if err != nil {
-		return database.ErrorResponse[Session]("Unable to delete session")
+		return database.ErrorResponse[Session]("Unable to delete session", err)
 	}
 	return database.SuccessResponse(Session{ID: id})
 }
 
-// UpdateSession updates a session
-func UpdateSession(session Session) database.Response[Session] {
+// UpdateSessionInDB updates a session
+func UpdateSessionInDB(session Session) database.Response[Session] {
 	db := database.GetDB("neuralnexus")
 	defer db.Close()
 
@@ -130,7 +131,88 @@ func UpdateSession(session Session) database.Response[Session] {
 		session.ID, session.UserID, session.Permissions, session.IssuedAt, session.LastUsedAt, session.ExpiresAt,
 	)
 	if err != nil {
-		return database.ErrorResponse[Session]("Unable to update session")
+		return database.ErrorResponse[Session]("Unable to update session", err)
+	}
+	return database.SuccessResponse(session)
+}
+
+// -------------- Cache Functions --------------
+
+// AddSessionToCache adds a session to the cache
+func AddSessionToCache(session Session) database.Response[Session] {
+	rdb := database.GetRedis()
+	defer rdb.Close()
+
+	stringSession, err := json.Marshal(session)
+	if err != nil {
+		return database.ErrorResponse[Session]("Unable to add session to cache", err)
+	}
+
+	_, err = rdb.Set(context.Background(), session.ID.String(), stringSession, time.Until(time.Unix(session.ExpiresAt, 0))).Result()
+	if err != nil {
+		return database.ErrorResponse[Session]("Unable to add session to cache", err)
+	}
+	return database.SuccessResponse(session)
+}
+
+// GetSessionFromCache gets a session from the cache
+func GetSessionFromCache(id uuid.UUID) database.Response[Session] {
+	rdb := database.GetRedis()
+	defer rdb.Close()
+
+	var session Session
+	stringSession, err := rdb.Get(context.Background(), id.String()).Result()
+	if err != nil {
+		database.ErrorResponse[Session]("Unable to get session from cache", err)
+	}
+
+	err = json.Unmarshal([]byte(stringSession), &session)
+	if err != nil {
+		return database.ErrorResponse[Session]("Unable to get session from cache", err)
+	}
+	return database.SuccessResponse(session)
+}
+
+// DeleteSessionFromCache deletes a session from the cache
+func DeleteSessionFromCache(id uuid.UUID) database.Response[Session] {
+	rdb := database.GetRedis()
+	defer rdb.Close()
+
+	_, err := rdb.Del(context.Background(), id.String()).Result()
+	if err != nil {
+		return database.ErrorResponse[Session]("Unable to delete session from cache", err)
+	}
+	return database.SuccessResponse(Session{ID: id})
+}
+
+// -------------- Functions --------------
+
+// GetSession gets a session by ID
+func GetSession(id uuid.UUID) database.Response[Session] {
+	session := GetSessionFromCache(id)
+	if !session.Success {
+		session = GetSessionFromDB(id)
+		if session.Success {
+			AddSessionToCache(session.Data)
+		}
+	}
+	return session
+}
+
+// UpdateSession updates a session
+func UpdateSession(session Session) database.Response[Session] {
+	session = UpdateSessionInDB(session).Data
+	if session.ID != uuid.Nil {
+		AddSessionToCache(session)
+	}
+	return database.SuccessResponse(session)
+}
+
+// DeleteSession deletes a session by ID
+func DeleteSession(id uuid.UUID) database.Response[Session] {
+	session := DeleteSessionInDB(id).Data
+	if session.ID != uuid.Nil {
+		DeleteSessionFromCache(id)
 	}
 	return database.SuccessResponse(session)
 }
