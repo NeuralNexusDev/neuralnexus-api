@@ -54,6 +54,8 @@ func RequestLoggerMiddleware(next http.Handler) http.Handler {
 		log.Println("X-Forwarded-Proto: " + r.Header.Get("X-Forwarded-Proto"))
 		log.Println("X-Forwarded-For: " + r.Header.Get("X-Forwarded-For"))
 		log.Println("X-Real-IP: " + r.Header.Get("X-Real-IP"))
+		log.Println("RemoteAddr: " + r.RemoteAddr)
+		log.Println("CF-Connecting-IP: " + r.Header.Get("CF-Connecting-IP"))
 
 		log.Printf("%s %d %s %s %s", r.RemoteAddr, wrapped.statusCode, r.Method, r.URL.Path, time.Since(start))
 	})
