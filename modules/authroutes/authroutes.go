@@ -1,7 +1,6 @@
 package authroutes
 
 import (
-	"log"
 	"net/http"
 	"time"
 
@@ -58,9 +57,6 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 // LogoutHandler handles the logout route
 func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	session := r.Context().Value(middleware.SessionKey).(auth.Session)
-
-	log.Println("Logging out session", session.ID)
-
 	auth.DeleteSessionFromCache(session.ID)
 	responses.SendAndEncodeStruct(w, r, http.StatusOK, session)
 	auth.DeleteSessionInDB(session.ID)

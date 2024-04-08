@@ -51,8 +51,8 @@ func RequestLoggerMiddleware(next http.Handler) http.Handler {
 		wrapped := &WrappedWriter{w, http.StatusOK}
 		next.ServeHTTP(wrapped, r)
 
-		forwardedFor := r.Header.Get("X-Forwarded-For")
 		cfConnectingIP := r.Header.Get("CF-Connecting-IP")
+		forwardedFor := r.Header.Get("X-Forwarded-For")
 		if cfConnectingIP != "" {
 			r.RemoteAddr = cfConnectingIP
 		} else if forwardedFor != "" {
@@ -91,6 +91,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 
 		if !session.Data.IsValid() {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			auth.DeleteSession(session.Data.ID)
 			return
 		}
 

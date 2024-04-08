@@ -13,31 +13,35 @@ import (
 
 // CREATE TABLE accounts (
 // 	user_id UUID PRIMARY KEY NOT NULL,
-// 	username TEXT NOT NULL,
-// 	email TEXT NOT NULL,
-// 	hashed_secret BYTEA NOT NULL,
-// 	salt BYTEA NOT NULL,
-// 	roles TEXT[]
+// 	username TEXT UNIQUE,
+// 	email TEXT UNIQUE,
+// 	hashed_secret BYTEA,
+// 	salt BYTEA,
+// 	roles TEXT[],
 //  created_at timestamp with time zone default current_timestamp,
-//  CONSTRAINT username_unique UNIQUE (username),
-//  CONSTRAINT email_unique UNIQUE (email)
+//  CONSTRAINT email_unique CHECK (email IS NOT NULL),
+//  CONSTRAINT password_enforced CHECK (email IS NOT NULL OR hashed_secret IS NOT NULL)
 // );
+
+// CREATE TABLE linked_accounts (
+// 	user_id UUID FOREIGN KEY REFERENCES accounts(user_id),
+// )
 
 // -------------- Structs --------------
 
 // Account struct
 type Account struct {
-	UserID       uuid.UUID `db:"user_id"`
-	Username     string    `db:"username"`
-	Email        string    `db:"email"`
-	HashedSecret []byte    `db:"hashed_secret"`
+	UserID       uuid.UUID `db:"user_id" validate:"required"`
+	Username     string    `db:"username" validate:"required_without=Email"`
+	Email        string    `db:"email" validate:"required_without=Username"`
+	HashedSecret []byte    `db:"hashed_secret" validate:"required_without=Email"`
 	Salt         []byte    `db:"salt"`
 	Roles        []string  `db:"roles"`
 	CreatedAt    time.Time `db:"created_at"`
 }
 
 // NewAccount creates a new account
-func NewAccount(username string, email string, password string) (Account, error) {
+func NewAccount(username, email, password string) (Account, error) {
 	user := Account{
 		UserID:   uuid.New(),
 		Username: username,
@@ -48,6 +52,15 @@ func NewAccount(username string, email string, password string) (Account, error)
 		return user, err
 	}
 	return user, nil
+}
+
+// NewPasswordLessAccount creates a new account without a password
+func NewPasswordLessAccount(username, email string) Account {
+	return Account{
+		UserID:   uuid.New(),
+		Username: username,
+		Email:    email,
+	}
 }
 
 // Hash password
