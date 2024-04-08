@@ -53,15 +53,13 @@ func RequestLoggerMiddleware(next http.Handler) http.Handler {
 
 		forwardedFor := r.Header.Get("X-Forwarded-For")
 		cfConnectingIP := r.Header.Get("CF-Connecting-IP")
-		sourceIP := forwardedFor
-		if forwardedFor != cfConnectingIP {
-			sourceIP = cfConnectingIP
-		}
-		if sourceIP == "" {
-			sourceIP = r.RemoteAddr
+		if cfConnectingIP != "" {
+			r.RemoteAddr = cfConnectingIP
+		} else if forwardedFor != "" {
+			r.RemoteAddr = forwardedFor
 		}
 
-		log.Printf("%s %d %s %s %s", sourceIP, wrapped.statusCode, r.Method, r.URL.Path, time.Since(start))
+		log.Printf("%s %d %s %s %s", r.RemoteAddr, wrapped.statusCode, r.Method, r.URL.Path, time.Since(start))
 	})
 }
 
