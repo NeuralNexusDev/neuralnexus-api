@@ -2,11 +2,8 @@ package beenamegenerator
 
 import (
 	"context"
-	"log"
 	"net/http"
-	"os"
 	"strconv"
-	"strings"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
@@ -168,7 +165,6 @@ func rejectBeeNameSuggestion(beeName string) database.Response[string] {
 
 // ApplyRoutes - Apply the routes
 func ApplyRoutes(mux *http.ServeMux, authedMux *http.ServeMux) (*http.ServeMux, *http.ServeMux) {
-	mux.HandleFunc("GET /bee-name-generator", GetRoot)
 	mux.HandleFunc("GET /bee-name-generator/name", GetBeeNameHandler)
 	authedMux.HandleFunc("POST /bee-name-generator/name", UploadBeeNameHandler)
 	authedMux.HandleFunc("POST /bee-name-generator/name/{name}", UploadBeeNameHandler)
@@ -183,27 +179,6 @@ func ApplyRoutes(mux *http.ServeMux, authedMux *http.ServeMux) (*http.ServeMux, 
 	authedMux.HandleFunc("DELETE /bee-name-generator/suggestion", RejectBeeNameSuggestionHandler)
 	authedMux.HandleFunc("DELETE /bee-name-generator/suggestion/{name}", RejectBeeNameSuggestionHandler)
 	return mux, authedMux
-}
-
-// TODO: Deprecate this in favor of the actual web page
-// GetRoot get a simple docs/examples page
-func GetRoot(w http.ResponseWriter, r *http.Request) {
-	// Read the html file
-	html, err := os.ReadFile("static/beenamegenerator/templates/index.html")
-	if err != nil {
-		log.Println("Failed to read index.html: " + err.Error())
-		responses.SendAndEncodeInternalServerError(w, r, "Failed to read index.html")
-		return
-	}
-
-	// Replace the server url
-	htmlString := string(html)
-	htmlString = strings.ReplaceAll(htmlString, "{{SERVER_URL}}", SERVER_URL)
-
-	// Serve the html
-	w.Header().Set("Content-Type", "text/html")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(htmlString))
 }
 
 // GetBeeNameHandler
