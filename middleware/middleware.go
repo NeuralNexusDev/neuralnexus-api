@@ -50,11 +50,12 @@ func RequestLoggerMiddleware(next http.Handler) http.Handler {
 		start := time.Now()
 		wrapped := &WrappedWriter{w, http.StatusOK}
 		next.ServeHTTP(wrapped, r)
-		address := r.Header.Get("X-Real-IP")
-		if address == "" {
-			address = r.RemoteAddr
-		}
-		log.Printf("%s %d %s %s %s", address, wrapped.statusCode, r.Method, r.URL.Path, time.Since(start))
+		log.Println("X-Forwarded-Host: " + r.Header.Get("X-Forwarded-Host"))
+		log.Println("X-Forwarded-Proto: " + r.Header.Get("X-Forwarded-Proto"))
+		log.Println("X-Forwarded-For: " + r.Header.Get("X-Forwarded-For"))
+		log.Println("X-Real-IP: " + r.Header.Get("X-Real-IP"))
+
+		log.Printf("%s %d %s %s %s", r.RemoteAddr, wrapped.statusCode, r.Method, r.URL.Path, time.Since(start))
 	})
 }
 
