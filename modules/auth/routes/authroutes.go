@@ -1,6 +1,7 @@
 package authroutes
 
 import (
+	"log"
 	"net/http"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 func ApplyRoutes(mux, authedMux *http.ServeMux) (*http.ServeMux, *http.ServeMux) {
 	mux.HandleFunc("POST /auth/login", LoginHandler)
 	authedMux.HandleFunc("POST /auth/logout", LogoutHandler)
+	mux.HandleFunc("/auth/discord", DiscordOAuthHandler)
 	return mux, authedMux
 }
 
@@ -60,4 +62,24 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	auth.DeleteSessionFromCache(session.ID)
 	responses.SendAndEncodeStruct(w, r, http.StatusOK, session)
 	auth.DeleteSessionInDB(session.ID)
+}
+
+// DiscordOAuthHandler handles the Discord OAuth route
+func DiscordOAuthHandler(w http.ResponseWriter, r *http.Request) {
+	// Get the code from the query parameters
+	code := r.URL.Query().Get("code")
+	if code == "" {
+		responses.SendAndEncodeBadRequest(w, r, "Invalid request")
+		return
+	}
+	log.Println(code)
+	// Get the state from the query parameters
+	state := r.URL.Query().Get("state")
+	if state == "" {
+		responses.SendAndEncodeBadRequest(w, r, "Invalid request")
+		return
+	}
+	log.Println(state)
+
+	responses.SendAndEncodeStruct(w, r, http.StatusOK, "Discord OAuth")
 }

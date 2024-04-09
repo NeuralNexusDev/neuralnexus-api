@@ -23,10 +23,6 @@ import (
 //  CONSTRAINT password_enforced CHECK (email IS NOT NULL OR hashed_secret IS NOT NULL)
 // );
 
-// CREATE TABLE linked_accounts (
-// 	user_id UUID FOREIGN KEY REFERENCES accounts(user_id),
-// )
-
 // -------------- Structs --------------
 
 // Account struct
