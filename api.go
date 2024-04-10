@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/middleware"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/authroutes"
+	authroutes "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/routes"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/beenamegenerator"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/cct_turtle"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/mcstatus"
@@ -46,7 +46,7 @@ func (s *APIServer) Run() error {
 	router := http.NewServeMux()
 	authedRouter := http.NewServeMux()
 	router, authedRouter = routerStack(router, authedRouter)
-	router.Handle("/", middleware.AuthMiddleware(authedRouter))
+	router.Handle("/", cors.Default().Handler(middleware.AuthMiddleware(authedRouter)))
 
 	v1 := http.NewServeMux()
 	v1.Handle("/api/v1/", http.StripPrefix("/api/v1", router))
