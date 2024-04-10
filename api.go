@@ -40,9 +40,7 @@ func (s *APIServer) Run() error {
 
 	middlewareStack := middleware.CreateStack(
 		middleware.RequestLoggerMiddleware,
-		cors.New(cors.Options{
-			AllowCredentials: true,
-		}).Handler,
+		cors.AllowAll().Handler,
 	)
 
 	authedMiddlewareStack := middleware.CreateStack(
