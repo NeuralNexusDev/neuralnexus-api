@@ -43,10 +43,15 @@ func (s *APIServer) Run() error {
 		cors.Default().Handler,
 	)
 
+	authedMiddlewareStack := middleware.CreateStack(
+		middleware.AuthMiddleware,
+		cors.Default().Handler,
+	)
+
 	router := http.NewServeMux()
 	authedRouter := http.NewServeMux()
 	router, authedRouter = routerStack(router, authedRouter)
-	router.Handle("/", cors.Default().Handler(middleware.AuthMiddleware(authedRouter)))
+	router.Handle("/", authedMiddlewareStack(authedRouter))
 
 	v1 := http.NewServeMux()
 	v1.Handle("/api/v1/", http.StripPrefix("/api/v1", router))
