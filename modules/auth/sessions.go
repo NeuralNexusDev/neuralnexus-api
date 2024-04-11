@@ -85,6 +85,9 @@ func AddSessionToDB(session Session) database.Response[Session] {
 		"INSERT INTO sessions (session_id, user_id, permissions, iat, lua, exp) VALUES ($1, $2, $3, $4, $5, $6)",
 		session.ID, session.UserID, session.Permissions, session.IssuedAt, session.LastUsedAt, session.ExpiresAt,
 	)
+
+	go ClearExpiredSessions()
+
 	if err != nil {
 		return database.ErrorResponse[Session]("Unable to insert session", err)
 	}
@@ -102,6 +105,8 @@ func GetSessionFromDB(id uuid.UUID) database.Response[Session] {
 		return database.ErrorResponse[Session]("Unable to retreive session", err)
 	}
 
+	go ClearExpiredSessions()
+
 	session, err = pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Session])
 	if err != nil {
 		return database.ErrorResponse[Session]("Unable to retreive session", err)
@@ -115,6 +120,9 @@ func DeleteSessionInDB(id uuid.UUID) database.Response[Session] {
 	defer db.Close()
 
 	_, err := db.Exec(context.Background(), "DELETE FROM sessions WHERE session_id = $1", id)
+
+	go ClearExpiredSessions()
+
 	if err != nil {
 		return database.ErrorResponse[Session]("Unable to delete session", err)
 	}
@@ -130,10 +138,25 @@ func UpdateSessionInDB(session Session) database.Response[Session] {
 		"UPDATE sessions SET user_id = $2, permissions = $3, iat = $4, lua = $5, exp = $6 WHERE session_id = $1",
 		session.ID, session.UserID, session.Permissions, session.IssuedAt, session.LastUsedAt, session.ExpiresAt,
 	)
+
+	go ClearExpiredSessions()
+
 	if err != nil {
 		return database.ErrorResponse[Session]("Unable to update session", err)
 	}
 	return database.SuccessResponse(session)
+}
+
+// Clear expired sessions
+func ClearExpiredSessions() {
+	db := database.GetDB("neuralnexus")
+	defer db.Close()
+
+	_, err := db.Exec(context.Background(), "DELETE FROM sessions WHERE exp < $1 AND exp != 0", time.Now().Unix())
+	if err != nil {
+		log.Println("Unable to clear expired sessions:")
+		log.Println(err)
+	}
 }
 
 // -------------- Cache Functions --------------

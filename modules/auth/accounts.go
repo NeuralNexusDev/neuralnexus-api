@@ -95,8 +95,8 @@ func (user *Account) RemoveRole(role string) {
 
 // -------------- Functions --------------
 
-// CreateAccountInDB creates an account in the database
-func CreateAccountInDB(account Account) database.Response[Account] {
+// CreateAccount creates an account in the database
+func CreateAccount(account Account) database.Response[Account] {
 	db := database.GetDB("neuralnexus")
 	defer db.Close()
 
@@ -162,4 +162,31 @@ func GetAccountByEmail(email string) database.Response[Account] {
 		return database.ErrorResponse[Account]("Unable to get account", err)
 	}
 	return database.SuccessResponse(*account)
+}
+
+// UpdateAccount updates an account in the database
+func UpdateAccount(account Account) database.Response[Account] {
+	db := database.GetDB("neuralnexus")
+	defer db.Close()
+
+	_, err := db.Exec(context.Background(),
+		"UPDATE accounts SET username = $2, email = $3, hashed_secret = $4, salt = $5, roles = $6 WHERE user_id = $1",
+		account.UserID, account.Username, account.Email, account.HashedSecret, account.Salt, account.Roles,
+	)
+	if err != nil {
+		return database.ErrorResponse[Account]("Unable to update account", err)
+	}
+	return database.SuccessResponse(account)
+}
+
+// DeleteAccount deletes an account from the database
+func DeleteAccount(userID uuid.UUID) database.Response[Account] {
+	db := database.GetDB("neuralnexus")
+	defer db.Close()
+
+	_, err := db.Exec(context.Background(), "DELETE FROM accounts WHERE user_id = $1", userID)
+	if err != nil {
+		return database.ErrorResponse[Account]("Unable to delete account", err)
+	}
+	return database.SuccessResponse(Account{UserID: userID})
 }
