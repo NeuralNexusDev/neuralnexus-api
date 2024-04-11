@@ -6,15 +6,14 @@ import (
 )
 
 func main() {
-	ip := os.Getenv("IP_ADDRESS")
-	if ip == "" {
-		ip = "0.0.0.0"
-	}
-	port := os.Getenv("REST_PORT")
-	if port == "" {
-		port = "8080"
+	address := os.Getenv("ADDRESS")
+	useUDS := os.Getenv("USE_UDS") == "true"
+	if address == "" && useUDS {
+		address = "/tmp/go.socket"
+	} else if address == "" {
+		address = "0.0.0.0:8080"
 	}
 
-	server := NewAPIServer(ip + ":" + port)
+	server := NewAPIServer(address, useUDS)
 	log.Fatal(server.Run())
 }
