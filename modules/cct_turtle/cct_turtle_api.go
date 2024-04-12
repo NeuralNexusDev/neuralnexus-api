@@ -83,12 +83,12 @@ func ApplyRoutes(mux *http.ServeMux, authedMux *http.ServeMux) (*http.ServeMux, 
 
 // GetTurtleCode - Get the turtle code
 func GetTurtleCode(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, "static/cct_turtle/startup.lua")
+	http.ServeFile(w, r, "public/cct_turtle/startup.lua")
 }
 
 // GetTurtleUpdatingCode - Get the turtle updating code
 func GetTurtleUpdatingCode(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, "static/cct_turtle/updating_startup.lua")
+	http.ServeFile(w, r, "public/cct_turtle/updating_startup.lua")
 }
 
 // TODO: pull from DB

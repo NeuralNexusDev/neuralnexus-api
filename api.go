@@ -57,12 +57,17 @@ func (s *APIServer) Run() error {
 	v1 := http.NewServeMux()
 	v1.Handle("/api/v1/", http.StripPrefix("/api/v1", router))
 
+	server := http.Server{
+		Addr:    s.Address,
+		Handler: middlewareStack(v1),
+	}
+
 	if s.UsingUDS {
 		c := make(chan os.Signal, 1)
 		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 		go func() {
 			<-c
-			os.Remove("/tmp/echo.sock")
+			os.Remove(s.Address)
 			os.Exit(1)
 		}()
 
@@ -77,17 +82,9 @@ func (s *APIServer) Run() error {
 		if err != nil {
 			return err
 		}
-		server := http.Server{
-			Addr:    s.Address,
-			Handler: middlewareStack(v1),
-		}
 		log.Printf("API Server listening on %s", s.Address)
 		return server.Serve(socket)
 	} else {
-		server := http.Server{
-			Addr:    s.Address,
-			Handler: middlewareStack(v1),
-		}
 		log.Printf("API Server listening on %s", s.Address)
 		return server.ListenAndServe()
 	}

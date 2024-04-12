@@ -22,7 +22,7 @@ import (
 var (
 	SERVER_URL string = "https://api.neuralnexus.dev/api/v1/mcstatus"
 
-	defaultIcon, _ = loadImgFromFile("static/mcstatus/icons/default.png")
+	defaultIcon, _ = loadImgFromFile("public/mcstatus/icons/default.png")
 
 	offlineJavaResponse StausResponse = StausResponse{
 		Name:          "Server Offline",
@@ -36,7 +36,7 @@ var (
 		ServerType:    "java",
 	}
 
-	bedrockIcon, _ = loadImgFromFile("static/mcstatus/icons/bedrock.png")
+	bedrockIcon, _ = loadImgFromFile("public/mcstatus/icons/bedrock.png")
 
 	offlineBedrockResponse StausResponse = StausResponse{
 		Name:          "Server Offline",
@@ -396,7 +396,7 @@ func GetRoot(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Read the html file
-	html, err := os.ReadFile("static/mcstatus/templates/index.html")
+	html, err := os.ReadFile("public/mcstatus/templates/index.html")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -473,7 +473,7 @@ func GetServerStatus(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(resp)
 		return
 	} else if strings.Split(r.Header.Get("Accept"), ",")[0] == "text/html" {
-		html, err := os.ReadFile("static/mcstatus/templates/status.html")
+		html, err := os.ReadFile("public/mcstatus/templates/status.html")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
@@ -492,7 +492,7 @@ func GetServerStatus(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(htmlString))
 		return
 	} else {
-		html, err := os.ReadFile("static/mcstatus/templates/embed.html")
+		html, err := os.ReadFile("public/mcstatus/templates/embed.html")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
