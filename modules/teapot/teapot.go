@@ -15,7 +15,7 @@ func ApplyRoutes(mux, authedMux *http.ServeMux) (*http.ServeMux, *http.ServeMux)
 			"about:blank",
 			http.StatusTeapot,
 			"I'm a teapot",
-			"I'm a little teapot, short and stout\nHere is my handle, here is my spout\n",
+			"You requested a cup of coffee, but I'm a teapot.",
 			"https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/418",
 		).SendAndEncodeProblem(w, r)
 	}))
