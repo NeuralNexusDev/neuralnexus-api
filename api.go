@@ -14,7 +14,9 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/cct_turtle"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/mcstatus"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/petpictures"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/projects"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/switchboard"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/teapot"
 	"github.com/NeuralNexusDev/neuralnexus-api/routes"
 	"github.com/rs/cors"
 )
@@ -33,15 +35,17 @@ func NewAPIServer(address string, usingUDS bool) *APIServer {
 	}
 }
 
-// Run - Start the API server
-func (s *APIServer) Run() error {
+// Setup - Setup the API server
+func (s *APIServer) Setup() http.Handler {
 	routerStack := routes.CreateStack(
 		authroutes.ApplyRoutes,
 		beenamegenerator.ApplyRoutes,
 		cct_turtle.ApplyRoutes,
 		mcstatus.ApplyRoutes,
 		petpictures.ApplyRoutes,
+		projects.ApplyRoutes,
 		switchboard.ApplyRoutes,
+		teapot.ApplyRoutes,
 	)
 
 	middlewareStack := middleware.CreateStack(
@@ -57,9 +61,14 @@ func (s *APIServer) Run() error {
 	v1 := http.NewServeMux()
 	v1.Handle("/api/v1/", http.StripPrefix("/api/v1", router))
 
+	return middlewareStack(v1)
+}
+
+// Run - Start the API server
+func (s *APIServer) Run() error {
 	server := http.Server{
 		Addr:    s.Address,
-		Handler: middlewareStack(v1),
+		Handler: s.Setup(),
 	}
 
 	if s.UsingUDS {

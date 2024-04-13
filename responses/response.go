@@ -28,28 +28,15 @@ func DecodeStruct[T any](r *http.Request, data *T) error {
 	return json.NewDecoder(r.Body).Decode(data)
 }
 
-// SendAndEncodeProblem -- Send a ProblemResponse as JSON or XML
-func SendAndEncodeProblem(w http.ResponseWriter, r *http.Request, problem *ProblemResponse) {
-	w.WriteHeader(problem.Status)
-	if r.Header.Get("Content-Type") == "application/xml" {
-		w.Header().Set("Content-Type", "application/problem+xml")
-		xml.NewEncoder(w).Encode(problem)
-	} else {
-		w.Header().Set("Content-Type", "application/problem+json")
-		json.NewEncoder(w).Encode(problem)
-	}
-}
-
 // SendAndEncodeBadRequest - Send and encode an invalid input problem
 func SendAndEncodeBadRequest(w http.ResponseWriter, r *http.Request, message string) {
-	problem := NewProblemResponse(
+	NewProblemResponse(
 		"about:blank",
 		http.StatusBadRequest,
 		"Bad Request",
 		message,
 		"https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400",
-	)
-	SendAndEncodeProblem(w, r, problem)
+	).SendAndEncodeProblem(w, r)
 }
 
 // SendAndEncodeForbidden -- Send a ForbiddenResponse as JSON or XML
@@ -57,14 +44,13 @@ func SendAndEncodeForbidden(w http.ResponseWriter, r *http.Request, message stri
 	if message == "" {
 		message = "You do not have permission to access this resource."
 	}
-	problem := NewProblemResponse(
+	NewProblemResponse(
 		"about:blank",
 		http.StatusForbidden,
 		"Forbidden",
 		message,
 		"https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403",
-	)
-	SendAndEncodeProblem(w, r, problem)
+	).SendAndEncodeProblem(w, r)
 }
 
 // SendAndEncodeNotFound -- Send a NotFoundResponse as JSON or XML
@@ -72,14 +58,13 @@ func SendAndEncodeNotFound(w http.ResponseWriter, r *http.Request, message strin
 	if message == "" {
 		message = "The requested resource could not be found."
 	}
-	problem := NewProblemResponse(
+	NewProblemResponse(
 		"about:blank",
 		http.StatusNotFound,
 		"Not Found",
 		message,
 		"https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404",
-	)
-	SendAndEncodeProblem(w, r, problem)
+	).SendAndEncodeProblem(w, r)
 }
 
 // SendAndEncodeInternalServerError -- Send an InternalServerErrorResponse as JSON or XML
@@ -87,12 +72,11 @@ func SendAndEncodeInternalServerError(w http.ResponseWriter, r *http.Request, me
 	if message == "" {
 		message = "An internal server error occurred."
 	}
-	problem := NewProblemResponse(
+	NewProblemResponse(
 		"about:blank",
 		http.StatusInternalServerError,
 		"Internal Server Error",
 		message,
 		"https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/500",
-	)
-	SendAndEncodeProblem(w, r, problem)
+	).SendAndEncodeProblem(w, r)
 }
