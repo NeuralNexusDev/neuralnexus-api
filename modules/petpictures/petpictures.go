@@ -313,17 +313,17 @@ func UploadPetPicture(file *os.File, primarySubject int, othersSubjects []int, a
 
 // ApplyRoutes - Apply routes to the router
 func ApplyRoutes(mux *http.ServeMux, authedMux *http.ServeMux) (*http.ServeMux, *http.ServeMux) {
-	authedMux.HandleFunc("POST /pet-pictures/pets/{name}", CreatePetHandler)
-	authedMux.HandleFunc("POST /pet-pictures/pets", CreatePetHandler)
-	mux.HandleFunc("GET /pet-pictures/pets/{id}", GetPetHandler)
-	mux.HandleFunc("GET /pet-pictures/pets", GetPetHandler)
-	authedMux.HandleFunc("PUT /pet-pictures/pets", UpdatePetHandler)
-	mux.HandleFunc("GET /pet-pictures/pictures/random", GetRandPetPictureByNameHandler)
-	mux.HandleFunc("GET /pet-pictures/pictures/{id}", GetPetPictureHandler)
-	mux.HandleFunc("GET /pet-pictures/pictures", GetPetPictureHandler)
-	authedMux.HandleFunc("PUT /pet-pictures/pictures", UpdatePetPictureHandler)
-	authedMux.HandleFunc("DELETE /pet-pictures/pictures/{id}", DeletePetPictureHandler)
-	authedMux.HandleFunc("DELETE /pet-pictures/pictures", DeletePetPictureHandler)
+	authedMux.HandleFunc("POST /api/v1/pet-pictures/pets/{name}", CreatePetHandler)
+	authedMux.HandleFunc("POST /api/v1/pet-pictures/pets", CreatePetHandler)
+	mux.HandleFunc("GET /api/v1/pet-pictures/pets/{id}", GetPetHandler)
+	mux.HandleFunc("GET /api/v1/pet-pictures/pets", GetPetHandler)
+	authedMux.HandleFunc("PUT /api/v1/pet-pictures/pets", UpdatePetHandler)
+	mux.HandleFunc("GET /api/v1/pet-pictures/pictures/random", GetRandPetPictureByNameHandler)
+	mux.HandleFunc("GET /api/v1/pet-pictures/pictures/{id}", GetPetPictureHandler)
+	mux.HandleFunc("GET /api/v1/pet-pictures/pictures", GetPetPictureHandler)
+	authedMux.HandleFunc("PUT /api/v1/pet-pictures/pictures", UpdatePetPictureHandler)
+	authedMux.HandleFunc("DELETE /api/v1/pet-pictures/pictures/{id}", DeletePetPictureHandler)
+	authedMux.HandleFunc("DELETE /api/v1/pet-pictures/pictures", DeletePetPictureHandler)
 	return mux, authedMux
 }
 

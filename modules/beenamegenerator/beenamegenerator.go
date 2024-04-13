@@ -165,19 +165,19 @@ func rejectBeeNameSuggestion(beeName string) database.Response[string] {
 
 // ApplyRoutes - Apply the routes
 func ApplyRoutes(mux *http.ServeMux, authedMux *http.ServeMux) (*http.ServeMux, *http.ServeMux) {
-	mux.HandleFunc("GET /bee-name-generator/name", GetBeeNameHandler)
-	authedMux.HandleFunc("POST /bee-name-generator/name", UploadBeeNameHandler)
-	authedMux.HandleFunc("POST /bee-name-generator/name/{name}", UploadBeeNameHandler)
-	authedMux.HandleFunc("DELETE /bee-name-generator/name", DeleteBeeNameHandler)
-	authedMux.HandleFunc("DELETE /bee-name-generator/name/{name}", DeleteBeeNameHandler)
-	mux.HandleFunc("POST /bee-name-generator/suggestion", SubmitBeeNameHandler)
-	mux.HandleFunc("POST /bee-name-generator/suggestion/{name}", SubmitBeeNameHandler)
-	authedMux.HandleFunc("GET /bee-name-generator/suggestion", GetBeeNameSuggestionsHandler)
-	authedMux.HandleFunc("GET /bee-name-generator/suggestion/{amount}", GetBeeNameSuggestionsHandler)
-	authedMux.HandleFunc("PUT /bee-name-generator/suggestion", AcceptBeeNameSuggestionHandler)
-	authedMux.HandleFunc("PUT /bee-name-generator/suggestion/{name}", AcceptBeeNameSuggestionHandler)
-	authedMux.HandleFunc("DELETE /bee-name-generator/suggestion", RejectBeeNameSuggestionHandler)
-	authedMux.HandleFunc("DELETE /bee-name-generator/suggestion/{name}", RejectBeeNameSuggestionHandler)
+	mux.HandleFunc("GET /api/v1/bee-name-generator/name", GetBeeNameHandler)
+	authedMux.HandleFunc("POST /api/v1/bee-name-generator/name", UploadBeeNameHandler)
+	authedMux.HandleFunc("POST /api/v1/bee-name-generator/name/{name}", UploadBeeNameHandler)
+	authedMux.HandleFunc("DELETE /api/v1/bee-name-generator/name", DeleteBeeNameHandler)
+	authedMux.HandleFunc("DELETE /api/v1/bee-name-generator/name/{name}", DeleteBeeNameHandler)
+	mux.HandleFunc("POST /api/v1/bee-name-generator/suggestion", SubmitBeeNameHandler)
+	mux.HandleFunc("POST /api/v1/bee-name-generator/suggestion/{name}", SubmitBeeNameHandler)
+	authedMux.HandleFunc("GET /api/v1/bee-name-generator/suggestion", GetBeeNameSuggestionsHandler)
+	authedMux.HandleFunc("GET /api/v1/bee-name-generator/suggestion/{amount}", GetBeeNameSuggestionsHandler)
+	authedMux.HandleFunc("PUT /api/v1/bee-name-generator/suggestion", AcceptBeeNameSuggestionHandler)
+	authedMux.HandleFunc("PUT /api/v1/bee-name-generator/suggestion/{name}", AcceptBeeNameSuggestionHandler)
+	authedMux.HandleFunc("DELETE /api/v1/bee-name-generator/suggestion", RejectBeeNameSuggestionHandler)
+	authedMux.HandleFunc("DELETE /api/v1/bee-name-generator/suggestion/{name}", RejectBeeNameSuggestionHandler)
 	return mux, authedMux
 }
 

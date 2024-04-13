@@ -7,6 +7,7 @@ import (
 )
 
 // -------------- Structs --------------
+
 // ProblemResponse -- Defined by https://www.rfc-editor.org/rfc/rfc9457.html#section-3
 type ProblemResponse struct {
 	Type     string `json:"type" xml:"type"`

@@ -35,9 +35,22 @@ func NewAPIServer(address string, usingUDS bool) *APIServer {
 	}
 }
 
+// ApplyRoutes - Apply the routes to the API server
+func ApplyRoutes(mux *http.ServeMux, authedMux *http.ServeMux) (*http.ServeMux, *http.ServeMux) {
+	mux.Handle("/public/", http.StripPrefix("/public/", http.FileServer(http.Dir("./public/"))))
+	mux.HandleFunc("/docs", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "./public/docs.html")
+	})
+	mux.HandleFunc("/api/v1", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "./public/docs.html")
+	})
+	return mux, authedMux
+}
+
 // Setup - Setup the API server
 func (s *APIServer) Setup() http.Handler {
 	routerStack := routes.CreateStack(
+		ApplyRoutes,
 		authroutes.ApplyRoutes,
 		beenamegenerator.ApplyRoutes,
 		cct_turtle.ApplyRoutes,
@@ -58,10 +71,7 @@ func (s *APIServer) Setup() http.Handler {
 	router, authedRouter = routerStack(router, authedRouter)
 	router.Handle("/", middleware.AuthMiddleware(authedRouter))
 
-	v1 := http.NewServeMux()
-	v1.Handle("/api/v1/", http.StripPrefix("/api/v1", router))
-
-	return middlewareStack(v1)
+	return middlewareStack(router)
 }
 
 // Run - Start the API server

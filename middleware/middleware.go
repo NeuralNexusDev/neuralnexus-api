@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
+	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"github.com/google/uuid"
 )
 
@@ -68,29 +69,30 @@ func AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			responses.SendAndEncodeUnauthorized(w, r, "")
 			return
 		}
 
 		authStrings := strings.Split(authHeader, "Bearer ")
 		if len(authStrings) != 2 {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			responses.SendAndEncodeUnauthorized(w, r, "")
+			return
 		}
 
 		sessionID, err := uuid.Parse(authStrings[1])
 		if err != nil {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			responses.SendAndEncodeUnauthorized(w, r, "")
 			return
 		}
 
 		session := auth.GetSession(sessionID)
 		if !session.Success {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			responses.SendAndEncodeUnauthorized(w, r, "")
 			return
 		}
 
 		if !session.Data.IsValid() {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			responses.SendAndEncodeUnauthorized(w, r, "")
 			auth.DeleteSession(session.Data.ID)
 			return
 		}

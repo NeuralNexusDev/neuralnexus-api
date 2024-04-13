@@ -15,9 +15,9 @@ import (
 
 // ApplyRoutes applies the auth routes
 func ApplyRoutes(mux, authedMux *http.ServeMux) (*http.ServeMux, *http.ServeMux) {
-	mux.HandleFunc("POST /auth/login", LoginHandler)
-	authedMux.HandleFunc("POST /auth/logout", LogoutHandler)
-	mux.HandleFunc("/auth/discord", DiscordOAuthHandler)
+	mux.HandleFunc("POST /api/v1/auth/login", LoginHandler)
+	authedMux.HandleFunc("POST /api/v1/auth/logout", LogoutHandler)
+	mux.HandleFunc("/api/v1/auth/discord", DiscordOAuthHandler)
 	return mux, authedMux
 }
 

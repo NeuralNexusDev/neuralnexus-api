@@ -381,9 +381,9 @@ func ServerStatus(serverInfo ServerInfo) (StausResponse, image.Image, error) {
 
 // ApplyRoutes - Apply the routes
 func ApplyRoutes(mux *http.ServeMux, authedMux *http.ServeMux) (*http.ServeMux, *http.ServeMux) {
-	mux.HandleFunc("/mcstatus", GetRoot)
-	mux.HandleFunc("/mcstatus/{address}", GetServerStatus)
-	mux.HandleFunc("/mcstatus/icon/{address}", GetIcon)
+	mux.HandleFunc("/api/v1/mcstatus", GetRoot)
+	mux.HandleFunc("/api/v1/mcstatus/{address}", GetServerStatus)
+	mux.HandleFunc("/api/v1/mcstatus/icon/{address}", GetIcon)
 	return mux, authedMux
 }
 

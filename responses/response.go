@@ -30,12 +30,29 @@ func DecodeStruct[T any](r *http.Request, data *T) error {
 
 // SendAndEncodeBadRequest - Send and encode an invalid input problem
 func SendAndEncodeBadRequest(w http.ResponseWriter, r *http.Request, message string) {
+	if message == "" {
+		message = "The request body is invalid."
+	}
 	NewProblemResponse(
 		"about:blank",
 		http.StatusBadRequest,
 		"Bad Request",
 		message,
 		"https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400",
+	).SendAndEncodeProblem(w, r)
+}
+
+// SendAndEncodeUnauthorized -- Send an UnauthorizedResponse as JSON or XML
+func SendAndEncodeUnauthorized(w http.ResponseWriter, r *http.Request, message string) {
+	if message == "" {
+		message = "You must be logged in to access this resource."
+	}
+	NewProblemResponse(
+		"about:blank",
+		http.StatusUnauthorized,
+		"Unauthorized",
+		message,
+		"https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401",
 	).SendAndEncodeProblem(w, r)
 }
 
