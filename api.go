@@ -12,7 +12,6 @@ import (
 	authroutes "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/routes"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/beenamegenerator"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/cct_turtle"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/mcstatus"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/petpictures"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/projects"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/switchboard"
