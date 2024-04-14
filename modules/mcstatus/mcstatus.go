@@ -1,4 +1,4 @@
-package mcstatus
+package main
 
 import (
 	"bytes"

@@ -11,11 +11,6 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
-// -------------- Globals --------------
-const (
-	SERVER_URL string = "https://api.neuralnexus.dev/api/v1/bee-name-generator"
-)
-
 // -------------- Structs --------------
 
 // NameResponse struct (extends Response)
