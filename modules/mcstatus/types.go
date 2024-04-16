@@ -8,11 +8,11 @@ var (
 
 // ServerInfo contains the server info
 type ServerInfo struct {
-	Address     string `json:"address"`
-	Port        int    `json:"port"`
-	EnableQuery bool   `json:"enable_query"`
-	QueryPort   int    `json:"query_port"`
-	IsBedrock   bool   `json:"is_bedrock"`
+	Address     string
+	Port        int
+	EnableQuery bool
+	QueryPort   int
+	IsBedrock   bool
 }
 
 // NewOfflineServerStatus - Create a new empty ServerInfo
@@ -39,24 +39,25 @@ func NewOfflineServerStatus(isBedrock bool) StausResponse {
 
 // Simple Player definition
 type Player struct {
-	Name string `json:"name"`
+	Name string `json:"name" xml:"name"`
+	ID   string `json:"id" xml:"id"`
 }
 
 // General status response
 type StausResponse struct {
-	Name          string   `json:"name"`
-	Map           string   `json:"map"`
-	MaxPlayers    int      `json:"maxplayers"`
-	OnlinePlayers int      `json:"onlineplayers"`
-	Players       []Player `json:"players"`
-	Connect       string   `json:"connect"`
-	Version       string   `json:"version"`
-	Favicon       string   `json:"favicon"`
-	ServerType    string   `json:"server_type"`
+	Name          string   `json:"name" xml:"name"`
+	Map           string   `json:"map" xml:"map"`
+	MaxPlayers    int      `json:"maxplayers" xml:"maxplayers"`
+	OnlinePlayers int      `json:"onlineplayers" xml:"onlineplayers"`
+	Players       []Player `json:"players" xml:"players"`
+	Connect       string   `json:"connect" xml:"connect"`
+	Version       string   `json:"version" xml:"version"`
+	Favicon       string   `json:"favicon" xml:"favicon"`
+	ServerType    string   `json:"server_type" xml:"server_type"`
 }
 
 // Error response
 type ErrorResponse struct {
-	Succes bool   `json:"success"`
-	Error  string `json:"error"`
+	Succes bool   `json:"success" xml:"success"`
+	Error  string `json:"error" xml:"error"`
 }

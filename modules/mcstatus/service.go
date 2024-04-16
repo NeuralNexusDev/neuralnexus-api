@@ -201,33 +201,25 @@ func (si *ServerInfo) JavaServerStatus() (StausResponse, image.Image, error) {
 
 // Parse players from Ping17 response
 func parsePlayers17(players []minequery.PlayerEntry17) []Player {
-	// Create a new array of players
-	var playerList []Player = []Player{}
-
-	// Loop through the players
+	var playerList []Player
 	for _, player := range players {
-		// Append the player to the player list
 		playerList = append(playerList, Player{
 			Name: player.Nickname,
+			ID:   player.UUID.String(),
 		})
 	}
-
 	return playerList
 }
 
 // Parse players from Query response
 func parsePlayersQuery(players []string) []Player {
-	// Create a new array of players
 	var playerList []Player = []Player{}
-
-	// Loop through the players
 	for _, player := range players {
-		// Append the player to the player list
 		playerList = append(playerList, Player{
 			Name: player,
+			ID:   "",
 		})
 	}
-
 	return playerList
 }
 
