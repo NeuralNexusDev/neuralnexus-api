@@ -97,56 +97,6 @@
                         "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
-            },
-            "post": {
-                "summary": "Get a random bee name",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
-                "requestBody": {
-                    "$ref": "#/components/requestBodies/BNGNameBody"
-                },
-                "responses": {
-                    "200": {
-                        "$ref": "#/components/responses/BNGNameResponse"
-                    },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/401Unauthorized"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/500InternalServerError"
-                    }
-                }
-            },
-            "delete": {
-                "summary": "Delete a bee name",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
-                "requestBody": {
-                    "$ref": "#/components/requestBodies/BNGNameBody"
-                },
-                "responses": {
-                    "200": {
-                        "$ref": "#/components/responses/BNGNameResponse"
-                    },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/401Unauthorized"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/500InternalServerError"
-                    }
-                }
             }
         },
         "/bee-name-generator/name/{name}": {
@@ -199,101 +149,7 @@
                 }
             }
         },
-        "/bee-name-generator/suggestion": {
-            "get": {
-                "summary": "Get bee name suggestions",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
-                "requestBody": {
-                    "$ref": "#/components/requestBodies/BNGSuggestionAmountBody"
-                },
-                "responses": {
-                    "200": {
-                        "$ref": "#/components/responses/BNGNameResponse"
-                    },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/401Unauthorized"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/500InternalServerError"
-                    }
-                }
-            },
-            "post": {
-                "summary": "Suggest a bee name",
-                "requestBody": {
-                    "$ref": "#/components/requestBodies/BNGNameBody"
-                },
-                "responses": {
-                    "200": {
-                        "$ref": "#/components/responses/BNGNameResponse"
-                    },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/500InternalServerError"
-                    }
-                }
-            },
-            "put": {
-                "summary": "Accept a bee name suggestion",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
-                "requestBody": {
-                    "$ref": "#/components/requestBodies/BNGNameBody"
-                },
-                "responses": {
-                    "200": {
-                        "$ref": "#/components/responses/BNGNameResponse"
-                    },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/401Unauthorized"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/500InternalServerError"
-                    }
-                }
-            },
-            "delete": {
-                "summary": "Reject a bee name suggestion",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
-                "requestBody": {
-                    "$ref": "#/components/requestBodies/BNGNameBody"
-                },
-                "responses": {
-                    "200": {
-                        "$ref": "#/components/responses/BNGNameResponse"
-                    },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/401Unauthorized"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/500InternalServerError"
-                    }
-                }
-            }
-        },
-        "/bee-name-generator/suggestion/{name}": {
+        "/bee-name-generator/suggestion/{param}": {
             "get": {
                 "summary": "Get bee name suggestions",
                 "security": [
@@ -303,12 +159,12 @@
                 ],
                 "parameters": [
                     {
-                        "$ref": "#/components/parameters/BNGNameSlug"
+                        "$ref": "#/components/parameters/BNGSuggestionAmountSlug"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "$ref": "#/components/responses/BNGNameResponse"
+                        "$ref": "#/components/responses/BNGSuggestionNamesResponse"
                     },
                     "400": {
                         "$ref": "#/components/responses/400BadRequest"
@@ -892,6 +748,27 @@
                     "application/xml": {
                         "schema": {
                             "$ref": "#/components/schemas/BNGName"
+                        }
+                    }
+                }
+            },
+            "BNGSuggestionNamesResponse": {
+                "description": "Bee name suggestions response",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "application/xml": {
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
                         }
                     }
                 }

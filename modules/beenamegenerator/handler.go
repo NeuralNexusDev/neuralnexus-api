@@ -6,32 +6,28 @@ import (
 
 	"github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
 // ApplyRoutes - Apply the routes
 func ApplyRoutes(mux *http.ServeMux, authedMux *http.ServeMux) (*http.ServeMux, *http.ServeMux) {
-	store := NewStore()
+	store := NewStore(database.GetDB("bee_name_generator"))
 	mux.HandleFunc("GET /api/v1/bee-name-generator/name", GetBeeNameHandler(store))
-	authedMux.HandleFunc("POST /api/v1/bee-name-generator/name", UploadBeeNameHandler(store))
 	authedMux.HandleFunc("POST /api/v1/bee-name-generator/name/{name}", UploadBeeNameHandler(store))
-	authedMux.HandleFunc("DELETE /api/v1/bee-name-generator/name", DeleteBeeNameHandler(store))
 	authedMux.HandleFunc("DELETE /api/v1/bee-name-generator/name/{name}", DeleteBeeNameHandler(store))
-	mux.HandleFunc("POST /api/v1/bee-name-generator/suggestion", SubmitBeeNameHandler(store))
 	mux.HandleFunc("POST /api/v1/bee-name-generator/suggestion/{name}", SubmitBeeNameHandler(store))
 	authedMux.HandleFunc("GET /api/v1/bee-name-generator/suggestion", GetBeeNameSuggestionsHandler(store))
 	authedMux.HandleFunc("GET /api/v1/bee-name-generator/suggestion/{amount}", GetBeeNameSuggestionsHandler(store))
-	authedMux.HandleFunc("PUT /api/v1/bee-name-generator/suggestion", AcceptBeeNameSuggestionHandler(store))
 	authedMux.HandleFunc("PUT /api/v1/bee-name-generator/suggestion/{name}", AcceptBeeNameSuggestionHandler(store))
-	authedMux.HandleFunc("DELETE /api/v1/bee-name-generator/suggestion", RejectBeeNameSuggestionHandler(store))
 	authedMux.HandleFunc("DELETE /api/v1/bee-name-generator/suggestion/{name}", RejectBeeNameSuggestionHandler(store))
 	return mux, authedMux
 }
 
 // GetBeeNameHandler
-func GetBeeNameHandler(s *Store) http.HandlerFunc {
+func GetBeeNameHandler(s BNGStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		beeName := s.getBeeName()
+		beeName := s.GetBeeName()
 		if !beeName.Success {
 			responses.SendAndEncodeInternalServerError(w, r, "Failed to get bee name")
 			return
@@ -41,7 +37,7 @@ func GetBeeNameHandler(s *Store) http.HandlerFunc {
 }
 
 // UploadBeeNameHandler Upload a bee name
-func UploadBeeNameHandler(s *Store) http.HandlerFunc {
+func UploadBeeNameHandler(s BNGStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(middleware.SessionKey).(auth.Session)
 		if !session.HasPermission(auth.ScopeAdminBeeNameGenerator) {
@@ -51,18 +47,11 @@ func UploadBeeNameHandler(s *Store) http.HandlerFunc {
 
 		beeName := r.PathValue("name")
 		if beeName == "" {
-			var nameResponse NameResponse
-			err := responses.DecodeStruct(r, &nameResponse)
-			if err == nil {
-				beeName = nameResponse.Name
-			}
-		}
-		if beeName == "" {
 			responses.SendAndEncodeBadRequest(w, r, "Invalid name")
 			return
 		}
 
-		upload := s.uploadBeeName(beeName)
+		upload := s.UploadBeeName(beeName)
 		if !upload.Success {
 			responses.SendAndEncodeInternalServerError(w, r, "Failed to upload bee name")
 			return
@@ -72,7 +61,7 @@ func UploadBeeNameHandler(s *Store) http.HandlerFunc {
 }
 
 // DeleteBeeName Delete a bee name
-func DeleteBeeNameHandler(s *Store) http.HandlerFunc {
+func DeleteBeeNameHandler(s BNGStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(middleware.SessionKey).(auth.Session)
 		if !session.HasPermission(auth.ScopeAdminBeeNameGenerator) {
@@ -82,18 +71,11 @@ func DeleteBeeNameHandler(s *Store) http.HandlerFunc {
 
 		beeName := r.PathValue("name")
 		if beeName == "" {
-			var nameResponse NameResponse
-			err := responses.DecodeStruct(r, &nameResponse)
-			if err == nil {
-				beeName = nameResponse.Name
-			}
-		}
-		if beeName == "" {
 			responses.SendAndEncodeBadRequest(w, r, "Invalid name")
 			return
 		}
 
-		delete := s.deleteBeeName(beeName)
+		delete := s.DeleteBeeName(beeName)
 		if !delete.Success {
 			responses.SendAndEncodeInternalServerError(w, r, "Failed to delete bee name")
 			return
@@ -103,22 +85,15 @@ func DeleteBeeNameHandler(s *Store) http.HandlerFunc {
 }
 
 // SubmitBeeNameHandler Submit a bee name suggestion
-func SubmitBeeNameHandler(s *Store) http.HandlerFunc {
+func SubmitBeeNameHandler(s BNGStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		beeName := r.PathValue("name")
-		if beeName == "" {
-			var nameResponse NameResponse
-			err := responses.DecodeStruct(r, &nameResponse)
-			if err == nil {
-				beeName = nameResponse.Name
-			}
-		}
 		if beeName == "" {
 			responses.SendAndEncodeBadRequest(w, r, "Invalid name")
 			return
 		}
 
-		submit := s.submitBeeName(beeName)
+		submit := s.SubmitBeeName(beeName)
 		if !submit.Success {
 			responses.SendAndEncodeInternalServerError(w, r, "Failed to submit bee name")
 			return
@@ -128,7 +103,7 @@ func SubmitBeeNameHandler(s *Store) http.HandlerFunc {
 }
 
 // GetBeeNameSuggestions Get a list of bee name suggestions
-func GetBeeNameSuggestionsHandler(s *Store) http.HandlerFunc {
+func GetBeeNameSuggestionsHandler(s BNGStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(middleware.SessionKey).(auth.Session)
 		if !session.HasPermission(auth.ScopeAdminBeeNameGenerator) {
@@ -137,15 +112,8 @@ func GetBeeNameSuggestionsHandler(s *Store) http.HandlerFunc {
 		}
 
 		amount := r.PathValue("amount")
-		if amount == "" {
-			var amountResponse AmountResponse
-			err := responses.DecodeStruct(r, &amountResponse)
-			if err == nil {
-				amount = strconv.FormatInt(amountResponse.Amount, 10)
-			}
-		}
 		if amount == "" || amount == "0" {
-			amount = "1"
+			amount = "NAN"
 		}
 		amountInt, err := strconv.ParseInt(amount, 10, 64)
 		if err != nil {
@@ -153,7 +121,7 @@ func GetBeeNameSuggestionsHandler(s *Store) http.HandlerFunc {
 			return
 		}
 
-		suggestions := s.getBeeNameSuggestions(amountInt)
+		suggestions := s.GetBeeNameSuggestions(amountInt)
 		if !suggestions.Success {
 			responses.SendAndEncodeInternalServerError(w, r, "Failed to get bee name suggestions")
 			return
@@ -163,7 +131,7 @@ func GetBeeNameSuggestionsHandler(s *Store) http.HandlerFunc {
 }
 
 // AcceptBeeNameSuggestionHandler Accept a bee name suggestion
-func AcceptBeeNameSuggestionHandler(s *Store) http.HandlerFunc {
+func AcceptBeeNameSuggestionHandler(s BNGStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(middleware.SessionKey).(auth.Session)
 		if !session.HasPermission(auth.ScopeAdminBeeNameGenerator) {
@@ -173,18 +141,11 @@ func AcceptBeeNameSuggestionHandler(s *Store) http.HandlerFunc {
 
 		beeName := r.PathValue("name")
 		if beeName == "" {
-			var nameResponse NameResponse
-			err := responses.DecodeStruct(r, &nameResponse)
-			if err == nil {
-				beeName = nameResponse.Name
-			}
-		}
-		if beeName == "" {
 			responses.SendAndEncodeBadRequest(w, r, "Invalid name")
 			return
 		}
 
-		accept := s.acceptBeeNameSuggestion(beeName)
+		accept := s.AcceptBeeNameSuggestion(beeName)
 		if !accept.Success {
 			responses.SendAndEncodeInternalServerError(w, r, "Failed to accept bee name suggestion")
 			return
@@ -194,7 +155,7 @@ func AcceptBeeNameSuggestionHandler(s *Store) http.HandlerFunc {
 }
 
 // RejectBeeNameSuggestionHandler Reject a bee name suggestion
-func RejectBeeNameSuggestionHandler(s *Store) http.HandlerFunc {
+func RejectBeeNameSuggestionHandler(s BNGStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(middleware.SessionKey).(auth.Session)
 		if !session.HasPermission(auth.ScopeAdminBeeNameGenerator) {
@@ -204,18 +165,11 @@ func RejectBeeNameSuggestionHandler(s *Store) http.HandlerFunc {
 
 		beeName := r.PathValue("name")
 		if beeName == "" {
-			var nameResponse NameResponse
-			err := responses.DecodeStruct(r, &nameResponse)
-			if err == nil {
-				beeName = nameResponse.Name
-			}
-		}
-		if beeName == "" {
 			responses.SendAndEncodeBadRequest(w, r, "Invalid name")
 			return
 		}
 
-		reject := s.rejectBeeNameSuggestion(beeName)
+		reject := s.RejectBeeNameSuggestion(beeName)
 		if !reject.Success {
 			responses.SendAndEncodeInternalServerError(w, r, "Failed to reject bee name suggestion")
 			return

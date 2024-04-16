@@ -4,70 +4,71 @@ import (
 	"context"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type Store struct{}
-
-func NewStore() *Store {
-	return &Store{}
+// BNGStore - Bee Name Generator Store
+type BNGStore interface {
+	GetBeeName() database.Response[string]
+	UploadBeeName(beeName string) database.Response[string]
+	DeleteBeeName(beeName string) database.Response[string]
+	SubmitBeeName(beeName string) database.Response[string]
+	GetBeeNameSuggestions(amount int64) database.Response[[]string]
+	AcceptBeeNameSuggestion(beeName string) database.Response[string]
+	RejectBeeNameSuggestion(beeName string) database.Response[string]
 }
 
-// getBeeName returns a random bee name from the database
-func (s *Store) getBeeName() database.Response[string] {
-	db := database.GetDB("bee_name_generator")
-	defer db.Close()
+// store - Bee Name Generator Store PG implementation
+type store struct {
+	db *pgxpool.Pool
+}
 
+// NewStore - Create a new bee name generator store
+func NewStore(db *pgxpool.Pool) *store {
+	return &store{db: db}
+}
+
+// GetBeeName returns a random bee name from the database
+func (s *store) GetBeeName() database.Response[string] {
 	var beeName string
-	err := db.QueryRow(context.Background(), "SELECT name FROM bee_name ORDER BY random() LIMIT 1").Scan(&beeName)
+	err := s.db.QueryRow(context.Background(), "SELECT name FROM bee_name ORDER BY random() LIMIT 1").Scan(&beeName)
 	if err != nil {
 		return database.ErrorResponse[string]("Failed to get bee name", err)
 	}
 	return database.SuccessResponse(beeName)
 }
 
-// uploadBeeName uploads a bee name to the database
-func (s *Store) uploadBeeName(beeName string) database.Response[string] {
-	db := database.GetDB("bee_name_generator")
-	defer db.Close()
-
-	_, err := db.Exec(context.Background(), "INSERT INTO bee_name (name) VALUES ($1)", beeName)
+// UploadBeeName uploads a bee name to the database
+func (s *store) UploadBeeName(beeName string) database.Response[string] {
+	_, err := s.db.Exec(context.Background(), "INSERT INTO bee_name (name) VALUES ($1)", beeName)
 	if err != nil {
 		return database.ErrorResponse[string]("Failed to upload bee name", err)
 	}
 	return database.SuccessResponse(beeName)
 }
 
-// deleteBeeName deletes a bee name from the database
-func (s *Store) deleteBeeName(beeName string) database.Response[string] {
-	db := database.GetDB("bee_name_generator")
-	defer db.Close()
-
-	_, err := db.Exec(context.Background(), "DELETE FROM bee_name WHERE name = $1", beeName)
+// DeleteBeeName deletes a bee name from the database
+func (s *store) DeleteBeeName(beeName string) database.Response[string] {
+	_, err := s.db.Exec(context.Background(), "DELETE FROM bee_name WHERE name = $1", beeName)
 	if err != nil {
 		return database.ErrorResponse[string]("Failed to delete bee name", err)
 	}
 	return database.SuccessResponse(beeName)
 }
 
-// submitBeeName submits a bee name to the suggestion database
-func (s *Store) submitBeeName(beeName string) database.Response[string] {
-	db := database.GetDB("bee_name_generator")
-	defer db.Close()
-
-	_, err := db.Exec(context.Background(), "INSERT INTO bee_name_suggestion (name) VALUES ($1)", beeName)
+// SubmitBeeName submits a bee name to the suggestion database
+func (s *store) SubmitBeeName(beeName string) database.Response[string] {
+	_, err := s.db.Exec(context.Background(), "INSERT INTO bee_name_suggestion (name) VALUES ($1)", beeName)
 	if err != nil {
 		return database.ErrorResponse[string]("Failed to submit bee name", err)
 	}
 	return database.SuccessResponse(beeName)
 }
 
-// getBeeNameSuggestions returns a list of bee name suggestions
-func (s *Store) getBeeNameSuggestions(amount int64) database.Response[[]string] {
-	db := database.GetDB("bee_name_generator")
-	defer db.Close()
-
+// GetBeeNameSuggestions returns a list of bee name suggestions
+func (s *store) GetBeeNameSuggestions(amount int64) database.Response[[]string] {
 	var beeNames []string
-	rows, err := db.Query(context.Background(), "SELECT name FROM bee_name_suggestion ORDER BY random() LIMIT $1", amount)
+	rows, err := s.db.Query(context.Background(), "SELECT name FROM bee_name_suggestion ORDER BY random() LIMIT $1", amount)
 	if err != nil {
 		return database.ErrorResponse[[]string]("Failed to get bee name suggestions", err)
 	}
@@ -88,29 +89,23 @@ func (s *Store) getBeeNameSuggestions(amount int64) database.Response[[]string] 
 	return database.SuccessResponse(beeNames)
 }
 
-// acceptBeeNameSuggestion accepts a bee name suggestion
-func (s *Store) acceptBeeNameSuggestion(beeName string) database.Response[string] {
-	db := database.GetDB("bee_name_generator")
-	defer db.Close()
-
-	_, err := db.Exec(context.Background(), "INSERT INTO bee_name (name) VALUES ($1)", beeName)
+// AcceptBeeNameSuggestion accepts a bee name suggestion
+func (s *store) AcceptBeeNameSuggestion(beeName string) database.Response[string] {
+	_, err := s.db.Exec(context.Background(), "INSERT INTO bee_name (name) VALUES ($1)", beeName)
 	if err != nil {
 		return database.ErrorResponse[string]("Failed to accept bee name suggestion", err)
 	}
 
-	_, err = db.Exec(context.Background(), "DELETE FROM bee_name_suggestion WHERE name = $1", beeName)
+	_, err = s.db.Exec(context.Background(), "DELETE FROM bee_name_suggestion WHERE name = $1", beeName)
 	if err != nil {
 		return database.ErrorResponse[string]("Failed to accept bee name suggestion", err)
 	}
 	return database.SuccessResponse(beeName)
 }
 
-// rejectBeeNameSuggestion rejects a bee name suggestion
-func (s *Store) rejectBeeNameSuggestion(beeName string) database.Response[string] {
-	db := database.GetDB("bee_name_generator")
-	defer db.Close()
-
-	_, err := db.Exec(context.Background(), "DELETE FROM bee_name_suggestion WHERE name = $1", beeName)
+// RejectBeeNameSuggestion rejects a bee name suggestion
+func (s *store) RejectBeeNameSuggestion(beeName string) database.Response[string] {
+	_, err := s.db.Exec(context.Background(), "DELETE FROM bee_name_suggestion WHERE name = $1", beeName)
 	if err != nil {
 		return database.ErrorResponse[string]("Failed to reject bee name suggestion", err)
 	}
