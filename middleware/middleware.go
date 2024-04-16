@@ -1,4 +1,4 @@
-package middleware
+package mw
 
 import (
 	"context"
@@ -64,8 +64,8 @@ func RequestLoggerMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// AuthMiddleware - Authenticate requests
-func AuthMiddleware(next http.Handler) http.Handler {
+// Auth - Authenticate requests
+func Auth(next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {

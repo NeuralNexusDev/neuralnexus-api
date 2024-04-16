@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/middleware"
+	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
@@ -14,11 +14,11 @@ import (
 // -------------- Routes --------------
 
 // ApplyRoutes applies the auth routes
-func ApplyRoutes(mux, authedMux *http.ServeMux) (*http.ServeMux, *http.ServeMux) {
+func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 	mux.HandleFunc("POST /api/v1/auth/login", LoginHandler)
-	authedMux.HandleFunc("POST /api/v1/auth/logout", LogoutHandler)
+	mux.Handle("POST /api/v1/auth/logout", mw.Auth(LogoutHandler))
 	mux.HandleFunc("/api/v1/auth/discord", DiscordOAuthHandler)
-	return mux, authedMux
+	return mux
 }
 
 // LoginHandler handles the login route
@@ -58,7 +58,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 // LogoutHandler handles the logout route
 func LogoutHandler(w http.ResponseWriter, r *http.Request) {
-	session := r.Context().Value(middleware.SessionKey).(auth.Session)
+	session := r.Context().Value(mw.SessionKey).(auth.Session)
 	auth.DeleteSessionFromCache(session.ID)
 	responses.SendAndEncodeStruct(w, r, http.StatusOK, session)
 	auth.DeleteSessionInDB(session.ID)

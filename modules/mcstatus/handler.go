@@ -11,11 +11,11 @@ import (
 )
 
 // ApplyRoutes - Apply the routes
-func ApplyRoutes(mux *http.ServeMux, authedMux *http.ServeMux) (*http.ServeMux, *http.ServeMux) {
+func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 	service := NewService()
 	mux.HandleFunc("/api/v1/mcstatus/{address}", GetServerStatus(service))
 	mux.HandleFunc("/api/v1/mcstatus/icon/{address}", GetIcon(service))
-	return mux, authedMux
+	return mux
 }
 
 // Route that returns the server status

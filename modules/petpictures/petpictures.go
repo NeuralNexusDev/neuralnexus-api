@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/middleware"
+	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
@@ -312,24 +312,24 @@ func UploadPetPicture(file *os.File, primarySubject int, othersSubjects []int, a
 // -------------- Routes --------------
 
 // ApplyRoutes - Apply routes to the router
-func ApplyRoutes(mux *http.ServeMux, authedMux *http.ServeMux) (*http.ServeMux, *http.ServeMux) {
-	authedMux.HandleFunc("POST /api/v1/pet-pictures/pets/{name}", CreatePetHandler)
-	authedMux.HandleFunc("POST /api/v1/pet-pictures/pets", CreatePetHandler)
-	mux.HandleFunc("GET /api/v1/pet-pictures/pets/{id}", GetPetHandler)
-	mux.HandleFunc("GET /api/v1/pet-pictures/pets", GetPetHandler)
-	authedMux.HandleFunc("PUT /api/v1/pet-pictures/pets", UpdatePetHandler)
-	mux.HandleFunc("GET /api/v1/pet-pictures/pictures/random", GetRandPetPictureByNameHandler)
-	mux.HandleFunc("GET /api/v1/pet-pictures/pictures/{id}", GetPetPictureHandler)
-	mux.HandleFunc("GET /api/v1/pet-pictures/pictures", GetPetPictureHandler)
-	authedMux.HandleFunc("PUT /api/v1/pet-pictures/pictures", UpdatePetPictureHandler)
-	authedMux.HandleFunc("DELETE /api/v1/pet-pictures/pictures/{id}", DeletePetPictureHandler)
-	authedMux.HandleFunc("DELETE /api/v1/pet-pictures/pictures", DeletePetPictureHandler)
-	return mux, authedMux
+func ApplyRoutes(router *http.ServeMux) *http.ServeMux {
+	router.HandleFunc("POST /api/v1/pet-pictures/pets/{name}", mw.Auth(CreatePetHandler))
+	router.HandleFunc("POST /api/v1/pet-pictures/pets", mw.Auth(CreatePetHandler))
+	router.HandleFunc("GET /api/v1/pet-pictures/pets/{id}", GetPetHandler)
+	router.HandleFunc("GET /api/v1/pet-pictures/pets", GetPetHandler)
+	router.HandleFunc("PUT /api/v1/pet-pictures/pets", mw.Auth(UpdatePetHandler))
+	router.HandleFunc("GET /api/v1/pet-pictures/pictures/random", GetRandPetPictureByNameHandler)
+	router.HandleFunc("GET /api/v1/pet-pictures/pictures/{id}", GetPetPictureHandler)
+	router.HandleFunc("GET /api/v1/pet-pictures/pictures", GetPetPictureHandler)
+	router.HandleFunc("PUT /api/v1/pet-pictures/pictures", mw.Auth(UpdatePetPictureHandler))
+	router.HandleFunc("DELETE /api/v1/pet-pictures/pictures/{id}", mw.Auth(DeletePetPictureHandler))
+	router.HandleFunc("DELETE /api/v1/pet-pictures/pictures", mw.Auth(DeletePetPictureHandler))
+	return router
 }
 
 // CreatePetHandler - Create a new pet
 func CreatePetHandler(w http.ResponseWriter, r *http.Request) {
-	session := r.Context().Value(middleware.SessionKey).(auth.Session)
+	session := r.Context().Value(mw.SessionKey).(auth.Session)
 	if !session.HasPermission(auth.ScopeAdminPetPictures) {
 		responses.SendAndEncodeForbidden(w, r, "You do not have permission to create a pet")
 		return
@@ -396,7 +396,7 @@ func UpdatePetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session := r.Context().Value(middleware.SessionKey).(auth.Session)
+	session := r.Context().Value(mw.SessionKey).(auth.Session)
 	if !session.HasPermission(auth.ScopePetPictures(pet.Name)) {
 		responses.SendAndEncodeForbidden(w, r, "You do not have permission to update this pet")
 		return
@@ -471,7 +471,7 @@ func UpdatePetPictureHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session := r.Context().Value(middleware.SessionKey).(auth.Session)
+	session := r.Context().Value(mw.SessionKey).(auth.Session)
 	if !session.HasPermission(auth.ScopePetPictures(pet.Data.Name)) {
 		responses.SendAndEncodeForbidden(w, r, "You do not have permission to update this pet")
 		return
@@ -512,7 +512,7 @@ func DeletePetPictureHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session := r.Context().Value(middleware.SessionKey).(auth.Session)
+	session := r.Context().Value(mw.SessionKey).(auth.Session)
 	if !session.HasPermission(auth.ScopePetPictures(pet.Data.Name)) {
 		responses.SendAndEncodeForbidden(w, r, "You do not have permission to update this pet")
 		return

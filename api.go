@@ -8,7 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/middleware"
+	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	authroutes "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/routes"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/beenamegenerator"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/cct_turtle"
@@ -21,7 +21,6 @@ import (
 	"github.com/rs/cors"
 )
 
-// -------------- Structs --------------
 type APIServer struct {
 	Address  string
 	UsingUDS bool
@@ -36,21 +35,14 @@ func NewAPIServer(address string, usingUDS bool) *APIServer {
 }
 
 // ApplyRoutes - Apply the routes to the API server
-func ApplyRoutes(mux *http.ServeMux, authedMux *http.ServeMux) (*http.ServeMux, *http.ServeMux) {
-	mux.Handle("/public/", http.StripPrefix("/public/", http.FileServer(http.Dir("./public/"))))
-	mux.HandleFunc("/docs", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "./public/docs.html")
-	})
-	mux.HandleFunc("/api/v1", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "./public/docs.html")
-	})
-	return mux, authedMux
+func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
+
+	return mux
 }
 
 // Setup - Setup the API server
 func (s *APIServer) Setup() http.Handler {
 	routerStack := routes.CreateStack(
-		ApplyRoutes,
 		authroutes.ApplyRoutes,
 		beenamegenerator.ApplyRoutes,
 		cct_turtle.ApplyRoutes,
@@ -61,16 +53,13 @@ func (s *APIServer) Setup() http.Handler {
 		teapot.ApplyRoutes,
 	)
 
-	middlewareStack := middleware.CreateStack(
-		middleware.RequestLoggerMiddleware,
+	middlewareStack := mw.CreateStack(
+		mw.RequestLoggerMiddleware,
 		cors.AllowAll().Handler,
 	)
 
-	router := http.NewServeMux()
-	authedRouter := http.NewServeMux()
-	router, authedRouter = routerStack(router, authedRouter)
-	router.Handle("/", middleware.AuthMiddleware(authedRouter))
-
+	router := routerStack(http.NewServeMux())
+	router.Handle("/", http.FileServer(http.Dir("./public")))
 	return middlewareStack(router)
 }
 

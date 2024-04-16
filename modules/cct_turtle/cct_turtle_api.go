@@ -54,7 +54,7 @@ type Item struct {
 
 // -------------- Routes --------------
 // ApplyRoutes - Apply the routes
-func ApplyRoutes(mux *http.ServeMux, authedMux *http.ServeMux) (*http.ServeMux, *http.ServeMux) {
+func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 	mux.HandleFunc("GET /api/v1/ws/v1/cct-turtle/{label}", WebSocketTurtleHandler)
 	// e.GET("/api/v1/cct-turtle/status", GetTurtleStatus)
 	// e.GET("/api/v1/cct-turtle/status/:label", GetTurtleStatus)
@@ -78,7 +78,7 @@ func ApplyRoutes(mux *http.ServeMux, authedMux *http.ServeMux) (*http.ServeMux, 
 	mux.HandleFunc("GET /api/v1/cct-turtle/dig-up/{label}", DigTurtleUp)
 	mux.HandleFunc("GET /api/v1/cct-turtle/dig-down", DigTurtleDown)
 	mux.HandleFunc("GET /api/v1/cct-turtle/dig-down/{label}", DigTurtleDown)
-	return mux, authedMux
+	return mux
 }
 
 // GetTurtleCode - Get the turtle code

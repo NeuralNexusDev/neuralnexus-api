@@ -9,7 +9,7 @@ import (
 // -------------- Routes --------------
 
 // ApplyRoutes - Apply the routes
-func ApplyRoutes(mux, authedMux *http.ServeMux) (*http.ServeMux, *http.ServeMux) {
+func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 	mux.HandleFunc("GET /api/v1/teapot", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		responses.NewProblemResponse(
 			"about:blank",
@@ -19,5 +19,5 @@ func ApplyRoutes(mux, authedMux *http.ServeMux) (*http.ServeMux, *http.ServeMux)
 			"https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/418",
 		).SendAndEncodeProblem(w, r)
 	}))
-	return mux, authedMux
+	return mux
 }

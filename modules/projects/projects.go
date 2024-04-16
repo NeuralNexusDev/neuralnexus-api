@@ -107,9 +107,9 @@ func ConvertToFMLFormat(gitHubReleasesURL string, releases []Release) map[string
 // -------------- Routes --------------
 
 // ApplyRoutes - Apply the routes
-func ApplyRoutes(mux, authedMux *http.ServeMux) (*http.ServeMux, *http.ServeMux) {
+func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 	mux.HandleFunc("GET /api/v1/projects/releases/{group}/{project}", GetReleasesHandler)
-	return mux, authedMux
+	return mux
 }
 
 // GetReleasesHandler - Get the releases for a project
