@@ -30,8 +30,7 @@ func SuccessResponse[T any](data T) Response[T] {
 
 // ErrorResponse - Create a new error response
 func ErrorResponse[T any](message string, err error) Response[T] {
-	log.Println(message + ":")
-	log.Println(err)
+	log.Println("[Error]: " + message + ":\n\t" + err.Error())
 	return Response[T]{
 		Success: false,
 		Message: message,
