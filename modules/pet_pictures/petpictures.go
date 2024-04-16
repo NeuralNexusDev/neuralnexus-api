@@ -1,4 +1,4 @@
-package pet_pictures
+package petpictures
 
 import (
 	"bytes"

@@ -1,4 +1,4 @@
-package cct_turtle
+package cctturtle
 
 import (
 	"encoding/json"

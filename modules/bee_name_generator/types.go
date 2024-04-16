@@ -1,4 +1,4 @@
-package bee_name_generator
+package beenamegenerator
 
 // NameResponse struct
 type NameResponse struct {
