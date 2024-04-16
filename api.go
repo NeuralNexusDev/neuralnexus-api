@@ -10,10 +10,10 @@ import (
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	authroutes "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/routes"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/beenamegenerator"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/bee_name_generator"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/cct_turtle"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/mcstatus"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/petpictures"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/pet_pictures"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/projects"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/switchboard"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/teapot"
@@ -44,10 +44,10 @@ func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 func (s *APIServer) Setup() http.Handler {
 	routerStack := routes.CreateStack(
 		authroutes.ApplyRoutes,
-		beenamegenerator.ApplyRoutes,
+		bee_name_generator.ApplyRoutes,
 		cct_turtle.ApplyRoutes,
 		mcstatus.ApplyRoutes,
-		petpictures.ApplyRoutes,
+		pet_pictures.ApplyRoutes,
 		projects.ApplyRoutes,
 		switchboard.ApplyRoutes,
 		teapot.ApplyRoutes,
