@@ -30,12 +30,14 @@ func NewProblemResponse(Type string, Status int, Title string, Detail string, In
 
 // SendAndEncodeProblem -- Send a ProblemResponse as JSON or XML
 func (problem *ProblemResponse) SendAndEncodeProblem(w http.ResponseWriter, r *http.Request) {
+	var problemBytes []byte
 	if r.Header.Get("Accept") == "application/xml" {
 		w.Header().Set("Content-Type", "application/problem+xml")
-		xml.NewEncoder(w).Encode(problem)
+		problemBytes, _ = xml.Marshal(problem)
 	} else {
 		w.Header().Set("Content-Type", "application/problem+json")
-		json.NewEncoder(w).Encode(problem)
+		problemBytes, _ = json.Marshal(problem)
 	}
 	w.WriteHeader(problem.Status)
+	w.Write(problemBytes)
 }

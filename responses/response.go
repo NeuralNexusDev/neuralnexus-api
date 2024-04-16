@@ -10,14 +10,16 @@ import (
 
 // SendAndEncodeStruct -- Send a struct as JSON or XML
 func SendAndEncodeStruct[T any](w http.ResponseWriter, r *http.Request, statusCode int, data T) {
+	var structBytes []byte
 	if r.Header.Get("Accept") == "application/xml" {
 		w.Header().Set("Content-Type", "application/xml")
-		xml.NewEncoder(w).Encode(data)
+		structBytes, _ = xml.Marshal(data)
 	} else {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(data)
+		structBytes, _ = json.Marshal(data)
 	}
 	w.WriteHeader(statusCode)
+	w.Write(structBytes)
 }
 
 // DecodeStruct -- Decode a struct from JSON or XML

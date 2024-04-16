@@ -12,18 +12,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// WrappedWriter - Wrapper for http.ResponseWriter
-type WrappedWriter struct {
-	http.ResponseWriter
-	statusCode int
-}
-
-// WriteHeader - Write the header
-func (w *WrappedWriter) WriteHeader(statusCode int) {
-	w.ResponseWriter.WriteHeader(statusCode)
-	w.statusCode = statusCode
-}
-
 // Middleware - Middleware type
 type Middleware func(http.Handler) http.Handler
 
@@ -43,6 +31,18 @@ func CreateStack(middlewares ...Middleware) Middleware {
 		}
 		return next
 	}
+}
+
+// WrappedWriter - Wrapper for http.ResponseWriter
+type WrappedWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+// WriteHeader - Write the header
+func (w *WrappedWriter) WriteHeader(statusCode int) {
+	w.statusCode = statusCode
+	w.ResponseWriter.WriteHeader(statusCode)
 }
 
 // RequestLoggerMiddleware - Log all requests
