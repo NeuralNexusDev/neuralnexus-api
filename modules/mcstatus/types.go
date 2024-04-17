@@ -1,5 +1,7 @@
 package mcstatus
 
+import gss "github.com/NeuralNexusDev/neuralnexus-api/modules/game_server_status"
+
 var (
 	SERVER_URL     string = "https://api.neuralnexus.dev/api/v1/mcstatus"
 	defaultIcon, _        = loadImgFromFile("public/mcstatus/icons/default.png")
@@ -22,7 +24,7 @@ func NewOfflineServerStatus(isBedrock bool) StausResponse {
 		Map:           "",
 		MaxPlayers:    0,
 		OnlinePlayers: 0,
-		Players:       []Player{},
+		Players:       []gss.Player{},
 		Connect:       "",
 		Version:       "",
 	}
@@ -37,23 +39,17 @@ func NewOfflineServerStatus(isBedrock bool) StausResponse {
 	return status
 }
 
-// Simple Player definition
-type Player struct {
-	Name string `json:"name" xml:"name"`
-	ID   string `json:"id" xml:"id"`
-}
-
 // General status response
 type StausResponse struct {
-	Name          string   `json:"name" xml:"name"`
-	Map           string   `json:"map" xml:"map"`
-	MaxPlayers    int      `json:"maxplayers" xml:"maxplayers"`
-	OnlinePlayers int      `json:"onlineplayers" xml:"onlineplayers"`
-	Players       []Player `json:"players" xml:"players"`
-	Connect       string   `json:"connect" xml:"connect"`
-	Version       string   `json:"version" xml:"version"`
-	Favicon       string   `json:"favicon" xml:"favicon"`
-	ServerType    string   `json:"server_type" xml:"server_type"`
+	Name          string       `json:"name" xml:"name"`
+	Map           string       `json:"map" xml:"map"`
+	MaxPlayers    int          `json:"maxplayers" xml:"maxplayers"`
+	OnlinePlayers int          `json:"onlineplayers" xml:"onlineplayers"`
+	Players       []gss.Player `json:"players" xml:"players"`
+	Connect       string       `json:"connect" xml:"connect"`
+	Version       string       `json:"version" xml:"version"`
+	Favicon       string       `json:"favicon" xml:"favicon"`
+	ServerType    string       `json:"server_type" xml:"server_type"`
 }
 
 // Error response

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	gss "github.com/NeuralNexusDev/neuralnexus-api/modules/game_server_status"
 	"github.com/ZeroErrors/go-bedrockping"
 	"github.com/dreamscached/minequery/v2"
 )
@@ -118,7 +119,7 @@ func (si ServerInfo) BedrockServerStatus() (StausResponse, image.Image, error) {
 		Map:           mapName,
 		MaxPlayers:    respB.MaxPlayers,
 		OnlinePlayers: respB.PlayerCount,
-		Players:       []Player{},
+		Players:       []gss.Player{},
 		Connect:       connect,
 		Version:       respB.MCPEVersion,
 		Favicon:       NewOfflineServerStatus(true).Favicon,
@@ -141,7 +142,7 @@ func (si *ServerInfo) JavaServerStatus() (StausResponse, image.Image, error) {
 		Map:           "",
 		MaxPlayers:    0,
 		OnlinePlayers: 0,
-		Players:       []Player{},
+		Players:       []gss.Player{},
 		Connect:       si.Address + ":" + fmt.Sprint(si.Port),
 		Version:       "",
 		Favicon:       "",
@@ -200,10 +201,10 @@ func (si *ServerInfo) JavaServerStatus() (StausResponse, image.Image, error) {
 }
 
 // Parse players from Ping17 response
-func parsePlayers17(players []minequery.PlayerEntry17) []Player {
-	var playerList []Player
+func parsePlayers17(players []minequery.PlayerEntry17) []gss.Player {
+	var playerList []gss.Player
 	for _, player := range players {
-		playerList = append(playerList, Player{
+		playerList = append(playerList, gss.Player{
 			Name: player.Nickname,
 			ID:   player.UUID.String(),
 		})
@@ -212,10 +213,10 @@ func parsePlayers17(players []minequery.PlayerEntry17) []Player {
 }
 
 // Parse players from Query response
-func parsePlayersQuery(players []string) []Player {
-	var playerList []Player = []Player{}
+func parsePlayersQuery(players []string) []gss.Player {
+	var playerList []gss.Player = []gss.Player{}
 	for _, player := range players {
-		playerList = append(playerList, Player{
+		playerList = append(playerList, gss.Player{
 			Name: player,
 			ID:   "",
 		})
