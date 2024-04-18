@@ -1,4 +1,4 @@
-package account_linking
+package accountlinking
 
 import (
 	"encoding/json"

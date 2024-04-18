@@ -120,8 +120,7 @@ func GetAccountByID(userID uuid.UUID) database.Response[Account] {
 		return database.ErrorResponse[Account]("Unable to get account", err)
 	}
 
-	var account *Account
-	account, err = pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Account])
+	account, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Account])
 	if err != nil {
 		return database.ErrorResponse[Account]("Unable to get account", err)
 	}
@@ -138,8 +137,7 @@ func GetAccountByUsername(username string) database.Response[Account] {
 		return database.ErrorResponse[Account]("Unable to get account", err)
 	}
 
-	var account *Account
-	account, err = pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Account])
+	account, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Account])
 	if err != nil {
 		return database.ErrorResponse[Account]("Unable to get account", err)
 	}
@@ -156,8 +154,7 @@ func GetAccountByEmail(email string) database.Response[Account] {
 		return database.ErrorResponse[Account]("Unable to get account", err)
 	}
 
-	var account *Account
-	account, err = pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Account])
+	account, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Account])
 	if err != nil {
 		return database.ErrorResponse[Account]("Unable to get account", err)
 	}
