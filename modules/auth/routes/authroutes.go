@@ -18,7 +18,7 @@ import (
 func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 	mux.HandleFunc("POST /api/v1/auth/login", LoginHandler)
 	mux.Handle("POST /api/v1/auth/logout", mw.Auth(LogoutHandler))
-	mux.HandleFunc("/api/v1/auth/discord", DiscordOAuthHandler)
+	mux.HandleFunc("/api/oauth", OAuthHandler)
 	return mux
 }
 
@@ -65,8 +65,8 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	auth.DeleteSessionInDB(session.ID)
 }
 
-// DiscordOAuthHandler handles the Discord OAuth route
-func DiscordOAuthHandler(w http.ResponseWriter, r *http.Request) {
+// OAuthHandler handles the Discord OAuth route
+func OAuthHandler(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
 	if code == "" {
 		responses.SendAndEncodeBadRequest(w, r, "Invalid request")
