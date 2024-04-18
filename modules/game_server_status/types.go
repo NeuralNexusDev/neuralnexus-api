@@ -1,12 +1,23 @@
 package gss
 
+import "github.com/NeuralNexusDev/neuralnexus-api/modules/mcstatus"
+
+// ServerStatus - Server status interface
+type ServerStatus interface {
+	Normalize() *GameServerStatus
+}
+
 // GameServerStatus - Normalized game server status
 type GameServerStatus struct {
-	HostName   string
-	MapName    string
-	MaxPlayers int
-	NumPlayers int
-	Players    []string
+	Host       string      `json:"host_name" xml:"host_name"`
+	Port       int         `json:"port" xml:"port"`
+	Name       string      `json:"name" xml:"name"`
+	MapName    string      `json:"map_name" xml:"map_name"`
+	MaxPlayers int         `json:"max_players" xml:"max_players"`
+	NumPlayers int         `json:"num_players" xml:"num_players"`
+	Players    []Player    `json:"players" xml:"players"`
+	QueryType  QueryType   `json:"query_type" xml:"query_type"`
+	Raw        interface{} `json:"raw,omitempty" xml:"raw,omitempty"`
 }
 
 // Simple Player definition
@@ -15,56 +26,131 @@ type Player struct {
 	ID   string `json:"id" xml:"id"`
 }
 
+// QueryType - Query type enum
+type QueryType string
+
+const (
+	// QueryTypeMinecraft - Query type Minecraft
+	QueryTypeMinecraft QueryType = "minecraft"
+	// QueryTypeGameQ - Query type GameQ
+	QueryTypeGameQ QueryType = "gameq"
+	// QueryTypeGameDig - Query type GameDig
+	QueryTypeGameDig QueryType = "gamedig"
+)
+
 // GameQResponse - GameQ REST API response
 type GameQResponse struct {
-	Address    string   `json:"gq_address"`
-	Dedicated  string   `json:"gq_dedicated"`
-	GameType   string   `json:"gq_gametype"`
-	HostName   string   `json:"gq_hostname"`
-	JoinLink   string   `json:"gq_joinlink"`
-	MapName    string   `json:"gq_mapname"`
-	MaxPlayers int      `json:"gq_maxplayers"`
-	Name       string   `json:"gq_name"`
-	NumPlayers int      `json:"gq_numplayers"`
-	Online     bool     `json:"gq_online"`
-	Password   string   `json:"gq_password"`
-	PortClient int      `json:"gq_port_client"`
-	PortQuery  int      `json:"gq_port_query"`
-	Protocol   string   `json:"gq_protocol"`
-	Transport  string   `json:"gq_transport"`
-	Type       string   `json:"gq_type"`
-	Players    []string `json:"players"`
-	Teams      []string `json:"teams"`
+	Address    string   `json:"gq_address" xml:"gq_address"`
+	Dedicated  string   `json:"gq_dedicated" xml:"gq_dedicated"`
+	GameType   string   `json:"gq_gametype" xml:"gq_gametype"`
+	HostName   string   `json:"gq_hostname" xml:"gq_hostname"`
+	JoinLink   string   `json:"gq_joinlink" xml:"gq_joinlink"`
+	MapName    string   `json:"gq_mapname" xml:"gq_mapname"`
+	MaxPlayers int      `json:"gq_maxplayers" xml:"gq_maxplayers"`
+	Name       string   `json:"gq_name" xml:"gq_name"`
+	NumPlayers int      `json:"gq_numplayers" xml:"gq_numplayers"`
+	Online     bool     `json:"gq_online" xml:"gq_online"`
+	Password   string   `json:"gq_password" xml:"gq_password"`
+	PortClient int      `json:"gq_port_client" xml:"gq_port_client"`
+	PortQuery  int      `json:"gq_port_query" xml:"gq_port_query"`
+	Protocol   string   `json:"gq_protocol" xml:"gq_protocol"`
+	Transport  string   `json:"gq_transport" xml:"gq_transport"`
+	Type       string   `json:"gq_type" xml:"gq_type"`
+	Players    []string `json:"players" xml:"players"`
+	Teams      []string `json:"teams" xml:"teams"`
+}
+
+// Type alias
+type mcstatusResponse mcstatus.MCStatusResponse
+
+// Normalize - Normalize Minecraft response
+func (mc *mcstatusResponse) Normalize() *GameServerStatus {
+	players := make([]Player, len(mc.Players))
+	for i, v := range mc.Players {
+		players[i] = Player{Name: v.Name, ID: v.UUID.String()}
+	}
+
+	return &GameServerStatus{
+		Host:       mc.Host,
+		Port:       mc.Port,
+		Name:       mc.Name,
+		MapName:    mc.Map,
+		MaxPlayers: mc.MaxPlayers,
+		NumPlayers: mc.NumPlayers,
+		Players:    players,
+		QueryType:  QueryTypeMinecraft,
+		Raw:        mc.Raw,
+	}
+}
+
+// Normalize - Normalize GameQ response
+func (gq *GameQResponse) Normalize() *GameServerStatus {
+	players := make([]Player, len(gq.Players))
+	for i, v := range gq.Players {
+		players[i] = Player{Name: v}
+	}
+
+	return &GameServerStatus{
+		Host:       gq.HostName,
+		Port:       gq.PortQuery,
+		Name:       gq.Name,
+		MapName:    gq.MapName,
+		MaxPlayers: gq.MaxPlayers,
+		NumPlayers: gq.NumPlayers,
+		Players:    players,
+		QueryType:  QueryTypeGameQ,
+		Raw:        gq,
+	}
 }
 
 // GameDigResponse - GameDig REST API response
 type GameDigResponse struct {
-	Name       string `json:"name"`
-	Map        string `json:"map"`
-	Password   bool   `json:"password"`
-	NumPlayers int    `json:"numplayers"`
-	MaxPlayers int    `json:"maxplayers"`
-	Players    []struct {
-		Name string      `json:"name"`
-		Raw  interface{} `json:"raw"`
-	} `json:"players"`
-	Bots []struct {
-		Name string      `json:"name"`
-		Raw  interface{} `json:"raw"`
-	} `json:"bots"`
-	Connect   string      `json:"connect"`
-	Ping      int         `json:"ping"`
-	QueryPort int         `json:"queryPort"`
-	Raw       interface{} `json:"raw"`
+	Name       string          `json:"name" xml:"name"`
+	Map        string          `json:"map" xml:"map"`
+	Password   bool            `json:"password" xml:"password"`
+	NumPlayers int             `json:"numplayers" xml:"numplayers"`
+	MaxPlayers int             `json:"maxplayers" xml:"maxplayers"`
+	Players    []GameDigPlayer `json:"players" xml:"players"`
+	Bots       []GameDigPlayer `json:"bots" xml:"bots"`
+	Connect    string          `json:"connect" xml:"connect"`
+	Ping       int             `json:"ping" xml:"ping"`
+	QueryPort  int             `json:"queryPort" xml:"queryPort"`
+	Raw        interface{}     `json:"raw" xml:"raw"`
+}
+
+// GameDigPlayer - GameDig player
+type GameDigPlayer struct {
+	Name string      `json:"name" xml:"name"`
+	Raw  interface{} `json:"raw" xml:"raw"`
+}
+
+// Normalize - Normalize GameDig response
+func (gd *GameDigResponse) Normalize() *GameServerStatus {
+	players := make([]Player, len(gd.Players))
+	for i, v := range gd.Players {
+		players[i] = Player{Name: v.Name}
+	}
+
+	return &GameServerStatus{
+		Host:       gd.Connect,
+		Port:       gd.QueryPort,
+		Name:       gd.Name,
+		MapName:    gd.Map,
+		MaxPlayers: gd.MaxPlayers,
+		NumPlayers: gd.NumPlayers,
+		Players:    players,
+		QueryType:  QueryTypeGameDig,
+		Raw:        gd,
+	}
 }
 
 // Minecraft List
-var MinecraftList = []string{
+var MinecraftList = [...]string{
 	"minecraft", "bedrock", "minecraftpe", "minecraftbe",
 }
 
 // List of supported GameQ games
-var GameQList = []string{
+var GameQList = [...]string{
 	"aa3",
 	"aapg",
 	"arkse",
@@ -215,7 +301,7 @@ var GameQList = []string{
 }
 
 // List of supported GameDig games
-var GameDigList = []string{
+var GameDigList = [...]string{
 	"a2oa",
 	"aaa",
 	"aapg",
