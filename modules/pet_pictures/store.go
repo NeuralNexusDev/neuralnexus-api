@@ -31,7 +31,7 @@ type PetPicStore interface {
 	CreatePet(name string) (*Pet, error)
 	GetPet(id int) (*Pet, error)
 	GetPetByName(name string) (*Pet, error)
-	UpdatePet(pet Pet) (*Pet, error)
+	UpdatePet(pet *Pet) (*Pet, error)
 	CreatePetPicture(id string, fileExt string, primarySubject int, othersSubjects []int, aliases []string) (*PetPicture, error)
 	GetRandPetPictureByName(name string) (*PetPicture, error)
 	GetPetPicture(id string) (*PetPicture, error)
@@ -91,7 +91,7 @@ func (s *store) GetPetByName(name string) (*Pet, error) {
 }
 
 // UpdatePet - Update a pet
-func (s *store) UpdatePet(pet Pet) (*Pet, error) {
+func (s *store) UpdatePet(pet *Pet) (*Pet, error) {
 	db := database.GetDB("pet_pictures")
 	defer db.Close()
 
@@ -99,7 +99,7 @@ func (s *store) UpdatePet(pet Pet) (*Pet, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &pet, nil
+	return pet, nil
 }
 
 // CreatePetPicture - Create a new pet picture

@@ -1,7 +1,5 @@
 package petpictures
 
-import "log"
-
 // PetPicture - Pet picture struct
 type PetPicture struct {
 	ID             string   `json:"id" xml:"id" db:"id"`
@@ -22,28 +20,4 @@ type Pet struct {
 	ID             int    `json:"id" xml:"id" db:"id"`
 	Name           string `json:"name" xml:"name" db:"name"`
 	ProfilePicture string `json:"profile_picture" xml:"profile_picture" db:"profile_picture"`
-}
-
-// APIResponse - API response struct
-type APIResponse[T Pet | PetPicture] struct {
-	Success bool
-	Message string
-	Data    T
-}
-
-// APISuccessResponse - Create a new API success response
-func APISuccessResponse[T Pet | PetPicture](data T) APIResponse[T] {
-	return APIResponse[T]{
-		Success: true,
-		Data:    data,
-	}
-}
-
-// APIErrorResponse - Create a new API error response
-func APIErrorResponse[T Pet | PetPicture](message string) APIResponse[T] {
-	log.Println(message + ":")
-	return APIResponse[T]{
-		Success: false,
-		Message: message,
-	}
 }

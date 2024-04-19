@@ -20,8 +20,8 @@ var (
 
 // PetPicService - Pet Picture service
 type PetPicService interface {
-	DB() PetPicStore
-	UploadPetPicture(file *os.File, primarySubject int, othersSubjects []int, aliases []string) APIResponse[PetPicture]
+	GetStore() PetPicStore
+	UploadPetPicture(file *os.File, primarySubject int, othersSubjects []int, aliases []string) (*PetPicture, error)
 }
 
 // service - Pet Picture service implementation
@@ -37,16 +37,16 @@ func NewService(db PetPicStore) PetPicService {
 }
 
 // DB - Get the database
-func (s *service) DB() PetPicStore {
+func (s *service) GetStore() PetPicStore {
 	return s.db
 }
 
 // UploadPetPicture - Upload a pet picture
-func (s *service) UploadPetPicture(file *os.File, primarySubject int, othersSubjects []int, aliases []string) APIResponse[PetPicture] {
+func (s *service) UploadPetPicture(file *os.File, primarySubject int, othersSubjects []int, aliases []string) (*PetPicture, error) {
 	// Get SHA1 hash
 	hash := sha256.New()
 	if _, err := io.Copy(hash, file); err != nil {
-		return APIErrorResponse[PetPicture]("Unable to get SHA256 hash")
+		return nil, err
 	}
 	sha := hex.EncodeToString(hash.Sum(nil))
 
@@ -55,19 +55,19 @@ func (s *service) UploadPetPicture(file *os.File, primarySubject int, othersSubj
 
 	petPicture, err := s.db.CreatePetPicture(sha, fileExt, primarySubject, othersSubjects, aliases)
 	if err != nil {
-		return APIErrorResponse[PetPicture]("Unable to create pet picture")
+		return nil, err
 	}
 
 	// Update file name
 	newFileName := string(petPicture.ID) + "." + fileExt
 	if err := os.Rename(file.Name(), newFileName); err != nil {
-		return APIErrorResponse[PetPicture]("Unable to rename file")
+		return nil, err
 	}
 
 	// Create a new request
 	req, err := http.NewRequest(http.MethodPost, CDN_URL+"/upload", nil)
 	if err != nil {
-		return APIErrorResponse[PetPicture]("Unable to create request")
+		return nil, err
 	}
 
 	// Create a new multipart writer
@@ -81,12 +81,12 @@ func (s *service) UploadPetPicture(file *os.File, primarySubject int, othersSubj
 	// Create a new form file
 	part, err := writer.CreateFormFile("file", newFileName)
 	if err != nil {
-		return APIErrorResponse[PetPicture]("Unable to create form file")
+		return nil, err
 	}
 
 	// Copy the file to the form file
 	if _, err := io.Copy(part, file); err != nil {
-		return APIErrorResponse[PetPicture]("Unable to copy file")
+		return nil, err
 	}
 	writer.Close()
 
@@ -97,7 +97,7 @@ func (s *service) UploadPetPicture(file *os.File, primarySubject int, othersSubj
 	client := &http.Client{}
 	_, err = client.Do(req)
 	if err != nil {
-		return APIErrorResponse[PetPicture]("Unable to send request")
+		return nil, err
 	}
-	return APISuccessResponse(*petPicture)
+	return petPicture, nil
 }

@@ -17,8 +17,9 @@ import (
 // ApplyRoutes applies the auth routes
 func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 	db := database.GetDB("neuralnexus")
+	rdb := database.GetRedis()
 	acctStore := auth.NewAccountStore(db)
-	sessStore := auth.NewSessionStore(db)
+	sessStore := auth.NewSessionStore(db, rdb)
 	alstore := accountlinking.NewStore(db)
 
 	mux.HandleFunc("POST /api/v1/auth/login", LoginHandler(acctStore, sessStore))
@@ -68,7 +69,7 @@ func LoginHandler(as auth.AccountStore, ss auth.SessionStore) http.HandlerFunc {
 // LogoutHandler handles the logout route
 func LogoutHandler(ss auth.SessionStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(auth.Session)
+		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		ss.DeleteSessionFromCache(session.ID)
 		responses.SendAndEncodeStruct(w, r, http.StatusOK, session)
 		ss.DeleteSessionInDB(session.ID)

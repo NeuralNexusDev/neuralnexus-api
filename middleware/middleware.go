@@ -68,7 +68,9 @@ func RequestLoggerMiddleware(next http.Handler) http.Handler {
 // Auth - Authenticate requests
 func Auth(next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		sessService := auth.NewSessionService(auth.NewSessionStore(database.GetDB("neuralnexus")))
+		db := database.GetDB("neuralnexus")
+		rdb := database.GetRedis()
+		sessService := auth.NewSessionService(auth.NewSessionStore(db, rdb))
 
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {

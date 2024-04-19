@@ -41,7 +41,7 @@ func GetBeeNameHandler(s BNGStore) http.HandlerFunc {
 // UploadBeeNameHandler Upload a bee name
 func UploadBeeNameHandler(s BNGStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(auth.Session)
+		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if !session.HasPermission(auth.ScopeAdminBeeNameGenerator) {
 			responses.SendAndEncodeForbidden(w, r, "You do not have permission to upload bee names")
 			return
@@ -66,7 +66,7 @@ func UploadBeeNameHandler(s BNGStore) http.HandlerFunc {
 // DeleteBeeName Delete a bee name
 func DeleteBeeNameHandler(s BNGStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(auth.Session)
+		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if !session.HasPermission(auth.ScopeAdminBeeNameGenerator) {
 			responses.SendAndEncodeForbidden(w, r, "You do not have permission to delete bee names")
 			return
@@ -110,7 +110,7 @@ func SubmitBeeNameHandler(s BNGStore) http.HandlerFunc {
 // GetBeeNameSuggestions Get a list of bee name suggestions
 func GetBeeNameSuggestionsHandler(s BNGStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(auth.Session)
+		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if !session.HasPermission(auth.ScopeAdminBeeNameGenerator) {
 			responses.SendAndEncodeForbidden(w, r, "You do not have permission to get bee name suggestions")
 			return
@@ -143,7 +143,7 @@ func GetBeeNameSuggestionsHandler(s BNGStore) http.HandlerFunc {
 // AcceptBeeNameSuggestionHandler Accept a bee name suggestion
 func AcceptBeeNameSuggestionHandler(s BNGStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(auth.Session)
+		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if !session.HasPermission(auth.ScopeAdminBeeNameGenerator) {
 			responses.SendAndEncodeForbidden(w, r, "You do not have permission to accept bee name suggestions")
 			return
@@ -168,7 +168,7 @@ func AcceptBeeNameSuggestionHandler(s BNGStore) http.HandlerFunc {
 // RejectBeeNameSuggestionHandler Reject a bee name suggestion
 func RejectBeeNameSuggestionHandler(s BNGStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(auth.Session)
+		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if !session.HasPermission(auth.ScopeAdminBeeNameGenerator) {
 			responses.SendAndEncodeForbidden(w, r, "You do not have permission to reject bee name suggestions")
 			return
