@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
+	sess "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/google/uuid"
 )
 
@@ -203,7 +204,7 @@ func GetDiscordUser(accessToken string) (*DiscordData, error) {
 }
 
 // DiscordOAuth process the Discord OAuth flow
-func DiscordOAuth(as auth.AccountStore, ss auth.SessionStore, las LinkAccountStore, code, state string) (*auth.Session, error) {
+func DiscordOAuth(as auth.AccountStore, ss sess.SessionStore, las LinkAccountStore, code, state string) (*sess.Session, error) {
 	var a *auth.Account
 	// TODO: Sign the state so it can't be tampered with/impersonated
 	if state != "" && false { // TEMPORARILY DISABLED

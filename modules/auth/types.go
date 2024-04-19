@@ -5,6 +5,8 @@ import (
 	"log"
 	"time"
 
+	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
+	sess "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/argon2"
 )
@@ -80,21 +82,11 @@ func (user *Account) RemoveRole(role string) {
 	}
 }
 
-// Session struct
-type Session struct {
-	ID          uuid.UUID `json:"session_id" xml:"session_id" db:"session_id"`
-	UserID      uuid.UUID `json:"user_id" xml:"user_id" db:"user_id"`
-	Permissions []string  `json:"permissions" xml:"permissions" db:"permissions"`
-	IssuedAt    int64     `json:"iat" xml:"iat" db:"iat"`
-	LastUsedAt  int64     `json:"lua" xml:"lua" db:"lua"`
-	ExpiresAt   int64     `json:"exp" xml:"exp" db:"exp"`
-}
-
 // NewSession creates a new session
-func (a *Account) NewSession(expiresAt int64) *Session {
+func (a *Account) NewSession(expiresAt int64) *sess.Session {
 	permissions := []string{}
 	for _, r := range a.Roles {
-		role, err := GetRoleByName(r)
+		role, err := perms.GetRoleByName(r)
 		if err != nil {
 			log.Println(err)
 			continue
@@ -104,7 +96,7 @@ func (a *Account) NewSession(expiresAt int64) *Session {
 		}
 	}
 
-	return &Session{
+	return &sess.Session{
 		ID:          uuid.New(),
 		UserID:      a.UserID,
 		Permissions: permissions,
@@ -112,22 +104,4 @@ func (a *Account) NewSession(expiresAt int64) *Session {
 		LastUsedAt:  time.Now().Unix(),
 		ExpiresAt:   expiresAt,
 	}
-}
-
-// HasPermission checks if a session has a permission
-func (s *Session) HasPermission(permission Scope) bool {
-	for _, p := range s.Permissions {
-		if p == permission.Name+"|"+permission.Value {
-			return true
-		}
-	}
-	return false
-}
-
-// IsExpired checks if a session is expired
-func (s *Session) IsValid() bool {
-	if s.ExpiresAt == 0 {
-		return true
-	}
-	return time.Now().Unix() < s.ExpiresAt
 }

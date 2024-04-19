@@ -8,6 +8,7 @@ import (
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	accountlinking "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
+	sess "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
@@ -19,7 +20,7 @@ func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 	db := database.GetDB("neuralnexus")
 	rdb := database.GetRedis()
 	acctStore := auth.NewAccountStore(db)
-	sessStore := auth.NewSessionStore(db, rdb)
+	sessStore := sess.NewSessionStore(db, rdb)
 	alstore := accountlinking.NewStore(db)
 
 	mux.HandleFunc("POST /api/v1/auth/login", LoginHandler(acctStore, sessStore))
@@ -30,7 +31,7 @@ func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 }
 
 // LoginHandler handles the login route
-func LoginHandler(as auth.AccountStore, ss auth.SessionStore) http.HandlerFunc {
+func LoginHandler(as auth.AccountStore, ss sess.SessionStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var login struct {
 			Username string `json:"username" xml:"username" validate:"required_without=Email"`
@@ -67,9 +68,9 @@ func LoginHandler(as auth.AccountStore, ss auth.SessionStore) http.HandlerFunc {
 }
 
 // LogoutHandler handles the logout route
-func LogoutHandler(ss auth.SessionStore) http.HandlerFunc {
+func LogoutHandler(ss sess.SessionStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*auth.Session)
+		session := r.Context().Value(mw.SessionKey).(*sess.Session)
 		ss.DeleteSessionFromCache(session.ID)
 		responses.SendAndEncodeStruct(w, r, http.StatusOK, session)
 		ss.DeleteSessionInDB(session.ID)
@@ -77,7 +78,7 @@ func LogoutHandler(ss auth.SessionStore) http.HandlerFunc {
 }
 
 // OAuthHandler handles the Discord OAuth route
-func OAuthHandler(as auth.AccountStore, ss auth.SessionStore, las accountlinking.LinkAccountStore) http.HandlerFunc {
+func OAuthHandler(as auth.AccountStore, ss sess.SessionStore, las accountlinking.LinkAccountStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		code := r.URL.Query().Get("code")
 		if code == "" {

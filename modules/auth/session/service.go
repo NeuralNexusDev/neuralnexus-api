@@ -1,4 +1,4 @@
-package auth
+package sess
 
 import "github.com/google/uuid"
 
