@@ -3,19 +3,18 @@ package beenamegenerator
 import (
 	"context"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // BNGStore - Bee Name Generator Store
 type BNGStore interface {
-	GetBeeName() database.Response[string]
-	UploadBeeName(beeName string) database.Response[string]
-	DeleteBeeName(beeName string) database.Response[string]
-	SubmitBeeName(beeName string) database.Response[string]
-	GetBeeNameSuggestions(amount int64) database.Response[[]string]
-	AcceptBeeNameSuggestion(beeName string) database.Response[string]
-	RejectBeeNameSuggestion(beeName string) database.Response[string]
+	GetBeeName() (string, error)
+	UploadBeeName(beeName string) (string, error)
+	DeleteBeeName(beeName string) (string, error)
+	SubmitBeeName(beeName string) (string, error)
+	GetBeeNameSuggestions(amount int64) ([]string, error)
+	AcceptBeeNameSuggestion(beeName string) (string, error)
+	RejectBeeNameSuggestion(beeName string) (string, error)
 }
 
 // store - Bee Name Generator Store PG implementation
@@ -29,48 +28,48 @@ func NewStore(db *pgxpool.Pool) *store {
 }
 
 // GetBeeName returns a random bee name from the database
-func (s *store) GetBeeName() database.Response[string] {
+func (s *store) GetBeeName() (string, error) {
 	var beeName string
 	err := s.db.QueryRow(context.Background(), "SELECT name FROM bee_name ORDER BY random() LIMIT 1").Scan(&beeName)
 	if err != nil {
-		return database.ErrorResponse[string]("Failed to get bee name", err)
+		return "", err
 	}
-	return database.SuccessResponse(beeName)
+	return beeName, nil
 }
 
 // UploadBeeName uploads a bee name to the database
-func (s *store) UploadBeeName(beeName string) database.Response[string] {
+func (s *store) UploadBeeName(beeName string) (string, error) {
 	_, err := s.db.Exec(context.Background(), "INSERT INTO bee_name (name) VALUES ($1)", beeName)
 	if err != nil {
-		return database.ErrorResponse[string]("Failed to upload bee name", err)
+		return "", err
 	}
-	return database.SuccessResponse(beeName)
+	return beeName, nil
 }
 
 // DeleteBeeName deletes a bee name from the database
-func (s *store) DeleteBeeName(beeName string) database.Response[string] {
+func (s *store) DeleteBeeName(beeName string) (string, error) {
 	_, err := s.db.Exec(context.Background(), "DELETE FROM bee_name WHERE name = $1", beeName)
 	if err != nil {
-		return database.ErrorResponse[string]("Failed to delete bee name", err)
+		return "", err
 	}
-	return database.SuccessResponse(beeName)
+	return beeName, nil
 }
 
 // SubmitBeeName submits a bee name to the suggestion database
-func (s *store) SubmitBeeName(beeName string) database.Response[string] {
+func (s *store) SubmitBeeName(beeName string) (string, error) {
 	_, err := s.db.Exec(context.Background(), "INSERT INTO bee_name_suggestion (name) VALUES ($1)", beeName)
 	if err != nil {
-		return database.ErrorResponse[string]("Failed to submit bee name", err)
+		return "", err
 	}
-	return database.SuccessResponse(beeName)
+	return beeName, nil
 }
 
 // GetBeeNameSuggestions returns a list of bee name suggestions
-func (s *store) GetBeeNameSuggestions(amount int64) database.Response[[]string] {
+func (s *store) GetBeeNameSuggestions(amount int64) ([]string, error) {
 	var beeNames []string
 	rows, err := s.db.Query(context.Background(), "SELECT name FROM bee_name_suggestion ORDER BY random() LIMIT $1", amount)
 	if err != nil {
-		return database.ErrorResponse[[]string]("Failed to get bee name suggestions", err)
+		return []string{}, err
 	}
 	defer rows.Close()
 
@@ -78,36 +77,36 @@ func (s *store) GetBeeNameSuggestions(amount int64) database.Response[[]string] 
 		var beeName string
 		err := rows.Scan(&beeName)
 		if err != nil {
-			return database.ErrorResponse[[]string]("Failed to get bee name suggestions", err)
+			return []string{}, err
 		}
 		beeNames = append(beeNames, beeName)
 	}
 
 	if len(beeNames) == 0 {
-		return database.ErrorResponse[[]string]("No bee name suggestions found", err)
+		return []string{}, err
 	}
-	return database.SuccessResponse(beeNames)
+	return beeNames, nil
 }
 
 // AcceptBeeNameSuggestion accepts a bee name suggestion
-func (s *store) AcceptBeeNameSuggestion(beeName string) database.Response[string] {
+func (s *store) AcceptBeeNameSuggestion(beeName string) (string, error) {
 	_, err := s.db.Exec(context.Background(), "INSERT INTO bee_name (name) VALUES ($1)", beeName)
 	if err != nil {
-		return database.ErrorResponse[string]("Failed to accept bee name suggestion", err)
+		return "", err
 	}
 
 	_, err = s.db.Exec(context.Background(), "DELETE FROM bee_name_suggestion WHERE name = $1", beeName)
 	if err != nil {
-		return database.ErrorResponse[string]("Failed to accept bee name suggestion", err)
+		return "", err
 	}
-	return database.SuccessResponse(beeName)
+	return beeName, nil
 }
 
 // RejectBeeNameSuggestion rejects a bee name suggestion
-func (s *store) RejectBeeNameSuggestion(beeName string) database.Response[string] {
+func (s *store) RejectBeeNameSuggestion(beeName string) (string, error) {
 	_, err := s.db.Exec(context.Background(), "DELETE FROM bee_name_suggestion WHERE name = $1", beeName)
 	if err != nil {
-		return database.ErrorResponse[string]("Failed to reject bee name suggestion", err)
+		return "", err
 	}
-	return database.SuccessResponse(beeName)
+	return beeName, nil
 }

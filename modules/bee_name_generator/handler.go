@@ -1,6 +1,7 @@
 package beenamegenerator
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 
@@ -27,12 +28,13 @@ func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 // GetBeeNameHandler
 func GetBeeNameHandler(s BNGStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		beeName := s.GetBeeName()
-		if !beeName.Success {
+		beeName, err := s.GetBeeName()
+		if err != nil {
+			log.Println("Failed to get bee name:\n\t", err)
 			responses.SendAndEncodeInternalServerError(w, r, "Failed to get bee name")
 			return
 		}
-		responses.SendAndEncodeStruct(w, r, http.StatusOK, NewNameResponse(beeName.Data))
+		responses.SendAndEncodeStruct(w, r, http.StatusOK, NewNameResponse(beeName))
 	}
 }
 
@@ -51,8 +53,9 @@ func UploadBeeNameHandler(s BNGStore) http.HandlerFunc {
 			return
 		}
 
-		upload := s.UploadBeeName(beeName)
-		if !upload.Success {
+		_, err := s.UploadBeeName(beeName)
+		if err != nil {
+			log.Println("Failed to upload bee name:\n\t", err)
 			responses.SendAndEncodeInternalServerError(w, r, "Failed to upload bee name")
 			return
 		}
@@ -75,8 +78,9 @@ func DeleteBeeNameHandler(s BNGStore) http.HandlerFunc {
 			return
 		}
 
-		delete := s.DeleteBeeName(beeName)
-		if !delete.Success {
+		_, err := s.DeleteBeeName(beeName)
+		if err != nil {
+			log.Println("Failed to delete bee name:\n\t", err)
 			responses.SendAndEncodeInternalServerError(w, r, "Failed to delete bee name")
 			return
 		}
@@ -93,8 +97,9 @@ func SubmitBeeNameHandler(s BNGStore) http.HandlerFunc {
 			return
 		}
 
-		submit := s.SubmitBeeName(beeName)
-		if !submit.Success {
+		_, err := s.SubmitBeeName(beeName)
+		if err != nil {
+			log.Println("Failed to submit bee name:\n\t", err)
 			responses.SendAndEncodeInternalServerError(w, r, "Failed to submit bee name")
 			return
 		}
@@ -121,12 +126,17 @@ func GetBeeNameSuggestionsHandler(s BNGStore) http.HandlerFunc {
 			return
 		}
 
-		suggestions := s.GetBeeNameSuggestions(amountInt)
-		if !suggestions.Success {
+		suggestions, err := s.GetBeeNameSuggestions(amountInt)
+		if err != nil {
+			log.Println("Failed to get bee name suggestions:\n\t", err)
 			responses.SendAndEncodeInternalServerError(w, r, "Failed to get bee name suggestions")
 			return
 		}
-		responses.SendAndEncodeStruct(w, r, http.StatusOK, NewSuggestionsResponse(suggestions.Data))
+		responses.SendAndEncodeStruct(w, r, http.StatusOK, struct {
+			Suggestions []string `json:"suggestions" xml:"suggestions"`
+		}{
+			Suggestions: suggestions,
+		})
 	}
 }
 
@@ -145,8 +155,9 @@ func AcceptBeeNameSuggestionHandler(s BNGStore) http.HandlerFunc {
 			return
 		}
 
-		accept := s.AcceptBeeNameSuggestion(beeName)
-		if !accept.Success {
+		_, err := s.AcceptBeeNameSuggestion(beeName)
+		if err != nil {
+			log.Println("Failed to accept bee name suggestion:\n\t", err)
 			responses.SendAndEncodeInternalServerError(w, r, "Failed to accept bee name suggestion")
 			return
 		}
@@ -169,8 +180,8 @@ func RejectBeeNameSuggestionHandler(s BNGStore) http.HandlerFunc {
 			return
 		}
 
-		reject := s.RejectBeeNameSuggestion(beeName)
-		if !reject.Success {
+		_, err := s.RejectBeeNameSuggestion(beeName)
+		if err != nil {
 			responses.SendAndEncodeInternalServerError(w, r, "Failed to reject bee name suggestion")
 			return
 		}
