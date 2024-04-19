@@ -8,6 +8,7 @@ import (
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	accountlinking "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
@@ -17,7 +18,9 @@ import (
 func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 	mux.HandleFunc("POST /api/v1/auth/login", LoginHandler)
 	mux.Handle("POST /api/v1/auth/logout", mw.Auth(LogoutHandler))
-	mux.HandleFunc("/api/oauth", OAuthHandler)
+
+	alstore := accountlinking.NewStore(database.GetDB("neuralnexus"))
+	mux.HandleFunc("/api/oauth", OAuthHandler(alstore))
 	return mux
 }
 
@@ -65,18 +68,20 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // OAuthHandler handles the Discord OAuth route
-func OAuthHandler(w http.ResponseWriter, r *http.Request) {
-	code := r.URL.Query().Get("code")
-	if code == "" {
-		responses.SendAndEncodeBadRequest(w, r, "Invalid request")
-		return
+func OAuthHandler(s accountlinking.LinkAccountStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		code := r.URL.Query().Get("code")
+		if code == "" {
+			responses.SendAndEncodeBadRequest(w, r, "Invalid request")
+			return
+		}
+		state := r.URL.Query().Get("state")
+		session, err := accountlinking.DiscordOAuth(s, code, state)
+		if err != nil {
+			log.Println("Failed to authenticate with Discord:\n\t", err)
+			responses.SendAndEncodeBadRequest(w, r, "Failed to authenticate with Discord")
+			return
+		}
+		responses.SendAndEncodeStruct(w, r, http.StatusOK, session)
 	}
-	state := r.URL.Query().Get("state")
-	session, err := accountlinking.DiscordOAuth(code, state)
-	if err != nil {
-		log.Println("Failed to authenticate with Discord:\n\t", err)
-		responses.SendAndEncodeBadRequest(w, r, "Failed to authenticate with Discord")
-		return
-	}
-	responses.SendAndEncodeStruct(w, r, http.StatusOK, session)
 }

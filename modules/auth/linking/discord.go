@@ -203,7 +203,7 @@ func GetDiscordUser(accessToken string) (*DiscordData, error) {
 }
 
 // DiscordOAuth process the Discord OAuth flow
-func DiscordOAuth(code, state string) (*auth.Session, error) {
+func DiscordOAuth(s LinkAccountStore, code, state string) (*auth.Session, error) {
 	var a *auth.Account
 	// TODO: Sign the state so it can't be tampered with/impersonated
 	if state != "" && false { // TEMPORARILY DISABLED
@@ -232,7 +232,7 @@ func DiscordOAuth(code, state string) (*auth.Session, error) {
 	}
 
 	// Check if platform account is linked to an account
-	la, err := GetLinkedAccountByPlatformID(PlatformDiscord, user.ID)
+	la, err := s.GetLinkedAccountByPlatformID(PlatformDiscord, user.ID)
 	if err != nil {
 		// If the account IDs don't match, default to OAuth as the source of truth
 		if a == nil || a.UserID != la.UserID {
@@ -240,15 +240,15 @@ func DiscordOAuth(code, state string) (*auth.Session, error) {
 			if err != nil {
 				return nil, err
 			}
-			s := a.NewSession(time.Now().Add(time.Hour * 24).Unix())
-			auth.AddSessionToCache(s)
-			defer auth.AddSessionToDB(s)
-			return s, nil
+			session := a.NewSession(time.Now().Add(time.Hour * 24).Unix())
+			auth.AddSessionToCache(session)
+			defer auth.AddSessionToDB(session)
+			return session, nil
 		} else if a.UserID == la.UserID {
-			s := a.NewSession(time.Now().Add(time.Hour * 24).Unix())
-			auth.AddSessionToCache(s)
-			defer auth.AddSessionToDB(s)
-			return s, nil
+			session := a.NewSession(time.Now().Add(time.Hour * 24).Unix())
+			auth.AddSessionToCache(session)
+			defer auth.AddSessionToDB(session)
+			return session, nil
 		}
 	}
 
@@ -265,12 +265,12 @@ func DiscordOAuth(code, state string) (*auth.Session, error) {
 
 	// Link account
 	la = NewLinkedAccount(a.UserID, PlatformDiscord, user.Username, user.ID, user)
-	_, err = AddLinkedAccountToDB(la)
+	_, err = s.AddLinkedAccountToDB(la)
 	if err != nil {
 		return nil, errors.New("failed to link account")
 	}
-	s := a.NewSession(time.Now().Add(time.Hour * 24).Unix())
-	auth.AddSessionToCache(s)
-	defer auth.AddSessionToDB(s)
-	return s, nil
+	session := a.NewSession(time.Now().Add(time.Hour * 24).Unix())
+	auth.AddSessionToCache(session)
+	defer auth.AddSessionToDB(session)
+	return session, nil
 }
