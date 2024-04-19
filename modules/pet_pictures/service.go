@@ -20,19 +20,25 @@ var (
 
 // PetPicService - Pet Picture service
 type PetPicService interface {
+	DB() PetPicStore
 	UploadPetPicture(file *os.File, primarySubject int, othersSubjects []int, aliases []string) APIResponse[PetPicture]
 }
 
 // service - Pet Picture service implementation
 type service struct {
-	db *store
+	db PetPicStore
 }
 
 // NewService - Create new Pet Picture service
-func NewService(db *store) *service {
+func NewService(db PetPicStore) PetPicService {
 	return &service{
 		db: db,
 	}
+}
+
+// DB - Get the database
+func (s *service) DB() PetPicStore {
+	return s.db
 }
 
 // UploadPetPicture - Upload a pet picture

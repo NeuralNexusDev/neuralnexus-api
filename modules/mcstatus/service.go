@@ -20,7 +20,7 @@ type MCStatusService interface {
 type service struct{}
 
 // NewService - Create new Minecraft Status service
-func NewService() *service {
+func NewService() MCStatusService {
 	return &service{}
 }
 

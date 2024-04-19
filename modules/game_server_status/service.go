@@ -22,7 +22,7 @@ type GSSService interface {
 type service struct{}
 
 // NewService - Create new Game Server Status service
-func NewService() *service {
+func NewService() GSSService {
 	return &service{}
 }
 

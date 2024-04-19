@@ -23,7 +23,7 @@ type store struct {
 }
 
 // NewStore - Create a new Bee Name Generator store
-func NewStore(db *pgxpool.Pool) *store {
+func NewStore(db *pgxpool.Pool) BNGStore {
 	return &store{db: db}
 }
 

@@ -17,7 +17,7 @@ func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 }
 
 // Route that returns the server status
-func GetServerStatus(s *service) http.HandlerFunc {
+func GetServerStatus(s MCStatusService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		host := r.PathValue("host")
 		isBedrock := r.URL.Query().Get("bedrock") == "true"
@@ -46,7 +46,7 @@ func GetServerStatus(s *service) http.HandlerFunc {
 }
 
 // Route that returns the server icon as a PNG (base64 encoded string didn't work for some reason)
-func GetIcon(s *service) http.HandlerFunc {
+func GetIcon(s MCStatusService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		host := r.PathValue("host")
 		isBedrock := r.URL.Query().Get("bedrock") == "true"

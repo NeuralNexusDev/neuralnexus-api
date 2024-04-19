@@ -45,7 +45,7 @@ type store struct {
 }
 
 // NewStore - Create a new Pet Picture store
-func NewStore(db *pgxpool.Pool) *store {
+func NewStore(db *pgxpool.Pool) PetPicStore {
 	return &store{db: db}
 }
 
