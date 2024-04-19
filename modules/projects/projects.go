@@ -108,32 +108,29 @@ func ConvertToFMLFormat(gitHubReleasesURL string, releases []Release) map[string
 
 // ApplyRoutes - Apply the routes
 func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
-	mux.HandleFunc("GET /api/v1/projects/releases/{group}/{project}", GetReleasesHandler)
+	mux.HandleFunc("GET /api/v1/projects/releases/{group}/{project}", func(w http.ResponseWriter, r *http.Request) {
+		group := r.PathValue("group")
+		project := r.PathValue("project")
+
+		format := r.URL.Query().Get("format")
+
+		releases, err := getReleases(group, project)
+		if err != nil {
+			log.Println(err.Error())
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+
+		if format == "fml" {
+			gitHubReleasesURL := "https://github.com/" + group + "/" + project + "/releases"
+			forgeModUpdates := ConvertToFMLFormat(gitHubReleasesURL, releases)
+			json.NewEncoder(w).Encode(forgeModUpdates)
+			return
+		}
+		json.NewEncoder(w).Encode(releases)
+	})
 	return mux
-}
-
-// GetReleasesHandler - Get the releases for a project
-func GetReleasesHandler(w http.ResponseWriter, r *http.Request) {
-	group := r.PathValue("group")
-	project := r.PathValue("project")
-
-	format := r.URL.Query().Get("format")
-
-	releases, err := getReleases(group, project)
-	if err != nil {
-		log.Println(err.Error())
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-
-	if format == "fml" {
-		gitHubReleasesURL := "https://github.com/" + group + "/" + project + "/releases"
-		forgeModUpdates := ConvertToFMLFormat(gitHubReleasesURL, releases)
-		json.NewEncoder(w).Encode(forgeModUpdates)
-		return
-	}
-	json.NewEncoder(w).Encode(releases)
 }
