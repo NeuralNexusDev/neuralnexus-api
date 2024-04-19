@@ -8,7 +8,6 @@ import (
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	accountlinking "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
@@ -35,23 +34,23 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var account database.Response[auth.Account]
+	var account *auth.Account
 	if login.Username != "" {
-		account = auth.GetAccountByUsername(login.Username)
+		account, err = auth.GetAccountByUsername(login.Username)
 	} else {
-		account = auth.GetAccountByEmail(login.Email)
+		account, err = auth.GetAccountByEmail(login.Email)
 	}
-	if !account.Success {
+	if err != nil {
 		responses.SendAndEncodeBadRequest(w, r, "Invalid username or email")
 		return
 	}
 
-	if !account.Data.ValidateUser(login.Password) {
+	if !account.ValidateUser(login.Password) {
 		responses.SendAndEncodeBadRequest(w, r, "Invalid password")
 		return
 	}
 
-	session := account.Data.NewSession(time.Now().Add(time.Hour * 24).Unix())
+	session := account.NewSession(time.Now().Add(time.Hour * 24).Unix())
 	auth.AddSessionToCache(session)
 	responses.SendAndEncodeStruct(w, r, http.StatusOK, session)
 	auth.AddSessionToDB(session)

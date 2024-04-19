@@ -54,23 +54,23 @@ type DiscordData struct {
 }
 
 // PlatformID returns the platform ID
-func (d DiscordData) PlatformID() string {
+func (d *DiscordData) PlatformID() string {
 	return d.ID
 }
 
 // PlatformUsername returns the platform username
-func (d DiscordData) PlatformUsername() string {
+func (d *DiscordData) PlatformUsername() string {
 	return d.Username
 }
 
 // PlatformData returns the platform data
-func (d DiscordData) PlatformData() string {
+func (d *DiscordData) PlatformData() string {
 	data, _ := json.Marshal(d)
 	return string(data)
 }
 
 // CreateLinkedAccount creates a linked account
-func (d DiscordData) CreateLinkedAccount(userID uuid.UUID) LinkedAccount {
+func (d *DiscordData) CreateLinkedAccount(userID uuid.UUID) *LinkedAccount {
 	return NewLinkedAccount(userID, PlatformDiscord, d.Username, d.ID, d)
 }
 
@@ -213,11 +213,10 @@ func DiscordOAuth(code, state string) (*auth.Session, error) {
 			log.Println("Failed to parse state as UUID")
 			return nil, err
 		}
-		ad := auth.GetAccountByID(id)
-		if !ad.Success {
-			return nil, errors.New("failed to get account")
+		a, err = auth.GetAccountByID(id)
+		if err != nil {
+			return nil, err
 		}
-		a = &ad.Data
 	}
 
 	token, err := DiscordExtCodeForToken(code)
@@ -233,48 +232,45 @@ func DiscordOAuth(code, state string) (*auth.Session, error) {
 	}
 
 	// Check if platform account is linked to an account
-	lad := GetLinkedAccountByPlatformID(PlatformDiscord, user.ID)
-	if lad.Success {
+	la, err := GetLinkedAccountByPlatformID(PlatformDiscord, user.ID)
+	if err != nil {
 		// If the account IDs don't match, default to OAuth as the source of truth
-		if a == nil || a.UserID != lad.Data.UserID {
-			ad := auth.GetAccountByID(lad.Data.UserID)
-			if !ad.Success {
-				return nil, errors.New("failed to get account")
+		if a == nil || a.UserID != la.UserID {
+			a, err = auth.GetAccountByID(la.UserID)
+			if err != nil {
+				return nil, err
 			}
-			s := ad.Data.NewSession(time.Now().Add(time.Hour * 24).Unix())
-			auth.AddSessionToCache(s)
-			defer auth.AddSessionToDB(s)
-			return &s, nil
-		} else if a.UserID == lad.Data.UserID {
 			s := a.NewSession(time.Now().Add(time.Hour * 24).Unix())
 			auth.AddSessionToCache(s)
 			defer auth.AddSessionToDB(s)
-			return &s, nil
+			return s, nil
+		} else if a.UserID == la.UserID {
+			s := a.NewSession(time.Now().Add(time.Hour * 24).Unix())
+			auth.AddSessionToCache(s)
+			defer auth.AddSessionToDB(s)
+			return s, nil
 		}
 	}
 
 	// Check if the email is already in use -- simple account merging
-	ad := auth.GetAccountByEmail(user.Email)
-	if ad.Success {
-		a = &ad.Data
-	} else if a == nil {
+	a, _ = auth.GetAccountByEmail(user.Email)
+	if a == nil {
 		// Create account
-		act := auth.NewPasswordLessAccount(user.Username, user.Email)
-		a = &act
-		dbResponse := auth.CreateAccount(*a)
-		if !dbResponse.Success {
-			return nil, errors.New("failed to create account")
+		a = auth.NewPasswordLessAccount(user.Username, user.Email)
+		a, err = auth.CreateAccount(a)
+		if err != nil {
+			return nil, err
 		}
 	}
 
 	// Link account
-	la := NewLinkedAccount(a.UserID, PlatformDiscord, user.Username, user.ID, user)
-	linkAcctData := AddLinkedAccountToDB(la)
-	if !linkAcctData.Success {
+	la = NewLinkedAccount(a.UserID, PlatformDiscord, user.Username, user.ID, user)
+	_, err = AddLinkedAccountToDB(la)
+	if err != nil {
 		return nil, errors.New("failed to link account")
 	}
 	s := a.NewSession(time.Now().Add(time.Hour * 24).Unix())
 	auth.AddSessionToCache(s)
 	defer auth.AddSessionToDB(s)
-	return &s, nil
+	return s, nil
 }

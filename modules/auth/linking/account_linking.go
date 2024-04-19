@@ -35,8 +35,8 @@ type LinkedAccount struct {
 }
 
 // NewLinkedAccount creates a new linked account
-func NewLinkedAccount(userID uuid.UUID, platform, platformUsername, platformID string, data Data) LinkedAccount {
-	return LinkedAccount{
+func NewLinkedAccount(userID uuid.UUID, platform, platformUsername, platformID string, data Data) *LinkedAccount {
+	return &LinkedAccount{
 		UserID:           userID,
 		Platform:         platform,
 		PlatformUsername: platformUsername,
@@ -50,7 +50,7 @@ type Data interface {
 	PlatformID() string
 	PlatformUsername() string
 	PlatformData() string
-	CreateLinkedAccount(uuid.UUID) LinkedAccount
+	CreateLinkedAccount(uuid.UUID) *LinkedAccount
 }
 
 // -------------- Enums --------------
@@ -63,47 +63,47 @@ var (
 
 // -------------- Functions --------------
 
-func AddLinkedAccountToDB(linkedAccount LinkedAccount) database.Response[LinkedAccount] {
+func AddLinkedAccountToDB(la *LinkedAccount) (*LinkedAccount, error) {
 	db := database.GetDB("neuralnexus")
 	defer db.Close()
 
-	_, err := db.Exec(context.Background(), "INSERT INTO linked_accounts (user_id, platform, platform_username, platform_id, data) VALUES ($1, $2, $3, $4, $5)", linkedAccount.UserID, linkedAccount.Platform, linkedAccount.PlatformUsername, linkedAccount.PlatformID, linkedAccount.Data)
+	_, err := db.Exec(context.Background(), "INSERT INTO linked_accounts (user_id, platform, platform_username, platform_id, data) VALUES ($1, $2, $3, $4, $5)", la.UserID, la.Platform, la.PlatformUsername, la.PlatformID, la.Data)
 	if err != nil {
-		return database.ErrorResponse[LinkedAccount]("Failed to create linked account", err)
+		return nil, err
 	}
-	return database.SuccessResponse(linkedAccount)
+	return la, nil
 }
 
-func GetLinkedAccountByPlatformID(platform, platformID string) database.Response[LinkedAccount] {
+func GetLinkedAccountByPlatformID(platform, platformID string) (*LinkedAccount, error) {
 	db := database.GetDB("neuralnexus")
 	defer db.Close()
 
 	rows, err := db.Query(context.Background(), "SELECT * FROM linked_accounts WHERE platform = $1 AND platform_id = $2", platform, platformID)
 	if err != nil {
-		return database.ErrorResponse[LinkedAccount]("Failed to get linked account", err)
+		return nil, err
 	}
 
-	linkedAccount, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[LinkedAccount])
+	al, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[LinkedAccount])
 	if err != nil {
-		return database.ErrorResponse[LinkedAccount]("Failed to get linked account", err)
+		return nil, err
 	}
-	return database.SuccessResponse(*linkedAccount)
+	return al, nil
 }
 
-func GetLinkedAccountByUserID(userID uuid.UUID, platform string) database.Response[LinkedAccount] {
+func GetLinkedAccountByUserID(userID uuid.UUID, platform string) (*LinkedAccount, error) {
 	db := database.GetDB("neuralnexus")
 	defer db.Close()
 
 	rows, err := db.Query(context.Background(), "SELECT * FROM linked_accounts WHERE user_id = $1 AND platform = $2", userID, platform)
 	if err != nil {
-		return database.ErrorResponse[LinkedAccount]("Failed to get linked account", err)
+		return nil, err
 	}
 
-	linkedAccount, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[LinkedAccount])
+	al, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[LinkedAccount])
 	if err != nil {
-		return database.ErrorResponse[LinkedAccount]("Failed to get linked account", err)
+		return nil, err
 	}
-	return database.SuccessResponse(*linkedAccount)
+	return al, nil
 }
 
 // -------------- Handlers --------------

@@ -40,6 +40,6 @@ func (t TwitchData) PlatformData() string {
 }
 
 // CreateLinkedAccount creates a linked account
-func (t TwitchData) CreateLinkedAccount(userID uuid.UUID) LinkedAccount {
+func (t TwitchData) CreateLinkedAccount(userID uuid.UUID) *LinkedAccount {
 	return NewLinkedAccount(userID, PlatformTwitch, t.Login, t.ID, t)
 }

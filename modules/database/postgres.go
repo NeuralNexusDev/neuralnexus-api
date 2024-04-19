@@ -11,32 +11,6 @@ import (
 // -------------- Globals --------------
 var DATABASE_URL = os.Getenv("DATABASE_URL")
 
-// -------------- Structs --------------
-
-// Generic response struct
-type Response[T any] struct {
-	Success bool
-	Message string
-	Data    T
-}
-
-// SuccessResponse - Create a new success response
-func SuccessResponse[T any](data T) Response[T] {
-	return Response[T]{
-		Success: true,
-		Data:    data,
-	}
-}
-
-// ErrorResponse - Create a new error response
-func ErrorResponse[T any](message string, err error) Response[T] {
-	log.Println("[Error]: " + message + ":\n\t" + err.Error())
-	return Response[T]{
-		Success: false,
-		Message: message,
-	}
-}
-
 // -------------- Functions --------------
 
 // GetDB - Get a connection pool to the database

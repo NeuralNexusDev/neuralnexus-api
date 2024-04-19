@@ -37,8 +37,8 @@ type Account struct {
 }
 
 // NewAccount creates a new account
-func NewAccount(username, email, password string) (Account, error) {
-	user := Account{
+func NewAccount(username, email, password string) (*Account, error) {
+	user := &Account{
 		UserID:   uuid.New(),
 		Username: username,
 		Email:    email,
@@ -51,15 +51,15 @@ func NewAccount(username, email, password string) (Account, error) {
 }
 
 // NewPasswordLessAccount creates a new account without a password
-func NewPasswordLessAccount(username, email string) Account {
-	return Account{
+func NewPasswordLessAccount(username, email string) *Account {
+	return &Account{
 		UserID:   uuid.New(),
 		Username: username,
 		Email:    email,
 	}
 }
 
-// Hash password
+// HashPassword hashes the password
 func (user *Account) HashPassword(password string) error {
 	salt := make([]byte, 16)
 	_, err := rand.Read(salt)
@@ -74,6 +74,9 @@ func (user *Account) HashPassword(password string) error {
 
 // Validate password
 func (user *Account) ValidateUser(password string) bool {
+	if user.HashedSecret == nil || user.Salt == nil {
+		return false
+	}
 	hashedSecret := argon2.IDKey([]byte(password), []byte(user.Salt), 1, 64*1024, 4, 32)
 	return string(hashedSecret) == string(user.HashedSecret)
 }
@@ -96,7 +99,7 @@ func (user *Account) RemoveRole(role string) {
 // -------------- Functions --------------
 
 // CreateAccount creates an account in the database
-func CreateAccount(account Account) database.Response[Account] {
+func CreateAccount(account *Account) (*Account, error) {
 	db := database.GetDB("neuralnexus")
 	defer db.Close()
 
@@ -105,64 +108,64 @@ func CreateAccount(account Account) database.Response[Account] {
 		account.UserID, account.Username, account.Email, account.HashedSecret, account.Salt, account.Roles,
 	)
 	if err != nil {
-		return database.ErrorResponse[Account]("Unable to create account", err)
+		return nil, err
 	}
-	return database.SuccessResponse(account)
+	return account, nil
 }
 
 // GetAccountByID gets an account by ID
-func GetAccountByID(userID uuid.UUID) database.Response[Account] {
+func GetAccountByID(userID uuid.UUID) (*Account, error) {
 	db := database.GetDB("neuralnexus")
 	defer db.Close()
 
 	rows, err := db.Query(context.Background(), "SELECT * FROM accounts WHERE user_id = $1", userID)
 	if err != nil {
-		return database.ErrorResponse[Account]("Unable to get account", err)
+		return nil, err
 	}
 
 	account, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Account])
 	if err != nil {
-		return database.ErrorResponse[Account]("Unable to get account", err)
+		return nil, err
 	}
-	return database.SuccessResponse(*account)
+	return account, nil
 }
 
 // GetAccountByUsername gets an account by username
-func GetAccountByUsername(username string) database.Response[Account] {
+func GetAccountByUsername(username string) (*Account, error) {
 	db := database.GetDB("neuralnexus")
 	defer db.Close()
 
 	rows, err := db.Query(context.Background(), "SELECT * FROM accounts WHERE username = $1", username)
 	if err != nil {
-		return database.ErrorResponse[Account]("Unable to get account", err)
+		return nil, err
 	}
 
 	account, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Account])
 	if err != nil {
-		return database.ErrorResponse[Account]("Unable to get account", err)
+		return nil, err
 	}
-	return database.SuccessResponse(*account)
+	return account, nil
 }
 
 // GetAccountByEmail gets an account by email
-func GetAccountByEmail(email string) database.Response[Account] {
+func GetAccountByEmail(email string) (*Account, error) {
 	db := database.GetDB("neuralnexus")
 	defer db.Close()
 
 	rows, err := db.Query(context.Background(), "SELECT * FROM accounts WHERE email = $1", email)
 	if err != nil {
-		return database.ErrorResponse[Account]("Unable to get account", err)
+		return nil, err
 	}
 
 	account, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Account])
 	if err != nil {
-		return database.ErrorResponse[Account]("Unable to get account", err)
+		return nil, err
 	}
-	return database.SuccessResponse(*account)
+	return account, nil
 }
 
 // UpdateAccount updates an account in the database
-func UpdateAccount(account Account) database.Response[Account] {
+func UpdateAccount(account *Account) (*Account, error) {
 	db := database.GetDB("neuralnexus")
 	defer db.Close()
 
@@ -171,19 +174,19 @@ func UpdateAccount(account Account) database.Response[Account] {
 		account.UserID, account.Username, account.Email, account.HashedSecret, account.Salt, account.Roles,
 	)
 	if err != nil {
-		return database.ErrorResponse[Account]("Unable to update account", err)
+		return nil, err
 	}
-	return database.SuccessResponse(account)
+	return account, nil
 }
 
 // DeleteAccount deletes an account from the database
-func DeleteAccount(userID uuid.UUID) database.Response[Account] {
+func DeleteAccount(userID uuid.UUID) (*Account, error) {
 	db := database.GetDB("neuralnexus")
 	defer db.Close()
 
 	_, err := db.Exec(context.Background(), "DELETE FROM accounts WHERE user_id = $1", userID)
 	if err != nil {
-		return database.ErrorResponse[Account]("Unable to delete account", err)
+		return nil, err
 	}
-	return database.SuccessResponse(Account{UserID: userID})
+	return &Account{UserID: userID}, nil
 }

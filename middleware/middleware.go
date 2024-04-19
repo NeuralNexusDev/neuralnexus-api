@@ -85,23 +85,24 @@ func Auth(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		session := auth.GetSession(sessionID)
-		if !session.Success {
+		session, err := auth.GetSession(sessionID)
+		if err != nil {
+			log.Println("Error getting session:\n\t", err)
 			responses.SendAndEncodeUnauthorized(w, r, "")
 			return
 		}
 
-		if !session.Data.IsValid() {
+		if !session.IsValid() {
 			responses.SendAndEncodeUnauthorized(w, r, "")
-			auth.DeleteSession(session.Data.ID)
+			auth.DeleteSession(session.ID)
 			return
 		}
 
-		session.Data.LastUsedAt = time.Now().Unix()
-		auth.UpdateSession(session.Data)
+		session.LastUsedAt = time.Now().Unix()
+		auth.UpdateSession(session)
 
 		ctx := r.Context()
-		ctx = context.WithValue(ctx, SessionKey, session.Data)
+		ctx = context.WithValue(ctx, SessionKey, session)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
