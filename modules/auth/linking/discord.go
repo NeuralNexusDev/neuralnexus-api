@@ -203,7 +203,7 @@ func GetDiscordUser(accessToken string) (*DiscordData, error) {
 }
 
 // DiscordOAuth process the Discord OAuth flow
-func DiscordOAuth(s LinkAccountStore, code, state string) (*auth.Session, error) {
+func DiscordOAuth(as auth.AccountStore, ss auth.SessionStore, las LinkAccountStore, code, state string) (*auth.Session, error) {
 	var a *auth.Account
 	// TODO: Sign the state so it can't be tampered with/impersonated
 	if state != "" && false { // TEMPORARILY DISABLED
@@ -213,7 +213,7 @@ func DiscordOAuth(s LinkAccountStore, code, state string) (*auth.Session, error)
 			log.Println("Failed to parse state as UUID")
 			return nil, err
 		}
-		a, err = auth.GetAccountByID(id)
+		a, err = as.GetAccountByID(id)
 		if err != nil {
 			return nil, err
 		}
@@ -232,32 +232,32 @@ func DiscordOAuth(s LinkAccountStore, code, state string) (*auth.Session, error)
 	}
 
 	// Check if platform account is linked to an account
-	la, err := s.GetLinkedAccountByPlatformID(PlatformDiscord, user.ID)
+	la, err := las.GetLinkedAccountByPlatformID(PlatformDiscord, user.ID)
 	if err != nil {
 		// If the account IDs don't match, default to OAuth as the source of truth
 		if a == nil || a.UserID != la.UserID {
-			a, err = auth.GetAccountByID(la.UserID)
+			a, err = as.GetAccountByID(la.UserID)
 			if err != nil {
 				return nil, err
 			}
 			session := a.NewSession(time.Now().Add(time.Hour * 24).Unix())
-			auth.AddSessionToCache(session)
-			defer auth.AddSessionToDB(session)
+			ss.AddSessionToCache(session)
+			defer ss.AddSessionToDB(session)
 			return session, nil
 		} else if a.UserID == la.UserID {
 			session := a.NewSession(time.Now().Add(time.Hour * 24).Unix())
-			auth.AddSessionToCache(session)
-			defer auth.AddSessionToDB(session)
+			ss.AddSessionToCache(session)
+			defer ss.AddSessionToDB(session)
 			return session, nil
 		}
 	}
 
 	// Check if the email is already in use -- simple account merging
-	a, _ = auth.GetAccountByEmail(user.Email)
+	a, _ = as.GetAccountByEmail(user.Email)
 	if a == nil {
 		// Create account
 		a = auth.NewPasswordLessAccount(user.Username, user.Email)
-		a, err = auth.CreateAccount(a)
+		a, err = as.AddAccountToDB(a)
 		if err != nil {
 			return nil, err
 		}
@@ -265,12 +265,12 @@ func DiscordOAuth(s LinkAccountStore, code, state string) (*auth.Session, error)
 
 	// Link account
 	la = NewLinkedAccount(a.UserID, PlatformDiscord, user.Username, user.ID, user)
-	_, err = s.AddLinkedAccountToDB(la)
+	_, err = las.AddLinkedAccountToDB(la)
 	if err != nil {
 		return nil, errors.New("failed to link account")
 	}
 	session := a.NewSession(time.Now().Add(time.Hour * 24).Unix())
-	auth.AddSessionToCache(session)
-	defer auth.AddSessionToDB(session)
+	ss.AddSessionToCache(session)
+	defer ss.AddSessionToDB(session)
 	return session, nil
 }

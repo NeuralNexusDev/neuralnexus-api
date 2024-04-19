@@ -9,6 +9,7 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // CREATE TABLE sessions (
@@ -20,64 +21,31 @@ import (
 // 	exp BIGINT NOT NULL
 // );
 
-// -------------- Structs --------------
-
-// Session struct
-type Session struct {
-	ID          uuid.UUID `json:"session_id" xml:"session_id" db:"session_id"`
-	UserID      uuid.UUID `json:"user_id" xml:"user_id" db:"user_id"`
-	Permissions []string  `json:"permissions" xml:"permissions" db:"permissions"`
-	IssuedAt    int64     `json:"iat" xml:"iat" db:"iat"`
-	LastUsedAt  int64     `json:"lua" xml:"lua" db:"lua"`
-	ExpiresAt   int64     `json:"exp" xml:"exp" db:"exp"`
+// SessionStore interface
+type SessionStore interface {
+	AddSessionToDB(session *Session) (*Session, error)
+	GetSessionFromDB(id uuid.UUID) (*Session, error)
+	UpdateSessionInDB(session *Session) (*Session, error)
+	DeleteSessionInDB(id uuid.UUID) (*Session, error)
+	AddSessionToCache(session *Session) (*Session, error)
+	GetSessionFromCache(id uuid.UUID) (*Session, error)
+	DeleteSessionFromCache(id uuid.UUID) (*Session, error)
 }
 
-// NewSession creates a new session
-func (a *Account) NewSession(expiresAt int64) *Session {
-	permissions := []string{}
-	for _, r := range a.Roles {
-		role, err := GetRoleByName(r)
-		if err != nil {
-			log.Println(err)
-			continue
-		}
-		for _, p := range role.Permissions {
-			permissions = append(permissions, p.Name+"|"+p.Value)
-		}
-	}
-
-	return &Session{
-		ID:          uuid.New(),
-		UserID:      a.UserID,
-		Permissions: permissions,
-		IssuedAt:    time.Now().Unix(),
-		LastUsedAt:  time.Now().Unix(),
-		ExpiresAt:   expiresAt,
-	}
+// sessStore - SessionStore implementation
+type sessStore struct {
+	db *pgxpool.Pool
 }
 
-// HasPermission checks if a session has a permission
-func (s *Session) HasPermission(permission Scope) bool {
-	for _, p := range s.Permissions {
-		if p == permission.Name+"|"+permission.Value {
-			return true
-		}
+// NewSessionStore - Create a new session store
+func NewSessionStore(db *pgxpool.Pool) SessionStore {
+	return &sessStore{
+		db: db,
 	}
-	return false
 }
-
-// IsExpired checks if a session is expired
-func (s *Session) IsValid() bool {
-	if s.ExpiresAt == 0 {
-		return true
-	}
-	return time.Now().Unix() < s.ExpiresAt
-}
-
-// -------------- DB Functions --------------
 
 // AddSessionToDB creates a session and inserts it into the database
-func AddSessionToDB(session *Session) (*Session, error) {
+func (s *sessStore) AddSessionToDB(session *Session) (*Session, error) {
 	db := database.GetDB("neuralnexus")
 	defer db.Close()
 
@@ -86,7 +54,7 @@ func AddSessionToDB(session *Session) (*Session, error) {
 		session.ID, session.UserID, session.Permissions, session.IssuedAt, session.LastUsedAt, session.ExpiresAt,
 	)
 
-	defer ClearExpiredSessions()
+	defer s.ClearExpiredSessions()
 
 	if err != nil {
 		return nil, err
@@ -95,7 +63,7 @@ func AddSessionToDB(session *Session) (*Session, error) {
 }
 
 // GetSessionFromDB gets a session by ID
-func GetSessionFromDB(id uuid.UUID) (*Session, error) {
+func (s *sessStore) GetSessionFromDB(id uuid.UUID) (*Session, error) {
 	db := database.GetDB("neuralnexus")
 	defer db.Close()
 
@@ -105,7 +73,7 @@ func GetSessionFromDB(id uuid.UUID) (*Session, error) {
 		return nil, err
 	}
 
-	defer ClearExpiredSessions()
+	defer s.ClearExpiredSessions()
 
 	session, err = pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Session])
 	if err != nil {
@@ -115,13 +83,13 @@ func GetSessionFromDB(id uuid.UUID) (*Session, error) {
 }
 
 // DeleteSessionInDB deletes a session by ID
-func DeleteSessionInDB(id uuid.UUID) (*Session, error) {
+func (s *sessStore) DeleteSessionInDB(id uuid.UUID) (*Session, error) {
 	db := database.GetDB("neuralnexus")
 	defer db.Close()
 
 	_, err := db.Exec(context.Background(), "DELETE FROM sessions WHERE session_id = $1", id)
 
-	defer ClearExpiredSessions()
+	defer s.ClearExpiredSessions()
 
 	if err != nil {
 		return nil, err
@@ -130,7 +98,7 @@ func DeleteSessionInDB(id uuid.UUID) (*Session, error) {
 }
 
 // UpdateSessionInDB updates a session
-func UpdateSessionInDB(session *Session) (*Session, error) {
+func (s *sessStore) UpdateSessionInDB(session *Session) (*Session, error) {
 	db := database.GetDB("neuralnexus")
 	defer db.Close()
 
@@ -139,7 +107,7 @@ func UpdateSessionInDB(session *Session) (*Session, error) {
 		session.ID, session.UserID, session.Permissions, session.IssuedAt, session.LastUsedAt, session.ExpiresAt,
 	)
 
-	defer ClearExpiredSessions()
+	defer s.ClearExpiredSessions()
 
 	if err != nil {
 		return nil, err
@@ -148,7 +116,7 @@ func UpdateSessionInDB(session *Session) (*Session, error) {
 }
 
 // Clear expired sessions
-func ClearExpiredSessions() {
+func (s *sessStore) ClearExpiredSessions() {
 	db := database.GetDB("neuralnexus")
 	defer db.Close()
 
@@ -162,7 +130,7 @@ func ClearExpiredSessions() {
 // -------------- Cache Functions --------------
 
 // AddSessionToCache adds a session to the cache
-func AddSessionToCache(session *Session) (*Session, error) {
+func (s *sessStore) AddSessionToCache(session *Session) (*Session, error) {
 	rdb := database.GetRedis()
 	defer rdb.Close()
 
@@ -179,7 +147,7 @@ func AddSessionToCache(session *Session) (*Session, error) {
 }
 
 // GetSessionFromCache gets a session from the cache
-func GetSessionFromCache(id uuid.UUID) (*Session, error) {
+func (s *sessStore) GetSessionFromCache(id uuid.UUID) (*Session, error) {
 	rdb := database.GetRedis()
 	defer rdb.Close()
 
@@ -197,7 +165,7 @@ func GetSessionFromCache(id uuid.UUID) (*Session, error) {
 }
 
 // DeleteSessionFromCache deletes a session from the cache
-func DeleteSessionFromCache(id uuid.UUID) (*Session, error) {
+func (s *sessStore) DeleteSessionFromCache(id uuid.UUID) (*Session, error) {
 	rdb := database.GetRedis()
 	defer rdb.Close()
 
@@ -206,43 +174,4 @@ func DeleteSessionFromCache(id uuid.UUID) (*Session, error) {
 		return nil, err
 	}
 	return &Session{ID: id}, nil
-}
-
-// -------------- Functions --------------
-
-// GetSession gets a session by ID
-func GetSession(id uuid.UUID) (*Session, error) {
-	session, err := GetSessionFromCache(id)
-	if err != nil {
-		session, err = GetSessionFromDB(id)
-		if err != nil {
-			return nil, err
-		}
-		AddSessionToCache(session)
-	}
-	return session, nil
-}
-
-// UpdateSession updates a session
-func UpdateSession(session *Session) (*Session, error) {
-	session, err := UpdateSessionInDB(session)
-	if err != nil {
-		return nil, err
-	}
-	if session.ID != uuid.Nil {
-		AddSessionToCache(session)
-	}
-	return session, nil
-}
-
-// DeleteSession deletes a session by ID
-func DeleteSession(id uuid.UUID) (*Session, error) {
-	session, err := DeleteSessionInDB(id)
-	if err != nil {
-		return nil, err
-	}
-	if session.ID != uuid.Nil {
-		DeleteSessionFromCache(id)
-	}
-	return session, nil
 }
