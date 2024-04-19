@@ -22,7 +22,7 @@ type store struct {
 	db *pgxpool.Pool
 }
 
-// NewStore - Create a new bee name generator store
+// NewStore - Create a new Bee Name Generator store
 func NewStore(db *pgxpool.Pool) *store {
 	return &store{db: db}
 }
