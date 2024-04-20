@@ -1,0 +1,27 @@
+syntax = "proto3";
+package mcstatuspb;
+option go_package = "./mcstatuspb";
+
+message ServerStatus {
+    string host = 1;
+    int32 port = 2;
+    string name = 3;
+    string motd = 4;
+    string map = 5;
+    int32 max_players = 6;
+    int32 num_players = 7;
+    repeated Player players = 8;
+    string version = 9;
+    string favicon = 10;
+    ServerType server_type = 11;
+}
+
+message Player {
+    string name = 1;
+    string uuid = 2;
+}
+
+enum ServerType {
+    JAVA = 0;
+    BEDROCK = 1;
+}

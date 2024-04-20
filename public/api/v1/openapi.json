@@ -268,38 +268,9 @@
             "get": {
                 "summary": "Get Minecraft server status",
                 "description": "Get Minecraft server status",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "type": "object",
-                                "required": [
-                                    "address"
-                                ],
-                                "properties": {
-                                    "address": {
-                                        "type": "string"
-                                    },
-                                    "port": {
-                                        "type": "integer"
-                                    },
-                                    "query_port": {
-                                        "type": "integer"
-                                    },
-                                    "is_bedrock": {
-                                        "type": "boolean"
-                                    },
-                                    "query_enabled": {
-                                        "type": "boolean"
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
                 "parameters": [
                     {
-                        "name": "address",
+                        "name": "host",
                         "in": "path",
                         "description": "Minecraft server address",
                         "required": true,
@@ -308,12 +279,21 @@
                         }
                     },
                     {
-                        "name": "port",
+                        "name": "bedrock",
                         "in": "query",
-                        "description": "Minecraft server port",
+                        "description": "Is the server bedrock edition",
                         "required": false,
                         "schema": {
-                            "type": "integer"
+                            "type": "boolean"
+                        }
+                    },
+                    {
+                        "name": "query",
+                        "in": "query",
+                        "description": "Is query enabled on the server",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean"
                         }
                     },
                     {
@@ -326,18 +306,9 @@
                         }
                     },
                     {
-                        "name": "is_bedrock",
+                        "name": "raw",
                         "in": "query",
-                        "description": "Is the server bedrock edition",
-                        "required": false,
-                        "schema": {
-                            "type": "boolean"
-                        }
-                    },
-                    {
-                        "name": "query_enabled",
-                        "in": "query",
-                        "description": "Is the server query enabled",
+                        "description": "Return raw server status",
                         "required": false,
                         "schema": {
                             "type": "boolean"
@@ -350,39 +321,17 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "type": "object",
-                                    "required": [
-                                        "name",
-                                        "map",
-                                        "maxplayers",
-                                        "players",
-                                        "connect",
-                                        "version",
-                                        "favicon"
-                                    ],
-                                    "properties": {
-                                        "name": {
-                                            "type": "string"
-                                        },
-                                        "map": {
-                                            "type": "string"
-                                        },
-                                        "maxplayers": {
-                                            "type": "integer"
-                                        },
-                                        "players": {
-                                            "type": "integer"
-                                        },
-                                        "connect": {
-                                            "type": "string"
-                                        },
-                                        "version": {
-                                            "type": "string"
-                                        },
-                                        "favicon": {
-                                            "type": "string"
-                                        }
-                                    }
+                                    "$ref": "#/components/schemas/MCServerStatus"
+                                }
+                            },
+                            "application/xml": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MCServerStatus"
+                                }
+                            },
+                            "application/x-protobuf": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MCServerStatus"
                                 }
                             }
                         }
@@ -425,16 +374,6 @@
                                 }
                             }
                         }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "content": {
-                            "text/plain": {
-                                "schema": {
-                                    "type": "string"
-                                }
-                            }
-                        }
                     }
                 }
             }
@@ -443,29 +382,6 @@
             "get": {
                 "summary": "Get Minecraft server icon",
                 "description": "Get Minecraft server icon",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "type": "object",
-                                "required": [
-                                    "address"
-                                ],
-                                "properties": {
-                                    "address": {
-                                        "type": "string"
-                                    },
-                                    "port": {
-                                        "type": "integer"
-                                    },
-                                    "is_bedrock": {
-                                        "type": "boolean"
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
                 "parameters": [
                     {
                         "name": "address",
@@ -474,24 +390,6 @@
                         "required": true,
                         "schema": {
                             "type": "string"
-                        }
-                    },
-                    {
-                        "name": "port",
-                        "in": "query",
-                        "description": "Minecraft server port",
-                        "required": false,
-                        "schema": {
-                            "type": "integer"
-                        }
-                    },
-                    {
-                        "name": "is_bedrock",
-                        "in": "query",
-                        "description": "Is the server bedrock edition",
-                        "required": false,
-                        "schema": {
-                            "type": "boolean"
                         }
                     }
                 ],
@@ -507,37 +405,8 @@
                             }
                         }
                     },
-                    "204": {
-                        "description": "No Content, bedrock server detected, so a png of a bedrock block is returned",
-                        "content": {
-                            "image/png": {
-                                "schema": {
-                                    "type": "string",
-                                    "format": "binary"
-                                }
-                            }
-                        }
-                    },
                     "404": {
-                        "description": "Not Found, returns generic offline server icon",
-                        "content": {
-                            "image/png": {
-                                "schema": {
-                                    "type": "string",
-                                    "format": "binary"
-                                }
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "content": {
-                            "text/plain": {
-                                "schema": {
-                                    "type": "string"
-                                }
-                            }
-                        }
+                        "$ref": "#/components/responses/404NotFound"
                     }
                 }
             }
@@ -616,6 +485,71 @@
                 "properties": {
                     "name": {
                         "type": "string"
+                    }
+                }
+            },
+            "MCServerStatus": {
+                "type": "object",
+                "required": [
+                    "host",
+                    "port",
+                    "name",
+                    "motd",
+                    "map",
+                    "max_players",
+                    "num_players",
+                    "version",
+                    "favicon",
+                    "server_type"
+                ],
+                "properties": {
+                    "host": {
+                        "type": "string"
+                    },
+                    "port": {
+                        "type": "integer"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "motd": {
+                        "type": "string"
+                    },
+                    "map": {
+                        "type": "string"
+                    },
+                    "max_players": {
+                        "type": "integer"
+                    },
+                    "num_players": {
+                        "type": "integer"
+                    },
+                    "players": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {
+                                    "type": "string"
+                                },
+                                "uuid": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "version": {
+                        "type": "string"
+                    },
+                    "favicon": {
+                        "type": "string"
+                    },
+                    "server_type": {
+                        "type": "string",
+                        "enum": [
+                            "java",
+                            "bedrock"
+                        ]
                     }
                 }
             }

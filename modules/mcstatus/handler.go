@@ -4,6 +4,7 @@ import (
 	"image/png"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
@@ -16,14 +17,14 @@ func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 	return mux
 }
 
-// Route that returns the server status
+// GetServerStatus - Route that returns the server status
 func GetServerStatus(s MCStatusService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		host := r.PathValue("host")
 		isBedrock := r.URL.Query().Get("bedrock") == "true"
 		queryEnabled := r.URL.Query().Get("query") == "true"
 		raw := r.URL.Query().Get("raw") == "true"
-		port, err := strconv.Atoi(r.URL.Query().Get("port"))
+		port, err := strconv.Atoi(host[strings.LastIndex(host, ":")+1:])
 		if err != nil {
 			if isBedrock {
 				port = 19132
@@ -31,38 +32,39 @@ func GetServerStatus(s MCStatusService) http.HandlerFunc {
 				port = 25565
 			}
 		}
-
-		status, err := s.GetServerStatus(host, port, isBedrock, queryEnabled)
+		queryPort, err := strconv.Atoi(r.URL.Query().Get("query_port"))
 		if err != nil {
-			responses.SendAndEncodeInternalServerError(w, r, err.Error())
+			queryPort = port
+		}
+
+		status, err := s.GetServerStatus(host, port, isBedrock, queryEnabled, queryPort)
+		if err != nil {
+			responses.SendAndEncodeNotFound(w, r, err.Error())
 			return
 		}
 		if !raw {
 			status.Raw = nil
 		}
-
 		responses.SendAndEncodeStruct(w, r, http.StatusOK, status)
 	}
 }
 
-// Route that returns the server icon as a PNG (base64 encoded string didn't work for some reason)
+// GetIcon - Route that returns the server icon as a PNG
 func GetIcon(s MCStatusService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		host := r.PathValue("host")
 		isBedrock := r.URL.Query().Get("bedrock") == "true"
-		queryEnabled := r.URL.Query().Get("query") == "true"
-		port, err := strconv.Atoi(r.URL.Query().Get("port"))
+		if isBedrock {
+			responses.SendAndEncodeBadRequest(w, r, "Bedrock servers do not have icons.")
+		}
+		port, err := strconv.Atoi(host[strings.LastIndex(host, ":")+1:])
 		if err != nil {
-			if isBedrock {
-				port = 19132
-			} else {
-				port = 25565
-			}
+			port = 25565
 		}
 
-		status, err := s.GetServerStatus(host, port, isBedrock, queryEnabled)
+		status, err := s.GetJavaServerStatus(host, port, false, 0)
 		if err != nil {
-			responses.SendAndEncodeInternalServerError(w, r, err.Error())
+			responses.SendAndEncodeNotFound(w, r, err.Error())
 			return
 		}
 

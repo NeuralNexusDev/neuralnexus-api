@@ -61,22 +61,22 @@ type GameQResponse struct {
 }
 
 // Type alias
-type mcstatusResponse mcstatus.MCStatusResponse
+type mcServerStatus mcstatus.MCServerStatus
 
 // Normalize - Normalize Minecraft response
-func (mc *mcstatusResponse) Normalize() *GameServerStatus {
+func (mc *mcServerStatus) Normalize() *GameServerStatus {
 	players := make([]Player, len(mc.Players))
 	for i, v := range mc.Players {
-		players[i] = Player{Name: v.Name, ID: v.UUID.String()}
+		players[i] = Player{Name: v.Name, ID: v.Uuid}
 	}
 
 	return &GameServerStatus{
 		Host:       mc.Host,
-		Port:       mc.Port,
+		Port:       int(mc.Port),
 		Name:       mc.Name,
 		MapName:    mc.Map,
-		MaxPlayers: mc.MaxPlayers,
-		NumPlayers: mc.NumPlayers,
+		MaxPlayers: int(mc.MaxPlayers),
+		NumPlayers: int(mc.NumPlayers),
 		Players:    players,
 		QueryType:  QueryTypeMinecraft,
 		Raw:        mc.Raw,

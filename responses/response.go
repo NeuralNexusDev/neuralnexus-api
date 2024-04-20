@@ -23,10 +23,12 @@ func SendAndEncodeStruct[T any](w http.ResponseWriter, r *http.Request, statusCo
 	case "application/xml":
 		content += "xml"
 		structBytes, _ = xml.Marshal(data)
-	default:
+	}
+	if structBytes == nil {
 		content += "json"
 		structBytes, _ = json.Marshal(data)
 	}
+
 	w.Header().Set("Content-Type", content)
 	w.WriteHeader(statusCode)
 	w.Write(structBytes)

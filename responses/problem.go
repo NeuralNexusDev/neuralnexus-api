@@ -42,7 +42,8 @@ func (problem *problem) SendAndEncodeProblem(w http.ResponseWriter, r *http.Requ
 	case "application/xml":
 		content += "xml"
 		structBytes, _ = xml.Marshal(problem)
-	default:
+	}
+	if structBytes == nil {
 		content += "json"
 		structBytes, _ = json.Marshal(problem)
 	}

@@ -11,9 +11,9 @@ import (
 
 // MCStatusService - Minecraft Status service
 type MCStatusService interface {
-	GetJavaServerStatus(host string, port int, queryEnabled bool) (*MCStatusResponse, error)
-	GetBedrockServerStatus(host string, port int) (*MCStatusResponse, error)
-	GetServerStatus(host string, port int, isBedrock bool, queryEnabled bool) (*MCStatusResponse, error)
+	GetJavaServerStatus(host string, port int, queryEnabled bool, queryPort int) (*MCServerStatus, error)
+	GetBedrockServerStatus(host string, port int) (*MCServerStatus, error)
+	GetServerStatus(host string, port int, isBedrock bool, queryEnabled bool, queryPort int) (*MCServerStatus, error)
 }
 
 // service - Minecraft Status service implementation
@@ -25,14 +25,14 @@ func NewService() MCStatusService {
 }
 
 // GetJavaServerStatus - Get Java server status
-func (s *service) GetJavaServerStatus(host string, port int, queryEnabled bool) (*MCStatusResponse, error) {
+func (s *service) GetJavaServerStatus(host string, port int, queryEnabled bool, queryPort int) (*MCServerStatus, error) {
 	pinger := minequery.NewPinger(
 		minequery.WithTimeout(5*time.Second),
 		minequery.WithProtocolVersion16(minequery.Ping16ProtocolVersion162),
 		minequery.WithProtocolVersion17(minequery.Ping17ProtocolVersion119),
 	)
 
-	var status *MCStatusResponse = nil
+	var status *MCServerStatus = nil
 	s17, err := pinger.Ping17(host, port)
 	if err == nil {
 		status = GetPing17Status(s17)
@@ -62,14 +62,14 @@ func (s *service) GetJavaServerStatus(host string, port int, queryEnabled bool) 
 	}
 	if status != nil {
 		status.Host = host
-		status.Port = port
+		status.Port = int32(port)
 		return status, nil
 	}
 	return nil, errors.New("failed to get java server status")
 }
 
 // GetBedrockServerStatus - Get Bedrock server status
-func (s *service) GetBedrockServerStatus(host string, port int) (*MCStatusResponse, error) {
+func (s *service) GetBedrockServerStatus(host string, port int) (*MCServerStatus, error) {
 	connect := host + ":" + fmt.Sprint(port)
 	status, err := bedrockping.Query(connect, 5*time.Second, 150*time.Millisecond)
 	if err != nil {
@@ -79,9 +79,9 @@ func (s *service) GetBedrockServerStatus(host string, port int) (*MCStatusRespon
 }
 
 // GetServerStatus - Get server status
-func (s *service) GetServerStatus(host string, port int, isBedrock bool, queryEnabled bool) (*MCStatusResponse, error) {
+func (s *service) GetServerStatus(host string, port int, isBedrock bool, queryEnabled bool, queryPort int) (*MCServerStatus, error) {
 	if isBedrock {
 		return s.GetBedrockServerStatus(host, port)
 	}
-	return s.GetJavaServerStatus(host, port, queryEnabled)
+	return s.GetJavaServerStatus(host, port, queryEnabled, queryPort)
 }

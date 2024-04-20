@@ -92,11 +92,11 @@ func (s *service) QueryGameServer(game string, host string, port int) (*GameServ
 	for _, v := range MinecraftList {
 		if v == game {
 			isBedrock := game != "minecraft"
-			response, err := mcstatus.NewService().GetServerStatus(host, port, isBedrock, true)
+			response, err := mcstatus.NewService().GetServerStatus(host, port, isBedrock, true, port)
 			if err != nil {
 				return nil, err
 			}
-			return (*mcstatusResponse)(response).Normalize(), nil
+			return (*mcServerStatus)(response).Normalize(), nil
 		}
 	}
 	for _, v := range GameQList {
