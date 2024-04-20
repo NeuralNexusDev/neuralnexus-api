@@ -12,14 +12,14 @@ import (
 // ApplyRoutes - Apply the routes
 func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 	service := NewService()
-	mux.HandleFunc("/api/v1/mcstatus/{host}", GetServerStatus(service))
-	mux.HandleFunc("/api/v1/mcstatus/icon/{host}", GetIcon(service))
-	mux.HandleFunc("/api/v1/mcstatus/simple/{host}", GetSimpleStatus(service))
+	mux.HandleFunc("/api/v1/mcstatus/{host}", ServerStatusHandler(service))
+	mux.HandleFunc("/api/v1/mcstatus/icon/{host}", IconHandler(service))
+	mux.HandleFunc("/api/v1/mcstatus/simple/{host}", SimpleStatusHandler(service))
 	return mux
 }
 
-// GetServerStatus - Route that returns the server status
-func GetServerStatus(s MCStatusService) http.HandlerFunc {
+// ServerStatusHandler - Route that returns the server status
+func ServerStatusHandler(s MCStatusService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		host := r.PathValue("host")
 		isBedrock := r.URL.Query().Get("bedrock") == "true"
@@ -50,8 +50,8 @@ func GetServerStatus(s MCStatusService) http.HandlerFunc {
 	}
 }
 
-// GetIcon - Route that returns the server icon as a PNG
-func GetIcon(s MCStatusService) http.HandlerFunc {
+// IconHandler - Route that returns the server icon as a PNG
+func IconHandler(s MCStatusService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		host := r.PathValue("host")
 		isBedrock := r.URL.Query().Get("bedrock") == "true"
@@ -75,8 +75,8 @@ func GetIcon(s MCStatusService) http.HandlerFunc {
 	}
 }
 
-// GetSimpleStatus - Route that returns the server status in a simple format
-func GetSimpleStatus(s MCStatusService) http.HandlerFunc {
+// SimpleStatusHandler - Route that returns the server status in a simple format
+func SimpleStatusHandler(s MCStatusService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		host := r.PathValue("host")
 		isBedrock := r.URL.Query().Get("bedrock") == "true"
