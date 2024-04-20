@@ -1,12 +1,13 @@
 package projects
 
 import (
-	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/goccy/go-json"
 )
 
 // -------------- Globals --------------

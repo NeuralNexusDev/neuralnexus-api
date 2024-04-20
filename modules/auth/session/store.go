@@ -2,10 +2,10 @@ package sess
 
 import (
 	"context"
-	"encoding/json"
 	"log"
 	"time"
 
+	"github.com/goccy/go-json"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"

@@ -1,11 +1,11 @@
 package switchboard
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/encryption"
+	"github.com/goccy/go-json"
 	"github.com/gorilla/websocket"
 )
 

@@ -1,9 +1,10 @@
 package cctturtle
 
 import (
-	"encoding/json"
 	"net/http"
 	"time"
+
+	"github.com/goccy/go-json"
 )
 
 // -------------- Globals --------------

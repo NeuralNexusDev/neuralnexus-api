@@ -1,7 +1,6 @@
 package accountlinking
 
 import (
-	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	sess "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/goccy/go-json"
 	"github.com/google/uuid"
 )
 

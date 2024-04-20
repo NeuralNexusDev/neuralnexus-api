@@ -1,7 +1,6 @@
 package gss
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -9,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/mcstatus"
+	"github.com/goccy/go-json"
 )
 
 // GSSService - Game Server Status service

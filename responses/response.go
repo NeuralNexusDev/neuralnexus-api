@@ -1,9 +1,10 @@
 package responses
 
 import (
-	"encoding/json"
 	"encoding/xml"
 	"net/http"
+
+	"github.com/goccy/go-json"
 )
 
 // -------------- Functions --------------
