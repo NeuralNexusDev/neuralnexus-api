@@ -264,7 +264,7 @@
                 }
             }
         },
-        "/mcstatus/{address}": {
+        "/mcstatus/{host}": {
             "get": {
                 "summary": "Get Minecraft server status",
                 "description": "Get Minecraft server status",
@@ -378,7 +378,7 @@
                 }
             }
         },
-        "/mcstatus/icon/{address}": {
+        "/mcstatus/icon/{host}": {
             "get": {
                 "summary": "Get Minecraft server icon",
                 "description": "Get Minecraft server icon",
@@ -407,6 +407,51 @@
                     },
                     "404": {
                         "$ref": "#/components/responses/404NotFound"
+                    }
+                }
+            }
+        },
+        "/mcstatus/simple/{host}": {
+            "get": {
+                "summary": "Get Minecraft server simple status",
+                "description": "Get Minecraft server simple status",
+                "parameters": [
+                    {
+                        "name": "address",
+                        "in": "path",
+                        "description": "Minecraft server address",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Online",
+                        "content": {
+                            "text/plain": {
+                                "schema": {
+                                    "type": "string",
+                                    "enum": [
+                                        "Online"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Offline",
+                        "content": {
+                            "text/plain": {
+                                "schema": {
+                                    "type": "string",
+                                    "enum": [
+                                        "Offline"
+                                    ]
+                                }
+                            }
+                        }
                     }
                 }
             }

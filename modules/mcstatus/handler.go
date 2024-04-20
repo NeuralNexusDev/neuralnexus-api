@@ -14,6 +14,7 @@ func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 	service := NewService()
 	mux.HandleFunc("/api/v1/mcstatus/{host}", GetServerStatus(service))
 	mux.HandleFunc("/api/v1/mcstatus/icon/{host}", GetIcon(service))
+	mux.HandleFunc("/api/v1/mcstatus/simple/{host}", GetSimpleStatus(service))
 	return mux
 }
 
@@ -71,5 +72,38 @@ func GetIcon(s MCStatusService) http.HandlerFunc {
 		w.Header().Set("Content-Type", "image/png")
 		w.WriteHeader(http.StatusOK)
 		png.Encode(w, status.Icon)
+	}
+}
+
+// GetSimpleStatus - Route that returns the server status in a simple format
+func GetSimpleStatus(s MCStatusService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		host := r.PathValue("host")
+		isBedrock := r.URL.Query().Get("bedrock") == "true"
+		queryEnabled := r.URL.Query().Get("query") == "true"
+		port, err := strconv.Atoi(host[strings.LastIndex(host, ":")+1:])
+		if err != nil {
+			if isBedrock {
+				port = 19132
+			} else {
+				port = 25565
+			}
+		}
+		queryPort, err := strconv.Atoi(r.URL.Query().Get("query_port"))
+		if err != nil {
+			queryPort = port
+		}
+
+		status := "Online"
+		statusCode := http.StatusOK
+		_, err = s.GetServerStatus(host, port, isBedrock, queryEnabled, queryPort)
+		if err != nil {
+			status = "Offline"
+			statusCode = http.StatusNotFound
+		}
+
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(statusCode)
+		w.Write([]byte(status))
 	}
 }
