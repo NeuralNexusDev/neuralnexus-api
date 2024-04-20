@@ -35,7 +35,7 @@ func GetBeeNameHandler(s BNGStore) http.HandlerFunc {
 			responses.SendAndEncodeInternalServerError(w, r, "Failed to get bee name")
 			return
 		}
-		responses.SendAndEncodeStruct(w, r, http.StatusOK, NewNameResponse(beeName))
+		responses.SendAndEncodeStruct(w, r, http.StatusOK, NewBeeName(beeName))
 	}
 }
 
@@ -60,7 +60,7 @@ func UploadBeeNameHandler(s BNGStore) http.HandlerFunc {
 			responses.SendAndEncodeInternalServerError(w, r, "Failed to upload bee name")
 			return
 		}
-		responses.SendAndEncodeStruct(w, r, http.StatusOK, NewNameResponse(beeName))
+		responses.SendAndEncodeStruct(w, r, http.StatusOK, NewBeeName(beeName))
 	}
 }
 
@@ -85,7 +85,7 @@ func DeleteBeeNameHandler(s BNGStore) http.HandlerFunc {
 			responses.SendAndEncodeInternalServerError(w, r, "Failed to delete bee name")
 			return
 		}
-		responses.SendAndEncodeStruct(w, r, http.StatusOK, NewNameResponse(beeName))
+		responses.SendAndEncodeStruct(w, r, http.StatusOK, NewBeeName(beeName))
 	}
 }
 
@@ -104,7 +104,7 @@ func SubmitBeeNameHandler(s BNGStore) http.HandlerFunc {
 			responses.SendAndEncodeInternalServerError(w, r, "Failed to submit bee name")
 			return
 		}
-		responses.SendAndEncodeStruct(w, r, http.StatusOK, NewNameResponse(beeName))
+		responses.SendAndEncodeStruct(w, r, http.StatusOK, NewBeeName(beeName))
 	}
 }
 
@@ -133,11 +133,7 @@ func GetBeeNameSuggestionsHandler(s BNGStore) http.HandlerFunc {
 			responses.SendAndEncodeInternalServerError(w, r, "Failed to get bee name suggestions")
 			return
 		}
-		responses.SendAndEncodeStruct(w, r, http.StatusOK, struct {
-			Suggestions []string `json:"suggestions" xml:"suggestions"`
-		}{
-			Suggestions: suggestions,
-		})
+		responses.SendAndEncodeStruct(w, r, http.StatusOK, NewBeeNameSuggestions(suggestions))
 	}
 }
 
@@ -162,7 +158,7 @@ func AcceptBeeNameSuggestionHandler(s BNGStore) http.HandlerFunc {
 			responses.SendAndEncodeInternalServerError(w, r, "Failed to accept bee name suggestion")
 			return
 		}
-		responses.SendAndEncodeStruct(w, r, http.StatusOK, NewNameResponse(beeName))
+		responses.SendAndEncodeStruct(w, r, http.StatusOK, NewBeeName(beeName))
 	}
 }
 
@@ -186,6 +182,6 @@ func RejectBeeNameSuggestionHandler(s BNGStore) http.HandlerFunc {
 			responses.SendAndEncodeInternalServerError(w, r, "Failed to reject bee name suggestion")
 			return
 		}
-		responses.SendAndEncodeStruct(w, r, http.StatusOK, NewNameResponse(beeName))
+		responses.SendAndEncodeStruct(w, r, http.StatusOK, NewBeeName(beeName))
 	}
 }

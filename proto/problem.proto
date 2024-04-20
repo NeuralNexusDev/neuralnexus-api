@@ -1,0 +1,11 @@
+syntax = "proto3";
+package problempb;
+option go_package = "./problempb";
+
+message Problem {
+    string type = 1;
+    int32 status = 2;
+    string title = 3;
+    string detail = 4;
+    string instance = 5;
+}

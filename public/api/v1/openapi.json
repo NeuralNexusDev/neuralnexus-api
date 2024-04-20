@@ -19,40 +19,17 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "type": "object",
-                                "required": [
-                                    "password"
-                                ],
-                                "properties": {
-                                    "username": {
-                                        "type": "string"
-                                    },
-                                    "email": {
-                                        "type": "string"
-                                    },
-                                    "password": {
-                                        "type": "string"
-                                    }
-                                }
+                                "$ref": "#/components/schemas/Login"
                             }
                         },
                         "application/xml": {
                             "schema": {
-                                "type": "object",
-                                "required": [
-                                    "password"
-                                ],
-                                "properties": {
-                                    "username": {
-                                        "type": "string"
-                                    },
-                                    "email": {
-                                        "type": "string"
-                                    },
-                                    "password": {
-                                        "type": "string"
-                                    }
-                                }
+                                "$ref": "#/components/schemas/Login"
+                            }
+                        },
+                        "application/x-protobuf": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Login"
                             }
                         }
                     }
@@ -185,6 +162,14 @@
                                 }
                             },
                             "application/xml": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    }
+                                }
+                            },
+                            "application/x-protobuf": {
                                 "schema": {
                                     "type": "array",
                                     "items": {
@@ -580,6 +565,49 @@
                     }
                 }
             },
+            "AuthSession": {
+                "type": "object",
+                "properties": {
+                    "session_id": {
+                        "type": "string"
+                    },
+                    "user_id": {
+                        "type": "string"
+                    },
+                    "permissions": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "iat": {
+                        "type": "integer"
+                    },
+                    "lua": {
+                        "type": "integer"
+                    },
+                    "exp": {
+                        "type": "integer"
+                    }
+                }
+            },
+            "Login": {
+                "type": "object",
+                "required": [
+                    "password"
+                ],
+                "properties": {
+                    "username": {
+                        "type": "string"
+                    },
+                    "email": {
+                        "type": "string"
+                    },
+                    "password": {
+                        "type": "string"
+                    }
+                }
+            },
             "BNGName": {
                 "type": "object",
                 "required": [
@@ -623,6 +651,11 @@
                         "schema": {
                             "$ref": "#/components/schemas/Problem"
                         }
+                    },
+                    "application/problem+x-protobuf": {
+                        "schema": {
+                            "$ref": "#/components/schemas/Problem"
+                        }
                     }
                 }
             },
@@ -635,6 +668,11 @@
                         }
                     },
                     "application/problem+xml": {
+                        "schema": {
+                            "$ref": "#/components/schemas/Problem"
+                        }
+                    },
+                    "application/problem+x-protobuf": {
                         "schema": {
                             "$ref": "#/components/schemas/Problem"
                         }
@@ -653,6 +691,11 @@
                         "schema": {
                             "$ref": "#/components/schemas/Problem"
                         }
+                    },
+                    "application/problem+x-protobuf": {
+                        "schema": {
+                            "$ref": "#/components/schemas/Problem"
+                        }
                     }
                 }
             },
@@ -661,58 +704,17 @@
                 "content": {
                     "application/json": {
                         "schema": {
-                            "type": "object",
-                            "properties": {
-                                "session_id": {
-                                    "type": "string"
-                                },
-                                "user_id": {
-                                    "type": "string"
-                                },
-                                "permissions": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "string"
-                                    }
-                                },
-                                "iat": {
-                                    "type": "integer"
-                                },
-                                "lua": {
-                                    "type": "integer"
-                                },
-                                "exp": {
-                                    "type": "integer"
-                                }
-                            }
+                            "$ref": "#/components/schemas/AuthSession"
                         }
                     },
                     "application/xml": {
                         "schema": {
-                            "type": "object",
-                            "properties": {
-                                "session_id": {
-                                    "type": "string"
-                                },
-                                "user_id": {
-                                    "type": "string"
-                                },
-                                "permissions": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "string"
-                                    }
-                                },
-                                "iat": {
-                                    "type": "integer"
-                                },
-                                "lua": {
-                                    "type": "integer"
-                                },
-                                "exp": {
-                                    "type": "integer"
-                                }
-                            }
+                            "$ref": "#/components/schemas/AuthSession"
+                        }
+                    },
+                    "application/x-protobuf": {
+                        "schema": {
+                            "$ref": "#/components/schemas/AuthSession"
                         }
                     }
                 }
@@ -726,6 +728,11 @@
                         }
                     },
                     "application/xml": {
+                        "schema": {
+                            "$ref": "#/components/schemas/BNGName"
+                        }
+                    },
+                    "application/x-protobuf": {
                         "schema": {
                             "$ref": "#/components/schemas/BNGName"
                         }

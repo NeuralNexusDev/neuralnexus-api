@@ -11,7 +11,7 @@ import (
 // ApplyRoutes - Apply the routes
 func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 	mux.HandleFunc("GET /api/v1/teapot", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		responses.NewProblemResponse(
+		responses.NewProblem(
 			"about:blank",
 			http.StatusTeapot,
 			"I'm a teapot",

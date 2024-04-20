@@ -1,13 +1,19 @@
 package beenamegenerator
 
-// NameResponse struct
-type NameResponse struct {
-	Name string `json:"name" xml:"name"`
+import (
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/proto/bngpb"
+)
+
+// NewBeeName - Create a new BeeName
+func NewBeeName(name string) *bngpb.BeeName {
+	return &bngpb.BeeName{
+		Name: name,
+	}
 }
 
-// NewNameResponse - Create a new NameResponse
-func NewNameResponse(name string) NameResponse {
-	return NameResponse{
-		Name: name,
+// NewBeeNameSuggestions - Create a new BeeNameSuggestions
+func NewBeeNameSuggestions(suggestions []string) *bngpb.BeeNameSuggestions {
+	return &bngpb.BeeNameSuggestions{
+		Suggestions: suggestions,
 	}
 }

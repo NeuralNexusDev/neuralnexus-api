@@ -1,0 +1,11 @@
+syntax = "proto3";
+package bngpb;
+option go_package = "./bngpb";
+
+message BeeName {
+    string name = 1;
+}
+
+message BeeNameSuggestions {
+    repeated string suggestions = 1;
+}

@@ -5,30 +5,49 @@ import (
 	"net/http"
 
 	"github.com/goccy/go-json"
+	"google.golang.org/protobuf/proto"
 )
 
 // -------------- Functions --------------
 
-// SendAndEncodeStruct -- Send a struct as JSON or XML
+// SendAndEncodeStruct -- Send a struct as JSON, XML or Protobuf
 func SendAndEncodeStruct[T any](w http.ResponseWriter, r *http.Request, statusCode int, data T) {
+	var content string = "application/"
 	var structBytes []byte
-	if r.Header.Get("Accept") == "application/xml" {
-		w.Header().Set("Content-Type", "application/xml")
+	switch accept := r.Header.Get("Accept"); accept {
+	case "application/x-protobuf":
+		content += "x-protobuf"
+		if pb, ok := any(data).(proto.Message); ok {
+			structBytes, _ = proto.Marshal(pb)
+		}
+	case "application/xml":
+		content += "xml"
 		structBytes, _ = xml.Marshal(data)
-	} else {
-		w.Header().Set("Content-Type", "application/json")
+	default:
+		content += "json"
 		structBytes, _ = json.Marshal(data)
 	}
+	w.Header().Set("Content-Type", content)
 	w.WriteHeader(statusCode)
 	w.Write(structBytes)
 }
 
-// DecodeStruct -- Decode a struct from JSON or XML
+// DecodeStruct -- Decode a struct from JSON, XML or Protobuf
 func DecodeStruct[T any](r *http.Request, data *T) error {
-	if r.Header.Get("Content-Type") == "application/xml" {
-		return xml.NewDecoder(r.Body).Decode(data)
+	var err error
+	switch contentType := r.Header.Get("Content-Type"); contentType {
+	case "application/x-protobuf":
+		var b []byte = make([]byte, r.ContentLength)
+		r.Body.Read(b)
+		if pb, ok := any(*data).(proto.Message); ok {
+			err = proto.Unmarshal(b, pb)
+		}
+	case "application/xml":
+		err = xml.NewDecoder(r.Body).Decode(data)
+	default:
+		err = json.NewDecoder(r.Body).Decode(data)
 	}
-	return json.NewDecoder(r.Body).Decode(data)
+	return err
 }
 
 // SendAndEncodeBadRequest - Send and encode an invalid input problem
@@ -36,7 +55,7 @@ func SendAndEncodeBadRequest(w http.ResponseWriter, r *http.Request, message str
 	if message == "" {
 		message = "The request body is invalid."
 	}
-	NewProblemResponse(
+	NewProblem(
 		"about:blank",
 		http.StatusBadRequest,
 		"Bad Request",
@@ -50,7 +69,7 @@ func SendAndEncodeUnauthorized(w http.ResponseWriter, r *http.Request, message s
 	if message == "" {
 		message = "You must be logged in to access this resource."
 	}
-	NewProblemResponse(
+	NewProblem(
 		"about:blank",
 		http.StatusUnauthorized,
 		"Unauthorized",
@@ -64,7 +83,7 @@ func SendAndEncodeForbidden(w http.ResponseWriter, r *http.Request, message stri
 	if message == "" {
 		message = "You do not have permission to access this resource."
 	}
-	NewProblemResponse(
+	NewProblem(
 		"about:blank",
 		http.StatusForbidden,
 		"Forbidden",
@@ -78,7 +97,7 @@ func SendAndEncodeNotFound(w http.ResponseWriter, r *http.Request, message strin
 	if message == "" {
 		message = "The requested resource could not be found."
 	}
-	NewProblemResponse(
+	NewProblem(
 		"about:blank",
 		http.StatusNotFound,
 		"Not Found",
@@ -92,7 +111,7 @@ func SendAndEncodeInternalServerError(w http.ResponseWriter, r *http.Request, me
 	if message == "" {
 		message = "An internal server error occurred."
 	}
-	NewProblemResponse(
+	NewProblem(
 		"about:blank",
 		http.StatusInternalServerError,
 		"Internal Server Error",
