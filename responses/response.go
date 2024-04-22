@@ -8,6 +8,14 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// -------------- Structs --------------
+
+// ProtoEncoder -- Interface for encoding a struct as a protobuf message
+// Useful for complex types that don't conform to auto-generated protobuf structs
+type ProtoEncoder interface {
+	ToProto() proto.Message
+}
+
 // -------------- Functions --------------
 
 // SendAndEncodeStruct -- Send a struct as JSON, XML or Protobuf
@@ -19,6 +27,9 @@ func SendAndEncodeStruct[T any](w http.ResponseWriter, r *http.Request, statusCo
 		content += "x-protobuf"
 		if pb, ok := any(data).(proto.Message); ok {
 			structBytes, _ = proto.Marshal(pb)
+		}
+		if encoder, ok := any(data).(ProtoEncoder); ok {
+			structBytes, _ = proto.Marshal(encoder.ToProto())
 		}
 	case "application/xml":
 		content += "xml"
@@ -43,6 +54,9 @@ func DecodeStruct[T any](r *http.Request, data *T) error {
 		r.Body.Read(b)
 		if pb, ok := any(*data).(proto.Message); ok {
 			err = proto.Unmarshal(b, pb)
+		}
+		if encoder, ok := any(*data).(ProtoEncoder); ok {
+			err = proto.Unmarshal(b, encoder.ToProto())
 		}
 	case "application/xml":
 		err = xml.NewDecoder(r.Body).Decode(data)

@@ -39,6 +39,9 @@ func (problem *problem) SendAndEncodeProblem(w http.ResponseWriter, r *http.Requ
 		if pb, ok := any(problem).(proto.Message); ok {
 			structBytes, _ = proto.Marshal(pb)
 		}
+		if encoder, ok := any(problem).(ProtoEncoder); ok {
+			structBytes, _ = proto.Marshal(encoder.ToProto())
+		}
 	case "application/xml":
 		content += "xml"
 		structBytes, _ = xml.Marshal(problem)

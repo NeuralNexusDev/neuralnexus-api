@@ -1,6 +1,8 @@
 package gss
 
 import (
+	"strings"
+
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/mcstatus"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/proto/gsspb"
 )
@@ -20,7 +22,7 @@ type GameServerStatus struct {
 // NewGameServerStatus - Create a new game server status
 func NewGameServerStatus(host string, port int, name string, mapName string, maxPlayers int, numPlayers int, players []*gsspb.Player, queryType QueryType, raw interface{}) *GameServerStatus {
 	return &GameServerStatus{
-		&gsspb.ServerStatus{
+		ServerStatus: &gsspb.ServerStatus{
 			Host:       host,
 			Port:       int32(port),
 			Name:       name,
@@ -28,9 +30,10 @@ func NewGameServerStatus(host string, port int, name string, mapName string, max
 			MaxPlayers: int32(maxPlayers),
 			NumPlayers: int32(numPlayers),
 			Players:    players,
+			QueryType:  gsspb.QueryType(gsspb.QueryType_value[strings.ToUpper(string(queryType))]),
 		},
-		queryType,
-		raw,
+		QueryType: queryType,
+		Raw:       raw,
 	}
 }
 

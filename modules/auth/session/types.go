@@ -4,7 +4,9 @@ import (
 	"time"
 
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/proto/sessionpb"
 	"github.com/google/uuid"
+	"google.golang.org/protobuf/proto"
 )
 
 // Session struct
@@ -15,6 +17,18 @@ type Session struct {
 	IssuedAt    int64     `json:"iat" xml:"iat" db:"iat"`
 	LastUsedAt  int64     `json:"lua" xml:"lua" db:"lua"`
 	ExpiresAt   int64     `json:"exp" xml:"exp" db:"exp"`
+}
+
+// ToProto converts a session to a protobuf message
+func (s *Session) ToProto() proto.Message {
+	return &sessionpb.Session{
+		Id:          s.ID.String(),
+		UserId:      s.UserID.String(),
+		Permissions: s.Permissions,
+		IssuedAt:    s.IssuedAt,
+		LastUsedAt:  s.LastUsedAt,
+		ExpiresAt:   s.ExpiresAt,
+	}
 }
 
 // HasPermission checks if a session has a permission
