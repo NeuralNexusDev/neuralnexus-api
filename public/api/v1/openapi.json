@@ -264,28 +264,19 @@
                 }
             }
         },
-        "/game-server-status/{host}": {
+        "/game-server-status/{game}": {
             "get": {
                 "summary": "Get game server status",
                 "description": "Get game server status",
                 "parameters": [
                     {
-                        "name": "host",
-                        "in": "path",
-                        "description": "Game server address",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
+                        "$ref": "#/components/parameters/GameSlug"
                     },
                     {
-                        "name": "port",
-                        "in": "query",
-                        "description": "Game server port",
-                        "required": true,
-                        "schema": {
-                            "type": "integer"
-                        }
+                        "$ref": "#/components/parameters/HostQuery"
+                    },
+                    {
+                        "$ref": "#/components/parameters/PortQuery"
                     },
                     {
                         "$ref": "#/components/parameters/RawQuery"
@@ -327,27 +318,27 @@
                 }
             }
         },
-        "/game-server-status/simple/{host}": {
+        "/game-server-status/simple/{game}": {
             "get": {
                 "summary": "Get game server simple status",
                 "description": "Get game server simple status",
                 "parameters": [
                     {
-                        "name": "host",
-                        "in": "path",
-                        "description": "Game server address",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
+                        "$ref": "#/components/parameters/GameSlug"
                     },
                     {
-                        "name": "port",
+                        "$ref": "#/components/parameters/HostQuery"
+                    },
+                    {
+                        "$ref": "#/components/parameters/PortQuery"
+                    },
+                    {
+                        "name": "query_type",
                         "in": "query",
-                        "description": "Game server port",
-                        "required": true,
+                        "description": "Query type",
+                        "required": false,
                         "schema": {
-                            "type": "integer"
+                            "$ref": "#/components/schemas/QueryType"
                         }
                     }
                 ],
@@ -694,12 +685,28 @@
                     "type": "string"
                 }
             },
-            "HostSlug": {
-                "name": "host",
+            "GameSlug": {
+                "name": "game",
                 "in": "path",
                 "required": true,
                 "schema": {
                     "type": "string"
+                }
+            },
+            "HostQuery": {
+                "name": "host",
+                "in": "query",
+                "required": true,
+                "schema": {
+                    "type": "string"
+                }
+            },
+            "PortQuery": {
+                "name": "port",
+                "in": "query",
+                "required": true,
+                "schema": {
+                    "type": "integer"
                 }
             },
             "RawQuery": {

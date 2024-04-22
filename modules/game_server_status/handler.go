@@ -18,7 +18,6 @@ func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 // GameServerStatusHandler - Get the game server status
 func GameServerStatusHandler(s GSSService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var err error
 		game := r.PathValue("game")
 		host := r.URL.Query().Get("host")
 		if host == "" {
@@ -31,26 +30,8 @@ func GameServerStatusHandler(s GSSService) http.HandlerFunc {
 			return
 		}
 
-		var status *GameServerStatus
-		query_type := r.URL.Query().Get("query_type")
-		if query_type != "" {
-			switch query_type {
-			case "gameq":
-				query, err := s.QueryGameQ(game, host, port)
-				if err != nil {
-					status = query.Normalize()
-				}
-			case "gamedig":
-				query, err := s.QueryGameDig(game, host, port)
-				if err != nil {
-					status = query.Normalize()
-				}
-			}
-		}
-
-		if status == nil {
-			status, err = s.QueryGameServer(game, host, port)
-		}
+		queryType := ParseQueryType(r.URL.Query().Get("query_type"))
+		status, err := s.QueryGameServer(game, host, port, queryType)
 		if err != nil {
 			responses.SendAndEncodeNotFound(w, r, err.Error())
 			return
@@ -80,7 +61,8 @@ func SimpleGameServerStatus(s GSSService) http.HandlerFunc {
 
 		status := "Online"
 		statusCode := http.StatusOK
-		_, err = s.QueryGameServer(game, host, port)
+		queryType := ParseQueryType(r.URL.Query().Get("query_type"))
+		_, err = s.QueryGameServer(game, host, port, queryType)
 		if err != nil {
 			status = "Offline"
 			statusCode = http.StatusNotFound

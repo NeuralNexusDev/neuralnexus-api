@@ -15,7 +15,7 @@ import (
 type GSSService interface {
 	QueryGameQ(game string, host string, port int) (*GameQResponse, error)
 	QueryGameDig(game string, host string, port int) (*GameDigResponse, error)
-	QueryGameServer(game string, host string, port int) (*GameServerStatus, error)
+	QueryGameServer(game string, host string, port int, queryType QueryType) (*GameServerStatus, error)
 }
 
 // service - Game Server Status service implementation
@@ -87,38 +87,71 @@ func (s *service) QueryGameDig(game string, host string, port int) (*GameDigResp
 	return &response, nil
 }
 
-// QueryGameServer - Query game server status
-func (s *service) QueryGameServer(game string, host string, port int) (*GameServerStatus, error) {
+// DetermineOrVerifyQueryType - Determine the query type or check if the query type is valid for the game
+func DetermineOrVerifyQueryType(game string, queryType QueryType) (QueryType, bool) {
 	for _, v := range MinecraftList {
 		if v == game {
-			isBedrock := game != "minecraft"
-			response, err := mcstatus.NewService().GetServerStatus(host, port, isBedrock, true, port)
-			if err != nil {
-				return nil, err
+			switch queryType {
+			case QueryTypeUnknown:
+			case QueryTypeMinecraft:
+				return QueryTypeMinecraft, true
 			}
-			return (*mcServerStatus)(response).Normalize(), nil
+			break
 		}
 	}
 	for _, v := range GameQList {
 		if v == game {
-			response, err := s.QueryGameQ(game, host, port)
-			if err != nil {
-				return nil, err
+			switch queryType {
+			case QueryTypeUnknown:
+			case QueryTypeGameQ:
+				return QueryTypeGameQ, true
 			}
-			if !response.Online {
-				return nil, errors.New("server is offline")
-			}
-			return response.Normalize(), nil
+			break
 		}
 	}
 	for _, v := range GameDigList {
 		if v == game {
-			response, err := s.QueryGameDig(game, host, port)
-			if err != nil {
-				return nil, err
+			switch queryType {
+			case QueryTypeUnknown:
+			case QueryTypeGameDig:
+				return QueryTypeGameDig, true
 			}
-			return response.Normalize(), nil
+			break
 		}
 	}
-	return nil, errors.New("game not supported")
+	return QueryTypeUnknown, false
+}
+
+// QueryGameServer - Query game server status
+func (s *service) QueryGameServer(game string, host string, port int, queryType QueryType) (*GameServerStatus, error) {
+	queryType, valid := DetermineOrVerifyQueryType(game, queryType)
+	if !valid {
+		return nil, errors.New("this game is not supported, or the given query type doesn't support this game")
+	}
+	switch queryType {
+	case QueryTypeMinecraft:
+		isBedrock := game != "minecraft"
+		response, err := mcstatus.NewService().GetServerStatus(host, port, isBedrock, true, port)
+		if err != nil {
+			return nil, err
+		}
+		return (*mcServerStatus)(response).Normalize(), nil
+	case QueryTypeGameQ:
+		response, err := s.QueryGameQ(game, host, port)
+		if err != nil {
+			return nil, err
+		}
+		if !response.Online {
+			return nil, errors.New("server is offline")
+		}
+		return response.Normalize(), nil
+	case QueryTypeGameDig:
+		response, err := s.QueryGameDig(game, host, port)
+		if err != nil {
+			return nil, err
+		}
+		return response.Normalize(), nil
+	default:
+		return nil, errors.New("game not supported")
+	}
 }

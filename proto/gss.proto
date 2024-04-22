@@ -19,7 +19,8 @@ message Player {
 }
 
 enum QueryType {
-    MINECRAFT = 0;
-    GAMEQ = 1;
-    GAMEDIG = 2;
+    UNKNOWN = 0;
+    MINECRAFT = 1;
+    GAMEQ = 2;
+    GAMEDIG = 3;
 }

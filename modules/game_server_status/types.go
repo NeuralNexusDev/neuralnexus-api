@@ -38,6 +38,8 @@ func NewGameServerStatus(host string, port int, name string, mapName string, max
 type QueryType string
 
 const (
+	// QueryTypeUnknown - Query type unknown
+	QueryTypeUnknown QueryType = "unknown"
 	// QueryTypeMinecraft - Query type Minecraft
 	QueryTypeMinecraft QueryType = "minecraft"
 	// QueryTypeGameQ - Query type GameQ
@@ -45,6 +47,20 @@ const (
 	// QueryTypeGameDig - Query type GameDig
 	QueryTypeGameDig QueryType = "gamedig"
 )
+
+// ParseQueryType - Parse query type
+func ParseQueryType(queryType string) QueryType {
+	switch queryType {
+	case "minecraft":
+		return QueryTypeMinecraft
+	case "gameq":
+		return QueryTypeGameQ
+	case "gamedig":
+		return QueryTypeGameDig
+	default:
+		return QueryTypeUnknown
+	}
+}
 
 // Type alias
 type mcServerStatus mcstatus.MCServerStatus
