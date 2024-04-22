@@ -93,6 +93,7 @@ func DetermineOrVerifyQueryType(game string, queryType QueryType) (QueryType, bo
 		if v == game {
 			switch queryType {
 			case QueryTypeUnknown:
+				fallthrough
 			case QueryTypeMinecraft:
 				return QueryTypeMinecraft, true
 			}
@@ -103,6 +104,7 @@ func DetermineOrVerifyQueryType(game string, queryType QueryType) (QueryType, bo
 		if v == game {
 			switch queryType {
 			case QueryTypeUnknown:
+				fallthrough
 			case QueryTypeGameQ:
 				return QueryTypeGameQ, true
 			}
@@ -113,6 +115,7 @@ func DetermineOrVerifyQueryType(game string, queryType QueryType) (QueryType, bo
 		if v == game {
 			switch queryType {
 			case QueryTypeUnknown:
+				fallthrough
 			case QueryTypeGameDig:
 				return QueryTypeGameDig, true
 			}
