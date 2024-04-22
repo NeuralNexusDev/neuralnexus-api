@@ -273,22 +273,16 @@
                         "$ref": "#/components/parameters/GameSlug"
                     },
                     {
-                        "$ref": "#/components/parameters/HostQuery"
+                        "$ref": "#/components/parameters/GameHostQuery"
                     },
                     {
-                        "$ref": "#/components/parameters/PortQuery"
+                        "$ref": "#/components/parameters/GamePortQuery"
                     },
                     {
-                        "$ref": "#/components/parameters/RawQuery"
+                        "$ref": "#/components/parameters/GameRawQuery"
                     },
                     {
-                        "name": "query_type",
-                        "in": "query",
-                        "description": "Query type",
-                        "required": false,
-                        "schema": {
-                            "$ref": "#/components/schemas/QueryType"
-                        }
+                        "$ref": "#/components/parameters/GameQueryTypeQuery"
                     }
                 ],
                 "responses": {
@@ -327,19 +321,13 @@
                         "$ref": "#/components/parameters/GameSlug"
                     },
                     {
-                        "$ref": "#/components/parameters/HostQuery"
+                        "$ref": "#/components/parameters/GameHostQuery"
                     },
                     {
-                        "$ref": "#/components/parameters/PortQuery"
+                        "$ref": "#/components/parameters/GamePortQuery"
                     },
                     {
-                        "name": "query_type",
-                        "in": "query",
-                        "description": "Query type",
-                        "required": false,
-                        "schema": {
-                            "$ref": "#/components/schemas/QueryType"
-                        }
+                        "$ref": "#/components/parameters/GameQueryTypeQuery"
                     }
                 ],
                 "responses": {
@@ -388,7 +376,7 @@
                         }
                     },
                     {
-                        "$ref": "#/components/parameters/RawQuery"
+                        "$ref": "#/components/parameters/GameRawQuery"
                     }
                 ],
                 "responses": {
@@ -693,7 +681,7 @@
                     "type": "string"
                 }
             },
-            "HostQuery": {
+            "GameHostQuery": {
                 "name": "host",
                 "in": "query",
                 "required": true,
@@ -701,7 +689,7 @@
                     "type": "string"
                 }
             },
-            "PortQuery": {
+            "GamePortQuery": {
                 "name": "port",
                 "in": "query",
                 "required": true,
@@ -709,7 +697,15 @@
                     "type": "integer"
                 }
             },
-            "RawQuery": {
+            "GameQueryTypeQuery": {
+                "name": "query_type",
+                "in": "query",
+                "required": false,
+                "schema": {
+                    "$ref": "#/components/schemas/QueryType"
+                }
+            },
+            "GameRawQuery": {
                 "name": "raw",
                 "in": "query",
                 "required": false,
