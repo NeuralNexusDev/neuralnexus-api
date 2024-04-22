@@ -1,6 +1,9 @@
 package gss
 
-import "github.com/NeuralNexusDev/neuralnexus-api/modules/mcstatus"
+import (
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/mcstatus"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/proto/gsspb"
+)
 
 // ServerStatus - Server status interface
 type ServerStatus interface {
@@ -9,21 +12,26 @@ type ServerStatus interface {
 
 // GameServerStatus - Normalized game server status
 type GameServerStatus struct {
-	Host       string      `json:"host_name" xml:"host_name"`
-	Port       int         `json:"port" xml:"port"`
-	Name       string      `json:"name" xml:"name"`
-	MapName    string      `json:"map_name" xml:"map_name"`
-	MaxPlayers int         `json:"max_players" xml:"max_players"`
-	NumPlayers int         `json:"num_players" xml:"num_players"`
-	Players    []Player    `json:"players" xml:"players"`
-	QueryType  QueryType   `json:"query_type" xml:"query_type"`
-	Raw        interface{} `json:"raw,omitempty" xml:"raw,omitempty"`
+	*gsspb.ServerStatus
+	QueryType QueryType   `json:"query_type" xml:"query_type"`
+	Raw       interface{} `json:"raw,omitempty" xml:"raw,omitempty"`
 }
 
-// Simple Player definition
-type Player struct {
-	Name string `json:"name" xml:"name"`
-	ID   string `json:"id" xml:"id"`
+// NewGameServerStatus - Create a new game server status
+func NewGameServerStatus(host string, port int, name string, mapName string, maxPlayers int, numPlayers int, players []*gsspb.Player, queryType QueryType, raw interface{}) *GameServerStatus {
+	return &GameServerStatus{
+		&gsspb.ServerStatus{
+			Host:       host,
+			Port:       int32(port),
+			Name:       name,
+			MapName:    mapName,
+			MaxPlayers: int32(maxPlayers),
+			NumPlayers: int32(numPlayers),
+			Players:    players,
+		},
+		queryType,
+		raw,
+	}
 }
 
 // QueryType - Query type enum
@@ -37,6 +45,29 @@ const (
 	// QueryTypeGameDig - Query type GameDig
 	QueryTypeGameDig QueryType = "gamedig"
 )
+
+// Type alias
+type mcServerStatus mcstatus.MCServerStatus
+
+// Normalize - Normalize Minecraft response
+func (mc *mcServerStatus) Normalize() *GameServerStatus {
+	players := make([]*gsspb.Player, len(mc.Players))
+	for i, v := range mc.Players {
+		players[i] = &gsspb.Player{Name: v.Name, Id: v.Uuid}
+	}
+
+	return NewGameServerStatus(
+		mc.Host,
+		int(mc.Port),
+		mc.Name,
+		mc.Map,
+		int(mc.MaxPlayers),
+		int(mc.NumPlayers),
+		players,
+		QueryTypeMinecraft,
+		mc,
+	)
+}
 
 // GameQResponse - GameQ REST API response
 type GameQResponse struct {
@@ -60,47 +91,24 @@ type GameQResponse struct {
 	Teams      []string `json:"teams" xml:"teams"`
 }
 
-// Type alias
-type mcServerStatus mcstatus.MCServerStatus
-
-// Normalize - Normalize Minecraft response
-func (mc *mcServerStatus) Normalize() *GameServerStatus {
-	players := make([]Player, len(mc.Players))
-	for i, v := range mc.Players {
-		players[i] = Player{Name: v.Name, ID: v.Uuid}
-	}
-
-	return &GameServerStatus{
-		Host:       mc.Host,
-		Port:       int(mc.Port),
-		Name:       mc.Name,
-		MapName:    mc.Map,
-		MaxPlayers: int(mc.MaxPlayers),
-		NumPlayers: int(mc.NumPlayers),
-		Players:    players,
-		QueryType:  QueryTypeMinecraft,
-		Raw:        mc.Raw,
-	}
-}
-
 // Normalize - Normalize GameQ response
 func (gq *GameQResponse) Normalize() *GameServerStatus {
-	players := make([]Player, len(gq.Players))
+	players := make([]*gsspb.Player, len(gq.Players))
 	for i, v := range gq.Players {
-		players[i] = Player{Name: v}
+		players[i] = &gsspb.Player{Name: v}
 	}
 
-	return &GameServerStatus{
-		Host:       gq.HostName,
-		Port:       gq.PortQuery,
-		Name:       gq.Name,
-		MapName:    gq.MapName,
-		MaxPlayers: gq.MaxPlayers,
-		NumPlayers: gq.NumPlayers,
-		Players:    players,
-		QueryType:  QueryTypeGameQ,
-		Raw:        gq,
-	}
+	return NewGameServerStatus(
+		gq.HostName,
+		gq.PortQuery,
+		gq.Name,
+		gq.MapName,
+		gq.MaxPlayers,
+		gq.NumPlayers,
+		players,
+		QueryTypeGameQ,
+		gq,
+	)
 }
 
 // GameDigResponse - GameDig REST API response
@@ -126,22 +134,22 @@ type GameDigPlayer struct {
 
 // Normalize - Normalize GameDig response
 func (gd *GameDigResponse) Normalize() *GameServerStatus {
-	players := make([]Player, len(gd.Players))
+	players := make([]*gsspb.Player, len(gd.Players))
 	for i, v := range gd.Players {
-		players[i] = Player{Name: v.Name}
+		players[i] = &gsspb.Player{Name: v.Name}
 	}
 
-	return &GameServerStatus{
-		Host:       gd.Connect,
-		Port:       gd.QueryPort,
-		Name:       gd.Name,
-		MapName:    gd.Map,
-		MaxPlayers: gd.MaxPlayers,
-		NumPlayers: gd.NumPlayers,
-		Players:    players,
-		QueryType:  QueryTypeGameDig,
-		Raw:        gd,
-	}
+	return NewGameServerStatus(
+		gd.Connect,
+		gd.QueryPort,
+		gd.Name,
+		gd.Map,
+		gd.MaxPlayers,
+		gd.NumPlayers,
+		players,
+		QueryTypeGameDig,
+		gd,
+	)
 }
 
 // Minecraft List

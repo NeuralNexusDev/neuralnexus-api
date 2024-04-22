@@ -18,6 +18,7 @@ func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 // GameServerStatusHandler - Get the game server status
 func GameServerStatusHandler(s GSSService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		var err error
 		game := r.PathValue("game")
 		host := r.URL.Query().Get("host")
 		if host == "" {
@@ -30,12 +31,31 @@ func GameServerStatusHandler(s GSSService) http.HandlerFunc {
 			return
 		}
 
-		returnRaw := r.URL.Query().Get("raw") == "true"
-		status, err := s.QueryGameServer(game, host, port)
+		var status *GameServerStatus
+		query_type := r.URL.Query().Get("query_type")
+		if query_type != "" {
+			switch query_type {
+			case "gameq":
+				query, err := s.QueryGameQ(game, host, port)
+				if err != nil {
+					status = query.Normalize()
+				}
+			case "gamedig":
+				query, err := s.QueryGameDig(game, host, port)
+				if err != nil {
+					status = query.Normalize()
+				}
+			}
+		}
+
+		if status == nil {
+			status, err = s.QueryGameServer(game, host, port)
+		}
 		if err != nil {
-			responses.SendAndEncodeInternalServerError(w, r, err.Error())
+			responses.SendAndEncodeNotFound(w, r, err.Error())
 			return
 		}
+		returnRaw := r.URL.Query().Get("raw") == "true"
 		if !returnRaw {
 			status.Raw = nil
 		}

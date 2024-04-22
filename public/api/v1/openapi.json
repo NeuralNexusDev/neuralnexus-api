@@ -264,19 +264,110 @@
                 }
             }
         },
+        "/game-server-status/{host}": {
+            "get": {
+                "summary": "Get game server status",
+                "description": "Get game server status",
+                "parameters": [
+                    {
+                        "name": "host",
+                        "in": "path",
+                        "description": "Game server address",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "port",
+                        "in": "query",
+                        "description": "Game server port",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "$ref": "#/components/parameters/RawQuery"
+                    },
+                    {
+                        "name": "query_type",
+                        "in": "query",
+                        "description": "Query type",
+                        "required": false,
+                        "schema": {
+                            "$ref": "#/components/schemas/QueryType"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GameServerStatus"
+                                }
+                            },
+                            "application/xml": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GameServerStatus"
+                                }
+                            },
+                            "application/x-protobuf": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GameServerStatus"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    }
+                }
+            }
+        },
+        "/game-server-status/simple/{host}": {
+            "get": {
+                "summary": "Get game server simple status",
+                "description": "Get game server simple status",
+                "parameters": [
+                    {
+                        "name": "host",
+                        "in": "path",
+                        "description": "Game server address",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "port",
+                        "in": "query",
+                        "description": "Game server port",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "$ref": "#/components/responses/SimpleOnlineResponse"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/SimpleOfflineResponse"
+                    }
+                }
+            }
+        },
         "/mcstatus/{host}": {
             "get": {
                 "summary": "Get Minecraft server status",
                 "description": "Get Minecraft server status",
                 "parameters": [
                     {
-                        "name": "host",
-                        "in": "path",
-                        "description": "Minecraft server address",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
+                        "$ref": "#/components/parameters/HostSlug"
                     },
                     {
                         "name": "bedrock",
@@ -306,13 +397,7 @@
                         }
                     },
                     {
-                        "name": "raw",
-                        "in": "query",
-                        "description": "Return raw server status",
-                        "required": false,
-                        "schema": {
-                            "type": "boolean"
-                        }
+                        "$ref": "#/components/parameters/RawQuery"
                     }
                 ],
                 "responses": {
@@ -337,43 +422,7 @@
                         }
                     },
                     "404": {
-                        "description": "Not Found, returns generic offline server status",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "schema": {
-                                        "type": "object",
-                                        "required": [
-                                            "name",
-                                            "favicon"
-                                        ],
-                                        "properties": {
-                                            "name": {
-                                                "type": "string"
-                                            },
-                                            "map": {
-                                                "type": "string"
-                                            },
-                                            "maxplayers": {
-                                                "type": "integer"
-                                            },
-                                            "players": {
-                                                "type": "integer"
-                                            },
-                                            "connect": {
-                                                "type": "string"
-                                            },
-                                            "version": {
-                                                "type": "string"
-                                            },
-                                            "favicon": {
-                                                "type": "string"
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        "$ref": "#/components/responses/404NotFound"
                     }
                 }
             }
@@ -384,13 +433,7 @@
                 "description": "Get Minecraft server icon",
                 "parameters": [
                     {
-                        "name": "address",
-                        "in": "path",
-                        "description": "Minecraft server address",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
+                        "$ref": "#/components/parameters/HostSlug"
                     }
                 ],
                 "responses": {
@@ -417,41 +460,15 @@
                 "description": "Get Minecraft server simple status",
                 "parameters": [
                     {
-                        "name": "address",
-                        "in": "path",
-                        "description": "Minecraft server address",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
+                        "$ref": "#/components/parameters/HostSlug"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "Online",
-                        "content": {
-                            "text/plain": {
-                                "schema": {
-                                    "type": "string",
-                                    "enum": [
-                                        "Online"
-                                    ]
-                                }
-                            }
-                        }
+                        "$ref": "#/components/responses/SimpleOnlineResponse"
                     },
                     "404": {
-                        "description": "Offline",
-                        "content": {
-                            "text/plain": {
-                                "schema": {
-                                    "type": "string",
-                                    "enum": [
-                                        "Offline"
-                                    ]
-                                }
-                            }
-                        }
+                        "$ref": "#/components/responses/SimpleOfflineResponse"
                     }
                 }
             }
@@ -459,26 +476,6 @@
     },
     "components": {
         "schemas": {
-            "Problem": {
-                "type": "object",
-                "properties": {
-                    "type": {
-                        "type": "string"
-                    },
-                    "status": {
-                        "type": "integer"
-                    },
-                    "title": {
-                        "type": "string"
-                    },
-                    "detail": {
-                        "type": "string"
-                    },
-                    "instance": {
-                        "type": "string"
-                    }
-                }
-            },
             "AuthSession": {
                 "type": "object",
                 "properties": {
@@ -505,6 +502,82 @@
                     }
                 }
             },
+            "BNGName": {
+                "type": "object",
+                "required": [
+                    "name"
+                ],
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    }
+                }
+            },
+            "GameServerStatus": {
+                "type": "object",
+                "required": [
+                    "host",
+                    "port",
+                    "name",
+                    "map_name",
+                    "map",
+                    "max_players",
+                    "num_players",
+                    "players",
+                    "query_type"
+                ],
+                "properties": {
+                    "host": {
+                        "type": "string"
+                    },
+                    "port": {
+                        "type": "integer"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "map_name": {
+                        "type": "string"
+                    },
+                    "map": {
+                        "type": "string"
+                    },
+                    "max_players": {
+                        "type": "integer"
+                    },
+                    "num_players": {
+                        "type": "integer"
+                    },
+                    "players": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {
+                                    "type": "string"
+                                },
+                                "id": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "query_type": {
+                        "$ref": "#/components/schemas/QueryType"
+                    },
+                    "raw": {
+                        "type": "object"
+                    }
+                }
+            },
+            "QueryType": {
+                "type": "string",
+                "enum": [
+                    "minecraft",
+                    "gameq",
+                    "gamedig"
+                ]
+            },
             "Login": {
                 "type": "object",
                 "required": [
@@ -522,17 +595,6 @@
                     }
                 }
             },
-            "BNGName": {
-                "type": "object",
-                "required": [
-                    "name"
-                ],
-                "properties": {
-                    "name": {
-                        "type": "string"
-                    }
-                }
-            },
             "MCServerStatus": {
                 "type": "object",
                 "required": [
@@ -543,6 +605,7 @@
                     "map",
                     "max_players",
                     "num_players",
+                    "players",
                     "version",
                     "favicon",
                     "server_type"
@@ -595,6 +658,29 @@
                             "java",
                             "bedrock"
                         ]
+                    },
+                    "raw": {
+                        "type": "object"
+                    }
+                }
+            },
+            "Problem": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "integer"
+                    },
+                    "title": {
+                        "type": "string"
+                    },
+                    "detail": {
+                        "type": "string"
+                    },
+                    "instance": {
+                        "type": "string"
                     }
                 }
             }
@@ -606,6 +692,22 @@
                 "required": true,
                 "schema": {
                     "type": "string"
+                }
+            },
+            "HostSlug": {
+                "name": "host",
+                "in": "path",
+                "required": true,
+                "schema": {
+                    "type": "string"
+                }
+            },
+            "RawQuery": {
+                "name": "raw",
+                "in": "query",
+                "required": false,
+                "schema": {
+                    "type": "boolean"
                 }
             }
         },
@@ -714,6 +816,32 @@
                     "application/x-protobuf": {
                         "schema": {
                             "$ref": "#/components/schemas/BNGName"
+                        }
+                    }
+                }
+            },
+            "SimpleOnlineResponse": {
+                "description": "Online response",
+                "content": {
+                    "text/plain": {
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "Online"
+                            ]
+                        }
+                    }
+                }
+            },
+            "SimpleOfflineResponse": {
+                "description": "Offline response",
+                "content": {
+                    "text/plain": {
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "Offline"
+                            ]
                         }
                     }
                 }

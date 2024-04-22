@@ -16,7 +16,7 @@ import (
 
 // MCServerStatus - Minecraft Status response
 type MCServerStatus struct {
-	mcstatuspb.ServerStatus
+	*mcstatuspb.ServerStatus
 	ServerType ServerType  `json:"server_type" xml:"server_type"`
 	Raw        interface{} `json:"raw,omitempty" xml:"raw,omitempty"`
 	Icon       image.Image `json:"-" xml:"-"`
@@ -34,7 +34,7 @@ const (
 // NewServerStatus - Create a new server status
 func NewServerStatus(host string, port int, name string, motd string, mapName string, maxPlayers int, numPlayers int, players []*mcstatuspb.Player, version string, favicon string, serverType ServerType, raw interface{}, icon image.Image) *MCServerStatus {
 	return &MCServerStatus{
-		ServerStatus: mcstatuspb.ServerStatus{
+		ServerStatus: &mcstatuspb.ServerStatus{
 			Host:       host,
 			Port:       int32(port),
 			Name:       name,

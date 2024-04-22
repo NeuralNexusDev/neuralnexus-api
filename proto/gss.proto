@@ -1,0 +1,25 @@
+syntax = "proto3";
+package gsspb;
+option go_package = "./gsspb";
+
+message ServerStatus {
+    string host = 1;
+    int32 port = 2;
+    string name = 3;
+    string map_name = 4;
+    int32 max_players = 5;
+    int32 num_players = 6;
+    repeated Player players = 7;
+    QueryType query_type = 8;
+}
+
+message Player {
+    string name = 1;
+    string id = 2;
+}
+
+enum QueryType {
+    MINECRAFT = 0;
+    GAMEQ = 1;
+    GAMEDIG = 2;
+}

@@ -7,3 +7,6 @@ gen:
 
 	protoc -I=./proto --go_out=./modules/proto ./proto/mcstatus.proto
 	sed -i 's/json:"\(.*\),omitempty"/json:"\1" xml:"\1"/g' ./modules/proto/mcstatuspb/mcstatus.pb.go
+
+	protoc -I=./proto --go_out=./modules/proto ./proto/gss.proto
+	sed -i 's/json:"\(.*\),omitempty"/json:"\1" xml:"\1"/g' ./modules/proto/gsspb/gss.pb.go
