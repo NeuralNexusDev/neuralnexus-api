@@ -18,7 +18,8 @@ import (
 // 	permissions TEXT[] NOT NULL,
 // 	iat BIGINT NOT NULL,
 // 	lua BIGINT NOT NULL,
-// 	exp BIGINT NOT NULL
+// 	exp BIGINT NOT NULL,
+//  FOREIGN KEY (user_id) REFERENCES accounts(user_id)
 // );
 
 // SessionStore interface

@@ -8,14 +8,19 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// CREATE TRIGGER update_linked_accounts_modtime
+// BEFORE UPDATE ON linked_accounts
+// FOR EACH ROW
+// EXECUTE PROCEDURE update_modified_column();
+
 // CREATE TABLE linked_accounts (
 //   user_id UUID NOT NULL,
 //   platform TEXT NOT NULL,
 //   platform_username TEXT NOT NULL,
 //   platform_id TEXT NOT NULL,
 //   data JSONB NOT NULL,
-//   data_updated_at timestamp with time zone default current_timestamp,
 //   created_at timestamp with time zone default current_timestamp,
+//   updated_at timestamp with time zone default current_timestamp,
 //   FOREIGN KEY (user_id) REFERENCES accounts(user_id),
 //   CONSTRAINT linked_accounts_unique UNIQUE (user_id, platform)
 // );
