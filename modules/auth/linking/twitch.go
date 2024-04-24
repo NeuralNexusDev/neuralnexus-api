@@ -191,12 +191,14 @@ func GetTwitchUser(accessToken string) (*TwitchData, error) {
 		return nil, errors.New("failed to get user data")
 	}
 
-	var data TwitchData
+	var data struct {
+		Data []TwitchData `json:"data"`
+	}
 	err = json.NewDecoder(resp.Body).Decode(&data)
 	if err != nil {
 		return nil, err
 	}
-	return &data, nil
+	return &data.Data[0], nil
 }
 
 // TwitchOAuth process the Twitch OAuth flow
