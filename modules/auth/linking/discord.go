@@ -235,7 +235,7 @@ func DiscordOAuth(as auth.AccountStore, ss sess.SessionStore, las LinkAccountSto
 
 	// Check if platform account is linked to an account
 	la, err := las.GetLinkedAccountByPlatformID(PlatformDiscord, user.ID)
-	if err != nil {
+	if err == nil {
 		// If the account IDs don't match, default to OAuth as the source of truth
 		if a == nil || a.UserID != la.UserID {
 			a, err = as.GetAccountByID(la.UserID)
