@@ -101,12 +101,12 @@ func TwitchExtCodeForToken(code string) (*TwitchTokenResponse, error) {
 	// return nil, errors.New("failed to exchange code for access token")
 	// }
 
-	var token *TwitchTokenResponse
-	err = json.NewDecoder(resp.Body).Decode(token)
+	var token TwitchTokenResponse
+	err = json.NewDecoder(resp.Body).Decode(&token)
 	if err != nil {
 		return nil, err
 	}
-	return token, nil
+	return &token, nil
 }
 
 // TwitchRefreshToken refreshes an access token
