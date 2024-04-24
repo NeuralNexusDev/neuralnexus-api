@@ -86,11 +86,22 @@ func OAuthHandler(as auth.AccountStore, ss sess.SessionStore, las accountlinking
 			return
 		}
 		state := r.URL.Query().Get("state")
-		session, err := accountlinking.DiscordOAuth(as, ss, las, code, state)
-		if err != nil {
-			log.Println("Failed to authenticate with Discord:\n\t", err)
-			responses.SendAndEncodeBadRequest(w, r, "Failed to authenticate with Discord")
-			return
+		var session *sess.Session
+		var err error
+		if state == accountlinking.PlatformDiscord {
+			session, err = accountlinking.DiscordOAuth(as, ss, las, code, state)
+			if err != nil {
+				log.Println("Failed to authenticate with Discord:\n\t", err)
+				responses.SendAndEncodeBadRequest(w, r, "Failed to authenticate with Discord")
+				return
+			}
+		} else if state == accountlinking.PlatformTwitch {
+			session, err = accountlinking.TwitchOAuth(as, ss, las, code, state)
+			if err != nil {
+				log.Println("Failed to authenticate with Twitch:\n\t", err)
+				responses.SendAndEncodeBadRequest(w, r, "Failed to authenticate with Twitch")
+				return
+			}
 		}
 		responses.SendAndEncodeStruct(w, r, http.StatusOK, session)
 	}

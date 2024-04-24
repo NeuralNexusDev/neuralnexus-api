@@ -103,13 +103,12 @@ func DiscordExtCodeForToken(code string) (*DiscordTokenResponse, error) {
 		return nil, errors.New("failed to exchange code for access token")
 	}
 
-	var token DiscordTokenResponse
-	err = json.NewDecoder(resp.Body).Decode(&token)
+	var token *DiscordTokenResponse
+	err = json.NewDecoder(resp.Body).Decode(token)
 	if err != nil {
 		return nil, err
 	}
-
-	return &token, nil
+	return token, nil
 }
 
 // DiscordRefreshToken refreshes an access token
@@ -137,13 +136,12 @@ func DiscordRefreshToken(refreshToken string) (*DiscordTokenResponse, error) {
 		return nil, errors.New("failed to refresh access token")
 	}
 
-	var token DiscordTokenResponse
-	err = json.NewDecoder(resp.Body).Decode(&token)
+	var token *DiscordTokenResponse
+	err = json.NewDecoder(resp.Body).Decode(token)
 	if err != nil {
 		return nil, err
 	}
-
-	return &token, nil
+	return token, nil
 }
 
 // DiscordRevokeToken revokes an access token
