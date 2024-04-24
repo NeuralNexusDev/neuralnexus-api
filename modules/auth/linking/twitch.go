@@ -82,6 +82,8 @@ func TwitchExtCodeForToken(code string) (*TwitchTokenResponse, error) {
 	data.Set("grant_type", "authorization_code")
 	data.Set("redirect_uri", TWITCH_REDIRECT_URI)
 
+	log.Println(data.Encode())
+
 	req, err := http.NewRequest("POST", TWITCH_API_ENDPOINT+"/oauth2/token", strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, err
