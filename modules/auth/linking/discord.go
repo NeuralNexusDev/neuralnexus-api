@@ -100,9 +100,9 @@ func DiscordExtCodeForToken(code string) (*DiscordTokenResponse, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		var body []byte
-		resp.Body.Read(body)
-		log.Println(string(body))
+		body := make(map[string]interface{})
+		json.NewDecoder(resp.Body).Decode(&body)
+		log.Println(body)
 		return nil, errors.New("failed to exchange code for access token")
 	}
 

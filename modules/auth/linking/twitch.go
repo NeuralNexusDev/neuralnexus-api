@@ -17,11 +17,10 @@ import (
 
 // -------------- Global Variables --------------
 var (
-	TWITCH_CLIENT_ID      = os.Getenv("TWITCH_CLIENT_ID")
-	TWITCH_CLIENT_SECRET  = os.Getenv("TWITCH_CLIENT_SECRET")
-	TWITCH_REDIRECT_URI   = os.Getenv("TWITCH_REDIRECT_URI")
-	TWITCH_OAUTH_ENDPOINT = "https://id.twitch.tv"
-	TWITCH_API_ENDPOINT   = "https://api.twitch.tv/helix"
+	TWITCH_CLIENT_ID     = os.Getenv("TWITCH_CLIENT_ID")
+	TWITCH_CLIENT_SECRET = os.Getenv("TWITCH_CLIENT_SECRET")
+	TWITCH_REDIRECT_URI  = os.Getenv("TWITCH_REDIRECT_URI")
+	TWITCH_API_ENDPOINT  = "https://api.twitch.tv/helix"
 )
 
 // -------------- Structs --------------
@@ -82,9 +81,7 @@ func TwitchExtCodeForToken(code string) (*TwitchTokenResponse, error) {
 	data.Set("grant_type", "authorization_code")
 	data.Set("redirect_uri", TWITCH_REDIRECT_URI)
 
-	log.Println(data.Encode())
-
-	req, err := http.NewRequest("POST", TWITCH_API_ENDPOINT+"/oauth2/token", strings.NewReader(data.Encode()))
+	req, err := http.NewRequest("POST", "https://id.twitch.tv/oauth2/token", strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, err
 	}
@@ -99,9 +96,9 @@ func TwitchExtCodeForToken(code string) (*TwitchTokenResponse, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		var body []byte
-		resp.Body.Read(body)
-		log.Println(string(body))
+		body := make(map[string]interface{})
+		json.NewDecoder(resp.Body).Decode(&body)
+		log.Println(body)
 		return nil, errors.New("failed to exchange code for access token")
 	}
 
