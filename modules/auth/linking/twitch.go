@@ -96,10 +96,12 @@ func TwitchExtCodeForToken(code string) (*TwitchTokenResponse, error) {
 	}
 	defer resp.Body.Close()
 
-	log.Println(resp.StatusCode)
-	// if resp.StatusCode != http.StatusOK {
-	// return nil, errors.New("failed to exchange code for access token")
-	// }
+	if resp.StatusCode != http.StatusOK {
+		var body []byte
+		resp.Body.Read(body)
+		log.Println(string(body))
+		return nil, errors.New("failed to exchange code for access token")
+	}
 
 	var token TwitchTokenResponse
 	err = json.NewDecoder(resp.Body).Decode(&token)
@@ -153,8 +155,6 @@ func TwitchRevokeToken(accessToken string) error {
 	if err != nil {
 		return err
 	}
-
-	log.Println(data.Encode())
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
