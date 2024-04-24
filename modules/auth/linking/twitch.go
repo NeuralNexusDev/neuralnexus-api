@@ -96,9 +96,10 @@ func TwitchExtCodeForToken(code string) (*TwitchTokenResponse, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New("failed to exchange code for access token")
-	}
+	log.Println(resp.StatusCode)
+	// if resp.StatusCode != http.StatusOK {
+	// return nil, errors.New("failed to exchange code for access token")
+	// }
 
 	var token *TwitchTokenResponse
 	err = json.NewDecoder(resp.Body).Decode(token)
@@ -134,12 +135,12 @@ func TwitchRefreshToken(refreshToken string) (*TwitchTokenResponse, error) {
 		return nil, errors.New("failed to refresh access token")
 	}
 
-	var token *TwitchTokenResponse
-	err = json.NewDecoder(resp.Body).Decode(token)
+	var token TwitchTokenResponse
+	err = json.NewDecoder(resp.Body).Decode(&token)
 	if err != nil {
 		return nil, err
 	}
-	return token, nil
+	return &token, nil
 }
 
 // TwitchRevokeToken revokes an access token
@@ -189,12 +190,12 @@ func GetTwitchUser(accessToken string) (*TwitchData, error) {
 		return nil, errors.New("failed to get user data")
 	}
 
-	var data *TwitchData
-	err = json.NewDecoder(resp.Body).Decode(data)
+	var data TwitchData
+	err = json.NewDecoder(resp.Body).Decode(&data)
 	if err != nil {
 		return nil, err
 	}
-	return data, nil
+	return &data, nil
 }
 
 // TwitchOAuth process the Twitch OAuth flow

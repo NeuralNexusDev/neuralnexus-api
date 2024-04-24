@@ -136,12 +136,12 @@ func DiscordRefreshToken(refreshToken string) (*DiscordTokenResponse, error) {
 		return nil, errors.New("failed to refresh access token")
 	}
 
-	var token *DiscordTokenResponse
-	err = json.NewDecoder(resp.Body).Decode(token)
+	var token DiscordTokenResponse
+	err = json.NewDecoder(resp.Body).Decode(&token)
 	if err != nil {
 		return nil, err
 	}
-	return token, nil
+	return &token, nil
 }
 
 // DiscordRevokeToken revokes an access token
@@ -192,13 +192,13 @@ func GetDiscordUser(accessToken string) (*DiscordData, error) {
 		return nil, errors.New("failed to get Discord user")
 	}
 
-	var user DiscordData
-	err = json.NewDecoder(resp.Body).Decode(&user)
+	var data DiscordData
+	err = json.NewDecoder(resp.Body).Decode(&data)
 	if err != nil {
 		return nil, err
 	}
 
-	return &user, nil
+	return &data, nil
 }
 
 // DiscordOAuth process the Discord OAuth flow
