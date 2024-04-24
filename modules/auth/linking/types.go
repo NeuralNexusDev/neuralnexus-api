@@ -15,7 +15,7 @@ type LinkedAccount struct {
 	PlatformUsername string      `db:"platform_username" validate:"required_without=PlatformID"`
 	PlatformID       string      `db:"platform_id" validate:"required_without=PlatformUsername"`
 	Data             interface{} `db:"data" validate:"required"`
-	DataUpdatedAt    time.Time   `db:"data_updated_at"`
+	DataUpdatedAt    time.Time   `db:"updated_at"`
 	CreatedAt        time.Time   `db:"created_at"`
 }
 
