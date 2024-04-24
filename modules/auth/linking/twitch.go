@@ -154,6 +154,8 @@ func TwitchRevokeToken(accessToken string) error {
 		return err
 	}
 
+	log.Println(data.Encode())
+
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	client := &http.Client{}
