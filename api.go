@@ -11,6 +11,8 @@ import (
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	authroutes "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/routes"
 	beenamegenerator "github.com/NeuralNexusDev/neuralnexus-api/modules/bee_name_generator"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/datastore"
+	numbersds "github.com/NeuralNexusDev/neuralnexus-api/modules/datastore/numbers"
 	gss "github.com/NeuralNexusDev/neuralnexus-api/modules/game_server_status"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/mcstatus"
 	petpictures "github.com/NeuralNexusDev/neuralnexus-api/modules/pet_pictures"
@@ -45,6 +47,8 @@ func (s *APIServer) Setup() http.Handler {
 	routerStack := routes.CreateStack(
 		authroutes.ApplyRoutes,
 		beenamegenerator.ApplyRoutes,
+		datastore.ApplyRoutes,
+		numbersds.ApplyRoutes,
 		gss.ApplyRoutes,
 		mcstatus.ApplyRoutes,
 		petpictures.ApplyRoutes,

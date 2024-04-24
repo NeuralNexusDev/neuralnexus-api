@@ -1,25 +1,23 @@
 package datastore
 
-import "github.com/google/uuid"
+import (
+	"time"
 
-// CREATE TRIGGER update_datastores_modtime
-// BEFORE UPDATE ON datastores
-// FOR EACH ROW
-// EXECUTE PROCEDURE update_modified_column();
+	"github.com/google/uuid"
+)
 
-// CREATE TABLE datastores (
-//  store_id UUID PRIMARY KEY NOT NULL,
-// 	owner_id UUID NOT NULL,
-// 	created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-// 	updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-//  FOREIGN KEY (owner_id) REFERENCES accounts(user_id)
-// );
+// Store - Data Store
+type Store struct {
+	StoreID   uuid.UUID `db:"store_id" json:"store_id" xml:"store_id"`
+	OwnerID   uuid.UUID `db:"owner_id" json:"owner_id" xml:"owner_id"`
+	CreatedAt time.Time `db:"created_at" json:"created_at" xml:"created_at"`
+	UpdatedAt time.Time `db:"updated_at" json:"updated_at" xml:"updated_at"`
+}
 
-// -------------- Structs --------------
-
-type DataStore interface {
-	Create(storeID, userID uuid.UUID, initVal any) error
-	Read(storeID, userID uuid.UUID) (any, error)
-	Update(storeID, userID uuid.UUID, newVal any) error
-	Delete(storeID, userID uuid.UUID) error
+// NewStore - Create a new Data store
+func NewDataStore(storeID, ownerID uuid.UUID) *Store {
+	return &Store{
+		StoreID: storeID,
+		OwnerID: ownerID,
+	}
 }

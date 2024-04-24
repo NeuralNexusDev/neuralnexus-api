@@ -5,9 +5,9 @@ package numbersds
 // NumberService - Number Service
 type NumberService interface {
 	Add(*NumberData, float64) error
-	Create(*NumberData) error
+	Create(*NumberData) (*NumberData, error)
 	Read(*NumberData) (*NumberData, error)
-	Update(*NumberData) error
+	Update(*NumberData) (*NumberData, error)
 	Delete(*NumberData) error
 }
 
@@ -28,22 +28,30 @@ func (s *numberService) Add(data *NumberData, value float64) error {
 }
 
 // Create - Create a new entry in the datastore
-func (s *numberService) Create(data *NumberData) error {
-	return s.store.Create(data.StoreID, data.UserID, data.Value)
+func (s *numberService) Create(data *NumberData) (*NumberData, error) {
+	val, err := s.store.Create(data.StoreID, data.UserID, data.Value)
+	if err != nil {
+		return nil, err
+	}
+	return NewNumberData(data.StoreID, data.UserID, val), nil
 }
 
 // Read - Read an entry from the datastore
 func (s *numberService) Read(data *NumberData) (*NumberData, error) {
-	value, err := s.store.Read(data.StoreID, data.UserID)
+	val, err := s.store.Read(data.StoreID, data.UserID)
 	if err != nil {
 		return nil, err
 	}
-	return NewNumberData(data.StoreID, data.UserID, value.(float64)), nil
+	return NewNumberData(data.StoreID, data.UserID, val), nil
 }
 
 // Update - Update an entry in the datastore
-func (s *numberService) Update(data *NumberData) error {
-	return s.store.Update(data.StoreID, data.UserID, data.Value)
+func (s *numberService) Update(data *NumberData) (*NumberData, error) {
+	val, err := s.store.Update(data.StoreID, data.UserID, data.Value)
+	if err != nil {
+		return nil, err
+	}
+	return NewNumberData(data.StoreID, data.UserID, val), nil
 }
 
 // Delete - Delete an entry from the datastore

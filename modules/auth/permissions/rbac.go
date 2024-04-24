@@ -24,6 +24,9 @@ var (
 		Description: "Rate limit",
 		Value:       "1000",
 	}
+
+	ScopeAdminDataStore   = ScopeDataStore("*")
+	ScopeAdminNumberStore = ScopeNumberStore("*")
 )
 
 // ScopePetPictures -- Pet pictures
@@ -31,6 +34,24 @@ func ScopePetPictures(value string) Scope {
 	return Scope{
 		Name:        "petpictures",
 		Description: "Pet pictures",
+		Value:       value,
+	}
+}
+
+// ScopeDataStore -- Data store
+func ScopeDataStore(value string) Scope {
+	return Scope{
+		Name:        "datastore",
+		Description: "Data store",
+		Value:       value,
+	}
+}
+
+// ScopeNumberStore -- Number store
+func ScopeNumberStore(value string) Scope {
+	return Scope{
+		Name:        "numberstore",
+		Description: "Number store",
 		Value:       value,
 	}
 }
@@ -49,6 +70,8 @@ var (
 			ScopeAdminBeeNameGenerator,
 			ScopeAdminPetPictures,
 			ScopeAdminRateLimit,
+			ScopeAdminDataStore,
+			ScopeAdminNumberStore,
 		},
 	}
 
@@ -59,6 +82,8 @@ var (
 			ScopeAdminBeeNameGenerator,
 			ScopeAdminPetPictures,
 			ScopeAdminRateLimit,
+			ScopeAdminDataStore,
+			ScopeAdminNumberStore,
 		},
 	}
 )

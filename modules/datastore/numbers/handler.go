@@ -5,6 +5,8 @@ import (
 	"net/http"
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
+	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
+	sess "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
@@ -13,12 +15,42 @@ import (
 func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 	nStore := NewStore(database.GetDB("neuralnexus"))
 	nService := NewService(nStore)
-	mux.Handle("POST /api/v1/numbers", mw.Auth(CreateNumberHandler(nService)))
+	mux.Handle("POST /api/v1/datastore/number", mw.Auth(CreateNumberHandler(nService)))
+	mux.Handle("GET /api/v1/datastore/number", ReadNumberHandler(nService))
+	mux.Handle("PUT /api/v1/datastore/number", mw.Auth(UpdateNumberHandler(nService)))
+	mux.Handle("DELETE /api/v1/datastore/number", mw.Auth(DeleteNumberHandler(nService)))
 	return mux
 }
 
 // CreateNumberHandler - Create a new number
 func CreateNumberHandler(s NumberService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		session := r.Context().Value(mw.SessionKey).(*sess.Session)
+		if !session.HasPermission(perms.ScopeAdminNumberStore) {
+			responses.SendAndEncodeForbidden(w, r, "You do not have permission to create a numberstore")
+			return
+		}
+
+		var n *NumberData
+		err := responses.DecodeStruct(r, &n)
+		if err != nil {
+			log.Println("Bad body:\n\t", err)
+			responses.SendAndEncodeBadRequest(w, r, "")
+			return
+		}
+
+		n, err = s.Create(n)
+		if err != nil {
+			log.Println("Failed to create numberstore:\n\t", err)
+			responses.SendAndEncodeInternalServerError(w, r, "Failed to create numberstore")
+			return
+		}
+		responses.SendAndEncodeStruct(w, r, http.StatusOK, n)
+	}
+}
+
+// ReadNumberHandler - Read a number
+func ReadNumberHandler(s NumberService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var n *NumberData
 		err := responses.DecodeStruct(r, &n)
@@ -27,11 +59,61 @@ func CreateNumberHandler(s NumberService) http.HandlerFunc {
 			responses.SendAndEncodeBadRequest(w, r, "")
 			return
 		}
-		err = s.Create(n)
+
+		n, err = s.Read(n)
 		if err != nil {
-			log.Println("Failed to create number:\n\t", err)
-			responses.SendAndEncodeInternalServerError(w, r, "Failed to create number")
+			log.Println("Failed to read numberstore:\n\t", err)
+			responses.SendAndEncodeInternalServerError(w, r, "Failed to read numberstore")
 			return
 		}
+		responses.SendAndEncodeStruct(w, r, http.StatusOK, n)
+	}
+}
+
+// UpdateNumberHandler - Update a number
+func UpdateNumberHandler(s NumberService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		session := r.Context().Value(mw.SessionKey).(*sess.Session)
+		if !session.HasPermission(perms.ScopeAdminNumberStore) {
+			responses.SendAndEncodeForbidden(w, r, "You do not have permission to create a numberstore")
+			return
+		}
+
+		var n *NumberData
+		err := responses.DecodeStruct(r, &n)
+		if err != nil {
+			log.Println("Bad body:\n\t", err)
+			responses.SendAndEncodeBadRequest(w, r, "")
+			return
+		}
+
+		n, err = s.Update(n)
+		if err != nil {
+			log.Println("Failed to update numberstore:\n\t", err)
+			responses.SendAndEncodeInternalServerError(w, r, "Failed to update numberstore")
+			return
+		}
+		responses.SendAndEncodeStruct(w, r, http.StatusOK, n)
+	}
+}
+
+// DeleteNumberHandler - Delete a number
+func DeleteNumberHandler(s NumberService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var n *NumberData
+		err := responses.DecodeStruct(r, &n)
+		if err != nil {
+			log.Println("Bad body:\n\t", err)
+			responses.SendAndEncodeBadRequest(w, r, "")
+			return
+		}
+
+		err = s.Delete(n)
+		if err != nil {
+			log.Println("Failed to delete numberstore:\n\t", err)
+			responses.SendAndEncodeInternalServerError(w, r, "Failed to delete numberstore")
+			return
+		}
+		responses.SendAndEncodeStruct(w, r, http.StatusOK, n)
 	}
 }

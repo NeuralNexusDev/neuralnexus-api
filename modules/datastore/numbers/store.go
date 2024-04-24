@@ -3,7 +3,6 @@ package numbersds
 import (
 	"context"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/datastore"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -19,12 +18,16 @@ import (
 // 	value FLOAT NOT NULL,
 // 	created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 // 	updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-//  FOREIGN KEY (store_id) REFERENCES datastores(store_id)
+//  FOREIGN KEY (store_id) REFERENCES datastores(store_id),
+//  FOREIGN KEY (user_id) REFERENCES accounts(user_id)
 // );
 
 // NumberStore - Number Store
 type NumberStore interface {
-	datastore.DataStore
+	Create(storeID, userID uuid.UUID, initVal float64) (float64, error)
+	Read(storeID, userID uuid.UUID) (float64, error)
+	Update(storeID, userID uuid.UUID, newVal float64) (float64, error)
+	Delete(storeID, userID uuid.UUID) error
 	Add(storeID, userID uuid.UUID, value float64) error
 }
 
@@ -48,17 +51,17 @@ func (s *numberStore) Add(storeID, userID uuid.UUID, value float64) error {
 }
 
 // Create - Create a new entry in the datastore
-func (s *numberStore) Create(storeID, userID uuid.UUID, value any) error {
-	_, err := s.db.Exec(context.Background(), "INSERT INTO datastore_numbers (store_id, user_id, value) VALUES ($1, $2, $3)", storeID, userID, value)
+func (s *numberStore) Create(storeID, userID uuid.UUID, initVal float64) (float64, error) {
+	_, err := s.db.Exec(context.Background(), "INSERT INTO datastore_numbers (store_id, user_id, value) VALUES ($1, $2, $3)", storeID, userID, initVal)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	return nil
+	return initVal, nil
 }
 
 // Read - Read an entry from the datastore
-func (s *numberStore) Read(storeID, userID uuid.UUID) (any, error) {
-	var value int
+func (s *numberStore) Read(storeID, userID uuid.UUID) (float64, error) {
+	var value float64
 	err := s.db.QueryRow(context.Background(), "SELECT value FROM datastore_numbers WHERE store_id = $1 AND user_id = $2", storeID, userID).Scan(&value)
 	if err != nil {
 		return 0, err
@@ -67,12 +70,12 @@ func (s *numberStore) Read(storeID, userID uuid.UUID) (any, error) {
 }
 
 // Update - Update an entry in the datastore
-func (s *numberStore) Update(storeID, userID uuid.UUID, value any) error {
+func (s *numberStore) Update(storeID, userID uuid.UUID, value float64) (float64, error) {
 	_, err := s.db.Exec(context.Background(), "UPDATE datastore_numbers SET value = $1 WHERE store_id = $2 AND user_id = $3", value, storeID, userID)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	return nil
+	return value, nil
 }
 
 // Delete - Delete an entry from the datastore
