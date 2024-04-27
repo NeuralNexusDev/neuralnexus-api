@@ -7,29 +7,33 @@ import (
 
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 	sess "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
-	"github.com/google/uuid"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"golang.org/x/crypto/argon2"
 )
 
 // Account struct
 type Account struct {
-	UserID       uuid.UUID `db:"user_id" validate:"required"`
+	UserID       string    `db:"user_id" validate:"required"`
 	Username     string    `db:"username" validate:"required_without=Email"`
 	Email        string    `db:"email" validate:"required_without=Username"`
 	HashedSecret []byte    `db:"hashed_secret" validate:"required_without=Email"`
 	Salt         []byte    `db:"salt"`
 	Roles        []string  `db:"roles"`
-	CreatedAt    time.Time `db:"created_at"`
+	UpdatedAt    time.Time `db:"updated_at"`
 }
 
 // NewAccount creates a new account
 func NewAccount(username, email, password string) (*Account, error) {
+	id, err := database.GenSnowflake()
+	if err != nil {
+		return nil, err
+	}
 	user := &Account{
-		UserID:   uuid.New(),
+		UserID:   id,
 		Username: username,
 		Email:    email,
 	}
-	err := user.HashPassword(password)
+	err = user.HashPassword(password)
 	if err != nil {
 		return user, err
 	}
@@ -37,12 +41,16 @@ func NewAccount(username, email, password string) (*Account, error) {
 }
 
 // NewPasswordLessAccount creates a new account without a password
-func NewPasswordLessAccount(username, email string) *Account {
+func NewPasswordLessAccount(username, email string) (*Account, error) {
+	id, err := database.GenSnowflake()
+	if err != nil {
+		return nil, err
+	}
 	return &Account{
-		UserID:   uuid.New(),
+		UserID:   id,
 		Username: username,
 		Email:    email,
-	}
+	}, nil
 }
 
 // HashPassword hashes the password
@@ -83,7 +91,7 @@ func (user *Account) RemoveRole(role string) {
 }
 
 // NewSession creates a new session
-func (a *Account) NewSession(expiresAt int64) *sess.Session {
+func (a *Account) NewSession(expiresAt int64) (*sess.Session, error) {
 	permissions := []string{}
 	for _, r := range a.Roles {
 		role, err := perms.GetRoleByName(r)
@@ -96,12 +104,16 @@ func (a *Account) NewSession(expiresAt int64) *sess.Session {
 		}
 	}
 
+	id, err := database.GenSnowflake()
+	if err != nil {
+		return nil, err
+	}
 	return &sess.Session{
-		ID:          uuid.New(),
+		ID:          id,
 		UserID:      a.UserID,
 		Permissions: permissions,
 		IssuedAt:    time.Now().Unix(),
 		LastUsedAt:  time.Now().Unix(),
 		ExpiresAt:   expiresAt,
-	}
+	}, nil
 }

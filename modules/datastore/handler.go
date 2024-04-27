@@ -9,7 +9,6 @@ import (
 	sess "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
-	"github.com/google/uuid"
 )
 
 // ApplyRoutes - Apply the routes
@@ -32,8 +31,14 @@ func CreateDataStoreHandler(s DSService) http.HandlerFunc {
 			return
 		}
 
-		ds := NewDataStore(uuid.New(), session.UserID)
-		ds, err := s.Create(ds)
+		id, err := database.GenSnowflake()
+		if err != nil {
+			log.Println("Failed to generate snowflake:\n\t", err)
+			responses.SendAndEncodeInternalServerError(w, r, "Failed to create datastore")
+			return
+		}
+		ds := NewDataStore(id, session.UserID)
+		ds, err = s.Create(ds)
 		if err != nil {
 			log.Println("Failed to create data store:\n\t", err)
 			responses.SendAndEncodeInternalServerError(w, r, "Failed to create datastore")

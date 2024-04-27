@@ -6,15 +6,14 @@ import (
 	"time"
 
 	"github.com/goccy/go-json"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 )
 
 // CREATE TABLE sessions (
-// 	session_id UUID PRIMARY KEY NOT NULL,
-// 	user_id UUID NOT NULL,
+// 	session_id BIGINT PRIMARY KEY NOT NULL,
+// 	user_id BIGINT NOT NULL,
 // 	permissions TEXT[] NOT NULL,
 // 	iat BIGINT NOT NULL,
 // 	lua BIGINT NOT NULL,
@@ -25,12 +24,12 @@ import (
 // SessionStore interface
 type SessionStore interface {
 	AddSessionToDB(session *Session) (*Session, error)
-	GetSessionFromDB(id uuid.UUID) (*Session, error)
+	GetSessionFromDB(id string) (*Session, error)
 	UpdateSessionInDB(session *Session) (*Session, error)
-	DeleteSessionInDB(id uuid.UUID) (*Session, error)
+	DeleteSessionInDB(id string) (*Session, error)
 	AddSessionToCache(session *Session) (*Session, error)
-	GetSessionFromCache(id uuid.UUID) (*Session, error)
-	DeleteSessionFromCache(id uuid.UUID) (*Session, error)
+	GetSessionFromCache(id string) (*Session, error)
+	DeleteSessionFromCache(id string) (*Session, error)
 }
 
 // sessStore - SessionStore implementation
@@ -62,7 +61,7 @@ func (s *sessStore) AddSessionToDB(session *Session) (*Session, error) {
 }
 
 // GetSessionFromDB gets a session by ID
-func (s *sessStore) GetSessionFromDB(id uuid.UUID) (*Session, error) {
+func (s *sessStore) GetSessionFromDB(id string) (*Session, error) {
 	defer s.ClearExpiredSessions()
 
 	var session *Session
@@ -79,7 +78,7 @@ func (s *sessStore) GetSessionFromDB(id uuid.UUID) (*Session, error) {
 }
 
 // DeleteSessionInDB deletes a session by ID
-func (s *sessStore) DeleteSessionInDB(id uuid.UUID) (*Session, error) {
+func (s *sessStore) DeleteSessionInDB(id string) (*Session, error) {
 	defer s.ClearExpiredSessions()
 
 	_, err := s.db.Exec(context.Background(), "DELETE FROM sessions WHERE session_id = $1", id)
@@ -121,7 +120,7 @@ func (s *sessStore) AddSessionToCache(session *Session) (*Session, error) {
 		return nil, err
 	}
 
-	_, err = s.rdb.Set(context.Background(), session.ID.String(), stringSession, time.Until(time.Unix(session.ExpiresAt, 0))).Result()
+	_, err = s.rdb.Set(context.Background(), session.ID, stringSession, time.Until(time.Unix(session.ExpiresAt, 0))).Result()
 	if err != nil {
 		return nil, err
 	}
@@ -129,9 +128,9 @@ func (s *sessStore) AddSessionToCache(session *Session) (*Session, error) {
 }
 
 // GetSessionFromCache gets a session from the cache
-func (s *sessStore) GetSessionFromCache(id uuid.UUID) (*Session, error) {
+func (s *sessStore) GetSessionFromCache(id string) (*Session, error) {
 	var session Session
-	stringSession, err := s.rdb.Get(context.Background(), id.String()).Result()
+	stringSession, err := s.rdb.Get(context.Background(), id).Result()
 	if err != nil {
 		return nil, err
 	}
@@ -144,8 +143,8 @@ func (s *sessStore) GetSessionFromCache(id uuid.UUID) (*Session, error) {
 }
 
 // DeleteSessionFromCache deletes a session from the cache
-func (s *sessStore) DeleteSessionFromCache(id uuid.UUID) (*Session, error) {
-	_, err := s.rdb.Del(context.Background(), id.String()).Result()
+func (s *sessStore) DeleteSessionFromCache(id string) (*Session, error) {
+	_, err := s.rdb.Del(context.Background(), id).Result()
 	if err != nil {
 		return nil, err
 	}

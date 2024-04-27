@@ -12,7 +12,6 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	sess "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/goccy/go-json"
-	"github.com/google/uuid"
 )
 
 // -------------- Global Variables --------------
@@ -66,7 +65,7 @@ func (t TwitchData) PlatformData() string {
 }
 
 // CreateLinkedAccount creates a linked account
-func (t TwitchData) CreateLinkedAccount(userID uuid.UUID) *LinkedAccount {
+func (t TwitchData) CreateLinkedAccount(userID string) *LinkedAccount {
 	return NewLinkedAccount(userID, PlatformTwitch, t.Login, t.ID, t)
 }
 
@@ -205,17 +204,7 @@ func GetTwitchUser(accessToken string) (*TwitchData, error) {
 func TwitchOAuth(as auth.AccountStore, ss sess.SessionStore, las LinkAccountStore, code, state string) (*sess.Session, error) {
 	var a *auth.Account
 	// TODO: Sign the state so it can't be tampered with/impersonated
-	if state != "" && false { // TEMPORARILY DISABLED
-		// Get account by state (which is the user ID)
-		id, err := uuid.Parse(state)
-		if err != nil {
-			log.Println("Failed to parse state as UUID")
-			return nil, err
-		}
-		a, err = as.GetAccountByID(id)
-		if err != nil {
-			return nil, err
-		}
+	if state != "" && false { // TEMPORARILY DISABLED UNTIL STATE IS SIGNED
 	}
 
 	token, err := TwitchExtCodeForToken(code)
@@ -239,12 +228,18 @@ func TwitchOAuth(as auth.AccountStore, ss sess.SessionStore, las LinkAccountStor
 			if err != nil {
 				return nil, err
 			}
-			session := a.NewSession(time.Now().Add(time.Hour * 24).Unix())
+			session, err := a.NewSession(time.Now().Add(time.Hour * 24).Unix())
+			if err != nil {
+				return nil, err
+			}
 			ss.AddSessionToCache(session)
 			defer ss.AddSessionToDB(session)
 			return session, nil
 		} else if a.UserID == la.UserID {
-			session := a.NewSession(time.Now().Add(time.Hour * 24).Unix())
+			session, err := a.NewSession(time.Now().Add(time.Hour * 24).Unix())
+			if err != nil {
+				return nil, err
+			}
 			ss.AddSessionToCache(session)
 			defer ss.AddSessionToDB(session)
 			return session, nil
@@ -255,7 +250,10 @@ func TwitchOAuth(as auth.AccountStore, ss sess.SessionStore, las LinkAccountStor
 	a, _ = as.GetAccountByEmail(user.Email)
 	if a == nil {
 		// Create account
-		a = auth.NewPasswordLessAccount(user.Login, user.Email)
+		a, err = auth.NewPasswordLessAccount(user.Login, user.Email)
+		if err != nil {
+			return nil, err
+		}
 		a, err = as.AddAccountToDB(a)
 		if err != nil {
 			return nil, err
@@ -268,7 +266,10 @@ func TwitchOAuth(as auth.AccountStore, ss sess.SessionStore, las LinkAccountStor
 	if err != nil {
 		return nil, errors.New("failed to link account")
 	}
-	session := a.NewSession(time.Now().Add(time.Hour * 24).Unix())
+	session, err := a.NewSession(time.Now().Add(time.Hour * 24).Unix())
+	if err != nil {
+		return nil, err
+	}
 	ss.AddSessionToCache(session)
 	defer ss.AddSessionToDB(session)
 	return session, nil

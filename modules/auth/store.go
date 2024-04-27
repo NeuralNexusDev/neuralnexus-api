@@ -3,19 +3,23 @@ package auth
 import (
 	"context"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// CREATE TRIGGER update_accounts_modtime
+// BEFORE UPDATE ON accounts
+// FOR EACH ROW
+// EXECUTE PROCEDURE update_modified_column();
+
 // CREATE TABLE accounts (
-// 	user_id UUID PRIMARY KEY NOT NULL,
+// 	user_id BIGINT PRIMARY KEY NOT NULL,
 // 	username TEXT UNIQUE,
 // 	email TEXT UNIQUE,
 // 	hashed_secret BYTEA,
 // 	salt BYTEA,
 // 	roles TEXT[],
-//  created_at timestamp with time zone default current_timestamp,
+//  updated_at timestamp with time zone default current_timestamp,
 //  CONSTRAINT email_unique CHECK (email IS NOT NULL),
 //  CONSTRAINT password_enforced CHECK (email IS NOT NULL OR hashed_secret IS NOT NULL)
 // );
@@ -23,11 +27,11 @@ import (
 // AccountStore interface
 type AccountStore interface {
 	AddAccountToDB(account *Account) (*Account, error)
-	GetAccountByID(userID uuid.UUID) (*Account, error)
+	GetAccountByID(userID string) (*Account, error)
 	GetAccountByUsername(username string) (*Account, error)
 	GetAccountByEmail(email string) (*Account, error)
 	UpdateAccount(account *Account) (*Account, error)
-	DeleteAccount(userID uuid.UUID) (*Account, error)
+	DeleteAccount(userID string) (*Account, error)
 }
 
 // acctStore - AccountStore implementation
@@ -55,7 +59,7 @@ func (s *acctStore) AddAccountToDB(account *Account) (*Account, error) {
 }
 
 // GetAccountByID gets an account by ID
-func (s *acctStore) GetAccountByID(userID uuid.UUID) (*Account, error) {
+func (s *acctStore) GetAccountByID(userID string) (*Account, error) {
 	rows, err := s.db.Query(context.Background(), "SELECT * FROM accounts WHERE user_id = $1", userID)
 	if err != nil {
 		return nil, err
@@ -109,7 +113,7 @@ func (s *acctStore) UpdateAccount(account *Account) (*Account, error) {
 }
 
 // DeleteAccount deletes an account from the database
-func (s *acctStore) DeleteAccount(userID uuid.UUID) (*Account, error) {
+func (s *acctStore) DeleteAccount(userID string) (*Account, error) {
 	_, err := s.db.Exec(context.Background(), "DELETE FROM accounts WHERE user_id = $1", userID)
 	if err != nil {
 		return nil, err

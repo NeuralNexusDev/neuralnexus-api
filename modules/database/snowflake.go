@@ -1,6 +1,10 @@
 package database
 
-import "github.com/kkrypt0nn/spaceflake"
+import (
+	"strconv"
+
+	"github.com/kkrypt0nn/spaceflake"
+)
 
 var settings = initSnowflake()
 
@@ -14,11 +18,11 @@ func initSnowflake() spaceflake.GeneratorSettings {
 	return settings
 }
 
-// GetSnowflake returns a new snowflake
-func GetSnowflake() (*spaceflake.Spaceflake, error) {
+// GenSnowflake returns a new snowflake
+func GenSnowflake() (string, error) {
 	sf, err := spaceflake.Generate(settings)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	return sf, nil
+	return strconv.FormatUint(sf.ID(), 10), nil
 }

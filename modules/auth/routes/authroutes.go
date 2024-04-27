@@ -60,7 +60,11 @@ func LoginHandler(as auth.AccountStore, ss sess.SessionStore) http.HandlerFunc {
 			return
 		}
 
-		session := account.NewSession(time.Now().Add(time.Hour * 24).Unix())
+		session, err := account.NewSession(time.Now().Add(time.Hour * 24).Unix())
+		if err != nil {
+			responses.SendAndEncodeBadRequest(w, r, "Failed to create session")
+			return
+		}
 		ss.AddSessionToCache(session)
 		responses.SendAndEncodeStruct(w, r, http.StatusOK, session)
 		ss.AddSessionToDB(session)

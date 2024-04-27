@@ -1,12 +1,10 @@
 package sess
 
-import "github.com/google/uuid"
-
 // SessionService interface
 type SessionService interface {
-	GetSession(id uuid.UUID) (*Session, error)
+	GetSession(id string) (*Session, error)
 	UpdateSession(session *Session) (*Session, error)
-	DeleteSession(id uuid.UUID) (*Session, error)
+	DeleteSession(id string) (*Session, error)
 }
 
 // sessionService - SessionService implementation
@@ -22,7 +20,7 @@ func NewSessionService(store SessionStore) SessionService {
 }
 
 // GetSession gets a session by ID
-func (s *sessionService) GetSession(id uuid.UUID) (*Session, error) {
+func (s *sessionService) GetSession(id string) (*Session, error) {
 	session, err := s.store.GetSessionFromCache(id)
 	if err != nil {
 		session, err = s.store.GetSessionFromDB(id)
@@ -40,19 +38,19 @@ func (s *sessionService) UpdateSession(session *Session) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	if session.ID != uuid.Nil {
+	if session.ID != "" {
 		s.store.AddSessionToCache(session)
 	}
 	return session, nil
 }
 
 // DeleteSession deletes a session by ID
-func (s *sessionService) DeleteSession(id uuid.UUID) (*Session, error) {
+func (s *sessionService) DeleteSession(id string) (*Session, error) {
 	session, err := s.store.DeleteSessionInDB(id)
 	if err != nil {
 		return nil, err
 	}
-	if session.ID != uuid.Nil {
+	if session.ID != "" {
 		s.store.DeleteSessionFromCache(id)
 	}
 	return session, nil

@@ -10,7 +10,6 @@ import (
 	sess "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
-	"github.com/google/uuid"
 )
 
 // Middleware - Middleware type
@@ -85,13 +84,7 @@ func Auth(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		sessionID, err := uuid.Parse(authStrings[1])
-		if err != nil {
-			responses.SendAndEncodeUnauthorized(w, r, "")
-			return
-		}
-
-		session, err := sessService.GetSession(sessionID)
+		session, err := sessService.GetSession(authStrings[1])
 		if err != nil {
 			log.Println("Error getting session:\n\t", err)
 			responses.SendAndEncodeUnauthorized(w, r, "")
