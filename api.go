@@ -10,7 +10,6 @@ import (
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	authroutes "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/routes"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/users"
 	beenamegenerator "github.com/NeuralNexusDev/neuralnexus-api/modules/bee_name_generator"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/datastore"
 	numbersds "github.com/NeuralNexusDev/neuralnexus-api/modules/datastore/numbers"
@@ -56,7 +55,6 @@ func (s *APIServer) Setup() http.Handler {
 		projects.ApplyRoutes,
 		switchboard.ApplyRoutes,
 		teapot.ApplyRoutes,
-		users.ApplyRoutes,
 	)
 
 	middlewareStack := mw.CreateStack(
