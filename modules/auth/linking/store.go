@@ -3,7 +3,6 @@ package accountlinking
 import (
 	"context"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -29,7 +28,7 @@ import (
 type LinkAccountStore interface {
 	AddLinkedAccountToDB(la *LinkedAccount) (*LinkedAccount, error)
 	GetLinkedAccountByPlatformID(platform, platformID string) (*LinkedAccount, error)
-	GetLinkedAccountByUserID(userID uuid.UUID, platform string) (*LinkedAccount, error)
+	GetLinkedAccountByUserID(userID string, platform string) (*LinkedAccount, error)
 }
 
 // store - Account Link Store PG implementation
@@ -66,7 +65,7 @@ func (s *store) GetLinkedAccountByPlatformID(platform, platformID string) (*Link
 }
 
 // GetLinkedAccountByUserID gets a linked account by user ID and platform
-func (s *store) GetLinkedAccountByUserID(userID uuid.UUID, platform string) (*LinkedAccount, error) {
+func (s *store) GetLinkedAccountByUserID(userID string, platform string) (*LinkedAccount, error) {
 	rows, err := s.db.Query(context.Background(), "SELECT * FROM linked_accounts WHERE user_id = $1 AND platform = $2", userID, platform)
 	if err != nil {
 		return nil, err
