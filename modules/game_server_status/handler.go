@@ -10,8 +10,8 @@ import (
 // ApplyRoutes - Apply the routes
 func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 	service := NewService()
-	mux.HandleFunc("/api/v1/game-server-status/{game}", GameServerStatusHandler(service))
-	mux.HandleFunc("/api/v1/game-server-status/simple/{game}", SimpleGameServerStatus(service))
+	mux.HandleFunc("GET /api/v1/game-server-status/{game}", GameServerStatusHandler(service))
+	mux.HandleFunc("GET /api/v1/game-server-status/simple/{game}", SimpleGameServerStatus(service))
 	return mux
 }
 

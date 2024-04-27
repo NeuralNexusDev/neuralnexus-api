@@ -89,7 +89,7 @@ func OAuthHandler(as auth.AccountStore, ss sess.SessionStore, las accountlinking
 			responses.SendAndEncodeBadRequest(w, r, "Invalid request")
 			return
 		}
-		state := r.URL.Query().Get("state")
+		state := any(r.URL.Query().Get("state")).(accountlinking.Platform)
 		var session *sess.Session
 		var err error
 		if state == accountlinking.PlatformDiscord {

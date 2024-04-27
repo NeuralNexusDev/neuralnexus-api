@@ -66,6 +66,34 @@ func DecodeStruct[T any](r *http.Request, data *T) error {
 	return err
 }
 
+// SendAndEncodeSuccess -- Send a success response as JSON or XML
+func SendAndEncodeSuccess(w http.ResponseWriter, r *http.Request, message string) {
+	if message == "" {
+		message = "The request was successful."
+	}
+	NewProblem(
+		"about:blank",
+		http.StatusOK,
+		"OK",
+		message,
+		"https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/200",
+	).SendAndEncodeProblem(w, r)
+}
+
+// SendAndEncodeNoContent -- Send a no content response as JSON or XML
+func SendAndEncodeNoContent(w http.ResponseWriter, r *http.Request, message string) {
+	if message == "" {
+		message = "The request was successful but there is no content to return."
+	}
+	NewProblem(
+		"about:blank",
+		http.StatusNoContent,
+		"No Content",
+		message,
+		"https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/204",
+	).SendAndEncodeProblem(w, r)
+}
+
 // SendAndEncodeBadRequest - Send and encode an invalid input problem
 func SendAndEncodeBadRequest(w http.ResponseWriter, r *http.Request, message string) {
 	if message == "" {

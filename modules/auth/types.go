@@ -13,13 +13,13 @@ import (
 
 // Account struct
 type Account struct {
-	UserID       string    `db:"user_id" validate:"required"`
-	Username     string    `db:"username" validate:"required_without=Email"`
-	Email        string    `db:"email" validate:"required_without=Username"`
-	HashedSecret []byte    `db:"hashed_secret" validate:"required_without=Email"`
-	Salt         []byte    `db:"salt"`
-	Roles        []string  `db:"roles"`
-	UpdatedAt    time.Time `db:"updated_at"`
+	UserID       string    `db:"user_id" validate:"required" json:"user_id" xml:"user_id"`
+	Username     string    `db:"username" json:"username" xml:"username"`
+	Email        string    `db:"email" json:"email" xml:"email"`
+	HashedSecret []byte    `db:"hashed_secret" json:"-" xml:"-"`
+	Salt         []byte    `db:"salt" json:"-" xml:"-"`
+	Roles        []string  `db:"roles" json:"roles" xml:"roles"`
+	UpdatedAt    time.Time `db:"updated_at" json:"updated_at" xml:"updated_at"`
 }
 
 // NewAccount creates a new account
@@ -50,6 +50,17 @@ func NewPasswordLessAccount(username, email string) (*Account, error) {
 		UserID:   id,
 		Username: username,
 		Email:    email,
+	}, nil
+}
+
+// NewIDOnlyAccount creates a new account with only an ID
+func NewIDOnlyAccount() (*Account, error) {
+	id, err := database.GenSnowflake()
+	if err != nil {
+		return nil, err
+	}
+	return &Account{
+		UserID: id,
 	}, nil
 }
 

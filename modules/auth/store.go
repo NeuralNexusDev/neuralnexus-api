@@ -31,7 +31,7 @@ type AccountStore interface {
 	GetAccountByUsername(username string) (*Account, error)
 	GetAccountByEmail(email string) (*Account, error)
 	UpdateAccount(account *Account) (*Account, error)
-	DeleteAccount(userID string) (*Account, error)
+	DeleteAccount(userID string) error
 }
 
 // acctStore - AccountStore implementation
@@ -113,10 +113,10 @@ func (s *acctStore) UpdateAccount(account *Account) (*Account, error) {
 }
 
 // DeleteAccount deletes an account from the database
-func (s *acctStore) DeleteAccount(userID string) (*Account, error) {
+func (s *acctStore) DeleteAccount(userID string) error {
 	_, err := s.db.Exec(context.Background(), "DELETE FROM accounts WHERE user_id = $1", userID)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return &Account{UserID: userID}, nil
+	return nil
 }

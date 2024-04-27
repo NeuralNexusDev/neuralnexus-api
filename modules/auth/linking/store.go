@@ -27,7 +27,8 @@ import (
 // LinkAccountStore - Account Link Store
 type LinkAccountStore interface {
 	AddLinkedAccountToDB(la *LinkedAccount) (*LinkedAccount, error)
-	GetLinkedAccountByPlatformID(platform, platformID string) (*LinkedAccount, error)
+	UpdateLinkedAccount(la *LinkedAccount) (*LinkedAccount, error)
+	GetLinkedAccountByPlatformID(platform Platform, platformID string) (*LinkedAccount, error)
 	GetLinkedAccountByUserID(userID string, platform string) (*LinkedAccount, error)
 }
 
@@ -50,8 +51,17 @@ func (s *store) AddLinkedAccountToDB(la *LinkedAccount) (*LinkedAccount, error) 
 	return la, nil
 }
 
+// UpdateLinkedAccount updates a linked account in the database
+func (s *store) UpdateLinkedAccount(la *LinkedAccount) (*LinkedAccount, error) {
+	_, err := s.db.Exec(context.Background(), "UPDATE linked_accounts SET platform_username = $1, platform_id = $2, data = $3, updated_at = current_timestamp WHERE user_id = $4 AND platform = $5", la.PlatformUsername, la.PlatformID, la.Data, la.UserID, la.Platform)
+	if err != nil {
+		return nil, err
+	}
+	return la, nil
+}
+
 // GetLinkedAccountByPlatformID gets a linked account by user ID and platform
-func (s *store) GetLinkedAccountByPlatformID(platform, platformID string) (*LinkedAccount, error) {
+func (s *store) GetLinkedAccountByPlatformID(platform Platform, platformID string) (*LinkedAccount, error) {
 	rows, err := s.db.Query(context.Background(), "SELECT * FROM linked_accounts WHERE platform = $1 AND platform_id = $2", platform, platformID)
 	if err != nil {
 		return nil, err

@@ -9,7 +9,7 @@ import (
 // LinkedAccount struct
 type LinkedAccount struct {
 	UserID           string      `db:"user_id" validate:"required"`
-	Platform         string      `db:"platform" validate:"required"`
+	Platform         Platform    `db:"platform" validate:"required"`
 	PlatformUsername string      `db:"platform_username" validate:"required_without=PlatformID"`
 	PlatformID       string      `db:"platform_id" validate:"required_without=PlatformUsername"`
 	Data             interface{} `db:"data" validate:"required"`
@@ -18,7 +18,7 @@ type LinkedAccount struct {
 }
 
 // NewLinkedAccount creates a new linked account
-func NewLinkedAccount(userID string, platform, platformUsername, platformID string, data Data) *LinkedAccount {
+func NewLinkedAccount(userID string, platform Platform, platformUsername, platformID string, data Data) *LinkedAccount {
 	return &LinkedAccount{
 		UserID:           userID,
 		Platform:         platform,
@@ -38,8 +38,10 @@ type Data interface {
 
 // -------------- Enums --------------
 
+type Platform string
+
 var (
-	PlatformDiscord   = "discord"
-	PlatformMinecraft = "minecraft"
-	PlatformTwitch    = "twitch"
+	PlatformDiscord   Platform = "discord"
+	PlatformMinecraft Platform = "minecraft"
+	PlatformTwitch    Platform = "twitch"
 )

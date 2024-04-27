@@ -12,9 +12,9 @@ import (
 // ApplyRoutes - Apply the routes
 func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 	service := NewService()
-	mux.HandleFunc("/api/v1/mcstatus/{host}", ServerStatusHandler(service))
-	mux.HandleFunc("/api/v1/mcstatus/icon/{host}", IconHandler(service))
-	mux.HandleFunc("/api/v1/mcstatus/simple/{host}", SimpleStatusHandler(service))
+	mux.HandleFunc("GET /api/v1/mcstatus/{host}", ServerStatusHandler(service))
+	mux.HandleFunc("GET /api/v1/mcstatus/icon/{host}", IconHandler(service))
+	mux.HandleFunc("GET /api/v1/mcstatus/simple/{host}", SimpleStatusHandler(service))
 	return mux
 }
 
