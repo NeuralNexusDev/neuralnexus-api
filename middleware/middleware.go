@@ -74,25 +74,25 @@ func Auth(next http.HandlerFunc) http.HandlerFunc {
 
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
-			responses.SendAndEncodeUnauthorized(w, r, "")
+			responses.Unauthorized(w, r, "")
 			return
 		}
 
 		authStrings := strings.Split(authHeader, "Bearer ")
 		if len(authStrings) != 2 {
-			responses.SendAndEncodeUnauthorized(w, r, "")
+			responses.Unauthorized(w, r, "")
 			return
 		}
 
 		session, err := sessService.GetSession(authStrings[1])
 		if err != nil {
 			log.Println("Error getting session:\n\t", err)
-			responses.SendAndEncodeUnauthorized(w, r, "")
+			responses.Unauthorized(w, r, "")
 			return
 		}
 
 		if !session.IsValid() {
-			responses.SendAndEncodeUnauthorized(w, r, "")
+			responses.Unauthorized(w, r, "")
 			sessService.DeleteSession(session.ID)
 			return
 		}

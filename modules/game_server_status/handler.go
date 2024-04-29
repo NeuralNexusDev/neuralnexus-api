@@ -21,26 +21,26 @@ func GameServerStatusHandler(s GSSService) http.HandlerFunc {
 		game := r.PathValue("game")
 		host := r.URL.Query().Get("host")
 		if host == "" {
-			responses.SendAndEncodeBadRequest(w, r, "Invalid host")
+			responses.BadRequest(w, r, "Invalid host")
 			return
 		}
 		port, err := strconv.Atoi(r.URL.Query().Get("port"))
 		if err != nil {
-			responses.SendAndEncodeBadRequest(w, r, "Invalid port")
+			responses.BadRequest(w, r, "Invalid port")
 			return
 		}
 
 		queryType := ParseQueryType(r.URL.Query().Get("query_type"))
 		status, err := s.QueryGameServer(game, host, port, queryType)
 		if err != nil {
-			responses.SendAndEncodeNotFound(w, r, err.Error())
+			responses.NotFound(w, r, err.Error())
 			return
 		}
 		returnRaw := r.URL.Query().Get("raw") == "true"
 		if !returnRaw {
 			status.Raw = nil
 		}
-		responses.SendAndEncodeStruct(w, r, http.StatusOK, status)
+		responses.StructOK(w, r, status)
 	}
 }
 
@@ -50,12 +50,12 @@ func SimpleGameServerStatus(s GSSService) http.HandlerFunc {
 		game := r.PathValue("game")
 		host := r.URL.Query().Get("host")
 		if host == "" {
-			responses.SendAndEncodeBadRequest(w, r, "Invalid host")
+			responses.BadRequest(w, r, "Invalid host")
 			return
 		}
 		port, err := strconv.Atoi(r.URL.Query().Get("port"))
 		if err != nil {
-			responses.SendAndEncodeBadRequest(w, r, "Invalid port")
+			responses.BadRequest(w, r, "Invalid port")
 			return
 		}
 

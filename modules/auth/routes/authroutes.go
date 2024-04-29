@@ -40,7 +40,7 @@ func LoginHandler(as auth.AccountStore, ss sess.SessionStore) http.HandlerFunc {
 		}
 		err := responses.DecodeStruct(r, &login)
 		if err != nil {
-			responses.SendAndEncodeBadRequest(w, r, "Invalid request body")
+			responses.BadRequest(w, r, "Invalid request body")
 			return
 		}
 
@@ -51,22 +51,22 @@ func LoginHandler(as auth.AccountStore, ss sess.SessionStore) http.HandlerFunc {
 			account, err = as.GetAccountByEmail(login.Email)
 		}
 		if err != nil {
-			responses.SendAndEncodeBadRequest(w, r, "Invalid username or email")
+			responses.BadRequest(w, r, "Invalid username or email")
 			return
 		}
 
 		if !account.ValidateUser(login.Password) {
-			responses.SendAndEncodeBadRequest(w, r, "Invalid password")
+			responses.BadRequest(w, r, "Invalid password")
 			return
 		}
 
 		session, err := account.NewSession(time.Now().Add(time.Hour * 24).Unix())
 		if err != nil {
-			responses.SendAndEncodeBadRequest(w, r, "Failed to create session")
+			responses.BadRequest(w, r, "Failed to create session")
 			return
 		}
 		ss.AddSessionToCache(session)
-		responses.SendAndEncodeStruct(w, r, http.StatusOK, session)
+		responses.StructOK(w, r, session)
 		ss.AddSessionToDB(session)
 	}
 }
@@ -76,7 +76,7 @@ func LogoutHandler(ss sess.SessionStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*sess.Session)
 		ss.DeleteSessionFromCache(session.ID)
-		responses.SendAndEncodeStruct(w, r, http.StatusOK, session)
+		responses.StructOK(w, r, session)
 		ss.DeleteSessionInDB(session.ID)
 	}
 }
@@ -86,7 +86,7 @@ func OAuthHandler(as auth.AccountStore, ss sess.SessionStore, las accountlinking
 	return func(w http.ResponseWriter, r *http.Request) {
 		code := r.URL.Query().Get("code")
 		if code == "" {
-			responses.SendAndEncodeBadRequest(w, r, "Invalid request")
+			responses.BadRequest(w, r, "Invalid request")
 			return
 		}
 		state := any(r.URL.Query().Get("state")).(accountlinking.Platform)
@@ -96,17 +96,17 @@ func OAuthHandler(as auth.AccountStore, ss sess.SessionStore, las accountlinking
 			session, err = accountlinking.DiscordOAuth(as, ss, las, code, state)
 			if err != nil {
 				log.Println("Failed to authenticate with Discord:\n\t", err)
-				responses.SendAndEncodeBadRequest(w, r, "Failed to authenticate with Discord")
+				responses.BadRequest(w, r, "Failed to authenticate with Discord")
 				return
 			}
 		} else if state == accountlinking.PlatformTwitch {
 			session, err = accountlinking.TwitchOAuth(as, ss, las, code, state)
 			if err != nil {
 				log.Println("Failed to authenticate with Twitch:\n\t", err)
-				responses.SendAndEncodeBadRequest(w, r, "Failed to authenticate with Twitch")
+				responses.BadRequest(w, r, "Failed to authenticate with Twitch")
 				return
 			}
 		}
-		responses.SendAndEncodeStruct(w, r, http.StatusOK, session)
+		responses.StructOK(w, r, session)
 	}
 }

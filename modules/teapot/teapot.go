@@ -17,7 +17,7 @@ func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 			"I'm a teapot",
 			"You requested a cup of coffee, but I'm a teapot.",
 			"https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/418",
-		).SendAndEncodeProblem(w, r)
+		).SendProblem(w, r)
 	}))
 	return mux
 }

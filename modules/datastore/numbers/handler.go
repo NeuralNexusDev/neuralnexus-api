@@ -27,7 +27,7 @@ func CreateNumberHandler(s NumberService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*sess.Session)
 		if !session.HasPermission(perms.ScopeAdminNumberStore) {
-			responses.SendAndEncodeForbidden(w, r, "You do not have permission to create a numberstore")
+			responses.Forbidden(w, r, "You do not have permission to create a numberstore")
 			return
 		}
 
@@ -35,17 +35,17 @@ func CreateNumberHandler(s NumberService) http.HandlerFunc {
 		err := responses.DecodeStruct(r, &n)
 		if err != nil {
 			log.Println("Bad body:\n\t", err)
-			responses.SendAndEncodeBadRequest(w, r, "")
+			responses.BadRequest(w, r, "")
 			return
 		}
 
 		n, err = s.Create(n)
 		if err != nil {
 			log.Println("Failed to create numberstore:\n\t", err)
-			responses.SendAndEncodeInternalServerError(w, r, "Failed to create numberstore")
+			responses.InternalServerError(w, r, "Failed to create numberstore")
 			return
 		}
-		responses.SendAndEncodeStruct(w, r, http.StatusOK, n)
+		responses.StructOK(w, r, n)
 	}
 }
 
@@ -56,17 +56,17 @@ func ReadNumberHandler(s NumberService) http.HandlerFunc {
 		err := responses.DecodeStruct(r, &n)
 		if err != nil {
 			log.Println("Bad body:\n\t", err)
-			responses.SendAndEncodeBadRequest(w, r, "")
+			responses.BadRequest(w, r, "")
 			return
 		}
 
 		n, err = s.Read(n)
 		if err != nil {
 			log.Println("Failed to read numberstore:\n\t", err)
-			responses.SendAndEncodeInternalServerError(w, r, "Failed to read numberstore")
+			responses.InternalServerError(w, r, "Failed to read numberstore")
 			return
 		}
-		responses.SendAndEncodeStruct(w, r, http.StatusOK, n)
+		responses.StructOK(w, r, n)
 	}
 }
 
@@ -75,7 +75,7 @@ func UpdateNumberHandler(s NumberService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*sess.Session)
 		if !session.HasPermission(perms.ScopeAdminNumberStore) {
-			responses.SendAndEncodeForbidden(w, r, "You do not have permission to create a numberstore")
+			responses.Forbidden(w, r, "You do not have permission to create a numberstore")
 			return
 		}
 
@@ -83,17 +83,17 @@ func UpdateNumberHandler(s NumberService) http.HandlerFunc {
 		err := responses.DecodeStruct(r, &n)
 		if err != nil {
 			log.Println("Bad body:\n\t", err)
-			responses.SendAndEncodeBadRequest(w, r, "")
+			responses.BadRequest(w, r, "")
 			return
 		}
 
 		n, err = s.Update(n)
 		if err != nil {
 			log.Println("Failed to update numberstore:\n\t", err)
-			responses.SendAndEncodeInternalServerError(w, r, "Failed to update numberstore")
+			responses.InternalServerError(w, r, "Failed to update numberstore")
 			return
 		}
-		responses.SendAndEncodeStruct(w, r, http.StatusOK, n)
+		responses.StructOK(w, r, n)
 	}
 }
 
@@ -104,16 +104,16 @@ func DeleteNumberHandler(s NumberService) http.HandlerFunc {
 		err := responses.DecodeStruct(r, &n)
 		if err != nil {
 			log.Println("Bad body:\n\t", err)
-			responses.SendAndEncodeBadRequest(w, r, "")
+			responses.BadRequest(w, r, "")
 			return
 		}
 
 		err = s.Delete(n)
 		if err != nil {
 			log.Println("Failed to delete numberstore:\n\t", err)
-			responses.SendAndEncodeInternalServerError(w, r, "Failed to delete numberstore")
+			responses.InternalServerError(w, r, "Failed to delete numberstore")
 			return
 		}
-		responses.SendAndEncodeStruct(w, r, http.StatusOK, n)
+		responses.StructOK(w, r, n)
 	}
 }

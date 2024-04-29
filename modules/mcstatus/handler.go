@@ -40,13 +40,13 @@ func ServerStatusHandler(s MCStatusService) http.HandlerFunc {
 
 		status, err := s.GetServerStatus(host, port, isBedrock, queryEnabled, queryPort)
 		if err != nil {
-			responses.SendAndEncodeNotFound(w, r, err.Error())
+			responses.NotFound(w, r, err.Error())
 			return
 		}
 		if !raw {
 			status.Raw = nil
 		}
-		responses.SendAndEncodeStruct(w, r, http.StatusOK, status)
+		responses.StructOK(w, r, status)
 	}
 }
 
@@ -56,7 +56,7 @@ func IconHandler(s MCStatusService) http.HandlerFunc {
 		host := r.PathValue("host")
 		isBedrock := r.URL.Query().Get("bedrock") == "true"
 		if isBedrock {
-			responses.SendAndEncodeBadRequest(w, r, "Bedrock servers do not have icons.")
+			responses.BadRequest(w, r, "Bedrock servers do not have icons.")
 		}
 		port, err := strconv.Atoi(host[strings.LastIndex(host, ":")+1:])
 		if err != nil {
@@ -65,7 +65,7 @@ func IconHandler(s MCStatusService) http.HandlerFunc {
 
 		status, err := s.GetJavaServerStatus(host, port, false, 0)
 		if err != nil {
-			responses.SendAndEncodeNotFound(w, r, err.Error())
+			responses.NotFound(w, r, err.Error())
 			return
 		}
 

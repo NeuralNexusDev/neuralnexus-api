@@ -29,8 +29,8 @@ func NewProblem(Type string, Status int, Title string, Detail string, Instance s
 	}
 }
 
-// SendAndEncodeProblem -- Send a Problem as JSON, XML or Protobuf
-func (problem *problem) SendAndEncodeProblem(w http.ResponseWriter, r *http.Request) {
+// SendProblem -- Send a Problem as JSON, XML or Protobuf
+func (problem *problem) SendProblem(w http.ResponseWriter, r *http.Request) {
 	var content string = "application/problem+"
 	var structBytes []byte
 	switch accept := r.Header.Get("Accept"); accept {

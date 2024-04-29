@@ -27,24 +27,24 @@ func CreateDataStoreHandler(s DSService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*sess.Session)
 		if !session.HasPermission(perms.ScopeAdminDataStore) {
-			responses.SendAndEncodeForbidden(w, r, "You do not have permission to create a datastore")
+			responses.Forbidden(w, r, "You do not have permission to create a datastore")
 			return
 		}
 
 		id, err := database.GenSnowflake()
 		if err != nil {
 			log.Println("Failed to generate snowflake:\n\t", err)
-			responses.SendAndEncodeInternalServerError(w, r, "Failed to create datastore")
+			responses.InternalServerError(w, r, "Failed to create datastore")
 			return
 		}
 		ds := NewDataStore(id, session.UserID)
 		ds, err = s.Create(ds)
 		if err != nil {
 			log.Println("Failed to create data store:\n\t", err)
-			responses.SendAndEncodeInternalServerError(w, r, "Failed to create datastore")
+			responses.InternalServerError(w, r, "Failed to create datastore")
 			return
 		}
-		responses.SendAndEncodeStruct(w, r, http.StatusOK, ds)
+		responses.StructOK(w, r, ds)
 	}
 }
 
@@ -55,16 +55,16 @@ func ReadDataStoreHandler(s DSService) http.HandlerFunc {
 		err := responses.DecodeStruct(r, &ds)
 		if err != nil {
 			log.Println("Bad body:\n\t", err)
-			responses.SendAndEncodeBadRequest(w, r, "")
+			responses.BadRequest(w, r, "")
 			return
 		}
 		ds, err = s.Read(ds)
 		if err != nil {
 			log.Println("Failed to read data store:\n\t", err)
-			responses.SendAndEncodeInternalServerError(w, r, "Failed to read datastore")
+			responses.InternalServerError(w, r, "Failed to read datastore")
 			return
 		}
-		responses.SendAndEncodeStruct(w, r, http.StatusOK, ds)
+		responses.StructOK(w, r, ds)
 	}
 }
 
@@ -73,7 +73,7 @@ func UpdateDataStoreHandler(s DSService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*sess.Session)
 		if !session.HasPermission(perms.ScopeAdminDataStore) {
-			responses.SendAndEncodeForbidden(w, r, "You do not have permission to update a datastore")
+			responses.Forbidden(w, r, "You do not have permission to update a datastore")
 			return
 		}
 
@@ -81,17 +81,17 @@ func UpdateDataStoreHandler(s DSService) http.HandlerFunc {
 		err := responses.DecodeStruct(r, &ds)
 		if err != nil {
 			log.Println("Bad body:\n\t", err)
-			responses.SendAndEncodeBadRequest(w, r, "")
+			responses.BadRequest(w, r, "")
 			return
 		}
 
 		ds, err = s.Update(ds)
 		if err != nil {
 			log.Println("Failed to update data store:\n\t", err)
-			responses.SendAndEncodeInternalServerError(w, r, "Failed to update datastore")
+			responses.InternalServerError(w, r, "Failed to update datastore")
 			return
 		}
-		responses.SendAndEncodeStruct(w, r, http.StatusOK, ds)
+		responses.StructOK(w, r, ds)
 	}
 }
 
@@ -100,7 +100,7 @@ func DeleteDataStoreHandler(s DSService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*sess.Session)
 		if !session.HasPermission(perms.ScopeAdminDataStore) {
-			responses.SendAndEncodeForbidden(w, r, "You do not have permission to delete a datastore")
+			responses.Forbidden(w, r, "You do not have permission to delete a datastore")
 			return
 		}
 
@@ -108,14 +108,14 @@ func DeleteDataStoreHandler(s DSService) http.HandlerFunc {
 		err := responses.DecodeStruct(r, &ds)
 		if err != nil {
 			log.Println("Bad body:\n\t", err)
-			responses.SendAndEncodeBadRequest(w, r, "")
+			responses.BadRequest(w, r, "")
 			return
 		}
 
 		err = s.Delete(ds)
 		if err != nil {
 			log.Println("Failed to delete data store:\n\t", err)
-			responses.SendAndEncodeInternalServerError(w, r, "Failed to delete datastore")
+			responses.InternalServerError(w, r, "Failed to delete datastore")
 			return
 		}
 	}
