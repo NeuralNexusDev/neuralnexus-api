@@ -85,7 +85,7 @@ func DeleteBeeNameHandler(s BNGStore) http.HandlerFunc {
 			responses.SendAndEncodeInternalServerError(w, r, "Failed to delete bee name")
 			return
 		}
-		responses.SendAndEncodeStruct(w, r, http.StatusOK, NewBeeName(beeName))
+		responses.SendAndEncodeNoContent(w, r)
 	}
 }
 
@@ -182,6 +182,6 @@ func RejectBeeNameSuggestionHandler(s BNGStore) http.HandlerFunc {
 			responses.SendAndEncodeInternalServerError(w, r, "Failed to reject bee name suggestion")
 			return
 		}
-		responses.SendAndEncodeStruct(w, r, http.StatusOK, NewBeeName(beeName))
+		responses.SendAndEncodeNoContent(w, r)
 	}
 }

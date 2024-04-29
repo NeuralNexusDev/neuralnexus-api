@@ -119,8 +119,8 @@
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "$ref": "#/components/responses/BNGNameResponse"
+                    "204": {
+                        "$ref": "#/components/responses/204NoContent"
                     },
                     "400": {
                         "$ref": "#/components/responses/400BadRequest"
@@ -249,8 +249,8 @@
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "$ref": "#/components/responses/BNGNameResponse"
+                    "204": {
+                        "$ref": "#/components/responses/204NoContent"
                     },
                     "400": {
                         "$ref": "#/components/responses/400BadRequest"
@@ -723,6 +723,26 @@
         },
         "requestBodies": {},
         "responses": {
+            "204NoContent": {
+                "description": "No content",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "application/xml": {
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "application/x-protobuf": {
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                }
+            },
             "400BadRequest": {
                 "description": "Bad request",
                 "content": {

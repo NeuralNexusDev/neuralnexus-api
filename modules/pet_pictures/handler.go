@@ -249,6 +249,6 @@ func DeletePetPictureHandler(s PetPicService) http.HandlerFunc {
 			responses.SendAndEncodeInternalServerError(w, r, "Unable to delete pet picture")
 			return
 		}
-		responses.SendAndEncodeStruct(w, r, http.StatusOK, petPicture)
+		responses.SendAndEncodeNoContent(w, r)
 	}
 }

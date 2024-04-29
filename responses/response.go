@@ -81,17 +81,10 @@ func SendAndEncodeSuccess(w http.ResponseWriter, r *http.Request, message string
 }
 
 // SendAndEncodeNoContent -- Send a no content response as JSON or XML
-func SendAndEncodeNoContent(w http.ResponseWriter, r *http.Request, message string) {
-	if message == "" {
-		message = "The request was successful but there is no content to return."
-	}
-	NewProblem(
-		"about:blank",
-		http.StatusNoContent,
-		"No Content",
-		message,
-		"https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/204",
-	).SendAndEncodeProblem(w, r)
+func SendAndEncodeNoContent(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusNoContent)
+	w.Write([]byte("{}"))
 }
 
 // SendAndEncodeBadRequest - Send and encode an invalid input problem

@@ -83,6 +83,6 @@ func DeleteUserHandler(service Service) http.HandlerFunc {
 			responses.SendAndEncodeBadRequest(w, r, "Failed to delete user")
 			return
 		}
-		responses.SendAndEncodeNoContent(w, r, "User deleted")
+		responses.SendAndEncodeNoContent(w, r)
 	}
 }
