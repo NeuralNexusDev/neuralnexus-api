@@ -3,6 +3,7 @@ package users
 import (
 	"net/http"
 
+	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	accountlinking "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
@@ -13,10 +14,10 @@ import (
 func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 	db := database.GetDB("neuralnexus")
 	service := NewService(auth.NewAccountStore(db), accountlinking.NewStore(db))
-	mux.HandleFunc("GET /api/v1/users/{user_id}", GetUserHandler(service))
-	mux.HandleFunc("PUT /api/v1/users/{user_id}", UpdateUserHandler(service))
-	mux.HandleFunc("PUT /api/v1/users/{platform}/{platform_id}", UpdateUserFromPlatformHandler(service))
-	mux.HandleFunc("DELETE /api/v1/users/{user_id}", DeleteUserHandler(service))
+	mux.HandleFunc("GET /api/v1/users/{user_id}", mw.Auth(GetUserHandler(service)))
+	mux.HandleFunc("PUT /api/v1/users/{user_id}", mw.Auth(UpdateUserHandler(service)))
+	mux.HandleFunc("PUT /api/v1/users/{platform}/{platform_id}", mw.Auth(UpdateUserFromPlatformHandler(service)))
+	mux.HandleFunc("DELETE /api/v1/users/{user_id}", mw.Auth(DeleteUserHandler(service)))
 	return mux
 }
 
