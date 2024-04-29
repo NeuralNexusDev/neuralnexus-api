@@ -15,6 +15,7 @@ func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 	db := database.GetDB("neuralnexus")
 	service := NewService(auth.NewAccountStore(db), accountlinking.NewStore(db))
 	mux.HandleFunc("GET /api/v1/users/{user_id}", mw.Auth(GetUserHandler(service)))
+	mux.HandleFunc("GET /api/v1/users/{platform}/{platform_id}", mw.Auth(GetUserFromPlatformHandler(service)))
 	mux.HandleFunc("PUT /api/v1/users/{user_id}", mw.Auth(UpdateUserHandler(service)))
 	mux.HandleFunc("PUT /api/v1/users/{platform}/{platform_id}", mw.Auth(UpdateUserFromPlatformHandler(service)))
 	mux.HandleFunc("DELETE /api/v1/users/{user_id}", mw.Auth(DeleteUserHandler(service)))
@@ -26,6 +27,20 @@ func GetUserHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := r.PathValue("user_id")
 		user, err := service.GetUser(userID)
+		if err != nil {
+			responses.NotFound(w, r, "User not found")
+			return
+		}
+		responses.StructOK(w, r, user)
+	}
+}
+
+// GetUserFromPlatformHandler - Get a user from a platform
+func GetUserFromPlatformHandler(service Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		platform := accountlinking.Platform(r.PathValue("platform"))
+		platformID := r.PathValue("platform_id")
+		user, err := service.GetUserFromPlatform(platform, platformID)
 		if err != nil {
 			responses.NotFound(w, r, "User not found")
 			return
