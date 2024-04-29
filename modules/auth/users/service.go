@@ -43,7 +43,20 @@ func (s *service) GetUserFromPlatform(platform accountlinking.Platform, platform
 
 // UpdateUser - Update a user
 func (s *service) UpdateUser(user *auth.Account) (*auth.Account, error) {
-	return s.as.UpdateAccount(user)
+	account, err := s.as.GetAccountByID(user.UserID)
+	if err != nil {
+		return nil, err
+	}
+	if user.Username != "" {
+		account.Username = user.Username
+	}
+	if user.Email != "" {
+		account.Email = user.Email
+	}
+	if user.Roles != nil {
+		account.Roles = user.Roles
+	}
+	return s.as.UpdateAccount(account)
 }
 
 // UpdateUserFromPlatform - Update a user from a platform

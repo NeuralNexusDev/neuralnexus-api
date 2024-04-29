@@ -15,7 +15,7 @@ import (
 type Account struct {
 	UserID       string    `db:"user_id" validate:"required" json:"user_id" xml:"user_id"`
 	Username     string    `db:"username" json:"username" xml:"username"`
-	Email        string    `db:"email" json:"email" xml:"email"`
+	Email        string    `db:"email" json:"-" xml:"-"`
 	HashedSecret []byte    `db:"hashed_secret" json:"-" xml:"-"`
 	Salt         []byte    `db:"salt" json:"-" xml:"-"`
 	Roles        []string  `db:"roles" json:"roles" xml:"roles"`
