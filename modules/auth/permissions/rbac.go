@@ -27,6 +27,7 @@ var (
 
 	ScopeAdminDataStore   = ScopeDataStore("*")
 	ScopeAdminNumberStore = ScopeNumberStore("*")
+	ScopeAdminUsers       = ScopeUsers("*")
 )
 
 // ScopePetPictures -- Pet pictures
@@ -56,6 +57,15 @@ func ScopeNumberStore(value string) Scope {
 	}
 }
 
+// ScopeUsers -- Admin users
+func ScopeUsers(value string) Scope {
+	return Scope{
+		Name:        "users",
+		Description: "Users",
+		Value:       value,
+	}
+}
+
 type Role struct {
 	Name        string
 	Description string
@@ -72,6 +82,7 @@ var (
 			ScopeAdminRateLimit,
 			ScopeAdminDataStore,
 			ScopeAdminNumberStore,
+			ScopeAdminUsers,
 		},
 	}
 
@@ -84,6 +95,7 @@ var (
 			ScopeAdminRateLimit,
 			ScopeAdminDataStore,
 			ScopeAdminNumberStore,
+			ScopeAdminUsers,
 		},
 	}
 )

@@ -1,16 +1,19 @@
 package users
 
 import (
+	"log"
 	"time"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	accountlinking "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
+	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 )
 
 // Service - The service interface
 type Service interface {
 	GetUser(userID string) (*auth.Account, error)
 	GetUserFromPlatform(platform accountlinking.Platform, platformID string) (*auth.Account, error)
+	GetUserPermissions(userID string) ([]string, error)
 	UpdateUser(user *auth.Account) (*auth.Account, error)
 	UpdateUserFromPlatform(platform accountlinking.Platform, platformID string, data accountlinking.Data) (*auth.Account, error)
 	DeleteUser(userID string) error
@@ -39,6 +42,26 @@ func (s *service) GetUserFromPlatform(platform accountlinking.Platform, platform
 		return nil, err
 	}
 	return s.as.GetAccountByID(la.UserID)
+}
+
+// GetUserPermissions - Get a user's permissions
+func (s *service) GetUserPermissions(userID string) ([]string, error) {
+	a, err := s.as.GetAccountByID(userID)
+	if err != nil {
+		return nil, err
+	}
+	permissions := []string{}
+	for _, r := range a.Roles {
+		role, err := perms.GetRoleByName(r)
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+		for _, p := range role.Permissions {
+			permissions = append(permissions, p.Name+"|"+p.Value)
+		}
+	}
+	return permissions, nil
 }
 
 // UpdateUser - Update a user

@@ -6,6 +6,8 @@ import (
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	accountlinking "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
+	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
+	sess "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
@@ -38,6 +40,11 @@ func GetUserHandler(service Service) http.HandlerFunc {
 // GetUserFromPlatformHandler - Get a user from a platform
 func GetUserFromPlatformHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		session := r.Context().Value(mw.SessionKey).(*sess.Session)
+		if !session.HasPermission(perms.ScopeAdminUsers) {
+			responses.Forbidden(w, r, "You do not have permission to get users")
+			return
+		}
 		platform := accountlinking.Platform(r.PathValue("platform"))
 		platformID := r.PathValue("platform_id")
 		user, err := service.GetUserFromPlatform(platform, platformID)
@@ -49,9 +56,32 @@ func GetUserFromPlatformHandler(service Service) http.HandlerFunc {
 	}
 }
 
+// GetUserPermissionsHandler - Get a user's permissions
+func GetUserPermissionsHandler(service Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		session := r.Context().Value(mw.SessionKey).(*sess.Session)
+		userID := r.PathValue("user_id")
+		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
+			responses.Forbidden(w, r, "You do not have permission to get user permissions")
+			return
+		}
+		permissions, err := service.GetUserPermissions(userID)
+		if err != nil {
+			responses.NotFound(w, r, "User not found")
+			return
+		}
+		responses.StructOK(w, r, permissions)
+	}
+}
+
 // UpdateUserHandler - Update a user
 func UpdateUserHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		session := r.Context().Value(mw.SessionKey).(*sess.Session)
+		if !session.HasPermission(perms.ScopeAdminUsers) {
+			responses.Forbidden(w, r, "You do not have permission to update users")
+			return
+		}
 		userID := r.PathValue("user_id")
 		var user auth.Account
 		err := responses.DecodeStruct(r, &user)
@@ -72,6 +102,11 @@ func UpdateUserHandler(service Service) http.HandlerFunc {
 // UpdateUserFromPlatformHandler - Update a user from a platform
 func UpdateUserFromPlatformHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		session := r.Context().Value(mw.SessionKey).(*sess.Session)
+		if !session.HasPermission(perms.ScopeAdminUsers) {
+			responses.Forbidden(w, r, "You do not have permission to update users")
+			return
+		}
 		platform := accountlinking.Platform(r.PathValue("platform"))
 		platformID := r.PathValue("platform_id")
 		var data accountlinking.Data
@@ -92,6 +127,11 @@ func UpdateUserFromPlatformHandler(service Service) http.HandlerFunc {
 // DeleteUserHandler - Delete a user
 func DeleteUserHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		session := r.Context().Value(mw.SessionKey).(*sess.Session)
+		if !session.HasPermission(perms.ScopeAdminUsers) {
+			responses.Forbidden(w, r, "You do not have permission to delete users")
+			return
+		}
 		userID := r.PathValue("user_id")
 		err := service.DeleteUser(userID)
 		if err != nil {
