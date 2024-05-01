@@ -21,7 +21,7 @@ func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 	mux.HandleFunc("GET /api/v1/users/{platform}/{platform_id}", mw.Auth(GetUserFromPlatformHandler(service)))
 	mux.HandleFunc("PUT /api/v1/users/{user_id}", mw.Auth(UpdateUserHandler(service)))
 	mux.HandleFunc("PUT /api/v1/users/{platform}/{platform_id}", mw.Auth(UpdateUserFromPlatformHandler(service)))
-	mux.HandleFunc("DELETE /api/v1/users/{user_id}", mw.Auth(DeleteUserHandler(service)))
+	// mux.HandleFunc("DELETE /api/v1/users/{user_id}", mw.Auth(DeleteUserHandler(service)))
 	return mux
 }
 
