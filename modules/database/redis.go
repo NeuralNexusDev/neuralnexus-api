@@ -19,7 +19,7 @@ var (
 
 func GetRedis() *redis.Client {
 	if REDIS_URL == "" {
-		log.Println("REDIS_URL is not set")
+		log.Fatal("REDIS_URL is not set")
 		return nil
 	}
 
@@ -32,7 +32,7 @@ func GetRedis() *redis.Client {
 
 	_, err := client.Ping(context.Background()).Result()
 	if err != nil {
-		log.Println("Unable to create connection pool:", err)
+		log.Fatal("Unable to create client:", err)
 		return nil
 	}
 	return client

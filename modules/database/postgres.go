@@ -16,13 +16,13 @@ var DATABASE_URL = os.Getenv("DATABASE_URL")
 // GetDB - Get a connection pool to the database
 func GetDB(database string) *pgxpool.Pool {
 	if DATABASE_URL == "" {
-		log.Println("DATABASE_URL is not set")
+		log.Fatal("DATABASE_URL is not set")
 		return nil
 	}
 
 	PgPool, err := pgxpool.New(context.Background(), DATABASE_URL+"/"+database)
 	if err != nil {
-		log.Println("Unable to create connection pool:", err)
+		log.Fatal("Unable to create connection pool:", err)
 		return nil
 	}
 	return PgPool

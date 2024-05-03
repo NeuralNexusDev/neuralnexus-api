@@ -1,44 +1,53 @@
-package main
+package archive
 
 import (
 	"context"
+	"io"
 	"log"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/minio/minio-go/v7"
 )
 
-func main() {
-	minioClient := database.GetS3()
+// S3Store interface for an S3 store
+type S3Store interface {
+	MakeBucket()
+	UploadFile(objectName string, reader io.Reader, size int64) (*minio.UploadInfo, error)
+}
 
+// s3store implementation of S3Store
+type s3store struct {
+	minioClient *minio.Client
+	bucketName  string
+	location    string
+}
+
+// NewS3Store creates a new S3 store
+func NewS3Store(minioClient *minio.Client) S3Store {
+	return &s3store{minioClient, "minecraft-archive", "ca-central-1"}
+}
+
+// MakeBucket creates a new bucket in the S3 store
+func (s *s3store) MakeBucket() {
 	ctx := context.Background()
-	bucketName := "minecraft-archive"
-	location := "ca-central-1"
-
-	err := minioClient.MakeBucket(ctx, bucketName, minio.MakeBucketOptions{Region: location})
+	err := s.minioClient.MakeBucket(ctx, s.bucketName, minio.MakeBucketOptions{Region: s.location})
 	if err != nil {
-		// Check to see if we already own this bucket (which happens if you run this twice)
-		exists, errBucketExists := minioClient.BucketExists(ctx, bucketName)
-		if errBucketExists == nil && exists {
-			log.Printf("We already own %s\n", bucketName)
+		exists, err := s.minioClient.BucketExists(ctx, s.bucketName)
+		if err == nil && exists {
+			log.Printf("We already own %s\n", s.bucketName)
 		} else {
-			log.Println(err)
+			log.Fatal("Unable to create bucket:", err)
 		}
 	} else {
-		log.Printf("Successfully created %s\n", bucketName)
+		log.Printf("Successfully created %s\n", s.bucketName)
 	}
+}
 
-	// Upload the test file
-	// Change the value of filePath if the file is in another location
-	objectName := "testdata"
-	filePath := "/tmp/testdata"
-	contentType := "application/octet-stream"
-
-	// Upload the test file with FPutObject
-	info, err := minioClient.FPutObject(ctx, bucketName, objectName, filePath, minio.PutObjectOptions{ContentType: contentType})
+// UploadFile uploads a file to the S3 store
+func (s *s3store) UploadFile(objectName string, reader io.Reader, size int64) (*minio.UploadInfo, error) {
+	info, err := s.minioClient.PutObject(context.Background(), s.bucketName, objectName, reader, size,
+		minio.PutObjectOptions{ContentType: "application/octet-stream"})
 	if err != nil {
-		log.Fatalln(err)
+		return nil, err
 	}
-
-	log.Printf("Successfully uploaded %s of size %d\n", objectName, info.Size)
+	return &info, nil
 }

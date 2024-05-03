@@ -19,7 +19,7 @@ func GetS3() *minio.Client {
 		Secure: useSSL,
 	})
 	if err != nil {
-		log.Println(err)
+		log.Fatal("Unable to create S3 client:", err)
 	}
 	return minioClient
 }
