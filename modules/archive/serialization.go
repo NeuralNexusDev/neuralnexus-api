@@ -1,5 +1,12 @@
 package archive
 
+import (
+	"encoding/json"
+
+	"github.com/BurntSushi/toml"
+	"gopkg.in/yaml.v3"
+)
+
 // BukkitPlugin is a struct that represents the plugin.yml file of a Bukkit plugin
 type BukkitPlugin struct {
 	Name        string   `yaml:"name"`
@@ -17,6 +24,16 @@ type BukkitPlugin struct {
 	Load        string   `yaml:"load"`
 }
 
+// NewBukkitPlugin creates a new BukkitPlugin struct from the plugin.yml file
+func NewBukkitPlugin(pluginYML string) (*BukkitPlugin, error) {
+	plugin := &BukkitPlugin{}
+	err := yaml.Unmarshal([]byte(pluginYML), plugin)
+	if err != nil {
+		return nil, err
+	}
+	return plugin, nil
+}
+
 // BungeeCordPlugin is a struct that represents the bungee.yml/plugin.yml file of a BungeeCord plugin
 type BungeeCordPlugin struct {
 	Name        string   `yaml:"name"`
@@ -31,6 +48,16 @@ type BungeeCordPlugin struct {
 	SoftDepend  []string `yaml:"softdepend"`
 	SoftDepends []string `yaml:"softdepends"`
 	LoadBefore  []string `yaml:"loadbefore"`
+}
+
+// NewBungeeCordPlugin creates a new BungeeCordPlugin struct from the bungee.yml/plugin.yml file
+func NewBungeeCordPlugin(pluginYML string) (*BungeeCordPlugin, error) {
+	plugin := &BungeeCordPlugin{}
+	err := yaml.Unmarshal([]byte(pluginYML), plugin)
+	if err != nil {
+		return nil, err
+	}
+	return plugin, nil
 }
 
 type (
@@ -85,6 +112,16 @@ type (
 	}
 )
 
+// NewFabricMod creates a new FabricMod struct from the fabric.mod.json file
+func NewFabricMod(fabricModJSON string) (*FabricMod, error) {
+	mod := &FabricMod{}
+	err := json.Unmarshal([]byte(fabricModJSON), mod)
+	if err != nil {
+		return nil, err
+	}
+	return mod, nil
+}
+
 // ForgeLegacyMod is a struct that represents the mcmod.info file of a Forge mod
 type ForgeLegacyMod []struct {
 	ModID                    string   `json:"modid"`
@@ -106,12 +143,32 @@ type ForgeLegacyMod []struct {
 	Dependants               []string `json:"dependants"`
 }
 
+// NewForgeLegacyMod creates a new ForgeLegacyMod struct from the mcmod.info file
+func NewForgeLegacyMod(mcmodInfoJSON string) (*ForgeLegacyMod, error) {
+	mod := &ForgeLegacyMod{}
+	err := json.Unmarshal([]byte(mcmodInfoJSON), mod)
+	if err != nil {
+		return nil, err
+	}
+	return mod, nil
+}
+
 // MCMeta is a struct that represents the pack.mcmeta file
 type MCMeta struct {
 	Pack struct {
 		PackFormat  int    `json:"pack_format"`
 		Description string `json:"description"`
 	} `json:"pack"`
+}
+
+// NewMCMeta creates a new MCMeta struct from the pack.mcmeta file
+func NewMCMeta(packMCMetaJSON string) (*MCMeta, error) {
+	mcMeta := &MCMeta{}
+	err := json.Unmarshal([]byte(packMCMetaJSON), mcMeta)
+	if err != nil {
+		return nil, err
+	}
+	return mcMeta, nil
 }
 
 type (
@@ -160,6 +217,16 @@ type (
 		Side         string `toml:"side"`
 	}
 )
+
+// NewForgeMod creates a new ForgeMod struct from the mods.toml file
+func NewForgeMod(modsTOML string) (*ForgeMod, error) {
+	mod := &ForgeMod{}
+	err := toml.Unmarshal([]byte(modsTOML), mod)
+	if err != nil {
+		return nil, err
+	}
+	return mod, nil
+}
 
 type (
 	// SpongePlugin is a struct that represents the META-INF/sponge_plugins.json file of a Sponge plugin
@@ -225,3 +292,13 @@ type (
 		Description string `json:"description"`
 	}
 )
+
+// NewSpongePlugin creates a new SpongePlugin struct from the sponge_plugins.json file
+func NewSpongePlugin(spongePluginsJSON string) (*SpongePlugin, error) {
+	plugin := &SpongePlugin{}
+	err := json.Unmarshal([]byte(spongePluginsJSON), plugin)
+	if err != nil {
+		return nil, err
+	}
+	return plugin, nil
+}
