@@ -302,3 +302,33 @@ func NewSpongePlugin(spongePluginsJSON string) (*SpongePlugin, error) {
 	}
 	return plugin, nil
 }
+
+type (
+	// VelocityPlugin is a struct that represents the velocity-plugin.json file of a Velocity plugin
+	VelocityPlugin struct {
+		ID           string               `json:"id"`
+		Name         string               `json:"name"`
+		Version      string               `json:"version"`
+		Description  string               `json:"description"`
+		URL          string               `json:"url"`
+		Authors      []string             `json:"authors"`
+		Dependencies []VelocityDependency `json:"dependencies"`
+		Main         string               `json:"main"`
+	}
+
+	// VelocityDependency is a struct that represents a dependency of a Velocity plugin
+	VelocityDependency struct {
+		ID       string `json:"id"`
+		Optional bool   `json:"optional"`
+	}
+)
+
+// NewVelocityPlugin creates a new VelocityPlugin struct from the velocity-plugin.json file
+func NewVelocityPlugin(velocityJSON string) (*VelocityPlugin, error) {
+	plugin := &VelocityPlugin{}
+	err := json.Unmarshal([]byte(velocityJSON), plugin)
+	if err != nil {
+		return nil, err
+	}
+	return plugin, nil
+}
