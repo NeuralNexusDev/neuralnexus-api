@@ -10,6 +10,6 @@ import (
 func ApplyRoutes(router *http.ServeMux) *http.ServeMux {
 	bucket := NewS3Store(database.GetS3())
 	bucket.MakeBucket()
-	service := NewService(bucket)
+	// service := NewService(bucket)
 	return router
 }
