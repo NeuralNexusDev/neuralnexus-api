@@ -1,12 +1,11 @@
 package switchboard
 
-type Header struct {
-	Version int    `json:"version"`
-	Origin  string `json:"origin"`
-	Dest    string `json:"dest"`
-}
+import "github.com/goccy/go-json"
 
-type Body struct {
+type Message struct {
+	Version     int    `json:"version"`
+	Origin      string `json:"origin"`
+	Dest        string `json:"dest"`
 	MessageID   string `json:"message_id"`
 	MessageType string `json:"message_type,omitempty"`
 	Encrypted   bool   `json:"encrypted,omitempty"`
@@ -14,7 +13,23 @@ type Body struct {
 	Content     string `json:"content"`
 }
 
-type Packet struct {
-	Header Header `json:"header"`
-	Body   Body   `json:"body"`
+type Relay struct {
+	Sources map[string]Source   `json:"sources"`
+	Routes  map[string][]string `json:"routes"`
+}
+
+type Source struct {
+	Protocol string `json:"protocol"`
+	Platform string `json:"platform"`
+}
+
+func (s *Source) UnmarshalJSON(data []byte) error {
+	err := json.Unmarshal(data, s)
+	if err != nil {
+		return err
+	}
+	if s.Protocol == "" {
+		s.Protocol = "http+json"
+	}
+	return nil
 }

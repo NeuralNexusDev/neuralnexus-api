@@ -6,7 +6,7 @@ import (
 )
 
 // EncryptMessage encrypts a message
-func EncryptMessage(message *Packet, key string) ([]byte, error) {
+func EncryptMessage(message *Message, key string) ([]byte, error) {
 	// Convert message to JSON
 	messageJSON, err := json.Marshal(message)
 	if err != nil {
@@ -23,7 +23,7 @@ func EncryptMessage(message *Packet, key string) ([]byte, error) {
 }
 
 // DecryptMessage decrypts a message
-func DecryptMessage(encryptedMessage []byte, key string) (*Packet, error) {
+func DecryptMessage(encryptedMessage []byte, key string) (*Message, error) {
 	// Decrypt message
 	decryptedMessage, err := encryption.DecryptAES(encryptedMessage, key)
 
@@ -38,7 +38,7 @@ func DecryptMessage(encryptedMessage []byte, key string) (*Packet, error) {
 	decryptedMessage = decryptedMessage[2:]
 
 	// Convert message from JSON
-	var message Packet
+	var message Message
 	err = json.Unmarshal(decryptedMessage, &message)
 	if err != nil {
 		return nil, err

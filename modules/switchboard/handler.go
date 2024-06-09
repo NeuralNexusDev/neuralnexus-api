@@ -32,22 +32,18 @@ func WebSocketRelayHandler(w http.ResponseWriter, r *http.Request) {
 
 	for {
 		// Write
-		packet := &Packet{
-			Header: Header{
-				Version: 1,
-				Origin:  "server",
-				Dest:    "client",
-			},
-			Body: Body{
-				MessageID:   "1",
-				MessageType: "message",
-				Encrypted:   true,
-				EncScheme:   "AES",
-				Content:     "Hello, client!",
-			},
+		packet := &Message{
+			Version:     1,
+			Origin:      "server",
+			Dest:        "client",
+			MessageID:   "1",
+			MessageType: "message",
+			Encrypted:   true,
+			EncScheme:   "AES",
+			Content:     "Hello, client!",
 		}
 		var packetBuffer []byte
-		if packet.Body.Encrypted {
+		if packet.Encrypted {
 			packetBuffer, err = EncryptMessage(packet, "dgwjgsemfouvauxc")
 			if err != nil {
 				log.Println(err.Error())
@@ -77,6 +73,6 @@ func WebSocketRelayHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Println(err.Error())
 		}
-		log.Println(packet.Body.Content)
+		log.Println(packet.Content)
 	}
 }
