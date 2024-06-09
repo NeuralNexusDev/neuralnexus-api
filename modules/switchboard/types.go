@@ -7,10 +7,11 @@ type Header struct {
 }
 
 type Body struct {
-	MessageID string `json:"message_id"`
-	Encrypted bool   `json:"encrypted,omitempty"`
-	EncScheme string `json:"enc_scheme,omitempty"`
-	Content   string `json:"content"`
+	MessageID   string `json:"message_id"`
+	MessageType string `json:"message_type,omitempty"`
+	Encrypted   bool   `json:"encrypted,omitempty"`
+	EncScheme   string `json:"enc_scheme,omitempty"`
+	Content     string `json:"content"`
 }
 
 type Packet struct {
