@@ -6,6 +6,7 @@ type Message struct {
 	Version     int    `json:"version"`
 	Origin      string `json:"origin"`
 	Dest        string `json:"dest"`
+	Sender      string `json:"sender,omitempty"`
 	MessageID   string `json:"message_id"`
 	MessageType string `json:"message_type,omitempty"`
 	Encrypted   bool   `json:"encrypted,omitempty"`

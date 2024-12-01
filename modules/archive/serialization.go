@@ -1,9 +1,8 @@
 package archive
 
 import (
-	"encoding/json"
-
 	"github.com/BurntSushi/toml"
+	"github.com/goccy/go-json"
 	"gopkg.in/yaml.v3"
 )
 
