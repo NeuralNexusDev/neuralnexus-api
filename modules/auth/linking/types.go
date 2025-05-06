@@ -6,6 +6,13 @@ import (
 
 // -------------- Structs --------------
 
+// OAuthState used with the OAuth state URL parameter
+type OAuthState struct {
+	Platform    Platform `json:"platform"`
+	Nonce       string   `json:"nonce"`
+	RedirectURI string   `json:"redirect_uri"`
+}
+
 // LinkedAccount struct
 type LinkedAccount struct {
 	UserID           string      `db:"user_id" validate:"required"`

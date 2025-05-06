@@ -7,10 +7,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// CREATE TRIGGER update_accounts_modtime
-// BEFORE UPDATE ON accounts
-// FOR EACH ROW
-// EXECUTE PROCEDURE update_modified_column();
+//CREATE TRIGGER update_accounts_modtime
+//BEFORE UPDATE ON accounts
+//FOR EACH ROW
+//EXECUTE PROCEDURE update_modified_column();
 
 // CREATE TABLE accounts (
 // 	user_id BIGINT PRIMARY KEY NOT NULL,

@@ -1,6 +1,7 @@
 package authroutes
 
 import (
+	"github.com/goccy/go-json"
 	"log"
 	"net/http"
 	"time"
@@ -89,17 +90,29 @@ func OAuthHandler(as auth.AccountStore, ss sess.SessionStore, las accountlinking
 			responses.BadRequest(w, r, "Invalid request")
 			return
 		}
-		state := any(r.URL.Query().Get("state")).(accountlinking.Platform)
-		var session *sess.Session
+
+		stateStr := r.URL.Query().Get("state")
+		if stateStr == "" {
+			responses.BadRequest(w, r, "Invalid request")
+			return
+		}
+		var state accountlinking.OAuthState
 		var err error
-		if state == accountlinking.PlatformDiscord {
+		err = json.Unmarshal([]byte(stateStr), state)
+		if err != nil {
+			responses.BadRequest(w, r, "Invalid state")
+			return
+		}
+
+		var session *sess.Session
+		if state.Platform == accountlinking.PlatformDiscord {
 			session, err = accountlinking.DiscordOAuth(as, ss, las, code, state)
 			if err != nil {
 				log.Println("Failed to authenticate with Discord:\n\t", err)
 				responses.BadRequest(w, r, "Failed to authenticate with Discord")
 				return
 			}
-		} else if state == accountlinking.PlatformTwitch {
+		} else if state.Platform == accountlinking.PlatformTwitch {
 			session, err = accountlinking.TwitchOAuth(as, ss, las, code, state)
 			if err != nil {
 				log.Println("Failed to authenticate with Twitch:\n\t", err)
@@ -107,6 +120,17 @@ func OAuthHandler(as auth.AccountStore, ss sess.SessionStore, las accountlinking
 				return
 			}
 		}
+		http.SetCookie(w, &http.Cookie{
+			Name:   "session",
+			Value:  session.ID,
+			Domain: "neuralnexus.dev",
+		})
+
+		if state.RedirectURI != "" {
+			http.Redirect(w, r, state.RedirectURI, http.StatusSeeOther)
+			return
+		}
+
 		responses.StructOK(w, r, session)
 	}
 }

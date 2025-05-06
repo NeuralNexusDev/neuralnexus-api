@@ -204,10 +204,10 @@ func GetDiscordUser(accessToken string) (*DiscordData, error) {
 }
 
 // DiscordOAuth process the Discord OAuth flow
-func DiscordOAuth(as auth.AccountStore, ss sess.SessionStore, las LinkAccountStore, code string, state Platform) (*sess.Session, error) {
+func DiscordOAuth(as auth.AccountStore, ss sess.SessionStore, las LinkAccountStore, code string, state OAuthState) (*sess.Session, error) {
 	var a *auth.Account
 	// TODO: Sign the state so it can't be tampered with/impersonated
-	if state != "" && false { // TEMPORARILY DISABLED UNTIL STATE IS SIGNED
+	if state.Platform != "" && false { // TEMPORARILY DISABLED UNTIL STATE IS SIGNED
 	}
 
 	token, err := DiscordExtCodeForToken(code)

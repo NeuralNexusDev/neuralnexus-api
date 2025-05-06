@@ -110,6 +110,6 @@ func GetRoleByName(name string) (Role, error) {
 	case RoleOwner.Name:
 		return RoleOwner, nil
 	default:
-		return Role{}, errors.New("Role not found")
+		return Role{}, errors.New("role not found")
 	}
 }

@@ -67,7 +67,7 @@ func RequestLoggerMiddleware(next http.Handler) http.Handler {
 
 // Auth - Authenticate requests
 func Auth(next http.HandlerFunc) http.HandlerFunc {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
 		db := database.GetDB("neuralnexus")
 		rdb := database.GetRedis()
 		sessService := sess.NewSessionService(sess.NewSessionStore(db, rdb))
@@ -103,5 +103,5 @@ func Auth(next http.HandlerFunc) http.HandlerFunc {
 		ctx := r.Context()
 		ctx = context.WithValue(ctx, SessionKey, session)
 		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+	}
 }

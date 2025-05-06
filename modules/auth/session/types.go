@@ -40,7 +40,7 @@ func (s *Session) HasPermission(permission perms.Scope) bool {
 	return false
 }
 
-// IsExpired checks if a session is expired
+// IsValid checks if a session is expired
 func (s *Session) IsValid() bool {
 	if s.ExpiresAt == 0 {
 		return true
