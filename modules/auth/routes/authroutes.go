@@ -87,12 +87,14 @@ func OAuthHandler(as auth.AccountStore, ss sess.SessionStore, las accountlinking
 	return func(w http.ResponseWriter, r *http.Request) {
 		code := r.URL.Query().Get("code")
 		if code == "" {
+			log.Println("No code provided")
 			responses.BadRequest(w, r, "Invalid request")
 			return
 		}
 
 		stateStr := r.URL.Query().Get("state")
 		if stateStr == "" {
+			log.Println("No state provided")
 			responses.BadRequest(w, r, "Invalid request")
 			return
 		}
@@ -100,6 +102,7 @@ func OAuthHandler(as auth.AccountStore, ss sess.SessionStore, las accountlinking
 		var err error
 		err = json.Unmarshal([]byte(stateStr), state)
 		if err != nil {
+			log.Println("Failed to unmarshal state:\n\t", err)
 			responses.BadRequest(w, r, "Invalid state")
 			return
 		}
