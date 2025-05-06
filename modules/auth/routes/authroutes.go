@@ -120,13 +120,16 @@ func OAuthHandler(as auth.AccountStore, ss sess.SessionStore, las accountlinking
 				return
 			}
 		}
-		http.SetCookie(w, &http.Cookie{
-			Name:   "session",
-			Value:  session.ID,
-			Domain: "neuralnexus.dev",
-		})
 
+		// If the state contains a redirect URI, set the session cookie and redirect
 		if state.RedirectURI != "" {
+			http.SetCookie(w, &http.Cookie{
+				Name:    "session",
+				Value:   session.ID,
+				Domain:  "neuralnexus.dev",
+				Expires: time.Unix(session.ExpiresAt, 0),
+			})
+
 			http.Redirect(w, r, state.RedirectURI, http.StatusSeeOther)
 			return
 		}
