@@ -100,7 +100,7 @@ func OAuthHandler(as auth.AccountStore, ss sess.SessionStore, las accountlinking
 		}
 		var state accountlinking.OAuthState
 		var err error
-		err = json.Unmarshal([]byte(stateStr), state)
+		err = json.Unmarshal([]byte(stateStr), &state)
 		if err != nil {
 			log.Println("Failed to unmarshal state:\n\t", err)
 			responses.BadRequest(w, r, "Invalid state")
