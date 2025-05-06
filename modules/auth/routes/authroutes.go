@@ -1,6 +1,7 @@
 package authroutes
 
 import (
+	"encoding/base64"
 	"github.com/goccy/go-json"
 	"log"
 	"net/http"
@@ -85,6 +86,8 @@ func LogoutHandler(ss sess.SessionStore) http.HandlerFunc {
 // OAuthHandler handles the Discord OAuth route
 func OAuthHandler(as auth.AccountStore, ss sess.SessionStore, las accountlinking.LinkAccountStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		var err error
+
 		code := r.URL.Query().Get("code")
 		if code == "" {
 			log.Println("No code provided")
@@ -92,15 +95,20 @@ func OAuthHandler(as auth.AccountStore, ss sess.SessionStore, las accountlinking
 			return
 		}
 
-		stateStr := r.URL.Query().Get("state")
-		if stateStr == "" {
+		stateB64 := r.URL.Query().Get("state")
+		if stateB64 == "" {
 			log.Println("No state provided")
 			responses.BadRequest(w, r, "Invalid request")
 			return
 		}
+		stateBytes, err := base64.URLEncoding.DecodeString(stateB64)
+		if err != nil {
+			log.Println("Failed to decode state:\n\t", err)
+			responses.BadRequest(w, r, "Invalid state")
+			return
+		}
 		var state accountlinking.OAuthState
-		var err error
-		err = json.Unmarshal([]byte(stateStr), &state)
+		err = json.Unmarshal(stateBytes, &state)
 		if err != nil {
 			log.Println("Failed to unmarshal state:\n\t", err)
 			responses.BadRequest(w, r, "Invalid state")
