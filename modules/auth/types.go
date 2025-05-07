@@ -3,13 +3,16 @@ package auth
 import (
 	"crypto/rand"
 	"log"
+	"os"
 	"time"
 
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 	sess "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
-	"golang.org/x/crypto/argon2"
+	_ "unsafe"
 )
+
+var pepper = []byte(os.Getenv("PEPPER"))
 
 // Account struct
 type Account struct {
@@ -64,6 +67,18 @@ func NewIDOnlyAccount() (*Account, error) {
 	}, nil
 }
 
+//go:linkname deriveKey argon2.deriveKey
+//goland:noinspection GoUnusedParameter
+func deriveKey(mode int, password, salt, secret, data []byte, time, memory uint32, threads uint8, keyLen uint32) []byte
+
+//go:linkname argon2id argon2.argon2id
+const argon2id = 2
+
+// IDKeyWithSecret Adds pepper support to the IDKey function
+func IDKeyWithSecret(password, salt []byte, secret []byte, time, memory uint32, threads uint8, keyLen uint32) []byte {
+	return deriveKey(argon2id, password, salt, secret, nil, time, memory, threads, keyLen)
+}
+
 // HashPassword hashes the password
 func (user *Account) HashPassword(password string) error {
 	salt := make([]byte, 16)
@@ -71,18 +86,20 @@ func (user *Account) HashPassword(password string) error {
 	if err != nil {
 		return err
 	}
-	hashedSecret := argon2.IDKey([]byte(password), salt, 1, 64*1024, 4, 32)
+	// TODO: Implement pepper support
+	hashedSecret := IDKeyWithSecret([]byte(password), salt, pepper, 1, 64*1024, 4, 32)
 	user.HashedSecret = hashedSecret
 	user.Salt = salt
 	return nil
 }
 
-// Validate password
+// ValidateUser validate the user's password
 func (user *Account) ValidateUser(password string) bool {
 	if user.HashedSecret == nil || user.Salt == nil {
 		return false
 	}
-	hashedSecret := argon2.IDKey([]byte(password), []byte(user.Salt), 1, 64*1024, 4, 32)
+	// TODO: Implement pepper support
+	hashedSecret := IDKeyWithSecret([]byte(password), user.Salt, pepper, 1, 64*1024, 4, 32)
 	return string(hashedSecret) == string(user.HashedSecret)
 }
 
@@ -102,9 +119,9 @@ func (user *Account) RemoveRole(role string) {
 }
 
 // NewSession creates a new session
-func (a *Account) NewSession(expiresAt int64) (*sess.Session, error) {
-	permissions := []string{}
-	for _, r := range a.Roles {
+func (user *Account) NewSession(expiresAt int64) (*sess.Session, error) {
+	var permissions []string
+	for _, r := range user.Roles {
 		role, err := perms.GetRoleByName(r)
 		if err != nil {
 			log.Println(err)
@@ -121,7 +138,7 @@ func (a *Account) NewSession(expiresAt int64) (*sess.Session, error) {
 	}
 	return &sess.Session{
 		ID:          id,
-		UserID:      a.UserID,
+		UserID:      user.UserID,
 		Permissions: permissions,
 		IssuedAt:    time.Now().Unix(),
 		LastUsedAt:  time.Now().Unix(),
