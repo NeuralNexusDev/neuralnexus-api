@@ -2,15 +2,17 @@ package auth
 
 import (
 	"crypto/rand"
+	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
+
 	"log"
 	"os"
 	"time"
 
-	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
-	sess "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	_ "unsafe"
 )
+
+// -------------- Account --------------
 
 var pepper = []byte(os.Getenv("PEPPER"))
 
@@ -67,12 +69,12 @@ func NewIDOnlyAccount() (*Account, error) {
 	}, nil
 }
 
-//go:linkname deriveKey argon2.deriveKey
+//go:linkname deriveKey golang.org/x/crypto/argon2.deriveKey
 //goland:noinspection GoUnusedParameter
 func deriveKey(mode int, password, salt, secret, data []byte, time, memory uint32, threads uint8, keyLen uint32) []byte
 
-//go:linkname argon2id argon2.argon2id
-const argon2id = 2
+//go:linkname argon2id golang.org/x/crypto/argon2.argon2id
+var argon2id int
 
 // IDKeyWithSecret Adds pepper support to the IDKey function
 func IDKeyWithSecret(password, salt []byte, secret []byte, time, memory uint32, threads uint8, keyLen uint32) []byte {
@@ -118,8 +120,10 @@ func (user *Account) RemoveRole(role string) {
 	}
 }
 
+// -------------- Session --------------
+
 // NewSession creates a new session
-func (user *Account) NewSession(expiresAt int64) (*sess.Session, error) {
+func (user *Account) NewSession(expiresAt int64) (*Session, error) {
 	var permissions []string
 	for _, r := range user.Roles {
 		role, err := perms.GetRoleByName(r)
@@ -136,7 +140,7 @@ func (user *Account) NewSession(expiresAt int64) (*sess.Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &sess.Session{
+	return &Session{
 		ID:          id,
 		UserID:      user.UserID,
 		Permissions: permissions,
@@ -145,3 +149,54 @@ func (user *Account) NewSession(expiresAt int64) (*sess.Session, error) {
 		ExpiresAt:   expiresAt,
 	}, nil
 }
+
+// -------------- Account Linking --------------
+
+// -------------- Structs --------------
+
+// OAuthState used with the OAuth state URL parameter
+type OAuthState struct {
+	Platform    Platform `json:"platform"`
+	Nonce       string   `json:"nonce"`
+	RedirectURI string   `json:"redirect_uri"`
+}
+
+// LinkedAccount struct
+type LinkedAccount struct {
+	UserID           string      `db:"user_id" validate:"required"`
+	Platform         Platform    `db:"platform" validate:"required"`
+	PlatformUsername string      `db:"platform_username" validate:"required_without=PlatformID"`
+	PlatformID       string      `db:"platform_id" validate:"required_without=PlatformUsername"`
+	Data             interface{} `db:"data" validate:"required"`
+	DataUpdatedAt    time.Time   `db:"updated_at"`
+	CreatedAt        time.Time   `db:"created_at"`
+}
+
+// NewLinkedAccount creates a new linked account
+func NewLinkedAccount(userID string, platform Platform, platformUsername, platformID string, data Data) *LinkedAccount {
+	return &LinkedAccount{
+		UserID:           userID,
+		Platform:         platform,
+		PlatformUsername: platformUsername,
+		PlatformID:       platformID,
+		Data:             data,
+	}
+}
+
+// Data interface
+type Data interface {
+	PlatformID() string
+	PlatformUsername() string
+	PlatformData() string
+	CreateLinkedAccount(string) *LinkedAccount
+}
+
+// -------------- Enums --------------
+
+type Platform string
+
+var (
+	PlatformDiscord   Platform = "discord"
+	PlatformMinecraft Platform = "minecraft"
+	PlatformTwitch    Platform = "twitch"
+)

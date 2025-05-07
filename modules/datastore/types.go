@@ -12,7 +12,7 @@ type Store struct {
 	UpdatedAt time.Time `db:"updated_at" json:"updated_at" xml:"updated_at"`
 }
 
-// NewStore - Create a new Data store
+// NewDataStore - Create a new Data store
 func NewDataStore(storeID, ownerID string) *Store {
 	return &Store{
 		StoreID: storeID,

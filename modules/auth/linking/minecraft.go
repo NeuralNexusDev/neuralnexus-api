@@ -1,6 +1,7 @@
 package accountlinking
 
 import (
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"github.com/goccy/go-json"
 	"github.com/google/uuid"
 )
@@ -44,6 +45,6 @@ func (m *MinecraftData) PlatformData() string {
 }
 
 // CreateLinkedAccount creates a linked account
-func (m *MinecraftData) CreateLinkedAccount(userID string) *LinkedAccount {
-	return NewLinkedAccount(userID, PlatformMinecraft, m.Username, m.ID.String(), m)
+func (m *MinecraftData) CreateLinkedAccount(userID string) *auth.LinkedAccount {
+	return auth.NewLinkedAccount(userID, auth.PlatformMinecraft, m.Username, m.ID.String(), m)
 }

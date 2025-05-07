@@ -5,29 +5,28 @@ import (
 	"time"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
-	accountlinking "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 )
 
 // Service - The service interface
 type Service interface {
 	GetUser(userID string) (*auth.Account, error)
-	GetUserFromPlatform(platform accountlinking.Platform, platformID string) (*auth.Account, error)
+	GetUserFromPlatform(platform auth.Platform, platformID string) (*auth.Account, error)
 	GetUserPermissions(userID string) ([]string, error)
 	UpdateUser(user *auth.Account) (*auth.Account, error)
-	UpdateUserFromPlatform(platform accountlinking.Platform, platformID string, data accountlinking.Data) (*auth.Account, error)
+	UpdateUserFromPlatform(platform auth.Platform, platformID string, data auth.Data) (*auth.Account, error)
 	DeleteUser(userID string) error
 }
 
 // service - The service struct
 type service struct {
 	as  auth.AccountStore
-	als accountlinking.LinkAccountStore
+	als auth.LinkAccountStore
 }
 
 // NewService - Create a new service
-func NewService(as auth.AccountStore, als accountlinking.LinkAccountStore) Service {
-	return &service{as, als}
+func NewService(store auth.Store) Service {
+	return &service{store.Account(), store.LinkAccount()}
 }
 
 // GetUser - Get a user by their ID
@@ -36,7 +35,7 @@ func (s *service) GetUser(userID string) (*auth.Account, error) {
 }
 
 // GetUserFromPlatform - Get a user by their platform ID
-func (s *service) GetUserFromPlatform(platform accountlinking.Platform, platformID string) (*auth.Account, error) {
+func (s *service) GetUserFromPlatform(platform auth.Platform, platformID string) (*auth.Account, error) {
 	la, err := s.als.GetLinkedAccountByPlatformID(platform, platformID)
 	if err != nil {
 		return nil, err
@@ -50,7 +49,7 @@ func (s *service) GetUserPermissions(userID string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	permissions := []string{}
+	var permissions []string
 	for _, r := range a.Roles {
 		role, err := perms.GetRoleByName(r)
 		if err != nil {
@@ -83,7 +82,7 @@ func (s *service) UpdateUser(user *auth.Account) (*auth.Account, error) {
 }
 
 // UpdateUserFromPlatform - Update a user from a platform
-func (s *service) UpdateUserFromPlatform(platform accountlinking.Platform, platformID string, data accountlinking.Data) (*auth.Account, error) {
+func (s *service) UpdateUserFromPlatform(platform auth.Platform, platformID string, data auth.Data) (*auth.Account, error) {
 	// If the user doesn't exist, create a new account
 	la, err := s.als.GetLinkedAccountByPlatformID(platform, platformID)
 	if err != nil {
@@ -95,7 +94,7 @@ func (s *service) UpdateUserFromPlatform(platform accountlinking.Platform, platf
 		if err != nil {
 			return nil, err
 		}
-		la = &accountlinking.LinkedAccount{
+		la = &auth.LinkedAccount{
 			UserID:        a.UserID,
 			Platform:      platform,
 			PlatformID:    platformID,

@@ -10,7 +10,6 @@ import (
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	accountlinking "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
-	sess "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
@@ -21,19 +20,17 @@ import (
 func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 	db := database.GetDB("neuralnexus")
 	rdb := database.GetRedis()
-	acctStore := auth.NewAccountStore(db)
-	sessStore := sess.NewSessionStore(db, rdb)
-	alstore := accountlinking.NewStore(db)
+	store := auth.NewStore(db, rdb)
 
-	mux.HandleFunc("POST /api/v1/auth/login", LoginHandler(acctStore, sessStore))
-	mux.Handle("POST /api/v1/auth/logout", mw.Auth(LogoutHandler(sessStore)))
+	mux.HandleFunc("POST /api/v1/auth/login", LoginHandler(store))
+	mux.Handle("POST /api/v1/auth/logout", mw.Auth(LogoutHandler(store)))
 
-	mux.HandleFunc("/api/oauth", OAuthHandler(acctStore, sessStore, alstore))
+	mux.HandleFunc("/api/oauth", OAuthHandler(store))
 	return mux
 }
 
 // LoginHandler handles the login route
-func LoginHandler(as auth.AccountStore, ss sess.SessionStore) http.HandlerFunc {
+func LoginHandler(store auth.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var login struct {
 			Username string `json:"username" xml:"username" validate:"required_without=Email"`
@@ -48,9 +45,9 @@ func LoginHandler(as auth.AccountStore, ss sess.SessionStore) http.HandlerFunc {
 
 		var account *auth.Account
 		if login.Username != "" {
-			account, err = as.GetAccountByUsername(login.Username)
+			account, err = store.Account().GetAccountByUsername(login.Username)
 		} else {
-			account, err = as.GetAccountByEmail(login.Email)
+			account, err = store.Account().GetAccountByEmail(login.Email)
 		}
 		if err != nil {
 			responses.BadRequest(w, r, "Invalid username or email")
@@ -67,24 +64,24 @@ func LoginHandler(as auth.AccountStore, ss sess.SessionStore) http.HandlerFunc {
 			responses.BadRequest(w, r, "Failed to create session")
 			return
 		}
-		ss.AddSessionToCache(session)
+		store.Session().AddSessionToCache(session)
 		responses.StructOK(w, r, session)
-		ss.AddSessionToDB(session)
+		store.Session().AddSessionToDB(session)
 	}
 }
 
 // LogoutHandler handles the logout route
-func LogoutHandler(ss sess.SessionStore) http.HandlerFunc {
+func LogoutHandler(store auth.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*sess.Session)
-		ss.DeleteSessionFromCache(session.ID)
+		session := r.Context().Value(mw.SessionKey).(*auth.Session)
+		store.Session().DeleteSessionFromCache(session.ID)
 		responses.StructOK(w, r, session)
-		ss.DeleteSessionInDB(session.ID)
+		store.Session().DeleteSessionInDB(session.ID)
 	}
 }
 
 // OAuthHandler handles the Discord OAuth route
-func OAuthHandler(as auth.AccountStore, ss sess.SessionStore, las accountlinking.LinkAccountStore) http.HandlerFunc {
+func OAuthHandler(store auth.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
@@ -107,7 +104,7 @@ func OAuthHandler(as auth.AccountStore, ss sess.SessionStore, las accountlinking
 			responses.BadRequest(w, r, "Invalid state")
 			return
 		}
-		var state accountlinking.OAuthState
+		var state auth.OAuthState
 		err = json.Unmarshal(stateBytes, &state)
 		if err != nil {
 			log.Println("Failed to unmarshal state:\n\t", err)
@@ -115,16 +112,16 @@ func OAuthHandler(as auth.AccountStore, ss sess.SessionStore, las accountlinking
 			return
 		}
 
-		var session *sess.Session
-		if state.Platform == accountlinking.PlatformDiscord {
-			session, err = accountlinking.DiscordOAuth(as, ss, las, code, state)
+		var session *auth.Session
+		if state.Platform == auth.PlatformDiscord {
+			session, err = accountlinking.DiscordOAuth(store, code, state)
 			if err != nil {
 				log.Println("Failed to authenticate with Discord:\n\t", err)
 				responses.BadRequest(w, r, "Failed to authenticate with Discord")
 				return
 			}
-		} else if state.Platform == accountlinking.PlatformTwitch {
-			session, err = accountlinking.TwitchOAuth(as, ss, las, code, state)
+		} else if state.Platform == auth.PlatformTwitch {
+			session, err = accountlinking.TwitchOAuth(store, code, state)
 			if err != nil {
 				log.Println("Failed to authenticate with Twitch:\n\t", err)
 				responses.BadRequest(w, r, "Failed to authenticate with Twitch")

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	sess "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
@@ -70,7 +70,7 @@ func Auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		db := database.GetDB("neuralnexus")
 		rdb := database.GetRedis()
-		sessService := sess.NewSessionService(sess.NewSessionStore(db, rdb))
+		sessService := auth.NewSessionService(auth.NewStore(db, rdb))
 
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {

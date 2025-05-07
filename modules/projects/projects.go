@@ -12,7 +12,7 @@ import (
 
 // -------------- Globals --------------
 var (
-	githubToken string = os.Getenv("GITHUB_TOKEN")
+	githubToken = os.Getenv("GITHUB_TOKEN")
 
 	forgeModVersions = []string{
 		"1.7.10",
@@ -43,6 +43,7 @@ var (
 )
 
 // -------------- Structs --------------
+
 type Release struct {
 	TagName string `json:"tag_name"`
 	URL     string `json:"html_url"`
@@ -80,7 +81,7 @@ func getReleases(group string, project string) ([]Release, error) {
 	return releases, nil
 }
 
-// Convert to Forge Mod Updates Format
+// ConvertToFMLFormat Convert to Forge Mod Updates Format
 func ConvertToFMLFormat(gitHubReleasesURL string, releases []Release) map[string]interface{} {
 	fmlFormat := make(map[string]interface{})
 

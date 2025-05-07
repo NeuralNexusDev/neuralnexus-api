@@ -5,9 +5,7 @@ import (
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
-	accountlinking "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
-	sess "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
@@ -15,7 +13,9 @@ import (
 // ApplyRoutes - Apply the routes
 func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 	db := database.GetDB("neuralnexus")
-	service := NewService(auth.NewAccountStore(db), accountlinking.NewStore(db))
+	rdb := database.GetRedis()
+	store := auth.NewStore(db, rdb)
+	service := NewService(store)
 	mux.HandleFunc("GET /api/v1/users/{user_id}", mw.Auth(GetUserHandler(service)))
 	mux.HandleFunc("GET /api/v1/users/{user_id}/permissions", mw.Auth(GetUserPermissionsHandler(service)))
 	mux.HandleFunc("GET /api/v1/users/{platform}/{platform_id}", mw.Auth(GetUserFromPlatformHandler(service)))
@@ -41,12 +41,12 @@ func GetUserHandler(service Service) http.HandlerFunc {
 // GetUserFromPlatformHandler - Get a user from a platform
 func GetUserFromPlatformHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*sess.Session)
+		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if !session.HasPermission(perms.ScopeAdminUsers) {
 			responses.Forbidden(w, r, "You do not have permission to get users")
 			return
 		}
-		platform := accountlinking.Platform(r.PathValue("platform"))
+		platform := auth.Platform(r.PathValue("platform"))
 		platformID := r.PathValue("platform_id")
 		user, err := service.GetUserFromPlatform(platform, platformID)
 		if err != nil {
@@ -60,7 +60,7 @@ func GetUserFromPlatformHandler(service Service) http.HandlerFunc {
 // GetUserPermissionsHandler - Get a user's permissions
 func GetUserPermissionsHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*sess.Session)
+		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		userID := r.PathValue("user_id")
 		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
 			responses.Forbidden(w, r, "You do not have permission to get user permissions")
@@ -78,7 +78,7 @@ func GetUserPermissionsHandler(service Service) http.HandlerFunc {
 // UpdateUserHandler - Update a user
 func UpdateUserHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*sess.Session)
+		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if !session.HasPermission(perms.ScopeAdminUsers) {
 			responses.Forbidden(w, r, "You do not have permission to update users")
 			return
@@ -103,14 +103,14 @@ func UpdateUserHandler(service Service) http.HandlerFunc {
 // UpdateUserFromPlatformHandler - Update a user from a platform
 func UpdateUserFromPlatformHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*sess.Session)
+		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if !session.HasPermission(perms.ScopeAdminUsers) {
 			responses.Forbidden(w, r, "You do not have permission to update users")
 			return
 		}
-		platform := accountlinking.Platform(r.PathValue("platform"))
+		platform := auth.Platform(r.PathValue("platform"))
 		platformID := r.PathValue("platform_id")
-		var data accountlinking.Data
+		var data auth.Data
 		err := responses.DecodeStruct(r, &data)
 		if err != nil {
 			responses.BadRequest(w, r, "Invalid request body")
@@ -128,7 +128,7 @@ func UpdateUserFromPlatformHandler(service Service) http.HandlerFunc {
 // DeleteUserHandler - Delete a user
 func DeleteUserHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*sess.Session)
+		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if !session.HasPermission(perms.ScopeAdminUsers) {
 			responses.Forbidden(w, r, "You do not have permission to delete users")
 			return

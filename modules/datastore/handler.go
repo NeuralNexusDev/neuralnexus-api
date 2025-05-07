@@ -5,8 +5,8 @@ import (
 	"net/http"
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
-	sess "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
@@ -25,7 +25,7 @@ func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 // CreateDataStoreHandler - Create a new data store
 func CreateDataStoreHandler(s DSService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*sess.Session)
+		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if !session.HasPermission(perms.ScopeAdminDataStore) {
 			responses.Forbidden(w, r, "You do not have permission to create a datastore")
 			return
@@ -71,7 +71,7 @@ func ReadDataStoreHandler(s DSService) http.HandlerFunc {
 // UpdateDataStoreHandler - Update a data store
 func UpdateDataStoreHandler(s DSService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*sess.Session)
+		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if !session.HasPermission(perms.ScopeAdminDataStore) {
 			responses.Forbidden(w, r, "You do not have permission to update a datastore")
 			return
@@ -98,7 +98,7 @@ func UpdateDataStoreHandler(s DSService) http.HandlerFunc {
 // DeleteDataStoreHandler - Delete a data store
 func DeleteDataStoreHandler(s DSService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*sess.Session)
+		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if !session.HasPermission(perms.ScopeAdminDataStore) {
 			responses.Forbidden(w, r, "You do not have permission to delete a datastore")
 			return

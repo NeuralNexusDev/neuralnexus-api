@@ -7,6 +7,8 @@ import (
 )
 
 // -------------- Globals --------------
+
+//goland:noinspection GoSnakeCaseUsage
 var (
 	IV_LENGTH  = 16
 	KEY_LENGTH = IV_LENGTH * 8

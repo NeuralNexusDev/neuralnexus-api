@@ -9,6 +9,8 @@ import (
 )
 
 // -------------- Globals --------------
+
+//goland:noinspection GoSnakeCaseUsage
 var (
 	REDIS_URL      = os.Getenv("REDIS_ADDRESS")
 	REDIS_USERNAME = os.Getenv("REDIS_USERNAME")

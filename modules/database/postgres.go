@@ -9,6 +9,8 @@ import (
 )
 
 // -------------- Globals --------------
+
+//goland:noinspection GoSnakeCaseUsage,GoNameStartsWithPackageName
 var DATABASE_URL = os.Getenv("DATABASE_URL")
 
 // -------------- Functions --------------

@@ -10,7 +10,7 @@ import (
 
 // ApplyRoutes - Apply the routes
 func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
-	mux.HandleFunc("GET /api/v1/teapot", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /api/v1/teapot", func(w http.ResponseWriter, r *http.Request) {
 		responses.NewProblem(
 			"about:blank",
 			http.StatusTeapot,
@@ -18,6 +18,6 @@ func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 			"You requested a cup of coffee, but I'm a teapot.",
 			"https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/418",
 		).SendProblem(w, r)
-	}))
+	})
 	return mux
 }

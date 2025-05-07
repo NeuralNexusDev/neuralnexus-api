@@ -10,11 +10,12 @@ import (
 	"time"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
-	sess "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/goccy/go-json"
 )
 
 // -------------- Global Variables --------------
+
+//goland:noinspection GoSnakeCaseUsage
 var (
 	DISCORD_CLIENT_ID     = os.Getenv("DISCORD_CLIENT_ID")
 	DISCORD_CLIENT_SECRET = os.Getenv("DISCORD_CLIENT_SECRET")
@@ -70,8 +71,8 @@ func (d *DiscordData) PlatformData() string {
 }
 
 // CreateLinkedAccount creates a linked account
-func (d *DiscordData) CreateLinkedAccount(userID string) *LinkedAccount {
-	return NewLinkedAccount(userID, PlatformDiscord, d.Username, d.ID, d)
+func (d *DiscordData) CreateLinkedAccount(userID string) *auth.LinkedAccount {
+	return auth.NewLinkedAccount(userID, auth.PlatformDiscord, d.Username, d.ID, d)
 }
 
 // -------------- Functions --------------
@@ -204,7 +205,7 @@ func GetDiscordUser(accessToken string) (*DiscordData, error) {
 }
 
 // DiscordOAuth process the Discord OAuth flow
-func DiscordOAuth(as auth.AccountStore, ss sess.SessionStore, las LinkAccountStore, code string, state OAuthState) (*sess.Session, error) {
+func DiscordOAuth(store auth.Store, code string, state auth.OAuthState) (*auth.Session, error) {
 	var a *auth.Account
 	// TODO: Sign the state so it can't be tampered with/impersonated
 	if state.Platform != "" && false { // TEMPORARILY DISABLED UNTIL STATE IS SIGNED
@@ -223,11 +224,11 @@ func DiscordOAuth(as auth.AccountStore, ss sess.SessionStore, las LinkAccountSto
 	}
 
 	// Check if platform account is linked to an account
-	la, err := las.GetLinkedAccountByPlatformID(PlatformDiscord, user.ID)
+	la, err := store.LinkAccount().GetLinkedAccountByPlatformID(auth.PlatformDiscord, user.ID)
 	if err == nil {
 		// If the account IDs don't match, default to OAuth as the source of truth
 		if a == nil || a.UserID != la.UserID {
-			a, err = as.GetAccountByID(la.UserID)
+			a, err = store.Account().GetAccountByID(la.UserID)
 			if err != nil {
 				return nil, err
 			}
@@ -235,37 +236,37 @@ func DiscordOAuth(as auth.AccountStore, ss sess.SessionStore, las LinkAccountSto
 			if err != nil {
 				return nil, err
 			}
-			ss.AddSessionToCache(session)
-			defer ss.AddSessionToDB(session)
+			store.Session().AddSessionToCache(session)
+			defer store.Session().AddSessionToDB(session)
 			return session, nil
 		} else if a.UserID == la.UserID {
 			session, err := a.NewSession(time.Now().Add(time.Hour * 24).Unix())
 			if err != nil {
 				return nil, err
 			}
-			ss.AddSessionToCache(session)
-			defer ss.AddSessionToDB(session)
+			store.Session().AddSessionToCache(session)
+			defer store.Session().AddSessionToDB(session)
 			return session, nil
 		}
 	}
 
 	// Check if the email is already in use -- simple account merging
-	a, _ = as.GetAccountByEmail(user.Email)
+	a, _ = store.Account().GetAccountByEmail(user.Email)
 	if a == nil {
 		// Create account
 		a, err = auth.NewPasswordLessAccount(user.Username, user.Email)
 		if err != nil {
 			return nil, err
 		}
-		a, err = as.AddAccountToDB(a)
+		a, err = store.Account().AddAccountToDB(a)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	// Link account
-	la = NewLinkedAccount(a.UserID, PlatformDiscord, user.Username, user.ID, user)
-	_, err = las.AddLinkedAccountToDB(la)
+	la = auth.NewLinkedAccount(a.UserID, auth.PlatformDiscord, user.Username, user.ID, user)
+	_, err = store.LinkAccount().AddLinkedAccountToDB(la)
 	if err != nil {
 		return nil, errors.New("failed to link account")
 	}
@@ -273,7 +274,7 @@ func DiscordOAuth(as auth.AccountStore, ss sess.SessionStore, las LinkAccountSto
 	if err != nil {
 		return nil, err
 	}
-	ss.AddSessionToCache(session)
-	defer ss.AddSessionToDB(session)
+	store.Session().AddSessionToCache(session)
+	defer store.Session().AddSessionToDB(session)
 	return session, nil
 }

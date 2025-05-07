@@ -14,6 +14,7 @@ var (
 )
 
 // -------------- Routes --------------
+
 // ApplyRoutes - Apply the routes
 func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 	// mux.HandleFunc("GET /ws/v1/switchboard/relay", ebSocketRelayHandler)
