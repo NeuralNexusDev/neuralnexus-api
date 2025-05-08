@@ -3,6 +3,7 @@ package mw
 import (
 	"context"
 	"crypto"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -90,7 +91,7 @@ func RequestLoggerMiddleware(next http.Handler) http.Handler {
 		if ok && session != nil {
 			h := crypto.SHA256.New()
 			h.Write([]byte(session.ID))
-			sessionId = string(h.Sum(nil))
+			sessionId = fmt.Sprintf("%x", h.Sum(nil))
 		}
 
 		log.Printf("%d %s %s %d %s %s %s",
