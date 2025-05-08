@@ -1,8 +1,6 @@
 package main
 
 import (
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"log"
 	"net"
 	"net/http"
@@ -11,9 +9,11 @@ import (
 	"syscall"
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	authroutes "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/routes"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/users"
 	beenamegenerator "github.com/NeuralNexusDev/neuralnexus-api/modules/bee_name_generator"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/datastore"
 	numbersds "github.com/NeuralNexusDev/neuralnexus-api/modules/datastore/numbers"
 	gss "github.com/NeuralNexusDev/neuralnexus-api/modules/game_server_status"

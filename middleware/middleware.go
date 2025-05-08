@@ -45,7 +45,7 @@ func LogRequest(r *http.Request, message ...string) {
 		requestId,
 		userId,
 		r.RemoteAddr,
-		message,
+		strings.Join(message, " "),
 	)
 }
 
