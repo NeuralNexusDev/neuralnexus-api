@@ -145,6 +145,7 @@ func OAuthHandler(store auth.Store) http.HandlerFunc {
 				Name:    "user_id",
 				Value:   session.UserID,
 				Domain:  ".neuralnexus.dev",
+				Path:    "/",
 				Expires: time.Unix(session.ExpiresAt, 0),
 				Secure:  true,
 			})
