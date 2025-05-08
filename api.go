@@ -1,6 +1,8 @@
 package main
 
 import (
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"log"
 	"net"
 	"net/http"
@@ -59,7 +61,15 @@ func (s *APIServer) Setup() http.Handler {
 		users.ApplyRoutes,
 	)
 
+	db := database.GetDB("neuralnexus")
+	rdb := database.GetRedis()
+	store := auth.NewStore(db, rdb)
+	session := auth.NewSessionService(store)
+
 	middlewareStack := mw.CreateStack(
+		mw.SessionMiddleware(session),
+		mw.RequestIDMiddleware,
+		mw.IPMiddleware,
 		mw.RequestLoggerMiddleware,
 		cors.AllowAll().Handler,
 	)
