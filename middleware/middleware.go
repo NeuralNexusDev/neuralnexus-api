@@ -40,8 +40,7 @@ func LogRequest(r *http.Request, message ...string) {
 	if ok && session != nil {
 		userId = session.UserID
 	}
-	log.Printf("%d %d %s %s %s",
-		time.Now().Unix(),
+	log.Printf("%d %s %s %s",
 		requestId,
 		userId,
 		r.RemoteAddr,
