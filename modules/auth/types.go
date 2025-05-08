@@ -88,7 +88,6 @@ func (user *Account) HashPassword(password string) error {
 	if err != nil {
 		return err
 	}
-	// TODO: Implement pepper support
 	hashedSecret := IDKeyWithSecret([]byte(password), salt, pepper, 1, 64*1024, 4, 32)
 	user.HashedSecret = hashedSecret
 	user.Salt = salt
@@ -100,7 +99,6 @@ func (user *Account) ValidateUser(password string) bool {
 	if user.HashedSecret == nil || user.Salt == nil {
 		return false
 	}
-	// TODO: Implement pepper support
 	hashedSecret := IDKeyWithSecret([]byte(password), user.Salt, pepper, 1, 64*1024, 4, 32)
 	return string(hashedSecret) == string(user.HashedSecret)
 }

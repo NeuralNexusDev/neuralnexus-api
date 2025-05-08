@@ -1,4 +1,4 @@
-package accountlinking
+package linking
 
 import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"

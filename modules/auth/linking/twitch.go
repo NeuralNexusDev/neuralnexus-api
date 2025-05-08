@@ -1,4 +1,4 @@
-package accountlinking
+package linking
 
 import (
 	"errors"

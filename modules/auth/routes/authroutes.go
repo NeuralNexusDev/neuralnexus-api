@@ -9,7 +9,7 @@ import (
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
-	accountlinking "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
@@ -114,14 +114,14 @@ func OAuthHandler(store auth.Store) http.HandlerFunc {
 
 		var session *auth.Session
 		if state.Platform == auth.PlatformDiscord {
-			session, err = accountlinking.DiscordOAuth(store, code, state)
+			session, err = linking.DiscordOAuth(store, code, state)
 			if err != nil {
 				log.Println("Failed to authenticate with Discord:\n\t", err)
 				responses.BadRequest(w, r, "Failed to authenticate with Discord")
 				return
 			}
 		} else if state.Platform == auth.PlatformTwitch {
-			session, err = accountlinking.TwitchOAuth(store, code, state)
+			session, err = linking.TwitchOAuth(store, code, state)
 			if err != nil {
 				log.Println("Failed to authenticate with Twitch:\n\t", err)
 				responses.BadRequest(w, r, "Failed to authenticate with Twitch")
