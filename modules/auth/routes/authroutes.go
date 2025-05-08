@@ -21,9 +21,10 @@ func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 	db := database.GetDB("neuralnexus")
 	rdb := database.GetRedis()
 	store := auth.NewStore(db, rdb)
+	session := auth.NewSessionService(store)
 
 	mux.HandleFunc("POST /api/v1/auth/login", LoginHandler(store))
-	mux.Handle("POST /api/v1/auth/logout", mw.Auth(LogoutHandler(store)))
+	mux.Handle("POST /api/v1/auth/logout", mw.Auth(session, LogoutHandler(store)))
 
 	mux.HandleFunc("/api/oauth", OAuthHandler(store))
 	return mux

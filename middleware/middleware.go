@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
@@ -66,12 +65,8 @@ func RequestLoggerMiddleware(next http.Handler) http.Handler {
 }
 
 // Auth - Authenticate requests
-func Auth(next http.HandlerFunc) http.HandlerFunc {
+func Auth(service auth.SessionService, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		db := database.GetDB("neuralnexus")
-		rdb := database.GetRedis()
-		sessService := auth.NewSessionService(auth.NewStore(db, rdb))
-
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
 			responses.Unauthorized(w, r, "")
@@ -84,7 +79,7 @@ func Auth(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		session, err := sessService.GetSession(authStrings[1])
+		session, err := service.GetSession(authStrings[1])
 		if err != nil {
 			log.Println("Error getting session:\n\t", err)
 			responses.Unauthorized(w, r, "")
@@ -93,12 +88,12 @@ func Auth(next http.HandlerFunc) http.HandlerFunc {
 
 		if !session.IsValid() {
 			responses.Unauthorized(w, r, "")
-			sessService.DeleteSession(session.ID)
+			service.DeleteSession(session.ID)
 			return
 		}
 
 		session.LastUsedAt = time.Now().Unix()
-		sessService.UpdateSession(session)
+		service.UpdateSession(session)
 
 		ctx := r.Context()
 		ctx = context.WithValue(ctx, SessionKey, session)

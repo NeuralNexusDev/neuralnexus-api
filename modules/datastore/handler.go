@@ -15,10 +15,16 @@ import (
 func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 	dsStore := NewStore(database.GetDB("neuralnexus"))
 	dsService := NewService(dsStore)
-	mux.Handle("POST /api/v1/datastore", mw.Auth(CreateDataStoreHandler(dsService)))
+
+	db := database.GetDB("neuralnexus")
+	rdb := database.GetRedis()
+	authStore := auth.NewStore(db, rdb)
+	session := auth.NewSessionService(authStore)
+
+	mux.Handle("POST /api/v1/datastore", mw.Auth(session, CreateDataStoreHandler(dsService)))
 	mux.Handle("GET /api/v1/datastore", ReadDataStoreHandler(dsService))
-	mux.Handle("PUT /api/v1/datastore", mw.Auth(UpdateDataStoreHandler(dsService)))
-	mux.Handle("DELETE /api/v1/datastore", mw.Auth(DeleteDataStoreHandler(dsService)))
+	mux.Handle("PUT /api/v1/datastore", mw.Auth(session, UpdateDataStoreHandler(dsService)))
+	mux.Handle("DELETE /api/v1/datastore", mw.Auth(session, DeleteDataStoreHandler(dsService)))
 	return mux
 }
 

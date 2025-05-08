@@ -24,8 +24,8 @@ type service struct {
 	als auth.LinkAccountStore
 }
 
-// NewService - Create a new service
-func NewService(store auth.Store) Service {
+// NewUserService - Create a new service
+func NewUserService(store auth.Store) Service {
 	return &service{store.Account(), store.LinkAccount()}
 }
 
