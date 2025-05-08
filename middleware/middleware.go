@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,6 +21,8 @@ type key int
 const (
 	// SessionKey - Key for session in context
 	SessionKey key = iota
+	// RequestIDKey - Key for request ID in context
+	RequestIDKey
 )
 
 // CreateStack - Create a stack of middlewares
@@ -50,6 +53,21 @@ func RequestLoggerMiddleware(next http.Handler) http.Handler {
 		start := time.Now()
 		wrapped := &WrappedWriter{w, http.StatusOK}
 
+		// Set the request ID in the context
+		// TODO: Check to see what the IP address is when using local unix socket
+		log.Println("-----IP address:", r.RemoteAddr)
+		requestIdStr := r.Header.Get("X-Request-ID")
+		var requestId int
+		if requestIdStr == "" {
+			requestId = int(start.UnixNano())
+			r.Header.Set("X-Request-ID", strconv.Itoa(requestId))
+		} else {
+			requestId, _ = strconv.Atoi(requestIdStr)
+		}
+		ctx := r.Context()
+		ctx = context.WithValue(ctx, RequestIDKey, requestId)
+
+		// IP address handling
 		cfConnectingIP := r.Header.Get("CF-Connecting-IP")
 		forwardedFor := r.Header.Get("X-Forwarded-For")
 		if cfConnectingIP != "" {
@@ -58,7 +76,7 @@ func RequestLoggerMiddleware(next http.Handler) http.Handler {
 			r.RemoteAddr = forwardedFor
 		}
 
-		next.ServeHTTP(wrapped, r)
+		next.ServeHTTP(wrapped, r.WithContext(ctx))
 
 		log.Printf("%s %d %s %s %s", r.RemoteAddr, wrapped.statusCode, r.Method, r.URL.Path, time.Since(start))
 	})
