@@ -2,6 +2,7 @@ package mw
 
 import (
 	"context"
+	"crypto"
 	"log"
 	"net/http"
 	"strconv"
@@ -23,6 +24,12 @@ const (
 	SessionKey key = iota
 	// RequestIDKey - Key for request ID in context
 	RequestIDKey
+)
+
+const (
+	XRequestIDHeader     = "X-Request-ID"
+	XForwardedForHeader  = "X-Forwarded-For"
+	CFConnectingIPHeader = "CF-Connecting-IP"
 )
 
 // CreateStack - Create a stack of middlewares
@@ -54,13 +61,11 @@ func RequestLoggerMiddleware(next http.Handler) http.Handler {
 		wrapped := &WrappedWriter{w, http.StatusOK}
 
 		// Set the request ID in the context
-		// TODO: Check to see what the IP address is when using local unix socket
-		log.Println("-----IP address:", r.RemoteAddr)
-		requestIdStr := r.Header.Get("X-Request-ID")
+		requestIdStr := r.Header.Get(XRequestIDHeader)
 		var requestId int
 		if requestIdStr == "" {
 			requestId = int(start.UnixNano())
-			r.Header.Set("X-Request-ID", strconv.Itoa(requestId))
+			r.Header.Set(XRequestIDHeader, strconv.Itoa(requestId))
 		} else {
 			requestId, _ = strconv.Atoi(requestIdStr)
 		}
@@ -68,17 +73,35 @@ func RequestLoggerMiddleware(next http.Handler) http.Handler {
 		ctx = context.WithValue(ctx, RequestIDKey, requestId)
 
 		// IP address handling
-		cfConnectingIP := r.Header.Get("CF-Connecting-IP")
-		forwardedFor := r.Header.Get("X-Forwarded-For")
+		cfConnectingIP := r.Header.Get(CFConnectingIPHeader)
+		forwardedFor := r.Header.Get(XForwardedForHeader)
 		if cfConnectingIP != "" {
 			r.RemoteAddr = cfConnectingIP
 		} else if forwardedFor != "" {
 			r.RemoteAddr = forwardedFor
 		}
 
+		// Handle the request
 		next.ServeHTTP(wrapped, r.WithContext(ctx))
 
-		log.Printf("%s %d %s %s %s", r.RemoteAddr, wrapped.statusCode, r.Method, r.URL.Path, time.Since(start))
+		// Log the request
+		session, ok := ctx.Value(SessionKey).(*auth.Session)
+		sessionId := "N/A"
+		if ok && session != nil {
+			h := crypto.SHA256.New()
+			h.Write([]byte(session.ID))
+			sessionId = string(h.Sum(nil))
+		}
+
+		log.Printf("%d %s %s %d %s %s %s",
+			requestId,
+			sessionId,
+			r.RemoteAddr,
+			wrapped.statusCode,
+			r.Method,
+			r.URL.Path,
+			time.Since(start),
+		)
 	})
 }
 
