@@ -1,41 +1,40 @@
-package users
+package auth
 
 import (
 	"log"
 	"time"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 )
 
-// Service - The service interface
-type Service interface {
-	GetUser(userID string) (*auth.Account, error)
-	GetUserFromPlatform(platform auth.Platform, platformID string) (*auth.Account, error)
+// UserService - The userService interface
+type UserService interface {
+	GetUser(userID string) (*Account, error)
+	GetUserFromPlatform(platform Platform, platformID string) (*Account, error)
 	GetUserPermissions(userID string) ([]string, error)
-	UpdateUser(user *auth.Account) (*auth.Account, error)
-	UpdateUserFromPlatform(platform auth.Platform, platformID string, data auth.Data) (*auth.Account, error)
+	UpdateUser(user *Account) (*Account, error)
+	UpdateUserFromPlatform(platform Platform, platformID string, data Data) (*Account, error)
 	DeleteUser(userID string) error
 }
 
-// service - The service struct
-type service struct {
-	as  auth.AccountStore
-	als auth.LinkAccountStore
+// userService - The userService struct
+type userService struct {
+	as  AccountStore
+	als LinkAccountStore
 }
 
-// NewUserService - Create a new service
-func NewUserService(store auth.Store) Service {
-	return &service{store.Account(), store.LinkAccount()}
+// NewUserService - Create a new userService
+func NewUserService(store Store) UserService {
+	return &userService{store.Account(), store.LinkAccount()}
 }
 
 // GetUser - Get a user by their ID
-func (s *service) GetUser(userID string) (*auth.Account, error) {
+func (s *userService) GetUser(userID string) (*Account, error) {
 	return s.as.GetAccountByID(userID)
 }
 
 // GetUserFromPlatform - Get a user by their platform ID
-func (s *service) GetUserFromPlatform(platform auth.Platform, platformID string) (*auth.Account, error) {
+func (s *userService) GetUserFromPlatform(platform Platform, platformID string) (*Account, error) {
 	la, err := s.als.GetLinkedAccountByPlatformID(platform, platformID)
 	if err != nil {
 		return nil, err
@@ -44,7 +43,7 @@ func (s *service) GetUserFromPlatform(platform auth.Platform, platformID string)
 }
 
 // GetUserPermissions - Get a user's permissions
-func (s *service) GetUserPermissions(userID string) ([]string, error) {
+func (s *userService) GetUserPermissions(userID string) ([]string, error) {
 	a, err := s.as.GetAccountByID(userID)
 	if err != nil {
 		return nil, err
@@ -65,7 +64,7 @@ func (s *service) GetUserPermissions(userID string) ([]string, error) {
 
 // UpdateUser - Update a user
 // TODO: Make this return just an error
-func (s *service) UpdateUser(user *auth.Account) (*auth.Account, error) {
+func (s *userService) UpdateUser(user *Account) (*Account, error) {
 	account, err := s.as.GetAccountByID(user.UserID)
 	if err != nil {
 		return nil, err
@@ -83,11 +82,11 @@ func (s *service) UpdateUser(user *auth.Account) (*auth.Account, error) {
 }
 
 // UpdateUserFromPlatform - Update a user from a platform
-func (s *service) UpdateUserFromPlatform(platform auth.Platform, platformID string, data auth.Data) (*auth.Account, error) {
+func (s *userService) UpdateUserFromPlatform(platform Platform, platformID string, data Data) (*Account, error) {
 	// If the user doesn't exist, create a new account
 	la, err := s.als.GetLinkedAccountByPlatformID(platform, platformID)
 	if err != nil {
-		a, err := auth.NewIDOnlyAccount()
+		a, err := NewIDOnlyAccount()
 		if err != nil {
 			return nil, err
 		}
@@ -95,7 +94,7 @@ func (s *service) UpdateUserFromPlatform(platform auth.Platform, platformID stri
 		if err != nil {
 			return nil, err
 		}
-		la = &auth.LinkedAccount{
+		la = &LinkedAccount{
 			UserID:        a.UserID,
 			Platform:      platform,
 			PlatformID:    platformID,
@@ -124,6 +123,6 @@ func (s *service) UpdateUserFromPlatform(platform auth.Platform, platformID stri
 }
 
 // DeleteUser - Delete a user
-func (s *service) DeleteUser(userID string) error {
+func (s *userService) DeleteUser(userID string) error {
 	return s.as.DeleteAccount(userID)
 }

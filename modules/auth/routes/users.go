@@ -1,34 +1,16 @@
-package users
+package authroutes
 
 import (
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"net/http"
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
-// ApplyRoutes - Apply the routes
-func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
-	db := database.GetDB("neuralnexus")
-	rdb := database.GetRedis()
-	store := auth.NewStore(db, rdb)
-	service := NewUserService(store)
-	session := auth.NewSessionService(store)
-
-	mux.HandleFunc("GET /api/v1/users/{user_id}", mw.Auth(session, GetUserHandler(service)))
-	mux.HandleFunc("GET /api/v1/users/{user_id}/permissions", mw.Auth(session, GetUserPermissionsHandler(service)))
-	mux.HandleFunc("GET /api/v1/users/{platform}/{platform_id}", mw.Auth(session, GetUserFromPlatformHandler(service)))
-	mux.HandleFunc("PUT /api/v1/users/{user_id}", mw.Auth(session, UpdateUserHandler(service)))
-	mux.HandleFunc("PUT /api/v1/users/{platform}/{platform_id}", mw.Auth(session, UpdateUserFromPlatformHandler(service)))
-	// mux.HandleFunc("DELETE /api/v1/users/{user_id}", mw.Auth(session, DeleteUserHandler(service)))
-	return mux
-}
-
 // GetUserHandler - Get a user
-func GetUserHandler(service Service) http.HandlerFunc {
+func GetUserHandler(service auth.UserService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := r.PathValue("user_id")
 		user, err := service.GetUser(userID)
@@ -41,7 +23,7 @@ func GetUserHandler(service Service) http.HandlerFunc {
 }
 
 // GetUserFromPlatformHandler - Get a user from a platform
-func GetUserFromPlatformHandler(service Service) http.HandlerFunc {
+func GetUserFromPlatformHandler(service auth.UserService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if !session.HasPermission(perms.ScopeAdminUsers) {
@@ -60,7 +42,7 @@ func GetUserFromPlatformHandler(service Service) http.HandlerFunc {
 }
 
 // GetUserPermissionsHandler - Get a user's permissions
-func GetUserPermissionsHandler(service Service) http.HandlerFunc {
+func GetUserPermissionsHandler(service auth.UserService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		userID := r.PathValue("user_id")
@@ -78,7 +60,7 @@ func GetUserPermissionsHandler(service Service) http.HandlerFunc {
 }
 
 // UpdateUserHandler - Update a user
-func UpdateUserHandler(service Service) http.HandlerFunc {
+func UpdateUserHandler(service auth.UserService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if !session.HasPermission(perms.ScopeAdminUsers) {
@@ -103,7 +85,7 @@ func UpdateUserHandler(service Service) http.HandlerFunc {
 }
 
 // UpdateUserFromPlatformHandler - Update a user from a platform
-func UpdateUserFromPlatformHandler(service Service) http.HandlerFunc {
+func UpdateUserFromPlatformHandler(service auth.UserService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if !session.HasPermission(perms.ScopeAdminUsers) {
@@ -128,7 +110,7 @@ func UpdateUserFromPlatformHandler(service Service) http.HandlerFunc {
 }
 
 // DeleteUserHandler - Delete a user
-func DeleteUserHandler(service Service) http.HandlerFunc {
+func DeleteUserHandler(service auth.UserService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if !session.HasPermission(perms.ScopeAdminUsers) {

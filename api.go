@@ -11,7 +11,6 @@ import (
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	authroutes "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/routes"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/users"
 	beenamegenerator "github.com/NeuralNexusDev/neuralnexus-api/modules/bee_name_generator"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/datastore"
@@ -58,7 +57,6 @@ func (s *APIServer) Setup() http.Handler {
 		projects.ApplyRoutes,
 		switchboard.ApplyRoutes,
 		teapot.ApplyRoutes,
-		users.ApplyRoutes,
 	)
 
 	db := database.GetDB("neuralnexus")

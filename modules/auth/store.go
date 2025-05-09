@@ -161,7 +161,7 @@ func (s *store) DeleteAccount(userID string) error {
 
 // SessionStore interface
 type SessionStore interface {
-	AddSessionToDB(session *Session) (*Session, error)
+	AddSessionToDB(session *Session) error
 	GetSessionFromDB(id string) (*Session, error)
 	UpdateSessionInDB(session *Session) error
 	DeleteSessionInDB(id string) error
@@ -171,7 +171,7 @@ type SessionStore interface {
 }
 
 // AddSessionToDB creates a session and inserts it into the database
-func (s *store) AddSessionToDB(session *Session) (*Session, error) {
+func (s *store) AddSessionToDB(session *Session) error {
 	defer s.ClearExpiredSessions()
 
 	_, err := s.db.Exec(context.Background(),
@@ -179,9 +179,9 @@ func (s *store) AddSessionToDB(session *Session) (*Session, error) {
 		session.ID, session.UserID, session.Permissions, session.IssuedAt, session.LastUsedAt, session.ExpiresAt,
 	)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return session, nil
+	return nil
 }
 
 // GetSessionFromDB gets a session by ID

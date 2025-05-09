@@ -21,17 +21,27 @@ func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 	db := database.GetDB("neuralnexus")
 	rdb := database.GetRedis()
 	store := auth.NewStore(db, rdb)
+	account := auth.NewAccountService(store)
 	session := auth.NewSessionService(store)
+	user := auth.NewUserService(store)
 
-	mux.HandleFunc("POST /api/v1/auth/login", LoginHandler(store))
-	mux.Handle("POST /api/v1/auth/logout", mw.Auth(session, LogoutHandler(store)))
+	mux.HandleFunc("POST /api/v1/auth/login", LoginHandler(account, session))
+	mux.Handle("POST /api/v1/auth/logout", mw.Auth(session, LogoutHandler(session)))
 
 	mux.HandleFunc("/api/oauth", OAuthHandler(store))
+
+	mux.HandleFunc("GET /api/v1/users/{user_id}", mw.Auth(session, GetUserHandler(user)))
+	mux.HandleFunc("GET /api/v1/users/{user_id}/permissions", mw.Auth(session, GetUserPermissionsHandler(user)))
+	mux.HandleFunc("GET /api/v1/users/{platform}/{platform_id}", mw.Auth(session, GetUserFromPlatformHandler(user)))
+	mux.HandleFunc("PUT /api/v1/users/{user_id}", mw.Auth(session, UpdateUserHandler(user)))
+	mux.HandleFunc("PUT /api/v1/users/{platform}/{platform_id}", mw.Auth(session, UpdateUserFromPlatformHandler(user)))
+	// mux.HandleFunc("DELETE /api/v1/users/{user_id}", mw.Auth(session, DeleteUserHandler(service)))
+
 	return mux
 }
 
 // LoginHandler handles the login route
-func LoginHandler(store auth.Store) http.HandlerFunc {
+func LoginHandler(as auth.AccountService, ss auth.SessionService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var login struct {
 			Username string `json:"username" xml:"username" validate:"required_without=Email"`
@@ -46,9 +56,9 @@ func LoginHandler(store auth.Store) http.HandlerFunc {
 
 		var account *auth.Account
 		if login.Username != "" {
-			account, err = store.Account().GetAccountByUsername(login.Username)
+			account, err = as.GetAccountByUsername(login.Username)
 		} else {
-			account, err = store.Account().GetAccountByEmail(login.Email)
+			account, err = as.GetAccountByEmail(login.Email)
 		}
 		if err != nil {
 			responses.BadRequest(w, r, "Invalid username or email")
@@ -65,19 +75,25 @@ func LoginHandler(store auth.Store) http.HandlerFunc {
 			responses.BadRequest(w, r, "Failed to create session")
 			return
 		}
-		store.Session().AddSessionToCache(session)
+		err = ss.AddSession(session)
 		responses.StructOK(w, r, session)
-		store.Session().AddSessionToDB(session)
 	}
 }
 
 // LogoutHandler handles the logout route
-func LogoutHandler(store auth.Store) http.HandlerFunc {
+func LogoutHandler(ss auth.SessionService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*auth.Session)
-		store.Session().DeleteSessionFromCache(session.ID)
+		if session == nil {
+			responses.BadRequest(w, r, "No session found")
+			return
+		}
+		err := ss.DeleteSession(session.ID)
+		if err != nil {
+			responses.InternalServerError(w, r, "Failed to delete session")
+			return
+		}
 		responses.StructOK(w, r, session)
-		store.Session().DeleteSessionInDB(session.ID)
 	}
 }
 

@@ -52,6 +52,7 @@ func (s *Session) IsValid() bool {
 
 // SessionService interface
 type SessionService interface {
+	AddSession(session *Session) error
 	GetSession(id string) (*Session, error)
 	UpdateSession(session *Session) error
 	DeleteSession(id string) error
@@ -62,11 +63,21 @@ type sessionService struct {
 	store SessionStore
 }
 
-// NewSessionService - Create a new session service
+// NewSessionService - Create a new session userService
 func NewSessionService(store Store) SessionService {
 	return &sessionService{
 		store: store.Session(),
 	}
+}
+
+// AddSession adds a session to the database and cache
+func (s *sessionService) AddSession(session *Session) error {
+	err := s.store.AddSessionToDB(session)
+	if err != nil {
+		return err
+	}
+	s.store.AddSessionToCache(session)
+	return nil
 }
 
 // GetSession gets a session by ID
