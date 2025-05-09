@@ -91,7 +91,7 @@ func SessionMiddleware(service auth.SessionService) Middleware {
 
 				if !session.IsValid() {
 					responses.Unauthorized(w, r, "")
-					_, err = service.DeleteSession(session.ID)
+					err = service.DeleteSession(session.ID)
 					if err != nil {
 						LogRequest(r, "Error deleting session:\n\t", err.Error())
 					}
@@ -99,7 +99,7 @@ func SessionMiddleware(service auth.SessionService) Middleware {
 				}
 
 				session.LastUsedAt = time.Now().Unix()
-				_, err = service.UpdateSession(session)
+				err = service.UpdateSession(session)
 				if err != nil {
 					responses.InternalServerError(w, r, "Error updating session")
 					LogRequest(r, "Error updating session:\n\t", err.Error())

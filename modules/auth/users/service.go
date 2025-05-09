@@ -64,6 +64,7 @@ func (s *service) GetUserPermissions(userID string) ([]string, error) {
 }
 
 // UpdateUser - Update a user
+// TODO: Make this return just an error
 func (s *service) UpdateUser(user *auth.Account) (*auth.Account, error) {
 	account, err := s.as.GetAccountByID(user.UserID)
 	if err != nil {
@@ -90,7 +91,7 @@ func (s *service) UpdateUserFromPlatform(platform auth.Platform, platformID stri
 		if err != nil {
 			return nil, err
 		}
-		a, err = s.as.AddAccountToDB(a)
+		err = s.as.AddAccountToDB(a)
 		if err != nil {
 			return nil, err
 		}
@@ -102,7 +103,7 @@ func (s *service) UpdateUserFromPlatform(platform auth.Platform, platformID stri
 			DataUpdatedAt: time.Now(),
 			CreatedAt:     time.Now(),
 		}
-		_, err = s.als.AddLinkedAccountToDB(la)
+		err = s.als.AddLinkedAccountToDB(la)
 		if err != nil {
 			return nil, err
 		}
@@ -110,7 +111,7 @@ func (s *service) UpdateUserFromPlatform(platform auth.Platform, platformID stri
 
 	// Update the linked account
 	la.Data = data
-	_, err = s.als.UpdateLinkedAccount(la)
+	err = s.als.UpdateLinkedAccount(la)
 	if err != nil {
 		return nil, err
 	}

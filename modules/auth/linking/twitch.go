@@ -255,7 +255,7 @@ func TwitchOAuth(store auth.Store, code string, state auth.OAuthState) (*auth.Se
 		if err != nil {
 			return nil, err
 		}
-		a, err = store.Account().AddAccountToDB(a)
+		err = store.Account().AddAccountToDB(a)
 		if err != nil {
 			return nil, err
 		}
@@ -263,7 +263,7 @@ func TwitchOAuth(store auth.Store, code string, state auth.OAuthState) (*auth.Se
 
 	// Link account
 	la = auth.NewLinkedAccount(a.UserID, auth.PlatformTwitch, user.Login, user.ID, user)
-	_, err = store.LinkAccount().AddLinkedAccountToDB(la)
+	err = store.LinkAccount().AddLinkedAccountToDB(la)
 	if err != nil {
 		return nil, errors.New("failed to link account")
 	}

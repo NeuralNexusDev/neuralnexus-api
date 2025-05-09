@@ -65,7 +65,7 @@ func (s *store) LinkAccount() LinkAccountStore {
 
 // AccountStore interface
 type AccountStore interface {
-	AddAccountToDB(account *Account) (*Account, error)
+	AddAccountToDB(account *Account) error
 	GetAccountByID(userID string) (*Account, error)
 	GetAccountByUsername(username string) (*Account, error)
 	GetAccountByEmail(email string) (*Account, error)
@@ -74,15 +74,15 @@ type AccountStore interface {
 }
 
 // AddAccountToDB creates an account in the database
-func (s *store) AddAccountToDB(account *Account) (*Account, error) {
+func (s *store) AddAccountToDB(account *Account) error {
 	_, err := s.db.Exec(context.Background(),
 		"INSERT INTO accounts (user_id, username, email, hashed_secret, salt, roles) VALUES ($1, $2, $3, $4, $5, $6)",
 		account.UserID, account.Username, account.Email, account.HashedSecret, account.Salt, account.Roles,
 	)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return account, nil
+	return nil
 }
 
 // GetAccountByID gets an account by ID
@@ -128,6 +128,7 @@ func (s *store) GetAccountByEmail(email string) (*Account, error) {
 }
 
 // UpdateAccount updates an account in the database
+// TODO: Make this return just an error
 func (s *store) UpdateAccount(account *Account) (*Account, error) {
 	_, err := s.db.Exec(context.Background(),
 		"UPDATE accounts SET username = $2, email = $3, hashed_secret = $4, salt = $5, roles = $6 WHERE user_id = $1",
@@ -162,11 +163,11 @@ func (s *store) DeleteAccount(userID string) error {
 type SessionStore interface {
 	AddSessionToDB(session *Session) (*Session, error)
 	GetSessionFromDB(id string) (*Session, error)
-	UpdateSessionInDB(session *Session) (*Session, error)
-	DeleteSessionInDB(id string) (*Session, error)
-	AddSessionToCache(session *Session) (*Session, error)
+	UpdateSessionInDB(session *Session) error
+	DeleteSessionInDB(id string) error
+	AddSessionToCache(session *Session) error
 	GetSessionFromCache(id string) (*Session, error)
-	DeleteSessionFromCache(id string) (*Session, error)
+	DeleteSessionFromCache(id string) error
 }
 
 // AddSessionToDB creates a session and inserts it into the database
@@ -201,18 +202,18 @@ func (s *store) GetSessionFromDB(id string) (*Session, error) {
 }
 
 // DeleteSessionInDB deletes a session by ID
-func (s *store) DeleteSessionInDB(id string) (*Session, error) {
+func (s *store) DeleteSessionInDB(id string) error {
 	defer s.ClearExpiredSessions()
 
 	_, err := s.db.Exec(context.Background(), "DELETE FROM sessions WHERE session_id = $1", id)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return &Session{ID: id}, nil
+	return nil
 }
 
 // UpdateSessionInDB updates a session
-func (s *store) UpdateSessionInDB(session *Session) (*Session, error) {
+func (s *store) UpdateSessionInDB(session *Session) error {
 	defer s.ClearExpiredSessions()
 
 	_, err := s.db.Exec(context.Background(),
@@ -220,12 +221,13 @@ func (s *store) UpdateSessionInDB(session *Session) (*Session, error) {
 		session.ID, session.UserID, session.Permissions, session.IssuedAt, session.LastUsedAt, session.ExpiresAt,
 	)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return session, nil
+	return nil
 }
 
 // ClearExpiredSessions clear expired sessions
+// TODO: Add this to interface and handle the error outside of it
 func (s *store) ClearExpiredSessions() {
 	_, err := s.db.Exec(context.Background(), "DELETE FROM sessions WHERE exp < $1 AND exp != 0", time.Now().Unix())
 	if err != nil {
@@ -237,17 +239,17 @@ func (s *store) ClearExpiredSessions() {
 // -------------- Cache Functions --------------
 
 // AddSessionToCache adds a session to the cache
-func (s *store) AddSessionToCache(session *Session) (*Session, error) {
+func (s *store) AddSessionToCache(session *Session) error {
 	stringSession, err := json.Marshal(session)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	_, err = s.rdb.Set(context.Background(), session.ID, stringSession, time.Until(time.Unix(session.ExpiresAt, 0))).Result()
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return session, nil
+	return nil
 }
 
 // GetSessionFromCache gets a session from the cache
@@ -266,12 +268,12 @@ func (s *store) GetSessionFromCache(id string) (*Session, error) {
 }
 
 // DeleteSessionFromCache deletes a session from the cache
-func (s *store) DeleteSessionFromCache(id string) (*Session, error) {
+func (s *store) DeleteSessionFromCache(id string) error {
 	_, err := s.rdb.Del(context.Background(), id).Result()
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return &Session{ID: id}, nil
+	return nil
 }
 
 //CREATE TRIGGER update_linked_accounts_modtime
@@ -293,28 +295,28 @@ func (s *store) DeleteSessionFromCache(id string) (*Session, error) {
 
 // LinkAccountStore - Account Link Store
 type LinkAccountStore interface {
-	AddLinkedAccountToDB(la *LinkedAccount) (*LinkedAccount, error)
-	UpdateLinkedAccount(la *LinkedAccount) (*LinkedAccount, error)
+	AddLinkedAccountToDB(la *LinkedAccount) error
+	UpdateLinkedAccount(la *LinkedAccount) error
 	GetLinkedAccountByPlatformID(platform Platform, platformID string) (*LinkedAccount, error)
 	GetLinkedAccountByUserID(userID string, platform string) (*LinkedAccount, error)
 }
 
 // AddLinkedAccountToDB adds a linked account to the database
-func (s *store) AddLinkedAccountToDB(la *LinkedAccount) (*LinkedAccount, error) {
+func (s *store) AddLinkedAccountToDB(la *LinkedAccount) error {
 	_, err := s.db.Exec(context.Background(), "INSERT INTO linked_accounts (user_id, platform, platform_username, platform_id, data) VALUES ($1, $2, $3, $4, $5)", la.UserID, la.Platform, la.PlatformUsername, la.PlatformID, la.Data)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return la, nil
+	return nil
 }
 
 // UpdateLinkedAccount updates a linked account in the database
-func (s *store) UpdateLinkedAccount(la *LinkedAccount) (*LinkedAccount, error) {
+func (s *store) UpdateLinkedAccount(la *LinkedAccount) error {
 	_, err := s.db.Exec(context.Background(), "UPDATE linked_accounts SET platform_username = $1, platform_id = $2, data = $3, updated_at = current_timestamp WHERE user_id = $4 AND platform = $5", la.PlatformUsername, la.PlatformID, la.Data, la.UserID, la.Platform)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return la, nil
+	return nil
 }
 
 // GetLinkedAccountByPlatformID gets a linked account by user ID and platform

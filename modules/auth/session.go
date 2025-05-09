@@ -53,8 +53,8 @@ func (s *Session) IsValid() bool {
 // SessionService interface
 type SessionService interface {
 	GetSession(id string) (*Session, error)
-	UpdateSession(session *Session) (*Session, error)
-	DeleteSession(id string) (*Session, error)
+	UpdateSession(session *Session) error
+	DeleteSession(id string) error
 }
 
 // sessionService - SessionService implementation
@@ -83,25 +83,21 @@ func (s *sessionService) GetSession(id string) (*Session, error) {
 }
 
 // UpdateSession updates a session
-func (s *sessionService) UpdateSession(session *Session) (*Session, error) {
-	session, err := s.store.UpdateSessionInDB(session)
+func (s *sessionService) UpdateSession(session *Session) error {
+	err := s.store.UpdateSessionInDB(session)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	if session.ID != "" {
-		s.store.AddSessionToCache(session)
-	}
-	return session, nil
+	s.store.AddSessionToCache(session)
+	return nil
 }
 
 // DeleteSession deletes a session by ID
-func (s *sessionService) DeleteSession(id string) (*Session, error) {
-	session, err := s.store.DeleteSessionInDB(id)
+func (s *sessionService) DeleteSession(id string) error {
+	err := s.store.DeleteSessionInDB(id)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	if session.ID != "" {
-		s.store.DeleteSessionFromCache(id)
-	}
-	return session, nil
+	s.store.DeleteSessionFromCache(id)
+	return nil
 }
