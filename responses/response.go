@@ -2,10 +2,10 @@ package responses
 
 import (
 	"encoding/xml"
-	"net/http"
-
 	"github.com/goccy/go-json"
 	"google.golang.org/protobuf/proto"
+	"net/http"
+	"time"
 )
 
 // -------------- Structs --------------
@@ -141,6 +141,22 @@ func NotFound(w http.ResponseWriter, r *http.Request, message string) {
 		"Not Found",
 		message,
 		"https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404",
+	).SendProblem(w, r)
+}
+
+// TooManyRequests -- Send a TooManyRequestsResponse as JSON or XML
+func TooManyRequests(w http.ResponseWriter, r *http.Request, retryAfter int, message string) {
+	if message == "" {
+		message = "You have made too many requests in a short period of time."
+	}
+	after := time.Now().Add(time.Duration(retryAfter) * time.Second)
+	w.Header().Set("Retry-After", after.Format(time.RFC1123))
+	NewProblem(
+		"about:blank",
+		http.StatusTooManyRequests,
+		"Too Many Requests",
+		message,
+		"https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429",
 	).SendProblem(w, r)
 }
 

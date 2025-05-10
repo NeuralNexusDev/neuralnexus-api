@@ -63,11 +63,13 @@ func (s *APIServer) Setup() http.Handler {
 	rdb := database.GetRedis()
 	store := auth.NewStore(db, rdb)
 	session := auth.NewSessionService(store)
+	rateLimit := auth.NewRateLimitService(store)
 
 	middlewareStack := mw.CreateStack(
+		mw.IPMiddleware,
 		mw.SessionMiddleware(session),
 		mw.RequestIDMiddleware,
-		mw.IPMiddleware,
+		mw.RateLimitMiddleware(rateLimit),
 		mw.RequestLoggerMiddleware,
 		cors.AllowAll().Handler,
 	)

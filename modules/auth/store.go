@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"github.com/goccy/go-json"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -15,6 +16,7 @@ type Store interface {
 	Account() AccountStore
 	Session() SessionStore
 	LinkAccount() LinkAccountStore
+	RateLimit() RateLimitStore
 }
 
 // store - primary store for auth
@@ -44,6 +46,11 @@ func (s *store) Session() SessionStore {
 // LinkAccount gets the linked account store
 func (s *store) LinkAccount() LinkAccountStore {
 	return LinkAccountStore(s)
+}
+
+// RateLimit gets the rate limit store
+func (s *store) RateLimit() RateLimitStore {
+	return RateLimitStore(s)
 }
 
 //CREATE TRIGGER update_accounts_modtime
@@ -345,4 +352,45 @@ func (s *store) GetLinkedAccountByUserID(userID string, platform string) (*Linke
 		return nil, err
 	}
 	return al, nil
+}
+
+// RateLimitStore interface
+type RateLimitStore interface {
+	GetRateLimit(key string) (int, error)
+	SetRateLimit(key string, val int) error
+	IncrementRateLimit(key string) error
+}
+
+// GetRateLimit gets the rate limit for a key
+func (s *store) GetRateLimit(key string) (int, error) {
+	val, err := s.rdb.Get(context.Background(), key).Int()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			err = s.SetRateLimit(key, 1)
+			if err != nil {
+				return 0, err
+			}
+			return 1, nil
+		}
+		return 0, err
+	}
+	return val, nil
+}
+
+// SetRateLimit sets the rate limit for a key
+func (s *store) SetRateLimit(key string, val int) error {
+	_, err := s.rdb.Set(context.Background(), key, val, time.Minute).Result()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// IncrementRateLimit increments the rate limit for a key
+func (s *store) IncrementRateLimit(key string) error {
+	_, err := s.rdb.IncrBy(context.Background(), key, 1).Result()
+	if err != nil {
+		return err
+	}
+	return nil
 }

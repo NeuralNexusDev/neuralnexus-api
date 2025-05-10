@@ -70,6 +70,21 @@ func (w *WrappedWriter) WriteHeader(statusCode int) {
 	w.ResponseWriter.WriteHeader(statusCode)
 }
 
+// IPMiddleware - Update the remote address based on headers
+func IPMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cfConnectingIP := r.Header.Get(CFConnectingIPHeader)
+		forwardedFor := r.Header.Get(XForwardedForHeader)
+		if cfConnectingIP != "" {
+			r.RemoteAddr = cfConnectingIP
+		} else if forwardedFor != "" {
+			r.RemoteAddr = forwardedFor
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 // SessionMiddleware - Read the session from the request
 func SessionMiddleware(service auth.SessionService) Middleware {
 	return func(next http.Handler) http.Handler {
@@ -114,6 +129,45 @@ func SessionMiddleware(service auth.SessionService) Middleware {
 	}
 }
 
+// RateLimitMiddleware - Rate limit requests
+func RateLimitMiddleware(service auth.RateLimitService) Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			session, ok := r.Context().Value(SessionKey).(*auth.Session)
+			if ok && session != nil {
+				err := service.IncrementRateLimitByID(session.UserID)
+				if err != nil {
+					LogRequest(r, "Error incrementing rate limit:\n\t", err.Error())
+				}
+				limit, err := service.GetRateLimitByID(session.UserID)
+				if err != nil {
+					LogRequest(r, "Error getting rate limit:\n\t", err.Error())
+				}
+				if limit > 300 {
+					responses.TooManyRequests(w, r, 60, "You have been rate limited. Please try again later.")
+					return
+				}
+			} else {
+				ip := strings.Split(r.RemoteAddr, ":")[0]
+				err := service.IncrementRateLimitIP(ip)
+				if err != nil {
+					LogRequest(r, "Error incrementing rate limit:\n\t", err.Error())
+					return
+				}
+				limit, err := service.GetRateLimitIP(ip)
+				if err != nil {
+					LogRequest(r, "Error getting rate limit:\n\t", err.Error())
+					return
+				}
+				if limit > 60 {
+					responses.TooManyRequests(w, r, 60, "You have been rate limited. Please try again later.")
+					return
+				}
+			}
+		})
+	}
+}
+
 // RequestIDMiddleware - Set the request ID in the context
 func RequestIDMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -128,21 +182,6 @@ func RequestIDMiddleware(next http.Handler) http.Handler {
 		ctx := r.Context()
 		ctx = context.WithValue(ctx, RequestIDKey, requestId)
 		r = r.WithContext(ctx)
-
-		next.ServeHTTP(w, r)
-	})
-}
-
-// IPMiddleware - Update the remote address based on headers
-func IPMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cfConnectingIP := r.Header.Get(CFConnectingIPHeader)
-		forwardedFor := r.Header.Get(XForwardedForHeader)
-		if cfConnectingIP != "" {
-			r.RemoteAddr = cfConnectingIP
-		} else if forwardedFor != "" {
-			r.RemoteAddr = forwardedFor
-		}
 
 		next.ServeHTTP(w, r)
 	})
