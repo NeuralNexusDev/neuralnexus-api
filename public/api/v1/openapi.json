@@ -36,7 +36,7 @@
                 },
                 "responses": {
                     "200": {
-                        "$ref": "#/components/responses/AuthSessionResponse"
+                        "$ref": "#/components/responses/SessionResponse"
                     },
                     "400": {
                         "$ref": "#/components/responses/400BadRequest"
@@ -56,8 +56,8 @@
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "$ref": "#/components/responses/AuthSessionResponse"
+                    "204": {
+                        "$ref": "#/components/responses/204NoContent"
                     },
                     "400": {
                         "$ref": "#/components/responses/400BadRequest"
@@ -455,29 +455,11 @@
     },
     "components": {
         "schemas": {
-            "AuthSession": {
+            "Session": {
                 "type": "object",
                 "properties": {
-                    "session_id": {
+                    "session": {
                         "type": "string"
-                    },
-                    "user_id": {
-                        "type": "string"
-                    },
-                    "permissions": {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        }
-                    },
-                    "iat": {
-                        "type": "integer"
-                    },
-                    "lua": {
-                        "type": "integer"
-                    },
-                    "exp": {
-                        "type": "integer"
                     }
                 }
             },
@@ -803,22 +785,22 @@
                     }
                 }
             },
-            "AuthSessionResponse": {
+            "SessionResponse": {
                 "description": "Session response",
                 "content": {
                     "application/json": {
                         "schema": {
-                            "$ref": "#/components/schemas/AuthSession"
+                            "$ref": "#/components/schemas/Session"
                         }
                     },
                     "application/xml": {
                         "schema": {
-                            "$ref": "#/components/schemas/AuthSession"
+                            "$ref": "#/components/schemas/Session"
                         }
                     },
                     "application/x-protobuf": {
                         "schema": {
-                            "$ref": "#/components/schemas/AuthSession"
+                            "$ref": "#/components/schemas/Session"
                         }
                     }
                 }

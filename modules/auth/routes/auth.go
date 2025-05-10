@@ -28,7 +28,7 @@ func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 	mux.HandleFunc("POST /api/v1/auth/login", LoginHandler(account, session))
 	mux.Handle("POST /api/v1/auth/logout", mw.Auth(session, LogoutHandler(session)))
 
-	mux.HandleFunc("/api/oauth", OAuthHandler(store))
+	mux.HandleFunc("/api/oauth", OAuthHandler(session, store))
 
 	mux.HandleFunc("GET /api/v1/users/{user_id}", mw.Auth(session, GetUserHandler(user)))
 	mux.HandleFunc("GET /api/v1/users/{user_id}/permissions", mw.Auth(session, GetUserPermissionsHandler(user)))
@@ -40,17 +40,25 @@ func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 	return mux
 }
 
+// Login struct for login request
+type Login struct {
+	Username string `json:"username" xml:"username" validate:"required_without=Email"`
+	Email    string `json:"email" xml:"email" validate:"required_without=Username"`
+	Password string `json:"password" xml:"password" validate:"required"`
+}
+
+// ReturnedJWT struct for JWT session
+type ReturnedJWT struct {
+	Session string `json:"session" xml:"session"`
+}
+
 // LoginHandler handles the login route
 func LoginHandler(as auth.AccountService, ss auth.SessionService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var login struct {
-			Username string `json:"username" xml:"username" validate:"required_without=Email"`
-			Email    string `json:"email" xml:"email" validate:"required_without=Username"`
-			Password string `json:"password" xml:"password" validate:"required"`
-		}
+		var login Login
 		err := responses.DecodeStruct(r, &login)
 		if err != nil {
-			responses.BadRequest(w, r, "Invalid request body")
+			responses.BadRequest(w, r, "Invalid username or password")
 			return
 		}
 
@@ -61,22 +69,36 @@ func LoginHandler(as auth.AccountService, ss auth.SessionService) http.HandlerFu
 			account, err = as.GetAccountByEmail(login.Email)
 		}
 		if err != nil {
-			responses.BadRequest(w, r, "Invalid username or email")
+			responses.BadRequest(w, r, "Invalid username or password")
 			return
 		}
 
 		if !account.ValidateUser(login.Password) {
-			responses.BadRequest(w, r, "Invalid password")
+			responses.BadRequest(w, r, "Invalid username or password")
 			return
 		}
 
 		session, err := account.NewSession(time.Now().Add(time.Hour * 24).Unix())
 		if err != nil {
-			responses.BadRequest(w, r, "Failed to create session")
+			log.Println("Failed to create session:\n\t", err)
+			responses.InternalServerError(w, r, "Authentication failed")
 			return
 		}
+
+		jwt, err := ss.CreateJWT(session)
+		if err != nil {
+			log.Println("Failed to create JWT:\n\t", err)
+			responses.InternalServerError(w, r, "Authentication failed")
+			return
+		}
+
 		err = ss.AddSession(session)
-		responses.StructOK(w, r, session)
+		if err != nil {
+			log.Println("Failed to add session:\n\t", err)
+			responses.InternalServerError(w, r, "Authentication failed")
+			return
+		}
+		responses.StructOK(w, r, ReturnedJWT{jwt})
 	}
 }
 
@@ -85,20 +107,21 @@ func LogoutHandler(ss auth.SessionService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if session == nil {
-			responses.BadRequest(w, r, "No session found")
+			responses.BadRequest(w, r, "Invalid session")
 			return
 		}
 		err := ss.DeleteSession(session.ID)
 		if err != nil {
+			log.Println("Failed to delete session:\n\t", err)
 			responses.InternalServerError(w, r, "Failed to delete session")
 			return
 		}
-		responses.StructOK(w, r, session)
+		responses.NoContent(w, r)
 	}
 }
 
 // OAuthHandler handles the Discord OAuth route
-func OAuthHandler(store auth.Store) http.HandlerFunc {
+func OAuthHandler(ss auth.SessionService, store auth.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
@@ -148,18 +171,15 @@ func OAuthHandler(store auth.Store) http.HandlerFunc {
 
 		// If the state contains a redirect URI, set the session cookie and redirect
 		if state.RedirectURI != "" {
+			jwtString, err := ss.CreateJWT(session)
+			if err != nil {
+				log.Println("Failed to create JWT:\n\t", err)
+				responses.InternalServerError(w, r, "Authentication failed")
+				return
+			}
 			http.SetCookie(w, &http.Cookie{
-				Name:    "session_id",
-				Value:   session.ID,
-				Domain:  ".neuralnexus.dev",
-				Path:    "/",
-				Expires: time.Unix(session.ExpiresAt, 0),
-				Secure:  true,
-			})
-
-			http.SetCookie(w, &http.Cookie{
-				Name:    "user_id",
-				Value:   session.UserID,
+				Name:    "session",
+				Value:   jwtString,
 				Domain:  ".neuralnexus.dev",
 				Path:    "/",
 				Expires: time.Unix(session.ExpiresAt, 0),

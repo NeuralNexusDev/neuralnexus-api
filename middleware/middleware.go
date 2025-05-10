@@ -81,10 +81,9 @@ func SessionMiddleware(service auth.SessionService) Middleware {
 					responses.Unauthorized(w, r, "")
 					return
 				}
-
-				session, err := service.GetSession(authStrings[1])
+				session, err := service.ReadJWT(authStrings[1])
 				if err != nil {
-					LogRequest(r, "Error getting session:\n\t", err.Error())
+					LogRequest(r, "Error reading JWT:\n\t", err.Error())
 					responses.Unauthorized(w, r, "")
 					return
 				}
@@ -98,7 +97,6 @@ func SessionMiddleware(service auth.SessionService) Middleware {
 					return
 				}
 
-				session.LastUsedAt = time.Now().Unix()
 				err = service.UpdateSession(session)
 				if err != nil {
 					responses.InternalServerError(w, r, "Error updating session")
@@ -170,37 +168,20 @@ func RequestLoggerMiddleware(next http.Handler) http.Handler {
 // Auth - Authenticate requests
 func Auth(service auth.SessionService, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get(AuthHeader)
-		if authHeader == "" {
+		session, ok := r.Context().Value(SessionKey).(*auth.Session)
+		if !ok || session == nil {
 			responses.Unauthorized(w, r, "")
 			return
 		}
 
-		//authStrings := strings.Split(authHeader, "Bearer ")
-		//if len(authStrings) != 2 {
-		//	responses.Unauthorized(w, r, "")
-		//	return
-		//}
-		//
-		//session, err := service.GetSession(authStrings[1])
-		//if err != nil {
-		//	log.Println("Error getting session:\n\t", err)
-		//	responses.Unauthorized(w, r, "")
-		//	return
-		//}
-		//
-		//if !session.IsValid() {
-		//	responses.Unauthorized(w, r, "")
-		//	service.DeleteSession(session.ID)
-		//	return
-		//}
-		//
-		//session.LastUsedAt = time.Now().Unix()
-		//service.UpdateSession(session)
-		//
-		//ctx := r.Context()
-		//ctx = context.WithValue(ctx, SessionKey, session)
-		//next.ServeHTTP(w, r.WithContext(ctx))
+		if !session.IsValid() {
+			responses.Unauthorized(w, r, "")
+			err := service.DeleteSession(session.ID)
+			if err != nil {
+				LogRequest(r, "Error deleting session:\n\t", err.Error())
+			}
+			return
+		}
 
 		next.ServeHTTP(w, r)
 	}

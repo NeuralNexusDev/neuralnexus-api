@@ -1,11 +1,23 @@
 package auth
 
 import (
+	"errors"
+	"fmt"
+	"github.com/golang-jwt/jwt/v5"
+	"os"
 	"time"
 
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/proto/sessionpb"
 	"google.golang.org/protobuf/proto"
+)
+
+//goland:noinspection GoSnakeCaseUsage
+var (
+	NN_API_URL     = os.Getenv("NN_API_URL")
+	NN_SITE_URL    = os.Getenv("NN_SITE_URL")
+	JWT_SECRET     = []byte(os.Getenv("JWT_SECRET"))
+	validAudiences = []string{NN_SITE_URL, NN_API_URL}
 )
 
 // Session struct
@@ -56,6 +68,8 @@ type SessionService interface {
 	GetSession(id string) (*Session, error)
 	UpdateSession(session *Session) error
 	DeleteSession(id string) error
+	CreateJWT(*Session) (string, error)
+	ReadJWT(token string) (*Session, error)
 }
 
 // sessionService - SessionService implementation
@@ -111,4 +125,70 @@ func (s *sessionService) DeleteSession(id string) error {
 	}
 	s.store.DeleteSessionFromCache(id)
 	return nil
+}
+
+// SessionClaims custom JWT claims for session
+type SessionClaims struct {
+	Scope []string `json:"scope"`
+	jwt.RegisteredClaims
+}
+
+// CreateJWT creates a JWT for a session
+func (s *sessionService) CreateJWT(session *Session) (string, error) {
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, SessionClaims{
+		session.Permissions,
+		jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Unix(session.ExpiresAt, 0)),
+			IssuedAt:  jwt.NewNumericDate(time.Unix(session.IssuedAt, 0)),
+			Issuer:    NN_API_URL,
+			Subject:   session.UserID,
+			Audience:  validAudiences,
+			ID:        session.ID,
+		},
+	}).SignedString(JWT_SECRET)
+}
+
+// ReadJWT reads a JWT and returns the session
+func (s *sessionService) ReadJWT(tokenStr string) (*Session, error) {
+	token, err := jwt.ParseWithClaims(tokenStr, &SessionClaims{}, func(token *jwt.Token) (interface{}, error) {
+		return JWT_SECRET, nil
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
+	if err != nil {
+		return nil, err
+	}
+
+	if claims, ok := token.Claims.(*SessionClaims); ok {
+		// Validate audience
+		for _, aud := range claims.Audience {
+			valid := false
+			for _, validAud := range validAudiences {
+				if aud == validAud {
+					valid = true
+					break
+				}
+			}
+			if !valid {
+				return nil, fmt.Errorf("invalid audience: %s", aud)
+			}
+		}
+
+		// Populate session
+		session := &Session{
+			ID:          claims.ID,
+			UserID:      claims.Subject,
+			Permissions: claims.Scope,
+			IssuedAt:    claims.IssuedAt.Unix(),
+			LastUsedAt:  time.Now().Unix(),
+			ExpiresAt:   claims.ExpiresAt.Unix(),
+		}
+
+		err = s.UpdateSession(session)
+		if err != nil {
+			return nil, err
+		}
+
+		return session, nil
+	} else {
+		return nil, errors.New("invalid token claims")
+	}
 }
