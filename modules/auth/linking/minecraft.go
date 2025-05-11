@@ -29,17 +29,22 @@ type Skin struct {
 type Cape struct{}
 
 // GetID returns the platform ID
-func (m *MinecraftData) ID() string {
+func (m *MinecraftData) GetID() string {
 	return m.ID.String()
 }
 
+// GetEmail returns the platform email
+func (m *MinecraftData) GetEmail() string {
+	return ""
+}
+
 // GetUsername returns the platform username
-func (m *MinecraftData) Username() string {
+func (m *MinecraftData) GetUsername() string {
 	return m.Username
 }
 
 // GetData returns the platform data
-func (m *MinecraftData) JSONData() string {
+func (m *MinecraftData) GetData() string {
 	data, _ := json.Marshal(m)
 	return string(data)
 }
