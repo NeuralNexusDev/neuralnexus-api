@@ -388,7 +388,15 @@ func (s *store) SetRateLimit(key string, val int) error {
 
 // IncrementRateLimit increments the rate limit for a key
 func (s *store) IncrementRateLimit(key string) error {
-	_, err := s.rdb.IncrBy(context.Background(), "rate_limit:"+key, 1).Result()
+	ttl, err := s.rdb.TTL(context.Background(), "rate_limit:"+key).Result()
+	if err != nil {
+		return err
+	}
+	_, err = s.rdb.IncrBy(context.Background(), "rate_limit:"+key, 1).Result()
+	if err != nil {
+		return err
+	}
+	_, err = s.rdb.Expire(context.Background(), "rate_limit:"+key, ttl).Result()
 	if err != nil {
 		return err
 	}
