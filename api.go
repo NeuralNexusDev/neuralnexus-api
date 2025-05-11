@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/rs/cors"
 	"log"
 	"net"
 	"net/http"
@@ -22,7 +23,6 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/switchboard"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/teapot"
 	"github.com/NeuralNexusDev/neuralnexus-api/routes"
-	"github.com/rs/cors"
 )
 
 type APIServer struct {
@@ -66,12 +66,12 @@ func (s *APIServer) Setup() http.Handler {
 	rateLimit := auth.NewRateLimitService(store)
 
 	middlewareStack := mw.CreateStack(
+		cors.AllowAll().Handler,
 		mw.IPMiddleware,
 		mw.SessionMiddleware(session),
 		mw.RequestIDMiddleware,
 		mw.RateLimitMiddleware(rateLimit),
 		mw.RequestLoggerMiddleware,
-		cors.AllowAll().Handler,
 	)
 
 	router := routerStack(http.NewServeMux())
