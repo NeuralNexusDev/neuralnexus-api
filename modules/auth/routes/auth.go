@@ -152,21 +152,11 @@ func OAuthHandler(ss auth.SessionService, store auth.Store) http.HandlerFunc {
 			return
 		}
 
-		var session *auth.Session
-		if state.Platform == auth.PlatformDiscord {
-			session, err = linking.DiscordOAuth(store, code, state)
-			if err != nil {
-				log.Println("Failed to authenticate with Discord:\n\t", err)
-				responses.BadRequest(w, r, "Failed to authenticate with Discord")
-				return
-			}
-		} else if state.Platform == auth.PlatformTwitch {
-			session, err = linking.TwitchOAuth(store, code, state)
-			if err != nil {
-				log.Println("Failed to authenticate with Twitch:\n\t", err)
-				responses.BadRequest(w, r, "Failed to authenticate with Twitch")
-				return
-			}
+		session, err := linking.ProcessOAuth(store, code, &state)
+		if err != nil {
+			log.Println("Failed to process OAuth:\n\t", err)
+			responses.InternalServerError(w, r, "Authentication failed")
+			return
 		}
 
 		// If the state contains a redirect URI, set the session cookie and redirect
