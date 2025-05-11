@@ -26,15 +26,20 @@ func ExtCodeForToken(config *oauth2.Config, code string) (*ScopedToken, error) {
 		return nil, errors.New("failed to exchange code for access token")
 	}
 
-	scope, ok := token.Extra("scope").([]interface{})
-	if !ok {
-		return nil, errors.New("failed to get scope from token")
-	}
 	var scopes []string
-	for _, s := range scope {
-		if str, ok := s.(string); ok {
-			scopes = append(scopes, str)
-		}
+	//if rawScopes, ok := token.Extra("scope").([]interface{}); ok {
+	//	for _, s := range rawScopes {
+	//		if str, ok := s.(string); ok {
+	//			scopes = append(scopes, str)
+	//		}
+	//	}
+	//} else
+	if rawScopes, ok := token.Extra("scope").([]string); ok {
+		scopes = rawScopes
+	} else if rawScopes, ok := token.Extra("scope").(string); ok {
+		scopes = []string{rawScopes}
+	} else {
+		return nil, errors.New("failed to get scope from token")
 	}
 
 	var scopedToken = &ScopedToken{
