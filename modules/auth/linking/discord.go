@@ -2,6 +2,7 @@ package linking
 
 import (
 	"errors"
+	"golang.org/x/oauth2"
 	"log"
 	"net/http"
 	"net/url"
@@ -21,6 +22,16 @@ var (
 	DISCORD_CLIENT_SECRET = os.Getenv("DISCORD_CLIENT_SECRET")
 	DISCORD_REDIRECT_URI  = os.Getenv("DISCORD_REDIRECT_URI")
 	DISCORD_API_ENDPOINT  = "https://discord.com/api/v10"
+	discordConfig         = &oauth2.Config{
+		ClientID:     DISCORD_CLIENT_ID,
+		ClientSecret: DISCORD_CLIENT_SECRET,
+		Endpoint: oauth2.Endpoint{
+			AuthURL:   "https://discord.com/oauth2/authorize",
+			TokenURL:  "https://discord.com/api/oauth2/token",
+			AuthStyle: oauth2.AuthStyleInHeader,
+		},
+		RedirectURL: DISCORD_REDIRECT_URI,
+	}
 )
 
 // -------------- Structs --------------
@@ -114,66 +125,6 @@ func DiscordExtCodeForToken(code string) (*DiscordTokenResponse, error) {
 	return &token, nil
 }
 
-// DiscordRefreshToken refreshes an access token
-func DiscordRefreshToken(refreshToken string) (*DiscordTokenResponse, error) {
-	data := url.Values{}
-	data.Set("grant_type", "refresh_token")
-	data.Set("refresh_token", refreshToken)
-
-	req, err := http.NewRequest("POST", DISCORD_API_ENDPOINT+"/oauth2/token", strings.NewReader(data.Encode()))
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.SetBasicAuth(DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET)
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New("failed to refresh access token")
-	}
-
-	var token DiscordTokenResponse
-	err = json.NewDecoder(resp.Body).Decode(&token)
-	if err != nil {
-		return nil, err
-	}
-	return &token, nil
-}
-
-// DiscordRevokeToken revokes an access token
-func DiscordRevokeToken(accessToken string) error {
-	data := url.Values{}
-	data.Set("token", accessToken)
-
-	req, err := http.NewRequest("POST", DISCORD_API_ENDPOINT+"/oauth2/token/revoke", strings.NewReader(data.Encode()))
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.SetBasicAuth(DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET)
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return errors.New("failed to revoke access token")
-	}
-
-	return nil
-}
-
 // GetDiscordUser gets a Discord user
 func GetDiscordUser(accessToken string) (*DiscordData, error) {
 	req, err := http.NewRequest("GET", DISCORD_API_ENDPOINT+"/users/@me", nil)
@@ -211,7 +162,7 @@ func DiscordOAuth(store auth.Store, code string, state auth.OAuthState) (*auth.S
 	if state.Platform != "" && false { // TEMPORARILY DISABLED UNTIL STATE IS SIGNED
 	}
 
-	token, err := DiscordExtCodeForToken(code)
+	token, err := ExtCodeForToken(discordConfig, code)
 	if err != nil {
 		log.Println("Failed to exchange code for token")
 		return nil, err
