@@ -252,7 +252,7 @@ func (s *store) AddSessionToCache(session *Session) error {
 		return err
 	}
 
-	_, err = s.rdb.Set(context.Background(), session.ID, stringSession, time.Until(time.Unix(session.ExpiresAt, 0))).Result()
+	_, err = s.rdb.Set(context.Background(), "session:"+session.ID, stringSession, time.Until(time.Unix(session.ExpiresAt, 0))).Result()
 	if err != nil {
 		return err
 	}
@@ -262,7 +262,7 @@ func (s *store) AddSessionToCache(session *Session) error {
 // GetSessionFromCache gets a session from the cache
 func (s *store) GetSessionFromCache(id string) (*Session, error) {
 	var session Session
-	stringSession, err := s.rdb.Get(context.Background(), id).Result()
+	stringSession, err := s.rdb.Get(context.Background(), "session:"+id).Result()
 	if err != nil {
 		return nil, err
 	}
@@ -276,7 +276,7 @@ func (s *store) GetSessionFromCache(id string) (*Session, error) {
 
 // DeleteSessionFromCache deletes a session from the cache
 func (s *store) DeleteSessionFromCache(id string) error {
-	_, err := s.rdb.Del(context.Background(), id).Result()
+	_, err := s.rdb.Del(context.Background(), "session:"+id).Result()
 	if err != nil {
 		return err
 	}
