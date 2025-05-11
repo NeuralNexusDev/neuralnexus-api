@@ -116,9 +116,20 @@ func UpdatedTwitchExtCodeForToken(code string) (*TwitchTokenResponse, error) {
 		return nil, errors.New("failed to exchange code for access token")
 	}
 
+	scope, ok := token.Extra("scope").([]interface{})
+	if !ok {
+		return nil, errors.New("failed to get scope from token")
+	}
+	var scopes []string
+	for _, s := range scope {
+		if str, ok := s.(string); ok {
+			scopes = append(scopes, str)
+		}
+	}
+
 	var twitchToken = &TwitchTokenResponse{
 		Token: token,
-		Scope: token.Extra("scope").([]string),
+		Scope: scopes,
 	}
 
 	return twitchToken, nil
