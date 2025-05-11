@@ -152,26 +152,19 @@ func (user *Account) NewSession(expiresAt int64) (*Session, error) {
 
 // -------------- Structs --------------
 
-// OAuthState used with the OAuth state URL parameter
-type OAuthState struct {
-	Platform    Platform `json:"platform"`
-	Nonce       string   `json:"nonce"`
-	RedirectURI string   `json:"redirect_uri"`
-}
-
 // LinkedAccount struct
 type LinkedAccount struct {
 	UserID           string      `db:"user_id" validate:"required"`
 	Platform         Platform    `db:"platform" validate:"required"`
-	PlatformUsername string      `db:"platform_username" validate:"required_without=PlatformID"`
-	PlatformID       string      `db:"platform_id" validate:"required_without=PlatformUsername"`
+	PlatformUsername string      `db:"platform_username" validate:"required_without=GetID"`
+	PlatformID       string      `db:"platform_id" validate:"required_without=GetUsername"`
 	Data             interface{} `db:"data" validate:"required"`
 	DataUpdatedAt    time.Time   `db:"updated_at"`
 	CreatedAt        time.Time   `db:"created_at"`
 }
 
 // NewLinkedAccount creates a new linked account
-func NewLinkedAccount(userID string, platform Platform, platformUsername, platformID string, data Data) *LinkedAccount {
+func NewLinkedAccount(userID string, platform Platform, platformUsername, platformID string, data PlatformData) *LinkedAccount {
 	return &LinkedAccount{
 		UserID:           userID,
 		Platform:         platform,
@@ -181,11 +174,12 @@ func NewLinkedAccount(userID string, platform Platform, platformUsername, platfo
 	}
 }
 
-// Data interface
-type Data interface {
-	PlatformID() string
-	PlatformUsername() string
-	PlatformData() string
+// PlatformData interface
+type PlatformData interface {
+	GetID() string
+	GetEmail() string
+	GetUsername() string
+	GetData() string
 	CreateLinkedAccount(string) *LinkedAccount
 }
 

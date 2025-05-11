@@ -13,7 +13,7 @@ type UserService interface {
 	GetUserFromPlatform(platform Platform, platformID string) (*Account, error)
 	GetUserPermissions(userID string) ([]string, error)
 	UpdateUser(user *Account) (*Account, error)
-	UpdateUserFromPlatform(platform Platform, platformID string, data Data) (*Account, error)
+	UpdateUserFromPlatform(platform Platform, platformID string, data PlatformData) (*Account, error)
 	DeleteUser(userID string) error
 }
 
@@ -82,7 +82,7 @@ func (s *userService) UpdateUser(user *Account) (*Account, error) {
 }
 
 // UpdateUserFromPlatform - Update a user from a platform
-func (s *userService) UpdateUserFromPlatform(platform Platform, platformID string, data Data) (*Account, error) {
+func (s *userService) UpdateUserFromPlatform(platform Platform, platformID string, data PlatformData) (*Account, error) {
 	// If the user doesn't exist, create a new account
 	la, err := s.als.GetLinkedAccountByPlatformID(platform, platformID)
 	if err != nil {

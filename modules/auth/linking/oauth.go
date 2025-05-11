@@ -3,10 +3,18 @@ package linking
 import (
 	"context"
 	"errors"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"golang.org/x/oauth2"
 )
 
 // -------------- Structs --------------
+
+// OAuthState used with the OAuth state URL parameter
+type OAuthState struct {
+	Platform    auth.Platform `json:"platform"`
+	Nonce       string        `json:"nonce"`
+	RedirectURI string        `json:"redirect_uri"`
+}
 
 // ScopedToken OAuth2 token with scope
 type ScopedToken struct {

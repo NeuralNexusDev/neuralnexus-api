@@ -94,7 +94,7 @@ func UpdateUserFromPlatformHandler(service auth.UserService) http.HandlerFunc {
 		}
 		platform := auth.Platform(r.PathValue("platform"))
 		platformID := r.PathValue("platform_id")
-		var data auth.Data
+		var data auth.PlatformData
 		err := responses.DecodeStruct(r, &data)
 		if err != nil {
 			responses.BadRequest(w, r, "Invalid request body")

@@ -5,7 +5,6 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"golang.org/x/oauth2"
 	"log"
-	"net/http"
 	"os"
 	"time"
 
@@ -20,7 +19,6 @@ var (
 	DISCORD_CLIENT_ID     = os.Getenv("DISCORD_CLIENT_ID")
 	DISCORD_CLIENT_SECRET = os.Getenv("DISCORD_CLIENT_SECRET")
 	DISCORD_REDIRECT_URI  = os.Getenv("DISCORD_REDIRECT_URI")
-	DISCORD_API_ENDPOINT  = "https://discord.com/api/v10"
 	discordConfig         = &oauth2.Config{
 		ClientID:     DISCORD_CLIENT_ID,
 		ClientSecret: DISCORD_CLIENT_SECRET,
@@ -40,18 +38,23 @@ type DiscordData struct {
 	*discordgo.User
 }
 
-// PlatformID returns the platform ID
-func (d *DiscordData) PlatformID() string {
+// GetID returns the platform ID
+func (d *DiscordData) GetID() string {
 	return d.ID
 }
 
-// PlatformUsername returns the platform username
-func (d *DiscordData) PlatformUsername() string {
+// GetUsername returns the platform username
+func (d *DiscordData) GetUsername() string {
 	return d.Username
 }
 
-// PlatformData returns the platform data
-func (d *DiscordData) PlatformData() string {
+// GetEmail returns the platform email
+func (d *DiscordData) GetEmail() string {
+	return d.Email
+}
+
+// GetData returns the platform data
+func (d *DiscordData) GetData() string {
 	data, _ := json.Marshal(d)
 	return string(data)
 }
@@ -62,36 +65,6 @@ func (d *DiscordData) CreateLinkedAccount(userID string) *auth.LinkedAccount {
 }
 
 // -------------- Functions --------------
-
-// OldGetDiscordUser gets a Discord user
-func OldGetDiscordUser(accessToken string) (*DiscordData, error) {
-	req, err := http.NewRequest("GET", DISCORD_API_ENDPOINT+"/users/@me", nil)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		log.Println("Failed to get Discord user:", resp.Status)
-		return nil, errors.New("failed to get Discord user")
-	}
-
-	var data DiscordData
-	err = json.NewDecoder(resp.Body).Decode(&data)
-	if err != nil {
-		return nil, err
-	}
-
-	return &data, nil
-}
 
 // GetDiscordUser gets a Discord user with the given access token
 func GetDiscordUser(accessToken string) (*DiscordData, error) {
@@ -107,7 +80,7 @@ func GetDiscordUser(accessToken string) (*DiscordData, error) {
 }
 
 // DiscordOAuth process the Discord OAuth flow
-func DiscordOAuth(store auth.Store, code string, state auth.OAuthState) (*auth.Session, error) {
+func DiscordOAuth(store auth.Store, code string, state OAuthState) (*auth.Session, error) {
 	var a *auth.Account
 	// TODO: Sign the state so it can't be tampered with/impersonated
 	if state.Platform != "" && false { // TEMPORARILY DISABLED UNTIL STATE IS SIGNED
@@ -126,7 +99,7 @@ func DiscordOAuth(store auth.Store, code string, state auth.OAuthState) (*auth.S
 	}
 
 	// Check if platform account is linked to an account
-	la, err := store.LinkAccount().GetLinkedAccountByPlatformID(auth.PlatformDiscord, user.ID)
+	la, err := store.LinkAccount().GetLinkedAccountByPlatformID(auth.PlatformDiscord, user.GetID())
 	if err == nil {
 		// If the account IDs don't match, default to OAuth as the source of truth
 		if a == nil || a.UserID != la.UserID {
@@ -153,10 +126,10 @@ func DiscordOAuth(store auth.Store, code string, state auth.OAuthState) (*auth.S
 	}
 
 	// Check if the email is already in use -- simple account merging
-	a, _ = store.Account().GetAccountByEmail(user.Email)
+	a, _ = store.Account().GetAccountByEmail(user.GetEmail())
 	if a == nil {
 		// Create account
-		a, err = auth.NewPasswordLessAccount(user.Username, user.Email)
+		a, err = auth.NewPasswordLessAccount(user.GetUsername(), user.GetEmail())
 		if err != nil {
 			return nil, err
 		}
@@ -167,7 +140,7 @@ func DiscordOAuth(store auth.Store, code string, state auth.OAuthState) (*auth.S
 	}
 
 	// Link account
-	la = auth.NewLinkedAccount(a.UserID, auth.PlatformDiscord, user.Username, user.ID, user)
+	la = auth.NewLinkedAccount(a.UserID, auth.PlatformDiscord, user.GetUsername(), user.GetID(), user)
 	err = store.LinkAccount().AddLinkedAccountToDB(la)
 	if err != nil {
 		return nil, errors.New("failed to link account")

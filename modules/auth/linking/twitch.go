@@ -1,11 +1,9 @@
 package linking
 
 import (
-	"context"
 	"errors"
 	"github.com/nicklaw5/helix/v2"
 	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/endpoints"
 	"log"
 	"os"
 	"time"
@@ -40,63 +38,33 @@ type TwitchData struct {
 	*helix.User
 }
 
-// PlatformID returns the platform ID
-func (t TwitchData) PlatformID() string {
+// GetID returns the platform ID
+func (t *TwitchData) GetID() string {
 	return t.ID
 }
 
-// PlatformUsername returns the platform username
-func (t TwitchData) PlatformUsername() string {
+// GetEmail returns the platform email
+func (t *TwitchData) GetEmail() string {
+	return t.Email
+}
+
+// GetUsername returns the platform username
+func (t *TwitchData) GetUsername() string {
 	return t.Login
 }
 
-// PlatformData returns the platform data
-func (t TwitchData) PlatformData() string {
+// GetData returns the platform data
+func (t *TwitchData) GetData() string {
 	data, _ := json.Marshal(t)
 	return string(data)
 }
 
 // CreateLinkedAccount creates a linked account
-func (t TwitchData) CreateLinkedAccount(userID string) *auth.LinkedAccount {
+func (t *TwitchData) CreateLinkedAccount(userID string) *auth.LinkedAccount {
 	return auth.NewLinkedAccount(userID, auth.PlatformTwitch, t.Login, t.ID, t)
 }
 
 // -------------- Functions --------------
-
-// TwitchExtCodeForToken returns the Twitch extension code for token
-func TwitchExtCodeForToken(code string) (*ScopedToken, error) {
-	config := &oauth2.Config{
-		ClientID:     TWITCH_CLIENT_ID,
-		ClientSecret: TWITCH_CLIENT_SECRET,
-		Endpoint:     endpoints.Twitch,
-		RedirectURL:  TWITCH_REDIRECT_URI,
-	}
-	token, err := config.Exchange(context.Background(), code)
-	if err != nil {
-		return nil, err
-	}
-	if token == nil {
-		return nil, errors.New("failed to exchange code for access token")
-	}
-
-	scope, ok := token.Extra("scope").([]interface{})
-	if !ok {
-		return nil, errors.New("failed to get scope from token")
-	}
-	var scopes []string
-	for _, s := range scope {
-		if str, ok := s.(string); ok {
-			scopes = append(scopes, str)
-		}
-	}
-
-	var scopedToken = &ScopedToken{
-		Token: token,
-		Scope: scopes,
-	}
-
-	return scopedToken, nil
-}
 
 // GetTwitchUser returns the Twitch user data
 func GetTwitchUser(accessToken string) (*TwitchData, error) {
@@ -121,7 +89,7 @@ func GetTwitchUser(accessToken string) (*TwitchData, error) {
 }
 
 // TwitchOAuth process the Twitch OAuth flow
-func TwitchOAuth(store auth.Store, code string, state auth.OAuthState) (*auth.Session, error) {
+func TwitchOAuth(store auth.Store, code string, state OAuthState) (*auth.Session, error) {
 	var a *auth.Account
 	// TODO: Sign the state so it can't be tampered with/impersonated
 	if state.Platform != "" && false { // TEMPORARILY DISABLED UNTIL STATE IS SIGNED
@@ -140,7 +108,7 @@ func TwitchOAuth(store auth.Store, code string, state auth.OAuthState) (*auth.Se
 	}
 
 	// Check if platform account is linked to an account
-	la, err := store.LinkAccount().GetLinkedAccountByPlatformID(auth.PlatformTwitch, user.ID)
+	la, err := store.LinkAccount().GetLinkedAccountByPlatformID(auth.PlatformTwitch, user.GetID())
 	if err == nil {
 		// If the account IDs don't match, default to OAuth as the source of truth
 		if a == nil || a.UserID != la.UserID {
@@ -167,10 +135,10 @@ func TwitchOAuth(store auth.Store, code string, state auth.OAuthState) (*auth.Se
 	}
 
 	// Check if the email is already in use -- simple account merging
-	a, _ = store.Account().GetAccountByEmail(user.Email)
+	a, _ = store.Account().GetAccountByEmail(user.GetEmail())
 	if a == nil {
 		// Create account
-		a, err = auth.NewPasswordLessAccount(user.Login, user.Email)
+		a, err = auth.NewPasswordLessAccount(user.GetUsername(), user.GetEmail())
 		if err != nil {
 			return nil, err
 		}
@@ -181,7 +149,7 @@ func TwitchOAuth(store auth.Store, code string, state auth.OAuthState) (*auth.Se
 	}
 
 	// Link account
-	la = auth.NewLinkedAccount(a.UserID, auth.PlatformTwitch, user.Login, user.ID, user)
+	la = auth.NewLinkedAccount(a.UserID, auth.PlatformTwitch, user.GetUsername(), user.GetID(), user)
 	err = store.LinkAccount().AddLinkedAccountToDB(la)
 	if err != nil {
 		return nil, errors.New("failed to link account")

@@ -42,8 +42,8 @@ func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 
 // Login struct for login request
 type Login struct {
-	Username string `json:"username" xml:"username" validate:"required_without=Email"`
-	Email    string `json:"email" xml:"email" validate:"required_without=Username"`
+	Username string `json:"username" xml:"username" validate:"required_without=GetEmail"`
+	Email    string `json:"email" xml:"email" validate:"required_without=GetUsername"`
 	Password string `json:"password" xml:"password" validate:"required"`
 }
 
@@ -144,7 +144,7 @@ func OAuthHandler(ss auth.SessionService, store auth.Store) http.HandlerFunc {
 			responses.BadRequest(w, r, "Invalid state")
 			return
 		}
-		var state auth.OAuthState
+		var state linking.OAuthState
 		err = json.Unmarshal(stateBytes, &state)
 		if err != nil {
 			log.Println("Failed to unmarshal state:\n\t", err)
