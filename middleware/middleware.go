@@ -164,6 +164,7 @@ func RateLimitMiddleware(service auth.RateLimitService) Middleware {
 					return
 				}
 			}
+			next.ServeHTTP(w, r)
 		})
 	}
 }
