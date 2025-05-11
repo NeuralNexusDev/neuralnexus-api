@@ -243,13 +243,13 @@ func TwitchOAuth(store auth.Store, code string, state auth.OAuthState) (*auth.Se
 	if state.Platform != "" && false { // TEMPORARILY DISABLED UNTIL STATE IS SIGNED
 	}
 
-	token, err := UpdatedTwitchExtCodeForToken(code)
+	token, err := TwitchExtCodeForToken(code)
 	if err != nil {
 		log.Println("Failed to exchange code for token")
 		return nil, err
 	}
 
-	user, err := UpdatedGetTwitchUser(token.AccessToken)
+	user, err := GetTwitchUser(token.AccessToken)
 	if err != nil {
 		log.Println("Failed to get user from Twitch API")
 		return nil, err
