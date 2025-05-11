@@ -1,7 +1,11 @@
 package linking
 
 import (
+	"context"
 	"errors"
+	"github.com/nicklaw5/helix/v2"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/endpoints"
 	"log"
 	"net/http"
 	"net/url"
@@ -27,26 +31,13 @@ var (
 
 // TwitchTokenResponse struct
 type TwitchTokenResponse struct {
-	AccessToken string   `json:"access_token"`
-	ExpiresIn   int      `json:"expires_in"`
-	RereshToken string   `json:"refresh_token"`
-	Scope       []string `json:"scope"`
-	TokenType   string   `json:"token_type"`
+	*oauth2.Token
+	Scope []string `json:"scope"`
 }
 
 // TwitchData struct
 type TwitchData struct {
-	ID              string `json:"id" validate:"required"`
-	Login           string `json:"login" validate:"required"`
-	DisplayName     string `json:"display_name" validate:"required"`
-	Type            string `json:"type,omitempty"`
-	BroadcasterType string `json:"broadcaster_type,omitempty"`
-	Description     string `json:"description,omitempty"`
-	ProfileImageURL string `json:"profile_image_url,omitempty"`
-	OfflineImageURL string `json:"offline_image_url,omitempty"`
-	ViewCount       int    `json:"view_count,omitempty"`
-	Email           string `json:"email,omitempty"`
-	CreatedAt       string `json:"created_at,omitempty"`
+	*helix.User
 }
 
 // PlatformID returns the platform ID
@@ -81,7 +72,7 @@ func TwitchExtCodeForToken(code string) (*TwitchTokenResponse, error) {
 	data.Set("grant_type", "authorization_code")
 	data.Set("redirect_uri", TWITCH_REDIRECT_URI)
 
-	req, err := http.NewRequest("POST", "https://id.twitch.tv/oauth2/token", strings.NewReader(data.Encode()))
+	req, err := http.NewRequest("POST", endpoints.Twitch.TokenURL, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, err
 	}
@@ -108,6 +99,29 @@ func TwitchExtCodeForToken(code string) (*TwitchTokenResponse, error) {
 		return nil, err
 	}
 	return &token, nil
+}
+
+func UpdatedTwitchExtCodeForToken(code string) (*TwitchTokenResponse, error) {
+	config := &oauth2.Config{
+		ClientID:     TWITCH_CLIENT_ID,
+		ClientSecret: TWITCH_CLIENT_SECRET,
+		Endpoint:     endpoints.Twitch,
+		RedirectURL:  TWITCH_REDIRECT_URI,
+	}
+	token, err := config.Exchange(context.Background(), code)
+	if err != nil {
+		return nil, err
+	}
+	if token == nil {
+		return nil, errors.New("failed to exchange code for access token")
+	}
+
+	var twitchToken = &TwitchTokenResponse{
+		Token: token,
+		Scope: token.Extra("scope").([]string),
+	}
+
+	return twitchToken, nil
 }
 
 // TwitchRefreshToken refreshes an access token
@@ -201,6 +215,27 @@ func GetTwitchUser(accessToken string) (*TwitchData, error) {
 	return &data.Data[0], nil
 }
 
+func UpdatedGetTwitchUser(accessToken string) (*TwitchData, error) {
+	client, err := helix.NewClient(&helix.Options{
+		ClientID:        TWITCH_CLIENT_ID,
+		UserAccessToken: accessToken,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	users, err := client.GetUsers(&helix.UsersParams{})
+	if err != nil {
+		return nil, err
+	}
+	if len(users.Data.Users) == 0 {
+		return nil, errors.New("failed to get user data")
+	}
+
+	user := &users.Data.Users[0]
+	return &TwitchData{user}, nil
+}
+
 // TwitchOAuth process the Twitch OAuth flow
 func TwitchOAuth(store auth.Store, code string, state auth.OAuthState) (*auth.Session, error) {
 	var a *auth.Account
@@ -208,13 +243,13 @@ func TwitchOAuth(store auth.Store, code string, state auth.OAuthState) (*auth.Se
 	if state.Platform != "" && false { // TEMPORARILY DISABLED UNTIL STATE IS SIGNED
 	}
 
-	token, err := TwitchExtCodeForToken(code)
+	token, err := UpdatedTwitchExtCodeForToken(code)
 	if err != nil {
 		log.Println("Failed to exchange code for token")
 		return nil, err
 	}
 
-	user, err := GetTwitchUser(token.AccessToken)
+	user, err := UpdatedGetTwitchUser(token.AccessToken)
 	if err != nil {
 		log.Println("Failed to get user from Twitch API")
 		return nil, err
