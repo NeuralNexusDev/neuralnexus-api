@@ -27,15 +27,12 @@ func ExtCodeForToken(config *oauth2.Config, code string) (*ScopedToken, error) {
 	}
 
 	var scopes []string
-	//if rawScopes, ok := token.Extra("scope").([]interface{}); ok {
-	//	for _, s := range rawScopes {
-	//		if str, ok := s.(string); ok {
-	//			scopes = append(scopes, str)
-	//		}
-	//	}
-	//} else
-	if rawScopes, ok := token.Extra("scope").([]string); ok {
-		scopes = rawScopes
+	if rawScopes, ok := token.Extra("scope").([]interface{}); ok {
+		for _, s := range rawScopes {
+			if str, ok := s.(string); ok {
+				scopes = append(scopes, str)
+			}
+		}
 	} else if rawScopes, ok := token.Extra("scope").(string); ok {
 		scopes = []string{rawScopes}
 	} else {
