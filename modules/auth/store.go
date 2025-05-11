@@ -363,7 +363,7 @@ type RateLimitStore interface {
 
 // GetRateLimit gets the rate limit for a key
 func (s *store) GetRateLimit(key string) (int, error) {
-	val, err := s.rdb.Get(context.Background(), key).Int()
+	val, err := s.rdb.Get(context.Background(), "rate_limit:"+key).Int()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
 			err = s.SetRateLimit(key, 1)
@@ -379,7 +379,7 @@ func (s *store) GetRateLimit(key string) (int, error) {
 
 // SetRateLimit sets the rate limit for a key
 func (s *store) SetRateLimit(key string, val int) error {
-	_, err := s.rdb.Set(context.Background(), key, val, time.Minute).Result()
+	_, err := s.rdb.Set(context.Background(), "rate_limit:"+key, val, time.Minute).Result()
 	if err != nil {
 		return err
 	}
@@ -388,7 +388,7 @@ func (s *store) SetRateLimit(key string, val int) error {
 
 // IncrementRateLimit increments the rate limit for a key
 func (s *store) IncrementRateLimit(key string) error {
-	_, err := s.rdb.IncrBy(context.Background(), key, 1).Result()
+	_, err := s.rdb.IncrBy(context.Background(), "rate_limit:"+key, 1).Result()
 	if err != nil {
 		return err
 	}
