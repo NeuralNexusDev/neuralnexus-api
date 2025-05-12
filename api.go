@@ -70,7 +70,7 @@ func (s *APIServer) Setup() http.Handler {
 		mw.IPMiddleware,
 		mw.SessionMiddleware(session),
 		mw.RequestIDMiddleware,
-		mw.RateLimitMiddleware(rateLimit),
+		mw.RateLimitMiddleware(rateLimit, 300, 60),
 		mw.RequestLoggerMiddleware,
 	)
 

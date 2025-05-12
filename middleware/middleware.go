@@ -130,7 +130,7 @@ func SessionMiddleware(service auth.SessionService) Middleware {
 }
 
 // RateLimitMiddleware - Rate limit requests
-func RateLimitMiddleware(service auth.RateLimitService) Middleware {
+func RateLimitMiddleware(service auth.RateLimitService, sessionLimit int, ipLimit int) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			session, ok := r.Context().Value(SessionKey).(*auth.Session)
@@ -143,7 +143,7 @@ func RateLimitMiddleware(service auth.RateLimitService) Middleware {
 				if err != nil {
 					LogRequest(r, "Error getting rate limit:\n\t", err.Error())
 				}
-				if limit > 300 {
+				if limit > sessionLimit {
 					responses.TooManyRequests(w, r, 60, "You have been rate limited. Please try again later.")
 					return
 				}
@@ -159,7 +159,7 @@ func RateLimitMiddleware(service auth.RateLimitService) Middleware {
 					LogRequest(r, "Error getting rate limit:\n\t", err.Error())
 					return
 				}
-				if limit > 60 {
+				if limit > ipLimit {
 					responses.TooManyRequests(w, r, 60, "You have been rate limited. Please try again later.")
 					return
 				}

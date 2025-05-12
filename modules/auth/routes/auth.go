@@ -25,10 +25,13 @@ func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 	session := auth.NewSessionService(store)
 	user := auth.NewUserService(store)
 
-	mux.HandleFunc("POST /api/v1/auth/login", LoginHandler(account, session))
-	mux.Handle("POST /api/v1/auth/logout", mw.Auth(session, LogoutHandler(session)))
+	rateLimitService := auth.NewRateLimitService(store)
+	rateLimit := mw.RateLimitMiddleware(rateLimitService, 5, 5)
 
-	mux.HandleFunc("/api/oauth", OAuthHandler(session, store))
+	mux.Handle("POST /api/v1/auth/login", rateLimit(LoginHandler(account, session)))
+	mux.Handle("POST /api/v1/auth/logout", rateLimit(mw.Auth(session, LogoutHandler(session))))
+
+	mux.Handle("/api/oauth", rateLimit(OAuthHandler(session, store)))
 
 	mux.HandleFunc("GET /api/v1/users/{user_id}", mw.Auth(session, GetUserHandler(user)))
 	mux.HandleFunc("GET /api/v1/users/{user_id}/permissions", mw.Auth(session, GetUserPermissionsHandler(user)))
