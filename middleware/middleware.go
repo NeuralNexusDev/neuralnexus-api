@@ -130,16 +130,16 @@ func SessionMiddleware(service auth.SessionService) Middleware {
 }
 
 // RateLimitMiddleware - Rate limit requests
-func RateLimitMiddleware(service auth.RateLimitService, sessionLimit int, ipLimit int) Middleware {
+func RateLimitMiddleware(service auth.RateLimitService, prefix string, sessionLimit int, ipLimit int) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			session, ok := r.Context().Value(SessionKey).(*auth.Session)
 			if ok && session != nil {
-				err := service.IncrementRateLimitByID(session.UserID)
+				err := service.IncrRateLimit(prefix + ":" + session.UserID)
 				if err != nil {
 					LogRequest(r, "Error incrementing rate limit:\n\t", err.Error())
 				}
-				limit, err := service.GetRateLimitByID(session.UserID)
+				limit, err := service.GetRateLimit(prefix + ":" + session.UserID)
 				if err != nil {
 					LogRequest(r, "Error getting rate limit:\n\t", err.Error())
 				}
@@ -149,12 +149,12 @@ func RateLimitMiddleware(service auth.RateLimitService, sessionLimit int, ipLimi
 				}
 			} else {
 				ip := strings.Split(r.RemoteAddr, ":")[0]
-				err := service.IncrementRateLimitIP(ip)
+				err := service.IncrRateLimit(prefix + ":" + ip)
 				if err != nil {
 					LogRequest(r, "Error incrementing rate limit:\n\t", err.Error())
 					return
 				}
-				limit, err := service.GetRateLimitIP(ip)
+				limit, err := service.GetRateLimit(prefix + ":" + ip)
 				if err != nil {
 					LogRequest(r, "Error getting rate limit:\n\t", err.Error())
 					return

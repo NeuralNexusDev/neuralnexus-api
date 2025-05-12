@@ -26,7 +26,7 @@ func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 	user := auth.NewUserService(store)
 
 	rateLimitService := auth.NewRateLimitService(store)
-	rateLimit := mw.RateLimitMiddleware(rateLimitService, 5, 5)
+	rateLimit := mw.RateLimitMiddleware(rateLimitService, "login", 5, 5)
 
 	mux.Handle("POST /api/v1/auth/login", rateLimit(LoginHandler(account, session)))
 	mux.Handle("POST /api/v1/auth/logout", rateLimit(mw.Auth(session, LogoutHandler(session))))

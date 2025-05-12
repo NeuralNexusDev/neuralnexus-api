@@ -3,12 +3,9 @@ package auth
 // RateLimitService - Rate limit service interface
 // If there is no session fall back to the request's IP
 type RateLimitService interface {
-	GetRateLimitByID(userID string) (int, error)
-	SetRateLimitByID(userID string, limit int) error
-	IncrementRateLimitByID(userID string) error
-	GetRateLimitIP(ip string) (int, error)
-	SetRateLimitIP(ip string, limit int) error
-	IncrementRateLimitIP(ip string) error
+	GetRateLimit(key string) (int, error)
+	SetRateLimit(key string, limit int) error
+	IncrRateLimit(key string) error
 }
 
 // rateLimitService - Rate limit service struct
@@ -23,32 +20,17 @@ func NewRateLimitService(store Store) RateLimitService {
 	}
 }
 
-// GetRateLimitByID - Get the rate limit for a user by their ID
-func (s *rateLimitService) GetRateLimitByID(userID string) (int, error) {
-	return s.store.GetRateLimit(userID)
+// GetRateLimit Get the rate limit by key
+func (s *rateLimitService) GetRateLimit(key string) (int, error) {
+	return s.store.GetRateLimit(key)
 }
 
-// SetRateLimitByID - Set the rate limit for a user by their ID
-func (s *rateLimitService) SetRateLimitByID(userID string, limit int) error {
-	return s.store.SetRateLimit(userID, limit)
+// SetRateLimit Set the rate limit for a key
+func (s *rateLimitService) SetRateLimit(key string, limit int) error {
+	return s.store.SetRateLimit(key, limit)
 }
 
-// IncrementRateLimitByID - Increment the rate limit for a user by their ID
-func (s *rateLimitService) IncrementRateLimitByID(userID string) error {
-	return s.store.IncrementRateLimit(userID)
-}
-
-// GetRateLimitIP - Get the rate limit for a user by their IP
-func (s *rateLimitService) GetRateLimitIP(ip string) (int, error) {
-	return s.store.GetRateLimit(ip)
-}
-
-// SetRateLimitIP - Set the rate limit for a user by their IP
-func (s *rateLimitService) SetRateLimitIP(ip string, limit int) error {
-	return s.store.SetRateLimit(ip, limit)
-}
-
-// IncrementRateLimitIP - Increment the rate limit for a user by their IP
-func (s *rateLimitService) IncrementRateLimitIP(ip string) error {
-	return s.store.IncrementRateLimit(ip)
+// IncrRateLimit Increment the rate limit for a key
+func (s *rateLimitService) IncrRateLimit(key string) error {
+	return s.store.IncrementRateLimit(key)
 }
