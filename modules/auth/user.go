@@ -8,11 +8,12 @@ import (
 )
 
 // UserService - The userService interface
+// TODO: Convert to a user struct that cannot modify sensitive data
 type UserService interface {
 	GetUser(userID string) (*Account, error)
 	GetUserFromPlatform(platform Platform, platformID string) (*Account, error)
 	GetUserPermissions(userID string) ([]string, error)
-	UpdateUser(user *Account) (*Account, error)
+	UpdateUser(user *Account) error
 	UpdateUserFromPlatform(platform Platform, platformID string, data PlatformData) (*Account, error)
 	DeleteUser(userID string) error
 }
@@ -63,11 +64,10 @@ func (s *userService) GetUserPermissions(userID string) ([]string, error) {
 }
 
 // UpdateUser - Update a user
-// TODO: Make this return just an error
-func (s *userService) UpdateUser(user *Account) (*Account, error) {
+func (s *userService) UpdateUser(user *Account) error {
 	account, err := s.as.GetAccountByID(user.UserID)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if user.Username != "" {
 		account.Username = user.Username
@@ -78,7 +78,7 @@ func (s *userService) UpdateUser(user *Account) (*Account, error) {
 	if user.Roles != nil {
 		account.Roles = user.Roles
 	}
-	return s.as.UpdateAccount(account)
+	return s.as.UpdateAccountInDB(account)
 }
 
 // UpdateUserFromPlatform - Update a user from a platform
@@ -124,5 +124,5 @@ func (s *userService) UpdateUserFromPlatform(platform Platform, platformID strin
 
 // DeleteUser - Delete a user
 func (s *userService) DeleteUser(userID string) error {
-	return s.as.DeleteAccount(userID)
+	return s.as.DeleteAccountFromDB(userID)
 }

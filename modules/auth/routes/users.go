@@ -75,12 +75,12 @@ func UpdateUserHandler(service auth.UserService) http.HandlerFunc {
 			return
 		}
 		user.UserID = userID
-		updatedUser, err := service.UpdateUser(&user)
+		err = service.UpdateUser(&user)
 		if err != nil {
 			responses.BadRequest(w, r, "Failed to update user")
 			return
 		}
-		responses.StructOK(w, r, updatedUser)
+		responses.StructOK(w, r, user)
 	}
 }
 

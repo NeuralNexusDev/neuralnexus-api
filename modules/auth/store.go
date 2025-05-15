@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
+	"golang.org/x/oauth2"
 	"log"
 	"time"
 )
@@ -17,6 +18,7 @@ type Store interface {
 	Session() SessionStore
 	LinkAccount() LinkAccountStore
 	RateLimit() RateLimitStore
+	OAuthToken() OAuthTokenStore
 }
 
 // store - primary store for auth
@@ -53,6 +55,11 @@ func (s *store) RateLimit() RateLimitStore {
 	return RateLimitStore(s)
 }
 
+// OAuthToken gets the OAuth token store
+func (s *store) OAuthToken() OAuthTokenStore {
+	return OAuthTokenStore(s)
+}
+
 //CREATE TRIGGER update_accounts_modtime
 //BEFORE UPDATE ON accounts
 //FOR EACH ROW
@@ -76,8 +83,8 @@ type AccountStore interface {
 	GetAccountByID(userID string) (*Account, error)
 	GetAccountByUsername(username string) (*Account, error)
 	GetAccountByEmail(email string) (*Account, error)
-	UpdateAccount(account *Account) (*Account, error)
-	DeleteAccount(userID string) error
+	UpdateAccountInDB(account *Account) error
+	DeleteAccountFromDB(userID string) error
 }
 
 // AddAccountToDB creates an account in the database
@@ -134,21 +141,20 @@ func (s *store) GetAccountByEmail(email string) (*Account, error) {
 	return account, nil
 }
 
-// UpdateAccount updates an account in the database
-// TODO: Make this return just an error
-func (s *store) UpdateAccount(account *Account) (*Account, error) {
+// UpdateAccountInDB updates an account in the database
+func (s *store) UpdateAccountInDB(account *Account) error {
 	_, err := s.db.Exec(context.Background(),
 		"UPDATE accounts SET username = $2, email = $3, hashed_secret = $4, salt = $5, roles = $6 WHERE user_id = $1",
 		account.UserID, account.Username, account.Email, account.HashedSecret, account.Salt, account.Roles,
 	)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return account, nil
+	return nil
 }
 
-// DeleteAccount deletes an account from the database
-func (s *store) DeleteAccount(userID string) error {
+// DeleteAccountFromDB deletes an account from the database
+func (s *store) DeleteAccountFromDB(userID string) error {
 	_, err := s.db.Exec(context.Background(), "DELETE FROM accounts WHERE user_id = $1", userID)
 	if err != nil {
 		return err
@@ -397,6 +403,86 @@ func (s *store) IncrementRateLimit(key string) error {
 		return err
 	}
 	_, err = s.rdb.Expire(context.Background(), "rl:"+key, ttl).Result()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+//CREATE TRIGGER update_oauth_tokens_modtime
+//BEFORE UPDATE ON oauth_tokens
+//FOR EACH ROW
+//EXECUTE PROCEDURE update_modified_column();
+
+//CREATE TABLE oauth_tokens (
+//	user_id BIGINT NOT NULL,
+//	platform TEXT NOT NULL,
+//	access_token TEXT NOT NULL,
+//  token_type TEXT,
+//  refresh_token TEXT,
+//	expiry BIGINT,
+//  expires_in BIGINT,
+//  scope TEXT[],
+//  created_at timestamp with time zone default current_timestamp,
+//  updated_at timestamp with time zone default current_timestamp,
+//  FOREIGN KEY (user_id) REFERENCES accounts(user_id),
+//  CONSTRAINT oauth_tokens_unique UNIQUE (user_id, platform)
+//);
+
+// OAuthToken OAuth2 token with scope
+type OAuthToken struct {
+	*oauth2.Token
+	UserID string   `json:"user_id"`
+	Scope  []string `json:"scope"`
+}
+
+// OAuthTokenStore interface
+type OAuthTokenStore interface {
+	AddOAuthTokenToDB(token *OAuthToken) error
+	GetOAuthTokenByUserID(userID string, platform string) (*OAuthToken, error)
+	UpdateOAuthToken(token *OAuthToken) error
+	DeleteOAuthToken(userID string, platform string) error
+}
+
+// AddOAuthTokenToDB adds an OAuth token to the database
+func (s *store) AddOAuthTokenToDB(token *OAuthToken) error {
+	_, err := s.db.Exec(context.Background(),
+		"INSERT INTO oauth_tokens (user_id, platform, access_token, token_type, refresh_token, expiry, expires_in, scope) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+		token.UserID, token.TokenType, token.AccessToken, token.RefreshToken, token.Expiry.Unix(), token.ExpiresIn, token.Scope)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// GetOAuthTokenByUserID gets an OAuth token by user ID and platform
+func (s *store) GetOAuthTokenByUserID(userID string, platform string) (*OAuthToken, error) {
+	rows, err := s.db.Query(context.Background(), "SELECT * FROM oauth_tokens WHERE user_id = $1 AND platform = $2", userID, platform)
+	if err != nil {
+		return nil, err
+	}
+
+	token, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[OAuthToken])
+	if err != nil {
+		return nil, err
+	}
+	return token, nil
+}
+
+// UpdateOAuthToken updates an OAuth token in the database
+func (s *store) UpdateOAuthToken(token *OAuthToken) error {
+	_, err := s.db.Exec(context.Background(),
+		"UPDATE oauth_tokens SET access_token = $2, token_type = $3, refresh_token = $4, expiry = $5, expires_in = $6, scope = $7 WHERE user_id = $1 AND platform = $8",
+		token.UserID, token.AccessToken, token.TokenType, token.RefreshToken, token.Expiry.Unix(), token.ExpiresIn, token.Scope)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// DeleteOAuthToken deletes an OAuth token from the database
+func (s *store) DeleteOAuthToken(userID string, platform string) error {
+	_, err := s.db.Exec(context.Background(), "DELETE FROM oauth_tokens WHERE user_id = $1 AND platform = $2", userID, platform)
 	if err != nil {
 		return err
 	}

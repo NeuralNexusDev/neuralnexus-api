@@ -31,7 +31,7 @@ func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 	mux.Handle("POST /api/v1/auth/login", rateLimit(LoginHandler(account, session)))
 	mux.Handle("POST /api/v1/auth/logout", rateLimit(mw.Auth(session, LogoutHandler(session))))
 
-	mux.Handle("/api/oauth", rateLimit(OAuthHandler(session, store)))
+	mux.Handle("/api/oauth", rateLimit(OAuthHandler(account, store.LinkAccount(), session)))
 
 	mux.HandleFunc("GET /api/v1/users/{user_id}", mw.Auth(session, GetUserHandler(user)))
 	mux.HandleFunc("GET /api/v1/users/{user_id}/permissions", mw.Auth(session, GetUserPermissionsHandler(user)))
@@ -123,8 +123,8 @@ func LogoutHandler(ss auth.SessionService) http.HandlerFunc {
 	}
 }
 
-// OAuthHandler handles the Discord OAuth route
-func OAuthHandler(ss auth.SessionService, store auth.Store) http.HandlerFunc {
+// OAuthHandler handles the OAuth route
+func OAuthHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.SessionService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
@@ -154,35 +154,48 @@ func OAuthHandler(ss auth.SessionService, store auth.Store) http.HandlerFunc {
 			responses.BadRequest(w, r, "Invalid state")
 			return
 		}
+		if state.Platform == "" || state.Nonce == "" || state.RedirectURI == "" || state.Mode == "" {
+			log.Println("Invalid state")
+			responses.BadRequest(w, r, "Invalid state")
+			return
+		}
 
-		session, err := linking.ProcessOAuth(store, code, &state)
+		// Verify that the nonce matches the value in the browser's cookie
+		cookie, err := r.Cookie("nonce")
+		if err != nil {
+			log.Println("Failed to get nonce cookie:\n\t", err)
+			responses.BadRequest(w, r, "Invalid state")
+			return
+		}
+		if cookie.Value != state.Nonce {
+			log.Println("Nonce does not match")
+			responses.BadRequest(w, r, "Invalid state")
+			return
+		}
+
+		session, err := linking.ProcessOAuthLogin(as, las, ss, code, &state)
 		if err != nil {
 			log.Println("Failed to process OAuth:\n\t", err)
 			responses.InternalServerError(w, r, "Authentication failed")
 			return
 		}
 
-		// If the state contains a redirect URI, set the session cookie and redirect
-		if state.RedirectURI != "" {
-			jwtString, err := ss.CreateJWT(session)
-			if err != nil {
-				log.Println("Failed to create JWT:\n\t", err)
-				responses.InternalServerError(w, r, "Authentication failed")
-				return
-			}
-			http.SetCookie(w, &http.Cookie{
-				Name:    "session",
-				Value:   jwtString,
-				Domain:  ".neuralnexus.dev",
-				Path:    "/",
-				Expires: time.Unix(session.ExpiresAt, 0),
-				Secure:  true,
-			})
-
-			http.Redirect(w, r, state.RedirectURI, http.StatusSeeOther)
+		// Set the session cookie and redirect the user
+		jwtString, err := ss.CreateJWT(session)
+		if err != nil {
+			log.Println("Failed to create JWT:\n\t", err)
+			responses.InternalServerError(w, r, "Authentication failed")
 			return
 		}
+		http.SetCookie(w, &http.Cookie{
+			Name:    "session",
+			Value:   jwtString,
+			Domain:  ".neuralnexus.dev",
+			Path:    "/",
+			Expires: time.Unix(session.ExpiresAt, 0),
+			Secure:  true,
+		})
 
-		responses.StructOK(w, r, session)
+		http.Redirect(w, r, state.RedirectURI, http.StatusSeeOther)
 	}
 }
