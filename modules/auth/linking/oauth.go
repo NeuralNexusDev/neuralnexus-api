@@ -63,7 +63,7 @@ func ExtCodeForToken(config *oauth2.Config, code string) (*auth.OAuthToken, erro
 	return scopedToken, nil
 }
 
-// RefreshToken refreshes the token and returns a ScopedToken
+// RefreshToken refreshes the token and returns a auth.OAuthToken
 func RefreshToken(config *oauth2.Config, token *oauth2.Token) (*auth.OAuthToken, error) {
 	newToken, err := config.TokenSource(context.Background(), token).Token()
 	if err != nil {

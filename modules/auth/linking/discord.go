@@ -63,7 +63,7 @@ func (d *DiscordData) CreateLinkedAccount(userID string) *auth.LinkedAccount {
 // -------------- Functions --------------
 
 // GetDiscordUser gets a Discord user with the given access token
-func GetDiscordUser(token *ScopedToken) (*DiscordData, error) {
+func GetDiscordUser(token *auth.OAuthToken) (*DiscordData, error) {
 	discord, err := discordgo.New("Bearer " + token.AccessToken)
 	if err != nil {
 		return nil, err

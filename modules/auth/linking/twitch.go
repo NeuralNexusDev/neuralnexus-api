@@ -64,7 +64,7 @@ func (t *TwitchData) CreateLinkedAccount(userID string) *auth.LinkedAccount {
 // -------------- Functions --------------
 
 // GetTwitchUser returns the Twitch user data
-func GetTwitchUser(token *ScopedToken) (*TwitchData, error) {
+func GetTwitchUser(token *auth.OAuthToken) (*TwitchData, error) {
 	client, err := helix.NewClient(&helix.Options{
 		ClientID:        TWITCH_CLIENT_ID,
 		UserAccessToken: token.AccessToken,
