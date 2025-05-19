@@ -1,4 +1,4 @@
-package linking
+package twitch
 
 import (
 	"errors"
@@ -9,64 +9,59 @@ import (
 	"os"
 )
 
-// -------------- Global Variables --------------
-
 //goland:noinspection GoSnakeCaseUsage
 var (
-	TWITCH_CLIENT_ID     = os.Getenv("TWITCH_CLIENT_ID")
-	TWITCH_CLIENT_SECRET = os.Getenv("TWITCH_CLIENT_SECRET")
-	TWITCH_REDIRECT_URI  = os.Getenv("TWITCH_REDIRECT_URI")
-	twitchConfig         = &oauth2.Config{
-		ClientID:     TWITCH_CLIENT_ID,
-		ClientSecret: TWITCH_CLIENT_SECRET,
+	USER_ID       = os.Getenv("TWITCH_USER_ID")
+	CLIENT_ID     = os.Getenv("TWITCH_CLIENT_ID")
+	CLIENT_SECRET = os.Getenv("TWITCH_CLIENT_SECRET")
+	REDIRECT_URI  = os.Getenv("TWITCH_REDIRECT_URI")
+	Config        = &oauth2.Config{
+		ClientID:     CLIENT_ID,
+		ClientSecret: CLIENT_SECRET,
 		Endpoint: oauth2.Endpoint{
 			AuthURL:   "https://id.twitch.tv/oauth2/authorize",
 			TokenURL:  "https://id.twitch.tv/oauth2/token",
 			AuthStyle: oauth2.AuthStyleInParams,
 		},
-		RedirectURL: TWITCH_REDIRECT_URI,
+		RedirectURL: REDIRECT_URI,
 	}
 )
 
-// -------------- Structs --------------
-
-// TwitchData struct
-type TwitchData struct {
+// Data struct
+type Data struct {
 	*helix.User
 }
 
 // GetID returns the platform ID
-func (t *TwitchData) GetID() string {
+func (t *Data) GetID() string {
 	return t.ID
 }
 
 // GetEmail returns the platform email
-func (t *TwitchData) GetEmail() string {
+func (t *Data) GetEmail() string {
 	return t.Email
 }
 
 // GetUsername returns the platform username
-func (t *TwitchData) GetUsername() string {
+func (t *Data) GetUsername() string {
 	return t.Login
 }
 
 // GetData returns the platform data
-func (t *TwitchData) GetData() string {
+func (t *Data) GetData() string {
 	data, _ := json.Marshal(t)
 	return string(data)
 }
 
 // CreateLinkedAccount creates a linked account
-func (t *TwitchData) CreateLinkedAccount(userID string) *auth.LinkedAccount {
+func (t *Data) CreateLinkedAccount(userID string) *auth.LinkedAccount {
 	return auth.NewLinkedAccount(userID, auth.PlatformTwitch, t.Login, t.ID, t)
 }
 
-// -------------- Functions --------------
-
-// GetTwitchUser returns the Twitch user data
-func GetTwitchUser(token *auth.OAuthToken) (*TwitchData, error) {
+// GetUser returns the Twitch user data
+func GetUser(token *auth.OAuthToken) (*Data, error) {
 	client, err := helix.NewClient(&helix.Options{
-		ClientID:        TWITCH_CLIENT_ID,
+		ClientID:        CLIENT_ID,
 		UserAccessToken: token.AccessToken,
 	})
 	if err != nil {
@@ -82,5 +77,5 @@ func GetTwitchUser(token *auth.OAuthToken) (*TwitchData, error) {
 	}
 
 	user := &users.Data.Users[0]
-	return &TwitchData{user}, nil
+	return &Data{user}, nil
 }

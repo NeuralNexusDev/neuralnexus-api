@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/twitch"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/cors"
 	"log"
@@ -126,6 +127,15 @@ func ApplyRoutes(mux *http.ServeMux, nndb *pgxpool.Pool, session auth.SessionSer
 
 	// --------------- Teapot ---------------
 	mux.HandleFunc("GET /api/v1/teapot", teapot.HandleTeapot)
+
+	// --------------- Twitch ---------------
+	mux.HandleFunc("POST /api/v1/twitch/eventsub", twitch.HandleEventSub)
+
+	// --------------- Health Check ---------------
+	mux.HandleFunc("GET /api/v1/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
 
 	return mux
 }

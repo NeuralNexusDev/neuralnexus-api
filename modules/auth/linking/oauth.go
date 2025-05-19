@@ -5,6 +5,7 @@ import (
 	"errors"
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/twitch"
 	"golang.org/x/oauth2"
 	"log"
 	"net/http"
@@ -110,7 +111,7 @@ func ProcessOAuthLogin(as auth.AccountService, las auth.LinkAccountStore, ss aut
 	case auth.PlatformDiscord:
 		config = discordConfig
 	case auth.PlatformTwitch:
-		config = twitchConfig
+		config = twitch.Config
 	default:
 		return nil, errors.New("invalid platform")
 	}
@@ -125,7 +126,7 @@ func ProcessOAuthLogin(as auth.AccountService, las auth.LinkAccountStore, ss aut
 	case auth.PlatformDiscord:
 		user, err = GetDiscordUser(token)
 	case auth.PlatformTwitch:
-		user, err = GetTwitchUser(token)
+		user, err = twitch.GetUser(token)
 	default:
 		return nil, errors.New("invalid platform")
 	}
@@ -170,7 +171,7 @@ func ProcessOAuthLink(r *http.Request, las auth.LinkAccountStore, code string, s
 	case auth.PlatformDiscord:
 		config = discordConfig
 	case auth.PlatformTwitch:
-		config = twitchConfig
+		config = twitch.Config
 	default:
 		return nil, errors.New("invalid platform")
 	}
@@ -185,7 +186,7 @@ func ProcessOAuthLink(r *http.Request, las auth.LinkAccountStore, code string, s
 	case auth.PlatformDiscord:
 		user, err = GetDiscordUser(token)
 	case auth.PlatformTwitch:
-		user, err = GetTwitchUser(token)
+		user, err = twitch.GetUser(token)
 	default:
 		return nil, errors.New("invalid platform")
 	}

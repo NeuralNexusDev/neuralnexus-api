@@ -143,7 +143,15 @@ func OAuthHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Ses
 			return
 		}
 
-		session, err := linking.ProcessOAuthLogin(as, las, ss, code, &state)
+		var session *auth.Session
+		switch state.Mode {
+		case linking.ModeLogin:
+			session, err = linking.ProcessOAuthLogin(as, las, ss, code, &state)
+		default:
+			log.Println("Invalid mode")
+			responses.BadRequest(w, r, "Invalid state")
+		}
+
 		if err != nil {
 			log.Println("Failed to process OAuth:\n\t", err)
 			responses.InternalServerError(w, r, "Authentication failed")
