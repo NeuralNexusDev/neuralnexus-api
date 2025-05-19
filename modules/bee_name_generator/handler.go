@@ -8,29 +8,8 @@ import (
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
-
-// ApplyRoutes - Apply the routes
-func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
-	store := NewStore(database.GetDB("bee_name_generator"))
-
-	db := database.GetDB("neuralnexus")
-	rdb := database.GetRedis()
-	authStore := auth.NewStore(db, rdb)
-	session := auth.NewSessionService(authStore)
-
-	mux.HandleFunc("GET /api/v1/bee-name-generator/name", GetBeeNameHandler(store))
-	mux.HandleFunc("POST /api/v1/bee-name-generator/name/{name}", mw.Auth(session, UploadBeeNameHandler(store)))
-	mux.HandleFunc("DELETE /api/v1/bee-name-generator/name/{name}", mw.Auth(session, DeleteBeeNameHandler(store)))
-	mux.HandleFunc("POST /api/v1/bee-name-generator/suggestion/{name}", SubmitBeeNameHandler(store))
-	mux.HandleFunc("GET /api/v1/bee-name-generator/suggestion", mw.Auth(session, GetBeeNameSuggestionsHandler(store)))
-	mux.HandleFunc("GET /api/v1/bee-name-generator/suggestion/{amount}", mw.Auth(session, GetBeeNameSuggestionsHandler(store)))
-	mux.HandleFunc("PUT /api/v1/bee-name-generator/suggestion/{name}", mw.Auth(session, AcceptBeeNameSuggestionHandler(store)))
-	mux.HandleFunc("DELETE /api/v1/bee-name-generator/suggestion/{name}", mw.Auth(session, RejectBeeNameSuggestionHandler(store)))
-	return mux
-}
 
 // GetBeeNameHandler Get a bee name
 func GetBeeNameHandler(s BNGStore) http.HandlerFunc {

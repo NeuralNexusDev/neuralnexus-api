@@ -11,23 +11,6 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
-// ApplyRoutes - Apply the routes
-func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
-	dsStore := NewStore(database.GetDB("neuralnexus"))
-	dsService := NewService(dsStore)
-
-	db := database.GetDB("neuralnexus")
-	rdb := database.GetRedis()
-	authStore := auth.NewStore(db, rdb)
-	session := auth.NewSessionService(authStore)
-
-	mux.Handle("POST /api/v1/datastore", mw.Auth(session, CreateDataStoreHandler(dsService)))
-	mux.Handle("GET /api/v1/datastore", ReadDataStoreHandler(dsService))
-	mux.Handle("PUT /api/v1/datastore", mw.Auth(session, UpdateDataStoreHandler(dsService)))
-	mux.Handle("DELETE /api/v1/datastore", mw.Auth(session, DeleteDataStoreHandler(dsService)))
-	return mux
-}
-
 // CreateDataStoreHandler - Create a new data store
 func CreateDataStoreHandler(s DSService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

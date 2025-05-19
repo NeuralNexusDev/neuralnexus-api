@@ -7,26 +7,8 @@ import (
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
-
-// ApplyRoutes - Apply the routes
-func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
-	nStore := NewStore(database.GetDB("neuralnexus"))
-	nService := NewService(nStore)
-
-	db := database.GetDB("neuralnexus")
-	rdb := database.GetRedis()
-	authStore := auth.NewStore(db, rdb)
-	session := auth.NewSessionService(authStore)
-
-	mux.Handle("POST /api/v1/datastore/number", mw.Auth(session, CreateNumberHandler(nService)))
-	mux.Handle("GET /api/v1/datastore/number", ReadNumberHandler(nService))
-	mux.Handle("PUT /api/v1/datastore/number", mw.Auth(session, UpdateNumberHandler(nService)))
-	mux.Handle("DELETE /api/v1/datastore/number", mw.Auth(session, DeleteNumberHandler(nService)))
-	return mux
-}
 
 // CreateNumberHandler - Create a new number
 func CreateNumberHandler(s NumberService) http.HandlerFunc {

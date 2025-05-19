@@ -206,23 +206,25 @@ func RequestLoggerMiddleware(next http.Handler) http.Handler {
 }
 
 // Auth - Authenticate requests
-func Auth(service auth.SessionService, next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		session, ok := r.Context().Value(SessionKey).(*auth.Session)
-		if !ok || session == nil {
-			responses.Unauthorized(w, r, "")
-			return
-		}
-
-		if !session.IsValid() {
-			responses.Unauthorized(w, r, "")
-			err := service.DeleteSession(session.ID)
-			if err != nil {
-				LogRequest(r, "Error deleting session:\n\t", err.Error())
+func Auth(service auth.SessionService) Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			session, ok := r.Context().Value(SessionKey).(*auth.Session)
+			if !ok || session == nil {
+				responses.Unauthorized(w, r, "")
+				return
 			}
-			return
-		}
 
-		next.ServeHTTP(w, r)
+			if !session.IsValid() {
+				responses.Unauthorized(w, r, "")
+				err := service.DeleteSession(session.ID)
+				if err != nil {
+					LogRequest(r, "Error deleting session:\n\t", err.Error())
+				}
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
 	}
 }

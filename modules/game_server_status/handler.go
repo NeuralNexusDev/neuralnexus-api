@@ -7,14 +7,6 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
-// ApplyRoutes - Apply the routes
-func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
-	service := NewService()
-	mux.HandleFunc("GET /api/v1/game-server-status/{game}", GameServerStatusHandler(service))
-	mux.HandleFunc("GET /api/v1/game-server-status/simple/{game}", SimpleGameServerStatus(service))
-	return mux
-}
-
 // GameServerStatusHandler - Get the game server status
 func GameServerStatusHandler(s GSSService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

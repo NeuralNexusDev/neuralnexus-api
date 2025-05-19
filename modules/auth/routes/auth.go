@@ -10,38 +10,8 @@ import (
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
-
-// -------------- Routes --------------
-
-// ApplyRoutes applies the auth routes
-func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
-	db := database.GetDB("neuralnexus")
-	rdb := database.GetRedis()
-	store := auth.NewStore(db, rdb)
-	account := auth.NewAccountService(store)
-	session := auth.NewSessionService(store)
-	user := auth.NewUserService(store)
-
-	rateLimitService := auth.NewRateLimitService(store)
-	rateLimit := mw.RateLimitMiddleware(rateLimitService, "login", 5, 5)
-
-	mux.Handle("POST /api/v1/auth/login", rateLimit(LoginHandler(account, session)))
-	mux.Handle("POST /api/v1/auth/logout", rateLimit(mw.Auth(session, LogoutHandler(session))))
-
-	mux.Handle("/api/oauth", rateLimit(OAuthHandler(account, store.LinkAccount(), session)))
-
-	mux.HandleFunc("GET /api/v1/users/{user_id}", mw.Auth(session, GetUserHandler(user)))
-	mux.HandleFunc("GET /api/v1/users/{user_id}/permissions", mw.Auth(session, GetUserPermissionsHandler(user)))
-	mux.HandleFunc("GET /api/v1/users/{platform}/{platform_id}", mw.Auth(session, GetUserFromPlatformHandler(user)))
-	mux.HandleFunc("PUT /api/v1/users/{user_id}", mw.Auth(session, UpdateUserHandler(user)))
-	mux.HandleFunc("PUT /api/v1/users/{platform}/{platform_id}", mw.Auth(session, UpdateUserFromPlatformHandler(user)))
-	// mux.HandleFunc("DELETE /api/v1/users/{user_id}", mw.Auth(session, DeleteUserHandler(service)))
-
-	return mux
-}
 
 // Login struct for login request
 type Login struct {

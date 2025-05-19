@@ -8,33 +8,8 @@ import (
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
-
-// ApplyRoutes - Apply routes to the router
-func ApplyRoutes(router *http.ServeMux) *http.ServeMux {
-	store := NewStore(database.GetDB("pet_pictures"))
-	service := NewService(store)
-
-	db := database.GetDB("neuralnexus")
-	rdb := database.GetRedis()
-	authStore := auth.NewStore(db, rdb)
-	session := auth.NewSessionService(authStore)
-
-	router.HandleFunc("POST /api/v1/pet-pictures/pets/{name}", mw.Auth(session, CreatePetHandler(service)))
-	router.HandleFunc("POST /api/v1/pet-pictures/pets", mw.Auth(session, CreatePetHandler(service)))
-	router.HandleFunc("GET /api/v1/pet-pictures/pets/{id}", GetPetHandler(service))
-	router.HandleFunc("GET /api/v1/pet-pictures/pets", GetPetHandler(service))
-	router.HandleFunc("PUT /api/v1/pet-pictures/pets", mw.Auth(session, UpdatePetHandler(service)))
-	router.HandleFunc("GET /api/v1/pet-pictures/pictures/random", GetRandPetPictureByNameHandler(service))
-	router.HandleFunc("GET /api/v1/pet-pictures/pictures/{id}", GetPetPictureHandler(service))
-	router.HandleFunc("GET /api/v1/pet-pictures/pictures", GetPetPictureHandler(service))
-	router.HandleFunc("PUT /api/v1/pet-pictures/pictures", mw.Auth(session, UpdatePetPictureHandler(service)))
-	router.HandleFunc("DELETE /api/v1/pet-pictures/pictures/{id}", mw.Auth(session, DeletePetPictureHandler(service)))
-	router.HandleFunc("DELETE /api/v1/pet-pictures/pictures", mw.Auth(session, DeletePetPictureHandler(service)))
-	return router
-}
 
 // CreatePetHandler - Create a new pet
 func CreatePetHandler(s PetPicService) http.HandlerFunc {
