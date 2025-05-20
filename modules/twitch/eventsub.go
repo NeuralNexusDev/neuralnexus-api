@@ -88,6 +88,14 @@ func HandleEventSub(eventsub EventSubService, tokens auth.OAuthTokenStore) http.
 		}
 		if vals == nil {
 			log.Println("EventSub challenge received, responding with challenge")
+			log.Println("EventSub verification challenge:", vals.Challenge)
+			log.Println("EventSub verification status:", vals.Subscription.Status)
+			log.Println("EventSub verification type:", vals.Subscription.Type)
+			log.Println("EventSub verification condition:", vals.Subscription.Condition)
+			log.Println("EventSub verification version:", vals.Subscription.ID)
+			log.Println("EventSub verification created at:", vals.Subscription.CreatedAt)
+			log.Println("EventSub verification cost:", vals.Subscription.Cost)
+			log.Println("EventSub verification event:", string(vals.Event))
 			err = eventsub.UpdateEventSubSubscriptionStatus(vals.Subscription.ID, helix.EventSubStatusEnabled)
 			if err != nil {
 				log.Println("Failed to update EventSub subscription:", err)
