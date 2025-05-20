@@ -56,8 +56,8 @@ func validateEventSubNotification(w http.ResponseWriter, r *http.Request, body [
 	messageType := strings.ToLower(r.Header.Get(EVENTSUB_MESSAGE_TYPE))
 	if vals.Challenge != "" && messageType == EventSubTypeVerification && vals.Subscription.Status == helix.EventSubStatusPending {
 		w.Header().Set("Content-Type", "text/plain")
-		w.Write([]byte(vals.Challenge))
 		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(vals.Challenge))
 		return nil, nil
 	}
 	return &vals, nil
