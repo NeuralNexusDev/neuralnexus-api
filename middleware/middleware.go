@@ -24,6 +24,8 @@ const (
 	SessionKey key = iota
 	// RequestIDKey - Key for request ID in context
 	RequestIDKey
+	// RemoteAddrKey - Key for remote address in context
+	RemoteAddrKey
 )
 
 const (
@@ -33,17 +35,21 @@ const (
 	CFConnectingIPHeader = "CF-Connecting-IP"
 )
 
-func LogRequest(r *http.Request, message ...string) {
-	requestId := r.Context().Value(RequestIDKey).(int)
-	session, ok := r.Context().Value(SessionKey).(*auth.Session)
+func LogRequest(ctx context.Context, message ...string) {
+	remoteAddr := ctx.Value(RemoteAddrKey).(string)
+	requestId := ctx.Value(RequestIDKey).(int)
+	session, ok := ctx.Value(SessionKey).(*auth.Session)
+	if !ok {
+		session = nil
+	}
 	userId := "N/A"
-	if ok && session != nil {
+	if session != nil {
 		userId = session.UserID
 	}
 	log.Printf("%d %s %s %s",
 		requestId,
 		userId,
-		r.RemoteAddr,
+		remoteAddr,
 		strings.Join(message, " "),
 	)
 }
@@ -81,6 +87,10 @@ func IPMiddleware(next http.Handler) http.Handler {
 			r.RemoteAddr = forwardedFor
 		}
 
+		ctx := r.Context()
+		ctx = context.WithValue(ctx, RemoteAddrKey, r.RemoteAddr)
+		r = r.WithContext(ctx)
+
 		next.ServeHTTP(w, r)
 	})
 }
@@ -98,7 +108,7 @@ func SessionMiddleware(service auth.SessionService) Middleware {
 				}
 				session, err := service.ReadJWT(authStrings[1])
 				if err != nil {
-					LogRequest(r, "Error reading JWT:\n\t", err.Error())
+					LogRequest(r.Context(), "Error reading JWT:\n\t", err.Error())
 					responses.Unauthorized(w, r, "")
 					return
 				}
@@ -107,7 +117,7 @@ func SessionMiddleware(service auth.SessionService) Middleware {
 					responses.Unauthorized(w, r, "")
 					err = service.DeleteSession(session.ID)
 					if err != nil {
-						LogRequest(r, "Error deleting session:\n\t", err.Error())
+						LogRequest(r.Context(), "Error deleting session:\n\t", err.Error())
 					}
 					return
 				}
@@ -115,7 +125,7 @@ func SessionMiddleware(service auth.SessionService) Middleware {
 				err = service.UpdateSession(session)
 				if err != nil {
 					responses.InternalServerError(w, r, "Error updating session")
-					LogRequest(r, "Error updating session:\n\t", err.Error())
+					LogRequest(r.Context(), "Error updating session:\n\t", err.Error())
 					return
 				}
 
@@ -137,11 +147,11 @@ func RateLimitMiddleware(service auth.RateLimitService, prefix string, sessionLi
 			if ok && session != nil {
 				err := service.IncrRateLimit(prefix + ":" + session.UserID)
 				if err != nil {
-					LogRequest(r, "Error incrementing rate limit:\n\t", err.Error())
+					LogRequest(r.Context(), "Error incrementing rate limit:\n\t", err.Error())
 				}
 				limit, err := service.GetRateLimit(prefix + ":" + session.UserID)
 				if err != nil {
-					LogRequest(r, "Error getting rate limit:\n\t", err.Error())
+					LogRequest(r.Context(), "Error getting rate limit:\n\t", err.Error())
 				}
 				if limit > sessionLimit {
 					responses.TooManyRequests(w, r, 60, "You have been rate limited. Please try again later.")
@@ -151,12 +161,12 @@ func RateLimitMiddleware(service auth.RateLimitService, prefix string, sessionLi
 				ip := strings.Split(r.RemoteAddr, ":")[0]
 				err := service.IncrRateLimit(prefix + ":" + ip)
 				if err != nil {
-					LogRequest(r, "Error incrementing rate limit:\n\t", err.Error())
+					LogRequest(r.Context(), "Error incrementing rate limit:\n\t", err.Error())
 					return
 				}
 				limit, err := service.GetRateLimit(prefix + ":" + ip)
 				if err != nil {
-					LogRequest(r, "Error getting rate limit:\n\t", err.Error())
+					LogRequest(r.Context(), "Error getting rate limit:\n\t", err.Error())
 					return
 				}
 				if limit > ipLimit {
@@ -196,7 +206,7 @@ func RequestLoggerMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(wrapped, r)
 
-		LogRequest(r, fmt.Sprintf("%d %s %s %s",
+		LogRequest(r.Context(), fmt.Sprintf("%d %s %s %s",
 			wrapped.statusCode,
 			r.Method,
 			r.URL.Path,
@@ -219,7 +229,7 @@ func Auth(service auth.SessionService) Middleware {
 				responses.Unauthorized(w, r, "")
 				err := service.DeleteSession(session.ID)
 				if err != nil {
-					LogRequest(r, "Error deleting session:\n\t", err.Error())
+					LogRequest(r.Context(), "Error deleting session:\n\t", err.Error())
 				}
 				return
 			}
