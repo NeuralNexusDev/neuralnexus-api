@@ -116,6 +116,7 @@ func HandleEventSub(eventsub EventSubService, tokens auth.OAuthTokenStore) http.
 		}
 
 		messageType := strings.ToLower(r.Header.Get(EVENTSUB_MESSAGE_TYPE))
+		mw.LogRequest(r.Context(), userId, "EventSub message type:", messageType)
 		switch messageType {
 		case EventSubTypeRevocation:
 			err = HandleRevocation(r.Context(), userId, eventsub, tokens, *vals)
@@ -125,7 +126,6 @@ func HandleEventSub(eventsub EventSubService, tokens auth.OAuthTokenStore) http.
 				return
 			}
 		case helix.EventSubTypeChannelFollow:
-			mw.LogRequest(r.Context(), userId, "EventSub channel follow received")
 			var followEvent helix.EventSubChannelFollowEvent
 			err = json.NewDecoder(bytes.NewReader(vals.Event)).Decode(&followEvent)
 			if err != nil {
@@ -153,7 +153,6 @@ func HandleEventSub(eventsub EventSubService, tokens auth.OAuthTokenStore) http.
 // HandleRevocation handles the EventSub revocation notifications
 func HandleRevocation(ctx context.Context, userId string, eventsub EventSubService, tokens auth.OAuthTokenStore, vals eventSubNotification) error {
 	var err error
-	mw.LogRequest(ctx, userId, "EventSub revocation received")
 	switch vals.Subscription.Status {
 	case helix.EventSubStatusAuthorizationRevoked:
 		mw.LogRequest(ctx, userId, "EventSub authorization revoked")
