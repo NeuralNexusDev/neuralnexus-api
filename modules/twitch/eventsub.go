@@ -35,6 +35,7 @@ const (
 	EventSubStatusVersionRemoved = "version_removed"
 )
 
+// eventSubNotification Outlines the structure of the EventSub notification
 type eventSubNotification struct {
 	Subscription helix.EventSubSubscription `json:"subscription"`
 	Challenge    string                     `json:"challenge"`
@@ -52,7 +53,6 @@ func validateEventSubNotification(w http.ResponseWriter, r *http.Request, body [
 		return nil, err
 	}
 	if vals.Subscription.CreatedAt.Before(time.Now().Add(-10 * time.Minute)) {
-		mw.LogRequest(r.Context(), "EventSub notification is older than 10 minutes")
 		return nil, errors.New("notification is too old")
 	}
 	messageType := strings.ToLower(r.Header.Get(EVENTSUB_MESSAGE_TYPE))
@@ -73,14 +73,16 @@ func HandleEventSub(eventsub EventSubService, tokens auth.OAuthTokenStore) http.
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get(EVENTSUB_MESSAGE_TYPE) == "" {
 			mw.LogRequest(r.Context(), "EventSub message type not set")
-			responses.BadRequest(w, r, "EventSub message type not set")
+			responses.BadRequest(w, r, "")
 			return
 		}
 
-		body, err := io.ReadAll(r.Body)
+		var err error
+		var body []byte
+		body, err = io.ReadAll(r.Body)
 		if err != nil {
 			mw.LogRequest(r.Context(), "Failed to read EventSub body:", err.Error())
-			responses.InternalServerError(w, r, "Failed to read EventSub body")
+			responses.BadRequest(w, r, "")
 			return
 		}
 		defer r.Body.Close()
@@ -88,23 +90,24 @@ func HandleEventSub(eventsub EventSubService, tokens auth.OAuthTokenStore) http.
 		vals, err := validateEventSubNotification(w, r, body)
 		if err != nil {
 			mw.LogRequest(r.Context(), "Failed to validate EventSub notification:", err.Error())
-			responses.InternalServerError(w, r, "Failed to validate EventSub notification")
+			responses.BadRequest(w, r, "")
 			return
 		}
 
+		var userId = vals.Subscription.Condition.BroadcasterUserID
 		switch vals.Subscription.Status {
 		case helix.EventSubStatusPending:
-			mw.LogRequest(r.Context(), "EventSub challenge received, responding with challenge")
+			mw.LogRequest(r.Context(), userId, "EventSub challenge received, responding with challenge")
 			err = eventsub.UpdateEventSubSubscriptionStatus(vals.Subscription.ID, helix.EventSubStatusEnabled)
 			if err != nil {
-				mw.LogRequest(r.Context(), "Failed to update EventSub subscription:", err.Error())
+				mw.LogRequest(r.Context(), userId, "Failed to update EventSub subscription:", err.Error())
 			}
 			return
 		case helix.EventSubStatusFailed:
-			mw.LogRequest(r.Context(), "EventSub verification failed")
+			mw.LogRequest(r.Context(), userId, "EventSub verification failed")
 			err = eventsub.RevokeEventSubSubscription(vals.Subscription.ID, vals.Subscription.Status)
 			if err != nil {
-				mw.LogRequest(r.Context(), "Failed to revoke EventSub subscription:", err.Error())
+				mw.LogRequest(r.Context(), userId, "Failed to revoke EventSub subscription:", err.Error())
 				responses.InternalServerError(w, r, "Failed to revoke EventSub subscription")
 				return
 			}
@@ -115,23 +118,32 @@ func HandleEventSub(eventsub EventSubService, tokens auth.OAuthTokenStore) http.
 		messageType := strings.ToLower(r.Header.Get(EVENTSUB_MESSAGE_TYPE))
 		switch messageType {
 		case EventSubTypeRevocation:
-			err = HandleRevocation(r.Context(), eventsub, tokens, *vals)
+			err = HandleRevocation(r.Context(), userId, eventsub, tokens, *vals)
 			if err != nil {
-				mw.LogRequest(r.Context(), "Failed to handle EventSub revocation:", err.Error())
+				mw.LogRequest(r.Context(), userId, "Failed to handle EventSub revocation:", err.Error())
 				responses.InternalServerError(w, r, "Failed to handle EventSub revocation")
 				return
 			}
 		case helix.EventSubTypeChannelFollow:
-			var userID = vals.Subscription.Condition.BroadcasterUserID
-			mw.LogRequest(r.Context(), userID, "EventSub channel follow received")
+			mw.LogRequest(r.Context(), userId, "EventSub channel follow received")
 			var followEvent helix.EventSubChannelFollowEvent
 			err = json.NewDecoder(bytes.NewReader(vals.Event)).Decode(&followEvent)
 			if err != nil {
-				mw.LogRequest(r.Context(), userID, "Failed to decode EventSub channel follow event:", err.Error())
+				mw.LogRequest(r.Context(), userId, "Failed to decode EventSub channel follow event:", err.Error())
 				responses.InternalServerError(w, r, "Failed to decode EventSub channel follow event")
 				return
 			}
 			log.Printf("User %s followed channel %s\n", followEvent.UserID, followEvent.BroadcasterUserID)
+		case helix.EventSubTypeChannelSubscription:
+			mw.LogRequest(r.Context(), userId, "EventSub channel subscription received")
+			var subscriptionEvent helix.EventSubChannelSubscribeEvent
+			err = json.NewDecoder(bytes.NewReader(vals.Event)).Decode(&subscriptionEvent)
+			if err != nil {
+				mw.LogRequest(r.Context(), userId, "Failed to decode EventSub channel subscription event:", err.Error())
+				responses.InternalServerError(w, r, "Failed to decode EventSub channel subscription event")
+				return
+			}
+			log.Printf("User %s subscribed to channel %s\n", subscriptionEvent.UserID, subscriptionEvent.BroadcasterUserID)
 		}
 
 		responses.NoContent(w, r)
@@ -139,30 +151,29 @@ func HandleEventSub(eventsub EventSubService, tokens auth.OAuthTokenStore) http.
 }
 
 // HandleRevocation handles the EventSub revocation notifications
-func HandleRevocation(ctx context.Context, eventsub EventSubService, tokens auth.OAuthTokenStore, vals eventSubNotification) error {
+func HandleRevocation(ctx context.Context, userId string, eventsub EventSubService, tokens auth.OAuthTokenStore, vals eventSubNotification) error {
 	var err error
-	var userID = vals.Subscription.Condition.BroadcasterUserID
-	mw.LogRequest(ctx, userID, "EventSub revocation received")
+	mw.LogRequest(ctx, userId, "EventSub revocation received")
 	switch vals.Subscription.Status {
 	case helix.EventSubStatusAuthorizationRevoked:
-		mw.LogRequest(ctx, userID, "EventSub authorization revoked")
+		mw.LogRequest(ctx, userId, "EventSub authorization revoked")
 		err = tokens.DeleteOAuthToken(vals.Subscription.Condition.BroadcasterUserID, auth.PlatformTwitch)
 		if err != nil {
-			mw.LogRequest(ctx, userID, "Failed to delete OAuth token:", err.Error())
+			mw.LogRequest(ctx, userId, "Failed to delete OAuth token:", err.Error())
 			return errors.New("failed to delete OAuth token")
 		}
 		fallthrough
 	case helix.EventSubStatusUserRemoved,
 		helix.EventSubStatusNotificationFailuresExceeded,
 		EventSubStatusVersionRemoved:
-		mw.LogRequest(ctx, userID, "EventSub subscription removed")
+		mw.LogRequest(ctx, userId, "EventSub subscription removed")
 		err = eventsub.RevokeEventSubSubscription(vals.Subscription.ID, vals.Subscription.Status)
 		if err != nil {
-			mw.LogRequest(ctx, userID, "Failed to revoke EventSub subscription:", err.Error())
+			mw.LogRequest(ctx, userId, "Failed to revoke EventSub subscription:", err.Error())
 			return errors.New("failed to revoke EventSub subscription")
 		}
 	default:
-		mw.LogRequest(ctx, userID, "EventSub unknown revocation status:", vals.Subscription.Status)
+		mw.LogRequest(ctx, userId, "EventSub unknown revocation status:", vals.Subscription.Status)
 		return errors.New("unknown EventSub revocation status")
 	}
 	return nil
