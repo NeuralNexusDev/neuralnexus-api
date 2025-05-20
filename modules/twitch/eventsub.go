@@ -31,6 +31,7 @@ var (
 const (
 	EVENTSUB_MESSAGE_TYPE        = "twitch-eventsub-message-type"
 	EventSubTypeRevocation       = "revocation"
+	EventSubTypeNotification     = "notification"
 	EventSubTypeVerification     = "webhook_callback_verification"
 	EventSubStatusVersionRemoved = "version_removed"
 )
@@ -116,8 +117,14 @@ func HandleEventSub(eventsub EventSubService, tokens auth.OAuthTokenStore) http.
 		}
 
 		messageType := strings.ToLower(r.Header.Get(EVENTSUB_MESSAGE_TYPE))
-		mw.LogRequest(r.Context(), userId, "EventSub message type:", messageType)
-		switch messageType {
+		if messageType != EventSubTypeNotification {
+			mw.LogRequest(r.Context(), userId, "Unexpected EventSub message type:", messageType)
+			responses.BadRequest(w, r, "")
+			return
+		}
+
+		mw.LogRequest(r.Context(), userId, "EventSub notification type:", vals.Subscription.Type)
+		switch vals.Subscription.Type {
 		case EventSubTypeRevocation:
 			err = HandleRevocation(r.Context(), userId, eventsub, tokens, *vals)
 			if err != nil {
