@@ -129,7 +129,9 @@ func ApplyRoutes(mux *http.ServeMux, nndb *pgxpool.Pool, session auth.SessionSer
 	mux.HandleFunc("GET /api/v1/teapot", teapot.HandleTeapot)
 
 	// --------------- Twitch ---------------
-	mux.HandleFunc("POST /api/v1/twitch/eventsub", twitch.HandleEventSub)
+	twitchStore := twitch.NewStore(database.GetDB("twitch"))
+	twitchService := twitch.NewService(twitchStore)
+	mux.HandleFunc("POST /api/v1/twitch/eventsub", twitch.HandleEventSub(twitchService, authStore.OAuthToken()))
 
 	// --------------- Health Check ---------------
 	mux.HandleFunc("GET /api/v1/health", func(w http.ResponseWriter, r *http.Request) {

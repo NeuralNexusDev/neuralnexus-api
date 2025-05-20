@@ -441,7 +441,7 @@ type OAuthTokenStore interface {
 	AddOAuthTokenToDB(token *OAuthToken) error
 	GetOAuthTokenByUserID(userID string, platform string) (*OAuthToken, error)
 	UpdateOAuthToken(token *OAuthToken) error
-	DeleteOAuthToken(userID string, platform string) error
+	DeleteOAuthToken(userID string, platform Platform) error
 }
 
 // AddOAuthTokenToDB adds an OAuth token to the database
@@ -481,7 +481,7 @@ func (s *store) UpdateOAuthToken(token *OAuthToken) error {
 }
 
 // DeleteOAuthToken deletes an OAuth token from the database
-func (s *store) DeleteOAuthToken(userID string, platform string) error {
+func (s *store) DeleteOAuthToken(userID string, platform Platform) error {
 	_, err := s.db.Exec(context.Background(), "DELETE FROM oauth_tokens WHERE user_id = $1 AND platform = $2", userID, platform)
 	if err != nil {
 		return err

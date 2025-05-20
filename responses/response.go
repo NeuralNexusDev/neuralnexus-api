@@ -83,9 +83,9 @@ func StructOK[T any](w http.ResponseWriter, r *http.Request, data T) {
 
 // NoContent -- Send a no content response as JSON or XML
 func NoContent(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusNoContent)
-	w.Write([]byte("{}"))
+	w.Write([]byte(""))
 }
 
 // BadRequest - Send and encode an invalid input problem

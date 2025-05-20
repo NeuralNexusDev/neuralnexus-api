@@ -3,6 +3,7 @@ package twitch
 import (
 	"bytes"
 	"errors"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"github.com/goccy/go-json"
 	"github.com/nicklaw5/helix/v2"
@@ -26,9 +27,10 @@ var (
 
 //goland:noinspection GoSnakeCaseUsage
 const (
-	EVENTSUB_MESSAGE_TYPE       = "twitch-eventsub-message-type"
-	EventSubTypeRevocation      = "revocation"
-	WebhookCallbackVerification = "webhook_callback_verification"
+	EVENTSUB_MESSAGE_TYPE        = "twitch-eventsub-message-type"
+	EventSubTypeRevocation       = "revocation"
+	EventSubTypeVerification     = "webhook_callback_verification"
+	EventSubStatusVersionRemoved = "version_removed"
 )
 
 type eventSubNotification struct {
@@ -52,41 +54,110 @@ func validateEventSubNotification(w http.ResponseWriter, r *http.Request, body [
 		return nil, errors.New("notification is too old")
 	}
 	messageType := strings.ToLower(r.Header.Get(EVENTSUB_MESSAGE_TYPE))
-	if vals.Challenge != "" && messageType == WebhookCallbackVerification {
+	if vals.Challenge != "" && messageType == EventSubTypeVerification && vals.Subscription.Status == helix.EventSubStatusPending {
+		w.Header().Set("Content-Type", "text/plain")
 		w.Write([]byte(vals.Challenge))
+		w.WriteHeader(http.StatusOK)
 		return nil, nil
 	}
 	return &vals, nil
 }
 
-func HandleEventSub(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		log.Println("failed to read EventSub body:", err)
-		return
-	}
-	defer r.Body.Close()
+// HandleEventSub handles the EventSub notifications
+func HandleEventSub(eventsub EventSubService, tokens auth.OAuthTokenStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get(EVENTSUB_MESSAGE_TYPE) == "" {
+			log.Println("EventSub message type not set")
+			responses.BadRequest(w, r, "EventSub message type not set")
+			return
+		}
 
-	vals, err := validateEventSubNotification(w, r, body)
-	if err != nil {
-		log.Println("failed to validate EventSub notification:", err)
-		w.WriteHeader(403)
-		return
-	}
-	if vals == nil {
-		log.Println("EventSub challenge received, responding with challenge")
-		return
-	}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			log.Println("Failed to read EventSub body:", err)
+			responses.InternalServerError(w, r, "Failed to read EventSub body")
+			return
+		}
+		defer r.Body.Close()
 
-	messageType := strings.ToLower(r.Header.Get(EVENTSUB_MESSAGE_TYPE))
-	switch messageType {
-	case EventSubTypeRevocation:
-		log.Println("EventSub revocation received")
-		// TODO: Handle revocation
+		vals, err := validateEventSubNotification(w, r, body)
+		if err != nil {
+			log.Println("Failed to validate EventSub notification:", err)
+			responses.InternalServerError(w, r, "Failed to validate EventSub notification")
+			return
+		}
+		if vals == nil {
+			log.Println("EventSub challenge received, responding with challenge")
+			err = eventsub.UpdateEventSubSubscriptionStatus(vals.Subscription.ID, helix.EventSubStatusEnabled)
+			if err != nil {
+				log.Println("Failed to update EventSub subscription:", err)
+			}
+			return
+		}
+
+		switch vals.Subscription.Status {
+		case helix.EventSubStatusFailed:
+			log.Println("EventSub verification failed")
+			err = eventsub.RevokeEventSubSubscription(vals.Subscription.ID, vals.Subscription.Status)
+			if err != nil {
+				log.Println("Failed to revoke EventSub subscription:", err)
+				responses.InternalServerError(w, r, "Failed to revoke EventSub subscription")
+				return
+			}
+			responses.NoContent(w, r)
+			return
+		}
+
+		messageType := strings.ToLower(r.Header.Get(EVENTSUB_MESSAGE_TYPE))
+		switch messageType {
+		case EventSubTypeRevocation:
+			err = HandleRevocation(eventsub, tokens, *vals)
+			if err != nil {
+				log.Println("Failed to handle EventSub revocation:", err)
+				responses.InternalServerError(w, r, "Failed to handle EventSub revocation")
+				return
+			}
+		case helix.EventSubTypeChannelFollow:
+			log.Println("EventSub channel follow received")
+			var followEvent helix.EventSubChannelFollowEvent
+			err = json.NewDecoder(bytes.NewReader(vals.Event)).Decode(&followEvent)
+			if err != nil {
+				log.Println("Failed to decode EventSub channel follow event:", err)
+				responses.InternalServerError(w, r, "Failed to decode EventSub channel follow event")
+				return
+			}
+			log.Printf("User %s followed channel %s\n", followEvent.UserID, followEvent.BroadcasterUserID)
+		}
+
+		responses.NoContent(w, r)
 	}
+}
 
-	//var followEvent helix.EventSubChannelFollowEvent
-	//err = json.NewDecoder(bytes.NewReader(vals.Event)).Decode(&followEvent)
-
-	responses.NoContent(w, r)
+// HandleRevocation handles the EventSub revocation notifications
+func HandleRevocation(eventsub EventSubService, tokens auth.OAuthTokenStore, vals eventSubNotification) error {
+	var err error
+	log.Println("EventSub revocation received")
+	switch vals.Subscription.Status {
+	case helix.EventSubStatusAuthorizationRevoked:
+		log.Println("EventSub authorization revoked")
+		err = tokens.DeleteOAuthToken(vals.Subscription.Condition.BroadcasterUserID, auth.PlatformTwitch)
+		if err != nil {
+			log.Println("failed to delete OAuth token:", err)
+			return errors.New("failed to delete OAuth token")
+		}
+		fallthrough
+	case helix.EventSubStatusUserRemoved,
+		helix.EventSubStatusNotificationFailuresExceeded,
+		EventSubStatusVersionRemoved:
+		log.Println("EventSub subscription removed")
+		err = eventsub.RevokeEventSubSubscription(vals.Subscription.ID, vals.Subscription.Status)
+		if err != nil {
+			log.Println("failed to revoke EventSub subscription:", err)
+			return errors.New("failed to revoke EventSub subscription")
+		}
+	default:
+		log.Println("EventSub unknown revocation status:", vals.Subscription.Status)
+		return errors.New("unknown EventSub revocation status")
+	}
+	return nil
 }
