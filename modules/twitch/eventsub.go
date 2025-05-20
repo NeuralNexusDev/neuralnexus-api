@@ -54,11 +54,14 @@ func validateEventSubNotification(w http.ResponseWriter, r *http.Request, body [
 		return nil, errors.New("notification is too old")
 	}
 	messageType := strings.ToLower(r.Header.Get(EVENTSUB_MESSAGE_TYPE))
-	if vals.Challenge != "" && messageType == EventSubTypeVerification && vals.Subscription.Status == helix.EventSubStatusPending {
-		w.Header().Set("Content-Type", "text/plain")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(vals.Challenge))
-		return nil, nil
+	if messageType == EventSubTypeVerification {
+		if vals.Challenge != "" && vals.Subscription.Status == helix.EventSubStatusPending {
+			w.Header().Set("Content-Type", "text/plain")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(vals.Challenge))
+			return &vals, nil
+		}
+		return nil, errors.New("invalid challenge")
 	}
 	return &vals, nil
 }
@@ -86,24 +89,15 @@ func HandleEventSub(eventsub EventSubService, tokens auth.OAuthTokenStore) http.
 			responses.InternalServerError(w, r, "Failed to validate EventSub notification")
 			return
 		}
-		if vals == nil {
+
+		switch vals.Subscription.Status {
+		case helix.EventSubStatusPending:
 			log.Println("EventSub challenge received, responding with challenge")
-			log.Println("EventSub verification challenge:", vals.Challenge)
-			log.Println("EventSub verification status:", vals.Subscription.Status)
-			log.Println("EventSub verification type:", vals.Subscription.Type)
-			log.Println("EventSub verification condition:", vals.Subscription.Condition)
-			log.Println("EventSub verification version:", vals.Subscription.ID)
-			log.Println("EventSub verification created at:", vals.Subscription.CreatedAt)
-			log.Println("EventSub verification cost:", vals.Subscription.Cost)
-			log.Println("EventSub verification event:", string(vals.Event))
 			err = eventsub.UpdateEventSubSubscriptionStatus(vals.Subscription.ID, helix.EventSubStatusEnabled)
 			if err != nil {
 				log.Println("Failed to update EventSub subscription:", err)
 			}
 			return
-		}
-
-		switch vals.Subscription.Status {
 		case helix.EventSubStatusFailed:
 			log.Println("EventSub verification failed")
 			err = eventsub.RevokeEventSubSubscription(vals.Subscription.ID, vals.Subscription.Status)
