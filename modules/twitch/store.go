@@ -32,14 +32,14 @@ func NewStore(db *pgxpool.Pool) Store {
 
 // EventSubEntry struct for storing EventSub subscription data
 type EventSubEntry struct {
-	ID        string    `json:"id"`
-	UserID    string    `json:"user_id"`
-	Status    string    `json:"status"`
-	Type      string    `json:"type"`
-	Version   int       `json:"version"`
-	CreatedAt time.Time `json:"created_at"`
-	RevokedAt time.Time `json:"revoked_at"`
-	Cost      int       `json:"cost"`
+	ID        string    `json:"id" db:"id"`
+	UserID    string    `json:"user_id" db:"user_id"`
+	Status    string    `json:"status" db:"status"`
+	Type      string    `json:"type" db:"type"`
+	Version   int       `json:"version" db:"version"`
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	RevokedAt time.Time `json:"revoked_at" db:"revoked_at"`
+	Cost      int       `json:"cost" db:"cost"`
 }
 
 // Store struct for storing Twitch data
