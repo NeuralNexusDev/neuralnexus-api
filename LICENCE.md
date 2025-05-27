@@ -6,7 +6,7 @@ FSL-1.1-MIT
 
 ## Notice
 
-Copyright 2024 Dylan Sperrer
+Copyright 2024-2025 Dylan Sperrer
 
 ## Terms and Conditions
 
