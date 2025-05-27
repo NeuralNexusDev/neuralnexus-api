@@ -29,7 +29,7 @@ const (
 )
 
 // HandleEventSub handles the EventSub notifications
-func HandleEventSub(eventsub EventSubService, tokens auth.OAuthTokenStore) http.HandlerFunc {
+func HandleEventSub(eventsub EventSubService, tokens auth.OAuthTokenStore, linked auth.LinkAccountStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get(EventSubMessageType) == "" {
 			mw.LogRequest(r.Context(), "EventSub message type not set")
@@ -62,7 +62,7 @@ func HandleEventSub(eventsub EventSubService, tokens auth.OAuthTokenStore) http.
 		case EventSubTypeVerification:
 			err = handleVerification(w, r.Context(), userId, eventsub, *vals)
 		case EventSubTypeNotification:
-			err = handleNotification(r.Context(), userId, eventsub, tokens, *vals)
+			err = handleNotification(r.Context(), userId, eventsub, tokens, *vals, linked)
 		default:
 			mw.LogRequest(r.Context(), userId, "Unexpected EventSub message type:", messageType)
 			responses.BadRequest(w, r, "")

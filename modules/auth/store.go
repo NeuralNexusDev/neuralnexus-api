@@ -311,7 +311,8 @@ type LinkAccountStore interface {
 	AddLinkedAccountToDB(la *LinkedAccount) error
 	UpdateLinkedAccount(la *LinkedAccount) error
 	GetLinkedAccountByPlatformID(platform Platform, platformID string) (*LinkedAccount, error)
-	GetLinkedAccountByUserID(userID string, platform string) (*LinkedAccount, error)
+	GetLinkedAccountByPlatformName(platform Platform, platformName string) (*LinkedAccount, error)
+	GetLinkedAccountByUserID(userID string, platform Platform) (*LinkedAccount, error)
 }
 
 // AddLinkedAccountToDB adds a linked account to the database
@@ -346,8 +347,22 @@ func (s *store) GetLinkedAccountByPlatformID(platform Platform, platformID strin
 	return al, nil
 }
 
+// GetLinkedAccountByPlatformName gets a linked account by name and platform
+func (s *store) GetLinkedAccountByPlatformName(platform Platform, platformName string) (*LinkedAccount, error) {
+	rows, err := s.db.Query(context.Background(), "SELECT * FROM linked_accounts WHERE platform = $1 AND platform_username = $2", platform, platformName)
+	if err != nil {
+		return nil, err
+	}
+
+	al, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[LinkedAccount])
+	if err != nil {
+		return nil, err
+	}
+	return al, nil
+}
+
 // GetLinkedAccountByUserID gets a linked account by user ID and platform
-func (s *store) GetLinkedAccountByUserID(userID string, platform string) (*LinkedAccount, error) {
+func (s *store) GetLinkedAccountByUserID(userID string, platform Platform) (*LinkedAccount, error) {
 	rows, err := s.db.Query(context.Background(), "SELECT * FROM linked_accounts WHERE user_id = $1 AND platform = $2", userID, platform)
 	if err != nil {
 		return nil, err

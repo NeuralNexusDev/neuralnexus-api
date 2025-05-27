@@ -10,6 +10,7 @@ import (
 	"github.com/nicklaw5/helix/v2"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -85,12 +86,12 @@ func handleVerification(w http.ResponseWriter, ctx context.Context, userId strin
 }
 
 // handleNotification handles the EventSub notifications
-func handleNotification(ctx context.Context, userId string, eventsub EventSubService, tokens auth.OAuthTokenStore, vals eventSubNotification) error {
+func handleNotification(ctx context.Context, userId string, eventsub EventSubService, tokens auth.OAuthTokenStore, vals eventSubNotification, linked auth.LinkAccountStore) error {
 	var err error
 	mw.LogRequest(ctx, userId, "EventSub notification type:", vals.Subscription.Type)
 	switch vals.Subscription.Type {
 	case helix.EventSubTypeChannelChatMessage:
-		err = handleChannelChatMessage(ctx, userId, eventsub, tokens, vals)
+		err = handleChannelChatMessage(ctx, userId, eventsub, tokens, vals, linked)
 	default:
 		mw.LogRequest(ctx, userId, "EventSub unknown notification type:", vals.Subscription.Type)
 		return errors.New("unknown EventSub notification type")
@@ -103,7 +104,7 @@ func handleNotification(ctx context.Context, userId string, eventsub EventSubSer
 }
 
 // handleChannelChatMessage handles the EventSub chat message notifications
-func handleChannelChatMessage(ctx context.Context, userId string, eventsub EventSubService, tokens auth.OAuthTokenStore, vals eventSubNotification) error {
+func handleChannelChatMessage(ctx context.Context, userId string, eventsub EventSubService, tokens auth.OAuthTokenStore, vals eventSubNotification, linked auth.LinkAccountStore) error {
 	var err error
 	var chatEvent helix.EventSubChannelChatMessageEvent
 	err = json.NewDecoder(bytes.NewReader(vals.Event)).Decode(&chatEvent)
@@ -111,6 +112,72 @@ func handleChannelChatMessage(ctx context.Context, userId string, eventsub Event
 		mw.LogRequest(ctx, userId, "Failed to decode EventSub chat message event:", err.Error())
 		return errors.New("failed to decode EventSub chat message event")
 	}
+
+	var message = chatEvent.Message.Text
+	if !strings.HasPrefix(message, "!") {
+		return nil
+	}
+
+	var args = strings.Split(message[1:], " ")
+	if len(args) < 1 {
+		mw.LogRequest(ctx, userId, "Chat message does not contain a command")
+		// return errors.New("chat message does not contain a command")
+	}
+	switch args[0] {
+	// !link platform platformNameOrId
+	case "link":
+		fromPlatform := auth.PlatformTwitch
+		fromPlatformId := chatEvent.ChatterUserID
+
+		toPlatform := auth.Platform(args[1])
+		toPlatformId := args[2]
+
+		if toPlatform == auth.PlatformMinecraft {
+			fromLinkedAccount, _ := linked.GetLinkedAccountByPlatformID(fromPlatform, fromPlatformId)
+			alreadyLinkedAccount, _ := linked.GetLinkedAccountByUserID(fromLinkedAccount.UserID, toPlatform)
+			toLinkedAccount, _ := linked.GetLinkedAccountByPlatformName(toPlatform, toPlatformId)
+
+			// Logic Matrix:
+			// 1. The Twitch user is already linked to this Minecraft account
+			// 2. The Twitch user is already linked to another Minecraft account
+
+			if fromLinkedAccount != nil && toLinkedAccount != nil && fromLinkedAccount.UserID == toLinkedAccount.UserID {
+				mw.LogRequest(ctx, userId, "Minecraft account is already linked to this user:", toLinkedAccount.PlatformUsername)
+				// return errors.New("user is already linked to Minecraft account")
+				// TODO: Reply with Twitch API
+				return nil
+			} else if fromLinkedAccount != nil && alreadyLinkedAccount != nil {
+				if alreadyLinkedAccount.PlatformUsername == toLinkedAccount.PlatformUsername {
+					mw.LogRequest(ctx, userId, "Minecraft account is already linked to this user:", alreadyLinkedAccount.PlatformUsername)
+					// return errors.New("user is already linked to Minecraft account")
+				}
+			} else if toLinkedAccount != nil {
+				mw.LogRequest(ctx, userId, "Minecraft account is already linked to another user:", toLinkedAccount.PlatformUsername)
+				// return errors.New("user is already linked to Minecraft account")
+				// TODO: Reply with Twitch API
+				return nil
+			} else if fromLinkedAccount != nil && fromLinkedAccount.Platform != fromPlatform {
+			}
+
+			// Check if the user is already linked to a Minecraft account
+			if fromLinkedAccount != nil {
+				tla, _ := linked.GetLinkedAccountByUserID(fromLinkedAccount.UserID, toPlatform)
+				if tla != nil {
+					mw.LogRequest(ctx, userId, "User is already linked to a Minecraft account:", tla.PlatformUsername)
+					// return errors.New("user is already linked to Minecraft account")
+					// TODO: Reply with Twitch API
+					return nil
+				}
+			}
+
+		} else {
+			mw.LogRequest(ctx, userId, "Unsupported platform for linking:", string(toPlatform))
+			// return errors.New("unsupported platform for linking")
+			// TODO: Reply with Twitch API
+			return nil
+		}
+	}
+
 	log.Printf("User %s sent a chat message in channel %s: %s\n", chatEvent.ChatterUserID, chatEvent.BroadcasterUserID, chatEvent.Message.Text)
 	return nil
 }
