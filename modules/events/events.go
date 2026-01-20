@@ -12,22 +12,30 @@ import (
 
 // CREATE DATABASE events;
 
-// CREATE TRIGGER update_event_log_modtime
-// BEFORE UPDATE ON event_log
-// FOR EACH ROW
-// EXECUTE PROCEDURE update_modified_column();
-
-// CREATE TABLE event_log (
-//    id BIG INT PRIMARY KEY NOT NULL,
-//    user_id INT NOT NULL,
-//    platform TEXT NOT NULL,
-//    type TEXT NOT NULL,
-//    status INT DEFAULT 0,
-//    payload JSONB,
-//    created_at TIMESTAMPTZ DEFAULT now(),
-//    updated_at TIMESTAMPTZ DEFAULT now()
-//   CONSTRAINT events_unique UNIQUE (id)
-// );
+//CREATE TABLE event_log (
+// id BIGINT PRIMARY KEY NOT NULL,
+// user_id BIGINT NOT NULL,
+// platform TEXT NOT NULL,
+// type TEXT NOT NULL,
+// status INT NOT NULL,
+// payload JSONB,
+// created_at TIMESTAMPTZ DEFAULT now(),
+// updated_at TIMESTAMPTZ DEFAULT now(),
+// CONSTRAINT events_unique UNIQUE (id)
+//);
+//
+//CREATE OR REPLACE FUNCTION update_modified_column()
+//RETURNS TRIGGER AS $$
+//BEGIN
+// NEW.updated_at = now();
+// RETURN NEW;
+//END;
+//$$ LANGUAGE plpgsql;
+//
+//CREATE TRIGGER update_event_log_modtime
+//BEFORE UPDATE ON event_log
+//FOR EACH ROW
+//EXECUTE PROCEDURE update_modified_column();
 
 type EventType string
 
