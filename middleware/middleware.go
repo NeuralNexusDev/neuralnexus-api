@@ -33,6 +33,8 @@ const (
 	XRequestIDHeader     = "X-Request-ID"
 	XForwardedForHeader  = "X-Forwarded-For"
 	CFConnectingIPHeader = "CF-Connecting-IP"
+
+	RetryAfter = 60
 )
 
 func LogRequest(ctx context.Context, message ...string) {
@@ -154,7 +156,7 @@ func RateLimitMiddleware(service auth.RateLimitService, prefix string, sessionLi
 					LogRequest(r.Context(), "Error getting rate limit:\n\t", err.Error())
 				}
 				if limit > sessionLimit {
-					responses.TooManyRequests(w, r, 60, "You have been rate limited. Please try again later.")
+					responses.TooManyRequests(w, r, RetryAfter, "You have been rate limited. Please try again later.")
 					return
 				}
 			} else {
@@ -170,7 +172,7 @@ func RateLimitMiddleware(service auth.RateLimitService, prefix string, sessionLi
 					return
 				}
 				if limit > ipLimit {
-					responses.TooManyRequests(w, r, 60, "You have been rate limited. Please try again later.")
+					responses.TooManyRequests(w, r, RetryAfter, "You have been rate limited. Please try again later.")
 					return
 				}
 			}
