@@ -139,6 +139,7 @@ type EventService interface {
 	GetEventsByPlatform(platform auth.Platform) ([]*Event, error)
 	CreateEvent(event *Event) error
 	UpdateEventStatus(id string, status EventStatus) error
+	ReplayEventById(id string) error
 }
 
 // service implements the EventService interface
@@ -175,3 +176,17 @@ func (s *service) UpdateEventStatus(id string, status EventStatus) error {
 	event.Status = status
 	return s.store.UpdateEvent(event)
 }
+
+// ReplayEventById replays an event based on an older event's ID
+func (s *service) ReplayEventById(id string) error {
+	event, err := s.store.GetEvent(id)
+	if err != nil {
+		return err
+	}
+	replay, err := NewEvent(event.UserID, event.Platform, event.Type, event.Payload)
+	if err != nil {
+		return err
+	}
+	return s.CreateEvent(replay)
+}
+
