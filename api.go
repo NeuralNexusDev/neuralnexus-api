@@ -1,15 +1,17 @@
 package main
 
 import (
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/twitch"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/rs/cors"
 	"log"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/twitch"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
+	"github.com/rs/cors"
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
@@ -20,6 +22,7 @@ import (
 	nds "github.com/NeuralNexusDev/neuralnexus-api/modules/datastore/numbers"
 	gss "github.com/NeuralNexusDev/neuralnexus-api/modules/game_server_status"
 	mcs "github.com/NeuralNexusDev/neuralnexus-api/modules/mcstatus"
+	mc "github.com/NeuralNexusDev/neuralnexus-api/modules/minecraft"
 	petpics "github.com/NeuralNexusDev/neuralnexus-api/modules/pet_pictures"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/projects"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/switchboard"
@@ -40,7 +43,13 @@ func NewAPIServer(address string, usingUDS bool) *APIServer {
 }
 
 // ApplyRoutes - Apply the routes to the API server
-func ApplyRoutes(mux *http.ServeMux, nndb *pgxpool.Pool, session auth.SessionService, authStore auth.Store, rateLimit auth.RateLimitService) *http.ServeMux {
+func ApplyRoutes(
+	mux *http.ServeMux,
+	nndb *pgxpool.Pool,
+	rdb *redis.Client,
+	session auth.SessionService,
+	authStore auth.Store,
+	rateLimit auth.RateLimitService) *http.ServeMux {
 	mwAuth := mw.Auth(session)
 
 	// --------------- Auth ---------------
@@ -95,6 +104,14 @@ func ApplyRoutes(mux *http.ServeMux, nndb *pgxpool.Pool, session auth.SessionSer
 	gssService := gss.NewService()
 	mux.Handle("GET /api/v1/game-server-status/{game}", gss.GameServerStatusHandler(gssService))
 	mux.Handle("GET /api/v1/game-server-status/simple/{game}", gss.SimpleGameServerStatus(gssService))
+
+	// --------------- Minecraft Player ---------------
+	mcStore := mc.NewStore(database.GetDB("archive"), rdb)
+	mcService := mc.NewService(mcStore, nil)
+
+	mux.Handle("GET /api/v1/mc/profile/lookup/name/{name}", mc.GetPlayerByNameHandler(mcService))
+	mux.Handle("GET /api/v1/mc/profile/lookup/{uuid}", mc.GetPlayerByUUIDHandler(mcService))
+	mux.Handle("POST /api/v1/mc/profile/lookup/bulk/byname", mc.GetPlayersByNamesHandler(mcService))
 
 	// --------------- Minecraft Status ---------------
 	mcsService := mcs.NewService()
@@ -159,7 +176,7 @@ func (s *APIServer) Setup() http.Handler {
 		mw.RequestLoggerMiddleware,
 	)
 
-	router := ApplyRoutes(http.NewServeMux(), db, session, authStore, rateLimit)
+	router := ApplyRoutes(http.NewServeMux(), db, rdb, session, authStore, rateLimit)
 
 	// --------------- Static Files ---------------
 	router.Handle("/", http.FileServer(http.Dir("./public")))
