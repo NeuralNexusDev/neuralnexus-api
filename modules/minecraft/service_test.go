@@ -13,27 +13,27 @@ import (
 // --- Mock Store ---
 
 type mockStore struct {
-	cache       map[string]*MCPlayer
-	db          map[string]*MCPlayer
+	cache       map[string]*Player
+	db          map[string]*Player
 	upsertErr   error
 	cacheSetErr error
 }
 
 func newMockStore() *mockStore {
 	return &mockStore{
-		cache: make(map[string]*MCPlayer),
-		db:    make(map[string]*MCPlayer),
+		cache: make(map[string]*Player),
+		db:    make(map[string]*Player),
 	}
 }
 
-func (m *mockStore) GetPlayerFromCache(key string) (*MCPlayer, error) {
+func (m *mockStore) GetPlayerFromCache(key string) (*Player, error) {
 	if p, ok := m.cache[key]; ok {
 		return p, nil
 	}
 	return nil, redis.Nil
 }
 
-func (m *mockStore) SetPlayerInCache(player *MCPlayer) error {
+func (m *mockStore) SetPlayerInCache(player *Player) error {
 	if m.cacheSetErr != nil {
 		return m.cacheSetErr
 	}
@@ -42,14 +42,14 @@ func (m *mockStore) SetPlayerInCache(player *MCPlayer) error {
 	return nil
 }
 
-func (m *mockStore) GetPlayerByUUID(id string) (*MCPlayer, error) {
+func (m *mockStore) GetPlayerByUUID(id string) (*Player, error) {
 	if p, ok := m.db[id]; ok {
 		return p, nil
 	}
 	return nil, errors.New("not found")
 }
 
-func (m *mockStore) GetPlayerByName(name string) (*MCPlayer, error) {
+func (m *mockStore) GetPlayerByName(name string) (*Player, error) {
 	for _, p := range m.db {
 		if p.Name == name {
 			return p, nil
@@ -58,7 +58,7 @@ func (m *mockStore) GetPlayerByName(name string) (*MCPlayer, error) {
 	return nil, errors.New("not found")
 }
 
-func (m *mockStore) UpsertPlayer(player *MCPlayer) error {
+func (m *mockStore) UpsertPlayer(player *Player) error {
 	if m.upsertErr != nil {
 		return m.upsertErr
 	}
@@ -89,7 +89,7 @@ func newTestService(store Store, server *httptest.Server) Service {
 
 func TestService_GetPlayerByName_CacheHit(t *testing.T) {
 	store := newMockStore()
-	player := &MCPlayer{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}
+	player := &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}
 	store.cache["jeb_"] = player
 
 	// Server should never be called on a cache hit
@@ -108,7 +108,7 @@ func TestService_GetPlayerByName_CacheHit(t *testing.T) {
 
 func TestService_GetPlayerByName_CacheMiss_MojangHit(t *testing.T) {
 	store := newMockStore()
-	mojangResponse := MCPlayer{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}
+	mojangResponse := Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}
 
 	server := newTestServer(http.StatusOK, mojangResponse)
 	defer server.Close()
@@ -151,7 +151,7 @@ func TestService_GetPlayerByName_NotFound(t *testing.T) {
 
 func TestService_GetPlayerByUUID_CacheHit(t *testing.T) {
 	store := newMockStore()
-	player := &MCPlayer{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}
+	player := &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}
 	store.cache[player.ID] = player
 
 	server := newTestServer(http.StatusInternalServerError, nil)
@@ -169,7 +169,7 @@ func TestService_GetPlayerByUUID_CacheHit(t *testing.T) {
 
 func TestService_GetPlayerByUUID_CacheMiss_MojangHit(t *testing.T) {
 	store := newMockStore()
-	mojangResponse := MCPlayer{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}
+	mojangResponse := Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}
 
 	server := newTestServer(http.StatusOK, mojangResponse)
 	defer server.Close()
@@ -186,8 +186,8 @@ func TestService_GetPlayerByUUID_CacheMiss_MojangHit(t *testing.T) {
 
 func TestService_GetPlayersByNames_AllCacheHits(t *testing.T) {
 	store := newMockStore()
-	store.cache["jeb_"] = &MCPlayer{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}
-	store.cache["Notch"] = &MCPlayer{ID: "069a79f444e94726a5befca90e38aaf5", Name: "Notch"}
+	store.cache["jeb_"] = &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}
+	store.cache["Notch"] = &Player{ID: "069a79f444e94726a5befca90e38aaf5", Name: "Notch"}
 
 	server := newTestServer(http.StatusInternalServerError, nil)
 	defer server.Close()

@@ -13,27 +13,27 @@ import (
 // --- Mock Service ---
 
 type mockService struct {
-	player  *MCPlayer
-	players []*MCPlayer
+	player  *Player
+	players []*Player
 	err     error
 }
 
-func (m *mockService) GetPlayerByName(_ string) (*MCPlayer, error) {
+func (m *mockService) GetPlayerByName(_ string) (*Player, error) {
 	return m.player, m.err
 }
 
-func (m *mockService) GetPlayerByUUID(_ string) (*MCPlayer, error) {
+func (m *mockService) GetPlayerByUUID(_ string) (*Player, error) {
 	return m.player, m.err
 }
 
-func (m *mockService) GetPlayersByNames(_ []string) ([]*MCPlayer, error) {
+func (m *mockService) GetPlayersByNames(_ []string) ([]*Player, error) {
 	return m.players, m.err
 }
 
 // --- Tests ---
 
 func TestHandler_GetPlayerByNameHandler_OK(t *testing.T) {
-	svc := &mockService{player: &MCPlayer{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}}
+	svc := &mockService{player: &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}}
 	handler := GetPlayerByNameHandler(svc)
 
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/lookup/name/jeb_", nil)
@@ -46,7 +46,7 @@ func TestHandler_GetPlayerByNameHandler_OK(t *testing.T) {
 		t.Errorf("expected 200, got %d", w.Code)
 	}
 
-	var got MCPlayer
+	var got Player
 	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestHandler_GetPlayerByNameHandler_InternalError(t *testing.T) {
 }
 
 func TestHandler_GetPlayerByUUIDHandler_OK(t *testing.T) {
-	svc := &mockService{player: &MCPlayer{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}}
+	svc := &mockService{player: &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}}
 	handler := GetPlayerByUUIDHandler(svc)
 
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/lookup/853c80ef3c3749fdaa49938b674adae6", nil)
@@ -116,7 +116,7 @@ func TestHandler_GetPlayerByUUIDHandler_NotFound(t *testing.T) {
 }
 
 func TestHandler_GetPlayersByNamesHandler_OK(t *testing.T) {
-	svc := &mockService{players: []*MCPlayer{
+	svc := &mockService{players: []*Player{
 		{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"},
 		{ID: "069a79f444e94726a5befca90e38aaf5", Name: "Notch"},
 	}}
@@ -132,7 +132,7 @@ func TestHandler_GetPlayersByNamesHandler_OK(t *testing.T) {
 		t.Errorf("expected 200, got %d", w.Code)
 	}
 
-	var got []*MCPlayer
+	var got []*Player
 	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}

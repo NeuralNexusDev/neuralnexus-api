@@ -27,9 +27,9 @@ const mojangLookupBulk = "https://api.minecraftservices.com/minecraft/profile/lo
 
 // Service - Minecraft player service
 type Service interface {
-	GetPlayerByName(name string) (*MCPlayer, error)
-	GetPlayerByUUID(id string) (*MCPlayer, error)
-	GetPlayersByNames(names []string) ([]*MCPlayer, error)
+	GetPlayerByName(name string) (*Player, error)
+	GetPlayerByUUID(id string) (*Player, error)
+	GetPlayersByNames(names []string) ([]*Player, error)
 }
 
 // service - Minecraft player service implementation
@@ -56,7 +56,7 @@ func NewService(store Store, client *http.Client) Service {
 }
 
 // GetPlayerByName gets a player by name, cache-first with Mojang fallback
-func (s *service) GetPlayerByName(name string) (*MCPlayer, error) {
+func (s *service) GetPlayerByName(name string) (*Player, error) {
 	cachePlayer, err := s.store.GetPlayerFromCache(name)
 	if err == nil {
 		return cachePlayer, nil
@@ -79,7 +79,7 @@ func (s *service) GetPlayerByName(name string) (*MCPlayer, error) {
 		return nil, errors.New("mojang API error: " + resp.Status)
 	}
 
-	var player MCPlayer
+	var player Player
 	if err := json.NewDecoder(resp.Body).Decode(&player); err != nil {
 		return nil, err
 	}
@@ -94,7 +94,7 @@ func (s *service) GetPlayerByName(name string) (*MCPlayer, error) {
 }
 
 // GetPlayerByUUID gets a player by UUID, cache-first with Mojang fallback
-func (s *service) GetPlayerByUUID(id string) (*MCPlayer, error) {
+func (s *service) GetPlayerByUUID(id string) (*Player, error) {
 	cachePlayer, err := s.store.GetPlayerFromCache(id)
 	if err == nil {
 		return cachePlayer, nil
@@ -117,7 +117,7 @@ func (s *service) GetPlayerByUUID(id string) (*MCPlayer, error) {
 		return nil, errors.New("mojang API error: " + resp.Status)
 	}
 
-	var player MCPlayer
+	var player Player
 	if err := json.NewDecoder(resp.Body).Decode(&player); err != nil {
 		return nil, err
 	}
@@ -133,7 +133,7 @@ func (s *service) GetPlayerByUUID(id string) (*MCPlayer, error) {
 
 // GetPlayersByNames gets players by name in batch, cache-first with Mojang fallback
 // Mojang batch endpoint is capped at 10 names per request
-func (s *service) GetPlayersByNames(names []string) ([]*MCPlayer, error) {
+func (s *service) GetPlayersByNames(names []string) ([]*Player, error) {
 	if len(names) == 0 {
 		return nil, errors.New("no names provided")
 	}
@@ -142,7 +142,7 @@ func (s *service) GetPlayersByNames(names []string) ([]*MCPlayer, error) {
 	}
 
 	// Check cache first, collect misses
-	players := make([]*MCPlayer, 0, len(names))
+	players := make([]*Player, 0, len(names))
 	misses := make([]string, 0, len(names))
 
 	for _, name := range names {
@@ -174,7 +174,7 @@ func (s *service) GetPlayersByNames(names []string) ([]*MCPlayer, error) {
 		return nil, errors.New("mojang API error: " + resp.Status)
 	}
 
-	var fetched []MCPlayer
+	var fetched []Player
 	if err := json.NewDecoder(resp.Body).Decode(&fetched); err != nil {
 		return nil, err
 	}

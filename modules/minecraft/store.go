@@ -14,11 +14,11 @@ const cacheTTL = 24 * time.Hour
 
 // Store - Minecraft player store
 type Store interface {
-	GetPlayerByUUID(id string) (*MCPlayer, error)
-	GetPlayerByName(name string) (*MCPlayer, error)
-	UpsertPlayer(player *MCPlayer) error
-	GetPlayerFromCache(key string) (*MCPlayer, error)
-	SetPlayerInCache(player *MCPlayer) error
+	GetPlayerByUUID(id string) (*Player, error)
+	GetPlayerByName(name string) (*Player, error)
+	UpsertPlayer(player *Player) error
+	GetPlayerFromCache(key string) (*Player, error)
+	SetPlayerInCache(player *Player) error
 }
 
 // store - Minecraft player store implementation
@@ -33,13 +33,13 @@ func NewStore(db *pgxpool.Pool, rdb *redis.Client) Store {
 }
 
 // GetPlayerByUUID gets a player by UUID from the database
-func (s *store) GetPlayerByUUID(id string) (*MCPlayer, error) {
+func (s *store) GetPlayerByUUID(id string) (*Player, error) {
 	rows, err := s.db.Query(context.Background(),
 		"SELECT id, name, legacy, demo, profile_actions, first_seen, last_seen FROM players WHERE id = $1", id)
 	if err != nil {
 		return nil, err
 	}
-	player, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[MCPlayer])
+	player, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Player])
 	if err != nil {
 		return nil, err
 	}
@@ -47,13 +47,13 @@ func (s *store) GetPlayerByUUID(id string) (*MCPlayer, error) {
 }
 
 // GetPlayerByName gets a player by name from the database
-func (s *store) GetPlayerByName(name string) (*MCPlayer, error) {
+func (s *store) GetPlayerByName(name string) (*Player, error) {
 	rows, err := s.db.Query(context.Background(),
 		"SELECT id, name, legacy, demo, profile_actions, first_seen, last_seen FROM players WHERE name = $1", name)
 	if err != nil {
 		return nil, err
 	}
-	player, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[MCPlayer])
+	player, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Player])
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +61,7 @@ func (s *store) GetPlayerByName(name string) (*MCPlayer, error) {
 }
 
 // UpsertPlayer upserts a player into the database and updates name history
-func (s *store) UpsertPlayer(player *MCPlayer) error {
+func (s *store) UpsertPlayer(player *Player) error {
 	now := time.Now().UnixMilli()
 
 	_, err := s.db.Exec(context.Background(), `
@@ -93,12 +93,12 @@ func (s *store) UpsertPlayer(player *MCPlayer) error {
 }
 
 // GetPlayerFromCache gets a player from the cache by key (uuid or name)
-func (s *store) GetPlayerFromCache(key string) (*MCPlayer, error) {
+func (s *store) GetPlayerFromCache(key string) (*Player, error) {
 	val, err := s.rdb.Get(context.Background(), "player:"+key).Result()
 	if err != nil {
 		return nil, err
 	}
-	var player MCPlayer
+	var player Player
 	if err := json.Unmarshal([]byte(val), &player); err != nil {
 		return nil, err
 	}
@@ -106,7 +106,7 @@ func (s *store) GetPlayerFromCache(key string) (*MCPlayer, error) {
 }
 
 // SetPlayerInCache sets a player in the cache under both uuid and name keys
-func (s *store) SetPlayerInCache(player *MCPlayer) error {
+func (s *store) SetPlayerInCache(player *Player) error {
 	data, err := json.Marshal(player)
 	if err != nil {
 		return err

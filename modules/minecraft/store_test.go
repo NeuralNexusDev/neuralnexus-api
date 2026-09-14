@@ -43,7 +43,7 @@ func setupStore(t *testing.T) Store {
 	return NewStore(db, rdb)
 }
 
-var testPlayer = &MCPlayer{
+var testPlayer = &Player{
 	ID:   "853c80ef3c3749fdaa49938b674adae6",
 	Name: "jeb_",
 }
@@ -100,7 +100,7 @@ func TestStore_UpsertPlayer_NameHistory(t *testing.T) {
 	}
 
 	// Simulate name change
-	renamed := &MCPlayer{ID: testPlayer.ID, Name: "jeb_renamed"}
+	renamed := &Player{ID: testPlayer.ID, Name: "jeb_renamed"}
 	if err := s.UpsertPlayer(renamed); err != nil {
 		t.Fatalf("upsert with new name failed: %v", err)
 	}
