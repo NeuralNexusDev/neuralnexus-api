@@ -2,10 +2,12 @@ package minecraft
 
 import (
 	"context"
+	"encoding/base64"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/goccy/go-json"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 )
@@ -35,7 +37,7 @@ func setupStore(t *testing.T) Store {
 	t.Cleanup(func() {
 		db.Exec(context.Background(), "DELETE FROM player_names WHERE player_id = '853c80ef-3c37-49fd-aa49-938b674adae6'")
 		db.Exec(context.Background(), "DELETE FROM players WHERE id = '853c80ef-3c37-49fd-aa49-938b674adae6'")
-		rdb.Del(context.Background(), "player:853c80ef3c3749fdaa49938b674adae6", "player:jeb_")
+		rdb.Del(context.Background(), CachePlayer+"853c80ef3c3749fdaa49938b674adae6", CachePlayer+"jeb_")
 		db.Close()
 		rdb.Close()
 	})
@@ -71,7 +73,7 @@ func TestStore_UpsertPlayer_Insert(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	got, err := s.GetPlayerByUUID(testPlayer.ID)
+	got, err := s.GetPlayerByUUID(testPlayer.ID, false)
 	if err != nil {
 		t.Fatalf("failed to get player: %v", err)
 	}
@@ -87,7 +89,7 @@ func TestStore_UpsertPlayer_UpdateLastSeen(t *testing.T) {
 		t.Fatalf("first upsert failed: %v", err)
 	}
 
-	got1, _ := s.GetPlayerByUUID(testPlayer.ID)
+	got1, _ := s.GetPlayerByUUID(testPlayer.ID, false)
 	firstSeen := got1.FirstSeen
 
 	// Small sleep to ensure last_seen differs
@@ -97,7 +99,7 @@ func TestStore_UpsertPlayer_UpdateLastSeen(t *testing.T) {
 		t.Fatalf("second upsert failed: %v", err)
 	}
 
-	got2, _ := s.GetPlayerByUUID(testPlayer.ID)
+	got2, _ := s.GetPlayerByUUID(testPlayer.ID, false)
 	if got2.FirstSeen != firstSeen {
 		t.Error("first_seen should not change on upsert")
 	}
@@ -124,7 +126,7 @@ func TestStore_UpsertPlayer_ProfileFields_NotUpdatedWithoutFlag(t *testing.T) {
 		t.Fatalf("upsert without profile failed: %v", err)
 	}
 
-	got, err := s.GetPlayerByUUID(testPlayer.ID)
+	got, err := s.GetPlayerByUUID(testPlayer.ID, false)
 	if err != nil {
 		t.Fatalf("failed to get player: %v", err)
 	}
@@ -158,7 +160,7 @@ func TestStore_UpsertPlayer_NameHistory(t *testing.T) {
 func TestStore_GetPlayerByUUID_NotFound(t *testing.T) {
 	s := setupStore(t)
 
-	_, err := s.GetPlayerByUUID("00000000000000000000000000000000")
+	_, err := s.GetPlayerByUUID("00000000000000000000000000000000", false)
 	if err == nil {
 		t.Error("expected error for unknown UUID")
 	}
@@ -167,7 +169,7 @@ func TestStore_GetPlayerByUUID_NotFound(t *testing.T) {
 func TestStore_GetPlayerByName_NotFound(t *testing.T) {
 	s := setupStore(t)
 
-	_, err := s.GetPlayerByName("nonexistent_player_xyz")
+	_, err := s.GetPlayerByName("nonexistent_player_xyz", false)
 	if err == nil {
 		t.Error("expected error for unknown name")
 	}
@@ -208,42 +210,151 @@ func TestStore_GetPlayerFromCache_Miss(t *testing.T) {
 	}
 }
 
-func TestStore_GetProfileFromCache_UnsignedVsSigned(t *testing.T) {
+func TestSetProfileInCache_Unsigned(t *testing.T) {
 	s := setupStore(t)
 
-	unsigned := &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}
-	signed := &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_signed"}
-
-	if err := s.SetProfileInCache(unsigned, false); err != nil {
-		t.Fatalf("failed to set unsigned cache: %v", err)
+	player := &Player{
+		ID:   "853c80ef3c3749fdaa49938b674adae6",
+		Name: "jeb_",
+		Properties: []Property{
+			{Name: TEXTURES, Value: encodedTextures(t, TexturesValue{
+				ProfileID:   "853c80ef3c3749fdaa49938b674adae6",
+				ProfileName: "jeb_",
+				Textures:    Textures{SKIN: &Texture{URL: "http://textures.minecraft.net/texture/abc123"}},
+			})},
+		},
 	}
-	if err := s.SetProfileInCache(signed, true); err != nil {
-		t.Fatalf("failed to set signed cache: %v", err)
+
+	if err := s.UpsertPlayer(player, false); err != nil {
+		t.Fatalf("failed to upsert player: %v", err)
+	}
+	if err := s.SetPlayerInCache(player); err != nil {
+		t.Fatalf("failed to set player in cache: %v", err)
+	}
+	if err := s.SetProfileInCache(player, false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 
-	gotUnsigned, err := s.GetProfileFromCache(unsigned.ID, false)
+	got, err := s.GetProfileFromCache(player.ID, false)
 	if err != nil {
-		t.Fatalf("failed to get unsigned profile: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if gotUnsigned.Name != "jeb_" {
-		t.Errorf("expected jeb_, got %s", gotUnsigned.Name)
+	if len(got.Properties) != 1 {
+		t.Fatalf("expected 1 property, got %d", len(got.Properties))
+	}
+	if got.Properties[0].Signature != "" {
+		t.Error("expected no signature on unsigned response")
 	}
 
-	gotSigned, err := s.GetProfileFromCache(signed.ID, true)
+	// Verify SignatureRequired is absent
+	decoded, err := base64.StdEncoding.DecodeString(got.Properties[0].Value)
 	if err != nil {
-		t.Fatalf("failed to get signed profile: %v", err)
+		t.Fatalf("failed to decode property value: %v", err)
 	}
-	if gotSigned.Name != "jeb_signed" {
-		t.Errorf("expected jeb_signed, got %s", gotSigned.Name)
+	var textures TexturesValue
+	if err := json.Unmarshal(decoded, &textures); err != nil {
+		t.Fatalf("failed to unmarshal textures: %v", err)
+	}
+	if textures.SignatureRequired {
+		t.Error("expected SignatureRequired to be absent on unsigned response")
 	}
 }
 
-func TestStore_GetProfileFromCache_Miss(t *testing.T) {
+func TestSetProfileInCache_Signed(t *testing.T) {
+	s := setupStore(t)
+
+	player := &Player{
+		ID:   "853c80ef3c3749fdaa49938b674adae6",
+		Name: "jeb_",
+		Properties: []Property{
+			{
+				Name: TEXTURES,
+				Value: encodedTextures(t, TexturesValue{
+					ProfileID:         "853c80ef3c3749fdaa49938b674adae6",
+					ProfileName:       "jeb_",
+					SignatureRequired: true,
+					Textures:          Textures{SKIN: &Texture{URL: "http://textures.minecraft.net/texture/abc123"}},
+				}),
+				Signature: "sig123",
+			},
+		},
+	}
+
+	if err := s.UpsertPlayer(player, false); err != nil {
+		t.Fatalf("failed to upsert player: %v", err)
+	}
+	if err := s.SetPlayerInCache(player); err != nil {
+		t.Fatalf("failed to set player in cache: %v", err)
+	}
+	if err := s.SetProfileInCache(player, true); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify unsigned cache has no signature and no SignatureRequired
+	gotUnsigned, err := s.GetProfileFromCache(player.ID, false)
+	if err != nil {
+		t.Fatalf("unexpected error getting unsigned: %v", err)
+	}
+	if gotUnsigned.Properties[0].Signature != "" {
+		t.Error("expected no signature on unsigned response")
+	}
+	decodedUnsigned, err := base64.StdEncoding.DecodeString(gotUnsigned.Properties[0].Value)
+	if err != nil {
+		t.Fatalf("failed to decode unsigned property value: %v", err)
+	}
+	var unsignedTextures TexturesValue
+	if err := json.Unmarshal(decodedUnsigned, &unsignedTextures); err != nil {
+		t.Fatalf("failed to unmarshal unsigned textures: %v", err)
+	}
+	if unsignedTextures.SignatureRequired {
+		t.Error("expected SignatureRequired to be absent on unsigned response")
+	}
+
+	// Verify signed cache has signature and SignatureRequired
+	gotSigned, err := s.GetProfileFromCache(player.ID, true)
+	if err != nil {
+		t.Fatalf("unexpected error getting signed: %v", err)
+	}
+	if gotSigned.Properties[0].Signature != "sig123" {
+		t.Errorf("expected sig123, got %s", gotSigned.Properties[0].Signature)
+	}
+	decodedSigned, err := base64.StdEncoding.DecodeString(gotSigned.Properties[0].Value)
+	if err != nil {
+		t.Fatalf("failed to decode signed property value: %v", err)
+	}
+	var signedTextures TexturesValue
+	if err := json.Unmarshal(decodedSigned, &signedTextures); err != nil {
+		t.Fatalf("failed to unmarshal signed textures: %v", err)
+	}
+	if !signedTextures.SignatureRequired {
+		t.Error("expected SignatureRequired to be true on signed response")
+	}
+}
+
+func TestGetProfileFromCache_Miss(t *testing.T) {
 	s := setupStore(t)
 
 	_, err := s.GetProfileFromCache("00000000000000000000000000000000", false)
 	if err == nil {
 		t.Error("expected cache miss error")
+	}
+}
+
+func TestGetProfileFromCache_MissingProperties(t *testing.T) {
+	s := setupStore(t)
+
+	player := &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}
+	if err := s.UpsertPlayer(player, false); err != nil {
+		t.Fatalf("failed to upsert player: %v", err)
+	}
+	if err := s.SetPlayerInCache(player); err != nil {
+		t.Fatalf("failed to set player in cache: %v", err)
+	}
+
+	// Player is in cache but properties are not
+	_, err := s.GetProfileFromCache(player.ID, false)
+	if err == nil {
+		t.Error("expected error when properties not cached")
 	}
 }
 

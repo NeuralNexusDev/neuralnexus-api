@@ -72,7 +72,19 @@ func (s *service) GetPlayerByName(name string) (*Player, error) {
 		return nil, err
 	}
 
-	// Cache miss — fetch from Mojang
+	// Cache miss — fetch from DB
+	dbPlayer, err := s.store.GetPlayerByName(name, false)
+	if err != nil {
+		return nil, err
+	}
+	if !dbPlayer.IsStale() {
+		if err := s.store.SetPlayerInCache(dbPlayer); err != nil {
+			return nil, err
+		}
+		return dbPlayer, nil
+	}
+
+	// Stale entry — fetch from Mojang
 	resp, err := s.client.Get(s.lookupByName + name)
 	if err != nil {
 		return nil, err
@@ -110,7 +122,19 @@ func (s *service) GetPlayerByUUID(id string) (*Player, error) {
 		return nil, err
 	}
 
-	// Cache miss — fetch from Mojang
+	// Cache miss — fetch from DB
+	dbPlayer, err := s.store.GetPlayerByUUID(id, false)
+	if err != nil {
+		return nil, err
+	}
+	if !dbPlayer.IsStale() {
+		if err := s.store.SetPlayerInCache(dbPlayer); err != nil {
+			return nil, err
+		}
+		return dbPlayer, nil
+	}
+
+	// Stale entry — fetch from Mojang
 	resp, err := s.client.Get(s.lookupByUUID + id)
 	if err != nil {
 		return nil, err
@@ -157,6 +181,16 @@ func (s *service) GetPlayersByNames(names []string) ([]*Player, error) {
 		if err == nil {
 			players = append(players, player)
 		} else {
+			// Cache miss — fetch from DB
+			player, _ := s.store.GetPlayerByName(name, false)
+			if player != nil && !player.IsStale() {
+				if err := s.store.SetPlayerInCache(player); err != nil {
+					return nil, err
+				}
+				players = append(players, player)
+			}
+
+			// Stale entry — fetch from Mojang
 			misses = append(misses, name)
 		}
 	}
@@ -165,7 +199,7 @@ func (s *service) GetPlayersByNames(names []string) ([]*Player, error) {
 		return players, nil
 	}
 
-	// Fetch misses from Mojang
+	// Fetch stale entries from Mojang
 	body, err := json.Marshal(misses)
 	if err != nil {
 		return nil, err
@@ -209,7 +243,21 @@ func (s *service) GetProfile(id string, signed bool) (*Player, error) {
 		return nil, err
 	}
 
-	// Cache miss — fetch from Mojang
+	// Cache miss — fetch from DB
+	if !signed {
+		dbPlayer, err := s.store.GetPlayerByUUID(id, true)
+		if err != nil {
+			return nil, err
+		}
+		if !dbPlayer.IsStale() {
+			if err := s.store.SetProfileInCache(dbPlayer, false); err != nil {
+				return nil, err
+			}
+			return dbPlayer, nil
+		}
+	}
+
+	// Stale entry — fetch from Mojang
 	url := s.lookupProfile + id
 	if signed {
 		url += "?unsigned=false"

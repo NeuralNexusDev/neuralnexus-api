@@ -45,9 +45,9 @@ func (m *mockStore) SetPlayerInCache(player *Player) error {
 }
 
 func (m *mockStore) GetProfileFromCache(id string, signed bool) (*Player, error) {
-	key := "player:profile:unsigned:" + id
+	key := CachePropertiesUnsigned + id
 	if signed {
-		key = "player:profile:signed:" + id
+		key = CachePropertiesSigned + id
 	}
 	if p, ok := m.profileCache[key]; ok {
 		return p, nil
@@ -59,22 +59,22 @@ func (m *mockStore) SetProfileInCache(player *Player, signed bool) error {
 	if m.cacheSetErr != nil {
 		return m.cacheSetErr
 	}
-	key := "player:profile:unsigned:" + player.ID
+	key := CachePropertiesUnsigned + player.ID
 	if signed {
-		key = "player:profile:signed:" + player.ID
+		key = CachePropertiesSigned + player.ID
 	}
 	m.profileCache[key] = player
 	return nil
 }
 
-func (m *mockStore) GetPlayerByUUID(id string) (*Player, error) {
+func (m *mockStore) GetPlayerByUUID(id string, _ bool) (*Player, error) {
 	if p, ok := m.db[id]; ok {
 		return p, nil
 	}
 	return nil, errors.New("not found")
 }
 
-func (m *mockStore) GetPlayerByName(name string) (*Player, error) {
+func (m *mockStore) GetPlayerByName(name string, _ bool) (*Player, error) {
 	for _, p := range m.db {
 		if p.Name == name {
 			return p, nil
@@ -263,7 +263,7 @@ func TestService_GetPlayersByNames_Empty(t *testing.T) {
 func TestService_GetProfile_CacheHit(t *testing.T) {
 	store := newMockStore()
 	player := &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}
-	store.profileCache["player:profile:unsigned:853c80ef3c3749fdaa49938b674adae6"] = player
+	store.profileCache[CachePropertiesUnsigned+"853c80ef3c3749fdaa49938b674adae6"] = player
 
 	server := newTestServer(http.StatusInternalServerError, nil)
 	defer server.Close()
@@ -331,8 +331,8 @@ func TestService_GetProfile_SignedVsUnsigned_CacheSeparation(t *testing.T) {
 	store := newMockStore()
 	unsigned := &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}
 	signed := &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_signed"}
-	store.profileCache["player:profile:unsigned:853c80ef3c3749fdaa49938b674adae6"] = unsigned
-	store.profileCache["player:profile:signed:853c80ef3c3749fdaa49938b674adae6"] = signed
+	store.profileCache[CachePropertiesUnsigned+"853c80ef3c3749fdaa49938b674adae6"] = unsigned
+	store.profileCache[CachePropertiesSigned+"853c80ef3c3749fdaa49938b674adae6"] = signed
 
 	server := newTestServer(http.StatusInternalServerError, nil)
 	defer server.Close()

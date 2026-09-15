@@ -108,3 +108,9 @@ type Model string
 
 // SLIM The only known value for Metadata.Model
 const SLIM Model = "slim"
+
+// PropertySignature - A property name and signature pair for cache storage
+type PropertySignature struct {
+	Name      PropertyName `json:"name"`
+	Signature string       `json:"signature"`
+}

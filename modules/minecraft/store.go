@@ -2,6 +2,7 @@ package minecraft
 
 import (
 	"context"
+	"encoding/base64"
 	"time"
 
 	"github.com/goccy/go-json"
@@ -10,12 +11,21 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-const cacheTTL = 24 * time.Hour
+const (
+	redisTTL           = 5 * time.Minute
+	stalenessThreshold = 24 * time.Hour
+)
+
+const (
+	CachePlayer             = "player:"
+	CachePropertiesSigned   = CachePlayer + "properties:signed:"
+	CachePropertiesUnsigned = CachePlayer + "properties:unsigned:"
+)
 
 // Store - Minecraft player store
 type Store interface {
-	GetPlayerByUUID(id string) (*Player, error)
-	GetPlayerByName(name string) (*Player, error)
+	GetPlayerByUUID(id string, includeProfile bool) (*Player, error)
+	GetPlayerByName(name string, includeProfile bool) (*Player, error)
 
 	UpsertPlayer(player *Player, updateProfile bool) error
 	UpsertTextures(value *TexturesValue) error
@@ -40,9 +50,16 @@ func NewStore(db *pgxpool.Pool, rdb *redis.Client) Store {
 }
 
 // GetPlayerByUUID gets a player by UUID from the database
-func (s *store) GetPlayerByUUID(id string) (*Player, error) {
-	rows, err := s.db.Query(context.Background(),
-		"SELECT id, name, legacy, demo, profile_actions, first_seen, last_seen FROM players WHERE id = $1", id)
+func (s *store) GetPlayerByUUID(id string, includeProfile bool) (*Player, error) {
+	var rows pgx.Rows
+	var err error
+	if includeProfile {
+		rows, err = s.db.Query(context.Background(),
+			"SELECT id, name, legacy, demo, profile_actions, first_seen, last_seen FROM players WHERE id = $1", id)
+	} else {
+		rows, err = s.db.Query(context.Background(),
+			"SELECT id, name, first_seen, last_seen FROM players WHERE id = $1", id)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -54,9 +71,16 @@ func (s *store) GetPlayerByUUID(id string) (*Player, error) {
 }
 
 // GetPlayerByName gets a player by name from the database
-func (s *store) GetPlayerByName(name string) (*Player, error) {
-	rows, err := s.db.Query(context.Background(),
-		"SELECT id, name, legacy, demo, profile_actions, first_seen, last_seen FROM players WHERE name = $1", name)
+func (s *store) GetPlayerByName(name string, includeProfile bool) (*Player, error) {
+	var rows pgx.Rows
+	var err error
+	if includeProfile {
+		rows, err = s.db.Query(context.Background(),
+			"SELECT id, name, legacy, demo, profile_actions, first_seen, last_seen FROM players WHERE name = $1", name)
+	} else {
+		rows, err = s.db.Query(context.Background(),
+			"SELECT id, name, first_seen, last_seen FROM players WHERE name = $1", name)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +163,7 @@ func (s *store) UpsertTextureHash(texture *Texture) error {
 
 // GetPlayerFromCache gets a player from the cache by key (uuid or name)
 func (s *store) GetPlayerFromCache(key string) (*Player, error) {
-	val, err := s.rdb.Get(context.Background(), "player:"+key).Result()
+	val, err := s.rdb.Get(context.Background(), CachePlayer+key).Result()
 	if err != nil {
 		return nil, err
 	}
@@ -158,38 +182,128 @@ func (s *store) SetPlayerInCache(player *Player) error {
 	}
 	blob := string(data)
 
-	if err := s.rdb.Set(context.Background(), "player:"+player.ID, blob, cacheTTL).Err(); err != nil {
+	if err := s.rdb.Set(context.Background(), CachePlayer+player.ID, blob, redisTTL).Err(); err != nil {
 		return err
 	}
-	return s.rdb.Set(context.Background(), "player:"+player.Name, blob, cacheTTL).Err()
+	return s.rdb.Set(context.Background(), CachePlayer+player.Name, blob, redisTTL).Err()
 }
 
 // GetProfileFromCache gets a player profile from the cache
 func (s *store) GetProfileFromCache(id string, signed bool) (*Player, error) {
-	key := "player:profile:unsigned:" + id
-	if signed {
-		key = "player:profile:signed:" + id
-	}
-	val, err := s.rdb.Get(context.Background(), key).Result()
+	player, err := s.GetPlayerFromCache(id)
 	if err != nil {
 		return nil, err
 	}
-	var player Player
-	if err := json.Unmarshal([]byte(val), &player); err != nil {
+
+	val, err := s.rdb.Get(context.Background(), CachePropertiesUnsigned+id).Result()
+	if err != nil {
 		return nil, err
 	}
-	return &player, nil
+	var properties []Property
+	if err := json.Unmarshal([]byte(val), &properties); err != nil {
+		return nil, err
+	}
+
+	var signatures []PropertySignature
+	if signed {
+		sigVal, err := s.rdb.Get(context.Background(), CachePropertiesSigned+id).Result()
+		if err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal([]byte(sigVal), &signatures); err != nil {
+			return nil, err
+		}
+	}
+
+	for i, prop := range properties {
+		if prop.Name != TEXTURES {
+			continue
+		}
+		if signed {
+			for _, sig := range signatures {
+				if sig.Name == prop.Name {
+					properties[i].Signature = sig.Signature
+					break
+				}
+			}
+			decoded, err := base64.StdEncoding.DecodeString(prop.Value)
+			if err != nil {
+				return nil, err
+			}
+			var textures TexturesValue
+			if err := json.Unmarshal(decoded, &textures); err != nil {
+				return nil, err
+			}
+			textures.SignatureRequired = true
+			reEncoded, err := json.Marshal(textures)
+			if err != nil {
+				return nil, err
+			}
+			properties[i].Value = base64.StdEncoding.EncodeToString(reEncoded)
+		}
+	}
+
+	player.Properties = properties
+	return player, nil
 }
 
 // SetProfileInCache sets a player profile in the cache
 func (s *store) SetProfileInCache(player *Player, signed bool) error {
-	key := "player:profile:unsigned:" + player.ID
-	if signed {
-		key = "player:profile:signed:" + player.ID
+	properties := make([]Property, len(player.Properties))
+	signatures := make([]PropertySignature, 0)
+
+	for i, prop := range player.Properties {
+		properties[i] = Property{Name: prop.Name, Value: prop.Value}
+
+		if signed {
+			if prop.Name == TEXTURES {
+				decoded, err := base64.StdEncoding.DecodeString(prop.Value)
+				if err != nil {
+					return err
+				}
+				var textures TexturesValue
+				if err := json.Unmarshal(decoded, &textures); err != nil {
+					return err
+				}
+				textures.SignatureRequired = false
+				reEncoded, err := json.Marshal(textures)
+				if err != nil {
+					return err
+				}
+				properties[i].Value = base64.StdEncoding.EncodeToString(reEncoded)
+			}
+
+			if prop.Signature != "" {
+				signatures = append(signatures, PropertySignature{
+					Name:      prop.Name,
+					Signature: prop.Signature,
+				})
+			}
+		}
 	}
-	data, err := json.Marshal(player)
+
+	propsData, err := json.Marshal(properties)
 	if err != nil {
 		return err
 	}
-	return s.rdb.Set(context.Background(), key, string(data), cacheTTL).Err()
+	if err := s.rdb.Set(context.Background(), CachePropertiesUnsigned+player.ID, string(propsData), redisTTL).Err(); err != nil {
+		return err
+	}
+
+	if signed && len(signatures) > 0 {
+		sigData, err := json.Marshal(signatures)
+		if err != nil {
+			return err
+		}
+		if err := s.rdb.Set(context.Background(), CachePropertiesSigned+player.ID, string(sigData), redisTTL).Err(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// IsStale returns true if the player's last_seen is older than the staleness threshold
+func (p *Player) IsStale() bool {
+	return time.Now().UnixMilli()-p.LastSeen > stalenessThreshold.Milliseconds()
 }
