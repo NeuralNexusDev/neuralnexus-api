@@ -91,7 +91,7 @@ func (s *service) GetPlayerByName(name string) (*Player, error) {
 		return nil, err
 	}
 
-	if err := s.store.UpsertPlayer(&player); err != nil {
+	if err := s.store.UpsertPlayer(&player, false); err != nil {
 		return nil, err
 	}
 	if err := s.store.SetPlayerInCache(&player); err != nil {
@@ -129,7 +129,7 @@ func (s *service) GetPlayerByUUID(id string) (*Player, error) {
 		return nil, err
 	}
 
-	if err := s.store.UpsertPlayer(&player); err != nil {
+	if err := s.store.UpsertPlayer(&player, false); err != nil {
 		return nil, err
 	}
 	if err := s.store.SetPlayerInCache(&player); err != nil {
@@ -187,7 +187,7 @@ func (s *service) GetPlayersByNames(names []string) ([]*Player, error) {
 	}
 
 	for i := range fetched {
-		if err := s.store.UpsertPlayer(&fetched[i]); err != nil {
+		if err := s.store.UpsertPlayer(&fetched[i], false); err != nil {
 			return nil, err
 		}
 		if err := s.store.SetPlayerInCache(&fetched[i]); err != nil {
@@ -236,7 +236,7 @@ func (s *service) GetProfile(id string, signed bool) (*Player, error) {
 	}
 
 	// Upsert player
-	if err := s.store.UpsertPlayer(&player); err != nil {
+	if err := s.store.UpsertPlayer(&player, true); err != nil {
 		return nil, err
 	}
 

@@ -67,7 +67,7 @@ var testPlayer = &Player{
 func TestStore_UpsertPlayer_Insert(t *testing.T) {
 	s := setupStore(t)
 
-	if err := s.UpsertPlayer(testPlayer); err != nil {
+	if err := s.UpsertPlayer(testPlayer, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -83,7 +83,7 @@ func TestStore_UpsertPlayer_Insert(t *testing.T) {
 func TestStore_UpsertPlayer_UpdateLastSeen(t *testing.T) {
 	s := setupStore(t)
 
-	if err := s.UpsertPlayer(testPlayer); err != nil {
+	if err := s.UpsertPlayer(testPlayer, false); err != nil {
 		t.Fatalf("first upsert failed: %v", err)
 	}
 
@@ -93,7 +93,7 @@ func TestStore_UpsertPlayer_UpdateLastSeen(t *testing.T) {
 	// Small sleep to ensure last_seen differs
 	time.Sleep(10 * time.Millisecond)
 
-	if err := s.UpsertPlayer(testPlayer); err != nil {
+	if err := s.UpsertPlayer(testPlayer, false); err != nil {
 		t.Fatalf("second upsert failed: %v", err)
 	}
 
@@ -106,16 +106,46 @@ func TestStore_UpsertPlayer_UpdateLastSeen(t *testing.T) {
 	}
 }
 
+func TestStore_UpsertPlayer_ProfileFields_NotUpdatedWithoutFlag(t *testing.T) {
+	s := setupStore(t)
+
+	full := &Player{
+		ID:     testPlayer.ID,
+		Name:   testPlayer.Name,
+		Legacy: true,
+		Demo:   true,
+	}
+	if err := s.UpsertPlayer(full, true); err != nil {
+		t.Fatalf("upsert with profile failed: %v", err)
+	}
+
+	// Now upsert without profile flag — legacy and demo should remain unchanged
+	if err := s.UpsertPlayer(testPlayer, false); err != nil {
+		t.Fatalf("upsert without profile failed: %v", err)
+	}
+
+	got, err := s.GetPlayerByUUID(testPlayer.ID)
+	if err != nil {
+		t.Fatalf("failed to get player: %v", err)
+	}
+	if !got.Legacy {
+		t.Error("legacy should not be overwritten when updateProfile is false")
+	}
+	if !got.Demo {
+		t.Error("demo should not be overwritten when updateProfile is false")
+	}
+}
+
 func TestStore_UpsertPlayer_NameHistory(t *testing.T) {
 	s := setupStore(t)
 
-	if err := s.UpsertPlayer(testPlayer); err != nil {
+	if err := s.UpsertPlayer(testPlayer, false); err != nil {
 		t.Fatalf("upsert failed: %v", err)
 	}
 
 	// Simulate name change
 	renamed := &Player{ID: testPlayer.ID, Name: "jeb_renamed"}
-	if err := s.UpsertPlayer(renamed); err != nil {
+	if err := s.UpsertPlayer(renamed, false); err != nil {
 		t.Fatalf("upsert with new name failed: %v", err)
 	}
 
@@ -248,7 +278,7 @@ func TestStore_UpsertTextures(t *testing.T) {
 	s := setupStore(t)
 
 	// Player must exist first
-	if err := s.UpsertPlayer(testPlayer); err != nil {
+	if err := s.UpsertPlayer(testPlayer, false); err != nil {
 		t.Fatalf("failed to upsert player: %v", err)
 	}
 
@@ -284,7 +314,7 @@ func TestStore_UpsertTextures(t *testing.T) {
 func TestStore_UpsertTextures_SlimModel(t *testing.T) {
 	s := setupStore(t)
 
-	if err := s.UpsertPlayer(testPlayer); err != nil {
+	if err := s.UpsertPlayer(testPlayer, false); err != nil {
 		t.Fatalf("failed to upsert player: %v", err)
 	}
 

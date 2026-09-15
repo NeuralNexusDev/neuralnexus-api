@@ -2,7 +2,6 @@ package minecraft
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/goccy/go-json"
@@ -18,7 +17,7 @@ type Store interface {
 	GetPlayerByUUID(id string) (*Player, error)
 	GetPlayerByName(name string) (*Player, error)
 
-	UpsertPlayer(player *Player) error
+	UpsertPlayer(player *Player, updateProfile bool) error
 	UpsertTextures(value *TexturesValue) error
 	UpsertTextureHash(hash *Texture) error
 
@@ -69,21 +68,34 @@ func (s *store) GetPlayerByName(name string) (*Player, error) {
 }
 
 // UpsertPlayer upserts a player into the database and updates name history
-func (s *store) UpsertPlayer(player *Player) error {
+func (s *store) UpsertPlayer(player *Player, updateProfile bool) error {
 	now := time.Now().UnixMilli()
 
-	_, err := s.db.Exec(context.Background(), `
-		INSERT INTO players (id, name, legacy, demo, profile_actions, first_seen, last_seen)
-		VALUES ($1, $2, $3, $4, $5, $6, $6)
-		ON CONFLICT (id) DO UPDATE SET
-			name           = EXCLUDED.name,
-			legacy         = EXCLUDED.legacy,
-			demo           = EXCLUDED.demo,
-			profile_actions = EXCLUDED.profile_actions,
-			last_seen      = EXCLUDED.last_seen
-		`,
-		player.ID, player.Name, player.Legacy, player.Demo, player.ProfileActions, now,
-	)
+	var err error
+	if updateProfile {
+		_, err = s.db.Exec(context.Background(), `
+			INSERT INTO players (id, name, legacy, demo, profile_actions, first_seen, last_seen)
+			VALUES ($1, $2, $3, $4, $5, $6, $6)
+			ON CONFLICT (id) DO UPDATE SET
+				name            = EXCLUDED.name,
+				legacy          = EXCLUDED.legacy,
+				demo            = EXCLUDED.demo,
+				profile_actions = EXCLUDED.profile_actions,
+				last_seen       = EXCLUDED.last_seen
+			`,
+			player.ID, player.Name, player.Legacy, player.Demo, player.ProfileActions, now,
+		)
+	} else {
+		_, err = s.db.Exec(context.Background(), `
+			INSERT INTO players (id, name, legacy, demo, profile_actions, first_seen, last_seen)
+			VALUES ($1, $2, false, false, '{}', $3, $3)
+			ON CONFLICT (id) DO UPDATE SET
+				name      = EXCLUDED.name,
+				last_seen = EXCLUDED.last_seen
+			`,
+			player.ID, player.Name, now,
+		)
+	}
 	if err != nil {
 		return err
 	}
@@ -120,15 +132,8 @@ func (s *store) UpsertTextures(value *TexturesValue) error {
 
 // UpsertTextureHash upserts a texture hash into the database
 func (s *store) UpsertTextureHash(texture *Texture) error {
-	if texture == nil {
-		return nil
-	}
-	hash := texture.Hash()
-	if hash == "" {
-		return errors.New("empty hash")
-	}
 	_, err := s.db.Exec(context.Background(),
-		"INSERT INTO textures (hash) VALUES ($1) ON CONFLICT (hash) DO NOTHING", hash)
+		"INSERT INTO textures (hash) VALUES ($1) ON CONFLICT (hash) DO NOTHING", texture.Hash())
 	return err
 }
 

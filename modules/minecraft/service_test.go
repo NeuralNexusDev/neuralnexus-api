@@ -83,7 +83,7 @@ func (m *mockStore) GetPlayerByName(name string) (*Player, error) {
 	return nil, errors.New("not found")
 }
 
-func (m *mockStore) UpsertPlayer(player *Player) error {
+func (m *mockStore) UpsertPlayer(player *Player, _ bool) error {
 	if m.upsertErr != nil {
 		return m.upsertErr
 	}
