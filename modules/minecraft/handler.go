@@ -82,3 +82,28 @@ func GetPlayersByNamesHandler(s Service) http.HandlerFunc {
 		responses.StructOK(w, r, players)
 	}
 }
+
+// GetProfileHandler - Get a player's profile from their UUID
+func GetProfileHandler(s Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("uuid")
+		if id == "" {
+			responses.BadRequest(w, r, "Invalid UUID")
+			return
+		}
+
+		signed := r.URL.Query().Get("unsigned") == "false"
+
+		player, err := s.GetProfile(id, signed)
+		if err != nil {
+			if errors.Is(err, ErrPlayerNotFound) {
+				responses.NotFound(w, r, "Player not found")
+				return
+			}
+			log.Println("Failed to get player profile:\n\t", err)
+			responses.InternalServerError(w, r, "Failed to get player profile")
+			return
+		}
+		responses.StructOK(w, r, player)
+	}
+}

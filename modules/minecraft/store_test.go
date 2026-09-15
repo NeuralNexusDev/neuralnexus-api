@@ -43,6 +43,20 @@ func setupStore(t *testing.T) Store {
 	return NewStore(db, rdb)
 }
 
+func setupRawDB(t *testing.T) *pgxpool.Pool {
+	t.Helper()
+	pgURL := os.Getenv("TEST_POSTGRES_URL")
+	if pgURL == "" {
+		t.Skip("TEST_POSTGRES_URL must be set to run store tests")
+	}
+	db, err := pgxpool.New(context.Background(), pgURL)
+	if err != nil {
+		t.Fatalf("failed to connect to postgres: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	return db
+}
+
 var testPlayer = &Player{
 	ID:   "853c80ef3c3749fdaa49938b674adae6",
 	Name: "jeb_",
@@ -161,5 +175,135 @@ func TestStore_GetPlayerFromCache_Miss(t *testing.T) {
 	_, err := s.GetPlayerFromCache("nonexistent_key")
 	if err == nil {
 		t.Error("expected cache miss error")
+	}
+}
+
+func TestStore_GetProfileFromCache_UnsignedVsSigned(t *testing.T) {
+	s := setupStore(t)
+
+	unsigned := &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}
+	signed := &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_signed"}
+
+	if err := s.SetProfileInCache(unsigned, false); err != nil {
+		t.Fatalf("failed to set unsigned cache: %v", err)
+	}
+	if err := s.SetProfileInCache(signed, true); err != nil {
+		t.Fatalf("failed to set signed cache: %v", err)
+	}
+
+	gotUnsigned, err := s.GetProfileFromCache(unsigned.ID, false)
+	if err != nil {
+		t.Fatalf("failed to get unsigned profile: %v", err)
+	}
+	if gotUnsigned.Name != "jeb_" {
+		t.Errorf("expected jeb_, got %s", gotUnsigned.Name)
+	}
+
+	gotSigned, err := s.GetProfileFromCache(signed.ID, true)
+	if err != nil {
+		t.Fatalf("failed to get signed profile: %v", err)
+	}
+	if gotSigned.Name != "jeb_signed" {
+		t.Errorf("expected jeb_signed, got %s", gotSigned.Name)
+	}
+}
+
+func TestStore_GetProfileFromCache_Miss(t *testing.T) {
+	s := setupStore(t)
+
+	_, err := s.GetProfileFromCache("00000000000000000000000000000000", false)
+	if err == nil {
+		t.Error("expected cache miss error")
+	}
+}
+
+func TestStore_UpsertTextureHash(t *testing.T) {
+	s := setupStore(t)
+
+	tex := &Texture{URL: "http://textures.minecraft.net/texture/abc123"}
+	if err := s.UpsertTextureHash(tex); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Second upsert should not error
+	if err := s.UpsertTextureHash(tex); err != nil {
+		t.Fatalf("unexpected error on duplicate: %v", err)
+	}
+
+	t.Cleanup(func() {
+		db := setupRawDB(t)
+		db.Exec(context.Background(), "DELETE FROM textures WHERE hash = 'abc123'")
+	})
+}
+
+func TestStore_UpsertTextureHash_Nil(t *testing.T) {
+	s := setupStore(t)
+
+	if err := s.UpsertTextureHash(nil); err != nil {
+		t.Errorf("expected nil error for nil texture, got %v", err)
+	}
+}
+
+func TestStore_UpsertTextures(t *testing.T) {
+	s := setupStore(t)
+
+	// Player must exist first
+	if err := s.UpsertPlayer(testPlayer); err != nil {
+		t.Fatalf("failed to upsert player: %v", err)
+	}
+
+	skin := &Texture{URL: "http://textures.minecraft.net/texture/skin123"}
+	cape := &Texture{URL: "http://textures.minecraft.net/texture/cape456"}
+
+	if err := s.UpsertTextureHash(skin); err != nil {
+		t.Fatalf("failed to upsert skin hash: %v", err)
+	}
+	if err := s.UpsertTextureHash(cape); err != nil {
+		t.Fatalf("failed to upsert cape hash: %v", err)
+	}
+
+	value := &TexturesValue{
+		Timestamp: 1234567890000,
+		ProfileID: testPlayer.ID,
+		Textures: Textures{
+			SKIN: skin,
+			CAPE: cape,
+		},
+	}
+
+	if err := s.UpsertTextures(value); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Second upsert should update last_seen without error
+	if err := s.UpsertTextures(value); err != nil {
+		t.Fatalf("unexpected error on duplicate: %v", err)
+	}
+}
+
+func TestStore_UpsertTextures_SlimModel(t *testing.T) {
+	s := setupStore(t)
+
+	if err := s.UpsertPlayer(testPlayer); err != nil {
+		t.Fatalf("failed to upsert player: %v", err)
+	}
+
+	skin := &Texture{
+		URL:      "http://textures.minecraft.net/texture/slim123",
+		Metadata: &Metadata{Model: SLIM},
+	}
+
+	if err := s.UpsertTextureHash(skin); err != nil {
+		t.Fatalf("failed to upsert skin hash: %v", err)
+	}
+
+	value := &TexturesValue{
+		Timestamp: 1234567890000,
+		ProfileID: testPlayer.ID,
+		Textures:  Textures{SKIN: skin},
+	}
+
+	if err := s.UpsertTextures(value); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

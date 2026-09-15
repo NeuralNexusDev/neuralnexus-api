@@ -112,6 +112,7 @@ func ApplyRoutes(
 	mux.Handle("GET /api/v1/mc/profile/lookup/name/{name}", mc.GetPlayerByNameHandler(mcService))
 	mux.Handle("GET /api/v1/mc/profile/lookup/{uuid}", mc.GetPlayerByUUIDHandler(mcService))
 	mux.Handle("POST /api/v1/mc/profile/lookup/bulk/byname", mc.GetPlayersByNamesHandler(mcService))
+	mux.Handle("GET /api/v1/mc/profile/{uuid}", mc.GetProfileHandler(mcService))
 
 	// --------------- Minecraft Status ---------------
 	mcsService := mcs.NewService()

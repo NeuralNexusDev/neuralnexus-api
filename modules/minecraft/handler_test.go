@@ -30,6 +30,10 @@ func (m *mockService) GetPlayersByNames(_ []string) ([]*Player, error) {
 	return m.players, m.err
 }
 
+func (m *mockService) GetProfile(_ string, _ bool) (*Player, error) {
+	return m.player, m.err
+}
+
 // --- Tests ---
 
 func TestHandler_GetPlayerByNameHandler_OK(t *testing.T) {
@@ -183,5 +187,50 @@ func TestHandler_GetPlayersByNamesHandler_TooMany(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandler_GetProfileHandler_OK(t *testing.T) {
+	svc := &mockService{player: &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}}
+	handler := GetProfileHandler(svc)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/853c80ef3c3749fdaa49938b674adae6", nil)
+	r.SetPathValue("uuid", "853c80ef3c3749fdaa49938b674adae6")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestHandler_GetProfileHandler_Signed(t *testing.T) {
+	svc := &mockService{player: &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}}
+	handler := GetProfileHandler(svc)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/853c80ef3c3749fdaa49938b674adae6?unsigned=false", nil)
+	r.SetPathValue("uuid", "853c80ef3c3749fdaa49938b674adae6")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestHandler_GetProfileHandler_NotFound(t *testing.T) {
+	svc := &mockService{err: ErrPlayerNotFound}
+	handler := GetProfileHandler(svc)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/853c80ef3c3749fdaa49938b674adae6", nil)
+	r.SetPathValue("uuid", "853c80ef3c3749fdaa49938b674adae6")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", w.Code)
 	}
 }

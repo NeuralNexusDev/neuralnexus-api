@@ -2,6 +2,7 @@ package minecraft
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/goccy/go-json"
@@ -16,9 +17,16 @@ const cacheTTL = 24 * time.Hour
 type Store interface {
 	GetPlayerByUUID(id string) (*Player, error)
 	GetPlayerByName(name string) (*Player, error)
+
 	UpsertPlayer(player *Player) error
+	UpsertTextures(value *TexturesValue) error
+	UpsertTextureHash(hash *Texture) error
+
 	GetPlayerFromCache(key string) (*Player, error)
 	SetPlayerInCache(player *Player) error
+
+	GetProfileFromCache(id string, signed bool) (*Player, error)
+	SetProfileInCache(player *Player, signed bool) error
 }
 
 // store - Minecraft player store implementation
@@ -92,6 +100,38 @@ func (s *store) UpsertPlayer(player *Player) error {
 	return err
 }
 
+// UpsertTextures upserts a player's skin and cape into the database
+func (s *store) UpsertTextures(value *TexturesValue) error {
+	skin := value.Textures.SKIN
+	var model *Model
+	if skin.Metadata != nil {
+		model = &skin.Metadata.Model
+	}
+	cape := value.Textures.CAPE
+
+	_, err := s.db.Exec(context.Background(), `
+		INSERT INTO player_textures (player_id, skin, model, cape, first_seen, last_seen)
+		VALUES ($1, $2, $3, $4, $5, $5)
+		ON CONFLICT ON CONSTRAINT player_textures_unique DO UPDATE SET
+			last_seen = EXCLUDED.last_seen
+		`, value.ProfileID, skin.Hash(), model, cape.Hash(), value.Timestamp)
+	return err
+}
+
+// UpsertTextureHash upserts a texture hash into the database
+func (s *store) UpsertTextureHash(texture *Texture) error {
+	if texture == nil {
+		return nil
+	}
+	hash := texture.Hash()
+	if hash == "" {
+		return errors.New("empty hash")
+	}
+	_, err := s.db.Exec(context.Background(),
+		"INSERT INTO textures (hash) VALUES ($1) ON CONFLICT (hash) DO NOTHING", hash)
+	return err
+}
+
 // GetPlayerFromCache gets a player from the cache by key (uuid or name)
 func (s *store) GetPlayerFromCache(key string) (*Player, error) {
 	val, err := s.rdb.Get(context.Background(), "player:"+key).Result()
@@ -117,4 +157,34 @@ func (s *store) SetPlayerInCache(player *Player) error {
 		return err
 	}
 	return s.rdb.Set(context.Background(), "player:"+player.Name, blob, cacheTTL).Err()
+}
+
+// GetProfileFromCache gets a player profile from the cache
+func (s *store) GetProfileFromCache(id string, signed bool) (*Player, error) {
+	key := "player:profile:unsigned:" + id
+	if signed {
+		key = "player:profile:signed:" + id
+	}
+	val, err := s.rdb.Get(context.Background(), key).Result()
+	if err != nil {
+		return nil, err
+	}
+	var player Player
+	if err := json.Unmarshal([]byte(val), &player); err != nil {
+		return nil, err
+	}
+	return &player, nil
+}
+
+// SetProfileInCache sets a player profile in the cache
+func (s *store) SetProfileInCache(player *Player, signed bool) error {
+	key := "player:profile:unsigned:" + player.ID
+	if signed {
+		key = "player:profile:signed:" + player.ID
+	}
+	data, err := json.Marshal(player)
+	if err != nil {
+		return err
+	}
+	return s.rdb.Set(context.Background(), key, string(data), cacheTTL).Err()
 }

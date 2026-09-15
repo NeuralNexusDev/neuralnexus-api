@@ -2,6 +2,7 @@ package minecraft
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"strings"
 
@@ -25,20 +26,25 @@ const mojangLookupByUUID = "https://api.minecraftservices.com/minecraft/profile/
 //	https://api.mojang.com/minecraft/profile/lookup/bulk/byname
 const mojangLookupBulk = "https://api.minecraftservices.com/minecraft/profile/lookup/bulk/byname"
 
+// https://sessionserver.mojang.com/session/minecraft/profile/
+const mojangLookupProfile = "https://sessionserver.mojang.com/session/minecraft/profile/"
+
 // Service - Minecraft player service
 type Service interface {
 	GetPlayerByName(name string) (*Player, error)
 	GetPlayerByUUID(id string) (*Player, error)
 	GetPlayersByNames(names []string) ([]*Player, error)
+	GetProfile(id string, signed bool) (*Player, error)
 }
 
 // service - Minecraft player service implementation
 type service struct {
-	store        Store
-	client       *http.Client
-	lookupByName string
-	lookupByUUID string
-	lookupBulk   string
+	store         Store
+	client        *http.Client
+	lookupByName  string
+	lookupByUUID  string
+	lookupBulk    string
+	lookupProfile string
 }
 
 // NewService - Create a new Minecraft player service
@@ -47,19 +53,20 @@ func NewService(store Store, client *http.Client) Service {
 		client = http.DefaultClient
 	}
 	return &service{
-		store:        store,
-		client:       client,
-		lookupByName: mojangLookupByName,
-		lookupByUUID: mojangLookupByUUID,
-		lookupBulk:   mojangLookupBulk,
+		store:         store,
+		client:        client,
+		lookupByName:  mojangLookupByName,
+		lookupByUUID:  mojangLookupByUUID,
+		lookupBulk:    mojangLookupBulk,
+		lookupProfile: mojangLookupProfile,
 	}
 }
 
 // GetPlayerByName gets a player by name, cache-first with Mojang fallback
 func (s *service) GetPlayerByName(name string) (*Player, error) {
-	cachePlayer, err := s.store.GetPlayerFromCache(name)
+	cached, err := s.store.GetPlayerFromCache(name)
 	if err == nil {
-		return cachePlayer, nil
+		return cached, nil
 	}
 	if !errors.Is(err, redis.Nil) {
 		return nil, err
@@ -95,9 +102,9 @@ func (s *service) GetPlayerByName(name string) (*Player, error) {
 
 // GetPlayerByUUID gets a player by UUID, cache-first with Mojang fallback
 func (s *service) GetPlayerByUUID(id string) (*Player, error) {
-	cachePlayer, err := s.store.GetPlayerFromCache(id)
+	cached, err := s.store.GetPlayerFromCache(id)
 	if err == nil {
-		return cachePlayer, nil
+		return cached, nil
 	}
 	if !errors.Is(err, redis.Nil) {
 		return nil, err
@@ -190,4 +197,67 @@ func (s *service) GetPlayersByNames(names []string) ([]*Player, error) {
 	}
 
 	return players, nil
+}
+
+// GetProfile gets a full player profile including properties
+func (s *service) GetProfile(id string, signed bool) (*Player, error) {
+	cached, err := s.store.GetProfileFromCache(id, signed)
+	if err == nil {
+		return cached, nil
+	}
+	if !errors.Is(err, redis.Nil) {
+		return nil, err
+	}
+
+	// Cache miss — fetch from Mojang
+	url := s.lookupProfile + id
+	if signed {
+		url += "?unsigned=false"
+	}
+	resp, err := s.client.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, ErrPlayerNotFound
+	}
+	if resp.StatusCode == http.StatusNoContent {
+		return nil, ErrPlayerNotFound
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.New("mojang API error: " + resp.Status)
+	}
+
+	var player Player
+	if err := json.NewDecoder(resp.Body).Decode(&player); err != nil {
+		return nil, err
+	}
+
+	// Upsert player
+	if err := s.store.UpsertPlayer(&player); err != nil {
+		return nil, err
+	}
+
+	// Extract and store textures
+	value := player.ParseProperties()
+	if value != nil {
+		if err := s.store.UpsertTextureHash(value.Textures.SKIN); err != nil {
+			log.Println("Failed to store skin hash:\n\t", err)
+		}
+
+		if err := s.store.UpsertTextureHash(value.Textures.CAPE); err != nil {
+			log.Println("Failed to store cape hash:\n\t", err)
+		}
+
+		if err := s.store.UpsertTextures(value); err != nil {
+			log.Println("Failed to store texture:\n\t", err)
+		}
+	}
+
+	if err := s.store.SetProfileInCache(&player, signed); err != nil {
+		return nil, err
+	}
+	return &player, nil
 }

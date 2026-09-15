@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"log"
+	"strings"
 
 	"github.com/goccy/go-json"
 )
@@ -23,23 +24,25 @@ type Player struct {
 }
 
 // ParseProperties parse the player's properties
-func (p *Player) ParseProperties() (*TexturesValue, error) {
+func (p *Player) ParseProperties() *TexturesValue {
 	for _, prop := range p.Properties {
-		if prop.Name != TEXTURE {
+		if prop.Name != TEXTURES {
 			log.Println("Unknown property:\n\t" + prop.String())
 			continue
 		}
 		decoded, err := base64.StdEncoding.DecodeString(prop.Value)
 		if err != nil {
-			return nil, err
+			log.Println("Failed to base64 decode texture property:\n\t", err)
+			continue
 		}
 		var textures TexturesValue
 		if err := json.Unmarshal(decoded, &textures); err != nil {
-			return nil, err
+			log.Println("Failed to unmarshal texture property:\n\t", err)
+			continue
 		}
-		return &textures, nil
+		return &textures
 	}
-	return nil, nil
+	return nil
 }
 
 // Property - A player property as returned by Mojang
@@ -61,8 +64,8 @@ func (p *Property) String() string {
 // PropertyName type alias
 type PropertyName string
 
-// TEXTURE the only known in-use value returned from the Mojang API
-const TEXTURE PropertyName = "texture"
+// TEXTURES the only known in-use value returned from the Mojang API
+const TEXTURES PropertyName = "textures"
 
 // TexturesValue - Decoded textures property
 type TexturesValue struct {
@@ -77,6 +80,16 @@ type TexturesValue struct {
 type Textures struct {
 	SKIN *Texture `json:"SKIN,omitempty"`
 	CAPE *Texture `json:"CAPE,omitempty"`
+}
+
+// Hash extracts the texture hash from a Mojang texture URL
+// e.g. http://textures.minecraft.net/texture/<hash> -> <hash>
+func (t *Texture) Hash() string {
+	idx := strings.LastIndex(t.URL, "/")
+	if idx == -1 || idx == len(t.URL)-1 {
+		return ""
+	}
+	return t.URL[idx+1:]
 }
 
 // Texture - A single texture entry (SKIN or CAPE)

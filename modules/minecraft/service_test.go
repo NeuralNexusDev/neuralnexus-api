@@ -13,16 +13,18 @@ import (
 // --- Mock Store ---
 
 type mockStore struct {
-	cache       map[string]*Player
-	db          map[string]*Player
-	upsertErr   error
-	cacheSetErr error
+	cache        map[string]*Player
+	profileCache map[string]*Player
+	db           map[string]*Player
+	upsertErr    error
+	cacheSetErr  error
 }
 
 func newMockStore() *mockStore {
 	return &mockStore{
-		cache: make(map[string]*Player),
-		db:    make(map[string]*Player),
+		cache:        make(map[string]*Player),
+		profileCache: make(map[string]*Player),
+		db:           make(map[string]*Player),
 	}
 }
 
@@ -39,6 +41,29 @@ func (m *mockStore) SetPlayerInCache(player *Player) error {
 	}
 	m.cache[player.ID] = player
 	m.cache[player.Name] = player
+	return nil
+}
+
+func (m *mockStore) GetProfileFromCache(id string, signed bool) (*Player, error) {
+	key := "player:profile:unsigned:" + id
+	if signed {
+		key = "player:profile:signed:" + id
+	}
+	if p, ok := m.profileCache[key]; ok {
+		return p, nil
+	}
+	return nil, redis.Nil
+}
+
+func (m *mockStore) SetProfileInCache(player *Player, signed bool) error {
+	if m.cacheSetErr != nil {
+		return m.cacheSetErr
+	}
+	key := "player:profile:unsigned:" + player.ID
+	if signed {
+		key = "player:profile:signed:" + player.ID
+	}
+	m.profileCache[key] = player
 	return nil
 }
 
@@ -63,6 +88,14 @@ func (m *mockStore) UpsertPlayer(player *Player) error {
 		return m.upsertErr
 	}
 	m.db[player.ID] = player
+	return nil
+}
+
+func (m *mockStore) UpsertTextures(_ *TexturesValue) error {
+	return nil
+}
+
+func (m *mockStore) UpsertTextureHash(_ *Texture) error {
 	return nil
 }
 
@@ -224,5 +257,97 @@ func TestService_GetPlayersByNames_Empty(t *testing.T) {
 	_, err := svc.GetPlayersByNames([]string{})
 	if err == nil {
 		t.Error("expected error for empty names")
+	}
+}
+
+func TestService_GetProfile_CacheHit(t *testing.T) {
+	store := newMockStore()
+	player := &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}
+	store.profileCache["player:profile:unsigned:853c80ef3c3749fdaa49938b674adae6"] = player
+
+	server := newTestServer(http.StatusInternalServerError, nil)
+	defer server.Close()
+
+	svc := newTestService(store, server)
+	got, err := svc.GetProfile("853c80ef3c3749fdaa49938b674adae6", false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.ID != player.ID {
+		t.Errorf("expected %s, got %s", player.ID, got.ID)
+	}
+}
+
+func TestService_GetProfile_CacheMiss_MojangHit(t *testing.T) {
+	store := newMockStore()
+	mojangResponse := Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}
+
+	server := newTestServer(http.StatusOK, mojangResponse)
+	defer server.Close()
+
+	svc := &service{
+		store:         store,
+		client:        server.Client(),
+		lookupProfile: server.URL + "/",
+	}
+
+	got, err := svc.GetProfile("853c80ef3c3749fdaa49938b674adae6", false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Name != "jeb_" {
+		t.Errorf("expected jeb_, got %s", got.Name)
+	}
+	if _, ok := store.db[mojangResponse.ID]; !ok {
+		t.Error("expected player to be upserted to DB")
+	}
+}
+
+func TestService_GetProfile_NotFound(t *testing.T) {
+	store := newMockStore()
+	server := newTestServer(http.StatusNotFound, nil)
+	defer server.Close()
+
+	svc := &service{store: store, client: server.Client(), lookupProfile: server.URL + "/"}
+	_, err := svc.GetProfile("853c80ef3c3749fdaa49938b674adae6", false)
+	if !errors.Is(err, ErrPlayerNotFound) {
+		t.Errorf("expected ErrPlayerNotFound, got %v", err)
+	}
+}
+
+func TestService_GetProfile_NoContent(t *testing.T) {
+	store := newMockStore()
+	server := newTestServer(http.StatusNoContent, nil)
+	defer server.Close()
+
+	svc := &service{store: store, client: server.Client(), lookupProfile: server.URL + "/"}
+	_, err := svc.GetProfile("853c80ef3c3749fdaa49938b674adae6", false)
+	if !errors.Is(err, ErrPlayerNotFound) {
+		t.Errorf("expected ErrPlayerNotFound, got %v", err)
+	}
+}
+
+func TestService_GetProfile_SignedVsUnsigned_CacheSeparation(t *testing.T) {
+	store := newMockStore()
+	unsigned := &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}
+	signed := &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_signed"}
+	store.profileCache["player:profile:unsigned:853c80ef3c3749fdaa49938b674adae6"] = unsigned
+	store.profileCache["player:profile:signed:853c80ef3c3749fdaa49938b674adae6"] = signed
+
+	server := newTestServer(http.StatusInternalServerError, nil)
+	defer server.Close()
+
+	svc := newTestService(store, server)
+
+	gotUnsigned, err := svc.GetProfile("853c80ef3c3749fdaa49938b674adae6", false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	gotSigned, err := svc.GetProfile("853c80ef3c3749fdaa49938b674adae6", true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotUnsigned.Name == gotSigned.Name {
+		t.Error("expected signed and unsigned cache entries to differ")
 	}
 }
