@@ -73,11 +73,8 @@ func (s *service) GetPlayerByName(name string) (*Player, error) {
 	}
 
 	// Cache miss — fetch from DB
-	dbPlayer, err := s.store.GetPlayerByName(name, false)
-	if err != nil {
-		return nil, err
-	}
-	if !dbPlayer.IsStale() {
+	dbPlayer, _ := s.store.GetPlayerByName(name, false)
+	if dbPlayer != nil && !dbPlayer.IsStale() {
 		if err := s.store.SetPlayerInCache(dbPlayer); err != nil {
 			return nil, err
 		}
@@ -123,11 +120,8 @@ func (s *service) GetPlayerByUUID(id string) (*Player, error) {
 	}
 
 	// Cache miss — fetch from DB
-	dbPlayer, err := s.store.GetPlayerByUUID(id, false)
-	if err != nil {
-		return nil, err
-	}
-	if !dbPlayer.IsStale() {
+	dbPlayer, _ := s.store.GetPlayerByUUID(id, false)
+	if dbPlayer != nil && !dbPlayer.IsStale() {
 		if err := s.store.SetPlayerInCache(dbPlayer); err != nil {
 			return nil, err
 		}
@@ -245,11 +239,9 @@ func (s *service) GetProfile(id string, signed bool) (*Player, error) {
 
 	// Cache miss — fetch from DB
 	if !signed {
-		dbPlayer, err := s.store.GetPlayerByUUID(id, true)
-		if err != nil {
-			return nil, err
-		}
-		if !dbPlayer.IsStale() {
+		dbPlayer, _ := s.store.GetPlayerByUUID(id, true)
+		// TODO: Get Skin from DB
+		if dbPlayer != nil && !dbPlayer.IsStale() {
 			if err := s.store.SetProfileInCache(dbPlayer, false); err != nil {
 				return nil, err
 			}
@@ -268,9 +260,6 @@ func (s *service) GetProfile(id string, signed bool) (*Player, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, ErrPlayerNotFound
-	}
 	if resp.StatusCode == http.StatusNoContent {
 		return nil, ErrPlayerNotFound
 	}

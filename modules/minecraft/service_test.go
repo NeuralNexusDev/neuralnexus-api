@@ -71,7 +71,7 @@ func (m *mockStore) GetPlayerByUUID(id string, _ bool) (*Player, error) {
 	if p, ok := m.db[id]; ok {
 		return p, nil
 	}
-	return nil, errors.New("not found")
+	return nil, ErrPlayerNotFound
 }
 
 func (m *mockStore) GetPlayerByName(name string, _ bool) (*Player, error) {
@@ -80,7 +80,7 @@ func (m *mockStore) GetPlayerByName(name string, _ bool) (*Player, error) {
 			return p, nil
 		}
 	}
-	return nil, errors.New("not found")
+	return nil, ErrPlayerNotFound
 }
 
 func (m *mockStore) UpsertPlayer(player *Player, _ bool) error {
@@ -146,7 +146,6 @@ func TestService_GetPlayerByName_CacheMiss_MojangHit(t *testing.T) {
 	server := newTestServer(http.StatusOK, mojangResponse)
 	defer server.Close()
 
-	// Point the URL constants at the test server
 	svc := &service{
 		store:        store,
 		client:       server.Client(),
@@ -207,7 +206,12 @@ func TestService_GetPlayerByUUID_CacheMiss_MojangHit(t *testing.T) {
 	server := newTestServer(http.StatusOK, mojangResponse)
 	defer server.Close()
 
-	svc := &service{store: store, client: server.Client(), lookupByUUID: server.URL + "/"}
+	svc := &service{
+		store:        store,
+		client:       server.Client(),
+		lookupByUUID: server.URL + "/",
+	}
+
 	got, err := svc.GetPlayerByUUID(mojangResponse.ID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -305,7 +309,7 @@ func TestService_GetProfile_CacheMiss_MojangHit(t *testing.T) {
 
 func TestService_GetProfile_NotFound(t *testing.T) {
 	store := newMockStore()
-	server := newTestServer(http.StatusNotFound, nil)
+	server := newTestServer(http.StatusNoContent, nil)
 	defer server.Close()
 
 	svc := &service{store: store, client: server.Client(), lookupProfile: server.URL + "/"}

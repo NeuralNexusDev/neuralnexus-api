@@ -128,6 +128,7 @@ func TestHandler_GetPlayersByNamesHandler_OK(t *testing.T) {
 
 	body, _ := json.Marshal([]string{"jeb_", "Notch"})
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/mc/profile/lookup/bulk/byname", strings.NewReader(string(body)))
+	r.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
 	handler.ServeHTTP(w, r)
@@ -150,6 +151,7 @@ func TestHandler_GetPlayersByNamesHandler_InvalidBody(t *testing.T) {
 	handler := GetPlayersByNamesHandler(svc)
 
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/mc/profile/lookup/bulk/byname", strings.NewReader("not json"))
+	r.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
 	handler.ServeHTTP(w, r)
@@ -165,6 +167,7 @@ func TestHandler_GetPlayersByNamesHandler_Empty(t *testing.T) {
 
 	body, _ := json.Marshal([]string{})
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/mc/profile/lookup/bulk/byname", strings.NewReader(string(body)))
+	r.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
 	handler.ServeHTTP(w, r)
@@ -181,6 +184,7 @@ func TestHandler_GetPlayersByNamesHandler_TooMany(t *testing.T) {
 	names := make([]string, 11)
 	body, _ := json.Marshal(names)
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/mc/profile/lookup/bulk/byname", strings.NewReader(string(body)))
+	r.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
 	handler.ServeHTTP(w, r)
@@ -230,7 +234,7 @@ func TestHandler_GetProfileHandler_NotFound(t *testing.T) {
 
 	handler.ServeHTTP(w, r)
 
-	if w.Code != http.StatusNotFound {
-		t.Errorf("expected 404, got %d", w.Code)
+	if w.Code != http.StatusNoContent {
+		t.Errorf("expected 204, got %d", w.Code)
 	}
 }

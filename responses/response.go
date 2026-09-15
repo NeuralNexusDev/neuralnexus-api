@@ -2,10 +2,11 @@ package responses
 
 import (
 	"encoding/xml"
-	"github.com/goccy/go-json"
-	"google.golang.org/protobuf/proto"
 	"net/http"
 	"time"
+
+	"github.com/goccy/go-json"
+	"google.golang.org/protobuf/proto"
 )
 
 // -------------- Structs --------------
@@ -141,6 +142,20 @@ func NotFound(w http.ResponseWriter, r *http.Request, message string) {
 		"Not Found",
 		message,
 		"https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404",
+	).SendProblem(w, r)
+}
+
+// UnsupportedMediaType -- Send a NotFoundResponse as JSON or XML
+func UnsupportedMediaType(w http.ResponseWriter, r *http.Request, message string) {
+	if message == "" {
+		message = "The requested media type is not supported."
+	}
+	NewProblem(
+		"about:blank",
+		http.StatusUnsupportedMediaType,
+		"Unsupported Media Type",
+		message,
+		"https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/415",
 	).SendProblem(w, r)
 }
 

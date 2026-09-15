@@ -7,6 +7,7 @@ import (
 
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"github.com/goccy/go-json"
+	"github.com/google/uuid"
 )
 
 // GetPlayerByNameHandler - Get a player by name
@@ -21,7 +22,7 @@ func GetPlayerByNameHandler(s Service) http.HandlerFunc {
 		player, err := s.GetPlayerByName(name)
 		if err != nil {
 			if errors.Is(err, ErrPlayerNotFound) {
-				responses.NotFound(w, r, "Player not found")
+				responses.NotFound(w, r, ErrPlayerNotFound.Error())
 				return
 			}
 			log.Println("Failed to get player by name:\n\t", err)
@@ -44,7 +45,7 @@ func GetPlayerByUUIDHandler(s Service) http.HandlerFunc {
 		player, err := s.GetPlayerByUUID(raw)
 		if err != nil {
 			if errors.Is(err, ErrPlayerNotFound) {
-				responses.NotFound(w, r, "Player not found")
+				responses.NotFound(w, r, ErrPlayerNotFound.Error())
 				return
 			}
 			log.Println("Failed to get player by UUID:\n\t", err)
@@ -58,19 +59,26 @@ func GetPlayerByUUIDHandler(s Service) http.HandlerFunc {
 // GetPlayersByNamesHandler - Get players by name in batch (max 10)
 func GetPlayersByNamesHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Content-Type") != "application/json" {
+			responses.UnsupportedMediaType(w, r, "Request must be of type application/json")
+		}
+
 		var names []string
 		if err := json.NewDecoder(r.Body).Decode(&names); err != nil {
 			responses.BadRequest(w, r, "Invalid request body")
 			return
 		}
 
-		if len(names) == 0 {
-			responses.BadRequest(w, r, "No names provided")
+		if len(names) == 0 || len(names) > 10 {
+			responses.BadRequest(w, r, "size must be between 1 and 10")
 			return
 		}
-		if len(names) > 10 {
-			responses.BadRequest(w, r, "Batch lookup is limited to 10 names")
-			return
+
+		for _, name := range names {
+			if name == "" {
+				responses.BadRequest(w, r, "Invalid profile name")
+				return
+			}
 		}
 
 		players, err := s.GetPlayersByNames(names)
@@ -87,8 +95,9 @@ func GetPlayersByNamesHandler(s Service) http.HandlerFunc {
 func GetProfileHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("uuid")
-		if id == "" {
-			responses.BadRequest(w, r, "Invalid UUID")
+		_, err := uuid.Parse(id)
+		if err != nil {
+			responses.BadRequest(w, r, "Not a valid UUID: "+id)
 			return
 		}
 
@@ -97,7 +106,7 @@ func GetProfileHandler(s Service) http.HandlerFunc {
 		player, err := s.GetProfile(id, signed)
 		if err != nil {
 			if errors.Is(err, ErrPlayerNotFound) {
-				responses.NotFound(w, r, "Player not found")
+				responses.NoContent(w, r)
 				return
 			}
 			log.Println("Failed to get player profile:\n\t", err)

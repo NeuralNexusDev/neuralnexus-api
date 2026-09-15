@@ -58,7 +58,7 @@ func (s *store) GetPlayerByUUID(id string, includeProfile bool) (*Player, error)
 			"SELECT id, name, legacy, demo, profile_actions, first_seen, last_seen FROM players WHERE id = $1", id)
 	} else {
 		rows, err = s.db.Query(context.Background(),
-			"SELECT id, name, first_seen, last_seen FROM players WHERE id = $1", id)
+			"SELECT id, name, legacy, demo, first_seen, last_seen FROM players WHERE id = $1", id)
 	}
 	if err != nil {
 		return nil, err
@@ -79,7 +79,7 @@ func (s *store) GetPlayerByName(name string, includeProfile bool) (*Player, erro
 			"SELECT id, name, legacy, demo, profile_actions, first_seen, last_seen FROM players WHERE name = $1", name)
 	} else {
 		rows, err = s.db.Query(context.Background(),
-			"SELECT id, name, first_seen, last_seen FROM players WHERE name = $1", name)
+			"SELECT id, name, legacy, demo, first_seen, last_seen FROM players WHERE name = $1", name)
 	}
 	if err != nil {
 		return nil, err
