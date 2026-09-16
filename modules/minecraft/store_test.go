@@ -358,6 +358,77 @@ func TestGetProfileFromCache_MissingProperties(t *testing.T) {
 	}
 }
 
+func TestStore_GetPlayerByUUID_IncludeProfile_HydratesTextures(t *testing.T) {
+	s := setupStore(t)
+
+	if err := s.UpsertPlayer(testPlayer, false); err != nil {
+		t.Fatalf("failed to upsert player: %v", err)
+	}
+
+	skin := &Texture{
+		URL:      "http://textures.minecraft.net/texture/skin123",
+		Metadata: &Metadata{Model: SLIM},
+	}
+	cape := &Texture{URL: "http://textures.minecraft.net/texture/cape456"}
+	if err := s.UpsertTextureHash(skin); err != nil {
+		t.Fatalf("failed to upsert skin hash: %v", err)
+	}
+	if err := s.UpsertTextureHash(cape); err != nil {
+		t.Fatalf("failed to upsert cape hash: %v", err)
+	}
+
+	value := &TexturesValue{
+		Timestamp: 1234567890000,
+		ProfileID: testPlayer.ID,
+		Textures:  Textures{SKIN: skin, CAPE: cape},
+	}
+	if err := s.UpsertTextures(value); err != nil {
+		t.Fatalf("failed to upsert textures: %v", err)
+	}
+
+	got, err := s.GetPlayerByUUID(testPlayer.ID, true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got.Properties) != 1 {
+		t.Fatalf("expected 1 property, got %d", len(got.Properties))
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(got.Properties[0].Value)
+	if err != nil {
+		t.Fatalf("failed to decode property: %v", err)
+	}
+	var textures TexturesValue
+	if err := json.Unmarshal(decoded, &textures); err != nil {
+		t.Fatalf("failed to unmarshal textures: %v", err)
+	}
+	if textures.Textures.SKIN == nil || textures.Textures.SKIN.Hash() != "skin123" {
+		t.Errorf("expected skin hash skin123, got %+v", textures.Textures.SKIN)
+	}
+	if textures.Textures.SKIN.Metadata == nil || textures.Textures.SKIN.Metadata.Model != SLIM {
+		t.Error("expected slim model to be preserved")
+	}
+	if textures.Textures.CAPE == nil || textures.Textures.CAPE.Hash() != "cape456" {
+		t.Errorf("expected cape hash cape456, got %+v", textures.Textures.CAPE)
+	}
+}
+
+func TestStore_GetPlayerByUUID_IncludeProfile_NoTextures(t *testing.T) {
+	s := setupStore(t)
+
+	if err := s.UpsertPlayer(testPlayer, false); err != nil {
+		t.Fatalf("failed to upsert player: %v", err)
+	}
+
+	got, err := s.GetPlayerByUUID(testPlayer.ID, true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got.Properties) != 0 {
+		t.Errorf("expected no properties when none stored, got %d", len(got.Properties))
+	}
+}
+
 func TestStore_UpsertTextureHash(t *testing.T) {
 	s := setupStore(t)
 

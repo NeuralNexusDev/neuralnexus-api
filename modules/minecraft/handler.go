@@ -36,14 +36,13 @@ func GetPlayerByNameHandler(s Service) http.HandlerFunc {
 // GetPlayerByUUIDHandler - Get a player by UUID
 func GetPlayerByUUIDHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		raw := r.PathValue("uuid")
-		if raw == "" {
-			responses.BadRequest(w, r, "Invalid UUID")
+		id := r.PathValue("uuid")
+		if _, err := uuid.Parse(id); err != nil {
+			responses.BadRequest(w, r, "Not a valid UUID: "+id)
 			return
 		}
 
-		// TODO: UUID validation
-		player, err := s.GetPlayerByUUID(raw)
+		player, err := s.GetPlayerByUUID(id)
 		if err != nil {
 			if errors.Is(err, ErrPlayerNotFound) {
 				responses.NotFound(w, r, ErrPlayerNotFound.Error())
@@ -97,8 +96,7 @@ func GetPlayersByNamesHandler(s Service) http.HandlerFunc {
 func GetProfileHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("uuid")
-		_, err := uuid.Parse(id)
-		if err != nil {
+		if _, err := uuid.Parse(id); err != nil {
 			responses.BadRequest(w, r, "Not a valid UUID: "+id)
 			return
 		}

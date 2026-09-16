@@ -3,6 +3,7 @@ package minecraft
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"time"
 
 	"github.com/goccy/go-json"
@@ -15,6 +16,10 @@ const (
 	redisTTL           = 5 * time.Minute
 	stalenessThreshold = 24 * time.Hour
 )
+
+// mojangTextureURL is prefixed onto a stored texture hash to reconstruct the
+// URL shape Mojang returns, since only the hash is persisted in player_textures.
+const mojangTextureURL = "https://textures.minecraft.net/texture/"
 
 const (
 	CachePlayer             = "player:"
@@ -67,6 +72,11 @@ func (s *store) GetPlayerByUUID(id string, includeProfile bool) (*Player, error)
 	if err != nil {
 		return nil, err
 	}
+	if includeProfile {
+		if err := s.hydrateTextureProperties(player); err != nil {
+			return nil, err
+		}
+	}
 	return player, nil
 }
 
@@ -88,7 +98,73 @@ func (s *store) GetPlayerByName(name string, includeProfile bool) (*Player, erro
 	if err != nil {
 		return nil, err
 	}
+	if includeProfile {
+		if err := s.hydrateTextureProperties(player); err != nil {
+			return nil, err
+		}
+	}
 	return player, nil
+}
+
+// hydrateTextureProperties loads the player's most recent skin/cape hashes from
+// player_textures and reconstructs a TEXTURES property matching the shape a live
+// Mojang response would have, so archived profiles work with ParseProperties and
+// SetProfileInCache the same as freshly-fetched ones. No-op if none are stored.
+func (s *store) hydrateTextureProperties(player *Player) error {
+	rows, err := s.db.Query(context.Background(), `
+		SELECT skin, model, cape, last_seen
+		FROM player_textures
+		WHERE player_id = $1
+		ORDER BY last_seen DESC
+		LIMIT 1
+		`, player.ID)
+	if err != nil {
+		return err
+	}
+
+	type textureRow struct {
+		Skin     *string
+		Model    *string
+		Cape     *string
+		LastSeen int64
+	}
+	row, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByPos[textureRow])
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		return err
+	}
+	if row.Skin == nil && row.Cape == nil {
+		return nil
+	}
+
+	var textures Textures
+	if row.Skin != nil {
+		textures.SKIN = &Texture{URL: mojangTextureURL + *row.Skin}
+		if row.Model != nil && Model(*row.Model) == SLIM {
+			textures.SKIN.Metadata = &Metadata{Model: SLIM}
+		}
+	}
+	if row.Cape != nil {
+		textures.CAPE = &Texture{URL: mojangTextureURL + *row.Cape}
+	}
+
+	value := TexturesValue{
+		Timestamp:   row.LastSeen,
+		ProfileID:   player.ID,
+		ProfileName: player.Name,
+		Textures:    textures,
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+
+	player.Properties = []Property{
+		{Name: TEXTURES, Value: base64.StdEncoding.EncodeToString(encoded)},
+	}
+	return nil
 }
 
 // UpsertPlayer upserts a player into the database and updates name history

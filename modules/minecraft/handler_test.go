@@ -104,6 +104,21 @@ func TestHandler_GetPlayerByUUIDHandler_OK(t *testing.T) {
 	}
 }
 
+func TestHandler_GetPlayerByUUIDHandler_InvalidUUID(t *testing.T) {
+	svc := &mockService{}
+	handler := GetPlayerByUUIDHandler(svc)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/lookup/not-a-uuid", nil)
+	r.SetPathValue("uuid", "not-a-uuid")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
 func TestHandler_GetPlayerByUUIDHandler_NotFound(t *testing.T) {
 	svc := &mockService{err: ErrPlayerNotFound}
 	handler := GetPlayerByUUIDHandler(svc)

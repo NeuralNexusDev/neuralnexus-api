@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -279,6 +280,32 @@ func TestService_GetProfile_CacheHit(t *testing.T) {
 	}
 	if got.ID != player.ID {
 		t.Errorf("expected %s, got %s", player.ID, got.ID)
+	}
+}
+
+func TestService_GetProfile_DBHit_NotStale(t *testing.T) {
+	store := newMockStore()
+	player := &Player{
+		ID:       "853c80ef3c3749fdaa49938b674adae6",
+		Name:     "jeb_",
+		LastSeen: time.Now().UnixMilli(),
+		Properties: []Property{
+			{Name: TEXTURES, Value: "encoded"},
+		},
+	}
+	store.db[player.ID] = player
+
+	// Server should never be called — DB row is fresh
+	server := newTestServer(http.StatusInternalServerError, nil)
+	defer server.Close()
+
+	svc := newTestService(store, server)
+	got, err := svc.GetProfile(player.ID, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got.Properties) != 1 {
+		t.Errorf("expected DB-hydrated properties to be preserved, got %d", len(got.Properties))
 	}
 }
 

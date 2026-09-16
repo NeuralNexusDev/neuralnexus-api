@@ -241,7 +241,6 @@ func (s *service) GetProfile(id string, signed bool) (*Player, error) {
 	// Cache miss — fetch from DB
 	if !signed {
 		dbPlayer, _ := s.store.GetPlayerByUUID(id, true)
-		// TODO: Get Skin from DB
 		if dbPlayer != nil && !dbPlayer.IsStale() {
 			if err := s.store.SetProfileInCache(dbPlayer, false); err != nil {
 				return nil, err
