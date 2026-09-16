@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/goccy/go-json"
@@ -33,8 +32,6 @@ const mojangLookupProfile = "https://sessionserver.mojang.com/session/minecraft/
 // http://textures.minecraft.net/texture/<hash>
 const mojangTextureURL = "http://textures.minecraft.net/texture/"
 
-var nnTextureURL = "https://" + os.Getenv("S3_API_URL") + "/mca/texture/"
-
 // Service - Minecraft player service
 type Service interface {
 	GetPlayerByName(name string) (*Player, error)
@@ -53,10 +50,11 @@ type service struct {
 	lookupBulk    string
 	lookupProfile string
 	lookupTexture string
+	nnTextureUrl  string
 }
 
 // NewService - Create a new Minecraft player service
-func NewService(store Store, client *http.Client) Service {
+func NewService(store Store, client *http.Client, nnTextureUrl string) Service {
 	if client == nil {
 		client = http.DefaultClient
 	}
@@ -68,6 +66,7 @@ func NewService(store Store, client *http.Client) Service {
 		lookupBulk:    mojangLookupBulk,
 		lookupProfile: mojangLookupProfile,
 		lookupTexture: mojangTextureURL,
+		nnTextureUrl:  nnTextureUrl,
 	}
 }
 
@@ -250,7 +249,21 @@ func (s *service) GetProfile(id string, signed bool) (*Player, error) {
 	// Cache miss — fetch from DB
 	if !signed {
 		dbPlayer, _ := s.store.GetProfileByUUID(id)
-		if dbPlayer != nil && !dbPlayer.IsStale() {
+		if dbPlayer == nil {
+			return nil, ErrPlayerNotFound
+		}
+		if !dbPlayer.IsStale() {
+			row, err := s.store.GetTextures(dbPlayer.ID)
+			if err != nil {
+				return nil, err
+			}
+			prop, err := row.Value(dbPlayer.Name, s.lookupTexture).ToProperty()
+			if err != nil {
+				log.Println("Failed to decode TexturesRow:\n\t", err)
+			}
+			if prop != nil {
+				dbPlayer.Properties = append(dbPlayer.Properties, *prop)
+			}
 			if err := s.store.SetProfileInCache(dbPlayer, false); err != nil {
 				return nil, err
 			}
@@ -289,11 +302,11 @@ func (s *service) GetProfile(id string, signed bool) (*Player, error) {
 	// Extract and store textures
 	value := player.ParseProperties()
 	if value != nil {
-		if err := s.store.UpsertTextureHash(value.Textures.SKIN); err != nil {
+		if err := s.store.UpsertTextureHash(value.Textures.SKIN.Hash()); err != nil {
 			log.Println("Failed to store skin hash:\n\t", err)
 		}
 
-		if err := s.store.UpsertTextureHash(value.Textures.CAPE); err != nil {
+		if err := s.store.UpsertTextureHash(value.Textures.CAPE.Hash()); err != nil {
 			log.Println("Failed to store cape hash:\n\t", err)
 		}
 
@@ -330,10 +343,14 @@ func (s *service) GetTexture(hash string, useMojang bool) (string, error) {
 		if err != nil {
 			return "", err
 		}
+
+		if err := s.store.UpsertTextureHash(hash); err != nil {
+			log.Println("Failed to store texture hash:\n\t", err)
+		}
 	}
 
 	if useMojang {
 		return s.lookupTexture + hash, nil
 	}
-	return nnTextureURL + hash, nil
+	return s.nnTextureUrl + hash, nil
 }

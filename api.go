@@ -124,13 +124,13 @@ func ApplyRoutes(
 	mcStore := mc.NewStore(
 		database.GetDB("archive"), rdb,
 		database.GetS3(endpoint, accessKey, secretKey))
-	mcService := mc.NewService(mcStore, nil)
+	mcService := mc.NewService(mcStore, nil, "https://"+endpoint+"/mca/texture/")
 
 	mux.Handle("GET /api/v1/mc/profile/lookup/name/{name}", mc.GetPlayerByNameHandler(mcService))
 	mux.Handle("GET /api/v1/mc/profile/lookup/{uuid}", mc.GetPlayerByUUIDHandler(mcService))
 	mux.Handle("POST /api/v1/mc/profile/lookup/bulk/byname", mc.GetPlayersByNamesHandler(mcService))
 	mux.Handle("GET /api/v1/mc/profile/{uuid}", mc.GetProfileHandler(mcService))
-	mux.Handle("GET /api/v1/mc/texture/{hash}", mc.GetTextureHandler(mcService))
+	mux.Handle("GET /api/v1/mc/texture/{hash}", mc.GetTextureHandler(mcService, nil))
 
 	// --------------- Minecraft Status ---------------
 	mcsService := mcs.NewService()

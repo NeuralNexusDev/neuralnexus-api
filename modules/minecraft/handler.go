@@ -119,7 +119,10 @@ func GetProfileHandler(s Service) http.HandlerFunc {
 }
 
 // GetTextureHandler - Pass-through the texture URL to the S3 bucket
-func GetTextureHandler(s Service) http.HandlerFunc {
+func GetTextureHandler(s Service, client *http.Client) http.HandlerFunc {
+	if client == nil {
+		client = http.DefaultClient
+	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		hash := r.PathValue("hash")
 		if hash == "" {
@@ -134,9 +137,8 @@ func GetTextureHandler(s Service) http.HandlerFunc {
 			return
 		}
 
-		// Fetch the file via standard HTTP client
-		// TODO: Consider if this needs to be replaced for testing
-		resp, err := http.Get(targetURL)
+		// Fetch the file from the hash's texture url
+		resp, err := client.Get(targetURL)
 		if err != nil {
 			responses.BadGateway(w, r, "Failed to reach storage backend")
 			log.Println("Failed to reach storage backend:\n\t", err)

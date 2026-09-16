@@ -82,13 +82,31 @@ type TexturesValue struct {
 	Textures          Textures `json:"textures"`
 }
 
+// ToProperty Converts a TextureValue to base64'd JSON and stores it in a TEXTURES property
+func (t *TexturesValue) ToProperty() (*Property, error) {
+	if t == nil {
+		return nil, nil
+	}
+	encoded, err := json.Marshal(*t)
+	if err != nil {
+		return nil, err
+	}
+	return &Property{Name: TEXTURES, Value: base64.StdEncoding.EncodeToString(encoded)}, nil
+}
+
 // Textures - The player's textures
 type Textures struct {
 	SKIN *Texture `json:"SKIN,omitempty"`
 	CAPE *Texture `json:"CAPE,omitempty"`
 }
 
-// Hash extracts the texture hash from a Mojang texture URL
+// Texture - A single texture entry (SKIN or CAPE)
+type Texture struct {
+	URL      string    `json:"url"`
+	Metadata *Metadata `json:"metadata,omitempty"`
+}
+
+// Hash extracts the texture hash from a Texture.URL
 // e.g. http://textures.minecraft.net/texture/<hash> -> <hash>
 func (t *Texture) Hash() string {
 	if t == nil {
@@ -99,12 +117,6 @@ func (t *Texture) Hash() string {
 		return ""
 	}
 	return t.URL[idx+1:]
-}
-
-// Texture - A single texture entry (SKIN or CAPE)
-type Texture struct {
-	URL      string    `json:"url"`
-	Metadata *Metadata `json:"metadata,omitempty"`
 }
 
 // Metadata - Skin metadata (only present for Alex/slim model)
@@ -120,6 +132,7 @@ const SLIM Model = "slim"
 
 // TexturesRow represents a texture in the database
 type TexturesRow struct {
+	PlayerId string  `db:"player_id"`
 	Skin     *string `db:"skin"`
 	Model    *Model  `db:"model"`
 	Cape     *string `db:"cape"`
@@ -127,25 +140,25 @@ type TexturesRow struct {
 }
 
 // Value converts a TexturesRow to a TexturesValue
-func (t *TexturesRow) Value(playerID, playerName string) *TexturesValue {
-	if t.Skin == nil && t.Cape == nil {
+func (t *TexturesRow) Value(playerName, textureUrl string) *TexturesValue {
+	if t == nil || (t.Skin == nil && t.Cape == nil) {
 		return nil
 	}
 
 	var textures Textures
 	if t.Skin != nil {
-		textures.SKIN = &Texture{URL: mojangTextureURL + *t.Skin}
+		textures.SKIN = &Texture{URL: textureUrl + *t.Skin}
 		if t.Model != nil && *t.Model == SLIM {
 			textures.SKIN.Metadata = &Metadata{Model: SLIM}
 		}
 	}
 	if t.Cape != nil {
-		textures.CAPE = &Texture{URL: mojangTextureURL + *t.Cape}
+		textures.CAPE = &Texture{URL: textureUrl + *t.Cape}
 	}
 
 	return &TexturesValue{
 		Timestamp:   t.LastSeen,
-		ProfileID:   playerID,
+		ProfileID:   t.PlayerId,
 		ProfileName: playerName,
 		Textures:    textures,
 	}

@@ -2,7 +2,6 @@ package minecraft
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -34,10 +33,11 @@ type Store interface {
 	GetPlayerByUUID(id string) (*Player, error)
 	GetPlayerByName(name string) (*Player, error)
 	GetProfileByUUID(id string) (*Player, error)
+	GetTextures(id string) (*TexturesRow, error)
 
 	UpsertPlayer(player *Player, updateProfile bool) error
 	UpsertTextures(value *TexturesValue) error
-	UpsertTextureHash(hash *Texture) error
+	UpsertTextureHash(hash string) error
 
 	GetPlayerFromCache(key string) (*Player, error)
 	SetPlayerInCache(player *Player) error
@@ -92,26 +92,17 @@ func (s *store) GetProfileByUUID(id string) (*Player, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	prop, err := s.GetTextures(player.ID, player.Name)
-	if err != nil {
-		return nil, err
-	}
-	if prop != nil {
-		player.Properties = append(player.Properties, *prop)
-	}
 	return player, nil
 }
 
-// GetTextures get a player's most recent skin+cape from the database and rebuild it as a Property
-func (s *store) GetTextures(playerID, playerName string) (*Property, error) {
+// GetTextures get a player's most recent skin+cape from the database
+func (s *store) GetTextures(id string) (*TexturesRow, error) {
 	rows, err := s.db.Query(context.Background(), `
-		SELECT skin, model, cape, last_seen
+		SELECT player_id, skin, model, cape, last_seen
 		FROM player_textures
 		WHERE player_id = $1
 		ORDER BY last_seen DESC
-		LIMIT 1
-		`, playerID)
+		LIMIT 1`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -123,17 +114,7 @@ func (s *store) GetTextures(playerID, playerName string) (*Property, error) {
 		}
 		return nil, err
 	}
-
-	value := row.Value(playerID, playerName)
-	if value == nil {
-		return nil, nil
-	}
-	encoded, err := json.Marshal(*value)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Property{Name: TEXTURES, Value: base64.StdEncoding.EncodeToString(encoded)}, nil
+	return row, nil
 }
 
 // UpsertPlayer upserts a player into the database and updates name history
@@ -200,9 +181,9 @@ func (s *store) UpsertTextures(value *TexturesValue) error {
 }
 
 // UpsertTextureHash upserts a texture hash into the database
-func (s *store) UpsertTextureHash(texture *Texture) error {
+func (s *store) UpsertTextureHash(hash string) error {
 	_, err := s.db.Exec(context.Background(),
-		"INSERT INTO textures (hash) VALUES ($1) ON CONFLICT (hash) DO NOTHING", texture.Hash())
+		"INSERT INTO textures (hash) VALUES ($1) ON CONFLICT (hash) DO NOTHING", hash)
 	return err
 }
 
