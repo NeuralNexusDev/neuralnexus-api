@@ -8,7 +8,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
-func GetS3() *minio.Client {
+func GetS3Old() *minio.Client {
 	endpoint := os.Getenv("S3_API_URL")
 	accessKeyID := os.Getenv("S3_ACCESS_KEY")
 	secretAccessKey := os.Getenv("S3_SECRET_KEY")
