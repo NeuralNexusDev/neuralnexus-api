@@ -105,14 +105,33 @@ func ApplyRoutes(
 	mux.Handle("GET /api/v1/game-server-status/{game}", gss.GameServerStatusHandler(gssService))
 	mux.Handle("GET /api/v1/game-server-status/simple/{game}", gss.SimpleGameServerStatus(gssService))
 
-	// --------------- Minecraft Player ---------------
-	mcStore := mc.NewStore(database.GetDB("archive"), rdb)
+	// --------------- Minecraft ---------------
+	endpoint := os.Getenv("S3_API_URL")
+	if endpoint == "" {
+		log.Fatal("S3_API_URL environment variable not set")
+		return nil
+	}
+	accessKey := os.Getenv("S3_ACCESS_KEY_MCA_TEXTURE")
+	if accessKey == "" {
+		log.Fatal("S3_ACCESS_KEY_MCA_TEXTURE environment variable not set")
+		return nil
+	}
+	secretKey := os.Getenv("S3_SECRET_KEY_MCA_TEXTURE")
+	if secretKey == "" {
+		log.Fatal("S3_SECRET_KEY_MCA_TEXTURE environment variable not set")
+		return nil
+	}
+	bucket := "mca"
+	mcStore := mc.NewStore(
+		database.GetDB("archive"), rdb,
+		database.GetS3(endpoint, accessKey, secretKey, bucket))
 	mcService := mc.NewService(mcStore, nil)
 
 	mux.Handle("GET /api/v1/mc/profile/lookup/name/{name}", mc.GetPlayerByNameHandler(mcService))
 	mux.Handle("GET /api/v1/mc/profile/lookup/{uuid}", mc.GetPlayerByUUIDHandler(mcService))
 	mux.Handle("POST /api/v1/mc/profile/lookup/bulk/byname", mc.GetPlayersByNamesHandler(mcService))
 	mux.Handle("GET /api/v1/mc/profile/{uuid}", mc.GetProfileHandler(mcService))
+	mux.Handle("GET /api/v1/mc/texture/{hash}", mc.GetTextureHandler(mcService))
 
 	// --------------- Minecraft Status ---------------
 	mcsService := mcs.NewService()

@@ -188,3 +188,17 @@ func InternalServerError(w http.ResponseWriter, r *http.Request, message string)
 		"https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/500",
 	).SendProblem(w, r)
 }
+
+// BadGateway -- Send an BadGatewayResponse as JSON or XML
+func BadGateway(w http.ResponseWriter, r *http.Request, message string) {
+	if message == "" {
+		message = "Failed to reach backend service"
+	}
+	NewProblem(
+		"about:blank",
+		http.StatusBadGateway,
+		"Bad Gateway",
+		message,
+		"https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/500",
+	).SendProblem(w, r)
+}

@@ -2,6 +2,7 @@ package minecraft
 
 import (
 	"errors"
+	"io"
 	"log"
 	"net/http"
 
@@ -114,5 +115,49 @@ func GetProfileHandler(s Service) http.HandlerFunc {
 			return
 		}
 		responses.StructOK(w, r, player)
+	}
+}
+
+// GetTextureHandler - Pass-through the texture URL to the S3 bucket
+func GetTextureHandler(s Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		hash := r.PathValue("hash")
+		if hash == "" {
+			responses.NotFound(w, r, "Invalid hash")
+			return
+		}
+
+		targetURL, err := s.GetTexture(hash, false)
+		if err != nil {
+			responses.BadGateway(w, r, "Failed to get texture")
+			log.Println("Failed to get texture:\n\t", err)
+			return
+		}
+
+		// Fetch the file via standard HTTP client
+		// TODO: Consider if this needs to be replaced for testing
+		resp, err := http.Get(targetURL)
+		if err != nil {
+			responses.BadGateway(w, r, "Failed to reach storage backend")
+			log.Println("Failed to reach storage backend:\n\t", err)
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode == http.StatusNotFound {
+			responses.NotFound(w, r, "Texture not found")
+			return
+		}
+
+		// Forward the Content-Type from S3 (or default to image/png)
+		if ct := resp.Header.Get("Content-Type"); ct != "" {
+			w.Header().Set("Content-Type", ct)
+		} else {
+			w.Header().Set("Content-Type", "image/png")
+		}
+
+		// Pass through status code and stream the bytes
+		w.WriteHeader(resp.StatusCode)
+		_, _ = io.Copy(w, resp.Body)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/goccy/go-json"
 )
@@ -43,6 +44,11 @@ func (p *Player) ParseProperties() *TexturesValue {
 		return &textures
 	}
 	return nil
+}
+
+// IsStale returns true if the player's last_seen is older than the staleness threshold
+func (p *Player) IsStale() bool {
+	return time.Now().UnixMilli()-p.LastSeen > stalenessThreshold.Milliseconds()
 }
 
 // Property - A player property as returned by Mojang

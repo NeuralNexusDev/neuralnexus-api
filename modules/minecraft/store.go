@@ -4,8 +4,13 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
+	"io"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/smithy-go"
 	"github.com/goccy/go-json"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -17,13 +22,11 @@ const (
 	stalenessThreshold = 24 * time.Hour
 )
 
-// mojangTextureURL is prefixed onto a stored texture hash to reconstruct the URL
-const mojangTextureURL = "http://textures.minecraft.net/texture/"
-
 const (
 	CachePlayer             = "player:"
 	CachePropertiesSigned   = CachePlayer + "properties:signed:"
 	CachePropertiesUnsigned = CachePlayer + "properties:unsigned:"
+	S3KeyPrefix             = "texture/"
 )
 
 // Store - Minecraft player store
@@ -41,17 +44,21 @@ type Store interface {
 
 	GetProfileFromCache(id string, signed bool) (*Player, error)
 	SetProfileInCache(player *Player, signed bool) error
+
+	IsTextureInS3(hash string) (bool, error)
+	PutTextureInS3(hash string, body io.ReadCloser) error
 }
 
 // store - Minecraft player store implementation
 type store struct {
 	db  *pgxpool.Pool
 	rdb *redis.Client
+	s3  *s3.Client
 }
 
 // NewStore - Create a new Minecraft player store
-func NewStore(db *pgxpool.Pool, rdb *redis.Client) Store {
-	return &store{db: db, rdb: rdb}
+func NewStore(db *pgxpool.Pool, rdb *redis.Client, s3 *s3.Client) Store {
+	return &store{db: db, rdb: rdb, s3: s3}
 }
 
 // GetPlayerByUUID gets a player by UUID from the database
@@ -264,7 +271,39 @@ func (s *store) SetProfileInCache(player *Player, signed bool) error {
 	return s.rdb.Set(context.Background(), key, string(data), redisTTL).Err()
 }
 
-// IsStale returns true if the player's last_seen is older than the staleness threshold
-func (p *Player) IsStale() bool {
-	return time.Now().UnixMilli()-p.LastSeen > stalenessThreshold.Milliseconds()
+// IsTextureInS3 check if the texture is in S3
+func (s *store) IsTextureInS3(hash string) (bool, error) {
+	_, err := s.s3.HeadObject(context.Background(), &s3.HeadObjectInput{
+		Bucket: aws.String("mca"),
+		Key:    aws.String(S3KeyPrefix + hash),
+	})
+
+	if err != nil {
+		var sue smithy.APIError
+		if errors.As(err, &sue) {
+			// Check for standard NotFound or NoSuchKey codes
+			if sue.ErrorCode() == "NotFound" || sue.ErrorCode() == "NoSuchKey" {
+				return false, nil
+			}
+		}
+		// Some S3-compatible stores (or older configs) might return a 404 generic error
+		// You can also check standard HTTP status code if needed, but the above is standard.
+		return false, err
+	}
+
+	return true, nil
+}
+
+// PutTextureInS3 upload a texture to S3
+func (s *store) PutTextureInS3(hash string, body io.ReadCloser) error {
+	_, err := s.s3.PutObject(context.Background(), &s3.PutObjectInput{
+		Bucket:      aws.String("mca"),
+		Key:         aws.String(S3KeyPrefix + hash),
+		Body:        body,
+		ContentType: aws.String("image/png"),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to upload to s3: %w", err)
+	}
+	return nil
 }

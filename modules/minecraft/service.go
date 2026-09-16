@@ -2,8 +2,10 @@ package minecraft
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/goccy/go-json"
@@ -28,12 +30,18 @@ const mojangLookupBulk = "https://api.minecraftservices.com/minecraft/profile/lo
 // https://sessionserver.mojang.com/session/minecraft/profile/<uuid>
 const mojangLookupProfile = "https://sessionserver.mojang.com/session/minecraft/profile/"
 
+// http://textures.minecraft.net/texture/<hash>
+const mojangTextureURL = "http://textures.minecraft.net/texture/"
+
+var nnTextureURL = "https://" + os.Getenv("S3_API_URL") + "/mca/texture/"
+
 // Service - Minecraft player service
 type Service interface {
 	GetPlayerByName(name string) (*Player, error)
 	GetPlayerByUUID(id string) (*Player, error)
 	GetPlayersByNames(names []string) ([]*Player, error)
 	GetProfile(id string, signed bool) (*Player, error)
+	GetTexture(hash string, useMojang bool) (string, error)
 }
 
 // service - Minecraft player service implementation
@@ -44,6 +52,7 @@ type service struct {
 	lookupByUUID  string
 	lookupBulk    string
 	lookupProfile string
+	lookupTexture string
 }
 
 // NewService - Create a new Minecraft player service
@@ -58,6 +67,7 @@ func NewService(store Store, client *http.Client) Service {
 		lookupByUUID:  mojangLookupByUUID,
 		lookupBulk:    mojangLookupBulk,
 		lookupProfile: mojangLookupProfile,
+		lookupTexture: mojangTextureURL,
 	}
 }
 
@@ -296,4 +306,34 @@ func (s *service) GetProfile(id string, signed bool) (*Player, error) {
 		return nil, err
 	}
 	return &player, nil
+}
+
+// GetTexture return the file url for a texture hash
+func (s *service) GetTexture(hash string, useMojang bool) (string, error) {
+	present, err := s.store.IsTextureInS3(hash)
+	if err != nil {
+		return "", err
+	}
+
+	if !present {
+		resp, err := s.client.Get(s.lookupTexture + hash)
+		if err != nil {
+			return "", err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return "", fmt.Errorf("bad status code from remote URL: %d", resp.StatusCode)
+		}
+
+		err = s.store.PutTextureInS3(hash, resp.Body)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	if useMojang {
+		return s.lookupTexture + hash, nil
+	}
+	return nnTextureURL + hash, nil
 }
