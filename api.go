@@ -121,10 +121,9 @@ func ApplyRoutes(
 		log.Fatal("S3_SECRET_KEY_MCA_TEXTURE environment variable not set")
 		return nil
 	}
-	bucket := "mca"
 	mcStore := mc.NewStore(
 		database.GetDB("archive"), rdb,
-		database.GetS3(endpoint, accessKey, secretKey, bucket))
+		database.GetS3(endpoint, accessKey, secretKey))
 	mcService := mc.NewService(mcStore, nil)
 
 	mux.Handle("GET /api/v1/mc/profile/lookup/name/{name}", mc.GetPlayerByNameHandler(mcService))

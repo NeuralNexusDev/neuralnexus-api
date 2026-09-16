@@ -123,7 +123,7 @@ func GetTextureHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		hash := r.PathValue("hash")
 		if hash == "" {
-			responses.NotFound(w, r, "Invalid hash")
+			responses.BadRequest(w, r, "Invalid hash")
 			return
 		}
 

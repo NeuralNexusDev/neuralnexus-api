@@ -9,12 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-func GetS3(endpoint, accessKey, secretKey, bucket string) *s3.Client {
-	if bucket == "" {
-		log.Fatal("Bucket not configured")
-		return nil
-	}
-
+func GetS3(endpoint, accessKey, secretKey string) *s3.Client {
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithRegion("us-east-1"),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, "")),
