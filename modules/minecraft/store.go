@@ -28,8 +28,9 @@ const (
 
 // Store - Minecraft player store
 type Store interface {
-	GetPlayerByUUID(id string, includeProfile bool) (*Player, error)
-	GetPlayerByName(name string, includeProfile bool) (*Player, error)
+	GetPlayerByUUID(id string) (*Player, error)
+	GetPlayerByName(name string) (*Player, error)
+	GetProfileByUUID(id string) (*Player, error)
 
 	UpsertPlayer(player *Player, updateProfile bool) error
 	UpsertTextures(value *TexturesValue) error
@@ -54,46 +55,29 @@ func NewStore(db *pgxpool.Pool, rdb *redis.Client) Store {
 }
 
 // GetPlayerByUUID gets a player by UUID from the database
-func (s *store) GetPlayerByUUID(id string, includeProfile bool) (*Player, error) {
-	var rows pgx.Rows
-	var err error
-	if includeProfile {
-		rows, err = s.db.Query(context.Background(),
-			"SELECT id, name, legacy, demo, profile_actions, first_seen, last_seen FROM players WHERE id = $1", id)
-	} else {
-		rows, err = s.db.Query(context.Background(),
-			"SELECT id, name, legacy, demo, first_seen, last_seen FROM players WHERE id = $1", id)
-	}
+func (s *store) GetPlayerByUUID(id string) (*Player, error) {
+	rows, err := s.db.Query(context.Background(),
+		"SELECT id, name, legacy, demo, first_seen, last_seen FROM players WHERE id = $1", id)
 	if err != nil {
 		return nil, err
 	}
-	player, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Player])
-	if err != nil {
-		return nil, err
-	}
-	if includeProfile {
-		prop, err := s.GetTextures(player.ID, player.Name)
-		if err != nil {
-			return nil, err
-		}
-		if prop != nil {
-			player.Properties = append(player.Properties, *prop)
-		}
-	}
-	return player, nil
+	return pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Player])
 }
 
 // GetPlayerByName gets a player by name from the database
-func (s *store) GetPlayerByName(name string, includeProfile bool) (*Player, error) {
-	var rows pgx.Rows
-	var err error
-	if includeProfile {
-		rows, err = s.db.Query(context.Background(),
-			"SELECT id, name, legacy, demo, profile_actions, first_seen, last_seen FROM players WHERE name = $1", name)
-	} else {
-		rows, err = s.db.Query(context.Background(),
-			"SELECT id, name, legacy, demo, first_seen, last_seen FROM players WHERE name = $1", name)
+func (s *store) GetPlayerByName(name string) (*Player, error) {
+	rows, err := s.db.Query(context.Background(),
+		"SELECT id, name, legacy, demo, first_seen, last_seen FROM players WHERE name = $1", name)
+	if err != nil {
+		return nil, err
 	}
+	return pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Player])
+}
+
+// GetProfileByUUID gets a player's full profile from the database by UUID
+func (s *store) GetProfileByUUID(id string) (*Player, error) {
+	rows, err := s.db.Query(context.Background(),
+		"SELECT id, name, legacy, demo, profile_actions, first_seen, last_seen FROM players WHERE id = $1", id)
 	if err != nil {
 		return nil, err
 	}
@@ -101,14 +85,13 @@ func (s *store) GetPlayerByName(name string, includeProfile bool) (*Player, erro
 	if err != nil {
 		return nil, err
 	}
-	if includeProfile {
-		prop, err := s.GetTextures(player.ID, player.Name)
-		if err != nil {
-			return nil, err
-		}
-		if prop != nil {
-			player.Properties = append(player.Properties, *prop)
-		}
+
+	prop, err := s.GetTextures(player.ID, player.Name)
+	if err != nil {
+		return nil, err
+	}
+	if prop != nil {
+		player.Properties = append(player.Properties, *prop)
 	}
 	return player, nil
 }

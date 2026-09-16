@@ -68,20 +68,27 @@ func (m *mockStore) SetProfileInCache(player *Player, signed bool) error {
 	return nil
 }
 
-func (m *mockStore) GetPlayerByUUID(id string, _ bool) (*Player, error) {
+func (m *mockStore) GetPlayerByUUID(id string) (*Player, error) {
 	if p, ok := m.db[id]; ok {
 		return p, nil
 	}
 	return nil, ErrPlayerNotFound
 }
 
-func (m *mockStore) GetPlayerByName(name string, _ bool) (*Player, error) {
+func (m *mockStore) GetPlayerByName(name string) (*Player, error) {
 	for _, p := range m.db {
 		if p.Name == name {
 			return p, nil
 		}
 	}
 	return nil, ErrPlayerNotFound
+}
+
+// GetProfileByUUID mirrors GetPlayerByUUID — the mock's db entries already
+// carry whatever Properties a test set on them, so there's no separate
+// texture-table join to simulate.
+func (m *mockStore) GetProfileByUUID(id string) (*Player, error) {
+	return m.GetPlayerByUUID(id)
 }
 
 func (m *mockStore) UpsertPlayer(player *Player, _ bool) error {

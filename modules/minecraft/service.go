@@ -10,7 +10,6 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// Primary endpoint — no known 403 issue
 // Alternatives:
 //
 //	https://api.mojang.com/users/profiles/minecraft/<name>   (occasional 403 due to Mojang misconfiguration)
@@ -26,7 +25,7 @@ const mojangLookupByUUID = "https://api.minecraftservices.com/minecraft/profile/
 //	https://api.mojang.com/minecraft/profile/lookup/bulk/byname
 const mojangLookupBulk = "https://api.minecraftservices.com/minecraft/profile/lookup/bulk/byname"
 
-// https://sessionserver.mojang.com/session/minecraft/profile/
+// https://sessionserver.mojang.com/session/minecraft/profile/<uuid>
 const mojangLookupProfile = "https://sessionserver.mojang.com/session/minecraft/profile/"
 
 // Service - Minecraft player service
@@ -73,7 +72,7 @@ func (s *service) GetPlayerByName(name string) (*Player, error) {
 	}
 
 	// Cache miss — fetch from DB
-	dbPlayer, _ := s.store.GetPlayerByName(name, false)
+	dbPlayer, _ := s.store.GetPlayerByName(name)
 	if dbPlayer != nil && !dbPlayer.IsStale() {
 		if err := s.store.SetPlayerInCache(dbPlayer); err != nil {
 			return nil, err
@@ -120,7 +119,7 @@ func (s *service) GetPlayerByUUID(id string) (*Player, error) {
 	}
 
 	// Cache miss — fetch from DB
-	dbPlayer, _ := s.store.GetPlayerByUUID(id, false)
+	dbPlayer, _ := s.store.GetPlayerByUUID(id)
 	if dbPlayer != nil && !dbPlayer.IsStale() {
 		if err := s.store.SetPlayerInCache(dbPlayer); err != nil {
 			return nil, err
@@ -176,7 +175,7 @@ func (s *service) GetPlayersByNames(names []string) ([]*Player, error) {
 			players = append(players, player)
 		} else {
 			// Cache miss — fetch from DB
-			player, _ := s.store.GetPlayerByName(name, false)
+			player, _ := s.store.GetPlayerByName(name)
 			if player != nil && !player.IsStale() {
 				if err := s.store.SetPlayerInCache(player); err != nil {
 					return nil, err
@@ -240,7 +239,7 @@ func (s *service) GetProfile(id string, signed bool) (*Player, error) {
 
 	// Cache miss — fetch from DB
 	if !signed {
-		dbPlayer, _ := s.store.GetPlayerByUUID(id, true)
+		dbPlayer, _ := s.store.GetProfileByUUID(id)
 		if dbPlayer != nil && !dbPlayer.IsStale() {
 			if err := s.store.SetProfileInCache(dbPlayer, false); err != nil {
 				return nil, err

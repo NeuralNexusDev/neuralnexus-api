@@ -73,7 +73,7 @@ func TestStore_UpsertPlayer_Insert(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	got, err := s.GetPlayerByUUID(testPlayer.ID, false)
+	got, err := s.GetPlayerByUUID(testPlayer.ID)
 	if err != nil {
 		t.Fatalf("failed to get player: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestStore_UpsertPlayer_UpdateLastSeen(t *testing.T) {
 		t.Fatalf("first upsert failed: %v", err)
 	}
 
-	got1, _ := s.GetPlayerByUUID(testPlayer.ID, false)
+	got1, _ := s.GetPlayerByUUID(testPlayer.ID)
 	firstSeen := got1.FirstSeen
 
 	// Small sleep to ensure last_seen differs
@@ -99,7 +99,7 @@ func TestStore_UpsertPlayer_UpdateLastSeen(t *testing.T) {
 		t.Fatalf("second upsert failed: %v", err)
 	}
 
-	got2, _ := s.GetPlayerByUUID(testPlayer.ID, false)
+	got2, _ := s.GetPlayerByUUID(testPlayer.ID)
 	if got2.FirstSeen != firstSeen {
 		t.Error("first_seen should not change on upsert")
 	}
@@ -126,7 +126,7 @@ func TestStore_UpsertPlayer_ProfileFields_NotUpdatedWithoutFlag(t *testing.T) {
 		t.Fatalf("upsert without profile failed: %v", err)
 	}
 
-	got, err := s.GetPlayerByUUID(testPlayer.ID, false)
+	got, err := s.GetPlayerByUUID(testPlayer.ID)
 	if err != nil {
 		t.Fatalf("failed to get player: %v", err)
 	}
@@ -160,7 +160,7 @@ func TestStore_UpsertPlayer_NameHistory(t *testing.T) {
 func TestStore_GetPlayerByUUID_NotFound(t *testing.T) {
 	s := setupStore(t)
 
-	_, err := s.GetPlayerByUUID("00000000000000000000000000000000", false)
+	_, err := s.GetPlayerByUUID("00000000000000000000000000000000")
 	if err == nil {
 		t.Error("expected error for unknown UUID")
 	}
@@ -169,7 +169,7 @@ func TestStore_GetPlayerByUUID_NotFound(t *testing.T) {
 func TestStore_GetPlayerByName_NotFound(t *testing.T) {
 	s := setupStore(t)
 
-	_, err := s.GetPlayerByName("nonexistent_player_xyz", false)
+	_, err := s.GetPlayerByName("nonexistent_player_xyz")
 	if err == nil {
 		t.Error("expected error for unknown name")
 	}
@@ -325,7 +325,7 @@ func TestGetProfileFromCache_MissingProperties(t *testing.T) {
 	}
 }
 
-func TestStore_GetPlayerByUUID_IncludeProfile_HydratesTextures(t *testing.T) {
+func TestStore_GetProfileByUUID_HydratesTextures(t *testing.T) {
 	s := setupStore(t)
 
 	if err := s.UpsertPlayer(testPlayer, false); err != nil {
@@ -353,7 +353,7 @@ func TestStore_GetPlayerByUUID_IncludeProfile_HydratesTextures(t *testing.T) {
 		t.Fatalf("failed to upsert textures: %v", err)
 	}
 
-	got, err := s.GetPlayerByUUID(testPlayer.ID, true)
+	got, err := s.GetProfileByUUID(testPlayer.ID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -380,14 +380,14 @@ func TestStore_GetPlayerByUUID_IncludeProfile_HydratesTextures(t *testing.T) {
 	}
 }
 
-func TestStore_GetPlayerByUUID_IncludeProfile_NoTextures(t *testing.T) {
+func TestStore_GetProfileByUUID_NoTextures(t *testing.T) {
 	s := setupStore(t)
 
 	if err := s.UpsertPlayer(testPlayer, false); err != nil {
 		t.Fatalf("failed to upsert player: %v", err)
 	}
 
-	got, err := s.GetPlayerByUUID(testPlayer.ID, true)
+	got, err := s.GetProfileByUUID(testPlayer.ID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
