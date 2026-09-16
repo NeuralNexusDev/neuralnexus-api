@@ -245,18 +245,8 @@ func TestSetProfileInCache_Unsigned(t *testing.T) {
 	if got.Properties[0].Signature != "" {
 		t.Error("expected no signature on unsigned response")
 	}
-
-	// Verify SignatureRequired is absent
-	decoded, err := base64.StdEncoding.DecodeString(got.Properties[0].Value)
-	if err != nil {
-		t.Fatalf("failed to decode property value: %v", err)
-	}
-	var textures TexturesValue
-	if err := json.Unmarshal(decoded, &textures); err != nil {
-		t.Fatalf("failed to unmarshal textures: %v", err)
-	}
-	if textures.SignatureRequired {
-		t.Error("expected SignatureRequired to be absent on unsigned response")
+	if got.Properties[0].Value != player.Properties[0].Value {
+		t.Error("expected cached value to match what was set, verbatim")
 	}
 }
 
@@ -290,27 +280,7 @@ func TestSetProfileInCache_Signed(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Verify unsigned cache has no signature and no SignatureRequired
-	gotUnsigned, err := s.GetProfileFromCache(player.ID, false)
-	if err != nil {
-		t.Fatalf("unexpected error getting unsigned: %v", err)
-	}
-	if gotUnsigned.Properties[0].Signature != "" {
-		t.Error("expected no signature on unsigned response")
-	}
-	decodedUnsigned, err := base64.StdEncoding.DecodeString(gotUnsigned.Properties[0].Value)
-	if err != nil {
-		t.Fatalf("failed to decode unsigned property value: %v", err)
-	}
-	var unsignedTextures TexturesValue
-	if err := json.Unmarshal(decodedUnsigned, &unsignedTextures); err != nil {
-		t.Fatalf("failed to unmarshal unsigned textures: %v", err)
-	}
-	if unsignedTextures.SignatureRequired {
-		t.Error("expected SignatureRequired to be absent on unsigned response")
-	}
-
-	// Verify signed cache has signature and SignatureRequired
+	// Signed cache holds the property, signature included, verbatim
 	gotSigned, err := s.GetProfileFromCache(player.ID, true)
 	if err != nil {
 		t.Fatalf("unexpected error getting signed: %v", err)
@@ -318,16 +288,13 @@ func TestSetProfileInCache_Signed(t *testing.T) {
 	if gotSigned.Properties[0].Signature != "sig123" {
 		t.Errorf("expected sig123, got %s", gotSigned.Properties[0].Signature)
 	}
-	decodedSigned, err := base64.StdEncoding.DecodeString(gotSigned.Properties[0].Value)
-	if err != nil {
-		t.Fatalf("failed to decode signed property value: %v", err)
+	if gotSigned.Properties[0].Value != player.Properties[0].Value {
+		t.Error("expected cached value to match what was set, verbatim")
 	}
-	var signedTextures TexturesValue
-	if err := json.Unmarshal(decodedSigned, &signedTextures); err != nil {
-		t.Fatalf("failed to unmarshal signed textures: %v", err)
-	}
-	if !signedTextures.SignatureRequired {
-		t.Error("expected SignatureRequired to be true on signed response")
+
+	// Signed and unsigned caches are independent — no unsigned entry was ever written
+	if _, err := s.GetProfileFromCache(player.ID, false); err == nil {
+		t.Error("expected cache miss on unsigned key")
 	}
 }
 
