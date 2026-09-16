@@ -13,9 +13,10 @@ import (
 // --- Mock Service ---
 
 type mockService struct {
-	player  *Player
-	players []*Player
-	err     error
+	player     *Player
+	players    []*Player
+	err        error
+	textureURL string
 }
 
 func (m *mockService) GetPlayerByName(_ string) (*Player, error) {
@@ -32,6 +33,16 @@ func (m *mockService) GetPlayersByNames(_ []string) ([]*Player, error) {
 
 func (m *mockService) GetProfile(_ string, _ bool) (*Player, error) {
 	return m.player, m.err
+}
+
+func (m *mockService) GetTexture(hash string, _ bool) (string, error) {
+	if m.err != nil {
+		return "", m.err
+	}
+	if m.textureURL != "" {
+		return m.textureURL, nil
+	}
+	return "http://mock-s3-endpoint/" + hash, nil
 }
 
 // --- Tests ---
@@ -251,5 +262,117 @@ func TestHandler_GetProfileHandler_NotFound(t *testing.T) {
 
 	if w.Code != http.StatusNoContent {
 		t.Errorf("expected 204, got %d", w.Code)
+	}
+}
+
+func TestHandler_GetTextureHandler_OK(t *testing.T) {
+	// Mock the S3 storage layer the handler attempts to fetch from
+	s3Mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("mock-texture-data"))
+	}))
+	defer s3Mock.Close()
+
+	svc := &mockService{textureURL: s3Mock.URL}
+	handler := GetTextureHandler(svc, s3Mock.Client())
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/texture/abc123hash", nil)
+	r.SetPathValue("hash", "abc123hash")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	if w.Header().Get("Content-Type") != "image/png" {
+		t.Errorf("expected image/png, got %s", w.Header().Get("Content-Type"))
+	}
+	if w.Body.String() != "mock-texture-data" {
+		t.Errorf("expected body mock-texture-data, got %s", w.Body.String())
+	}
+}
+
+func TestHandler_GetTextureHandler_ServiceError(t *testing.T) {
+	svc := &mockService{err: errors.New("upstream issue")}
+	handler := GetTextureHandler(svc, nil)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/texture/abc123hash", nil)
+	r.SetPathValue("hash", "abc123hash")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusBadGateway {
+		t.Errorf("expected 502, got %d", w.Code)
+	}
+}
+
+func TestHandler_GetTextureHandler_S3NotFound(t *testing.T) {
+	s3Mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer s3Mock.Close()
+
+	svc := &mockService{textureURL: s3Mock.URL}
+	handler := GetTextureHandler(svc, s3Mock.Client())
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/texture/abc123hash", nil)
+	r.SetPathValue("hash", "abc123hash")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", w.Code)
+	}
+}
+
+func TestHandler_GetPlayersByNamesHandler_WrongMediaType(t *testing.T) {
+	svc := &mockService{}
+	handler := GetPlayersByNamesHandler(svc)
+
+	body, _ := json.Marshal([]string{"jeb_"})
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/mc/profile/lookup/bulk/byname", strings.NewReader(string(body)))
+	// Intentionally omitting or setting wrong Content-Type
+	r.Header.Set("Content-Type", "text/plain")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusUnsupportedMediaType {
+		t.Errorf("expected 415, got %d", w.Code)
+	}
+}
+
+func TestHandler_GetPlayersByNamesHandler_EmptyNameInBatch(t *testing.T) {
+	svc := &mockService{}
+	handler := GetPlayersByNamesHandler(svc)
+
+	body, _ := json.Marshal([]string{"jeb_", ""})
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/mc/profile/lookup/bulk/byname", strings.NewReader(string(body)))
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandler_GetTextureHandler_EmptyHash(t *testing.T) {
+	svc := &mockService{}
+	handler := GetTextureHandler(svc, nil)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/texture/", nil)
+	r.SetPathValue("hash", "") // Empty hash
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
 	}
 }

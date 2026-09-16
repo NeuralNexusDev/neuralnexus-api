@@ -139,3 +139,39 @@ func TestTypes_TextureHash_TrailingSlash(t *testing.T) {
 		t.Errorf("expected empty hash for trailing slash, got %s", tex.Hash())
 	}
 }
+
+func TestTypes_ParseProperties_MultipleProperties(t *testing.T) {
+	value := TexturesValue{
+		Textures: Textures{
+			SKIN: &Texture{URL: "http://textures.minecraft.net/texture/abc123"},
+		},
+	}
+
+	player := &Player{
+		Properties: []Property{
+			{Name: "some_other_prop", Value: "ignored"},
+			{Name: TEXTURES, Value: encodedTextures(t, value)},
+		},
+	}
+
+	got := player.ParseProperties()
+	if got == nil {
+		t.Fatal("expected non-nil TexturesValue when textures is not the first property")
+	}
+	if got.Textures.SKIN.Hash() != "abc123" {
+		t.Errorf("expected abc123, got %s", got.Textures.SKIN.Hash())
+	}
+}
+
+func TestTypes_ParseProperties_InvalidBase64(t *testing.T) {
+	player := &Player{
+		Properties: []Property{
+			{Name: TEXTURES, Value: "not-valid-base64!@#$"},
+		},
+	}
+
+	got := player.ParseProperties()
+	if got != nil {
+		t.Error("expected nil when property value contains invalid base64")
+	}
+}

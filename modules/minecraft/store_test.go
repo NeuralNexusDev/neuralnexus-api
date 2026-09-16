@@ -3,10 +3,15 @@ package minecraft
 import (
 	"context"
 	"encoding/base64"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/goccy/go-json"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
@@ -42,7 +47,7 @@ func setupStore(t *testing.T) Store {
 		rdb.Close()
 	})
 
-	return NewStore(db, rdb)
+	return NewStore(db, rdb, nil)
 }
 
 func setupRawDB(t *testing.T) *pgxpool.Pool {
@@ -57,6 +62,26 @@ func setupRawDB(t *testing.T) *pgxpool.Pool {
 	}
 	t.Cleanup(func() { db.Close() })
 	return db
+}
+
+// setupMockS3 creates an isolated AWS S3 Client targeting a mock HTTP server.
+func setupMockS3(t *testing.T, handler http.HandlerFunc) *s3.Client {
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+
+	resolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
+		return aws.Endpoint{URL: server.URL}, nil
+	})
+
+	cfg := aws.Config{
+		Region:                      "us-east-1",
+		Credentials:                 credentials.NewStaticCredentialsProvider("dummy", "dummy", ""),
+		EndpointResolverWithOptions: resolver,
+	}
+
+	return s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.UsePathStyle = true
+	})
 }
 
 var testPlayer = &Player{
@@ -151,9 +176,28 @@ func TestStore_UpsertPlayer_NameHistory(t *testing.T) {
 		t.Fatalf("upsert with new name failed: %v", err)
 	}
 
-	// Cleanup extra name entry
+	// Verify we can find the player by their new name
+	got, err := s.GetPlayerByName("jeb_renamed")
+	if err != nil {
+		t.Fatalf("failed to get player by new name: %v", err)
+	}
+	if got.ID != testPlayer.ID {
+		t.Errorf("expected UUID %s, got %s", testPlayer.ID, got.ID)
+	}
+
+	// Verify looking up by UUID returns the updated name
+	gotUUID, err := s.GetPlayerByUUID(testPlayer.ID)
+	if err != nil {
+		t.Fatalf("failed to get player by UUID: %v", err)
+	}
+	if gotUUID.Name != "jeb_renamed" {
+		t.Errorf("expected name jeb_renamed, got %s", gotUUID.Name)
+	}
+
+	// Additional cleanup for the extra name entry in player_names
 	t.Cleanup(func() {
-		// handled by setupStore cleanup of the player row cascade
+		db := setupRawDB(t)
+		db.Exec(context.Background(), "DELETE FROM player_names WHERE name = 'jeb_renamed'")
 	})
 }
 
@@ -337,10 +381,11 @@ func TestStore_GetProfileByUUID_HydratesTextures(t *testing.T) {
 		Metadata: &Metadata{Model: SLIM},
 	}
 	cape := &Texture{URL: "http://textures.minecraft.net/texture/cape456"}
-	if err := s.UpsertTextureHash(skin); err != nil {
+
+	if err := s.UpsertTextureHash(skin.Hash()); err != nil {
 		t.Fatalf("failed to upsert skin hash: %v", err)
 	}
-	if err := s.UpsertTextureHash(cape); err != nil {
+	if err := s.UpsertTextureHash(cape.Hash()); err != nil {
 		t.Fatalf("failed to upsert cape hash: %v", err)
 	}
 
@@ -399,28 +444,20 @@ func TestStore_GetProfileByUUID_NoTextures(t *testing.T) {
 func TestStore_UpsertTextureHash(t *testing.T) {
 	s := setupStore(t)
 
-	tex := &Texture{URL: "http://textures.minecraft.net/texture/abc123"}
-	if err := s.UpsertTextureHash(tex); err != nil {
+	hash := "abc12345"
+	if err := s.UpsertTextureHash(hash); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	// Second upsert should not error
-	if err := s.UpsertTextureHash(tex); err != nil {
+	if err := s.UpsertTextureHash(hash); err != nil {
 		t.Fatalf("unexpected error on duplicate: %v", err)
 	}
 
 	t.Cleanup(func() {
 		db := setupRawDB(t)
-		db.Exec(context.Background(), "DELETE FROM textures WHERE hash = 'abc123'")
+		db.Exec(context.Background(), "DELETE FROM textures WHERE hash = 'abc12345'")
 	})
-}
-
-func TestStore_UpsertTextureHash_Nil(t *testing.T) {
-	s := setupStore(t)
-
-	if err := s.UpsertTextureHash(nil); err != nil {
-		t.Errorf("expected nil error for nil texture, got %v", err)
-	}
 }
 
 func TestStore_UpsertTextures(t *testing.T) {
@@ -434,10 +471,10 @@ func TestStore_UpsertTextures(t *testing.T) {
 	skin := &Texture{URL: "http://textures.minecraft.net/texture/skin123"}
 	cape := &Texture{URL: "http://textures.minecraft.net/texture/cape456"}
 
-	if err := s.UpsertTextureHash(skin); err != nil {
+	if err := s.UpsertTextureHash(skin.Hash()); err != nil {
 		t.Fatalf("failed to upsert skin hash: %v", err)
 	}
-	if err := s.UpsertTextureHash(cape); err != nil {
+	if err := s.UpsertTextureHash(cape.Hash()); err != nil {
 		t.Fatalf("failed to upsert cape hash: %v", err)
 	}
 
@@ -472,7 +509,7 @@ func TestStore_UpsertTextures_SlimModel(t *testing.T) {
 		Metadata: &Metadata{Model: SLIM},
 	}
 
-	if err := s.UpsertTextureHash(skin); err != nil {
+	if err := s.UpsertTextureHash(skin.Hash()); err != nil {
 		t.Fatalf("failed to upsert skin hash: %v", err)
 	}
 
@@ -483,6 +520,59 @@ func TestStore_UpsertTextures_SlimModel(t *testing.T) {
 	}
 
 	if err := s.UpsertTextures(value); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestStore_IsTextureInS3_Exists(t *testing.T) {
+	client := setupMockS3(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodHead {
+			t.Errorf("expected HEAD request, got %s", r.Method)
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+
+	s := &store{s3: client}
+	exists, err := s.IsTextureInS3("mockhash")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !exists {
+		t.Error("expected texture to exist")
+	}
+}
+
+func TestStore_IsTextureInS3_NotFound(t *testing.T) {
+	client := setupMockS3(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		// Standard AWS SDK behavior expects this XML format to map to "NoSuchKey"
+		w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?><Error><Code>NoSuchKey</Code></Error>`))
+	})
+
+	s := &store{s3: client}
+	exists, err := s.IsTextureInS3("mockhash")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if exists {
+		t.Error("expected texture to not exist")
+	}
+}
+
+func TestStore_PutTextureInS3(t *testing.T) {
+	client := setupMockS3(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("expected PUT request, got %s", r.Method)
+		}
+		if r.Header.Get("Content-Type") != "image/png" {
+			t.Errorf("expected Content-Type image/png, got %s", r.Header.Get("Content-Type"))
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+
+	s := &store{s3: client}
+	err := s.PutTextureInS3("mockhash", nil) // Body is irrelevant for mocked http server
+	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

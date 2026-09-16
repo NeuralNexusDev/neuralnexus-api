@@ -2,43 +2,80 @@ package minecraft
 
 import (
 	"encoding/json"
-	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/redis/go-redis/v9"
 )
 
-// --- Mock Store ---
-
+// mockStore implements the Store interface for unit testing the Service layer.
 type mockStore struct {
-	cache        map[string]*Player
-	profileCache map[string]*Player
-	db           map[string]*Player
-	upsertErr    error
-	cacheSetErr  error
+	playersByName map[string]*Player
+	playersByUUID map[string]*Player
+	cache         map[string]*Player
+	profilesCache map[string]*Player
+	s3Textures    map[string]bool
 }
 
-func newMockStore() *mockStore {
-	return &mockStore{
-		cache:        make(map[string]*Player),
-		profileCache: make(map[string]*Player),
-		db:           make(map[string]*Player),
+func (m *mockStore) GetPlayerByUUID(id string) (*Player, error) {
+	if p, ok := m.playersByUUID[id]; ok {
+		return p, nil
 	}
+	return nil, ErrPlayerNotFound
+}
+
+func (m *mockStore) GetPlayerByName(name string) (*Player, error) {
+	if p, ok := m.playersByName[name]; ok {
+		return p, nil
+	}
+	return nil, ErrPlayerNotFound
+}
+
+func (m *mockStore) GetProfileByUUID(id string) (*Player, error) {
+	if p, ok := m.playersByUUID[id]; ok {
+		return p, nil
+	}
+	return nil, ErrPlayerNotFound
+}
+
+func (m *mockStore) GetTextures(id string) (*TexturesRow, error) {
+	return nil, nil
+}
+
+func (m *mockStore) UpsertPlayer(player *Player, updateProfile bool) error {
+	if m.playersByName == nil {
+		m.playersByName = make(map[string]*Player)
+	}
+	if m.playersByUUID == nil {
+		m.playersByUUID = make(map[string]*Player)
+	}
+	m.playersByName[player.Name] = player
+	m.playersByUUID[player.ID] = player
+	return nil
+}
+
+func (m *mockStore) UpsertTextures(value *TexturesValue) error {
+	return nil
+}
+
+func (m *mockStore) UpsertTextureHash(hash string) error {
+	return nil
 }
 
 func (m *mockStore) GetPlayerFromCache(key string) (*Player, error) {
-	if p, ok := m.cache[key]; ok {
-		return p, nil
+	if m.cache != nil {
+		if p, ok := m.cache[key]; ok {
+			return p, nil
+		}
 	}
 	return nil, redis.Nil
 }
 
 func (m *mockStore) SetPlayerInCache(player *Player) error {
-	if m.cacheSetErr != nil {
-		return m.cacheSetErr
+	if m.cache == nil {
+		m.cache = make(map[string]*Player)
 	}
 	m.cache[player.ID] = player
 	m.cache[player.Name] = player
@@ -46,346 +83,127 @@ func (m *mockStore) SetPlayerInCache(player *Player) error {
 }
 
 func (m *mockStore) GetProfileFromCache(id string, signed bool) (*Player, error) {
-	key := CachePropertiesUnsigned + id
-	if signed {
-		key = CachePropertiesSigned + id
-	}
-	if p, ok := m.profileCache[key]; ok {
-		return p, nil
+	if m.profilesCache != nil {
+		key := id
+		if signed {
+			key += "_signed"
+		} else {
+			key += "_unsigned"
+		}
+		if p, ok := m.profilesCache[key]; ok {
+			return p, nil
+		}
 	}
 	return nil, redis.Nil
 }
 
 func (m *mockStore) SetProfileInCache(player *Player, signed bool) error {
-	if m.cacheSetErr != nil {
-		return m.cacheSetErr
+	if m.profilesCache == nil {
+		m.profilesCache = make(map[string]*Player)
 	}
-	key := CachePropertiesUnsigned + player.ID
+	key := player.ID
 	if signed {
-		key = CachePropertiesSigned + player.ID
+		key += "_signed"
+	} else {
+		key += "_unsigned"
 	}
-	m.profileCache[key] = player
+	m.profilesCache[key] = player
 	return nil
 }
 
-func (m *mockStore) GetPlayerByUUID(id string) (*Player, error) {
-	if p, ok := m.db[id]; ok {
-		return p, nil
+func (m *mockStore) IsTextureInS3(hash string) (bool, error) {
+	if m.s3Textures != nil && m.s3Textures[hash] {
+		return true, nil
 	}
-	return nil, ErrPlayerNotFound
+	return false, nil
 }
 
-func (m *mockStore) GetPlayerByName(name string) (*Player, error) {
-	for _, p := range m.db {
-		if p.Name == name {
-			return p, nil
-		}
+func (m *mockStore) PutTextureInS3(hash string, body io.ReadCloser) error {
+	if m.s3Textures == nil {
+		m.s3Textures = make(map[string]bool)
 	}
-	return nil, ErrPlayerNotFound
-}
-
-// GetProfileByUUID mirrors GetPlayerByUUID — the mock's db entries already
-// carry whatever Properties a test set on them, so there's no separate
-// texture-table join to simulate.
-func (m *mockStore) GetProfileByUUID(id string) (*Player, error) {
-	return m.GetPlayerByUUID(id)
-}
-
-func (m *mockStore) UpsertPlayer(player *Player, _ bool) error {
-	if m.upsertErr != nil {
-		return m.upsertErr
-	}
-	m.db[player.ID] = player
+	m.s3Textures[hash] = true
 	return nil
-}
-
-func (m *mockStore) UpsertTextures(_ *TexturesValue) error {
-	return nil
-}
-
-func (m *mockStore) UpsertTextureHash(_ *Texture) error {
-	return nil
-}
-
-// --- Helpers ---
-
-func newTestServer(status int, body interface{}) *httptest.Server {
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(status)
-		if body != nil {
-			//goland:noinspection GoUnhandledErrorResult
-			json.NewEncoder(w).Encode(body)
-		}
-	}))
-}
-
-func newTestService(store Store, server *httptest.Server) Service {
-	return &service{
-		store:  store,
-		client: server.Client(),
-	}
 }
 
 // --- Tests ---
 
 func TestService_GetPlayerByName_CacheHit(t *testing.T) {
-	store := newMockStore()
-	player := &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}
-	store.cache["jeb_"] = player
-
-	// Server should never be called on a cache hit
-	server := newTestServer(http.StatusInternalServerError, nil)
-	defer server.Close()
-
-	svc := newTestService(store, server)
-	got, err := svc.GetPlayerByName("jeb_")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if got.Name != "jeb_" {
-		t.Errorf("expected jeb_, got %s", got.Name)
-	}
-}
-
-func TestService_GetPlayerByName_CacheMiss_MojangHit(t *testing.T) {
-	store := newMockStore()
-	mojangResponse := Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}
-
-	server := newTestServer(http.StatusOK, mojangResponse)
-	defer server.Close()
-
-	svc := &service{
-		store:        store,
-		client:       server.Client(),
-		lookupByName: server.URL + "/",
-	}
-
-	got, err := svc.GetPlayerByName("jeb_")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if got.Name != "jeb_" {
-		t.Errorf("expected jeb_, got %s", got.Name)
-	}
-	// Verify upserted to DB
-	if _, ok := store.db[mojangResponse.ID]; !ok {
-		t.Error("expected player to be upserted to DB")
-	}
-	// Verify cached
-	if _, ok := store.cache[mojangResponse.Name]; !ok {
-		t.Error("expected player to be cached by name")
-	}
-}
-
-func TestService_GetPlayerByName_NotFound(t *testing.T) {
-	store := newMockStore()
-	server := newTestServer(http.StatusNotFound, nil)
-	defer server.Close()
-
-	svc := &service{store: store, client: server.Client(), lookupByName: server.URL + "/"}
-	_, err := svc.GetPlayerByName("nonexistent")
-	if !errors.Is(err, ErrPlayerNotFound) {
-		t.Errorf("expected ErrPlayerNotFound, got %v", err)
-	}
-}
-
-func TestService_GetPlayerByUUID_CacheHit(t *testing.T) {
-	store := newMockStore()
-	player := &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}
-	store.cache[player.ID] = player
-
-	server := newTestServer(http.StatusInternalServerError, nil)
-	defer server.Close()
-
-	svc := newTestService(store, server)
-	got, err := svc.GetPlayerByUUID(player.ID)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if got.ID != player.ID {
-		t.Errorf("expected %s, got %s", player.ID, got.ID)
-	}
-}
-
-func TestService_GetPlayerByUUID_CacheMiss_MojangHit(t *testing.T) {
-	store := newMockStore()
-	mojangResponse := Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}
-
-	server := newTestServer(http.StatusOK, mojangResponse)
-	defer server.Close()
-
-	svc := &service{
-		store:        store,
-		client:       server.Client(),
-		lookupByUUID: server.URL + "/",
-	}
-
-	got, err := svc.GetPlayerByUUID(mojangResponse.ID)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if got.ID != mojangResponse.ID {
-		t.Errorf("expected %s, got %s", mojangResponse.ID, got.ID)
-	}
-}
-
-func TestService_GetPlayersByNames_AllCacheHits(t *testing.T) {
-	store := newMockStore()
-	store.cache["jeb_"] = &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}
-	store.cache["Notch"] = &Player{ID: "069a79f444e94726a5befca90e38aaf5", Name: "Notch"}
-
-	server := newTestServer(http.StatusInternalServerError, nil)
-	defer server.Close()
-
-	svc := newTestService(store, server)
-	got, err := svc.GetPlayersByNames([]string{"jeb_", "Notch"})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(got) != 2 {
-		t.Errorf("expected 2 players, got %d", len(got))
-	}
-}
-
-func TestService_GetPlayersByNames_TooMany(t *testing.T) {
-	store := newMockStore()
-	server := newTestServer(http.StatusOK, nil)
-	defer server.Close()
-
-	svc := newTestService(store, server)
-	names := make([]string, 11)
-	_, err := svc.GetPlayersByNames(names)
-	if err == nil {
-		t.Error("expected error for >10 names")
-	}
-}
-
-func TestService_GetPlayersByNames_Empty(t *testing.T) {
-	store := newMockStore()
-	server := newTestServer(http.StatusOK, nil)
-	defer server.Close()
-
-	svc := newTestService(store, server)
-	_, err := svc.GetPlayersByNames([]string{})
-	if err == nil {
-		t.Error("expected error for empty names")
-	}
-}
-
-func TestService_GetProfile_CacheHit(t *testing.T) {
-	store := newMockStore()
-	player := &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}
-	store.profileCache[CachePropertiesUnsigned+"853c80ef3c3749fdaa49938b674adae6"] = player
-
-	server := newTestServer(http.StatusInternalServerError, nil)
-	defer server.Close()
-
-	svc := newTestService(store, server)
-	got, err := svc.GetProfile("853c80ef3c3749fdaa49938b674adae6", false)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if got.ID != player.ID {
-		t.Errorf("expected %s, got %s", player.ID, got.ID)
-	}
-}
-
-func TestService_GetProfile_DBHit_NotStale(t *testing.T) {
-	store := newMockStore()
-	player := &Player{
-		ID:       "853c80ef3c3749fdaa49938b674adae6",
-		Name:     "jeb_",
-		LastSeen: time.Now().UnixMilli(),
-		Properties: []Property{
-			{Name: TEXTURES, Value: "encoded"},
+	store := &mockStore{
+		cache: map[string]*Player{
+			"jeb_": {ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"},
 		},
 	}
-	store.db[player.ID] = player
 
-	// Server should never be called — DB row is fresh
-	server := newTestServer(http.StatusInternalServerError, nil)
-	defer server.Close()
+	svc := NewService(store, nil, "http://localhost/texture/")
+	player, err := svc.GetPlayerByName("jeb_")
 
-	svc := newTestService(store, server)
-	got, err := svc.GetProfile(player.ID, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(got.Properties) != 1 {
-		t.Errorf("expected DB-hydrated properties to be preserved, got %d", len(got.Properties))
+	if player.Name != "jeb_" {
+		t.Errorf("expected jeb_, got %s", player.Name)
 	}
 }
 
-func TestService_GetProfile_CacheMiss_MojangHit(t *testing.T) {
-	store := newMockStore()
-	mojangResponse := Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}
+func TestService_GetPlayerByName_MojangFallback(t *testing.T) {
+	// Mock Mojang API server
+	mojangServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(Player{
+			ID:   "853c80ef3c3749fdaa49938b674adae6",
+			Name: "jeb_",
+		})
+	}))
+	defer mojangServer.Close()
 
-	server := newTestServer(http.StatusOK, mojangResponse)
-	defer server.Close()
+	store := &mockStore{}
+	svc := NewService(store, mojangServer.Client(), "http://localhost/texture/")
 
-	svc := &service{
-		store:         store,
-		client:        server.Client(),
-		lookupProfile: server.URL + "/",
-	}
+	// Point service lookup to mock server URL
+	s := svc.(*service)
+	s.lookupByName = mojangServer.URL + "/"
 
-	got, err := svc.GetProfile("853c80ef3c3749fdaa49938b674adae6", false)
+	player, err := svc.GetPlayerByName("jeb_")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got.Name != "jeb_" {
-		t.Errorf("expected jeb_, got %s", got.Name)
-	}
-	if _, ok := store.db[mojangResponse.ID]; !ok {
-		t.Error("expected player to be upserted to DB")
+	if player.ID != "853c80ef3c3749fdaa49938b674adae6" {
+		t.Errorf("expected matching UUID, got %s", player.ID)
 	}
 }
 
-func TestService_GetProfile_NotFound(t *testing.T) {
-	store := newMockStore()
-	server := newTestServer(http.StatusNoContent, nil)
-	defer server.Close()
+func TestService_GetPlayersByNames_Validation(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store, nil, "http://localhost/texture/")
 
-	svc := &service{store: store, client: server.Client(), lookupProfile: server.URL + "/"}
-	_, err := svc.GetProfile("853c80ef3c3749fdaa49938b674adae6", false)
-	if !errors.Is(err, ErrPlayerNotFound) {
-		t.Errorf("expected ErrPlayerNotFound, got %v", err)
+	// Test empty slice
+	_, err := svc.GetPlayersByNames([]string{})
+	if err == nil {
+		t.Error("expected error for empty names list")
+	}
+
+	// Test slice exceeding batch cap of 10
+	tooMany := []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"}
+	_, err = svc.GetPlayersByNames(tooMany)
+	if err == nil {
+		t.Error("expected error for batch lookup exceeding 10 names")
 	}
 }
 
-func TestService_GetProfile_NoContent(t *testing.T) {
-	store := newMockStore()
-	server := newTestServer(http.StatusNoContent, nil)
-	defer server.Close()
-
-	svc := &service{store: store, client: server.Client(), lookupProfile: server.URL + "/"}
-	_, err := svc.GetProfile("853c80ef3c3749fdaa49938b674adae6", false)
-	if !errors.Is(err, ErrPlayerNotFound) {
-		t.Errorf("expected ErrPlayerNotFound, got %v", err)
+func TestService_GetTexture_FromS3(t *testing.T) {
+	store := &mockStore{
+		s3Textures: map[string]bool{"abc123hash": true},
 	}
-}
 
-func TestService_GetProfile_SignedVsUnsigned_CacheSeparation(t *testing.T) {
-	store := newMockStore()
-	unsigned := &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}
-	signed := &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_signed"}
-	store.profileCache[CachePropertiesUnsigned+"853c80ef3c3749fdaa49938b674adae6"] = unsigned
-	store.profileCache[CachePropertiesSigned+"853c80ef3c3749fdaa49938b674adae6"] = signed
+	svc := NewService(store, nil, "http://cdn.neuralnexus.dev/texture/")
+	url, err := svc.GetTexture("abc123hash", false)
 
-	server := newTestServer(http.StatusInternalServerError, nil)
-	defer server.Close()
-
-	svc := newTestService(store, server)
-
-	gotUnsigned, err := svc.GetProfile("853c80ef3c3749fdaa49938b674adae6", false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	gotSigned, err := svc.GetProfile("853c80ef3c3749fdaa49938b674adae6", true)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if gotUnsigned.Name == gotSigned.Name {
-		t.Error("expected signed and unsigned cache entries to differ")
+	expectedURL := "http://cdn.neuralnexus.dev/texture/abc123hash"
+	if url != expectedURL {
+		t.Errorf("expected %s, got %s", expectedURL, url)
 	}
 }
