@@ -85,6 +85,9 @@ type Textures struct {
 // Hash extracts the texture hash from a Mojang texture URL
 // e.g. http://textures.minecraft.net/texture/<hash> -> <hash>
 func (t *Texture) Hash() string {
+	if t == nil {
+		return ""
+	}
 	idx := strings.LastIndex(t.URL, "/")
 	if idx == -1 || idx == len(t.URL)-1 {
 		return ""

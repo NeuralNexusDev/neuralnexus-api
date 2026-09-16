@@ -42,6 +42,7 @@ func GetPlayerByUUIDHandler(s Service) http.HandlerFunc {
 			return
 		}
 
+		// TODO: UUID validation
 		player, err := s.GetPlayerByUUID(raw)
 		if err != nil {
 			if errors.Is(err, ErrPlayerNotFound) {
@@ -61,6 +62,7 @@ func GetPlayersByNamesHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Content-Type") != "application/json" {
 			responses.UnsupportedMediaType(w, r, "Request must be of type application/json")
+			return
 		}
 
 		var names []string

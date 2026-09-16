@@ -182,6 +182,7 @@ func (s *service) GetPlayersByNames(names []string) ([]*Player, error) {
 					return nil, err
 				}
 				players = append(players, player)
+				continue
 			}
 
 			// Stale entry — fetch from Mojang
