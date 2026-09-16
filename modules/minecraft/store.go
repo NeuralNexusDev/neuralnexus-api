@@ -17,8 +17,7 @@ const (
 	stalenessThreshold = 24 * time.Hour
 )
 
-// mojangTextureURL is prefixed onto a stored texture hash to reconstruct the
-// URL shape Mojang returns, since only the hash is persisted in player_textures.
+// mojangTextureURL is prefixed onto a stored texture hash to reconstruct the URL
 const mojangTextureURL = "https://textures.minecraft.net/texture/"
 
 const (
@@ -73,8 +72,12 @@ func (s *store) GetPlayerByUUID(id string, includeProfile bool) (*Player, error)
 		return nil, err
 	}
 	if includeProfile {
-		if err := s.hydrateTextureProperties(player); err != nil {
+		prop, err := s.GetTextures(player.ID, player.Name)
+		if err != nil {
 			return nil, err
+		}
+		if prop != nil {
+			player.Properties = append(player.Properties, *prop)
 		}
 	}
 	return player, nil
@@ -99,27 +102,28 @@ func (s *store) GetPlayerByName(name string, includeProfile bool) (*Player, erro
 		return nil, err
 	}
 	if includeProfile {
-		if err := s.hydrateTextureProperties(player); err != nil {
+		prop, err := s.GetTextures(player.ID, player.Name)
+		if err != nil {
 			return nil, err
+		}
+		if prop != nil {
+			player.Properties = append(player.Properties, *prop)
 		}
 	}
 	return player, nil
 }
 
-// hydrateTextureProperties loads the player's most recent skin/cape hashes from
-// player_textures and reconstructs a TEXTURES property matching the shape a live
-// Mojang response would have, so archived profiles work with ParseProperties and
-// SetProfileInCache the same as freshly-fetched ones. No-op if none are stored.
-func (s *store) hydrateTextureProperties(player *Player) error {
+// GetTextures get a player's most recent skin+cape from the database and rebuild it as a Property
+func (s *store) GetTextures(playerID, playerName string) (*Property, error) {
 	rows, err := s.db.Query(context.Background(), `
 		SELECT skin, model, cape, last_seen
 		FROM player_textures
 		WHERE player_id = $1
 		ORDER BY last_seen DESC
 		LIMIT 1
-		`, player.ID)
+		`, playerID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	type textureRow struct {
@@ -131,12 +135,12 @@ func (s *store) hydrateTextureProperties(player *Player) error {
 	row, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByPos[textureRow])
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil
+			return nil, nil
 		}
-		return err
+		return nil, err
 	}
 	if row.Skin == nil && row.Cape == nil {
-		return nil
+		return nil, nil
 	}
 
 	var textures Textures
@@ -152,19 +156,16 @@ func (s *store) hydrateTextureProperties(player *Player) error {
 
 	value := TexturesValue{
 		Timestamp:   row.LastSeen,
-		ProfileID:   player.ID,
-		ProfileName: player.Name,
+		ProfileID:   playerID,
+		ProfileName: playerName,
 		Textures:    textures,
 	}
 	encoded, err := json.Marshal(value)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	player.Properties = []Property{
-		{Name: TEXTURES, Value: base64.StdEncoding.EncodeToString(encoded)},
-	}
-	return nil
+	return &Property{Name: TEXTURES, Value: base64.StdEncoding.EncodeToString(encoded)}, nil
 }
 
 // UpsertPlayer upserts a player into the database and updates name history
