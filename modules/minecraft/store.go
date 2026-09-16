@@ -18,7 +18,7 @@ const (
 )
 
 // mojangTextureURL is prefixed onto a stored texture hash to reconstruct the URL
-const mojangTextureURL = "https://textures.minecraft.net/texture/"
+const mojangTextureURL = "http://textures.minecraft.net/texture/"
 
 const (
 	CachePlayer             = "player:"
@@ -109,41 +109,19 @@ func (s *store) GetTextures(playerID, playerName string) (*Property, error) {
 		return nil, err
 	}
 
-	type textureRow struct {
-		Skin     *string
-		Model    *string
-		Cape     *string
-		LastSeen int64
-	}
-	row, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByPos[textureRow])
+	row, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[TexturesRow])
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, err
 	}
-	if row.Skin == nil && row.Cape == nil {
+
+	value := row.Value(playerID, playerName)
+	if value == nil {
 		return nil, nil
 	}
-
-	var textures Textures
-	if row.Skin != nil {
-		textures.SKIN = &Texture{URL: mojangTextureURL + *row.Skin}
-		if row.Model != nil && Model(*row.Model) == SLIM {
-			textures.SKIN.Metadata = &Metadata{Model: SLIM}
-		}
-	}
-	if row.Cape != nil {
-		textures.CAPE = &Texture{URL: mojangTextureURL + *row.Cape}
-	}
-
-	value := TexturesValue{
-		Timestamp:   row.LastSeen,
-		ProfileID:   playerID,
-		ProfileName: playerName,
-		Textures:    textures,
-	}
-	encoded, err := json.Marshal(value)
+	encoded, err := json.Marshal(*value)
 	if err != nil {
 		return nil, err
 	}
@@ -200,7 +178,7 @@ func (s *store) UpsertPlayer(player *Player, updateProfile bool) error {
 func (s *store) UpsertTextures(value *TexturesValue) error {
 	skin := value.Textures.SKIN
 	var model *Model
-	if skin.Metadata != nil {
+	if skin != nil && skin.Metadata != nil {
 		model = &skin.Metadata.Model
 	}
 	cape := value.Textures.CAPE

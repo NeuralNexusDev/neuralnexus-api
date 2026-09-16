@@ -111,3 +111,36 @@ type Model string
 
 // SLIM The only known value for Metadata.Model
 const SLIM Model = "slim"
+
+// TexturesRow represents a texture in the database
+type TexturesRow struct {
+	Skin     *string `db:"skin"`
+	Model    *Model  `db:"model"`
+	Cape     *string `db:"cape"`
+	LastSeen int64   `db:"last_seen"`
+}
+
+// Value converts a TexturesRow to a TexturesValue
+func (t *TexturesRow) Value(playerID, playerName string) *TexturesValue {
+	if t.Skin == nil && t.Cape == nil {
+		return nil
+	}
+
+	var textures Textures
+	if t.Skin != nil {
+		textures.SKIN = &Texture{URL: mojangTextureURL + *t.Skin}
+		if t.Model != nil && *t.Model == SLIM {
+			textures.SKIN.Metadata = &Metadata{Model: SLIM}
+		}
+	}
+	if t.Cape != nil {
+		textures.CAPE = &Texture{URL: mojangTextureURL + *t.Cape}
+	}
+
+	return &TexturesValue{
+		Timestamp:   t.LastSeen,
+		ProfileID:   playerID,
+		ProfileName: playerName,
+		Textures:    textures,
+	}
+}
