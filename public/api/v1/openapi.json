@@ -131,270 +131,16 @@
                 }
             }
         },
-        "/game-server-status/{game}": {
+        "/bee-name-generator/suggestion": {
             "get": {
-                "summary": "Get game server status",
-                "description": "Get game server status",
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/GameSlug"
-                    },
-                    {
-                        "$ref": "#/components/parameters/GameHostQuery"
-                    },
-                    {
-                        "$ref": "#/components/parameters/GamePortQuery"
-                    },
-                    {
-                        "$ref": "#/components/parameters/GameRawQuery"
-                    },
-                    {
-                        "$ref": "#/components/parameters/GameQueryTypeQuery"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/GameServerStatus"
-                                }
-                            },
-                            "application/xml": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/GameServerStatus"
-                                }
-                            },
-                            "application/x-protobuf": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/GameServerStatus"
-                                }
-                            }
-                        }
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/404NotFound"
-                    }
-                }
-            }
-        },
-        "/game-server-status/simple/{game}": {
-            "get": {
-                "summary": "Get game server simple status",
-                "description": "Get game server simple status",
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/GameSlug"
-                    },
-                    {
-                        "$ref": "#/components/parameters/GameHostQuery"
-                    },
-                    {
-                        "$ref": "#/components/parameters/GamePortQuery"
-                    },
-                    {
-                        "$ref": "#/components/parameters/GameQueryTypeQuery"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "$ref": "#/components/responses/SimpleOnlineResponse"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/SimpleOfflineResponse"
-                    }
-                }
-            }
-        },
-        "/mcstatus/{host}": {
-            "get": {
-                "summary": "Get Minecraft server status",
-                "description": "Get Minecraft server status",
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/HostSlug"
-                    },
-                    {
-                        "name": "bedrock",
-                        "in": "query",
-                        "description": "Is the server bedrock edition",
-                        "required": false,
-                        "schema": {
-                            "type": "boolean"
-                        }
-                    },
-                    {
-                        "name": "query",
-                        "in": "query",
-                        "description": "Is query enabled on the server",
-                        "required": false,
-                        "schema": {
-                            "type": "boolean"
-                        }
-                    },
-                    {
-                        "name": "query_port",
-                        "in": "query",
-                        "description": "Minecraft server query port",
-                        "required": false,
-                        "schema": {
-                            "type": "integer"
-                        }
-                    },
-                    {
-                        "$ref": "#/components/parameters/GameRawQuery"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/MCServerStatus"
-                                }
-                            },
-                            "application/xml": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/MCServerStatus"
-                                }
-                            },
-                            "application/x-protobuf": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/MCServerStatus"
-                                }
-                            }
-                        }
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/404NotFound"
-                    }
-                }
-            }
-        },
-        "/mcstatus/icon/{host}": {
-            "get": {
-                "summary": "Get Minecraft server icon",
-                "description": "Get Minecraft server icon",
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/HostSlug"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "image/png": {
-                                "schema": {
-                                    "type": "string",
-                                    "format": "binary"
-                                }
-                            }
-                        }
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/404NotFound"
-                    }
-                }
-            }
-        },
-        "/mcstatus/simple/{host}": {
-            "get": {
-                "summary": "Get Minecraft server simple status",
-                "description": "Get Minecraft server simple status",
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/HostSlug"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "$ref": "#/components/responses/SimpleOnlineResponse"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/SimpleOfflineResponse"
-                    }
-                }
-            }
-        },
-        "/users/{user_id}": {
-            "get": {
-                "summary": "Get a user by ID",
-                "description": "Requires a valid session; any authenticated user may look up any other user by ID.",
+                "summary": "Get bee name suggestions (unreachable without a count)",
+                "description": "Registered with no path parameter, so the handler's amount lookup always comes back empty and fails validation before any suggestions are read. Use GET /bee-name-generator/suggestion/{amount} instead.",
                 "security": [
                     {
                         "bearerAuth": []
                     }
                 ],
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/UserIdSlug"
-                    }
-                ],
                 "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/Account"
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/401Unauthorized"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/404NotFound"
-                    }
-                }
-            },
-            "put": {
-                "summary": "Update a user",
-                "description": "Requires the admin:users scope.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/UserIdSlug"
-                    }
-                ],
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/Account"
-                            }
-                        },
-                        "application/xml": {
-                            "schema": {
-                                "$ref": "#/components/schemas/Account"
-                            }
-                        },
-                        "application/x-protobuf": {
-                            "schema": {
-                                "$ref": "#/components/schemas/Account"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/Account"
-                                }
-                            }
-                        }
-                    },
                     "400": {
                         "$ref": "#/components/responses/400BadRequest"
                     },
@@ -407,10 +153,10 @@
                 }
             }
         },
-        "/users/{user_id}/permissions": {
+        "/bee-name-generator/suggestion/{amount}": {
             "get": {
-                "summary": "Get a user's permissions",
-                "description": "Requires the admin:users scope, unless the caller is requesting their own permissions.",
+                "summary": "Get bee name suggestions",
+                "description": "Requires the admin:bee-name-generator scope.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -418,7 +164,7 @@
                 ],
                 "parameters": [
                     {
-                        "$ref": "#/components/parameters/UserIdSlug"
+                        "$ref": "#/components/parameters/BeeSuggestionAmountSlug"
                     }
                 ],
                 "responses": {
@@ -427,107 +173,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "string"
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/401Unauthorized"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/403Forbidden"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/404NotFound"
-                    }
-                }
-            }
-        },
-        "/users/{platform}/{platform_id}": {
-            "get": {
-                "summary": "Get a user by their linked-platform identity",
-                "description": "Requires the admin:users scope.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/PlatformSlug"
-                    },
-                    {
-                        "$ref": "#/components/parameters/PlatformIdSlug"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/Account"
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/401Unauthorized"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/403Forbidden"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/404NotFound"
-                    }
-                }
-            },
-            "put": {
-                "summary": "Update a user's linked-platform data",
-                "description": "Requires the admin:users scope.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/PlatformSlug"
-                    },
-                    {
-                        "$ref": "#/components/parameters/PlatformIdSlug"
-                    }
-                ],
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/PlatformData"
-                            }
-                        },
-                        "application/xml": {
-                            "schema": {
-                                "$ref": "#/components/schemas/PlatformData"
-                            }
-                        },
-                        "application/x-protobuf": {
-                            "schema": {
-                                "$ref": "#/components/schemas/PlatformData"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/Account"
+                                    "$ref": "#/components/schemas/BNGSuggestions"
                                 }
                             }
                         }
@@ -540,6 +186,92 @@
                     },
                     "403": {
                         "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/bee-name-generator/suggestion/{name}": {
+            "post": {
+                "summary": "Suggest a bee name",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/BeeSuggestionNameSlug"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "$ref": "#/components/responses/BNGNameResponse"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            },
+            "put": {
+                "summary": "Accept a bee name suggestion",
+                "description": "Requires the admin:bee-name-generator scope.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/BeeSuggestionNameSlug"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "$ref": "#/components/responses/BNGNameResponse"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            },
+            "delete": {
+                "summary": "Reject a bee name suggestion",
+                "description": "Requires the admin:bee-name-generator scope.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/BeeSuggestionNameSlug"
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "$ref": "#/components/responses/204NoContent"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             }
@@ -862,7 +594,7 @@
             },
             "delete": {
                 "summary": "Delete a number record",
-                "description": "Requires a valid session, but — unlike create/update — the handler does not check the admin:numberstore scope; any authenticated user can delete any record.",
+                "description": "Requires a valid session, but \u2014 unlike create/update \u2014 the handler does not check the admin:numberstore scope; any authenticated user can delete any record.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -903,6 +635,147 @@
                     },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/game-server-status/simple/{game}": {
+            "get": {
+                "summary": "Get game server simple status",
+                "description": "Get game server simple status",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/GameSlug"
+                    },
+                    {
+                        "$ref": "#/components/parameters/GameHostQuery"
+                    },
+                    {
+                        "$ref": "#/components/parameters/GamePortQuery"
+                    },
+                    {
+                        "$ref": "#/components/parameters/GameQueryTypeQuery"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "$ref": "#/components/responses/SimpleOnlineResponse"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/SimpleOfflineResponse"
+                    }
+                }
+            }
+        },
+        "/game-server-status/{game}": {
+            "get": {
+                "summary": "Get game server status",
+                "description": "Get game server status",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/GameSlug"
+                    },
+                    {
+                        "$ref": "#/components/parameters/GameHostQuery"
+                    },
+                    {
+                        "$ref": "#/components/parameters/GamePortQuery"
+                    },
+                    {
+                        "$ref": "#/components/parameters/GameRawQuery"
+                    },
+                    {
+                        "$ref": "#/components/parameters/GameQueryTypeQuery"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GameServerStatus"
+                                }
+                            },
+                            "application/xml": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GameServerStatus"
+                                }
+                            },
+                            "application/x-protobuf": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GameServerStatus"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    }
+                }
+            }
+        },
+        "/health": {
+            "get": {
+                "summary": "Health check",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "text/plain": {
+                                "schema": {
+                                    "type": "string",
+                                    "enum": [
+                                        "OK"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/mc/profile/lookup/bulk/byname": {
+            "post": {
+                "summary": "Look up players by name in batch",
+                "description": "Body must be a JSON array of 1 to 10 non-empty names; Content-Type must be application/json.",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                },
+                                "minItems": 1,
+                                "maxItems": 10
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/MCPlayer"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "415": {
+                        "$ref": "#/components/responses/415UnsupportedMediaType"
                     },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
@@ -965,51 +838,6 @@
                     },
                     "404": {
                         "$ref": "#/components/responses/404NotFound"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/500InternalServerError"
-                    }
-                }
-            }
-        },
-        "/mc/profile/lookup/bulk/byname": {
-            "post": {
-                "summary": "Look up players by name in batch",
-                "description": "Body must be a JSON array of 1 to 10 non-empty names; Content-Type must be application/json.",
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "type": "array",
-                                "items": {
-                                    "type": "string"
-                                },
-                                "minItems": 1,
-                                "maxItems": 10
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/MCPlayer"
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
-                    },
-                    "415": {
-                        "$ref": "#/components/responses/415UnsupportedMediaType"
                     },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
@@ -1085,42 +913,114 @@
                 }
             }
         },
-        "/pet-pictures/pets/{name}": {
-            "post": {
-                "summary": "Create a pet",
-                "description": "Requires the admin:pet-pictures scope.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
+        "/mcstatus/icon/{host}": {
+            "get": {
+                "summary": "Get Minecraft server icon",
+                "description": "Get Minecraft server icon",
                 "parameters": [
                     {
-                        "$ref": "#/components/parameters/MCNameSlug"
+                        "$ref": "#/components/parameters/HostSlug"
                     }
                 ],
                 "responses": {
-                    "201": {
-                        "description": "Created",
+                    "200": {
+                        "description": "OK",
                         "content": {
-                            "application/json": {
+                            "image/png": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/Pet"
+                                    "type": "string",
+                                    "format": "binary"
                                 }
                             }
                         }
                     },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    }
+                }
+            }
+        },
+        "/mcstatus/simple/{host}": {
+            "get": {
+                "summary": "Get Minecraft server simple status",
+                "description": "Get Minecraft server simple status",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/HostSlug"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "$ref": "#/components/responses/SimpleOnlineResponse"
                     },
-                    "401": {
-                        "$ref": "#/components/responses/401Unauthorized"
+                    "404": {
+                        "$ref": "#/components/responses/SimpleOfflineResponse"
+                    }
+                }
+            }
+        },
+        "/mcstatus/{host}": {
+            "get": {
+                "summary": "Get Minecraft server status",
+                "description": "Get Minecraft server status",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/HostSlug"
                     },
-                    "403": {
-                        "$ref": "#/components/responses/403Forbidden"
+                    {
+                        "name": "bedrock",
+                        "in": "query",
+                        "description": "Is the server bedrock edition",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean"
+                        }
                     },
-                    "500": {
-                        "$ref": "#/components/responses/500InternalServerError"
+                    {
+                        "name": "query",
+                        "in": "query",
+                        "description": "Is query enabled on the server",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    {
+                        "name": "query_port",
+                        "in": "query",
+                        "description": "Minecraft server query port",
+                        "required": false,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "$ref": "#/components/parameters/GameRawQuery"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MCServerStatus"
+                                }
+                            },
+                            "application/xml": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MCServerStatus"
+                                }
+                            },
+                            "application/x-protobuf": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MCServerStatus"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
                     }
                 }
             }
@@ -1300,79 +1200,10 @@
                 }
             }
         },
-        "/pet-pictures/pictures/random": {
-            "get": {
-                "summary": "Get a random picture of a named pet",
-                "description": "The pet name comes from the request body (this route has no {name} path segment).",
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/Pet"
-                            }
-                        },
-                        "application/xml": {
-                            "schema": {
-                                "$ref": "#/components/schemas/Pet"
-                            }
-                        },
-                        "application/x-protobuf": {
-                            "schema": {
-                                "$ref": "#/components/schemas/Pet"
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/PetPicture"
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/404NotFound"
-                    }
-                }
-            }
-        },
-        "/pet-pictures/pictures/{id}": {
-            "get": {
-                "summary": "Get a pet picture by ID",
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/PetPictureIdSlug"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/PetPicture"
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/404NotFound"
-                    }
-                }
-            },
-            "delete": {
-                "summary": "Delete a pet picture",
-                "description": "Requires the pet-pictures scope for the picture's primary subject's pet name.",
+        "/pet-pictures/pets/{name}": {
+            "post": {
+                "summary": "Create a pet",
+                "description": "Requires the admin:pet-pictures scope.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -1380,12 +1211,19 @@
                 ],
                 "parameters": [
                     {
-                        "$ref": "#/components/parameters/PetPictureIdSlug"
+                        "$ref": "#/components/parameters/MCNameSlug"
                     }
                 ],
                 "responses": {
-                    "204": {
-                        "$ref": "#/components/responses/204NoContent"
+                    "201": {
+                        "description": "Created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Pet"
+                                }
+                            }
+                        }
                     },
                     "400": {
                         "$ref": "#/components/responses/400BadRequest"
@@ -1395,9 +1233,6 @@
                     },
                     "403": {
                         "$ref": "#/components/responses/403Forbidden"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/404NotFound"
                     },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
@@ -1551,6 +1386,111 @@
                 }
             }
         },
+        "/pet-pictures/pictures/random": {
+            "get": {
+                "summary": "Get a random picture of a named pet",
+                "description": "The pet name comes from the request body (this route has no {name} path segment).",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Pet"
+                            }
+                        },
+                        "application/xml": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Pet"
+                            }
+                        },
+                        "application/x-protobuf": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Pet"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PetPicture"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    }
+                }
+            }
+        },
+        "/pet-pictures/pictures/{id}": {
+            "get": {
+                "summary": "Get a pet picture by ID",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/PetPictureIdSlug"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PetPicture"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    }
+                }
+            },
+            "delete": {
+                "summary": "Delete a pet picture",
+                "description": "Requires the pet-pictures scope for the picture's primary subject's pet name.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/PetPictureIdSlug"
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "$ref": "#/components/responses/204NoContent"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
         "/projects/releases/{group}/{project}": {
             "get": {
                 "summary": "Get a GitHub repo's releases",
@@ -1618,52 +1558,10 @@
                 }
             }
         },
-        "/health": {
+        "/users/{platform}/{platform_id}": {
             "get": {
-                "summary": "Health check",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "text/plain": {
-                                "schema": {
-                                    "type": "string",
-                                    "enum": [
-                                        "OK"
-                                    ]
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/bee-name-generator/suggestion": {
-            "get": {
-                "summary": "Get bee name suggestions (unreachable without a count)",
-                "description": "Registered with no path parameter, so the handler's amount lookup always comes back empty and fails validation before any suggestions are read. Use GET /bee-name-generator/suggestion/{amount} instead.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
-                "responses": {
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/401Unauthorized"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/403Forbidden"
-                    }
-                }
-            }
-        },
-        "/bee-name-generator/suggestion/{amount}": {
-            "get": {
-                "summary": "Get bee name suggestions",
-                "description": "Requires the admin:bee-name-generator scope.",
+                "summary": "Get a user by their linked-platform identity",
+                "description": "Requires the admin:users scope.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -1671,7 +1569,10 @@
                 ],
                 "parameters": [
                     {
-                        "$ref": "#/components/parameters/BeeSuggestionAmountSlug"
+                        "$ref": "#/components/parameters/PlatformSlug"
+                    },
+                    {
+                        "$ref": "#/components/parameters/PlatformIdSlug"
                     }
                 ],
                 "responses": {
@@ -1680,7 +1581,64 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/BNGSuggestions"
+                                    "$ref": "#/components/schemas/Account"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    }
+                }
+            },
+            "put": {
+                "summary": "Update a user's linked-platform data",
+                "description": "Requires the admin:users scope.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/PlatformSlug"
+                    },
+                    {
+                        "$ref": "#/components/parameters/PlatformIdSlug"
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PlatformData"
+                            }
+                        },
+                        "application/xml": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PlatformData"
+                            }
+                        },
+                        "application/x-protobuf": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PlatformData"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Account"
                                 }
                             }
                         }
@@ -1693,36 +1651,46 @@
                     },
                     "403": {
                         "$ref": "#/components/responses/403Forbidden"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             }
         },
-        "/bee-name-generator/suggestion/{name}": {
-            "post": {
-                "summary": "Suggest a bee name",
+        "/users/{user_id}": {
+            "get": {
+                "summary": "Get a user by ID",
+                "description": "Requires a valid session; any authenticated user may look up any other user by ID.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
                 "parameters": [
                     {
-                        "$ref": "#/components/parameters/BeeSuggestionNameSlug"
+                        "$ref": "#/components/parameters/UserIdSlug"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "$ref": "#/components/responses/BNGNameResponse"
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Account"
+                                }
+                            }
+                        }
                     },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
                     },
-                    "500": {
-                        "$ref": "#/components/responses/500InternalServerError"
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
                     }
                 }
             },
             "put": {
-                "summary": "Accept a bee name suggestion",
-                "description": "Requires the admin:bee-name-generator scope.",
+                "summary": "Update a user",
+                "description": "Requires the admin:users scope.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -1730,46 +1698,78 @@
                 ],
                 "parameters": [
                     {
-                        "$ref": "#/components/parameters/BeeSuggestionNameSlug"
+                        "$ref": "#/components/parameters/UserIdSlug"
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Account"
+                            }
+                        },
+                        "application/xml": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Account"
+                            }
+                        },
+                        "application/x-protobuf": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Account"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Account"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    }
+                }
+            }
+        },
+        "/users/{user_id}/permissions": {
+            "get": {
+                "summary": "Get a user's permissions",
+                "description": "Requires the admin:users scope, unless the caller is requesting their own permissions.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/UserIdSlug"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "$ref": "#/components/responses/BNGNameResponse"
-                    },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/401Unauthorized"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/403Forbidden"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/500InternalServerError"
-                    }
-                }
-            },
-            "delete": {
-                "summary": "Reject a bee name suggestion",
-                "description": "Requires the admin:bee-name-generator scope.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/BeeSuggestionNameSlug"
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "$ref": "#/components/responses/204NoContent"
-                    },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
                     },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
@@ -1777,8 +1777,8 @@
                     "403": {
                         "$ref": "#/components/responses/403Forbidden"
                     },
-                    "500": {
-                        "$ref": "#/components/responses/500InternalServerError"
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
                     }
                 }
             }
