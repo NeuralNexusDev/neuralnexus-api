@@ -1,7 +1,9 @@
 package minecraft
 
 import (
+	"bytes"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,10 +15,11 @@ import (
 // --- Mock Service ---
 
 type mockService struct {
-	player     *Player
-	players    []*Player
-	err        error
-	textureURL string
+	player             *Player
+	players            []*Player
+	err                error
+	textureBody        []byte
+	textureContentType string
 }
 
 func (m *mockService) GetPlayerByName(_ string) (*Player, error) {
@@ -35,14 +38,19 @@ func (m *mockService) GetProfile(_ string, _ bool) (*Player, error) {
 	return m.player, m.err
 }
 
-func (m *mockService) GetTexture(hash string, _ bool) (string, error) {
+func (m *mockService) GetTextureContent(_ string) (*TextureResult, error) {
 	if m.err != nil {
-		return "", m.err
+		return nil, m.err
 	}
-	if m.textureURL != "" {
-		return m.textureURL, nil
+	body := m.textureBody
+	if body == nil {
+		body = []byte("mock-texture-data")
 	}
-	return "http://mock-s3-endpoint/" + hash, nil
+	contentType := m.textureContentType
+	if contentType == "" {
+		contentType = "image/png"
+	}
+	return &TextureResult{Body: io.NopCloser(bytes.NewReader(body)), ContentType: contentType}, nil
 }
 
 // --- Tests ---
@@ -266,16 +274,8 @@ func TestHandler_GetProfileHandler_NotFound(t *testing.T) {
 }
 
 func TestHandler_GetTextureHandler_OK(t *testing.T) {
-	// Mock the S3 storage layer the handler attempts to fetch from
-	s3Mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "image/png")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("mock-texture-data"))
-	}))
-	defer s3Mock.Close()
-
-	svc := &mockService{textureURL: s3Mock.URL}
-	handler := GetTextureHandler(svc, s3Mock.Client())
+	svc := &mockService{textureBody: []byte("mock-texture-data"), textureContentType: "image/png"}
+	handler := GetTextureHandler(svc)
 
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/texture/abc123hash", nil)
 	r.SetPathValue("hash", "abc123hash")
@@ -296,7 +296,7 @@ func TestHandler_GetTextureHandler_OK(t *testing.T) {
 
 func TestHandler_GetTextureHandler_ServiceError(t *testing.T) {
 	svc := &mockService{err: errors.New("upstream issue")}
-	handler := GetTextureHandler(svc, nil)
+	handler := GetTextureHandler(svc)
 
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/texture/abc123hash", nil)
 	r.SetPathValue("hash", "abc123hash")
@@ -309,14 +309,9 @@ func TestHandler_GetTextureHandler_ServiceError(t *testing.T) {
 	}
 }
 
-func TestHandler_GetTextureHandler_S3NotFound(t *testing.T) {
-	s3Mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-	}))
-	defer s3Mock.Close()
-
-	svc := &mockService{textureURL: s3Mock.URL}
-	handler := GetTextureHandler(svc, s3Mock.Client())
+func TestHandler_GetTextureHandler_NotFound(t *testing.T) {
+	svc := &mockService{err: ErrTextureNotFound}
+	handler := GetTextureHandler(svc)
 
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/texture/abc123hash", nil)
 	r.SetPathValue("hash", "abc123hash")
@@ -364,7 +359,7 @@ func TestHandler_GetPlayersByNamesHandler_EmptyNameInBatch(t *testing.T) {
 
 func TestHandler_GetTextureHandler_EmptyHash(t *testing.T) {
 	svc := &mockService{}
-	handler := GetTextureHandler(svc, nil)
+	handler := GetTextureHandler(svc)
 
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/texture/", nil)
 	r.SetPathValue("hash", "") // Empty hash

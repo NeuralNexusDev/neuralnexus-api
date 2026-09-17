@@ -2,6 +2,7 @@ package minecraft
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +18,8 @@ type mockStore struct {
 	cache         map[string]*Player
 	profilesCache map[string]*Player
 	s3Textures    map[string]bool
+	putBodies     map[string][]byte
+	putErr        error
 }
 
 func (m *mockStore) GetPlayerByUUID(id string) (*Player, error) {
@@ -119,10 +122,19 @@ func (m *mockStore) IsTextureInS3(hash string) (bool, error) {
 }
 
 func (m *mockStore) PutTextureInS3(hash string, body io.ReadCloser) error {
+	if m.putErr != nil {
+		return m.putErr
+	}
 	if m.s3Textures == nil {
 		m.s3Textures = make(map[string]bool)
 	}
 	m.s3Textures[hash] = true
+
+	if m.putBodies == nil {
+		m.putBodies = make(map[string][]byte)
+	}
+	data, _ := io.ReadAll(body)
+	m.putBodies[hash] = data
 	return nil
 }
 
@@ -191,19 +203,123 @@ func TestService_GetPlayersByNames_Validation(t *testing.T) {
 	}
 }
 
-func TestService_GetTexture_FromS3(t *testing.T) {
-	store := &mockStore{
-		s3Textures: map[string]bool{"abc123hash": true},
-	}
+func TestService_GetTextureContent_S3Hit(t *testing.T) {
+	cdn := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("cached-texture-bytes"))
+	}))
+	defer cdn.Close()
 
-	svc := NewService(store, nil, "http://cdn.neuralnexus.dev/texture/")
-	url, err := svc.GetTexture("abc123hash", false)
+	store := &mockStore{s3Textures: map[string]bool{"abc123hash": true}}
+	svc := NewService(store, cdn.Client(), cdn.URL+"/")
 
+	result, err := svc.GetTextureContent("abc123hash")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	expectedURL := "http://cdn.neuralnexus.dev/texture/abc123hash"
-	if url != expectedURL {
-		t.Errorf("expected %s, got %s", expectedURL, url)
+	defer result.Body.Close()
+
+	body, _ := io.ReadAll(result.Body)
+	if string(body) != "cached-texture-bytes" {
+		t.Errorf("expected cached-texture-bytes, got %s", body)
+	}
+	if result.ContentType != "image/png" {
+		t.Errorf("expected image/png, got %s", result.ContentType)
+	}
+	if len(store.putBodies) != 0 {
+		t.Error("did not expect PutTextureInS3 to be called on a cache hit")
+	}
+}
+
+func TestService_GetTextureContent_S3Hit_NotFound(t *testing.T) {
+	cdn := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer cdn.Close()
+
+	store := &mockStore{s3Textures: map[string]bool{"abc123hash": true}}
+	svc := NewService(store, cdn.Client(), cdn.URL+"/")
+
+	_, err := svc.GetTextureContent("abc123hash")
+	if !errors.Is(err, ErrTextureNotFound) {
+		t.Errorf("expected ErrTextureNotFound, got %v", err)
+	}
+}
+
+func TestService_GetTextureContent_MissPath_FetchesOnceAndArchives(t *testing.T) {
+	var mojangHits int
+	mojang := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mojangHits++
+		w.Header().Set("Content-Type", "image/png")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("fresh-texture-bytes"))
+	}))
+	defer mojang.Close()
+
+	store := &mockStore{}
+	svc := NewService(store, mojang.Client(), "http://localhost/texture/")
+	s := svc.(*service)
+	s.lookupTexture = mojang.URL + "/"
+
+	result, err := svc.GetTextureContent("newhash")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer result.Body.Close()
+
+	body, _ := io.ReadAll(result.Body)
+	if string(body) != "fresh-texture-bytes" {
+		t.Errorf("expected fresh-texture-bytes, got %s", body)
+	}
+	if mojangHits != 1 {
+		t.Errorf("expected exactly 1 Mojang fetch, got %d", mojangHits)
+	}
+	if string(store.putBodies["newhash"]) != "fresh-texture-bytes" {
+		t.Errorf("expected PutTextureInS3 to receive the fetched bytes, got %q", store.putBodies["newhash"])
+	}
+}
+
+func TestService_GetTextureContent_MissPath_MojangError(t *testing.T) {
+	mojang := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer mojang.Close()
+
+	store := &mockStore{}
+	svc := NewService(store, mojang.Client(), "http://localhost/texture/")
+	s := svc.(*service)
+	s.lookupTexture = mojang.URL + "/"
+
+	_, err := svc.GetTextureContent("newhash")
+	if err == nil {
+		t.Fatal("expected error on non-200 from Mojang")
+	}
+	if len(store.putBodies) != 0 {
+		t.Error("PutTextureInS3 should not be called when the Mojang fetch fails")
+	}
+}
+
+func TestService_GetTextureContent_MissPath_ArchiveFailureStillServesClient(t *testing.T) {
+	mojang := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("fresh-texture-bytes"))
+	}))
+	defer mojang.Close()
+
+	store := &mockStore{putErr: errors.New("s3 unavailable")}
+	svc := NewService(store, mojang.Client(), "http://localhost/texture/")
+	s := svc.(*service)
+	s.lookupTexture = mojang.URL + "/"
+
+	result, err := svc.GetTextureContent("newhash")
+	if err != nil {
+		t.Fatalf("expected client to still be served when archival fails, got error: %v", err)
+	}
+	defer result.Body.Close()
+
+	body, _ := io.ReadAll(result.Body)
+	if string(body) != "fresh-texture-bytes" {
+		t.Errorf("expected fresh-texture-bytes, got %s", body)
 	}
 }

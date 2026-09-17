@@ -1,8 +1,10 @@
 package minecraft
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -38,7 +40,7 @@ type Service interface {
 	GetPlayerByUUID(id string) (*Player, error)
 	GetPlayersByNames(names []string) ([]*Player, error)
 	GetProfile(id string, signed bool) (*Player, error)
-	GetTexture(hash string, useMojang bool) (string, error)
+	GetTextureContent(hash string) (*TextureResult, error)
 }
 
 // service - Minecraft player service implementation
@@ -321,36 +323,73 @@ func (s *service) GetProfile(id string, signed bool) (*Player, error) {
 	return &player, nil
 }
 
-// GetTexture return the file url for a texture hash
-func (s *service) GetTexture(hash string, useMojang bool) (string, error) {
+// GetTextureContent returns the texture's bytes and content type, fetching from
+// Mojang exactly once on a cache miss instead of round-tripping back through S3.
+func (s *service) GetTextureContent(hash string) (*TextureResult, error) {
 	present, err := s.store.IsTextureInS3(hash)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	if !present {
-		resp, err := s.client.Get(s.lookupTexture + hash)
-		if err != nil {
-			return "", err
-		}
-		defer resp.Body.Close()
+	if present {
+		return s.serveFromS3(hash)
+	}
+	return s.fetchAndArchive(hash)
+}
 
-		if resp.StatusCode != http.StatusOK {
-			return "", fmt.Errorf("bad status code from remote URL: %d", resp.StatusCode)
-		}
-
-		err = s.store.PutTextureInS3(hash, resp.Body)
-		if err != nil {
-			return "", err
-		}
-
-		if err := s.store.UpsertTextureHash(hash); err != nil {
-			log.Println("Failed to store texture hash:\n\t", err)
-		}
+// serveFromS3 fetches an already-archived texture straight from the CDN/S3
+func (s *service) serveFromS3(hash string) (*TextureResult, error) {
+	resp, err := s.client.Get(s.nnTextureUrl + hash)
+	if err != nil {
+		return nil, err
 	}
 
-	if useMojang {
-		return s.lookupTexture + hash, nil
+	if resp.StatusCode == http.StatusNotFound {
+		resp.Body.Close()
+		return nil, ErrTextureNotFound
 	}
-	return s.nnTextureUrl + hash, nil
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		return nil, fmt.Errorf("bad status code from S3: %d", resp.StatusCode)
+	}
+
+	contentType := resp.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "image/png"
+	}
+	return &TextureResult{Body: resp.Body, ContentType: contentType}, nil
+}
+
+// fetchAndArchive fetches a texture from Mojang once, archives it to S3, and
+// returns a second reader over the same bytes to serve the client — no
+// re-fetch through S3 for the request that just caused the miss.
+func (s *service) fetchAndArchive(hash string) (*TextureResult, error) {
+	resp, err := s.client.Get(s.lookupTexture + hash)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("bad status code from remote URL: %d", resp.StatusCode)
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	contentType := resp.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "image/png"
+	}
+
+	// Archival failure shouldn't fail the client's request — degrade gracefully.
+	if err := s.store.PutTextureInS3(hash, io.NopCloser(bytes.NewReader(data))); err != nil {
+		log.Println("Failed to upload texture to S3:\n\t", err)
+	} else if err := s.store.UpsertTextureHash(hash); err != nil {
+		log.Println("Failed to store texture hash:\n\t", err)
+	}
+
+	return &TextureResult{Body: io.NopCloser(bytes.NewReader(data)), ContentType: contentType}, nil
 }

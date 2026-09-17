@@ -118,11 +118,8 @@ func GetProfileHandler(s Service) http.HandlerFunc {
 	}
 }
 
-// GetTextureHandler - Pass-through the texture URL to the S3 bucket
-func GetTextureHandler(s Service, client *http.Client) http.HandlerFunc {
-	if client == nil {
-		client = http.DefaultClient
-	}
+// GetTextureHandler - Serve a texture's bytes, fetching from the backend exactly once
+func GetTextureHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		hash := r.PathValue("hash")
 		if hash == "" {
@@ -130,36 +127,19 @@ func GetTextureHandler(s Service, client *http.Client) http.HandlerFunc {
 			return
 		}
 
-		targetURL, err := s.GetTexture(hash, false)
+		result, err := s.GetTextureContent(hash)
 		if err != nil {
+			if errors.Is(err, ErrTextureNotFound) {
+				responses.NotFound(w, r, "Texture not found")
+				return
+			}
 			responses.BadGateway(w, r, "Failed to get texture")
 			log.Println("Failed to get texture:\n\t", err)
 			return
 		}
+		defer result.Body.Close()
 
-		// Fetch the file from the hash's texture url
-		resp, err := client.Get(targetURL)
-		if err != nil {
-			responses.BadGateway(w, r, "Failed to reach storage backend")
-			log.Println("Failed to reach storage backend:\n\t", err)
-			return
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode == http.StatusNotFound {
-			responses.NotFound(w, r, "Texture not found")
-			return
-		}
-
-		// Forward the Content-Type from S3 (or default to image/png)
-		if ct := resp.Header.Get("Content-Type"); ct != "" {
-			w.Header().Set("Content-Type", ct)
-		} else {
-			w.Header().Set("Content-Type", "image/png")
-		}
-
-		// Pass through status code and stream the bytes
-		w.WriteHeader(resp.StatusCode)
-		_, _ = io.Copy(w, resp.Body)
+		w.Header().Set("Content-Type", result.ContentType)
+		_, _ = io.Copy(w, result.Body)
 	}
 }
