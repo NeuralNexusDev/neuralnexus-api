@@ -52,6 +52,12 @@ func ApplyRoutes(
 	rateLimit auth.RateLimitService) *http.ServeMux {
 	mwAuth := mw.Auth(session)
 
+	dbUrl := os.Getenv("DATABASE_URL")
+	if dbUrl == "" {
+		log.Fatal("DATABASE_URL is not set")
+		return nil
+	}
+
 	// --------------- Auth ---------------
 	account := auth.NewAccountService(authStore)
 	user := auth.NewUserService(authStore)
@@ -71,7 +77,7 @@ func ApplyRoutes(
 	// mux.HandleFunc("DELETE /api/v1/users/{user_id}", mwAuth(authroutes.DeleteUserHandler(gssService)))
 
 	// --------------- Bee Name Generator ---------------
-	bngStore := bng.NewStore(database.GetDB("bee_name_generator"))
+	bngStore := bng.NewStore(database.GetDB(dbUrl + "/bee_name_generator"))
 
 	mux.Handle("GET /api/v1/bee-name-generator/name", bng.GetBeeNameHandler(bngStore))
 	mux.Handle("POST /api/v1/bee-name-generator/name/{name}", mwAuth(bng.UploadBeeNameHandler(bngStore)))
@@ -122,7 +128,7 @@ func ApplyRoutes(
 		return nil
 	}
 	mcStore := mc.NewStore(
-		database.GetDB("archive"), rdb,
+		database.GetDB(dbUrl+"/archive"), rdb,
 		database.GetS3(endpoint, accessKey, secretKey))
 	mcService := mc.NewService(mcStore, nil, "https://"+endpoint+"/"+mc.S3Bucket+"/"+mc.S3KeyPrefix)
 
@@ -139,7 +145,7 @@ func ApplyRoutes(
 	mux.Handle("GET /api/v1/mcstatus/simple/{host}", mcs.SimpleStatusHandler(mcsService))
 
 	// --------------- Pet Pictures ---------------
-	petStore := petpics.NewStore(database.GetDB("pet_pictures"))
+	petStore := petpics.NewStore(database.GetDB(dbUrl + "/pet_pictures"))
 	petService := petpics.NewService(petStore)
 
 	mux.Handle("POST /api/v1/pet-pictures/pets/{name}", mwAuth(petpics.CreatePetHandler(petService)))
@@ -165,7 +171,7 @@ func ApplyRoutes(
 	mux.HandleFunc("GET /api/v1/teapot", teapot.HandleTeapot)
 
 	// --------------- Twitch ---------------
-	twitchStore := twitch.NewStore(database.GetDB("twitch"))
+	twitchStore := twitch.NewStore(database.GetDB(dbUrl + "/twitch"))
 	twitchService := twitch.NewService(twitchStore)
 	mux.HandleFunc("POST /api/twitch/eventsub", twitch.HandleEventSub(twitchService, authStore.OAuthToken(), authStore.LinkAccount()))
 
@@ -180,7 +186,7 @@ func ApplyRoutes(
 
 // Setup - Setup the API server
 func (s *APIServer) Setup() http.Handler {
-	db := database.GetDB("neuralnexus")
+	db := database.GetDB(os.Getenv("DATABASE_URL") + "/neuralnexus")
 	rdb := database.GetRedis()
 	authStore := auth.NewStore(db, rdb)
 	session := auth.NewSessionService(authStore)

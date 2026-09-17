@@ -2,6 +2,7 @@ package petpictures
 
 import (
 	"context"
+	"os"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/jackc/pgx/v5"
@@ -51,7 +52,7 @@ func NewStore(db *pgxpool.Pool) PetPicStore {
 
 // CreatePet - Create a new pet
 func (s *store) CreatePet(name string) (*Pet, error) {
-	db := database.GetDB("pet_pictures")
+	db := database.GetDB(os.Getenv("DATABASE_URL") + "/pet_pictures")
 	defer db.Close()
 
 	var pet Pet
@@ -66,7 +67,7 @@ func (s *store) CreatePet(name string) (*Pet, error) {
 
 // GetPet - Get a pet by ID
 func (s *store) GetPet(id int) (*Pet, error) {
-	db := database.GetDB("pet_pictures")
+	db := database.GetDB(os.Getenv("DATABASE_URL") + "/pet_pictures")
 	defer db.Close()
 
 	var pet Pet
@@ -79,7 +80,7 @@ func (s *store) GetPet(id int) (*Pet, error) {
 
 // GetPetByName - Get a pet by name
 func (s *store) GetPetByName(name string) (*Pet, error) {
-	db := database.GetDB("pet_pictures")
+	db := database.GetDB(os.Getenv("DATABASE_URL") + "/pet_pictures")
 	defer db.Close()
 
 	var pet Pet
@@ -92,7 +93,7 @@ func (s *store) GetPetByName(name string) (*Pet, error) {
 
 // UpdatePet - Update a pet
 func (s *store) UpdatePet(pet *Pet) (*Pet, error) {
-	db := database.GetDB("pet_pictures")
+	db := database.GetDB(os.Getenv("DATABASE_URL") + "/pet_pictures")
 	defer db.Close()
 
 	_, err := db.Query(context.Background(), "UPDATE pets SET name = $1, profile_picture = $2 WHERE id = $3", pet.Name, pet.ProfilePicture, pet.ID)
@@ -104,7 +105,7 @@ func (s *store) UpdatePet(pet *Pet) (*Pet, error) {
 
 // CreatePetPicture - Create a new pet picture
 func (s *store) CreatePetPicture(id string, fileExt string, primarySubject int, othersSubjects []int, aliases []string) (*PetPicture, error) {
-	db := database.GetDB("pet_pictures")
+	db := database.GetDB(os.Getenv("DATABASE_URL") + "/pet_pictures")
 	defer db.Close()
 
 	_, err := db.Query(context.Background(),
@@ -130,7 +131,7 @@ func (s *store) GetRandPetPictureByName(name string) (*PetPicture, error) {
 		return nil, err
 	}
 
-	db := database.GetDB("pet_pictures")
+	db := database.GetDB(os.Getenv("DATABASE_URL") + "/pet_pictures")
 	defer db.Close()
 
 	rows, err := db.Query(context.Background(),
@@ -149,7 +150,7 @@ func (s *store) GetRandPetPictureByName(name string) (*PetPicture, error) {
 
 // GetPetPicture - Get a pet picture by ID
 func (s *store) GetPetPicture(id string) (*PetPicture, error) {
-	db := database.GetDB("pet_pictures")
+	db := database.GetDB(os.Getenv("DATABASE_URL") + "/pet_pictures")
 	defer db.Close()
 
 	rows, err := db.Query(context.Background(), "SELECT * FROM pictures WHERE id = $1", id)
@@ -167,7 +168,7 @@ func (s *store) GetPetPicture(id string) (*PetPicture, error) {
 
 // UpdatePetPicture - Update a pet picture
 func (s *store) UpdatePetPicture(picture PetPicture) (*PetPicture, error) {
-	db := database.GetDB("pet_pictures")
+	db := database.GetDB(os.Getenv("DATABASE_URL") + "/pet_pictures")
 	defer db.Close()
 
 	var petPicture PetPicture
@@ -183,7 +184,7 @@ func (s *store) UpdatePetPicture(picture PetPicture) (*PetPicture, error) {
 
 // DeletePetPicture - Delete a pet picture
 func (s *store) DeletePetPicture(id string) (*PetPicture, error) {
-	db := database.GetDB("pet_pictures")
+	db := database.GetDB(os.Getenv("DATABASE_URL") + "/pet_pictures")
 	defer db.Close()
 
 	_, err := db.Query(context.Background(), "DELETE FROM pictures WHERE id = $1", id)

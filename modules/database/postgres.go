@@ -3,26 +3,15 @@ package database
 import (
 	"context"
 	"log"
-	"os"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
-
-// -------------- Globals --------------
-
-//goland:noinspection GoSnakeCaseUsage,GoNameStartsWithPackageName
-var DATABASE_URL = os.Getenv("DATABASE_URL")
 
 // -------------- Functions --------------
 
 // GetDB - Get a connection pool to the database
 func GetDB(database string) *pgxpool.Pool {
-	if DATABASE_URL == "" {
-		log.Fatal("DATABASE_URL is not set")
-		return nil
-	}
-
-	PgPool, err := pgxpool.New(context.Background(), DATABASE_URL+"/"+database)
+	PgPool, err := pgxpool.New(context.Background(), database)
 	if err != nil {
 		log.Fatal("Unable to create connection pool:", err)
 		return nil
