@@ -157,17 +157,6 @@ func (t *Texture) Hash() string {
 	return t.URL[idx+1:]
 }
 
-// withURL returns a copy of the Texture with its URL rewritten to
-// baseURL+hash, or nil if t is nil.
-func (t *Texture) withURL(baseURL string) *Texture {
-	if t == nil {
-		return nil
-	}
-	rewritten := *t
-	rewritten.URL = baseURL + t.Hash()
-	return &rewritten
-}
-
 // Metadata - Skin metadata (only present for Alex/slim model)
 type Metadata struct {
 	Model Model `json:"model"`
