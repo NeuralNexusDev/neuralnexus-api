@@ -345,12 +345,16 @@ func (s *service) fetchProfileFromMojang(id string, signed bool) (*Player, *Prof
 	// Extract and store textures
 	profile := player.ToProfile()
 	if profile.Textures != nil {
-		if err := s.store.UpsertTextureHash(profile.Textures.Textures.SKIN.Hash()); err != nil {
-			log.Println("Failed to store skin hash:\n\t", err)
+		if hash := textureHash(profile.Textures.Textures.SKIN); hash != nil {
+			if err := s.store.UpsertTextureHash(*hash); err != nil {
+				log.Println("Failed to store skin hash:\n\t", err)
+			}
 		}
 
-		if err := s.store.UpsertTextureHash(profile.Textures.Textures.CAPE.Hash()); err != nil {
-			log.Println("Failed to store cape hash:\n\t", err)
+		if hash := textureHash(profile.Textures.Textures.CAPE); hash != nil {
+			if err := s.store.UpsertTextureHash(*hash); err != nil {
+				log.Println("Failed to store cape hash:\n\t", err)
+			}
 		}
 
 		if err := s.store.UpsertTextures(profile.Textures); err != nil {
