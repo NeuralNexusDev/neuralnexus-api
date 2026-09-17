@@ -17,25 +17,30 @@ import (
 type mockService struct {
 	player             *Player
 	players            []*Player
+	profile            *Profile
 	err                error
 	textureBody        []byte
 	textureContentType string
 }
 
-func (m *mockService) GetPlayerByName(_ string) (*Player, error) {
+func (m *mockService) GetMojangPlayerByName(_ string) (*Player, error) {
 	return m.player, m.err
 }
 
-func (m *mockService) GetPlayerByUUID(_ string) (*Player, error) {
+func (m *mockService) GetMojangPlayerByUUID(_ string) (*Player, error) {
 	return m.player, m.err
 }
 
-func (m *mockService) GetPlayersByNames(_ []string) ([]*Player, error) {
+func (m *mockService) GetMojangPlayersByNames(_ []string) ([]*Player, error) {
 	return m.players, m.err
 }
 
-func (m *mockService) GetProfile(_ string, _ bool) (*Player, error) {
+func (m *mockService) GetMojangProfile(_ string, _ bool) (*Player, error) {
 	return m.player, m.err
+}
+
+func (m *mockService) GetProfile(_ string) (*Profile, error) {
+	return m.profile, m.err
 }
 
 func (m *mockService) GetTextureContent(_ string) (*TextureResult, error) {
@@ -55,11 +60,11 @@ func (m *mockService) GetTextureContent(_ string) (*TextureResult, error) {
 
 // --- Tests ---
 
-func TestHandler_GetPlayerByNameHandler_OK(t *testing.T) {
+func TestHandler_GetMojangPlayerByNameHandler_OK(t *testing.T) {
 	svc := &mockService{player: &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}}
-	handler := GetPlayerByNameHandler(svc)
+	handler := GetMojangPlayerByNameHandler(svc)
 
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/lookup/name/jeb_", nil)
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/mojang/lookup/name/jeb_", nil)
 	r.SetPathValue("name", "jeb_")
 	w := httptest.NewRecorder()
 
@@ -78,11 +83,11 @@ func TestHandler_GetPlayerByNameHandler_OK(t *testing.T) {
 	}
 }
 
-func TestHandler_GetPlayerByNameHandler_NotFound(t *testing.T) {
+func TestHandler_GetMojangPlayerByNameHandler_NotFound(t *testing.T) {
 	svc := &mockService{err: ErrPlayerNotFound}
-	handler := GetPlayerByNameHandler(svc)
+	handler := GetMojangPlayerByNameHandler(svc)
 
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/lookup/name/nonexistent", nil)
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/mojang/lookup/name/nonexistent", nil)
 	r.SetPathValue("name", "nonexistent")
 	w := httptest.NewRecorder()
 
@@ -93,11 +98,11 @@ func TestHandler_GetPlayerByNameHandler_NotFound(t *testing.T) {
 	}
 }
 
-func TestHandler_GetPlayerByNameHandler_InternalError(t *testing.T) {
+func TestHandler_GetMojangPlayerByNameHandler_InternalError(t *testing.T) {
 	svc := &mockService{err: errors.New("db error")}
-	handler := GetPlayerByNameHandler(svc)
+	handler := GetMojangPlayerByNameHandler(svc)
 
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/lookup/name/jeb_", nil)
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/mojang/lookup/name/jeb_", nil)
 	r.SetPathValue("name", "jeb_")
 	w := httptest.NewRecorder()
 
@@ -108,11 +113,11 @@ func TestHandler_GetPlayerByNameHandler_InternalError(t *testing.T) {
 	}
 }
 
-func TestHandler_GetPlayerByNameHandler_OmitsProfileActionsWhenNil(t *testing.T) {
+func TestHandler_GetMojangPlayerByNameHandler_OmitsProfileActionsWhenNil(t *testing.T) {
 	svc := &mockService{player: &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}}
-	handler := GetPlayerByNameHandler(svc)
+	handler := GetMojangPlayerByNameHandler(svc)
 
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/lookup/name/jeb_", nil)
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/mojang/lookup/name/jeb_", nil)
 	r.SetPathValue("name", "jeb_")
 	w := httptest.NewRecorder()
 
@@ -127,11 +132,11 @@ func TestHandler_GetPlayerByNameHandler_OmitsProfileActionsWhenNil(t *testing.T)
 	}
 }
 
-func TestHandler_GetPlayerByUUIDHandler_OK(t *testing.T) {
+func TestHandler_GetMojangPlayerByUUIDHandler_OK(t *testing.T) {
 	svc := &mockService{player: &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}}
-	handler := GetPlayerByUUIDHandler(svc)
+	handler := GetMojangPlayerByUUIDHandler(svc)
 
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/lookup/853c80ef3c3749fdaa49938b674adae6", nil)
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/mojang/lookup/853c80ef3c3749fdaa49938b674adae6", nil)
 	r.SetPathValue("uuid", "853c80ef3c3749fdaa49938b674adae6")
 	w := httptest.NewRecorder()
 
@@ -142,11 +147,11 @@ func TestHandler_GetPlayerByUUIDHandler_OK(t *testing.T) {
 	}
 }
 
-func TestHandler_GetPlayerByUUIDHandler_OmitsProfileActionsWhenNil(t *testing.T) {
+func TestHandler_GetMojangPlayerByUUIDHandler_OmitsProfileActionsWhenNil(t *testing.T) {
 	svc := &mockService{player: &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}}
-	handler := GetPlayerByUUIDHandler(svc)
+	handler := GetMojangPlayerByUUIDHandler(svc)
 
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/lookup/853c80ef3c3749fdaa49938b674adae6", nil)
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/mojang/lookup/853c80ef3c3749fdaa49938b674adae6", nil)
 	r.SetPathValue("uuid", "853c80ef3c3749fdaa49938b674adae6")
 	w := httptest.NewRecorder()
 
@@ -161,11 +166,11 @@ func TestHandler_GetPlayerByUUIDHandler_OmitsProfileActionsWhenNil(t *testing.T)
 	}
 }
 
-func TestHandler_GetPlayerByUUIDHandler_InvalidUUID(t *testing.T) {
+func TestHandler_GetMojangPlayerByUUIDHandler_InvalidUUID(t *testing.T) {
 	svc := &mockService{}
-	handler := GetPlayerByUUIDHandler(svc)
+	handler := GetMojangPlayerByUUIDHandler(svc)
 
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/lookup/not-a-uuid", nil)
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/mojang/lookup/not-a-uuid", nil)
 	r.SetPathValue("uuid", "not-a-uuid")
 	w := httptest.NewRecorder()
 
@@ -176,11 +181,11 @@ func TestHandler_GetPlayerByUUIDHandler_InvalidUUID(t *testing.T) {
 	}
 }
 
-func TestHandler_GetPlayerByUUIDHandler_NotFound(t *testing.T) {
+func TestHandler_GetMojangPlayerByUUIDHandler_NotFound(t *testing.T) {
 	svc := &mockService{err: ErrPlayerNotFound}
-	handler := GetPlayerByUUIDHandler(svc)
+	handler := GetMojangPlayerByUUIDHandler(svc)
 
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/lookup/853c80ef3c3749fdaa49938b674adae6", nil)
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/mojang/lookup/853c80ef3c3749fdaa49938b674adae6", nil)
 	r.SetPathValue("uuid", "853c80ef3c3749fdaa49938b674adae6")
 	w := httptest.NewRecorder()
 
@@ -191,15 +196,15 @@ func TestHandler_GetPlayerByUUIDHandler_NotFound(t *testing.T) {
 	}
 }
 
-func TestHandler_GetPlayersByNamesHandler_OK(t *testing.T) {
+func TestHandler_GetMojangPlayersByNamesHandler_OK(t *testing.T) {
 	svc := &mockService{players: []*Player{
 		{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"},
 		{ID: "069a79f444e94726a5befca90e38aaf5", Name: "Notch"},
 	}}
-	handler := GetPlayersByNamesHandler(svc)
+	handler := GetMojangPlayersByNamesHandler(svc)
 
 	body, _ := json.Marshal([]string{"jeb_", "Notch"})
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/mc/profile/lookup/bulk/byname", strings.NewReader(string(body)))
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/mc/mojang/lookup/bulk/byname", strings.NewReader(string(body)))
 	r.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -218,11 +223,11 @@ func TestHandler_GetPlayersByNamesHandler_OK(t *testing.T) {
 	}
 }
 
-func TestHandler_GetPlayersByNamesHandler_InvalidBody(t *testing.T) {
+func TestHandler_GetMojangPlayersByNamesHandler_InvalidBody(t *testing.T) {
 	svc := &mockService{}
-	handler := GetPlayersByNamesHandler(svc)
+	handler := GetMojangPlayersByNamesHandler(svc)
 
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/mc/profile/lookup/bulk/byname", strings.NewReader("not json"))
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/mc/mojang/lookup/bulk/byname", strings.NewReader("not json"))
 	r.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -233,12 +238,12 @@ func TestHandler_GetPlayersByNamesHandler_InvalidBody(t *testing.T) {
 	}
 }
 
-func TestHandler_GetPlayersByNamesHandler_Empty(t *testing.T) {
+func TestHandler_GetMojangPlayersByNamesHandler_Empty(t *testing.T) {
 	svc := &mockService{}
-	handler := GetPlayersByNamesHandler(svc)
+	handler := GetMojangPlayersByNamesHandler(svc)
 
 	body, _ := json.Marshal([]string{})
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/mc/profile/lookup/bulk/byname", strings.NewReader(string(body)))
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/mc/mojang/lookup/bulk/byname", strings.NewReader(string(body)))
 	r.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -249,13 +254,13 @@ func TestHandler_GetPlayersByNamesHandler_Empty(t *testing.T) {
 	}
 }
 
-func TestHandler_GetPlayersByNamesHandler_TooMany(t *testing.T) {
+func TestHandler_GetMojangPlayersByNamesHandler_TooMany(t *testing.T) {
 	svc := &mockService{}
-	handler := GetPlayersByNamesHandler(svc)
+	handler := GetMojangPlayersByNamesHandler(svc)
 
 	names := make([]string, 11)
 	body, _ := json.Marshal(names)
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/mc/profile/lookup/bulk/byname", strings.NewReader(string(body)))
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/mc/mojang/lookup/bulk/byname", strings.NewReader(string(body)))
 	r.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -266,11 +271,11 @@ func TestHandler_GetPlayersByNamesHandler_TooMany(t *testing.T) {
 	}
 }
 
-func TestHandler_GetProfileHandler_OK(t *testing.T) {
+func TestHandler_GetMojangProfileHandler_OK(t *testing.T) {
 	svc := &mockService{player: &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}}
-	handler := GetProfileHandler(svc)
+	handler := GetMojangProfileHandler(svc)
 
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/853c80ef3c3749fdaa49938b674adae6", nil)
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/mojang/profile/853c80ef3c3749fdaa49938b674adae6", nil)
 	r.SetPathValue("uuid", "853c80ef3c3749fdaa49938b674adae6")
 	w := httptest.NewRecorder()
 
@@ -281,15 +286,15 @@ func TestHandler_GetProfileHandler_OK(t *testing.T) {
 	}
 }
 
-func TestHandler_GetProfileHandler_ProfileActionsPresentAsEmptyArray(t *testing.T) {
+func TestHandler_GetMojangProfileHandler_ProfileActionsPresentAsEmptyArray(t *testing.T) {
 	svc := &mockService{player: &Player{
 		ID:             "853c80ef3c3749fdaa49938b674adae6",
 		Name:           "jeb_",
 		ProfileActions: []string{},
 	}}
-	handler := GetProfileHandler(svc)
+	handler := GetMojangProfileHandler(svc)
 
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/853c80ef3c3749fdaa49938b674adae6", nil)
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/mojang/profile/853c80ef3c3749fdaa49938b674adae6", nil)
 	r.SetPathValue("uuid", "853c80ef3c3749fdaa49938b674adae6")
 	w := httptest.NewRecorder()
 
@@ -308,11 +313,11 @@ func TestHandler_GetProfileHandler_ProfileActionsPresentAsEmptyArray(t *testing.
 	}
 }
 
-func TestHandler_GetProfileHandler_Signed(t *testing.T) {
+func TestHandler_GetMojangProfileHandler_Signed(t *testing.T) {
 	svc := &mockService{player: &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}}
-	handler := GetProfileHandler(svc)
+	handler := GetMojangProfileHandler(svc)
 
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/853c80ef3c3749fdaa49938b674adae6?unsigned=false", nil)
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/mojang/profile/853c80ef3c3749fdaa49938b674adae6?unsigned=false", nil)
 	r.SetPathValue("uuid", "853c80ef3c3749fdaa49938b674adae6")
 	w := httptest.NewRecorder()
 
@@ -320,6 +325,80 @@ func TestHandler_GetProfileHandler_Signed(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestHandler_GetMojangProfileHandler_NotFound(t *testing.T) {
+	svc := &mockService{err: ErrPlayerNotFound}
+	handler := GetMojangProfileHandler(svc)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/mojang/profile/853c80ef3c3749fdaa49938b674adae6", nil)
+	r.SetPathValue("uuid", "853c80ef3c3749fdaa49938b674adae6")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusNoContent {
+		t.Errorf("expected 204, got %d", w.Code)
+	}
+}
+
+func TestHandler_GetProfileHandler_OK(t *testing.T) {
+	svc := &mockService{profile: &Profile{
+		ID:   "853c80ef3c3749fdaa49938b674adae6",
+		Name: "jeb_",
+		Textures: &TexturesValue{
+			ProfileID:   "853c80ef3c3749fdaa49938b674adae6",
+			ProfileName: "jeb_",
+			Textures: Textures{
+				SKIN: &Texture{URL: "http://textures.minecraft.net/texture/abc123hash"},
+			},
+		},
+	}}
+	handler := GetProfileHandler(svc)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/853c80ef3c3749fdaa49938b674adae6", nil)
+	r.SetPathValue("uuid", "853c80ef3c3749fdaa49938b674adae6")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var raw map[string]json.RawMessage
+	if err := json.NewDecoder(w.Body).Decode(&raw); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if _, ok := raw["properties"]; ok {
+		t.Errorf("expected no raw base64 properties in the decoded response, got %s", w.Body.String())
+	}
+	textures, ok := raw["textures"]
+	if !ok {
+		t.Fatalf("expected textures to be present as decoded JSON, got %s", w.Body.String())
+	}
+	var decoded TexturesValue
+	if err := json.Unmarshal(textures, &decoded); err != nil {
+		t.Fatalf("expected textures to already be JSON, not a base64 string: %v", err)
+	}
+	if decoded.Textures.SKIN == nil || decoded.Textures.SKIN.URL != "http://textures.minecraft.net/texture/abc123hash" {
+		t.Errorf("expected decoded skin URL, got %+v", decoded.Textures.SKIN)
+	}
+}
+
+func TestHandler_GetProfileHandler_InvalidUUID(t *testing.T) {
+	svc := &mockService{}
+	handler := GetProfileHandler(svc)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/not-a-uuid", nil)
+	r.SetPathValue("uuid", "not-a-uuid")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
 	}
 }
 
@@ -389,12 +468,12 @@ func TestHandler_GetTextureHandler_NotFound(t *testing.T) {
 	}
 }
 
-func TestHandler_GetPlayersByNamesHandler_WrongMediaType(t *testing.T) {
+func TestHandler_GetMojangPlayersByNamesHandler_WrongMediaType(t *testing.T) {
 	svc := &mockService{}
-	handler := GetPlayersByNamesHandler(svc)
+	handler := GetMojangPlayersByNamesHandler(svc)
 
 	body, _ := json.Marshal([]string{"jeb_"})
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/mc/profile/lookup/bulk/byname", strings.NewReader(string(body)))
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/mc/mojang/lookup/bulk/byname", strings.NewReader(string(body)))
 	// Intentionally omitting or setting wrong Content-Type
 	r.Header.Set("Content-Type", "text/plain")
 	w := httptest.NewRecorder()
@@ -406,12 +485,12 @@ func TestHandler_GetPlayersByNamesHandler_WrongMediaType(t *testing.T) {
 	}
 }
 
-func TestHandler_GetPlayersByNamesHandler_EmptyNameInBatch(t *testing.T) {
+func TestHandler_GetMojangPlayersByNamesHandler_EmptyNameInBatch(t *testing.T) {
 	svc := &mockService{}
-	handler := GetPlayersByNamesHandler(svc)
+	handler := GetMojangPlayersByNamesHandler(svc)
 
 	body, _ := json.Marshal([]string{"jeb_", ""})
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/mc/profile/lookup/bulk/byname", strings.NewReader(string(body)))
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/mc/mojang/lookup/bulk/byname", strings.NewReader(string(body)))
 	r.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 

@@ -36,10 +36,11 @@ const mojangTextureURL = "http://textures.minecraft.net/texture/"
 
 // Service - Minecraft player service
 type Service interface {
-	GetPlayerByName(name string) (*Player, error)
-	GetPlayerByUUID(id string) (*Player, error)
-	GetPlayersByNames(names []string) ([]*Player, error)
-	GetProfile(id string, signed bool) (*Player, error)
+	GetMojangPlayerByName(name string) (*Player, error)
+	GetMojangPlayerByUUID(id string) (*Player, error)
+	GetMojangPlayersByNames(names []string) ([]*Player, error)
+	GetMojangProfile(id string, signed bool) (*Player, error)
+	GetProfile(id string) (*Profile, error)
 	GetTextureContent(hash string) (*TextureResult, error)
 }
 
@@ -72,8 +73,8 @@ func NewService(store Store, client *http.Client, nnTextureUrl string) Service {
 	}
 }
 
-// GetPlayerByName gets a player by name, cache-first with Mojang fallback
-func (s *service) GetPlayerByName(name string) (*Player, error) {
+// GetMojangPlayerByName gets a player by name, cache-first with Mojang fallback
+func (s *service) GetMojangPlayerByName(name string) (*Player, error) {
 	cached, err := s.store.GetPlayerFromCache(name)
 	if err == nil {
 		return cached, nil
@@ -119,8 +120,8 @@ func (s *service) GetPlayerByName(name string) (*Player, error) {
 	return &player, nil
 }
 
-// GetPlayerByUUID gets a player by UUID, cache-first with Mojang fallback
-func (s *service) GetPlayerByUUID(id string) (*Player, error) {
+// GetMojangPlayerByUUID gets a player by UUID, cache-first with Mojang fallback
+func (s *service) GetMojangPlayerByUUID(id string) (*Player, error) {
 	cached, err := s.store.GetPlayerFromCache(id)
 	if err == nil {
 		return cached, nil
@@ -166,9 +167,9 @@ func (s *service) GetPlayerByUUID(id string) (*Player, error) {
 	return &player, nil
 }
 
-// GetPlayersByNames gets players by name in batch, cache-first with Mojang fallback
+// GetMojangPlayersByNames gets players by name in batch, cache-first with Mojang fallback
 // Mojang batch endpoint is capped at 10 names per request
-func (s *service) GetPlayersByNames(names []string) ([]*Player, error) {
+func (s *service) GetMojangPlayersByNames(names []string) ([]*Player, error) {
 	if len(names) == 0 {
 		return nil, errors.New("no names provided")
 	}
@@ -238,9 +239,50 @@ func (s *service) GetPlayersByNames(names []string) ([]*Player, error) {
 	return players, nil
 }
 
-// GetProfile gets a full player profile including properties
-func (s *service) GetProfile(id string, signed bool) (*Player, error) {
-	cached, err := s.store.GetProfileFromCache(id, signed)
+// GetMojangProfile gets a full player profile
+func (s *service) GetMojangProfile(id string, signed bool) (*Player, error) {
+	if signed {
+		cached, err := s.store.GetSignedProfileFromCache(id)
+		if err == nil {
+			return cached, nil
+		}
+		if !errors.Is(err, redis.Nil) {
+			return nil, err
+		}
+		player, _, err := s.fetchProfileFromMojang(id, true)
+		return player, err
+	}
+
+	profile, err := s.resolveProfile(id)
+	if err != nil {
+		return nil, err
+	}
+	return profile.ToPlayer()
+}
+
+// GetProfile gets a player's profile with textures decoded as native JSON,
+// with texture URLs pointing at our own CDN instead of Mojang's.
+func (s *service) GetProfile(id string) (*Profile, error) {
+	profile, err := s.resolveProfile(id)
+	if err != nil {
+		return nil, err
+	}
+	if profile.Textures == nil {
+		return profile, nil
+	}
+	if profile.Textures.Textures.SKIN != nil {
+		profile.Textures.Textures.SKIN.URL = s.nnTextureUrl + profile.Textures.Textures.SKIN.Hash()
+	}
+	if profile.Textures.Textures.CAPE != nil {
+		profile.Textures.Textures.CAPE.URL = s.nnTextureUrl + profile.Textures.Textures.CAPE.Hash()
+	}
+	return profile, nil
+}
+
+// resolveProfile gets a player's canonical Profile from cache or the
+// database, fetching live from Mojang when needed.
+func (s *service) resolveProfile(id string) (*Profile, error) {
+	cached, err := s.store.GetProfileFromCache(id)
 	if err == nil {
 		return cached, nil
 	}
@@ -248,85 +290,85 @@ func (s *service) GetProfile(id string, signed bool) (*Player, error) {
 		return nil, err
 	}
 
-	// Cache miss — fetch from DB
-	if !signed {
-		dbPlayer, _ := s.store.GetProfileByUUID(id)
-		if dbPlayer == nil {
-			return nil, ErrPlayerNotFound
+	dbProfile, err := s.store.GetProfileByUUID(id)
+	if err != nil && !errors.Is(err, ErrPlayerNotFound) {
+		log.Println("Failed to get profile from DB:\n\t", err)
+	}
+	if dbProfile != nil {
+		if dbProfile.ProfileActions == nil {
+			dbProfile.ProfileActions = []string{}
 		}
-		if dbPlayer.ProfileActions == nil {
-			dbPlayer.ProfileActions = []string{}
-		}
-		if !dbPlayer.IsStale() {
-			row, err := s.store.GetTextures(dbPlayer.ID)
-			if err != nil {
+		if !dbProfile.IsStale() {
+			if err := s.store.SetProfileInCache(dbProfile); err != nil {
 				return nil, err
 			}
-			prop, err := row.Value(dbPlayer.Name, s.lookupTexture).ToProperty()
-			if err != nil {
-				log.Println("Failed to decode TexturesRow:\n\t", err)
-			}
-			if prop != nil {
-				dbPlayer.Properties = append(dbPlayer.Properties, *prop)
-			}
-			if err := s.store.SetProfileInCache(dbPlayer, false); err != nil {
-				return nil, err
-			}
-			return dbPlayer, nil
+			return dbProfile, nil
 		}
 	}
 
-	// Stale entry — fetch from Mojang
+	_, profile, err := s.fetchProfileFromMojang(id, false)
+	return profile, err
+}
+
+// fetchProfileFromMojang fetches and persists a player's profile live from
+// Mojang, returning both the raw Player and the decoded Profile.
+func (s *service) fetchProfileFromMojang(id string, signed bool) (*Player, *Profile, error) {
 	url := s.lookupProfile + id
 	if signed {
 		url += "?unsigned=false"
 	}
 	resp, err := s.client.Get(url)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNoContent {
-		return nil, ErrPlayerNotFound
+		return nil, nil, ErrPlayerNotFound
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New("mojang API error: " + resp.Status)
+		return nil, nil, errors.New("mojang API error: " + resp.Status)
 	}
 
 	var player Player
 	if err := json.NewDecoder(resp.Body).Decode(&player); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if player.ProfileActions == nil {
 		player.ProfileActions = []string{}
 	}
 
-	// Upsert player
 	if err := s.store.UpsertPlayer(&player, true); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Extract and store textures
-	value := player.ParseProperties()
-	if value != nil {
-		if err := s.store.UpsertTextureHash(value.Textures.SKIN.Hash()); err != nil {
+	profile := player.ToProfile()
+	if profile.Textures != nil {
+		if err := s.store.UpsertTextureHash(profile.Textures.Textures.SKIN.Hash()); err != nil {
 			log.Println("Failed to store skin hash:\n\t", err)
 		}
 
-		if err := s.store.UpsertTextureHash(value.Textures.CAPE.Hash()); err != nil {
+		if err := s.store.UpsertTextureHash(profile.Textures.Textures.CAPE.Hash()); err != nil {
 			log.Println("Failed to store cape hash:\n\t", err)
 		}
 
-		if err := s.store.UpsertTextures(value); err != nil {
+		if err := s.store.UpsertTextures(profile.Textures); err != nil {
 			log.Println("Failed to store texture:\n\t", err)
 		}
 	}
 
-	if err := s.store.SetProfileInCache(&player, signed); err != nil {
-		return nil, err
+	if signed {
+		if err := s.store.SetSignedProfileInCache(&player); err != nil {
+			return nil, nil, err
+		}
+	} else {
+		if err := s.store.SetProfileInCache(profile); err != nil {
+			return nil, nil, err
+		}
 	}
-	return &player, nil
+
+	return &player, profile, nil
 }
 
 // GetTextureContent returns the texture's bytes and content type, fetching from

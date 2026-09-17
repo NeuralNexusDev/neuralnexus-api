@@ -22,19 +22,18 @@ const (
 )
 
 const (
-	CachePlayer             = "player:"
-	CachePropertiesSigned   = CachePlayer + "properties:signed:"
-	CachePropertiesUnsigned = CachePlayer + "properties:unsigned:"
-	S3Bucket                = "mca"
-	S3KeyPrefix             = "texture/"
+	CachePlayer        = "player:"
+	CacheProfile       = CachePlayer + "profile:"
+	CacheProfileSigned = CacheProfile + "signed:"
+	S3Bucket           = "mca"
+	S3KeyPrefix        = "texture/"
 )
 
 // Store - Minecraft player store
 type Store interface {
 	GetPlayerByUUID(id string) (*Player, error)
 	GetPlayerByName(name string) (*Player, error)
-	GetProfileByUUID(id string) (*Player, error)
-	GetTextures(id string) (*TexturesRow, error)
+	GetProfileByUUID(id string) (*Profile, error)
 
 	UpsertPlayer(player *Player, updateProfile bool) error
 	UpsertTextures(value *TexturesValue) error
@@ -43,8 +42,11 @@ type Store interface {
 	GetPlayerFromCache(key string) (*Player, error)
 	SetPlayerInCache(player *Player) error
 
-	GetProfileFromCache(id string, signed bool) (*Player, error)
-	SetProfileInCache(player *Player, signed bool) error
+	GetProfileFromCache(id string) (*Profile, error)
+	SetProfileInCache(profile *Profile) error
+
+	GetSignedProfileFromCache(id string) (*Player, error)
+	SetSignedProfileInCache(player *Player) error
 
 	IsTextureInS3(hash string) (bool, error)
 	PutTextureInS3(hash string, body io.ReadCloser) error
@@ -83,7 +85,7 @@ func (s *store) GetPlayerByName(name string) (*Player, error) {
 }
 
 // GetProfileByUUID gets a player's full profile from the database by UUID
-func (s *store) GetProfileByUUID(id string) (*Player, error) {
+func (s *store) GetProfileByUUID(id string) (*Profile, error) {
 	rows, err := s.db.Query(context.Background(),
 		"SELECT id, name, legacy, demo, profile_actions, first_seen, last_seen FROM players WHERE id = $1", id)
 	if err != nil {
@@ -93,11 +95,27 @@ func (s *store) GetProfileByUUID(id string) (*Player, error) {
 	if err != nil {
 		return nil, err
 	}
-	return player, nil
+
+	textures, err := s.getTextures(id, player.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Profile{
+		ID:             player.ID,
+		Name:           player.Name,
+		Legacy:         player.Legacy,
+		Demo:           player.Demo,
+		ProfileActions: player.ProfileActions,
+		Textures:       textures,
+		FirstSeen:      player.FirstSeen,
+		LastSeen:       player.LastSeen,
+	}, nil
 }
 
-// GetTextures get a player's most recent skin+cape from the database
-func (s *store) GetTextures(id string) (*TexturesRow, error) {
+// getTextures loads a player's most recently seen skin+cape from the
+// database and decodes it into a TexturesValue, or nil if none is stored.
+func (s *store) getTextures(id, name string) (*TexturesValue, error) {
 	rows, err := s.db.Query(context.Background(), `
 		SELECT player_id, skin, model, cape, last_seen
 		FROM player_textures
@@ -115,7 +133,7 @@ func (s *store) GetTextures(id string) (*TexturesRow, error) {
 		}
 		return nil, err
 	}
-	return row, nil
+	return row.Value(name, mojangTextureURL), nil
 }
 
 // UpsertPlayer upserts a player into the database and updates name history
@@ -215,42 +233,48 @@ func (s *store) SetPlayerInCache(player *Player) error {
 	return s.rdb.Set(context.Background(), CachePlayer+player.Name, blob, redisTTL).Err()
 }
 
-// GetProfileFromCache gets a player profile from the cache
-func (s *store) GetProfileFromCache(id string, signed bool) (*Player, error) {
-	player, err := s.GetPlayerFromCache(id)
+// GetProfileFromCache gets a player's profile from the cache
+func (s *store) GetProfileFromCache(id string) (*Profile, error) {
+	val, err := s.rdb.Get(context.Background(), CacheProfile+id).Result()
 	if err != nil {
 		return nil, err
 	}
-
-	key := CachePropertiesUnsigned + id
-	if signed {
-		key = CachePropertiesSigned + id
-	}
-	val, err := s.rdb.Get(context.Background(), key).Result()
-	if err != nil {
+	var profile Profile
+	if err := json.Unmarshal([]byte(val), &profile); err != nil {
 		return nil, err
 	}
-	var properties []Property
-	if err := json.Unmarshal([]byte(val), &properties); err != nil {
-		return nil, err
-	}
-
-	player.Properties = properties
-	return player, nil
+	return &profile, nil
 }
 
-// SetProfileInCache sets a player profile in the cache
-func (s *store) SetProfileInCache(player *Player, signed bool) error {
-	data, err := json.Marshal(player.Properties)
+// SetProfileInCache sets a player's profile in the cache
+func (s *store) SetProfileInCache(profile *Profile) error {
+	data, err := json.Marshal(profile)
 	if err != nil {
 		return err
 	}
+	return s.rdb.Set(context.Background(), CacheProfile+profile.ID, string(data), redisTTL).Err()
+}
 
-	key := CachePropertiesUnsigned + player.ID
-	if signed {
-		key = CachePropertiesSigned + player.ID
+// GetSignedProfileFromCache gets a player's signed profile from the cache
+func (s *store) GetSignedProfileFromCache(id string) (*Player, error) {
+	val, err := s.rdb.Get(context.Background(), CacheProfileSigned+id).Result()
+	if err != nil {
+		return nil, err
 	}
-	return s.rdb.Set(context.Background(), key, string(data), redisTTL).Err()
+	var player Player
+	if err := json.Unmarshal([]byte(val), &player); err != nil {
+		return nil, err
+	}
+	return &player, nil
+}
+
+// SetSignedProfileInCache sets a player's signed profile in the cache
+func (s *store) SetSignedProfileInCache(player *Player) error {
+	data, err := json.Marshal(player)
+	if err != nil {
+		return err
+	}
+	return s.rdb.Set(context.Background(), CacheProfileSigned+player.ID, string(data), redisTTL).Err()
 }
 
 // IsTextureInS3 check if the texture is in S3

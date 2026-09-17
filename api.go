@@ -137,9 +137,10 @@ func ApplyRoutes(
 		database.GetS3(endpoint, accessKey, secretKey))
 	mcService := mc.NewService(mcStore, nil, "https://"+endpoint+"/"+mc.S3Bucket+"/"+mc.S3KeyPrefix)
 
-	mux.Handle("GET /api/v1/mc/profile/lookup/name/{name}", mc.GetPlayerByNameHandler(mcService))
-	mux.Handle("GET /api/v1/mc/profile/lookup/{uuid}", mc.GetPlayerByUUIDHandler(mcService))
-	mux.Handle("POST /api/v1/mc/profile/lookup/bulk/byname", mc.GetPlayersByNamesHandler(mcService))
+	mux.Handle("GET /api/v1/mc/mojang/lookup/name/{name}", mc.GetMojangPlayerByNameHandler(mcService))
+	mux.Handle("GET /api/v1/mc/mojang/lookup/{uuid}", mc.GetMojangPlayerByUUIDHandler(mcService))
+	mux.Handle("POST /api/v1/mc/mojang/lookup/bulk/byname", mc.GetMojangPlayersByNamesHandler(mcService))
+	mux.Handle("GET /api/v1/mc/mojang/profile/{uuid}", mc.GetMojangProfileHandler(mcService))
 	mux.Handle("GET /api/v1/mc/profile/{uuid}", mc.GetProfileHandler(mcService))
 	mux.Handle("GET /api/v1/mc/texture/{hash}", mc.GetTextureHandler(mcService))
 

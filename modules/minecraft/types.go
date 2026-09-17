@@ -76,6 +76,19 @@ func (p *Player) IsStale() bool {
 	return time.Now().UnixMilli()-p.LastSeen > stalenessThreshold.Milliseconds()
 }
 
+// ToProfile converts a Player fetched live from Mojang into our canonical,
+// decoded shape for storage and caching.
+func (p *Player) ToProfile() *Profile {
+	return &Profile{
+		ID:             p.ID,
+		Name:           p.Name,
+		Legacy:         p.Legacy,
+		Demo:           p.Demo,
+		ProfileActions: p.ProfileActions,
+		Textures:       p.ParseProperties(),
+	}
+}
+
 // Property - A player property as returned by Mojang
 type Property struct {
 	Name      PropertyName `json:"name"`
@@ -154,6 +167,42 @@ type Model string
 
 // SLIM The only known value for Metadata.Model
 const SLIM Model = "slim"
+
+// Profile - a player's full profile, decoded and canonical.
+type Profile struct {
+	ID             string         `json:"id"`
+	Name           string         `json:"name"`
+	Legacy         bool           `json:"legacy,omitempty"`
+	Demo           bool           `json:"demo,omitempty"`
+	ProfileActions []string       `json:"profileActions,omitempty"`
+	Textures       *TexturesValue `json:"textures,omitempty"`
+	FirstSeen      int64          `json:"-"`
+	LastSeen       int64          `json:"-"`
+}
+
+// IsStale returns true if the profile's last_seen is older than the staleness threshold
+func (p *Profile) IsStale() bool {
+	return time.Now().UnixMilli()-p.LastSeen > stalenessThreshold.Milliseconds()
+}
+
+// ToPlayer converts a Profile into Mojang's raw session-server mirror shape.
+func (p *Profile) ToPlayer() (*Player, error) {
+	prop, err := p.Textures.ToProperty()
+	if err != nil {
+		return nil, err
+	}
+	player := &Player{
+		ID:             p.ID,
+		Name:           p.Name,
+		Legacy:         p.Legacy,
+		Demo:           p.Demo,
+		ProfileActions: p.ProfileActions,
+	}
+	if prop != nil {
+		player.Properties = []Property{*prop}
+	}
+	return player, nil
+}
 
 // TexturesRow represents a texture in the database
 type TexturesRow struct {
