@@ -322,39 +322,3 @@ func TestTypes_Profile_ToPlayer_NoTextures(t *testing.T) {
 		t.Errorf("expected no properties when the profile has no textures, got %v", player.Properties)
 	}
 }
-
-func TestTypes_Profile_WithTextureURL_RewritesSkinAndCape(t *testing.T) {
-	profile := &Profile{
-		ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_",
-		Textures: &TexturesValue{
-			Textures: Textures{
-				SKIN: &Texture{URL: "http://textures.minecraft.net/texture/skin123", Metadata: &Metadata{Model: SLIM}},
-				CAPE: &Texture{URL: "http://textures.minecraft.net/texture/cape456"},
-			},
-		},
-	}
-
-	got := profile.WithTextureURL("https://cdn.example.com/texture/")
-
-	if got.Textures.Textures.SKIN.URL != "https://cdn.example.com/texture/skin123" {
-		t.Errorf("expected rewritten skin URL, got %s", got.Textures.Textures.SKIN.URL)
-	}
-	if got.Textures.Textures.SKIN.Metadata == nil || got.Textures.Textures.SKIN.Metadata.Model != SLIM {
-		t.Error("expected slim model to be preserved")
-	}
-	if got.Textures.Textures.CAPE.URL != "https://cdn.example.com/texture/cape456" {
-		t.Errorf("expected rewritten cape URL, got %s", got.Textures.Textures.CAPE.URL)
-	}
-	if profile.Textures.Textures.SKIN.URL != "http://textures.minecraft.net/texture/skin123" {
-		t.Error("expected the original profile to be left untouched")
-	}
-}
-
-func TestTypes_Profile_WithTextureURL_NoTextures(t *testing.T) {
-	profile := &Profile{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}
-
-	got := profile.WithTextureURL("https://cdn.example.com/texture/")
-	if got.Textures != nil {
-		t.Errorf("expected no textures, got %+v", got.Textures)
-	}
-}

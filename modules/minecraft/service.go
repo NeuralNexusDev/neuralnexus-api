@@ -267,7 +267,15 @@ func (s *service) GetProfile(id string) (*Profile, error) {
 	if err != nil {
 		return nil, err
 	}
-	return profile.WithTextureURL(s.nnTextureUrl), nil
+	if profile.Textures == nil {
+		return profile, nil
+	}
+	rewritten := *profile
+	textures := *profile.Textures
+	textures.Textures.SKIN = textures.Textures.SKIN.withURL(s.nnTextureUrl)
+	textures.Textures.CAPE = textures.Textures.CAPE.withURL(s.nnTextureUrl)
+	rewritten.Textures = &textures
+	return &rewritten, nil
 }
 
 // resolveProfile gets a player's canonical Profile — texture URLs still

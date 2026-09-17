@@ -215,19 +215,6 @@ func (p *Profile) ToPlayer() (*Player, error) {
 	return player, nil
 }
 
-// WithTextureURL returns a copy of the Profile with texture URLs rewritten to baseURL+hash.
-func (p *Profile) WithTextureURL(baseURL string) *Profile {
-	if p.Textures == nil {
-		return p
-	}
-	rewritten := *p
-	textures := *p.Textures
-	textures.Textures.SKIN = textures.Textures.SKIN.withURL(baseURL)
-	textures.Textures.CAPE = textures.Textures.CAPE.withURL(baseURL)
-	rewritten.Textures = &textures
-	return &rewritten
-}
-
 // TexturesRow represents a texture in the database
 type TexturesRow struct {
 	PlayerId string  `db:"player_id"`
