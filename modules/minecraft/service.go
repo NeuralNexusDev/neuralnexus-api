@@ -291,17 +291,16 @@ func (s *service) resolveProfile(id string) (*Profile, error) {
 	}
 
 	dbProfile, _ := s.store.GetProfileByUUID(id)
-	if dbProfile == nil {
-		return nil, ErrPlayerNotFound
-	}
-	if dbProfile.ProfileActions == nil {
-		dbProfile.ProfileActions = []string{}
-	}
-	if !dbProfile.IsStale() {
-		if err := s.store.SetProfileInCache(dbProfile); err != nil {
-			return nil, err
+	if dbProfile != nil {
+		if dbProfile.ProfileActions == nil {
+			dbProfile.ProfileActions = []string{}
 		}
-		return dbProfile, nil
+		if !dbProfile.IsStale() {
+			if err := s.store.SetProfileInCache(dbProfile); err != nil {
+				return nil, err
+			}
+			return dbProfile, nil
+		}
 	}
 
 	_, profile, err := s.fetchProfileFromMojang(id, false)

@@ -460,6 +460,46 @@ func TestService_GetMojangProfile_Unsigned_StaleDBEntry_FetchesAndMirrors(t *tes
 	}
 }
 
+func TestService_GetProfile_UnknownUUID_FetchesFromMojang(t *testing.T) {
+	id := "853c80ef3c3749fdaa49938b674adae6"
+	mojang := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(Player{ID: id, Name: "jeb_"})
+	}))
+	defer mojang.Close()
+
+	store := &mockStore{}
+	svc := NewService(store, mojang.Client(), "http://localhost/texture/")
+	s := svc.(*service)
+	s.lookupProfile = mojang.URL + "/"
+
+	profile, err := svc.GetProfile(id)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if profile.Name != "jeb_" {
+		t.Errorf("expected the freshly-fetched profile, got %+v", profile)
+	}
+}
+
+func TestService_GetProfile_UnknownUUID_MojangNotFound(t *testing.T) {
+	id := "853c80ef3c3749fdaa49938b674adae6"
+	mojang := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer mojang.Close()
+
+	store := &mockStore{}
+	svc := NewService(store, mojang.Client(), "http://localhost/texture/")
+	s := svc.(*service)
+	s.lookupProfile = mojang.URL + "/"
+
+	_, err := svc.GetProfile(id)
+	if !errors.Is(err, ErrPlayerNotFound) {
+		t.Errorf("expected ErrPlayerNotFound, got %v", err)
+	}
+}
+
 func TestService_GetProfile_DBHit_TexturesReturnedAsJSONNotBase64Property(t *testing.T) {
 	id := "853c80ef3c3749fdaa49938b674adae6"
 	store := &mockStore{
