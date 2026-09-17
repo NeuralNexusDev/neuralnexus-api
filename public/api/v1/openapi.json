@@ -131,9 +131,10 @@
                 }
             }
         },
-        "/bee-name-generator/suggestion/{param}": {
+        "/bee-name-generator/suggestion/{amount}": {
             "get": {
                 "summary": "Get bee name suggestions",
+                "description": "Requires the admin:bee-name-generator scope.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -141,40 +142,16 @@
                 ],
                 "parameters": [
                     {
-                        "name": "amount",
-                        "in": "query",
-                        "required": true,
-                        "schema": {
-                            "type": "integer"
-                        }
+                        "$ref": "#/components/parameters/BeeSuggestionAmountSlug"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "Bee name suggestions response",
+                        "description": "OK",
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "string"
-                                    }
-                                }
-                            },
-                            "application/xml": {
-                                "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "string"
-                                    }
-                                }
-                            },
-                            "application/x-protobuf": {
-                                "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "string"
-                                    }
+                                    "$ref": "#/components/schemas/BNGSuggestions"
                                 }
                             }
                         }
@@ -185,16 +162,21 @@
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
                     },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
-            },
+            }
+        },
+        "/bee-name-generator/suggestion/{name}": {
             "post": {
                 "summary": "Suggest a bee name",
                 "parameters": [
                     {
-                        "$ref": "#/components/parameters/BNGNameSlug"
+                        "$ref": "#/components/parameters/BeeSuggestionNameSlug"
                     }
                 ],
                 "responses": {
@@ -211,6 +193,7 @@
             },
             "put": {
                 "summary": "Accept a bee name suggestion",
+                "description": "Requires the admin:bee-name-generator scope.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -218,7 +201,7 @@
                 ],
                 "parameters": [
                     {
-                        "$ref": "#/components/parameters/BNGNameSlug"
+                        "$ref": "#/components/parameters/BeeSuggestionNameSlug"
                     }
                 ],
                 "responses": {
@@ -231,6 +214,9 @@
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
                     },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
                     }
@@ -238,6 +224,7 @@
             },
             "delete": {
                 "summary": "Reject a bee name suggestion",
+                "description": "Requires the admin:bee-name-generator scope.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -245,7 +232,7 @@
                 ],
                 "parameters": [
                     {
-                        "$ref": "#/components/parameters/BNGNameSlug"
+                        "$ref": "#/components/parameters/BeeSuggestionNameSlug"
                     }
                 ],
                 "responses": {
@@ -258,8 +245,405 @@
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
                     },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/datastore": {
+            "post": {
+                "summary": "Create a data store",
+                "description": "Requires the admin:datastore scope. The store is created for the caller; no request body is read.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DataStore"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            },
+            "get": {
+                "summary": "Read a data store",
+                "description": "Identifies the store via the request body rather than a path or query parameter.",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DataStore"
+                            }
+                        },
+                        "application/xml": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DataStore"
+                            }
+                        },
+                        "application/x-protobuf": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DataStore"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DataStore"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            },
+            "put": {
+                "summary": "Update a data store",
+                "description": "Requires the admin:datastore scope.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DataStore"
+                            }
+                        },
+                        "application/xml": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DataStore"
+                            }
+                        },
+                        "application/x-protobuf": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DataStore"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DataStore"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            },
+            "delete": {
+                "summary": "Delete a data store",
+                "description": "Requires the admin:datastore scope.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DataStore"
+                            }
+                        },
+                        "application/xml": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DataStore"
+                            }
+                        },
+                        "application/x-protobuf": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DataStore"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "$ref": "#/components/responses/204NoContent"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/datastore/number": {
+            "post": {
+                "summary": "Create a number record",
+                "description": "Requires the admin:numberstore scope.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/NumberData"
+                            }
+                        },
+                        "application/xml": {
+                            "schema": {
+                                "$ref": "#/components/schemas/NumberData"
+                            }
+                        },
+                        "application/x-protobuf": {
+                            "schema": {
+                                "$ref": "#/components/schemas/NumberData"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/NumberData"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            },
+            "get": {
+                "summary": "Read a number record",
+                "description": "Identifies the record via the request body rather than a path or query parameter.",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/NumberData"
+                            }
+                        },
+                        "application/xml": {
+                            "schema": {
+                                "$ref": "#/components/schemas/NumberData"
+                            }
+                        },
+                        "application/x-protobuf": {
+                            "schema": {
+                                "$ref": "#/components/schemas/NumberData"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/NumberData"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            },
+            "put": {
+                "summary": "Update a number record",
+                "description": "Requires the admin:numberstore scope.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/NumberData"
+                            }
+                        },
+                        "application/xml": {
+                            "schema": {
+                                "$ref": "#/components/schemas/NumberData"
+                            }
+                        },
+                        "application/x-protobuf": {
+                            "schema": {
+                                "$ref": "#/components/schemas/NumberData"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/NumberData"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            },
+            "delete": {
+                "summary": "Delete a number record",
+                "description": "Requires a valid session, but \u2014 unlike create/update \u2014 the handler does not check the admin:numberstore scope; any authenticated user can delete any record.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/NumberData"
+                            }
+                        },
+                        "application/xml": {
+                            "schema": {
+                                "$ref": "#/components/schemas/NumberData"
+                            }
+                        },
+                        "application/x-protobuf": {
+                            "schema": {
+                                "$ref": "#/components/schemas/NumberData"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/NumberData"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/game-server-status/simple/{game}": {
+            "get": {
+                "summary": "Get game server simple status",
+                "description": "Get game server simple status",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/GameSlug"
+                    },
+                    {
+                        "$ref": "#/components/parameters/GameHostQuery"
+                    },
+                    {
+                        "$ref": "#/components/parameters/GamePortQuery"
+                    },
+                    {
+                        "$ref": "#/components/parameters/GameQueryTypeQuery"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "$ref": "#/components/responses/SimpleOnlineResponse"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/SimpleOfflineResponse"
                     }
                 }
             }
@@ -312,22 +696,235 @@
                 }
             }
         },
-        "/game-server-status/simple/{game}": {
+        "/health": {
             "get": {
-                "summary": "Get game server simple status",
-                "description": "Get game server simple status",
+                "summary": "Health check",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "text/plain": {
+                                "schema": {
+                                    "type": "string",
+                                    "enum": [
+                                        "OK"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/mc/profile/lookup/bulk/byname": {
+            "post": {
+                "summary": "Look up players by name in batch",
+                "description": "Body must be a JSON array of 1 to 10 non-empty names; Content-Type must be application/json.",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                },
+                                "minItems": 1,
+                                "maxItems": 10
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/MCPlayer"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "415": {
+                        "$ref": "#/components/responses/415UnsupportedMediaType"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/mc/profile/lookup/name/{name}": {
+            "get": {
+                "summary": "Look up a player by name",
                 "parameters": [
                     {
-                        "$ref": "#/components/parameters/GameSlug"
+                        "$ref": "#/components/parameters/MCNameSlug"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MCPlayer"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/mc/profile/lookup/{uuid}": {
+            "get": {
+                "summary": "Look up a player by UUID",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/MCUUIDSlug"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MCPlayer"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/mc/profile/{uuid}": {
+            "get": {
+                "summary": "Get a player's full profile",
+                "description": "Returns 204 (not 404) when the profile can't be found.",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/MCUUIDSlug"
                     },
                     {
-                        "$ref": "#/components/parameters/GameHostQuery"
+                        "$ref": "#/components/parameters/UnsignedQuery"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MCPlayer"
+                                }
+                            }
+                        }
                     },
-                    {
-                        "$ref": "#/components/parameters/GamePortQuery"
+                    "204": {
+                        "$ref": "#/components/responses/204NoContent"
                     },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/mc/texture/{hash}": {
+            "get": {
+                "summary": "Get a texture's raw image bytes",
+                "description": "Fetches from Mojang on first request and archives to S3; served straight from S3/CDN thereafter.",
+                "parameters": [
                     {
-                        "$ref": "#/components/parameters/GameQueryTypeQuery"
+                        "$ref": "#/components/parameters/MCHashSlug"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "image/png": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "502": {
+                        "$ref": "#/components/responses/502BadGateway"
+                    }
+                }
+            }
+        },
+        "/mcstatus/icon/{host}": {
+            "get": {
+                "summary": "Get Minecraft server icon",
+                "description": "Get Minecraft server icon",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/HostSlug"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "image/png": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    }
+                }
+            }
+        },
+        "/mcstatus/simple/{host}": {
+            "get": {
+                "summary": "Get Minecraft server simple status",
+                "description": "Get Minecraft server simple status",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/HostSlug"
                     }
                 ],
                 "responses": {
@@ -406,26 +1003,174 @@
                 }
             }
         },
-        "/mcstatus/icon/{host}": {
+        "/pet-pictures/pets": {
+            "post": {
+                "summary": "Create a pet",
+                "description": "Requires the admin:pet-pictures scope. The pet name comes from the request body when no {name} path segment is used.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Pet"
+                            }
+                        },
+                        "application/xml": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Pet"
+                            }
+                        },
+                        "application/x-protobuf": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Pet"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Pet"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            },
             "get": {
-                "summary": "Get Minecraft server icon",
-                "description": "Get Minecraft server icon",
+                "summary": "Get a pet",
+                "description": "The pet ID comes from the request body when no {id} path segment is used.",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Pet"
+                            }
+                        },
+                        "application/xml": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Pet"
+                            }
+                        },
+                        "application/x-protobuf": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Pet"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Pet"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    }
+                }
+            },
+            "put": {
+                "summary": "Update a pet",
+                "description": "Requires the pet-pictures scope for this pet's name.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Pet"
+                            }
+                        },
+                        "application/xml": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Pet"
+                            }
+                        },
+                        "application/x-protobuf": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Pet"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Pet"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/pet-pictures/pets/{id}": {
+            "get": {
+                "summary": "Get a pet by ID",
                 "parameters": [
                     {
-                        "$ref": "#/components/parameters/HostSlug"
+                        "$ref": "#/components/parameters/PetIdSlug"
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "content": {
-                            "image/png": {
+                            "application/json": {
                                 "schema": {
-                                    "type": "string",
-                                    "format": "binary"
+                                    "$ref": "#/components/schemas/Pet"
                                 }
                             }
                         }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
                     },
                     "404": {
                         "$ref": "#/components/responses/404NotFound"
@@ -433,21 +1178,585 @@
                 }
             }
         },
-        "/mcstatus/simple/{host}": {
-            "get": {
-                "summary": "Get Minecraft server simple status",
-                "description": "Get Minecraft server simple status",
+        "/pet-pictures/pets/{name}": {
+            "post": {
+                "summary": "Create a pet",
+                "description": "Requires the admin:pet-pictures scope.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
                 "parameters": [
                     {
-                        "$ref": "#/components/parameters/HostSlug"
+                        "$ref": "#/components/parameters/MCNameSlug"
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Pet"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/pet-pictures/pictures": {
+            "get": {
+                "summary": "Get a pet picture",
+                "description": "The picture ID comes from the request body when no {id} path segment is used.",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PetPicture"
+                            }
+                        },
+                        "application/xml": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PetPicture"
+                            }
+                        },
+                        "application/x-protobuf": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PetPicture"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PetPicture"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    }
+                }
+            },
+            "put": {
+                "summary": "Update a pet picture",
+                "description": "Requires the pet-pictures scope for the picture's primary subject's pet name.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PetPicture"
+                            }
+                        },
+                        "application/xml": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PetPicture"
+                            }
+                        },
+                        "application/x-protobuf": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PetPicture"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PetPicture"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            },
+            "delete": {
+                "summary": "Delete a pet picture",
+                "description": "Requires the pet-pictures scope for the picture's primary subject's pet name. The picture ID comes from the request body when no {id} path segment is used.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PetPicture"
+                            }
+                        },
+                        "application/xml": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PetPicture"
+                            }
+                        },
+                        "application/x-protobuf": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PetPicture"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "$ref": "#/components/responses/204NoContent"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/pet-pictures/pictures/random": {
+            "get": {
+                "summary": "Get a random picture of a named pet",
+                "description": "The pet name comes from the request body (this route has no {name} path segment).",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Pet"
+                            }
+                        },
+                        "application/xml": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Pet"
+                            }
+                        },
+                        "application/x-protobuf": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Pet"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PetPicture"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    }
+                }
+            }
+        },
+        "/pet-pictures/pictures/{id}": {
+            "get": {
+                "summary": "Get a pet picture by ID",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/PetPictureIdSlug"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "$ref": "#/components/responses/SimpleOnlineResponse"
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PetPicture"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
                     },
                     "404": {
-                        "$ref": "#/components/responses/SimpleOfflineResponse"
+                        "$ref": "#/components/responses/404NotFound"
+                    }
+                }
+            },
+            "delete": {
+                "summary": "Delete a pet picture",
+                "description": "Requires the pet-pictures scope for the picture's primary subject's pet name.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/PetPictureIdSlug"
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "$ref": "#/components/responses/204NoContent"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/projects/releases/{group}/{project}": {
+            "get": {
+                "summary": "Get a GitHub repo's releases",
+                "description": "Proxies the GitHub releases API. With format=fml, reshapes the response into Forge Mod Loader update-JSON format instead.",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/GroupSlug"
+                    },
+                    {
+                        "$ref": "#/components/parameters/ProjectSlug"
+                    },
+                    {
+                        "$ref": "#/components/parameters/FormatQuery"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "oneOf": [
+                                        {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/Release"
+                                            }
+                                        },
+                                        {
+                                            "type": "object",
+                                            "description": "Forge Mod Loader update-JSON format (format=fml)."
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "content": {
+                            "text/plain": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/teapot": {
+            "get": {
+                "summary": "I'm a teapot",
+                "responses": {
+                    "418": {
+                        "description": "I'm a teapot",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Problem"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/users/{platform}/{platform_id}": {
+            "get": {
+                "summary": "Get a user by their linked-platform identity",
+                "description": "Requires the admin:users scope.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/PlatformSlug"
+                    },
+                    {
+                        "$ref": "#/components/parameters/PlatformIdSlug"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Account"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    }
+                }
+            },
+            "put": {
+                "summary": "Update a user's linked-platform data",
+                "description": "Requires the admin:users scope.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/PlatformSlug"
+                    },
+                    {
+                        "$ref": "#/components/parameters/PlatformIdSlug"
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PlatformData"
+                            }
+                        },
+                        "application/xml": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PlatformData"
+                            }
+                        },
+                        "application/x-protobuf": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PlatformData"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Account"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    }
+                }
+            }
+        },
+        "/users/{user_id}": {
+            "get": {
+                "summary": "Get a user by ID",
+                "description": "Requires a valid session; any authenticated user may look up any other user by ID.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/UserIdSlug"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Account"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    }
+                }
+            },
+            "put": {
+                "summary": "Update a user",
+                "description": "Requires the admin:users scope.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/UserIdSlug"
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Account"
+                            }
+                        },
+                        "application/xml": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Account"
+                            }
+                        },
+                        "application/x-protobuf": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Account"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Account"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    }
+                }
+            }
+        },
+        "/users/{user_id}/permissions": {
+            "get": {
+                "summary": "Get a user's permissions",
+                "description": "Requires the admin:users scope, unless the caller is requesting their own permissions.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/UserIdSlug"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
                     }
                 }
             }
@@ -644,6 +1953,196 @@
                         "type": "string"
                     }
                 }
+            },
+            "Account": {
+                "type": "object",
+                "description": "A user account. Write-only fields (email, password hash, salt) are never serialized.",
+                "required": [
+                    "user_id"
+                ],
+                "properties": {
+                    "user_id": {
+                        "type": "string"
+                    },
+                    "username": {
+                        "type": "string"
+                    },
+                    "roles": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            },
+            "PlatformData": {
+                "type": "object",
+                "description": "Platform-specific linked-account data. Shape depends on the platform: for 'discord' this mirrors a Discord user object, for 'minecraft' a Mojang profile, for 'twitch' a Twitch user object. Sent as-is to the provider's account-linking record.",
+                "additionalProperties": true
+            },
+            "DataStore": {
+                "type": "object",
+                "properties": {
+                    "store_id": {
+                        "type": "string"
+                    },
+                    "owner_id": {
+                        "type": "string"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            },
+            "NumberData": {
+                "type": "object",
+                "required": [
+                    "store_id",
+                    "user_id"
+                ],
+                "properties": {
+                    "store_id": {
+                        "type": "string"
+                    },
+                    "user_id": {
+                        "type": "string"
+                    },
+                    "value": {
+                        "type": "number",
+                        "format": "double"
+                    }
+                }
+            },
+            "BNGSuggestions": {
+                "type": "object",
+                "properties": {
+                    "suggestions": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "MCProperty": {
+                "type": "object",
+                "required": [
+                    "name",
+                    "value"
+                ],
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Currently only 'textures' is in use."
+                    },
+                    "value": {
+                        "type": "string",
+                        "description": "Base64-encoded JSON payload."
+                    },
+                    "signature": {
+                        "type": "string"
+                    }
+                }
+            },
+            "MCPlayer": {
+                "type": "object",
+                "required": [
+                    "id",
+                    "name"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "legacy": {
+                        "type": "boolean"
+                    },
+                    "demo": {
+                        "type": "boolean"
+                    },
+                    "properties": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/MCProperty"
+                        }
+                    },
+                    "profileActions": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Only present on full-profile responses (GET /mc/profile/{uuid}). Absent entirely on name/UUID lookups, which never populate it; an empty array means the profile was fetched and genuinely has no actions."
+                    }
+                }
+            },
+            "Pet": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "profile_picture": {
+                        "type": "string"
+                    }
+                }
+            },
+            "PetPicture": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "file_ext": {
+                        "type": "string"
+                    },
+                    "prime_subj": {
+                        "type": "integer",
+                        "description": "Pet ID of the picture's primary subject."
+                    },
+                    "othr_subj": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        },
+                        "description": "Pet IDs of any other pets in the picture."
+                    },
+                    "aliases": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "created": {
+                        "type": "string"
+                    }
+                }
+            },
+            "Release": {
+                "type": "object",
+                "properties": {
+                    "tag_name": {
+                        "type": "string"
+                    },
+                    "html_url": {
+                        "type": "string",
+                        "format": "uri"
+                    }
+                }
             }
         },
         "parameters": {
@@ -693,6 +2192,141 @@
                 "required": false,
                 "schema": {
                     "type": "boolean"
+                }
+            },
+            "UserIdSlug": {
+                "name": "user_id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                    "type": "string"
+                }
+            },
+            "PlatformSlug": {
+                "name": "platform",
+                "in": "path",
+                "required": true,
+                "schema": {
+                    "type": "string"
+                },
+                "description": "One of: discord, minecraft, twitch."
+            },
+            "PlatformIdSlug": {
+                "name": "platform_id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                    "type": "string"
+                }
+            },
+            "MCNameSlug": {
+                "name": "name",
+                "in": "path",
+                "required": true,
+                "schema": {
+                    "type": "string"
+                },
+                "description": "Minecraft in-game name."
+            },
+            "MCUUIDSlug": {
+                "name": "uuid",
+                "in": "path",
+                "required": true,
+                "schema": {
+                    "type": "string"
+                },
+                "description": "Minecraft account UUID."
+            },
+            "MCHashSlug": {
+                "name": "hash",
+                "in": "path",
+                "required": true,
+                "schema": {
+                    "type": "string"
+                },
+                "description": "Texture hash, as referenced by a profile's textures property."
+            },
+            "BeeSuggestionAmountSlug": {
+                "name": "amount",
+                "in": "path",
+                "required": true,
+                "schema": {
+                    "type": "integer"
+                },
+                "description": "Number of suggestions to return."
+            },
+            "BeeSuggestionNameSlug": {
+                "name": "name",
+                "in": "path",
+                "required": true,
+                "schema": {
+                    "type": "string"
+                },
+                "description": "A suggested bee name."
+            },
+            "PetIdSlug": {
+                "name": "id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                    "type": "integer"
+                },
+                "description": "Pet ID."
+            },
+            "PetPictureIdSlug": {
+                "name": "id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                    "type": "string"
+                },
+                "description": "Pet picture ID."
+            },
+            "GroupSlug": {
+                "name": "group",
+                "in": "path",
+                "required": true,
+                "schema": {
+                    "type": "string"
+                },
+                "description": "GitHub organization or user."
+            },
+            "ProjectSlug": {
+                "name": "project",
+                "in": "path",
+                "required": true,
+                "schema": {
+                    "type": "string"
+                },
+                "description": "GitHub repository name."
+            },
+            "FormatQuery": {
+                "name": "format",
+                "in": "query",
+                "required": false,
+                "description": "Set to 'fml' to get Forge Mod Loader update-JSON format instead of a plain release list.",
+                "schema": {
+                    "type": "string",
+                    "enum": [
+                        "fml"
+                    ]
+                }
+            },
+            "UnsignedQuery": {
+                "name": "unsigned",
+                "in": "query",
+                "required": false,
+                "description": "Set to 'false' to request signed texture properties.",
+                "schema": {
+                    "type": "string"
+                }
+            },
+            "HostSlug": {
+                "name": "host",
+                "in": "path",
+                "required": true,
+                "schema": {
+                    "type": "string"
                 }
             }
         },
@@ -847,6 +2481,86 @@
                             "enum": [
                                 "Offline"
                             ]
+                        }
+                    }
+                }
+            },
+            "404NotFound": {
+                "description": "Not found",
+                "content": {
+                    "application/problem+json": {
+                        "schema": {
+                            "$ref": "#/components/schemas/Problem"
+                        }
+                    },
+                    "application/problem+xml": {
+                        "schema": {
+                            "$ref": "#/components/schemas/Problem"
+                        }
+                    },
+                    "application/problem+x-protobuf": {
+                        "schema": {
+                            "$ref": "#/components/schemas/Problem"
+                        }
+                    }
+                }
+            },
+            "403Forbidden": {
+                "description": "Forbidden",
+                "content": {
+                    "application/problem+json": {
+                        "schema": {
+                            "$ref": "#/components/schemas/Problem"
+                        }
+                    },
+                    "application/problem+xml": {
+                        "schema": {
+                            "$ref": "#/components/schemas/Problem"
+                        }
+                    },
+                    "application/problem+x-protobuf": {
+                        "schema": {
+                            "$ref": "#/components/schemas/Problem"
+                        }
+                    }
+                }
+            },
+            "415UnsupportedMediaType": {
+                "description": "Unsupported media type",
+                "content": {
+                    "application/problem+json": {
+                        "schema": {
+                            "$ref": "#/components/schemas/Problem"
+                        }
+                    },
+                    "application/problem+xml": {
+                        "schema": {
+                            "$ref": "#/components/schemas/Problem"
+                        }
+                    },
+                    "application/problem+x-protobuf": {
+                        "schema": {
+                            "$ref": "#/components/schemas/Problem"
+                        }
+                    }
+                }
+            },
+            "502BadGateway": {
+                "description": "Bad gateway",
+                "content": {
+                    "application/problem+json": {
+                        "schema": {
+                            "$ref": "#/components/schemas/Problem"
+                        }
+                    },
+                    "application/problem+xml": {
+                        "schema": {
+                            "$ref": "#/components/schemas/Problem"
+                        }
+                    },
+                    "application/problem+x-protobuf": {
+                        "schema": {
+                            "$ref": "#/components/schemas/Problem"
                         }
                     }
                 }
