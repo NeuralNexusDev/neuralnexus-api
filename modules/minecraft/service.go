@@ -253,16 +253,28 @@ func (s *service) GetMojangProfile(id string, signed bool) (*Player, error) {
 		return player, err
 	}
 
-	profile, err := s.GetProfile(id)
+	profile, err := s.resolveProfile(id)
 	if err != nil {
 		return nil, err
 	}
 	return profile.ToPlayer()
 }
 
-// GetProfile gets a player's profile with textures decoded as native JSON.
-// An unknown player is reported as ErrPlayerNotFound directly.
+// GetProfile gets a player's profile with textures decoded as native JSON,
+// with texture URLs pointing at our own CDN instead of Mojang's.
 func (s *service) GetProfile(id string) (*Profile, error) {
+	profile, err := s.resolveProfile(id)
+	if err != nil {
+		return nil, err
+	}
+	return profile.WithTextureURL(s.nnTextureUrl), nil
+}
+
+// resolveProfile gets a player's canonical Profile — texture URLs still
+// pointing at Mojang — from cache or the database, fetching live from
+// Mojang when needed. An unknown player is reported as ErrPlayerNotFound
+// directly.
+func (s *service) resolveProfile(id string) (*Profile, error) {
 	cached, err := s.store.GetProfileFromCache(id)
 	if err == nil {
 		return cached, nil

@@ -157,6 +157,17 @@ func (t *Texture) Hash() string {
 	return t.URL[idx+1:]
 }
 
+// withURL returns a copy of the Texture with its URL rewritten to
+// baseURL+hash, or nil if t is nil.
+func (t *Texture) withURL(baseURL string) *Texture {
+	if t == nil {
+		return nil
+	}
+	rewritten := *t
+	rewritten.URL = baseURL + t.Hash()
+	return &rewritten
+}
+
 // Metadata - Skin metadata (only present for Alex/slim model)
 type Metadata struct {
 	Model Model `json:"model"`
@@ -206,6 +217,21 @@ func (p *Profile) ToPlayer() (*Player, error) {
 		player.Properties = []Property{*prop}
 	}
 	return player, nil
+}
+
+// WithTextureURL returns a copy of the Profile with its texture URLs
+// rewritten to baseURL+hash, e.g. pointing at our own CDN instead of
+// Mojang's.
+func (p *Profile) WithTextureURL(baseURL string) *Profile {
+	if p.Textures == nil {
+		return p
+	}
+	rewritten := *p
+	textures := *p.Textures
+	textures.Textures.SKIN = textures.Textures.SKIN.withURL(baseURL)
+	textures.Textures.CAPE = textures.Textures.CAPE.withURL(baseURL)
+	rewritten.Textures = &textures
+	return &rewritten
 }
 
 // TexturesRow represents a texture in the database

@@ -482,8 +482,33 @@ func TestService_GetProfile_DBHit_TexturesReturnedAsJSONNotBase64Property(t *tes
 	if profile.Textures == nil {
 		t.Fatal("expected Textures to be populated from the stored profile")
 	}
-	if profile.Textures.Textures.SKIN == nil || profile.Textures.Textures.SKIN.URL != mojangTextureURL+"abc123hash" {
-		t.Errorf("expected decoded skin URL, got %+v", profile.Textures.Textures.SKIN)
+	if profile.Textures.Textures.SKIN == nil || profile.Textures.Textures.SKIN.URL != "http://localhost/texture/abc123hash" {
+		t.Errorf("expected the decoded route to use our own texture URL, got %+v", profile.Textures.Textures.SKIN)
+	}
+}
+
+func TestService_GetMojangProfile_DBHit_KeepsMojangTextureURL(t *testing.T) {
+	id := "853c80ef3c3749fdaa49938b674adae6"
+	store := &mockStore{
+		profilesByUUID: map[string]*Profile{
+			id: {
+				ID: id, Name: "jeb_", LastSeen: time.Now().UnixMilli(),
+				Textures: &TexturesValue{
+					ProfileID: id, ProfileName: "jeb_",
+					Textures: Textures{SKIN: &Texture{URL: mojangTextureURL + "abc123hash"}},
+				},
+			},
+		},
+	}
+
+	svc := NewService(store, nil, "http://localhost/texture/")
+	player, err := svc.GetMojangProfile(id, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	decoded := player.ParseProperties()
+	if decoded == nil || decoded.Textures.SKIN == nil || decoded.Textures.SKIN.URL != mojangTextureURL+"abc123hash" {
+		t.Errorf("expected the mirror route to keep Mojang's texture URL, got %+v", decoded)
 	}
 }
 
@@ -525,8 +550,8 @@ func TestService_GetProfile_MojangFetch_TexturesDecoded(t *testing.T) {
 	if profile.Textures == nil || profile.Textures.Textures.SKIN == nil {
 		t.Fatalf("expected decoded textures, got %+v", profile.Textures)
 	}
-	if profile.Textures.Textures.SKIN.URL != "http://textures.minecraft.net/texture/abc123hash" {
-		t.Errorf("expected decoded skin URL, got %s", profile.Textures.Textures.SKIN.URL)
+	if profile.Textures.Textures.SKIN.URL != "http://localhost/texture/abc123hash" {
+		t.Errorf("expected our own texture URL, got %s", profile.Textures.Textures.SKIN.URL)
 	}
 }
 
