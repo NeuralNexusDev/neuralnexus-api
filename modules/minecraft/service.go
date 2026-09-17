@@ -279,10 +279,8 @@ func (s *service) GetProfile(id string) (*Profile, error) {
 	return profile, nil
 }
 
-// resolveProfile gets a player's canonical Profile — texture URLs still
-// pointing at Mojang — from cache or the database, fetching live from
-// Mojang when needed. An unknown player is reported as ErrPlayerNotFound
-// directly.
+// resolveProfile gets a player's canonical Profile from cache or the
+// database, fetching live from Mojang when needed.
 func (s *service) resolveProfile(id string) (*Profile, error) {
 	cached, err := s.store.GetProfileFromCache(id)
 	if err == nil {
