@@ -192,7 +192,13 @@ func ApplyRoutes(
 
 // Setup - Setup the API server
 func (s *APIServer) Setup() http.Handler {
-	db := database.GetDB(os.Getenv("DATABASE_URL") + "/neuralnexus")
+	dbUrl := os.Getenv("DATABASE_URL")
+	if dbUrl == "" {
+		log.Fatal("DATABASE_URL is not set")
+		return nil
+	}
+
+	db := database.GetDB(dbUrl + "/neuralnexus")
 	rdb := database.GetRedis()
 	authStore := auth.NewStore(db, rdb)
 	session := auth.NewSessionService(authStore)
