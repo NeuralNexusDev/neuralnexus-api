@@ -290,7 +290,10 @@ func (s *service) resolveProfile(id string) (*Profile, error) {
 		return nil, err
 	}
 
-	dbProfile, _ := s.store.GetProfileByUUID(id)
+	dbProfile, err := s.store.GetProfileByUUID(id)
+	if err != nil {
+		log.Println("Failed to get profile from DB:\n\t", err)
+	}
 	if dbProfile != nil {
 		if dbProfile.ProfileActions == nil {
 			dbProfile.ProfileActions = []string{}
