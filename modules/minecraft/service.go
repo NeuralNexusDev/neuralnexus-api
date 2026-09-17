@@ -291,7 +291,7 @@ func (s *service) resolveProfile(id string) (*Profile, error) {
 	}
 
 	dbProfile, err := s.store.GetProfileByUUID(id)
-	if err != nil {
+	if err != nil && !errors.Is(err, ErrPlayerNotFound) {
 		log.Println("Failed to get profile from DB:\n\t", err)
 	}
 	if dbProfile != nil {
