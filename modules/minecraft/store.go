@@ -25,6 +25,7 @@ const (
 	CachePlayer             = "player:"
 	CachePropertiesSigned   = CachePlayer + "properties:signed:"
 	CachePropertiesUnsigned = CachePlayer + "properties:unsigned:"
+	S3Bucket                = "mca"
 	S3KeyPrefix             = "texture/"
 )
 
@@ -255,7 +256,7 @@ func (s *store) SetProfileInCache(player *Player, signed bool) error {
 // IsTextureInS3 check if the texture is in S3
 func (s *store) IsTextureInS3(hash string) (bool, error) {
 	_, err := s.s3.HeadObject(context.Background(), &s3.HeadObjectInput{
-		Bucket: aws.String("mca"),
+		Bucket: aws.String(S3Bucket),
 		Key:    aws.String(S3KeyPrefix + hash),
 	})
 
@@ -278,7 +279,7 @@ func (s *store) IsTextureInS3(hash string) (bool, error) {
 // PutTextureInS3 upload a texture to S3
 func (s *store) PutTextureInS3(hash string, body io.ReadCloser) error {
 	_, err := s.s3.PutObject(context.Background(), &s3.PutObjectInput{
-		Bucket:      aws.String("mca"),
+		Bucket:      aws.String(S3Bucket),
 		Key:         aws.String(S3KeyPrefix + hash),
 		Body:        body,
 		ContentType: aws.String("image/png"),

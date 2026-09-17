@@ -124,7 +124,7 @@ func ApplyRoutes(
 	mcStore := mc.NewStore(
 		database.GetDB("archive"), rdb,
 		database.GetS3(endpoint, accessKey, secretKey))
-	mcService := mc.NewService(mcStore, nil, "https://"+endpoint+"/mca/texture/")
+	mcService := mc.NewService(mcStore, nil, "https://"+endpoint+"/"+mc.S3Bucket+"/"+mc.S3KeyPrefix)
 
 	mux.Handle("GET /api/v1/mc/profile/lookup/name/{name}", mc.GetPlayerByNameHandler(mcService))
 	mux.Handle("GET /api/v1/mc/profile/lookup/{uuid}", mc.GetPlayerByUUIDHandler(mcService))
