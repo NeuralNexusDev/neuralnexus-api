@@ -143,6 +143,7 @@ func ApplyRoutes(
 	mux.Handle("GET /api/v1/mc/mojang/profile/{uuid}", mc.GetMojangProfileHandler(mcService))
 	mux.Handle("GET /api/v1/mc/profile/{uuid}", mc.GetProfileHandler(mcService))
 	mux.Handle("GET /api/v1/mc/texture/{hash}", mc.GetTextureHandler(mcService))
+	mux.Handle("GET /api/v1/mc/geyser/xuid/{gamertag}", mc.GetGeyserXUIDHandler(mcService))
 
 	// --------------- Minecraft Status ---------------
 	mcsService := mcs.NewService()

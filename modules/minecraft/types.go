@@ -3,6 +3,7 @@ package minecraft
 import (
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"strings"
@@ -202,6 +203,22 @@ func (p *Profile) ToPlayer() (*Player, error) {
 		player.Properties = []Property{*prop}
 	}
 	return player, nil
+}
+
+// GeyserPlayer - a Bedrock player's identity derived from Geyser's Xbox XUID lookup.
+// Bedrock players have no Mojang profile, so this carries only what Geyser/Xbox Live expose.
+type GeyserPlayer struct {
+	Gamertag string `json:"gamertag"`
+	XUID     int64  `json:"xuid"`
+	UUID     string `json:"uuid"`
+}
+
+// xuidToUUID derives a Bedrock player's synthetic UUID from their Xbox XUID:
+// the XUID's hex representation, left-padded with zeros to 32 hex digits and
+// formatted as a standard UUID (00000000-0000-0000-xxxx-xxxxxxxxxxxx).
+func xuidToUUID(xuid int64) string {
+	hex := fmt.Sprintf("%032x", uint64(xuid))
+	return hex[0:8] + "-" + hex[8:12] + "-" + hex[12:16] + "-" + hex[16:20] + "-" + hex[20:32]
 }
 
 // TexturesRow represents a texture in the database

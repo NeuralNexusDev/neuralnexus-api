@@ -716,6 +716,38 @@
                 }
             }
         },
+        "/mc/geyser/xuid/{gamertag}": {
+            "get": {
+                "summary": "Look up a Bedrock player's XUID and derived UUID by gamertag",
+                "description": "Proxies Geyser's Xbox XUID lookup API. The UUID is synthesized from the XUID's hex representation (left-padded to 32 hex digits and formatted as a standard UUID); it is not a real Mojang UUID, since Bedrock players have no Mojang profile. No caching: fetched live from Geyser on every request.",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/GamertagSlug"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GeyserPlayer"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
         "/mc/profile/lookup/bulk/byname": {
             "post": {
                 "summary": "Look up players by name in batch",
@@ -2143,6 +2175,28 @@
                         "format": "uri"
                     }
                 }
+            },
+            "GeyserPlayer": {
+                "type": "object",
+                "description": "A Bedrock player's identity derived from Geyser's Xbox XUID lookup. Bedrock players have no Mojang profile, so this carries only what Geyser/Xbox Live expose.",
+                "required": [
+                    "gamertag",
+                    "xuid",
+                    "uuid"
+                ],
+                "properties": {
+                    "gamertag": {
+                        "type": "string"
+                    },
+                    "xuid": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "uuid": {
+                        "type": "string",
+                        "description": "Synthesized from the XUID, not a real Mojang UUID."
+                    }
+                }
             }
         },
         "parameters": {
@@ -2328,6 +2382,15 @@
                 "schema": {
                     "type": "string"
                 }
+            },
+            "GamertagSlug": {
+                "name": "gamertag",
+                "in": "path",
+                "required": true,
+                "schema": {
+                    "type": "string"
+                },
+                "description": "Xbox gamertag of a Geyser Bedrock player."
             }
         },
         "securitySchemes": {

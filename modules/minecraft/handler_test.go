@@ -18,6 +18,7 @@ type mockService struct {
 	player             *Player
 	players            []*Player
 	profile            *Profile
+	geyserPlayer       *GeyserPlayer
 	err                error
 	textureBody        []byte
 	textureContentType string
@@ -41,6 +42,10 @@ func (m *mockService) GetMojangProfile(_ string, _ bool) (*Player, error) {
 
 func (m *mockService) GetProfile(_ string) (*Profile, error) {
 	return m.profile, m.err
+}
+
+func (m *mockService) GetGeyserXUID(_ string) (*GeyserPlayer, error) {
+	return m.geyserPlayer, m.err
 }
 
 func (m *mockService) GetTextureContent(_ string) (*TextureResult, error) {
@@ -513,5 +518,80 @@ func TestHandler_GetTextureHandler_EmptyHash(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandler_GetGeyserXUIDHandler_OK(t *testing.T) {
+	svc := &mockService{geyserPlayer: &GeyserPlayer{
+		Gamertag: "Notch",
+		XUID:     2535457445285308,
+		UUID:     "00000000-0000-0000-0009-01fc305e8dbc",
+	}}
+	handler := GetGeyserXUIDHandler(svc)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/geyser/xuid/Notch", nil)
+	r.SetPathValue("gamertag", "Notch")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	var got GeyserPlayer
+	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if got.Gamertag != "Notch" {
+		t.Errorf("expected Notch, got %s", got.Gamertag)
+	}
+	if got.UUID != "00000000-0000-0000-0009-01fc305e8dbc" {
+		t.Errorf("unexpected UUID: %s", got.UUID)
+	}
+}
+
+func TestHandler_GetGeyserXUIDHandler_EmptyGamertag(t *testing.T) {
+	svc := &mockService{}
+	handler := GetGeyserXUIDHandler(svc)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/geyser/xuid/", nil)
+	r.SetPathValue("gamertag", "")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandler_GetGeyserXUIDHandler_NotFound(t *testing.T) {
+	svc := &mockService{err: ErrPlayerNotFound}
+	handler := GetGeyserXUIDHandler(svc)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/geyser/xuid/nonexistent", nil)
+	r.SetPathValue("gamertag", "nonexistent")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", w.Code)
+	}
+}
+
+func TestHandler_GetGeyserXUIDHandler_InternalError(t *testing.T) {
+	svc := &mockService{err: errors.New("geyser API error: 500")}
+	handler := GetGeyserXUIDHandler(svc)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/geyser/xuid/Notch", nil)
+	r.SetPathValue("gamertag", "Notch")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500, got %d", w.Code)
 	}
 }

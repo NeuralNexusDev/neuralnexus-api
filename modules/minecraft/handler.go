@@ -141,6 +141,29 @@ func GetProfileHandler(s Service) http.HandlerFunc {
 	}
 }
 
+// GetGeyserXUIDHandler - Look up a Bedrock player's XUID and derived UUID by gamertag
+func GetGeyserXUIDHandler(s Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		gamertag := r.PathValue("gamertag")
+		if gamertag == "" {
+			responses.BadRequest(w, r, "Invalid gamertag")
+			return
+		}
+
+		player, err := s.GetGeyserXUID(gamertag)
+		if err != nil {
+			if errors.Is(err, ErrPlayerNotFound) {
+				responses.NotFound(w, r, ErrPlayerNotFound.Error())
+				return
+			}
+			log.Println("Failed to get Geyser XUID:\n\t", err)
+			responses.InternalServerError(w, r, "Failed to get Geyser XUID")
+			return
+		}
+		responses.StructOK(w, r, player)
+	}
+}
+
 // GetTextureHandler - Serve a texture's bytes, fetching from the backend exactly once
 func GetTextureHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

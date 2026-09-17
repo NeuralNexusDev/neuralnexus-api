@@ -34,6 +34,9 @@ const mojangLookupProfile = "https://sessionserver.mojang.com/session/minecraft/
 // http://textures.minecraft.net/texture/<hash>
 const mojangTextureURL = "http://textures.minecraft.net/texture/"
 
+// https://api.geysermc.org/v2/xbox/xuid/<gamertag>
+const geyserXUIDLookup = "https://api.geysermc.org/v2/xbox/xuid/"
+
 // Service - Minecraft player service
 type Service interface {
 	GetMojangPlayerByName(name string) (*Player, error)
@@ -42,18 +45,20 @@ type Service interface {
 	GetMojangProfile(id string, signed bool) (*Player, error)
 	GetProfile(id string) (*Profile, error)
 	GetTextureContent(hash string) (*TextureResult, error)
+	GetGeyserXUID(gamertag string) (*GeyserPlayer, error)
 }
 
 // service - Minecraft player service implementation
 type service struct {
-	store         Store
-	client        *http.Client
-	lookupByName  string
-	lookupByUUID  string
-	lookupBulk    string
-	lookupProfile string
-	lookupTexture string
-	nnTextureUrl  string
+	store            Store
+	client           *http.Client
+	lookupByName     string
+	lookupByUUID     string
+	lookupBulk       string
+	lookupProfile    string
+	lookupTexture    string
+	geyserXUIDLookup string
+	nnTextureUrl     string
 }
 
 // NewService - Create a new Minecraft player service
@@ -62,14 +67,15 @@ func NewService(store Store, client *http.Client, nnTextureUrl string) Service {
 		client = http.DefaultClient
 	}
 	return &service{
-		store:         store,
-		client:        client,
-		lookupByName:  mojangLookupByName,
-		lookupByUUID:  mojangLookupByUUID,
-		lookupBulk:    mojangLookupBulk,
-		lookupProfile: mojangLookupProfile,
-		lookupTexture: mojangTextureURL,
-		nnTextureUrl:  nnTextureUrl,
+		store:            store,
+		client:           client,
+		lookupByName:     mojangLookupByName,
+		lookupByUUID:     mojangLookupByUUID,
+		lookupBulk:       mojangLookupBulk,
+		lookupProfile:    mojangLookupProfile,
+		lookupTexture:    mojangTextureURL,
+		geyserXUIDLookup: geyserXUIDLookup,
+		nnTextureUrl:     nnTextureUrl,
 	}
 }
 
@@ -373,6 +379,36 @@ func (s *service) fetchProfileFromMojang(id string, signed bool) (*Player, *Prof
 	}
 
 	return &player, profile, nil
+}
+
+// GetGeyserXUID looks up a Bedrock player's Xbox XUID by gamertag via Geyser's
+// API and derives their synthetic UUID from it. No caching: a thin passthrough.
+func (s *service) GetGeyserXUID(gamertag string) (*GeyserPlayer, error) {
+	resp, err := s.client.Get(s.geyserXUIDLookup + gamertag)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, ErrPlayerNotFound
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.New("geyser API error: " + resp.Status)
+	}
+
+	var result struct {
+		XUID int64 `json:"xuid"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return &GeyserPlayer{
+		Gamertag: gamertag,
+		XUID:     result.XUID,
+		UUID:     xuidToUUID(result.XUID),
+	}, nil
 }
 
 // GetTextureContent returns the texture's bytes and content type, fetching from

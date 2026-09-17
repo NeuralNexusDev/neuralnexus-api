@@ -765,3 +765,75 @@ func TestService_GetMojangProfile_Signed_FetchCachesSeparatelyFromUnsigned(t *te
 		t.Error("expected a signed fetch not to populate the decoded Profile cache, since it can't represent a real signature")
 	}
 }
+
+func TestService_GetGeyserXUID_OK(t *testing.T) {
+	geyser := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/Notch" {
+			t.Errorf("expected gamertag in path, got %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]int64{"xuid": 2535457445285308})
+	}))
+	defer geyser.Close()
+
+	store := &mockStore{}
+	svc := NewService(store, geyser.Client(), "http://localhost/texture/")
+	s := svc.(*service)
+	s.geyserXUIDLookup = geyser.URL + "/"
+
+	player, err := svc.GetGeyserXUID("Notch")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if player.Gamertag != "Notch" {
+		t.Errorf("expected Notch, got %s", player.Gamertag)
+	}
+	if player.XUID != 2535457445285308 {
+		t.Errorf("expected xuid 2535457445285308, got %d", player.XUID)
+	}
+	if player.UUID != xuidToUUID(2535457445285308) {
+		t.Errorf("expected derived UUID %s, got %s", xuidToUUID(2535457445285308), player.UUID)
+	}
+}
+
+func TestService_GetGeyserXUID_NotFound(t *testing.T) {
+	geyser := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer geyser.Close()
+
+	store := &mockStore{}
+	svc := NewService(store, geyser.Client(), "http://localhost/texture/")
+	s := svc.(*service)
+	s.geyserXUIDLookup = geyser.URL + "/"
+
+	_, err := svc.GetGeyserXUID("nonexistent")
+	if !errors.Is(err, ErrPlayerNotFound) {
+		t.Errorf("expected ErrPlayerNotFound, got %v", err)
+	}
+}
+
+func TestService_GetGeyserXUID_UpstreamError(t *testing.T) {
+	geyser := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer geyser.Close()
+
+	store := &mockStore{}
+	svc := NewService(store, geyser.Client(), "http://localhost/texture/")
+	s := svc.(*service)
+	s.geyserXUIDLookup = geyser.URL + "/"
+
+	_, err := svc.GetGeyserXUID("Notch")
+	if err == nil {
+		t.Fatal("expected an error for a non-200/404 upstream response")
+	}
+}
+
+func TestXUIDToUUID(t *testing.T) {
+	got := xuidToUUID(2535457445285308)
+	want := "00000000-0000-0000-0009-01fc305e8dbc"
+	if got != want {
+		t.Errorf("expected %s, got %s", want, got)
+	}
+}
