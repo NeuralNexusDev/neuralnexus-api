@@ -238,3 +238,87 @@ func TestTypes_MarshalJSON_ProfileActionsPopulated(t *testing.T) {
 		t.Errorf("expected [FORCED_NAME_CHANGE], got %v", got.ProfileActions)
 	}
 }
+
+func TestTypes_Profile_MarshalJSON_ProfileActionsOmittedWhenEmpty(t *testing.T) {
+	profile := &Profile{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}
+
+	data, err := json.Marshal(profile)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+	if _, ok := raw["profileActions"]; ok {
+		t.Errorf("expected profileActions to be omitted when empty, got %s", data)
+	}
+	if _, ok := raw["firstSeen"]; ok {
+		t.Errorf("expected firstSeen to never be exposed in JSON, got %s", data)
+	}
+	if _, ok := raw["lastSeen"]; ok {
+		t.Errorf("expected lastSeen to never be exposed in JSON, got %s", data)
+	}
+}
+
+func TestTypes_Profile_MarshalJSON_ProfileActionsPresentWhenPopulated(t *testing.T) {
+	profile := &Profile{
+		ID:             "853c80ef3c3749fdaa49938b674adae6",
+		Name:           "jeb_",
+		ProfileActions: []string{"FORCED_NAME_CHANGE"},
+	}
+
+	data, err := json.Marshal(profile)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var got Profile
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+	if len(got.ProfileActions) != 1 || got.ProfileActions[0] != "FORCED_NAME_CHANGE" {
+		t.Errorf("expected [FORCED_NAME_CHANGE], got %v", got.ProfileActions)
+	}
+}
+
+func TestTypes_Profile_ToPlayer_EncodesTexturesAsUnsignedProperty(t *testing.T) {
+	profile := &Profile{
+		ID:   "853c80ef3c3749fdaa49938b674adae6",
+		Name: "jeb_",
+		Textures: &TexturesValue{
+			ProfileID:   "853c80ef3c3749fdaa49938b674adae6",
+			ProfileName: "jeb_",
+			Textures:    Textures{SKIN: &Texture{URL: "http://textures.minecraft.net/texture/abc123"}},
+		},
+	}
+
+	player, err := profile.ToPlayer()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(player.Properties) != 1 || player.Properties[0].Name != TEXTURES {
+		t.Fatalf("expected a single textures property, got %v", player.Properties)
+	}
+	if player.Properties[0].Signature != "" {
+		t.Error("expected no signature on a locally-encoded property")
+	}
+
+	decoded := player.ParseProperties()
+	if decoded == nil || decoded.Textures.SKIN == nil || decoded.Textures.SKIN.Hash() != "abc123" {
+		t.Errorf("expected the encoded property to decode back to the original textures, got %+v", decoded)
+	}
+}
+
+func TestTypes_Profile_ToPlayer_NoTextures(t *testing.T) {
+	profile := &Profile{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}
+
+	player, err := profile.ToPlayer()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(player.Properties) != 0 {
+		t.Errorf("expected no properties when the profile has no textures, got %v", player.Properties)
+	}
+}

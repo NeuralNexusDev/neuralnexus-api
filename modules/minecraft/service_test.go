@@ -1,6 +1,7 @@
 package minecraft
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -14,13 +15,15 @@ import (
 
 // mockStore implements the Store interface for unit testing the Service layer.
 type mockStore struct {
-	playersByName map[string]*Player
-	playersByUUID map[string]*Player
-	cache         map[string]*Player
-	profilesCache map[string]*Player
-	s3Textures    map[string]bool
-	putBodies     map[string][]byte
-	putErr        error
+	playersByName       map[string]*Player
+	playersByUUID       map[string]*Player
+	profilesByUUID      map[string]*Profile
+	cache               map[string]*Player
+	profilesCache       map[string]*Profile
+	signedProfilesCache map[string]*Player
+	s3Textures          map[string]bool
+	putBodies           map[string][]byte
+	putErr              error
 }
 
 func (m *mockStore) GetPlayerByUUID(id string) (*Player, error) {
@@ -37,15 +40,11 @@ func (m *mockStore) GetPlayerByName(name string) (*Player, error) {
 	return nil, ErrPlayerNotFound
 }
 
-func (m *mockStore) GetProfileByUUID(id string) (*Player, error) {
-	if p, ok := m.playersByUUID[id]; ok {
+func (m *mockStore) GetProfileByUUID(id string) (*Profile, error) {
+	if p, ok := m.profilesByUUID[id]; ok {
 		return p, nil
 	}
 	return nil, ErrPlayerNotFound
-}
-
-func (m *mockStore) GetTextures(id string) (*TexturesRow, error) {
-	return nil, nil
 }
 
 func (m *mockStore) UpsertPlayer(player *Player, updateProfile bool) error {
@@ -86,32 +85,37 @@ func (m *mockStore) SetPlayerInCache(player *Player) error {
 	return nil
 }
 
-func (m *mockStore) GetProfileFromCache(id string, signed bool) (*Player, error) {
+func (m *mockStore) GetProfileFromCache(id string) (*Profile, error) {
 	if m.profilesCache != nil {
-		key := id
-		if signed {
-			key += "_signed"
-		} else {
-			key += "_unsigned"
-		}
-		if p, ok := m.profilesCache[key]; ok {
+		if p, ok := m.profilesCache[id]; ok {
 			return p, nil
 		}
 	}
 	return nil, redis.Nil
 }
 
-func (m *mockStore) SetProfileInCache(player *Player, signed bool) error {
+func (m *mockStore) SetProfileInCache(profile *Profile) error {
 	if m.profilesCache == nil {
-		m.profilesCache = make(map[string]*Player)
+		m.profilesCache = make(map[string]*Profile)
 	}
-	key := player.ID
-	if signed {
-		key += "_signed"
-	} else {
-		key += "_unsigned"
+	m.profilesCache[profile.ID] = profile
+	return nil
+}
+
+func (m *mockStore) GetSignedProfileFromCache(id string) (*Player, error) {
+	if m.signedProfilesCache != nil {
+		if p, ok := m.signedProfilesCache[id]; ok {
+			return p, nil
+		}
 	}
-	m.profilesCache[key] = player
+	return nil, redis.Nil
+}
+
+func (m *mockStore) SetSignedProfileInCache(player *Player) error {
+	if m.signedProfilesCache == nil {
+		m.signedProfilesCache = make(map[string]*Player)
+	}
+	m.signedProfilesCache[player.ID] = player
 	return nil
 }
 
@@ -141,7 +145,7 @@ func (m *mockStore) PutTextureInS3(hash string, body io.ReadCloser) error {
 
 // --- Tests ---
 
-func TestService_GetPlayerByName_CacheHit(t *testing.T) {
+func TestService_GetMojangPlayerByName_CacheHit(t *testing.T) {
 	store := &mockStore{
 		cache: map[string]*Player{
 			"jeb_": {ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"},
@@ -149,7 +153,7 @@ func TestService_GetPlayerByName_CacheHit(t *testing.T) {
 	}
 
 	svc := NewService(store, nil, "http://localhost/texture/")
-	player, err := svc.GetPlayerByName("jeb_")
+	player, err := svc.GetMojangPlayerByName("jeb_")
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -159,7 +163,7 @@ func TestService_GetPlayerByName_CacheHit(t *testing.T) {
 	}
 }
 
-func TestService_GetPlayerByName_MojangFallback(t *testing.T) {
+func TestService_GetMojangPlayerByName_MojangFallback(t *testing.T) {
 	// Mock Mojang API server
 	mojangServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -177,7 +181,7 @@ func TestService_GetPlayerByName_MojangFallback(t *testing.T) {
 	s := svc.(*service)
 	s.lookupByName = mojangServer.URL + "/"
 
-	player, err := svc.GetPlayerByName("jeb_")
+	player, err := svc.GetMojangPlayerByName("jeb_")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -186,19 +190,19 @@ func TestService_GetPlayerByName_MojangFallback(t *testing.T) {
 	}
 }
 
-func TestService_GetPlayersByNames_Validation(t *testing.T) {
+func TestService_GetMojangPlayersByNames_Validation(t *testing.T) {
 	store := &mockStore{}
 	svc := NewService(store, nil, "http://localhost/texture/")
 
 	// Test empty slice
-	_, err := svc.GetPlayersByNames([]string{})
+	_, err := svc.GetMojangPlayersByNames([]string{})
 	if err == nil {
 		t.Error("expected error for empty names list")
 	}
 
 	// Test slice exceeding batch cap of 10
 	tooMany := []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"}
-	_, err = svc.GetPlayersByNames(tooMany)
+	_, err = svc.GetMojangPlayersByNames(tooMany)
 	if err == nil {
 		t.Error("expected error for batch lookup exceeding 10 names")
 	}
@@ -348,16 +352,16 @@ func TestService_GetTextureContent_MissPath_ArchiveFailureStillServesClient(t *t
 	}
 }
 
-func TestService_GetProfile_DBHit_NilProfileActionsNormalized(t *testing.T) {
+func TestService_GetMojangProfile_DBHit_NilProfileActionsNormalized(t *testing.T) {
 	id := "853c80ef3c3749fdaa49938b674adae6"
 	store := &mockStore{
-		playersByUUID: map[string]*Player{
+		profilesByUUID: map[string]*Profile{
 			id: {ID: id, Name: "jeb_", LastSeen: time.Now().UnixMilli()},
 		},
 	}
 
 	svc := NewService(store, nil, "http://localhost/texture/")
-	player, err := svc.GetProfile(id, false)
+	player, err := svc.GetMojangProfile(id, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -369,7 +373,122 @@ func TestService_GetProfile_DBHit_NilProfileActionsNormalized(t *testing.T) {
 	}
 }
 
-func TestService_GetProfile_MojangFetch_NilProfileActionsNormalized(t *testing.T) {
+func TestService_GetMojangProfile_DBHit_MirrorsAsBase64Property(t *testing.T) {
+	id := "853c80ef3c3749fdaa49938b674adae6"
+	store := &mockStore{
+		profilesByUUID: map[string]*Profile{
+			id: {
+				ID: id, Name: "jeb_", LastSeen: time.Now().UnixMilli(),
+				Textures: &TexturesValue{
+					ProfileID: id, ProfileName: "jeb_",
+					Textures: Textures{SKIN: &Texture{URL: mojangTextureURL + "abc123hash"}},
+				},
+			},
+		},
+	}
+
+	svc := NewService(store, nil, "http://localhost/texture/")
+	player, err := svc.GetMojangProfile(id, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(player.Properties) != 1 || player.Properties[0].Name != TEXTURES {
+		t.Fatalf("expected a single textures property mirroring Mojang's shape, got %v", player.Properties)
+	}
+	if _, err := base64.StdEncoding.DecodeString(player.Properties[0].Value); err != nil {
+		t.Errorf("expected the property value to be base64, got %q: %v", player.Properties[0].Value, err)
+	}
+}
+
+func TestService_GetMojangProfile_DBHit_NoStoredTextures(t *testing.T) {
+	id := "853c80ef3c3749fdaa49938b674adae6"
+	store := &mockStore{
+		profilesByUUID: map[string]*Profile{
+			id: {ID: id, Name: "jeb_", LastSeen: time.Now().UnixMilli()},
+		},
+	}
+
+	svc := NewService(store, nil, "http://localhost/texture/")
+	player, err := svc.GetMojangProfile(id, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(player.Properties) != 0 {
+		t.Errorf("expected no properties when the player has no stored textures, got %v", player.Properties)
+	}
+}
+
+func TestService_GetProfile_DBHit_TexturesReturnedAsJSONNotBase64Property(t *testing.T) {
+	id := "853c80ef3c3749fdaa49938b674adae6"
+	store := &mockStore{
+		profilesByUUID: map[string]*Profile{
+			id: {
+				ID: id, Name: "jeb_", LastSeen: time.Now().UnixMilli(),
+				Textures: &TexturesValue{
+					ProfileID: id, ProfileName: "jeb_",
+					Textures: Textures{SKIN: &Texture{URL: mojangTextureURL + "abc123hash"}},
+				},
+			},
+		},
+	}
+
+	svc := NewService(store, nil, "http://localhost/texture/")
+	profile, err := svc.GetProfile(id)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if profile.Textures == nil {
+		t.Fatal("expected Textures to be populated from the stored profile")
+	}
+	if profile.Textures.Textures.SKIN == nil || profile.Textures.Textures.SKIN.URL != mojangTextureURL+"abc123hash" {
+		t.Errorf("expected decoded skin URL, got %+v", profile.Textures.Textures.SKIN)
+	}
+}
+
+func TestService_GetProfile_MojangFetch_TexturesDecoded(t *testing.T) {
+	id := "853c80ef3c3749fdaa49938b674adae6"
+	mojang := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		textures := TexturesValue{
+			ProfileID:   id,
+			ProfileName: "jeb_",
+			Textures: Textures{
+				SKIN: &Texture{URL: "http://textures.minecraft.net/texture/abc123hash"},
+			},
+		}
+		prop, _ := textures.ToProperty()
+		json.NewEncoder(w).Encode(Player{
+			ID:         id,
+			Name:       "jeb_",
+			Properties: []Property{*prop},
+		})
+	}))
+	defer mojang.Close()
+
+	// GetProfile always resolves unsigned, so it only ever reaches Mojang
+	// for a DB entry that's gone stale.
+	store := &mockStore{
+		profilesByUUID: map[string]*Profile{
+			id: {ID: id, Name: "jeb_", LastSeen: 0},
+		},
+	}
+	svc := NewService(store, mojang.Client(), "http://localhost/texture/")
+	s := svc.(*service)
+	s.lookupProfile = mojang.URL + "/"
+
+	profile, err := svc.GetProfile(id)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if profile.Textures == nil || profile.Textures.Textures.SKIN == nil {
+		t.Fatalf("expected decoded textures, got %+v", profile.Textures)
+	}
+	if profile.Textures.Textures.SKIN.URL != "http://textures.minecraft.net/texture/abc123hash" {
+		t.Errorf("expected decoded skin URL, got %s", profile.Textures.Textures.SKIN.URL)
+	}
+}
+
+func TestService_GetMojangProfile_MojangFetch_NilProfileActionsNormalized(t *testing.T) {
 	mojang := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		// Intentionally omit "profileActions" from the response, as Mojang
@@ -386,7 +505,7 @@ func TestService_GetProfile_MojangFetch_NilProfileActionsNormalized(t *testing.T
 	s := svc.(*service)
 	s.lookupProfile = mojang.URL + "/"
 
-	player, err := svc.GetProfile("853c80ef3c3749fdaa49938b674adae6", true)
+	player, err := svc.GetMojangProfile("853c80ef3c3749fdaa49938b674adae6", true)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -395,5 +514,61 @@ func TestService_GetProfile_MojangFetch_NilProfileActionsNormalized(t *testing.T
 	}
 	if len(player.ProfileActions) != 0 {
 		t.Errorf("expected no profile actions, got %v", player.ProfileActions)
+	}
+}
+
+func TestService_GetMojangProfile_Signed_CacheHitSkipsMojang(t *testing.T) {
+	id := "853c80ef3c3749fdaa49938b674adae6"
+	mojang := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("did not expect a Mojang fetch on a signed cache hit")
+	}))
+	defer mojang.Close()
+
+	store := &mockStore{
+		signedProfilesCache: map[string]*Player{
+			id: {ID: id, Name: "jeb_", Properties: []Property{{Name: TEXTURES, Value: "cached", Signature: "sig123"}}},
+		},
+	}
+	svc := NewService(store, mojang.Client(), "http://localhost/texture/")
+	s := svc.(*service)
+	s.lookupProfile = mojang.URL + "/"
+
+	player, err := svc.GetMojangProfile(id, true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(player.Properties) != 1 || player.Properties[0].Signature != "sig123" {
+		t.Errorf("expected the cached signed property verbatim, got %v", player.Properties)
+	}
+}
+
+func TestService_GetMojangProfile_Signed_FetchCachesSeparatelyFromUnsigned(t *testing.T) {
+	id := "853c80ef3c3749fdaa49938b674adae6"
+	mojang := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(Player{
+			ID:   id,
+			Name: "jeb_",
+			Properties: []Property{
+				{Name: TEXTURES, Value: encodedTextures(t, TexturesValue{ProfileID: id, ProfileName: "jeb_"}), Signature: "sig123"},
+			},
+		})
+	}))
+	defer mojang.Close()
+
+	store := &mockStore{}
+	svc := NewService(store, mojang.Client(), "http://localhost/texture/")
+	s := svc.(*service)
+	s.lookupProfile = mojang.URL + "/"
+
+	if _, err := svc.GetMojangProfile(id, true); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if _, ok := store.signedProfilesCache[id]; !ok {
+		t.Error("expected the signed response to be cached under the signed cache")
+	}
+	if _, ok := store.profilesCache[id]; ok {
+		t.Error("expected a signed fetch not to populate the decoded Profile cache, since it can't represent a real signature")
 	}
 }

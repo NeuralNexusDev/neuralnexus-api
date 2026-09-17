@@ -11,8 +11,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// GetPlayerByNameHandler - Get a player by name
-func GetPlayerByNameHandler(s Service) http.HandlerFunc {
+// GetMojangPlayerByNameHandler - Get a player by name, mirroring Mojang
+func GetMojangPlayerByNameHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		name := r.PathValue("name")
 		if name == "" {
@@ -20,7 +20,7 @@ func GetPlayerByNameHandler(s Service) http.HandlerFunc {
 			return
 		}
 
-		player, err := s.GetPlayerByName(name)
+		player, err := s.GetMojangPlayerByName(name)
 		if err != nil {
 			if errors.Is(err, ErrPlayerNotFound) {
 				responses.NotFound(w, r, ErrPlayerNotFound.Error())
@@ -34,8 +34,8 @@ func GetPlayerByNameHandler(s Service) http.HandlerFunc {
 	}
 }
 
-// GetPlayerByUUIDHandler - Get a player by UUID
-func GetPlayerByUUIDHandler(s Service) http.HandlerFunc {
+// GetMojangPlayerByUUIDHandler - Get a player by UUID, mirroring Mojang
+func GetMojangPlayerByUUIDHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("uuid")
 		if _, err := uuid.Parse(id); err != nil {
@@ -43,7 +43,7 @@ func GetPlayerByUUIDHandler(s Service) http.HandlerFunc {
 			return
 		}
 
-		player, err := s.GetPlayerByUUID(id)
+		player, err := s.GetMojangPlayerByUUID(id)
 		if err != nil {
 			if errors.Is(err, ErrPlayerNotFound) {
 				responses.NotFound(w, r, ErrPlayerNotFound.Error())
@@ -57,8 +57,8 @@ func GetPlayerByUUIDHandler(s Service) http.HandlerFunc {
 	}
 }
 
-// GetPlayersByNamesHandler - Get players by name in batch (max 10)
-func GetPlayersByNamesHandler(s Service) http.HandlerFunc {
+// GetMojangPlayersByNamesHandler - Get players by name in batch (max 10), mirroring Mojang
+func GetMojangPlayersByNamesHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Content-Type") != "application/json" {
 			responses.UnsupportedMediaType(w, r, "Request must be of type application/json")
@@ -83,7 +83,7 @@ func GetPlayersByNamesHandler(s Service) http.HandlerFunc {
 			}
 		}
 
-		players, err := s.GetPlayersByNames(names)
+		players, err := s.GetMojangPlayersByNames(names)
 		if err != nil {
 			log.Println("Failed to get players by names:\n\t", err)
 			responses.InternalServerError(w, r, "Failed to get players")
@@ -93,8 +93,8 @@ func GetPlayersByNamesHandler(s Service) http.HandlerFunc {
 	}
 }
 
-// GetProfileHandler - Get a player's profile from their UUID
-func GetProfileHandler(s Service) http.HandlerFunc {
+// GetMojangProfileHandler - Get a player's full profile from their UUID, mirroring Mojang exactly
+func GetMojangProfileHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("uuid")
 		if _, err := uuid.Parse(id); err != nil {
@@ -104,7 +104,7 @@ func GetProfileHandler(s Service) http.HandlerFunc {
 
 		signed := r.URL.Query().Get("unsigned") == "false"
 
-		player, err := s.GetProfile(id, signed)
+		player, err := s.GetMojangProfile(id, signed)
 		if err != nil {
 			if errors.Is(err, ErrPlayerNotFound) {
 				responses.NoContent(w, r)
@@ -115,6 +115,29 @@ func GetProfileHandler(s Service) http.HandlerFunc {
 			return
 		}
 		responses.StructOK(w, r, player)
+	}
+}
+
+// GetProfileHandler - Get a player's profile with textures decoded
+func GetProfileHandler(s Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("uuid")
+		if _, err := uuid.Parse(id); err != nil {
+			responses.BadRequest(w, r, "Not a valid UUID: "+id)
+			return
+		}
+
+		profile, err := s.GetProfile(id)
+		if err != nil {
+			if errors.Is(err, ErrPlayerNotFound) {
+				responses.NoContent(w, r)
+				return
+			}
+			log.Println("Failed to get player profile:\n\t", err)
+			responses.InternalServerError(w, r, "Failed to get player profile")
+			return
+		}
+		responses.StructOK(w, r, profile)
 	}
 }
 

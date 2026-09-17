@@ -2,7 +2,6 @@ package minecraft
 
 import (
 	"context"
-	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,7 +11,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/goccy/go-json"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 )
@@ -254,47 +252,36 @@ func TestStore_GetPlayerFromCache_Miss(t *testing.T) {
 	}
 }
 
-func TestSetProfileInCache_Unsigned(t *testing.T) {
+func TestStore_SetProfileInCache(t *testing.T) {
 	s := setupStore(t)
 
-	player := &Player{
+	profile := &Profile{
 		ID:   "853c80ef3c3749fdaa49938b674adae6",
 		Name: "jeb_",
-		Properties: []Property{
-			{Name: TEXTURES, Value: encodedTextures(t, TexturesValue{
-				ProfileID:   "853c80ef3c3749fdaa49938b674adae6",
-				ProfileName: "jeb_",
-				Textures:    Textures{SKIN: &Texture{URL: "http://textures.minecraft.net/texture/abc123"}},
-			})},
+		Textures: &TexturesValue{
+			ProfileID:   "853c80ef3c3749fdaa49938b674adae6",
+			ProfileName: "jeb_",
+			Textures:    Textures{SKIN: &Texture{URL: "http://textures.minecraft.net/texture/abc123"}},
 		},
 	}
 
-	if err := s.UpsertPlayer(player, false); err != nil {
-		t.Fatalf("failed to upsert player: %v", err)
-	}
-	if err := s.SetPlayerInCache(player); err != nil {
-		t.Fatalf("failed to set player in cache: %v", err)
-	}
-	if err := s.SetProfileInCache(player, false); err != nil {
+	if err := s.SetProfileInCache(profile); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	got, err := s.GetProfileFromCache(player.ID, false)
+	got, err := s.GetProfileFromCache(profile.ID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(got.Properties) != 1 {
-		t.Fatalf("expected 1 property, got %d", len(got.Properties))
+	if got.Textures == nil || got.Textures.Textures.SKIN == nil {
+		t.Fatal("expected cached textures to round-trip")
 	}
-	if got.Properties[0].Signature != "" {
-		t.Error("expected no signature on unsigned response")
-	}
-	if got.Properties[0].Value != player.Properties[0].Value {
+	if got.Textures.Textures.SKIN.URL != profile.Textures.Textures.SKIN.URL {
 		t.Error("expected cached value to match what was set, verbatim")
 	}
 }
 
-func TestSetProfileInCache_Signed(t *testing.T) {
+func TestStore_SetSignedProfileInCache(t *testing.T) {
 	s := setupStore(t)
 
 	player := &Player{
@@ -314,58 +301,31 @@ func TestSetProfileInCache_Signed(t *testing.T) {
 		},
 	}
 
-	if err := s.UpsertPlayer(player, false); err != nil {
-		t.Fatalf("failed to upsert player: %v", err)
-	}
-	if err := s.SetPlayerInCache(player); err != nil {
-		t.Fatalf("failed to set player in cache: %v", err)
-	}
-	if err := s.SetProfileInCache(player, true); err != nil {
+	if err := s.SetSignedProfileInCache(player); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Signed cache holds the property, signature included, verbatim
-	gotSigned, err := s.GetProfileFromCache(player.ID, true)
+	got, err := s.GetSignedProfileFromCache(player.ID)
 	if err != nil {
-		t.Fatalf("unexpected error getting signed: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if gotSigned.Properties[0].Signature != "sig123" {
-		t.Errorf("expected sig123, got %s", gotSigned.Properties[0].Signature)
-	}
-	if gotSigned.Properties[0].Value != player.Properties[0].Value {
-		t.Error("expected cached value to match what was set, verbatim")
+	if len(got.Properties) != 1 || got.Properties[0].Signature != "sig123" {
+		t.Errorf("expected the signature to round-trip verbatim, got %v", got.Properties)
 	}
 
-	// Signed and unsigned caches are independent — no unsigned entry was ever written
-	if _, err := s.GetProfileFromCache(player.ID, false); err == nil {
-		t.Error("expected cache miss on unsigned key")
+	// The signed cache is separate from the decoded Profile cache — no
+	// unsigned entry was ever written for this ID.
+	if _, err := s.GetProfileFromCache(player.ID); err == nil {
+		t.Error("expected no entry in the decoded Profile cache")
 	}
 }
 
 func TestGetProfileFromCache_Miss(t *testing.T) {
 	s := setupStore(t)
 
-	_, err := s.GetProfileFromCache("00000000000000000000000000000000", false)
+	_, err := s.GetProfileFromCache("00000000000000000000000000000000")
 	if err == nil {
 		t.Error("expected cache miss error")
-	}
-}
-
-func TestGetProfileFromCache_MissingProperties(t *testing.T) {
-	s := setupStore(t)
-
-	player := &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}
-	if err := s.UpsertPlayer(player, false); err != nil {
-		t.Fatalf("failed to upsert player: %v", err)
-	}
-	if err := s.SetPlayerInCache(player); err != nil {
-		t.Fatalf("failed to set player in cache: %v", err)
-	}
-
-	// Player is in cache but properties are not
-	_, err := s.GetProfileFromCache(player.ID, false)
-	if err == nil {
-		t.Error("expected error when properties not cached")
 	}
 }
 
@@ -402,26 +362,17 @@ func TestStore_GetProfileByUUID_HydratesTextures(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(got.Properties) != 1 {
-		t.Fatalf("expected 1 property, got %d", len(got.Properties))
+	if got.Textures == nil {
+		t.Fatal("expected textures to be hydrated")
 	}
-
-	decoded, err := base64.StdEncoding.DecodeString(got.Properties[0].Value)
-	if err != nil {
-		t.Fatalf("failed to decode property: %v", err)
+	if got.Textures.Textures.SKIN == nil || got.Textures.Textures.SKIN.Hash() != "skin123" {
+		t.Errorf("expected skin hash skin123, got %+v", got.Textures.Textures.SKIN)
 	}
-	var textures TexturesValue
-	if err := json.Unmarshal(decoded, &textures); err != nil {
-		t.Fatalf("failed to unmarshal textures: %v", err)
-	}
-	if textures.Textures.SKIN == nil || textures.Textures.SKIN.Hash() != "skin123" {
-		t.Errorf("expected skin hash skin123, got %+v", textures.Textures.SKIN)
-	}
-	if textures.Textures.SKIN.Metadata == nil || textures.Textures.SKIN.Metadata.Model != SLIM {
+	if got.Textures.Textures.SKIN.Metadata == nil || got.Textures.Textures.SKIN.Metadata.Model != SLIM {
 		t.Error("expected slim model to be preserved")
 	}
-	if textures.Textures.CAPE == nil || textures.Textures.CAPE.Hash() != "cape456" {
-		t.Errorf("expected cape hash cape456, got %+v", textures.Textures.CAPE)
+	if got.Textures.Textures.CAPE == nil || got.Textures.Textures.CAPE.Hash() != "cape456" {
+		t.Errorf("expected cape hash cape456, got %+v", got.Textures.Textures.CAPE)
 	}
 }
 
@@ -436,8 +387,8 @@ func TestStore_GetProfileByUUID_NoTextures(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(got.Properties) != 0 {
-		t.Errorf("expected no properties when none stored, got %d", len(got.Properties))
+	if got.Textures != nil {
+		t.Errorf("expected no textures when none stored, got %+v", got.Textures)
 	}
 }
 
