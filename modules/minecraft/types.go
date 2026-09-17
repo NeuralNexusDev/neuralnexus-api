@@ -179,9 +179,7 @@ type Model string
 // SLIM The only known value for Metadata.Model
 const SLIM Model = "slim"
 
-// Profile - a player's full profile, decoded and canonical. GetMojangProfile
-// converts it into Mojang's raw mirror shape (Player, with textures
-// re-encoded into a property) instead.
+// Profile - a player's full profile, decoded and canonical.
 type Profile struct {
 	ID             string         `json:"id"`
 	Name           string         `json:"name"`
@@ -199,8 +197,6 @@ func (p *Profile) IsStale() bool {
 }
 
 // ToPlayer converts a Profile into Mojang's raw session-server mirror shape.
-// The resulting property is unsigned — a locally-decoded Profile has no
-// cryptographic signature to offer; only a live Mojang response does.
 func (p *Profile) ToPlayer() (*Player, error) {
 	prop, err := p.Textures.ToProperty()
 	if err != nil {
@@ -219,9 +215,7 @@ func (p *Profile) ToPlayer() (*Player, error) {
 	return player, nil
 }
 
-// WithTextureURL returns a copy of the Profile with its texture URLs
-// rewritten to baseURL+hash, e.g. pointing at our own CDN instead of
-// Mojang's.
+// WithTextureURL returns a copy of the Profile with texture URLs rewritten to baseURL+hash.
 func (p *Profile) WithTextureURL(baseURL string) *Profile {
 	if p.Textures == nil {
 		return p
