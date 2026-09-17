@@ -39,8 +39,17 @@ func setupStore(t *testing.T) Store {
 
 	t.Cleanup(func() {
 		db.Exec(context.Background(), "DELETE FROM player_names WHERE player_id = '853c80ef-3c37-49fd-aa49-938b674adae6'")
+		db.Exec(context.Background(), "DELETE FROM player_textures WHERE player_id = '853c80ef-3c37-49fd-aa49-938b674adae6'")
 		db.Exec(context.Background(), "DELETE FROM players WHERE id = '853c80ef-3c37-49fd-aa49-938b674adae6'")
-		rdb.Del(context.Background(), CachePlayer+"853c80ef3c3749fdaa49938b674adae6", CachePlayer+"jeb_")
+		rdb.Del(context.Background(),
+			CachePlayer+"853c80ef-3c37-49fd-aa49-938b674adae6", CachePlayer+"jeb_",
+			CacheProfile+"853c80ef-3c37-49fd-aa49-938b674adae6",
+			CacheProfileSigned+"853c80ef-3c37-49fd-aa49-938b674adae6",
+			// The Redis-only cache tests (SetProfileInCache, SetSignedProfileInCache)
+			// use this dashless literal directly instead of testPlayer.
+			CacheProfile+"853c80ef3c3749fdaa49938b674adae6",
+			CacheProfileSigned+"853c80ef3c3749fdaa49938b674adae6",
+		)
 		db.Close()
 		rdb.Close()
 	})
@@ -82,8 +91,11 @@ func setupMockS3(t *testing.T, handler http.HandlerFunc) *s3.Client {
 	})
 }
 
+// players.id is a UUID column, which Postgres always returns in canonical
+// dashed form regardless of how it was written — so the fixture uses that
+// form too, rather than only matching by accident on the round trip.
 var testPlayer = &Player{
-	ID:   "853c80ef3c3749fdaa49938b674adae6",
+	ID:   "853c80ef-3c37-49fd-aa49-938b674adae6",
 	Name: "jeb_",
 }
 
