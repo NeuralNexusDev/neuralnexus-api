@@ -302,9 +302,7 @@ func (s *service) resolveProfile(id string) (*Profile, error) {
 }
 
 // fetchProfileFromMojang fetches and persists a player's profile live from
-// Mojang. It returns the raw Player, which GetMojangProfile hands back
-// untouched when signed since only Mojang can produce a valid signature,
-// alongside the decoded Profile used by GetProfile.
+// Mojang, returning both the raw Player and the decoded Profile.
 func (s *service) fetchProfileFromMojang(id string, signed bool) (*Player, *Profile, error) {
 	url := s.lookupProfile + id
 	if signed {
