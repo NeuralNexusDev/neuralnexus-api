@@ -270,19 +270,18 @@ func (s *service) GetProfile(id string) (*Profile, error) {
 	if profile.Textures == nil {
 		return profile, nil
 	}
-	withURL := func(t *Texture) *Texture {
-		if t == nil {
-			return nil
-		}
-		rewritten := *t
-		rewritten.URL = s.nnTextureUrl + t.Hash()
-		return &rewritten
-	}
-
 	rewritten := *profile
 	textures := *profile.Textures
-	textures.Textures.SKIN = withURL(textures.Textures.SKIN)
-	textures.Textures.CAPE = withURL(textures.Textures.CAPE)
+	if textures.Textures.SKIN != nil {
+		skin := *textures.Textures.SKIN
+		skin.URL = s.nnTextureUrl + skin.Hash()
+		textures.Textures.SKIN = &skin
+	}
+	if textures.Textures.CAPE != nil {
+		cape := *textures.Textures.CAPE
+		cape.URL = s.nnTextureUrl + cape.Hash()
+		textures.Textures.CAPE = &cape
+	}
 	rewritten.Textures = &textures
 	return &rewritten, nil
 }
