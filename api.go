@@ -58,6 +58,12 @@ func ApplyRoutes(
 		return nil
 	}
 
+	dbUrl2 := os.Getenv("DATABASE_URL_2")
+	if dbUrl2 == "" {
+		log.Fatal("DATABASE_URL_2 is not set")
+		return nil
+	}
+
 	// --------------- Auth ---------------
 	account := auth.NewAccountService(authStore)
 	user := auth.NewUserService(authStore)
@@ -128,7 +134,7 @@ func ApplyRoutes(
 		return nil
 	}
 	mcStore := mc.NewStore(
-		database.GetDB(dbUrl+"/archive"), rdb,
+		database.GetDB(dbUrl2+"/archive?sslmode=require"), rdb,
 		database.GetS3(endpoint, accessKey, secretKey))
 	mcService := mc.NewService(mcStore, nil, "https://"+endpoint+"/"+mc.S3Bucket+"/"+mc.S3KeyPrefix)
 
