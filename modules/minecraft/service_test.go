@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -344,5 +345,55 @@ func TestService_GetTextureContent_MissPath_ArchiveFailureStillServesClient(t *t
 	body, _ := io.ReadAll(result.Body)
 	if string(body) != "fresh-texture-bytes" {
 		t.Errorf("expected fresh-texture-bytes, got %s", body)
+	}
+}
+
+func TestService_GetProfile_DBHit_NilProfileActionsNormalized(t *testing.T) {
+	id := "853c80ef3c3749fdaa49938b674adae6"
+	store := &mockStore{
+		playersByUUID: map[string]*Player{
+			id: {ID: id, Name: "jeb_", LastSeen: time.Now().UnixMilli()},
+		},
+	}
+
+	svc := NewService(store, nil, "http://localhost/texture/")
+	player, err := svc.GetProfile(id, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if player.ProfileActions == nil {
+		t.Error("expected ProfileActions to be normalized to a non-nil empty slice, got nil")
+	}
+	if len(player.ProfileActions) != 0 {
+		t.Errorf("expected no profile actions, got %v", player.ProfileActions)
+	}
+}
+
+func TestService_GetProfile_MojangFetch_NilProfileActionsNormalized(t *testing.T) {
+	mojang := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		// Intentionally omit "profileActions" from the response, as Mojang
+		// does for accounts with no actions.
+		json.NewEncoder(w).Encode(Player{
+			ID:   "853c80ef3c3749fdaa49938b674adae6",
+			Name: "jeb_",
+		})
+	}))
+	defer mojang.Close()
+
+	store := &mockStore{}
+	svc := NewService(store, mojang.Client(), "http://localhost/texture/")
+	s := svc.(*service)
+	s.lookupProfile = mojang.URL + "/"
+
+	player, err := svc.GetProfile("853c80ef3c3749fdaa49938b674adae6", true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if player.ProfileActions == nil {
+		t.Error("expected ProfileActions to be normalized to a non-nil empty slice, got nil")
+	}
+	if len(player.ProfileActions) != 0 {
+		t.Errorf("expected no profile actions, got %v", player.ProfileActions)
 	}
 }

@@ -254,6 +254,9 @@ func (s *service) GetProfile(id string, signed bool) (*Player, error) {
 		if dbPlayer == nil {
 			return nil, ErrPlayerNotFound
 		}
+		if dbPlayer.ProfileActions == nil {
+			dbPlayer.ProfileActions = []string{}
+		}
 		if !dbPlayer.IsStale() {
 			row, err := s.store.GetTextures(dbPlayer.ID)
 			if err != nil {
@@ -294,6 +297,9 @@ func (s *service) GetProfile(id string, signed bool) (*Player, error) {
 	var player Player
 	if err := json.NewDecoder(resp.Body).Decode(&player); err != nil {
 		return nil, err
+	}
+	if player.ProfileActions == nil {
+		player.ProfileActions = []string{}
 	}
 
 	// Upsert player

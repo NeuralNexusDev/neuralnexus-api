@@ -108,6 +108,25 @@ func TestHandler_GetPlayerByNameHandler_InternalError(t *testing.T) {
 	}
 }
 
+func TestHandler_GetPlayerByNameHandler_OmitsProfileActionsWhenNil(t *testing.T) {
+	svc := &mockService{player: &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}}
+	handler := GetPlayerByNameHandler(svc)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/lookup/name/jeb_", nil)
+	r.SetPathValue("name", "jeb_")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	var raw map[string]json.RawMessage
+	if err := json.NewDecoder(w.Body).Decode(&raw); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if _, ok := raw["profileActions"]; ok {
+		t.Errorf("expected profileActions key to be absent, got %s", w.Body.String())
+	}
+}
+
 func TestHandler_GetPlayerByUUIDHandler_OK(t *testing.T) {
 	svc := &mockService{player: &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}}
 	handler := GetPlayerByUUIDHandler(svc)
@@ -120,6 +139,25 @@ func TestHandler_GetPlayerByUUIDHandler_OK(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestHandler_GetPlayerByUUIDHandler_OmitsProfileActionsWhenNil(t *testing.T) {
+	svc := &mockService{player: &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}}
+	handler := GetPlayerByUUIDHandler(svc)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/lookup/853c80ef3c3749fdaa49938b674adae6", nil)
+	r.SetPathValue("uuid", "853c80ef3c3749fdaa49938b674adae6")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	var raw map[string]json.RawMessage
+	if err := json.NewDecoder(w.Body).Decode(&raw); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if _, ok := raw["profileActions"]; ok {
+		t.Errorf("expected profileActions key to be absent, got %s", w.Body.String())
 	}
 }
 
@@ -240,6 +278,33 @@ func TestHandler_GetProfileHandler_OK(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestHandler_GetProfileHandler_ProfileActionsPresentAsEmptyArray(t *testing.T) {
+	svc := &mockService{player: &Player{
+		ID:             "853c80ef3c3749fdaa49938b674adae6",
+		Name:           "jeb_",
+		ProfileActions: []string{},
+	}}
+	handler := GetProfileHandler(svc)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/853c80ef3c3749fdaa49938b674adae6", nil)
+	r.SetPathValue("uuid", "853c80ef3c3749fdaa49938b674adae6")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	var raw map[string]json.RawMessage
+	if err := json.NewDecoder(w.Body).Decode(&raw); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	action, ok := raw["profileActions"]
+	if !ok {
+		t.Fatalf("expected profileActions key to be present, got %s", w.Body.String())
+	}
+	if string(action) != "[]" {
+		t.Errorf("expected profileActions to serialize as [], got %s", action)
 	}
 }
 

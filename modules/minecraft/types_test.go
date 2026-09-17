@@ -175,3 +175,66 @@ func TestTypes_ParseProperties_InvalidBase64(t *testing.T) {
 		t.Error("expected nil when property value contains invalid base64")
 	}
 }
+
+func TestTypes_MarshalJSON_ProfileActionsNil_KeyOmitted(t *testing.T) {
+	player := &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}
+
+	data, err := json.Marshal(player)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+	if _, ok := raw["profileActions"]; ok {
+		t.Errorf("expected profileActions key to be omitted, got %s", data)
+	}
+}
+
+func TestTypes_MarshalJSON_ProfileActionsEmptyNotNil_KeyPresentAsEmptyArray(t *testing.T) {
+	player := &Player{
+		ID:             "853c80ef3c3749fdaa49938b674adae6",
+		Name:           "jeb_",
+		ProfileActions: []string{},
+	}
+
+	data, err := json.Marshal(player)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+	action, ok := raw["profileActions"]
+	if !ok {
+		t.Fatalf("expected profileActions key to be present, got %s", data)
+	}
+	if string(action) != "[]" {
+		t.Errorf("expected profileActions to serialize as [], got %s", action)
+	}
+}
+
+func TestTypes_MarshalJSON_ProfileActionsPopulated(t *testing.T) {
+	player := &Player{
+		ID:             "853c80ef3c3749fdaa49938b674adae6",
+		Name:           "jeb_",
+		ProfileActions: []string{"FORCED_NAME_CHANGE"},
+	}
+
+	data, err := json.Marshal(player)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var got Player
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+	if len(got.ProfileActions) != 1 || got.ProfileActions[0] != "FORCED_NAME_CHANGE" {
+		t.Errorf("expected [FORCED_NAME_CHANGE], got %v", got.ProfileActions)
+	}
+}

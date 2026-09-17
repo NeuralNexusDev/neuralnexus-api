@@ -34,6 +34,21 @@ type Player struct {
 	LastSeen       int64      `json:"-"                    db:"last_seen"`
 }
 
+// MarshalJSON customizes Player's JSON output so ProfileActions is omitted
+// only when it was never populated (nil) — a genuinely empty slice (fetched,
+// zero actions) still serializes as []. Plain `omitempty` can't tell those
+// apart since both have len == 0.
+func (p *Player) MarshalJSON() ([]byte, error) {
+	type Alias Player
+	if p.ProfileActions == nil {
+		return json.Marshal(struct {
+			*Alias
+			ProfileActions json.RawMessage `json:"profileActions,omitempty"`
+		}{Alias: (*Alias)(p)})
+	}
+	return json.Marshal((*Alias)(p))
+}
+
 // ParseProperties parse the player's properties
 func (p *Player) ParseProperties() *TexturesValue {
 	for _, prop := range p.Properties {
