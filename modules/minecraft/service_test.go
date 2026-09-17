@@ -15,15 +15,16 @@ import (
 
 // mockStore implements the Store interface for unit testing the Service layer.
 type mockStore struct {
-	playersByName       map[string]*Player
-	playersByUUID       map[string]*Player
-	profilesByUUID      map[string]*Profile
-	cache               map[string]*Player
-	profilesCache       map[string]*Profile
-	signedProfilesCache map[string]*Player
-	s3Textures          map[string]bool
-	putBodies           map[string][]byte
-	putErr              error
+	playersByName         map[string]*Player
+	playersByUUID         map[string]*Player
+	profilesByUUID        map[string]*Profile
+	cache                 map[string]*Player
+	profilesCache         map[string]*Profile
+	signedProfilesCache   map[string]*Player
+	s3Textures            map[string]bool
+	putBodies             map[string][]byte
+	putErr                error
+	upsertedTextureHashes []string
 }
 
 func (m *mockStore) GetPlayerByUUID(id string) (*Player, error) {
@@ -64,6 +65,7 @@ func (m *mockStore) UpsertTextures(value *TexturesValue) error {
 }
 
 func (m *mockStore) UpsertTextureHash(hash string) error {
+	m.upsertedTextureHashes = append(m.upsertedTextureHashes, hash)
 	return nil
 }
 
@@ -457,6 +459,90 @@ func TestService_GetMojangProfile_Unsigned_StaleDBEntry_FetchesAndMirrors(t *tes
 	got := player.ParseProperties()
 	if got == nil || got.Textures.SKIN == nil || got.Textures.SKIN.URL != "http://textures.minecraft.net/texture/abc123hash" {
 		t.Errorf("expected the freshly-fetched skin URL to survive the round trip, got %+v", got)
+	}
+}
+
+func TestService_FetchProfileFromMojang_NoCape_DoesNotUpsertEmptyHash(t *testing.T) {
+	id := "853c80ef3c3749fdaa49938b674adae6"
+	mojang := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		textures := TexturesValue{
+			ProfileID:   id,
+			ProfileName: "jeb_",
+			Textures: Textures{
+				SKIN: &Texture{URL: "http://textures.minecraft.net/texture/skinhash123"},
+			},
+		}
+		prop, _ := textures.ToProperty()
+		json.NewEncoder(w).Encode(Player{
+			ID:         id,
+			Name:       "jeb_",
+			Properties: []Property{*prop},
+		})
+	}))
+	defer mojang.Close()
+
+	store := &mockStore{}
+	svc := NewService(store, mojang.Client(), "http://localhost/texture/")
+	s := svc.(*service)
+	s.lookupProfile = mojang.URL + "/"
+
+	if _, err := svc.GetMojangProfile(id, false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Regression guard: a player with no cape must never reach
+	// UpsertTextureHash with an empty hash — the DB rejects that outright
+	// (textures_hash_not_empty), and fetchProfileFromMojang used to call
+	// UpsertTextureHash(CAPE.Hash()) unconditionally.
+	for _, h := range store.upsertedTextureHashes {
+		if h == "" {
+			t.Error("UpsertTextureHash should never be called with an empty hash")
+		}
+	}
+	if len(store.upsertedTextureHashes) != 1 || store.upsertedTextureHashes[0] != "skinhash123" {
+		t.Errorf("expected exactly one UpsertTextureHash call for the skin hash, got %v", store.upsertedTextureHashes)
+	}
+}
+
+func TestService_FetchProfileFromMojang_SkinAndCape_UpsertsBothHashes(t *testing.T) {
+	id := "853c80ef3c3749fdaa49938b674adae6"
+	mojang := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		textures := TexturesValue{
+			ProfileID:   id,
+			ProfileName: "jeb_",
+			Textures: Textures{
+				SKIN: &Texture{URL: "http://textures.minecraft.net/texture/skinhash123"},
+				CAPE: &Texture{URL: "http://textures.minecraft.net/texture/capehash456"},
+			},
+		}
+		prop, _ := textures.ToProperty()
+		json.NewEncoder(w).Encode(Player{
+			ID:         id,
+			Name:       "jeb_",
+			Properties: []Property{*prop},
+		})
+	}))
+	defer mojang.Close()
+
+	store := &mockStore{}
+	svc := NewService(store, mojang.Client(), "http://localhost/texture/")
+	s := svc.(*service)
+	s.lookupProfile = mojang.URL + "/"
+
+	if _, err := svc.GetMojangProfile(id, false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(store.upsertedTextureHashes) != 2 {
+		t.Fatalf("expected UpsertTextureHash to be called for both skin and cape, got %v", store.upsertedTextureHashes)
+	}
+	want := map[string]bool{"skinhash123": true, "capehash456": true}
+	for _, h := range store.upsertedTextureHashes {
+		if !want[h] {
+			t.Errorf("unexpected hash upserted: %q", h)
+		}
 	}
 }
 

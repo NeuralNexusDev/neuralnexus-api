@@ -39,8 +39,17 @@ func setupStore(t *testing.T) Store {
 
 	t.Cleanup(func() {
 		db.Exec(context.Background(), "DELETE FROM player_names WHERE player_id = '853c80ef-3c37-49fd-aa49-938b674adae6'")
+		db.Exec(context.Background(), "DELETE FROM player_textures WHERE player_id = '853c80ef-3c37-49fd-aa49-938b674adae6'")
 		db.Exec(context.Background(), "DELETE FROM players WHERE id = '853c80ef-3c37-49fd-aa49-938b674adae6'")
-		rdb.Del(context.Background(), CachePlayer+"853c80ef3c3749fdaa49938b674adae6", CachePlayer+"jeb_")
+		rdb.Del(context.Background(),
+			CachePlayer+"853c80ef-3c37-49fd-aa49-938b674adae6", CachePlayer+"jeb_",
+			CacheProfile+"853c80ef-3c37-49fd-aa49-938b674adae6",
+			CacheProfileSigned+"853c80ef-3c37-49fd-aa49-938b674adae6",
+			// The Redis-only cache tests (SetProfileInCache, SetSignedProfileInCache)
+			// use this dashless literal directly instead of testPlayer.
+			CacheProfile+"853c80ef3c3749fdaa49938b674adae6",
+			CacheProfileSigned+"853c80ef3c3749fdaa49938b674adae6",
+		)
 		db.Close()
 		rdb.Close()
 	})
@@ -82,8 +91,11 @@ func setupMockS3(t *testing.T, handler http.HandlerFunc) *s3.Client {
 	})
 }
 
+// players.id is a UUID column, which Postgres always returns in canonical
+// dashed form regardless of how it was written — so the fixture uses that
+// form too, rather than only matching by accident on the round trip.
 var testPlayer = &Player{
-	ID:   "853c80ef3c3749fdaa49938b674adae6",
+	ID:   "853c80ef-3c37-49fd-aa49-938b674adae6",
 	Name: "jeb_",
 }
 
@@ -472,6 +484,29 @@ func TestStore_UpsertTextures_SlimModel(t *testing.T) {
 
 	if err := s.UpsertTextures(value); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify at the layer that actually enforces it: the absent cape must
+	// be NULL in the row, never "" — the CHECK constraint on this column
+	// would reject "" outright, but a regression that quietly wrote NULL
+	// as a different sentinel wouldn't trip that constraint.
+	db := setupRawDB(t)
+	var cape *string
+	err := db.QueryRow(context.Background(),
+		"SELECT cape FROM player_textures WHERE player_id = $1", testPlayer.ID).Scan(&cape)
+	if err != nil {
+		t.Fatalf("failed to query player_textures: %v", err)
+	}
+	if cape != nil {
+		t.Errorf("expected cape to be NULL, got %q", *cape)
+	}
+}
+
+func TestStore_UpsertTextureHash_EmptyHash_RejectedByCheckConstraint(t *testing.T) {
+	s := setupStore(t)
+
+	if err := s.UpsertTextureHash(""); err == nil {
+		t.Error("expected the textures_hash_not_empty CHECK constraint to reject an empty hash")
 	}
 }
 

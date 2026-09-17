@@ -1,0 +1,26 @@
+services:
+  test-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: neuralnexus
+      POSTGRES_PASSWORD: neuralnexus
+      POSTGRES_DB: neuralnexus_test
+    ports:
+      - "55432:5432"
+    volumes:
+      - ./docker/testdb/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U neuralnexus -d neuralnexus_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  test-redis:
+    image: redis:7-alpine
+    ports:
+      - "56379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 15

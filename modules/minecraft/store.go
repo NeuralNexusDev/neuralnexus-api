@@ -71,7 +71,9 @@ func (s *store) GetPlayerByUUID(id string) (*Player, error) {
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Player])
+	// Lax: this query intentionally omits profile_actions, unlike
+	// GetProfileByUUID, so Player.ProfileActions is left at its zero value.
+	return pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByNameLax[Player])
 }
 
 // GetPlayerByName gets a player by name from the database
@@ -81,7 +83,8 @@ func (s *store) GetPlayerByName(name string) (*Player, error) {
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Player])
+	// Lax: see GetPlayerByUUID.
+	return pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByNameLax[Player])
 }
 
 // GetProfileByUUID gets a player's full profile from the database by UUID
@@ -157,7 +160,7 @@ func (s *store) UpsertPlayer(player *Player, updateProfile bool) error {
 	} else {
 		_, err = s.db.Exec(context.Background(), `
 			INSERT INTO players (id, name, legacy, demo, profile_actions, first_seen, last_seen)
-			VALUES ($1, $2, false, false, '{}', $3, $3)
+			VALUES ($1, $2, false, false, '[]', $3, $3)
 			ON CONFLICT (id) DO UPDATE SET
 				name      = EXCLUDED.name,
 				last_seen = EXCLUDED.last_seen
@@ -190,13 +193,28 @@ func (s *store) UpsertTextures(value *TexturesValue) error {
 	}
 	cape := value.Textures.CAPE
 
+	// player_textures_unique is an expression index (COALESCE(skin/model/cape, ''))
+	// rather than a plain-column constraint, so it can't be targeted by name
+	// via ON CONFLICT ON CONSTRAINT — the conflict target must repeat the
+	// same expressions instead.
 	_, err := s.db.Exec(context.Background(), `
 		INSERT INTO player_textures (player_id, skin, model, cape, first_seen, last_seen)
 		VALUES ($1, $2, $3, $4, $5, $5)
-		ON CONFLICT ON CONSTRAINT player_textures_unique DO UPDATE SET
+		ON CONFLICT (player_id, COALESCE(skin, ''), COALESCE(model, ''), COALESCE(cape, '')) DO UPDATE SET
 			last_seen = EXCLUDED.last_seen
-		`, value.ProfileID, skin.Hash(), model, cape.Hash(), value.Timestamp)
+		`, value.ProfileID, textureHash(skin), model, textureHash(cape), value.Timestamp)
 	return err
+}
+
+// textureHash returns t's hash, or nil when absent or unparsable — an
+// empty string is never a valid skin/cape reference (see the
+// player_textures_skin_not_empty / _cape_not_empty DB constraints).
+func textureHash(t *Texture) *string {
+	hash := t.Hash()
+	if hash == "" {
+		return nil
+	}
+	return &hash
 }
 
 // UpsertTextureHash upserts a texture hash into the database
