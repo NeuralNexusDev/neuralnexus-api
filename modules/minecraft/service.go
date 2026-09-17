@@ -360,6 +360,15 @@ func (s *service) serveFromS3(hash string) (*TextureResult, error) {
 	return &TextureResult{Body: resp.Body, ContentType: contentType}, nil
 }
 
+// bytesReadCloser adapts a *bytes.Reader to io.ReadCloser while keeping Len()
+// visible, so the store can set an explicit Content-Length instead of the
+// SDK re-buffering to compute it.
+type bytesReadCloser struct {
+	*bytes.Reader
+}
+
+func (bytesReadCloser) Close() error { return nil }
+
 // fetchAndArchive fetches a texture from Mojang once, archives it to S3, and
 // returns a second reader over the same bytes to serve the client — no
 // re-fetch through S3 for the request that just caused the miss.
@@ -388,7 +397,7 @@ func (s *service) fetchAndArchive(hash string) (*TextureResult, error) {
 	}
 
 	// Archival failure shouldn't fail the client's request — degrade gracefully.
-	if err := s.store.PutTextureInS3(hash, io.NopCloser(bytes.NewReader(data))); err != nil {
+	if err := s.store.PutTextureInS3(hash, bytesReadCloser{bytes.NewReader(data)}); err != nil {
 		log.Println("Failed to upload texture to S3:\n\t", err)
 	} else if err := s.store.UpsertTextureHash(hash); err != nil {
 		log.Println("Failed to store texture hash:\n\t", err)

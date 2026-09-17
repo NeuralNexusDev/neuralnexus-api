@@ -278,12 +278,17 @@ func (s *store) IsTextureInS3(hash string) (bool, error) {
 
 // PutTextureInS3 upload a texture to S3
 func (s *store) PutTextureInS3(hash string, body io.ReadCloser) error {
-	_, err := s.s3.PutObject(context.Background(), &s3.PutObjectInput{
+	input := &s3.PutObjectInput{
 		Bucket:      aws.String(S3Bucket),
 		Key:         aws.String(S3KeyPrefix + hash),
 		Body:        body,
 		ContentType: aws.String("image/png"),
-	})
+	}
+	if lr, ok := body.(interface{ Len() int }); ok {
+		input.ContentLength = aws.Int64(int64(lr.Len()))
+	}
+
+	_, err := s.s3.PutObject(context.Background(), input)
 	if err != nil {
 		return fmt.Errorf("failed to upload to s3: %w", err)
 	}
