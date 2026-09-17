@@ -485,6 +485,29 @@ func TestStore_UpsertTextures_SlimModel(t *testing.T) {
 	if err := s.UpsertTextures(value); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
+	// Verify at the layer that actually enforces it: the absent cape must
+	// be NULL in the row, never "" — the CHECK constraint on this column
+	// would reject "" outright, but a regression that quietly wrote NULL
+	// as a different sentinel wouldn't trip that constraint.
+	db := setupRawDB(t)
+	var cape *string
+	err := db.QueryRow(context.Background(),
+		"SELECT cape FROM player_textures WHERE player_id = $1", testPlayer.ID).Scan(&cape)
+	if err != nil {
+		t.Fatalf("failed to query player_textures: %v", err)
+	}
+	if cape != nil {
+		t.Errorf("expected cape to be NULL, got %q", *cape)
+	}
+}
+
+func TestStore_UpsertTextureHash_EmptyHash_RejectedByCheckConstraint(t *testing.T) {
+	s := setupStore(t)
+
+	if err := s.UpsertTextureHash(""); err == nil {
+		t.Error("expected the textures_hash_not_empty CHECK constraint to reject an empty hash")
+	}
 }
 
 func TestStore_IsTextureInS3_Exists(t *testing.T) {
