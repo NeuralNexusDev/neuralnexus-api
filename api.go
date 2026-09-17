@@ -89,7 +89,6 @@ func ApplyRoutes(
 	mux.Handle("POST /api/v1/bee-name-generator/name/{name}", mwAuth(bng.UploadBeeNameHandler(bngStore)))
 	mux.Handle("DELETE /api/v1/bee-name-generator/name/{name}", mwAuth(bng.DeleteBeeNameHandler(bngStore)))
 	mux.Handle("POST /api/v1/bee-name-generator/suggestion/{name}", bng.SubmitBeeNameHandler(bngStore))
-	mux.Handle("GET /api/v1/bee-name-generator/suggestion", mwAuth(bng.GetBeeNameSuggestionsHandler(bngStore)))
 	mux.Handle("GET /api/v1/bee-name-generator/suggestion/{amount}", mwAuth(bng.GetBeeNameSuggestionsHandler(bngStore)))
 	mux.Handle("PUT /api/v1/bee-name-generator/suggestion/{name}", mwAuth(bng.AcceptBeeNameSuggestionHandler(bngStore)))
 	mux.Handle("DELETE /api/v1/bee-name-generator/suggestion/{name}", mwAuth(bng.RejectBeeNameSuggestionHandler(bngStore)))

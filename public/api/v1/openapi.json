@@ -131,28 +131,6 @@
                 }
             }
         },
-        "/bee-name-generator/suggestion": {
-            "get": {
-                "summary": "Get bee name suggestions (unreachable without a count)",
-                "description": "Registered with no path parameter, so the handler's amount lookup always comes back empty and fails validation before any suggestions are read. Use GET /bee-name-generator/suggestion/{amount} instead.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
-                "responses": {
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/401Unauthorized"
-                    },
-                    "403": {
-                        "$ref": "#/components/responses/403Forbidden"
-                    }
-                }
-            }
-        },
         "/bee-name-generator/suggestion/{amount}": {
             "get": {
                 "summary": "Get bee name suggestions",
