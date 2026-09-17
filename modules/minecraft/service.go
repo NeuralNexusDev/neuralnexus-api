@@ -261,9 +261,7 @@ func (s *service) GetMojangProfile(id string, signed bool) (*Player, error) {
 }
 
 // GetProfile gets a player's profile with textures decoded as native JSON.
-// A player unknown to us entirely (never looked up before) is reported as
-// ErrPlayerNotFound directly — the profile endpoints only serve players
-// already on record.
+// An unknown player is reported as ErrPlayerNotFound directly.
 func (s *service) GetProfile(id string) (*Profile, error) {
 	cached, err := s.store.GetProfileFromCache(id)
 	if err == nil {
