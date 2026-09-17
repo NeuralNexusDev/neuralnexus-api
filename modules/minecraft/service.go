@@ -253,60 +253,42 @@ func (s *service) GetMojangProfile(id string, signed bool) (*Player, error) {
 		return player, err
 	}
 
-	profile, fresh, err := s.resolveProfile(id)
+	profile, err := s.GetProfile(id)
 	if err != nil {
 		return nil, err
 	}
-	if fresh {
-		return profile.ToPlayer()
-	}
-	player, _, err := s.fetchProfileFromMojang(id, false)
-	return player, err
+	return profile.ToPlayer()
 }
 
-// GetProfile gets a player's profile with textures decoded as native JSON
+// GetProfile gets a player's profile with textures decoded as native JSON.
+// A player unknown to us entirely (never looked up before) is reported as
+// ErrPlayerNotFound directly — the profile endpoints only serve players
+// already on record.
 func (s *service) GetProfile(id string) (*Profile, error) {
-	profile, fresh, err := s.resolveProfile(id)
-	if err != nil {
-		return nil, err
-	}
-	if !fresh {
-		if _, profile, err = s.fetchProfileFromMojang(id, false); err != nil {
-			return nil, err
-		}
-	}
-	return profile, nil
-}
-
-// resolveProfile gets a Profile from cache or the database, without
-// contacting Mojang. fresh is false when the caller must fall back to
-// fetchProfileFromMojang. A player unknown to us entirely (never looked up
-// before) is reported as ErrPlayerNotFound directly — the profile endpoints
-// only serve players already on record.
-func (s *service) resolveProfile(id string) (*Profile, bool, error) {
 	cached, err := s.store.GetProfileFromCache(id)
 	if err == nil {
-		return cached, true, nil
+		return cached, nil
 	}
 	if !errors.Is(err, redis.Nil) {
-		return nil, false, err
+		return nil, err
 	}
 
 	dbProfile, _ := s.store.GetProfileByUUID(id)
 	if dbProfile == nil {
-		return nil, false, ErrPlayerNotFound
+		return nil, ErrPlayerNotFound
 	}
 	if dbProfile.ProfileActions == nil {
 		dbProfile.ProfileActions = []string{}
 	}
-	if dbProfile.IsStale() {
-		return nil, false, nil
+	if !dbProfile.IsStale() {
+		if err := s.store.SetProfileInCache(dbProfile); err != nil {
+			return nil, err
+		}
+		return dbProfile, nil
 	}
 
-	if err := s.store.SetProfileInCache(dbProfile); err != nil {
-		return nil, false, err
-	}
-	return dbProfile, true, nil
+	_, profile, err := s.fetchProfileFromMojang(id, false)
+	return profile, err
 }
 
 // fetchProfileFromMojang fetches and persists a player's profile live from

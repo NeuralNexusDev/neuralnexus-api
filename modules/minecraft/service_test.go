@@ -418,6 +418,48 @@ func TestService_GetMojangProfile_DBHit_NoStoredTextures(t *testing.T) {
 	}
 }
 
+func TestService_GetMojangProfile_Unsigned_StaleDBEntry_FetchesAndMirrors(t *testing.T) {
+	id := "853c80ef3c3749fdaa49938b674adae6"
+	mojang := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		textures := TexturesValue{
+			ProfileID:   id,
+			ProfileName: "jeb_",
+			Textures: Textures{
+				SKIN: &Texture{URL: "http://textures.minecraft.net/texture/abc123hash"},
+			},
+		}
+		prop, _ := textures.ToProperty()
+		json.NewEncoder(w).Encode(Player{
+			ID:         id,
+			Name:       "jeb_",
+			Properties: []Property{*prop},
+		})
+	}))
+	defer mojang.Close()
+
+	store := &mockStore{
+		profilesByUUID: map[string]*Profile{
+			id: {ID: id, Name: "jeb_", LastSeen: 0}, // stale
+		},
+	}
+	svc := NewService(store, mojang.Client(), "http://localhost/texture/")
+	s := svc.(*service)
+	s.lookupProfile = mojang.URL + "/"
+
+	player, err := svc.GetMojangProfile(id, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(player.Properties) != 1 || player.Properties[0].Name != TEXTURES {
+		t.Fatalf("expected a single textures property, got %v", player.Properties)
+	}
+	got := player.ParseProperties()
+	if got == nil || got.Textures.SKIN == nil || got.Textures.SKIN.URL != "http://textures.minecraft.net/texture/abc123hash" {
+		t.Errorf("expected the freshly-fetched skin URL to survive the round trip, got %+v", got)
+	}
+}
+
 func TestService_GetProfile_DBHit_TexturesReturnedAsJSONNotBase64Property(t *testing.T) {
 	id := "853c80ef3c3749fdaa49938b674adae6"
 	store := &mockStore{
