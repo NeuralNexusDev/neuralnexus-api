@@ -11,7 +11,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// GetMojangPlayerByNameHandler - Get a player by name, mirroring Mojang
+// GetMojangPlayerByNameHandler - Get a player by name
 func GetMojangPlayerByNameHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		name := r.PathValue("name")
@@ -34,7 +34,7 @@ func GetMojangPlayerByNameHandler(s Service) http.HandlerFunc {
 	}
 }
 
-// GetMojangPlayerByUUIDHandler - Get a player by UUID, mirroring Mojang
+// GetMojangPlayerByUUIDHandler - Get a player by UUID
 func GetMojangPlayerByUUIDHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("uuid")
@@ -57,7 +57,7 @@ func GetMojangPlayerByUUIDHandler(s Service) http.HandlerFunc {
 	}
 }
 
-// GetMojangPlayersByNamesHandler - Get players by name in batch (max 10), mirroring Mojang
+// GetMojangPlayersByNamesHandler - Get players by name in batch (max 10)
 func GetMojangPlayersByNamesHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Content-Type") != "application/json" {
@@ -93,7 +93,7 @@ func GetMojangPlayersByNamesHandler(s Service) http.HandlerFunc {
 	}
 }
 
-// GetMojangProfileHandler - Get a player's full profile from their UUID, mirroring Mojang exactly
+// GetMojangProfileHandler - Get a player's full profile from their UUID
 func GetMojangProfileHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("uuid")

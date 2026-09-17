@@ -168,10 +168,9 @@ type Model string
 // SLIM The only known value for Metadata.Model
 const SLIM Model = "slim"
 
-// Profile - a player's full profile, decoded and canonical. This is the
-// shape store.go persists and caches, and what GetProfile hands back
-// directly; GetMojangProfile converts it into Mojang's raw mirror shape
-// (Player, with textures re-encoded into a property) instead.
+// Profile - a player's full profile, decoded and canonical. GetMojangProfile
+// converts it into Mojang's raw mirror shape (Player, with textures
+// re-encoded into a property) instead.
 type Profile struct {
 	ID             string         `json:"id"`
 	Name           string         `json:"name"`

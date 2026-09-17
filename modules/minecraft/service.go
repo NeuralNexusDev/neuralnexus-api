@@ -239,7 +239,7 @@ func (s *service) GetMojangPlayersByNames(names []string) ([]*Player, error) {
 	return players, nil
 }
 
-// GetMojangProfile gets a full player profile, mirroring Mojang exactly
+// GetMojangProfile gets a full player profile
 func (s *service) GetMojangProfile(id string, signed bool) (*Player, error) {
 	if signed {
 		cached, err := s.store.GetSignedProfileFromCache(id)
@@ -264,9 +264,7 @@ func (s *service) GetMojangProfile(id string, signed bool) (*Player, error) {
 	return player, err
 }
 
-// GetProfile gets a player's profile with textures decoded as native JSON.
-// It's our own response shape, not a Mojang mirror, so it always resolves
-// the unsigned data.
+// GetProfile gets a player's profile with textures decoded as native JSON
 func (s *service) GetProfile(id string) (*Profile, error) {
 	profile, fresh, err := s.resolveProfile(id)
 	if err != nil {
@@ -280,11 +278,11 @@ func (s *service) GetProfile(id string) (*Profile, error) {
 	return profile, nil
 }
 
-// resolveProfile resolves a player's canonical, decoded Profile from cache or
-// the database, without contacting Mojang. fresh is false when the caller
-// must fall back to fetchProfileFromMojang. A player unknown to us entirely
-// (never looked up before) is reported as ErrPlayerNotFound directly — the
-// profile endpoints only serve players already on record.
+// resolveProfile gets a Profile from cache or the database, without
+// contacting Mojang. fresh is false when the caller must fall back to
+// fetchProfileFromMojang. A player unknown to us entirely (never looked up
+// before) is reported as ErrPlayerNotFound directly — the profile endpoints
+// only serve players already on record.
 func (s *service) resolveProfile(id string) (*Profile, bool, error) {
 	cached, err := s.store.GetProfileFromCache(id)
 	if err == nil {
@@ -311,11 +309,10 @@ func (s *service) resolveProfile(id string) (*Profile, bool, error) {
 	return dbProfile, true, nil
 }
 
-// fetchProfileFromMojang fetches a player's profile live from Mojang and
-// persists it. It returns Mojang's own raw Player response — which
-// GetMojangProfile hands back untouched when signed, since that's the only
-// source of a validly signed property — alongside our decoded Profile, used
-// by GetProfile and cached for future unsigned lookups.
+// fetchProfileFromMojang fetches and persists a player's profile live from
+// Mojang. It returns the raw Player, which GetMojangProfile hands back
+// untouched when signed since only Mojang can produce a valid signature,
+// alongside the decoded Profile used by GetProfile.
 func (s *service) fetchProfileFromMojang(id string, signed bool) (*Player, *Profile, error) {
 	url := s.lookupProfile + id
 	if signed {

@@ -45,10 +45,6 @@ type Store interface {
 	GetProfileFromCache(id string) (*Profile, error)
 	SetProfileInCache(profile *Profile) error
 
-	// GetSignedProfileFromCache/SetSignedProfileInCache cache Mojang's raw,
-	// signed profile response verbatim, separately from the decoded Profile
-	// cache — a signature can't be reconstructed from a Profile, so a signed
-	// request is only ever served from here or straight from Mojang.
 	GetSignedProfileFromCache(id string) (*Player, error)
 	SetSignedProfileInCache(player *Player) error
 
@@ -88,8 +84,7 @@ func (s *store) GetPlayerByName(name string) (*Player, error) {
 	return pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Player])
 }
 
-// GetProfileByUUID gets a player's full profile — including their most
-// recently seen textures, already decoded — from the database by UUID.
+// GetProfileByUUID gets a player's full profile from the database by UUID
 func (s *store) GetProfileByUUID(id string) (*Profile, error) {
 	rows, err := s.db.Query(context.Background(),
 		"SELECT id, name, legacy, demo, profile_actions, first_seen, last_seen FROM players WHERE id = $1", id)
@@ -238,7 +233,7 @@ func (s *store) SetPlayerInCache(player *Player) error {
 	return s.rdb.Set(context.Background(), CachePlayer+player.Name, blob, redisTTL).Err()
 }
 
-// GetProfileFromCache gets a player's decoded profile from the cache
+// GetProfileFromCache gets a player's profile from the cache
 func (s *store) GetProfileFromCache(id string) (*Profile, error) {
 	val, err := s.rdb.Get(context.Background(), CacheProfile+id).Result()
 	if err != nil {
@@ -251,7 +246,7 @@ func (s *store) GetProfileFromCache(id string) (*Profile, error) {
 	return &profile, nil
 }
 
-// SetProfileInCache sets a player's decoded profile in the cache
+// SetProfileInCache sets a player's profile in the cache
 func (s *store) SetProfileInCache(profile *Profile) error {
 	data, err := json.Marshal(profile)
 	if err != nil {
@@ -260,8 +255,7 @@ func (s *store) SetProfileInCache(profile *Profile) error {
 	return s.rdb.Set(context.Background(), CacheProfile+profile.ID, string(data), redisTTL).Err()
 }
 
-// GetSignedProfileFromCache gets a player's raw, signed Mojang profile
-// response from the cache, verbatim
+// GetSignedProfileFromCache gets a player's signed profile from the cache
 func (s *store) GetSignedProfileFromCache(id string) (*Player, error) {
 	val, err := s.rdb.Get(context.Background(), CacheProfileSigned+id).Result()
 	if err != nil {
@@ -274,8 +268,7 @@ func (s *store) GetSignedProfileFromCache(id string) (*Player, error) {
 	return &player, nil
 }
 
-// SetSignedProfileInCache caches a player's raw, signed Mojang profile
-// response verbatim
+// SetSignedProfileInCache sets a player's signed profile in the cache
 func (s *store) SetSignedProfileInCache(player *Player) error {
 	data, err := json.Marshal(player)
 	if err != nil {
