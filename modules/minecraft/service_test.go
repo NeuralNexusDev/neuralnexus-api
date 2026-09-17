@@ -280,7 +280,27 @@ func TestService_GetTextureContent_MissPath_FetchesOnceAndArchives(t *testing.T)
 	}
 }
 
-func TestService_GetTextureContent_MissPath_MojangError(t *testing.T) {
+func TestService_GetTextureContent_MissPath_MojangNotFound(t *testing.T) {
+	mojang := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer mojang.Close()
+
+	store := &mockStore{}
+	svc := NewService(store, mojang.Client(), "http://localhost/texture/")
+	s := svc.(*service)
+	s.lookupTexture = mojang.URL + "/"
+
+	_, err := svc.GetTextureContent("newhash")
+	if !errors.Is(err, ErrTextureNotFound) {
+		t.Errorf("expected ErrTextureNotFound, got %v", err)
+	}
+	if len(store.putBodies) != 0 {
+		t.Error("PutTextureInS3 should not be called when the texture doesn't exist")
+	}
+}
+
+func TestService_GetTextureContent_MissPath_MojangOutage(t *testing.T) {
 	mojang := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
@@ -294,6 +314,9 @@ func TestService_GetTextureContent_MissPath_MojangError(t *testing.T) {
 	_, err := svc.GetTextureContent("newhash")
 	if err == nil {
 		t.Fatal("expected error on non-200 from Mojang")
+	}
+	if errors.Is(err, ErrTextureNotFound) {
+		t.Error("a 500 from Mojang should not be reported as ErrTextureNotFound")
 	}
 	if len(store.putBodies) != 0 {
 		t.Error("PutTextureInS3 should not be called when the Mojang fetch fails")

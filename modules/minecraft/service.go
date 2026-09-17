@@ -370,6 +370,9 @@ func (s *service) fetchAndArchive(hash string) (*TextureResult, error) {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, ErrTextureNotFound
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("bad status code from remote URL: %d", resp.StatusCode)
 	}
