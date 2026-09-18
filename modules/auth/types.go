@@ -76,20 +76,10 @@ func NewIDOnlyAccount() (*Account, error) {
 	}, nil
 }
 
-// This reaches into golang.org/x/crypto/argon2's unexported deriveKey via
-// go:linkname to pass a pepper as the real Argon2 "secret" parameter,
-// which the public argon2.IDKey doesn't expose (it hardcodes secret=nil).
-// That's a deliberate choice, not an oversight: it keeps the pepper as an
-// explicit, first-class part of the KDF call rather than folded into the
-// password bytes before hashing. It does mean depending on an unversioned
-// internal of another module, which a stricter Go toolchain or an
-// x/crypto refactor could break - if that ever happens, the fallback is
-// switching to argon2.IDKey(append(password, pepper...), salt, ...).
-// The pepper itself will need rotating eventually, and rotating it
-// invalidates every existing stored hash (it's mixed into the hash output
-// itself, not just appended-and-checked separately) - handle that with a
-// rehash-on-next-successful-login migration when it happens, not a
-// flip-the-switch change.
+// Deliberate go:linkname into argon2's unexported deriveKey, to pass a
+// pepper as a real Argon2 "secret" rather than folding it into the
+// password bytes - the public argon2.IDKey hardcodes secret=nil. Fallback
+// if x/crypto ever breaks this: argon2.IDKey(append(password, pepper...), salt, ...).
 //go:linkname deriveKey golang.org/x/crypto/argon2.deriveKey
 //goland:noinspection GoUnusedParameter
 func deriveKey(mode int, password, salt, secret, data []byte, time, memory uint32, threads uint8, keyLen uint32) []byte

@@ -324,15 +324,6 @@ func (s *store) DeleteSessionFromCache(id string) error {
 //   CONSTRAINT linked_accounts_unique UNIQUE (user_id, platform),
 //   CONSTRAINT linked_accounts_platform_unique UNIQUE (platform, platform_id)
 // );
-//
-// linked_accounts_platform_unique is NOT YET APPLIED to any live schema as
-// of this comment. It needs a manual migration:
-//   ALTER TABLE linked_accounts
-//     ADD CONSTRAINT linked_accounts_platform_unique UNIQUE (platform, platform_id);
-// Until that runs against the live database, AddLinkedAccountToDB's
-// ErrAlreadyLinked handling below is inert (the insert can never fail this
-// way), which is safe - it just means the race UpdateUserFromPlatform and
-// ProcessOAuthLogin guard against isn't actually closed yet.
 
 // LinkAccountStore - Account Link Store
 type LinkAccountStore interface {
@@ -352,13 +343,9 @@ var ErrAlreadyLinked = errors.New("platform account already linked")
 
 // ErrDuplicateLinkedAccount is returned by GetLinkedAccountByPlatformID
 // when more than one linked_accounts row matches the same (platform,
-// platform_id) pair. Until linked_accounts_platform_unique (see the
-// schema comment above) is applied to the live database, that pair isn't
-// actually guaranteed unique, so this can happen. Unlike ErrAlreadyLinked,
-// there's no safe automatic recovery here - which row is "correct" isn't
-// knowable from this query alone (Postgres doesn't guarantee an order
-// without ORDER BY), so this fails closed instead of guessing and
-// silently routing someone to the wrong account. Needs a manual data fix.
+// platform_id) pair. Unlike ErrAlreadyLinked, this isn't auto-recovered:
+// which row is "correct" isn't knowable from this query alone, so it
+// fails closed and needs a manual data fix instead of guessing.
 var ErrDuplicateLinkedAccount = errors.New("multiple linked accounts found for platform ID")
 
 // AddLinkedAccountToDB adds a linked account to the database
