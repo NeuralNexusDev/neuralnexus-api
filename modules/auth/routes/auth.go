@@ -166,12 +166,14 @@ func OAuthHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Ses
 			return
 		}
 		http.SetCookie(w, &http.Cookie{
-			Name:    "session",
-			Value:   jwtString,
-			Domain:  ".neuralnexus.dev",
-			Path:    "/",
-			Expires: time.Unix(session.ExpiresAt, 0),
-			Secure:  true,
+			Name:     "session",
+			Value:    jwtString,
+			Domain:   ".neuralnexus.dev",
+			Path:     "/",
+			Expires:  time.Unix(session.ExpiresAt, 0),
+			Secure:   true,
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
 		})
 
 		http.Redirect(w, r, state.RedirectURI, http.StatusSeeOther)

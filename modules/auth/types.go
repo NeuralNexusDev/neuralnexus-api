@@ -2,6 +2,7 @@ package auth
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 
@@ -15,6 +16,12 @@ import (
 // -------------- Account --------------
 
 var pepper = []byte(os.Getenv("PEPPER"))
+
+func init() {
+	if len(pepper) == 0 {
+		log.Fatal("PEPPER environment variable must be set")
+	}
+}
 
 // Account struct
 type Account struct {
@@ -100,7 +107,7 @@ func (user *Account) ValidateUser(password string) bool {
 		return false
 	}
 	hashedSecret := IDKeyWithSecret([]byte(password), user.Salt, pepper, 1, 64*1024, 4, 32)
-	return string(hashedSecret) == string(user.HashedSecret)
+	return subtle.ConstantTimeCompare(hashedSecret, user.HashedSecret) == 1
 }
 
 // AddRole adds a role to an account

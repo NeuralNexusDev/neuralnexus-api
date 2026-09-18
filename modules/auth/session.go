@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/golang-jwt/jwt/v5"
+	"log"
 	"os"
 	"time"
 
@@ -19,6 +20,12 @@ var (
 	JWT_SECRET     = []byte(os.Getenv("JWT_SECRET"))
 	validAudiences = []string{NN_SITE_URL, NN_API_URL}
 )
+
+func init() {
+	if len(JWT_SECRET) == 0 {
+		log.Fatal("JWT_SECRET environment variable must be set")
+	}
+}
 
 // Session struct
 type Session struct {
