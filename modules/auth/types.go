@@ -76,6 +76,19 @@ func NewIDOnlyAccount() (*Account, error) {
 	}, nil
 }
 
+// TODO: this reaches into golang.org/x/crypto/argon2's unexported
+// deriveKey/argon2id via go:linkname purely to pass a pepper as the
+// "secret" parameter, which the public argon2.IDKey doesn't expose. That's
+// fragile (an unversioned dependency on another module's internals, which
+// a stricter Go toolchain or an x/crypto refactor could break outright) and
+// current params (time=1) are on the low end of current guidance. The pepper
+// itself will need rotating eventually, and rotating it invalidates every
+// existing stored hash (this mixes the pepper into the hash output itself,
+// not just appended-and-checked separately) - both of these are worth fixing
+// together, since either one requires the same migration: verify against the
+// old format once, then transparently rehash into the new format on that
+// user's next successful login. Do this the next time the pepper rotates
+// rather than as a standalone change now.
 //go:linkname deriveKey golang.org/x/crypto/argon2.deriveKey
 //goland:noinspection GoUnusedParameter
 func deriveKey(mode int, password, salt, secret, data []byte, time, memory uint32, threads uint8, keyLen uint32) []byte
