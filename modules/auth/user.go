@@ -108,7 +108,20 @@ func (s *userService) UpdateUserFromPlatform(platform Platform, platformID strin
 		}
 		err = s.als.AddLinkedAccountToDB(la)
 		if err != nil {
-			return nil, err
+			if !errors.Is(err, ErrAlreadyLinked) {
+				return nil, err
+			}
+			// Lost the race to link this platform account: another
+			// request's insert won between our lookup and our own insert.
+			// Clean up the account we just created for it and use the
+			// winner's linked account instead.
+			if delErr := s.as.DeleteAccountFromDB(a.UserID); delErr != nil {
+				return nil, delErr
+			}
+			la, err = s.als.GetLinkedAccountByPlatformID(platform, platformID)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 

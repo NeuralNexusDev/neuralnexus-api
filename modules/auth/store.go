@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/goccy/go-json"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"log"
@@ -320,20 +321,18 @@ func (s *store) DeleteSessionFromCache(id string) error {
 //   created_at timestamp with time zone default current_timestamp,
 //   updated_at timestamp with time zone default current_timestamp,
 //   FOREIGN KEY (user_id) REFERENCES accounts(user_id),
-//   CONSTRAINT linked_accounts_unique UNIQUE (user_id, platform)
+//   CONSTRAINT linked_accounts_unique UNIQUE (user_id, platform),
+//   CONSTRAINT linked_accounts_platform_unique UNIQUE (platform, platform_id)
 // );
 //
-// TODO (not yet applied to any live schema): there is no uniqueness
-// constraint on (platform, platform_id). UpdateUserFromPlatform and
-// ProcessOAuthLogin both check-then-insert on that pair when a platform
-// account is seen for the first time, so two concurrent requests for the
-// same never-before-linked platform account can each create a separate
-// neuralnexus account and a separate linked_accounts row for it. Adding
-// `CONSTRAINT linked_accounts_platform_unique UNIQUE (platform, platform_id)`
-// would let the database reject the loser instead, at which point the
-// check-then-insert callers should catch that specific constraint
-// violation and re-fetch the row the winner just inserted rather than
-// erroring out.
+// linked_accounts_platform_unique is NOT YET APPLIED to any live schema as
+// of this comment. It needs a manual migration:
+//   ALTER TABLE linked_accounts
+//     ADD CONSTRAINT linked_accounts_platform_unique UNIQUE (platform, platform_id);
+// Until that runs against the live database, AddLinkedAccountToDB's
+// ErrAlreadyLinked handling below is inert (the insert can never fail this
+// way), which is safe - it just means the race UpdateUserFromPlatform and
+// ProcessOAuthLogin guard against isn't actually closed yet.
 
 // LinkAccountStore - Account Link Store
 type LinkAccountStore interface {
@@ -344,10 +343,21 @@ type LinkAccountStore interface {
 	GetLinkedAccountByUserID(userID string, platform Platform) (*LinkedAccount, error)
 }
 
+// ErrAlreadyLinked is returned by AddLinkedAccountToDB when a concurrent
+// insert already linked this exact (platform, platform_id) pair first -
+// the caller lost the race and should re-fetch via
+// GetLinkedAccountByPlatformID and use the winner's row instead of
+// treating this as a hard failure.
+var ErrAlreadyLinked = errors.New("platform account already linked")
+
 // AddLinkedAccountToDB adds a linked account to the database
 func (s *store) AddLinkedAccountToDB(la *LinkedAccount) error {
 	_, err := s.db.Exec(context.Background(), "INSERT INTO linked_accounts (user_id, platform, platform_username, platform_id, data) VALUES ($1, $2, $3, $4, $5)", la.UserID, la.Platform, la.PlatformUsername, la.PlatformID, la.Data)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "linked_accounts_platform_unique" {
+			return ErrAlreadyLinked
+		}
 		return err
 	}
 	return nil

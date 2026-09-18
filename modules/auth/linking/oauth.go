@@ -149,6 +149,29 @@ func ProcessOAuthLogin(as auth.AccountService, las auth.LinkAccountStore, ss aut
 		if err != nil {
 			return nil, err
 		}
+
+		la = auth.NewLinkedAccount(a.UserID, state.Platform, user.GetUsername(), user.GetID(), user)
+		err = las.AddLinkedAccountToDB(la)
+		if err != nil {
+			if !errors.Is(err, auth.ErrAlreadyLinked) {
+				return nil, err
+			}
+			// Lost the race to link this platform account: another
+			// request's insert won between our lookup and our own insert.
+			// Clean up the account we just created for it and use the
+			// winner's account instead.
+			if delErr := as.DeleteAccount(a.UserID); delErr != nil {
+				return nil, delErr
+			}
+			la, err = las.GetLinkedAccountByPlatformID(state.Platform, user.GetID())
+			if err != nil {
+				return nil, err
+			}
+			a, err = as.GetAccountByID(la.UserID)
+			if err != nil {
+				return nil, err
+			}
+		}
 	} else {
 		a, err = as.GetAccountByID(la.UserID)
 		if err != nil {
