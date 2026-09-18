@@ -2,6 +2,7 @@ package auth
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 
@@ -15,6 +16,12 @@ import (
 // -------------- Account --------------
 
 var pepper = []byte(os.Getenv("PEPPER"))
+
+func init() {
+	if len(pepper) == 0 {
+		log.Fatal("PEPPER environment variable must be set")
+	}
+}
 
 // Account struct
 type Account struct {
@@ -69,6 +76,10 @@ func NewIDOnlyAccount() (*Account, error) {
 	}, nil
 }
 
+// Deliberate go:linkname into argon2's unexported deriveKey, to pass a
+// pepper as a real Argon2 "secret" rather than folding it into the
+// password bytes - the public argon2.IDKey hardcodes secret=nil. Fallback
+// if x/crypto ever breaks this: argon2.IDKey(append(password, pepper...), salt, ...).
 //go:linkname deriveKey golang.org/x/crypto/argon2.deriveKey
 //goland:noinspection GoUnusedParameter
 func deriveKey(mode int, password, salt, secret, data []byte, time, memory uint32, threads uint8, keyLen uint32) []byte
@@ -88,7 +99,7 @@ func (user *Account) HashPassword(password string) error {
 	if err != nil {
 		return err
 	}
-	hashedSecret := IDKeyWithSecret([]byte(password), salt, pepper, 1, 64*1024, 4, 32)
+	hashedSecret := IDKeyWithSecret([]byte(password), salt, pepper, 3, 64*1024, 4, 32)
 	user.HashedSecret = hashedSecret
 	user.Salt = salt
 	return nil
@@ -99,8 +110,8 @@ func (user *Account) ValidateUser(password string) bool {
 	if user.HashedSecret == nil || user.Salt == nil {
 		return false
 	}
-	hashedSecret := IDKeyWithSecret([]byte(password), user.Salt, pepper, 1, 64*1024, 4, 32)
-	return string(hashedSecret) == string(user.HashedSecret)
+	hashedSecret := IDKeyWithSecret([]byte(password), user.Salt, pepper, 3, 64*1024, 4, 32)
+	return subtle.ConstantTimeCompare(hashedSecret, user.HashedSecret) == 1
 }
 
 // AddRole adds a role to an account

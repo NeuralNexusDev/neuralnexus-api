@@ -5,12 +5,17 @@ import (
 	"errors"
 	"github.com/goccy/go-json"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
-	"golang.org/x/oauth2"
 	"log"
 	"time"
 )
+
+// ErrNotFound is returned by lookup methods that translate a "no rows"
+// result into a stable, driver-independent sentinel so callers can tell a
+// genuine not-found apart from a real query/connection error.
+var ErrNotFound = errors.New("not found")
 
 // Store interface
 type Store interface {
@@ -258,7 +263,17 @@ func (s *store) AddSessionToCache(session *Session) error {
 		return err
 	}
 
-	_, err = s.rdb.Set(context.Background(), "session:"+session.ID, stringSession, time.Until(time.Unix(session.ExpiresAt, 0))).Result()
+	// ExpiresAt == 0 means never-expires (TTL 0); a past ExpiresAt would
+	// otherwise yield a negative TTL, which Redis rejects, so skip caching it.
+	var ttl time.Duration
+	if session.ExpiresAt != 0 {
+		ttl = time.Until(time.Unix(session.ExpiresAt, 0))
+		if ttl <= 0 {
+			return nil
+		}
+	}
+
+	_, err = s.rdb.Set(context.Background(), "session:"+session.ID, stringSession, ttl).Result()
 	if err != nil {
 		return err
 	}
@@ -303,7 +318,8 @@ func (s *store) DeleteSessionFromCache(id string) error {
 //   created_at timestamp with time zone default current_timestamp,
 //   updated_at timestamp with time zone default current_timestamp,
 //   FOREIGN KEY (user_id) REFERENCES accounts(user_id),
-//   CONSTRAINT linked_accounts_unique UNIQUE (user_id, platform)
+//   CONSTRAINT linked_accounts_unique UNIQUE (user_id, platform),
+//   CONSTRAINT linked_accounts_platform_unique UNIQUE (platform, platform_id)
 // );
 
 // LinkAccountStore - Account Link Store
@@ -315,10 +331,28 @@ type LinkAccountStore interface {
 	GetLinkedAccountByUserID(userID string, platform Platform) (*LinkedAccount, error)
 }
 
+// ErrAlreadyLinked is returned by AddLinkedAccountToDB when a concurrent
+// insert already linked this exact (platform, platform_id) pair first -
+// the caller lost the race and should re-fetch via
+// GetLinkedAccountByPlatformID and use the winner's row instead of
+// treating this as a hard failure.
+var ErrAlreadyLinked = errors.New("platform account already linked")
+
+// ErrDuplicateLinkedAccount is returned by GetLinkedAccountByPlatformID
+// when more than one linked_accounts row matches the same (platform,
+// platform_id) pair. Unlike ErrAlreadyLinked, this isn't auto-recovered:
+// which row is "correct" isn't knowable from this query alone, so it
+// fails closed and needs a manual data fix instead of guessing.
+var ErrDuplicateLinkedAccount = errors.New("multiple linked accounts found for platform ID")
+
 // AddLinkedAccountToDB adds a linked account to the database
 func (s *store) AddLinkedAccountToDB(la *LinkedAccount) error {
 	_, err := s.db.Exec(context.Background(), "INSERT INTO linked_accounts (user_id, platform, platform_username, platform_id, data) VALUES ($1, $2, $3, $4, $5)", la.UserID, la.Platform, la.PlatformUsername, la.PlatformID, la.Data)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "linked_accounts_platform_unique" {
+			return ErrAlreadyLinked
+		}
 		return err
 	}
 	return nil
@@ -342,6 +376,12 @@ func (s *store) GetLinkedAccountByPlatformID(platform Platform, platformID strin
 
 	al, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[LinkedAccount])
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		if errors.Is(err, pgx.ErrTooManyRows) {
+			return nil, ErrDuplicateLinkedAccount
+		}
 		return nil, err
 	}
 	return al, nil
@@ -409,15 +449,14 @@ func (s *store) SetRateLimit(key string, val int) error {
 
 // IncrementRateLimit increments the rate limit for a key
 func (s *store) IncrementRateLimit(key string) error {
-	ttl, err := s.rdb.TTL(context.Background(), "rl:"+key).Result()
+	rediskey := "rl:" + key
+	_, err := s.rdb.Incr(context.Background(), rediskey).Result()
 	if err != nil {
 		return err
 	}
-	_, err = s.rdb.IncrBy(context.Background(), "rl:"+key, 1).Result()
-	if err != nil {
-		return err
-	}
-	_, err = s.rdb.Expire(context.Background(), "rl:"+key, ttl).Result()
+	// Only set the TTL if this increment created the key, so an existing
+	// key's window doesn't reset on every request.
+	_, err = s.rdb.ExpireNX(context.Background(), rediskey, time.Minute).Result()
 	if err != nil {
 		return err
 	}
@@ -446,20 +485,22 @@ func (s *store) IncrementRateLimit(key string) error {
 
 // OAuthToken OAuth2 token with scope
 type OAuthToken struct {
-	*oauth2.Token
 	AccessToken  string    `json:"access_token" db:"access_token"`
 	TokenType    string    `json:"token_type,omitempty" db:"token_type"`
 	RefreshToken string    `json:"refresh_token,omitempty" db:"refresh_token"`
-	Expiry       time.Time `json:"expiry,omitempty" db:"expiry"`
+	Expiry       int64     `json:"expiry,omitempty" db:"expiry"`
 	ExpiresIn    int64     `json:"expires_in,omitempty" db:"expires_in"`
 	UserID       string    `json:"user_id" db:"user_id"`
+	Platform     Platform  `json:"platform" db:"platform"`
 	Scope        []string  `json:"scope" db:"scope"`
+	CreatedAt    time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
 }
 
 // OAuthTokenStore interface
 type OAuthTokenStore interface {
 	AddOAuthTokenToDB(token *OAuthToken) error
-	GetOAuthTokenByUserID(userID string, platform string) (*OAuthToken, error)
+	GetOAuthTokenByUserID(userID string, platform Platform) (*OAuthToken, error)
 	UpdateOAuthToken(token *OAuthToken) error
 	DeleteOAuthToken(userID string, platform Platform) error
 }
@@ -468,7 +509,7 @@ type OAuthTokenStore interface {
 func (s *store) AddOAuthTokenToDB(token *OAuthToken) error {
 	_, err := s.db.Exec(context.Background(),
 		"INSERT INTO oauth_tokens (user_id, platform, access_token, token_type, refresh_token, expiry, expires_in, scope) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
-		token.UserID, token.TokenType, token.AccessToken, token.RefreshToken, token.Expiry.Unix(), token.ExpiresIn, token.Scope)
+		token.UserID, token.Platform, token.AccessToken, token.TokenType, token.RefreshToken, token.Expiry, token.ExpiresIn, token.Scope)
 	if err != nil {
 		return err
 	}
@@ -476,7 +517,7 @@ func (s *store) AddOAuthTokenToDB(token *OAuthToken) error {
 }
 
 // GetOAuthTokenByUserID gets an OAuth token by user ID and platform
-func (s *store) GetOAuthTokenByUserID(userID string, platform string) (*OAuthToken, error) {
+func (s *store) GetOAuthTokenByUserID(userID string, platform Platform) (*OAuthToken, error) {
 	rows, err := s.db.Query(context.Background(), "SELECT * FROM oauth_tokens WHERE user_id = $1 AND platform = $2", userID, platform)
 	if err != nil {
 		return nil, err
@@ -493,7 +534,7 @@ func (s *store) GetOAuthTokenByUserID(userID string, platform string) (*OAuthTok
 func (s *store) UpdateOAuthToken(token *OAuthToken) error {
 	_, err := s.db.Exec(context.Background(),
 		"UPDATE oauth_tokens SET access_token = $2, token_type = $3, refresh_token = $4, expiry = $5, expires_in = $6, scope = $7 WHERE user_id = $1 AND platform = $8",
-		token.UserID, token.AccessToken, token.TokenType, token.RefreshToken, token.Expiry.Unix(), token.ExpiresIn, token.Scope)
+		token.UserID, token.AccessToken, token.TokenType, token.RefreshToken, token.Expiry, token.ExpiresIn, token.Scope, token.Platform)
 	if err != nil {
 		return err
 	}

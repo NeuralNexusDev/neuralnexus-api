@@ -6,13 +6,25 @@ import (
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/twitch"
+
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
 // GetUserHandler - Get a user
 func GetUserHandler(service auth.UserService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		userID := r.PathValue("user_id")
+		// Locked down to self-lookup and admins for now. Cross-user lookup
+		// with the target's consent is a planned feature (for account-link
+		// integrations) but isn't implemented yet - don't open this up
+		// generally until that consent mechanism actually exists.
+		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
+			responses.Forbidden(w, r, "You do not have permission to get this user")
+			return
+		}
 		user, err := service.GetUser(userID)
 		if err != nil {
 			responses.NotFound(w, r, "User not found")
@@ -94,12 +106,35 @@ func UpdateUserFromPlatformHandler(service auth.UserService) http.HandlerFunc {
 		}
 		platform := auth.Platform(r.PathValue("platform"))
 		platformID := r.PathValue("platform_id")
+
 		var data auth.PlatformData
-		err := responses.DecodeStruct(r, &data)
-		if err != nil {
-			responses.BadRequest(w, r, "Invalid request body")
+		switch platform {
+		case auth.PlatformDiscord:
+			var d linking.DiscordData
+			if err := responses.DecodeStruct(r, &d); err != nil {
+				responses.BadRequest(w, r, "Invalid request body")
+				return
+			}
+			data = &d
+		case auth.PlatformMinecraft:
+			var d linking.MinecraftData
+			if err := responses.DecodeStruct(r, &d); err != nil {
+				responses.BadRequest(w, r, "Invalid request body")
+				return
+			}
+			data = &d
+		case auth.PlatformTwitch:
+			var d twitch.Data
+			if err := responses.DecodeStruct(r, &d); err != nil {
+				responses.BadRequest(w, r, "Invalid request body")
+				return
+			}
+			data = &d
+		default:
+			responses.BadRequest(w, r, "Unsupported platform")
 			return
 		}
+
 		user, err := service.UpdateUserFromPlatform(platform, platformID, data)
 		if err != nil {
 			responses.BadRequest(w, r, "Failed to update user")

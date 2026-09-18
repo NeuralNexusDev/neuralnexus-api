@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/golang-jwt/jwt/v5"
+	"log"
 	"os"
 	"time"
 
@@ -19,6 +20,18 @@ var (
 	JWT_SECRET     = []byte(os.Getenv("JWT_SECRET"))
 	validAudiences = []string{NN_SITE_URL, NN_API_URL}
 )
+
+func init() {
+	if len(JWT_SECRET) == 0 {
+		log.Fatal("JWT_SECRET environment variable must be set")
+	}
+	// If left unset, validAudiences would contain empty strings, which would
+	// make ReadJWT's audience check accept a token with an empty-string aud
+	// entry - defeating the check silently rather than failing loudly here.
+	if NN_SITE_URL == "" || NN_API_URL == "" {
+		log.Fatal("NN_SITE_URL and NN_API_URL environment variables must be set")
+	}
+}
 
 // Session struct
 type Session struct {
@@ -90,7 +103,9 @@ func (s *sessionService) AddSession(session *Session) error {
 	if err != nil {
 		return err
 	}
-	s.store.AddSessionToCache(session)
+	if err := s.store.AddSessionToCache(session); err != nil {
+		log.Println("failed to add session to cache:\n\t", err)
+	}
 	return nil
 }
 
@@ -102,7 +117,9 @@ func (s *sessionService) GetSession(id string) (*Session, error) {
 		if err != nil {
 			return nil, err
 		}
-		s.store.AddSessionToCache(session)
+		if err := s.store.AddSessionToCache(session); err != nil {
+			log.Println("failed to re-populate session cache after a cache miss:\n\t", err)
+		}
 	}
 	return session, nil
 }
@@ -113,7 +130,9 @@ func (s *sessionService) UpdateSession(session *Session) error {
 	if err != nil {
 		return err
 	}
-	s.store.AddSessionToCache(session)
+	if err := s.store.AddSessionToCache(session); err != nil {
+		log.Println("failed to update session in cache:\n\t", err)
+	}
 	return nil
 }
 
@@ -123,7 +142,10 @@ func (s *sessionService) DeleteSession(id string) error {
 	if err != nil {
 		return err
 	}
-	s.store.DeleteSessionFromCache(id)
+	// Unlike AddSessionToCache, this can't be fail-open: a stale cache entry would keep a revoked session valid until it expires.
+	if err := s.store.DeleteSessionFromCache(id); err != nil {
+		return fmt.Errorf("session deleted from db but failed to evict from cache: %w", err)
+	}
 	return nil
 }
 
@@ -135,10 +157,18 @@ type SessionClaims struct {
 
 // CreateJWT creates a JWT for a session
 func (s *sessionService) CreateJWT(session *Session) (string, error) {
+	// ExpiresAt == 0 means the session never expires (see Session.IsValid and
+	// store.AddSessionToCache). Encoding that literally would set the JWT's
+	// exp claim to 1970-01-01, which ReadJWT would immediately reject as
+	// expired, so omit the exp claim entirely in that case instead.
+	var expiresAt *jwt.NumericDate
+	if session.ExpiresAt != 0 {
+		expiresAt = jwt.NewNumericDate(time.Unix(session.ExpiresAt, 0))
+	}
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, SessionClaims{
 		session.Permissions,
 		jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Unix(session.ExpiresAt, 0)),
+			ExpiresAt: expiresAt,
 			IssuedAt:  jwt.NewNumericDate(time.Unix(session.IssuedAt, 0)),
 			Issuer:    NN_API_URL,
 			Subject:   session.UserID,
@@ -157,38 +187,49 @@ func (s *sessionService) ReadJWT(tokenStr string) (*Session, error) {
 		return nil, err
 	}
 
-	if claims, ok := token.Claims.(*SessionClaims); ok {
-		// Validate audience
-		for _, aud := range claims.Audience {
-			valid := false
-			for _, validAud := range validAudiences {
-				if aud == validAud {
-					valid = true
-					break
-				}
-			}
-			if !valid {
-				return nil, fmt.Errorf("invalid audience: %s", aud)
-			}
-		}
-
-		// Populate session
-		session := &Session{
-			ID:          claims.ID,
-			UserID:      claims.Subject,
-			Permissions: claims.Scope,
-			IssuedAt:    claims.IssuedAt.Unix(),
-			LastUsedAt:  time.Now().Unix(),
-			ExpiresAt:   claims.ExpiresAt.Unix(),
-		}
-
-		err = s.UpdateSession(session)
-		if err != nil {
-			return nil, err
-		}
-
-		return session, nil
-	} else {
+	claims, ok := token.Claims.(*SessionClaims)
+	if !ok {
 		return nil, errors.New("invalid token claims")
 	}
+
+	// Validate audience: an empty/missing aud claim must fail closed rather
+	// than vacuously pass the loop below with no entries to check.
+	if len(claims.Audience) == 0 {
+		return nil, errors.New("missing audience")
+	}
+	for _, aud := range claims.Audience {
+		// An empty entry must never validate, even if validAudiences itself
+		// were ever misconfigured to contain one (e.g. an unset URL env var).
+		if aud == "" {
+			return nil, errors.New("empty audience entry")
+		}
+		valid := false
+		for _, validAud := range validAudiences {
+			if aud == validAud {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			return nil, fmt.Errorf("invalid audience: %s", aud)
+		}
+	}
+
+	// The session must still exist in the store; a deleted/logged-out
+	// session must not be revivable just because its JWT hasn't expired yet.
+	session, err := s.GetSession(claims.ID)
+	if err != nil {
+		return nil, fmt.Errorf("session not found: %w", err)
+	}
+	if session.UserID != claims.Subject {
+		return nil, errors.New("session does not match token subject")
+	}
+
+	session.LastUsedAt = time.Now().Unix()
+	err = s.UpdateSession(session)
+	if err != nil {
+		return nil, err
+	}
+
+	return session, nil
 }

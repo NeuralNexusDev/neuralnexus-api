@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"errors"
+	"fmt"
 	"log"
 	"time"
 
@@ -86,6 +88,9 @@ func (s *userService) UpdateUserFromPlatform(platform Platform, platformID strin
 	// If the user doesn't exist, create a new account
 	la, err := s.als.GetLinkedAccountByPlatformID(platform, platformID)
 	if err != nil {
+		if !errors.Is(err, ErrNotFound) {
+			return nil, err
+		}
 		a, err := NewIDOnlyAccount()
 		if err != nil {
 			return nil, err
@@ -104,7 +109,21 @@ func (s *userService) UpdateUserFromPlatform(platform Platform, platformID strin
 		}
 		err = s.als.AddLinkedAccountToDB(la)
 		if err != nil {
-			return nil, err
+			// Whatever went wrong, the placeholder account created above is
+			// now orphaned - clean it up before deciding how to handle err.
+			if delErr := s.as.DeleteAccountFromDB(a.UserID); delErr != nil {
+				return nil, fmt.Errorf("failed to link account (%w) and failed to clean up the orphaned placeholder account: %w", err, delErr)
+			}
+			if !errors.Is(err, ErrAlreadyLinked) {
+				return nil, err
+			}
+			// Lost the race to link this platform account: another
+			// request's insert won between our lookup and our own insert.
+			// Use the winner's linked account instead.
+			la, err = s.als.GetLinkedAccountByPlatformID(platform, platformID)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 

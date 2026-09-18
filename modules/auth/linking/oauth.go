@@ -3,11 +3,11 @@ package linking
 import (
 	"context"
 	"errors"
+	"fmt"
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/twitch"
 	"golang.org/x/oauth2"
-	"log"
 	"net/http"
 	"time"
 )
@@ -57,8 +57,12 @@ func ExtCodeForToken(config *oauth2.Config, code string) (*auth.OAuthToken, erro
 	}
 
 	var scopedToken = &auth.OAuthToken{
-		Token: token,
-		Scope: scopes,
+		AccessToken:  token.AccessToken,
+		TokenType:    token.TokenType,
+		RefreshToken: token.RefreshToken,
+		Expiry:       token.Expiry.Unix(),
+		ExpiresIn:    token.ExpiresIn,
+		Scope:        scopes,
 	}
 
 	return scopedToken, nil
@@ -88,19 +92,15 @@ func RefreshToken(config *oauth2.Config, token *oauth2.Token) (*auth.OAuthToken,
 	}
 
 	var scopedToken = &auth.OAuthToken{
-		Token: newToken,
-		Scope: scopes,
+		AccessToken:  newToken.AccessToken,
+		TokenType:    newToken.TokenType,
+		RefreshToken: newToken.RefreshToken,
+		Expiry:       newToken.Expiry.Unix(),
+		ExpiresIn:    newToken.ExpiresIn,
+		Scope:        scopes,
 	}
 
 	return scopedToken, nil
-}
-
-// DeferStoreSession adds a session to the session service and logs an error if it fails
-func DeferStoreSession(ss auth.SessionService, session *auth.Session) {
-	err := ss.AddSession(session)
-	if err != nil {
-		log.Println("failed to add session:\n\t", err)
-	}
 }
 
 // ProcessOAuthLogin processes the OAuth2 code and returns a session
@@ -134,12 +134,38 @@ func ProcessOAuthLogin(as auth.AccountService, las auth.LinkAccountStore, ss aut
 		return nil, err
 	}
 
-	var a *auth.Account
-	var la *auth.LinkedAccount
-	var session *auth.Session
-	la, err = las.GetLinkedAccountByPlatformID(state.Platform, user.GetID())
+	a, err := resolveOrCreateAccountForPlatformUser(as, las, state.Platform, user)
 	if err != nil {
-		a, err = auth.NewPasswordLessAccount(user.GetUsername(), user.GetEmail())
+		return nil, err
+	}
+
+	session, err := a.NewSession(time.Now().Add(time.Hour * 24).Unix())
+	if err != nil {
+		return nil, err
+	}
+
+	if err = ss.AddSession(session); err != nil {
+		return nil, err
+	}
+	return session, nil
+}
+
+// resolveOrCreateAccountForPlatformUser resolves the auth.Account linked to
+// the given platform user, creating a new placeholder account and linking it
+// if none exists yet. If AddLinkedAccountToDB fails for any reason, the
+// placeholder account created above is now orphaned and is cleaned up before
+// deciding how to handle the error: on auth.ErrAlreadyLinked (a concurrent
+// request won the race to link this exact platform account first) the
+// winner's linked account/account are re-fetched and returned instead of
+// treating it as a hard failure; any other error is returned as-is (wrapped
+// together with a cleanup failure, if the cleanup itself also failed).
+func resolveOrCreateAccountForPlatformUser(as auth.AccountService, las auth.LinkAccountStore, platform auth.Platform, user auth.PlatformData) (*auth.Account, error) {
+	la, err := las.GetLinkedAccountByPlatformID(platform, user.GetID())
+	if err != nil {
+		if !errors.Is(err, auth.ErrNotFound) {
+			return nil, err
+		}
+		a, err := auth.NewPasswordLessAccount(user.GetUsername(), user.GetEmail())
 		if err != nil {
 			return nil, err
 		}
@@ -147,24 +173,47 @@ func ProcessOAuthLogin(as auth.AccountService, las auth.LinkAccountStore, ss aut
 		if err != nil {
 			return nil, err
 		}
-	} else {
-		a, err = as.GetAccountByID(la.UserID)
+
+		la = auth.NewLinkedAccount(a.UserID, platform, user.GetUsername(), user.GetID(), user)
+		err = las.AddLinkedAccountToDB(la)
 		if err != nil {
-			return nil, err
+			// Whatever went wrong, the account created above is now
+			// orphaned - clean it up before deciding how to handle err.
+			if delErr := as.DeleteAccount(a.UserID); delErr != nil {
+				return nil, fmt.Errorf("failed to link account (%w) and failed to clean up the orphaned placeholder account: %w", err, delErr)
+			}
+			if !errors.Is(err, auth.ErrAlreadyLinked) {
+				return nil, err
+			}
+			// Lost the race: use the winner's account instead.
+			la, err = las.GetLinkedAccountByPlatformID(platform, user.GetID())
+			if err != nil {
+				return nil, err
+			}
+			a, err = as.GetAccountByID(la.UserID)
+			if err != nil {
+				return nil, err
+			}
 		}
+		return a, nil
 	}
 
-	session, err = a.NewSession(time.Now().Add(time.Hour * 24).Unix())
-	if err != nil {
-		return nil, err
-	}
-
-	defer DeferStoreSession(ss, session)
-	return session, nil
+	return as.GetAccountByID(la.UserID)
 }
 
 // ProcessOAuthLink links an account to an existing user
 func ProcessOAuthLink(r *http.Request, las auth.LinkAccountStore, code string, state *OAuthState) (*auth.Session, error) {
+	// Get session from request context first: there's no point exchanging
+	// the OAuth code or calling out to the platform's API for a session
+	// that's missing or already expired.
+	session, ok := r.Context().Value(mw.SessionKey).(*auth.Session)
+	if !ok || session == nil {
+		return nil, errors.New("session not found")
+	}
+	if !session.IsValid() {
+		return nil, errors.New("session expired")
+	}
+
 	var err error
 	var config *oauth2.Config
 	switch state.Platform {
@@ -194,22 +243,16 @@ func ProcessOAuthLink(r *http.Request, las auth.LinkAccountStore, code string, s
 		return nil, err
 	}
 
-	// Get session from request context
-	session, ok := r.Context().Value(mw.SessionKey).(*auth.Session)
-	if !ok || session == nil {
-		return nil, errors.New("session not found")
-	}
-	if session.IsValid() {
-		return nil, errors.New("session expired")
-	}
-
 	// Check if platform account is linked to an account
 	la, err := las.GetLinkedAccountByPlatformID(state.Platform, user.GetID())
-	if err == nil {
+	switch {
+	case err == nil:
 		// Return an error if the linked account is not the same as the current session
 		if session.UserID != la.UserID {
 			return nil, errors.New("platform account already linked to another account")
 		}
+	case !errors.Is(err, auth.ErrNotFound):
+		return nil, err
 	}
 
 	// Link account
