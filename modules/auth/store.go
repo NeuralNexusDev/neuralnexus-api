@@ -447,14 +447,14 @@ func (s *store) IncrementRateLimit(key string) error {
 // OAuthToken OAuth2 token with scope
 type OAuthToken struct {
 	*oauth2.Token
-	AccessToken  string    `json:"access_token" db:"access_token"`
-	TokenType    string    `json:"token_type,omitempty" db:"token_type"`
-	RefreshToken string    `json:"refresh_token,omitempty" db:"refresh_token"`
-	Expiry       time.Time `json:"expiry,omitempty" db:"expiry"`
-	ExpiresIn    int64     `json:"expires_in,omitempty" db:"expires_in"`
-	UserID       string    `json:"user_id" db:"user_id"`
-	Platform     Platform  `json:"platform" db:"platform"`
-	Scope        []string  `json:"scope" db:"scope"`
+	AccessToken  string   `json:"access_token" db:"access_token"`
+	TokenType    string   `json:"token_type,omitempty" db:"token_type"`
+	RefreshToken string   `json:"refresh_token,omitempty" db:"refresh_token"`
+	Expiry       int64    `json:"expiry,omitempty" db:"expiry"`
+	ExpiresIn    int64    `json:"expires_in,omitempty" db:"expires_in"`
+	UserID       string   `json:"user_id" db:"user_id"`
+	Platform     Platform `json:"platform" db:"platform"`
+	Scope        []string `json:"scope" db:"scope"`
 }
 
 // OAuthTokenStore interface
@@ -469,7 +469,7 @@ type OAuthTokenStore interface {
 func (s *store) AddOAuthTokenToDB(token *OAuthToken) error {
 	_, err := s.db.Exec(context.Background(),
 		"INSERT INTO oauth_tokens (user_id, platform, access_token, token_type, refresh_token, expiry, expires_in, scope) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
-		token.UserID, token.Platform, token.AccessToken, token.TokenType, token.RefreshToken, token.Expiry.Unix(), token.ExpiresIn, token.Scope)
+		token.UserID, token.Platform, token.AccessToken, token.TokenType, token.RefreshToken, token.Expiry, token.ExpiresIn, token.Scope)
 	if err != nil {
 		return err
 	}
@@ -494,7 +494,7 @@ func (s *store) GetOAuthTokenByUserID(userID string, platform Platform) (*OAuthT
 func (s *store) UpdateOAuthToken(token *OAuthToken) error {
 	_, err := s.db.Exec(context.Background(),
 		"UPDATE oauth_tokens SET access_token = $2, token_type = $3, refresh_token = $4, expiry = $5, expires_in = $6, scope = $7 WHERE user_id = $1 AND platform = $8",
-		token.UserID, token.AccessToken, token.TokenType, token.RefreshToken, token.Expiry.Unix(), token.ExpiresIn, token.Scope, token.Platform)
+		token.UserID, token.AccessToken, token.TokenType, token.RefreshToken, token.Expiry, token.ExpiresIn, token.Scope, token.Platform)
 	if err != nil {
 		return err
 	}
