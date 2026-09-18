@@ -7,7 +7,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
-	"golang.org/x/oauth2"
 	"log"
 	"time"
 )
@@ -446,7 +445,6 @@ func (s *store) IncrementRateLimit(key string) error {
 
 // OAuthToken OAuth2 token with scope
 type OAuthToken struct {
-	*oauth2.Token
 	AccessToken  string   `json:"access_token" db:"access_token"`
 	TokenType    string   `json:"token_type,omitempty" db:"token_type"`
 	RefreshToken string   `json:"refresh_token,omitempty" db:"refresh_token"`

@@ -56,8 +56,12 @@ func ExtCodeForToken(config *oauth2.Config, code string) (*auth.OAuthToken, erro
 	}
 
 	var scopedToken = &auth.OAuthToken{
-		Token: token,
-		Scope: scopes,
+		AccessToken:  token.AccessToken,
+		TokenType:    token.TokenType,
+		RefreshToken: token.RefreshToken,
+		Expiry:       token.Expiry.Unix(),
+		ExpiresIn:    token.ExpiresIn,
+		Scope:        scopes,
 	}
 
 	return scopedToken, nil
@@ -87,8 +91,12 @@ func RefreshToken(config *oauth2.Config, token *oauth2.Token) (*auth.OAuthToken,
 	}
 
 	var scopedToken = &auth.OAuthToken{
-		Token: newToken,
-		Scope: scopes,
+		AccessToken:  newToken.AccessToken,
+		TokenType:    newToken.TokenType,
+		RefreshToken: newToken.RefreshToken,
+		Expiry:       newToken.Expiry.Unix(),
+		ExpiresIn:    newToken.ExpiresIn,
+		Scope:        scopes,
 	}
 
 	return scopedToken, nil
