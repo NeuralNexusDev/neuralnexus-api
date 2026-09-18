@@ -381,9 +381,18 @@ func (s *service) fetchProfileFromMojang(id string, signed bool) (*Player, *Prof
 	return &player, profile, nil
 }
 
-// GetGeyserXUID looks up a Bedrock player's Xbox XUID by gamertag via Geyser's
-// API and derives their synthetic UUID from it. No caching: a thin passthrough.
+// GetGeyserXUID looks up a Bedrock player's Xbox XUID by gamertag, DB-cache-first
+// with a fallback to Geyser's API. The UUID is always derived from the XUID,
+// never stored.
 func (s *service) GetGeyserXUID(gamertag string) (*GeyserPlayer, error) {
+	dbPlayer, _ := s.store.GetGeyserPlayerByGamertag(gamertag)
+	if dbPlayer != nil && !dbPlayer.IsStale() {
+		// UUID is derived, not stored — compute it here rather than trusting
+		// every Store implementation to have set it.
+		dbPlayer.UUID = xuidToUUID(dbPlayer.XUID)
+		return dbPlayer, nil
+	}
+
 	resp, err := s.client.Get(s.geyserXUIDLookup + gamertag)
 	if err != nil {
 		return nil, err
@@ -404,11 +413,16 @@ func (s *service) GetGeyserXUID(gamertag string) (*GeyserPlayer, error) {
 		return nil, err
 	}
 
-	return &GeyserPlayer{
+	player := &GeyserPlayer{
 		Gamertag: gamertag,
 		XUID:     result.XUID,
 		UUID:     xuidToUUID(result.XUID),
-	}, nil
+	}
+
+	if err := s.store.UpsertGeyserPlayer(player); err != nil {
+		return nil, err
+	}
+	return player, nil
 }
 
 // GetTextureContent returns the texture's bytes and content type, fetching from

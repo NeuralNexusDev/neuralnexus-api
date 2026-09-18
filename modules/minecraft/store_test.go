@@ -41,6 +41,7 @@ func setupStore(t *testing.T) Store {
 		db.Exec(context.Background(), "DELETE FROM player_names WHERE player_id = '853c80ef-3c37-49fd-aa49-938b674adae6'")
 		db.Exec(context.Background(), "DELETE FROM player_textures WHERE player_id = '853c80ef-3c37-49fd-aa49-938b674adae6'")
 		db.Exec(context.Background(), "DELETE FROM players WHERE id = '853c80ef-3c37-49fd-aa49-938b674adae6'")
+		db.Exec(context.Background(), "DELETE FROM geyser_players WHERE xuid = 2535457445285308")
 		rdb.Del(context.Background(),
 			CachePlayer+"853c80ef-3c37-49fd-aa49-938b674adae6", CachePlayer+"jeb_",
 			CacheProfile+"853c80ef-3c37-49fd-aa49-938b674adae6",
@@ -560,5 +561,87 @@ func TestStore_PutTextureInS3(t *testing.T) {
 	err := s.PutTextureInS3("mockhash", nil) // Body is irrelevant for mocked http server
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// testGeyserPlayer's UUID is intentionally left unset: GetGeyserPlayerByGamertag
+// derives it from XUID rather than reading it from the database.
+var testGeyserPlayer = &GeyserPlayer{Gamertag: "Notch", XUID: 2535457445285308}
+
+func TestStore_UpsertGeyserPlayer_Insert(t *testing.T) {
+	s := setupStore(t)
+
+	if err := s.UpsertGeyserPlayer(testGeyserPlayer); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got, err := s.GetGeyserPlayerByGamertag(testGeyserPlayer.Gamertag)
+	if err != nil {
+		t.Fatalf("failed to get geyser player: %v", err)
+	}
+	if got.XUID != testGeyserPlayer.XUID {
+		t.Errorf("expected xuid %d, got %d", testGeyserPlayer.XUID, got.XUID)
+	}
+	if got.UUID != xuidToUUID(testGeyserPlayer.XUID) {
+		t.Errorf("expected derived UUID %s, got %s", xuidToUUID(testGeyserPlayer.XUID), got.UUID)
+	}
+}
+
+func TestStore_UpsertGeyserPlayer_UpdateLastSeen(t *testing.T) {
+	s := setupStore(t)
+
+	if err := s.UpsertGeyserPlayer(testGeyserPlayer); err != nil {
+		t.Fatalf("first upsert failed: %v", err)
+	}
+
+	got1, _ := s.GetGeyserPlayerByGamertag(testGeyserPlayer.Gamertag)
+	firstSeen := got1.FirstSeen
+
+	time.Sleep(10 * time.Millisecond)
+
+	if err := s.UpsertGeyserPlayer(testGeyserPlayer); err != nil {
+		t.Fatalf("second upsert failed: %v", err)
+	}
+
+	got2, _ := s.GetGeyserPlayerByGamertag(testGeyserPlayer.Gamertag)
+	if got2.FirstSeen != firstSeen {
+		t.Error("first_seen should not change on upsert")
+	}
+	if got2.LastSeen <= got1.LastSeen {
+		t.Error("last_seen should be updated on upsert")
+	}
+}
+
+func TestStore_UpsertGeyserPlayer_GamertagChange(t *testing.T) {
+	s := setupStore(t)
+
+	if err := s.UpsertGeyserPlayer(testGeyserPlayer); err != nil {
+		t.Fatalf("upsert failed: %v", err)
+	}
+
+	renamed := &GeyserPlayer{Gamertag: "NotchRenamed", XUID: testGeyserPlayer.XUID}
+	if err := s.UpsertGeyserPlayer(renamed); err != nil {
+		t.Fatalf("upsert with new gamertag failed: %v", err)
+	}
+
+	got, err := s.GetGeyserPlayerByGamertag("NotchRenamed")
+	if err != nil {
+		t.Fatalf("failed to get geyser player by new gamertag: %v", err)
+	}
+	if got.XUID != testGeyserPlayer.XUID {
+		t.Errorf("expected xuid %d, got %d", testGeyserPlayer.XUID, got.XUID)
+	}
+
+	if _, err := s.GetGeyserPlayerByGamertag(testGeyserPlayer.Gamertag); err == nil {
+		t.Error("expected the old gamertag to no longer resolve, since xuid is the stable key")
+	}
+}
+
+func TestStore_GetGeyserPlayerByGamertag_NotFound(t *testing.T) {
+	s := setupStore(t)
+
+	_, err := s.GetGeyserPlayerByGamertag("nonexistent_gamertag_xyz")
+	if err == nil {
+		t.Error("expected error for unknown gamertag")
 	}
 }

@@ -719,7 +719,7 @@
         "/mc/geyser/xuid/{gamertag}": {
             "get": {
                 "summary": "Look up a Bedrock player's XUID and derived UUID by gamertag",
-                "description": "Proxies Geyser's Xbox XUID lookup API. The UUID is synthesized from the XUID's hex representation (left-padded to 32 hex digits and formatted as a standard UUID); it is not a real Mojang UUID, since Bedrock players have no Mojang profile. No caching: fetched live from Geyser on every request.",
+                "description": "Looks up a gamertag's Xbox XUID, DB-cache-first (24h staleness) with a fallback to Geyser's Xbox XUID lookup API on a miss or stale entry. The UUID is synthesized from the XUID's hex representation (left-padded to 32 hex digits and formatted as a standard UUID) and is never stored; it is not a real Mojang UUID, since Bedrock players have no Mojang profile.",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/GamertagSlug"

@@ -208,9 +208,16 @@ func (p *Profile) ToPlayer() (*Player, error) {
 // GeyserPlayer - a Bedrock player's identity derived from Geyser's Xbox XUID lookup.
 // Bedrock players have no Mojang profile, so this carries only what Geyser/Xbox Live expose.
 type GeyserPlayer struct {
-	Gamertag string `json:"gamertag"`
-	XUID     int64  `json:"xuid"`
-	UUID     string `json:"uuid"`
+	Gamertag  string `json:"gamertag"     db:"gamertag"`
+	XUID      int64  `json:"xuid"         db:"xuid"`
+	UUID      string `json:"uuid"         db:"-"`
+	FirstSeen int64  `json:"-"            db:"first_seen"`
+	LastSeen  int64  `json:"-"            db:"last_seen"`
+}
+
+// IsStale returns true if the GeyserPlayer's last_seen is older than the staleness threshold
+func (p *GeyserPlayer) IsStale() bool {
+	return time.Now().UnixMilli()-p.LastSeen > stalenessThreshold.Milliseconds()
 }
 
 // xuidToUUID derives a Bedrock player's synthetic UUID from their Xbox XUID:

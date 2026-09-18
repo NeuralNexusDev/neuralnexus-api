@@ -50,6 +50,9 @@ type Store interface {
 
 	IsTextureInS3(hash string) (bool, error)
 	PutTextureInS3(hash string, body io.ReadCloser) error
+
+	GetGeyserPlayerByGamertag(gamertag string) (*GeyserPlayer, error)
+	UpsertGeyserPlayer(player *GeyserPlayer) error
 }
 
 // store - Minecraft player store implementation
@@ -316,6 +319,37 @@ func (s *store) IsTextureInS3(hash string) (bool, error) {
 	}
 
 	return true, nil
+}
+
+// GetGeyserPlayerByGamertag gets a Bedrock player's gamertag->XUID mapping
+// from the database.
+func (s *store) GetGeyserPlayerByGamertag(gamertag string) (*GeyserPlayer, error) {
+	rows, err := s.db.Query(context.Background(),
+		"SELECT xuid, gamertag, first_seen, last_seen FROM geyser_players WHERE gamertag = $1", gamertag)
+	if err != nil {
+		return nil, err
+	}
+	player, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByNameLax[GeyserPlayer])
+	if err != nil {
+		return nil, err
+	}
+	player.UUID = xuidToUUID(player.XUID)
+	return player, nil
+}
+
+// UpsertGeyserPlayer upserts a Bedrock player's gamertag->XUID mapping into the database
+func (s *store) UpsertGeyserPlayer(player *GeyserPlayer) error {
+	now := time.Now().UnixMilli()
+	_, err := s.db.Exec(context.Background(), `
+		INSERT INTO geyser_players (xuid, gamertag, first_seen, last_seen)
+		VALUES ($1, $2, $3, $3)
+		ON CONFLICT (xuid) DO UPDATE SET
+			gamertag  = EXCLUDED.gamertag,
+			last_seen = EXCLUDED.last_seen
+		`,
+		player.XUID, player.Gamertag, now,
+	)
+	return err
 }
 
 // PutTextureInS3 upload a texture to S3

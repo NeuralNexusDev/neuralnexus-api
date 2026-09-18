@@ -46,3 +46,14 @@ CREATE TABLE IF NOT EXISTS player_names (
     last_seen BIGINT NOT NULL,
     PRIMARY KEY (player_id, name)
 );
+
+-- Bedrock players' gamertag<->XUID mapping. Keyed by xuid (stable, like
+-- players.id) since a gamertag can be changed by its owner while keeping
+-- the same XUID. The synthetic UUID is derived from xuid at read time
+-- (xuidToUUID), never stored.
+CREATE TABLE IF NOT EXISTS geyser_players (
+    xuid BIGINT PRIMARY KEY NOT NULL,
+    gamertag TEXT NOT NULL,
+    first_seen BIGINT NOT NULL,
+    last_seen BIGINT NOT NULL
+);

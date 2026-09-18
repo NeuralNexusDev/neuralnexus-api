@@ -25,6 +25,7 @@ type mockStore struct {
 	putBodies             map[string][]byte
 	putErr                error
 	upsertedTextureHashes []string
+	geyserPlayers         map[string]*GeyserPlayer
 }
 
 func (m *mockStore) GetPlayerByUUID(id string) (*Player, error) {
@@ -118,6 +119,21 @@ func (m *mockStore) SetSignedProfileInCache(player *Player) error {
 		m.signedProfilesCache = make(map[string]*Player)
 	}
 	m.signedProfilesCache[player.ID] = player
+	return nil
+}
+
+func (m *mockStore) GetGeyserPlayerByGamertag(gamertag string) (*GeyserPlayer, error) {
+	if p, ok := m.geyserPlayers[gamertag]; ok {
+		return p, nil
+	}
+	return nil, ErrPlayerNotFound
+}
+
+func (m *mockStore) UpsertGeyserPlayer(player *GeyserPlayer) error {
+	if m.geyserPlayers == nil {
+		m.geyserPlayers = make(map[string]*GeyserPlayer)
+	}
+	m.geyserPlayers[player.Gamertag] = player
 	return nil
 }
 
@@ -827,6 +843,77 @@ func TestService_GetGeyserXUID_UpstreamError(t *testing.T) {
 	_, err := svc.GetGeyserXUID("Notch")
 	if err == nil {
 		t.Fatal("expected an error for a non-200/404 upstream response")
+	}
+}
+
+func TestService_GetGeyserXUID_DBCacheHit(t *testing.T) {
+	store := &mockStore{
+		geyserPlayers: map[string]*GeyserPlayer{
+			"Notch": {Gamertag: "Notch", XUID: 2535457445285308, LastSeen: time.Now().UnixMilli()},
+		},
+	}
+	// No mock Geyser server: a network call here would fail the test.
+	svc := NewService(store, nil, "http://localhost/texture/")
+
+	player, err := svc.GetGeyserXUID("Notch")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if player.XUID != 2535457445285308 {
+		t.Errorf("expected xuid 2535457445285308, got %d", player.XUID)
+	}
+	if player.UUID != xuidToUUID(2535457445285308) {
+		t.Errorf("expected derived UUID %s, got %s", xuidToUUID(2535457445285308), player.UUID)
+	}
+}
+
+func TestService_GetGeyserXUID_StaleDBEntry_RefetchesFromGeyser(t *testing.T) {
+	var geyserHits int
+	geyser := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		geyserHits++
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]int64{"xuid": 2535457445285308})
+	}))
+	defer geyser.Close()
+
+	store := &mockStore{
+		geyserPlayers: map[string]*GeyserPlayer{
+			"Notch": {
+				Gamertag: "Notch",
+				XUID:     2535457445285308,
+				LastSeen: time.Now().Add(-48 * time.Hour).UnixMilli(),
+			},
+		},
+	}
+	svc := NewService(store, geyser.Client(), "http://localhost/texture/")
+	s := svc.(*service)
+	s.geyserXUIDLookup = geyser.URL + "/"
+
+	if _, err := svc.GetGeyserXUID("Notch"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if geyserHits != 1 {
+		t.Errorf("expected a refetch from Geyser for a stale DB entry, got %d hits", geyserHits)
+	}
+}
+
+func TestService_GetGeyserXUID_UpsertsOnFetch(t *testing.T) {
+	geyser := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]int64{"xuid": 2535457445285308})
+	}))
+	defer geyser.Close()
+
+	store := &mockStore{}
+	svc := NewService(store, geyser.Client(), "http://localhost/texture/")
+	s := svc.(*service)
+	s.geyserXUIDLookup = geyser.URL + "/"
+
+	if _, err := svc.GetGeyserXUID("Notch"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := store.geyserPlayers["Notch"]; !ok {
+		t.Error("expected the fetched gamertag->XUID mapping to be persisted")
 	}
 }
 
