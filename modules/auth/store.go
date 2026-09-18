@@ -11,6 +11,11 @@ import (
 	"time"
 )
 
+// ErrNotFound is returned by lookup methods that translate a "no rows"
+// result into a stable, driver-independent sentinel so callers can tell a
+// genuine not-found apart from a real query/connection error.
+var ErrNotFound = errors.New("not found")
+
 // Store interface
 type Store interface {
 	Account() AccountStore
@@ -317,6 +322,18 @@ func (s *store) DeleteSessionFromCache(id string) error {
 //   FOREIGN KEY (user_id) REFERENCES accounts(user_id),
 //   CONSTRAINT linked_accounts_unique UNIQUE (user_id, platform)
 // );
+//
+// TODO (not yet applied to any live schema): there is no uniqueness
+// constraint on (platform, platform_id). UpdateUserFromPlatform and
+// ProcessOAuthLogin both check-then-insert on that pair when a platform
+// account is seen for the first time, so two concurrent requests for the
+// same never-before-linked platform account can each create a separate
+// neuralnexus account and a separate linked_accounts row for it. Adding
+// `CONSTRAINT linked_accounts_platform_unique UNIQUE (platform, platform_id)`
+// would let the database reject the loser instead, at which point the
+// check-then-insert callers should catch that specific constraint
+// violation and re-fetch the row the winner just inserted rather than
+// erroring out.
 
 // LinkAccountStore - Account Link Store
 type LinkAccountStore interface {
@@ -354,6 +371,9 @@ func (s *store) GetLinkedAccountByPlatformID(platform Platform, platformID strin
 
 	al, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[LinkedAccount])
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
 		return nil, err
 	}
 	return al, nil

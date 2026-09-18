@@ -138,6 +138,9 @@ func ProcessOAuthLogin(as auth.AccountService, las auth.LinkAccountStore, ss aut
 	var session *auth.Session
 	la, err = las.GetLinkedAccountByPlatformID(state.Platform, user.GetID())
 	if err != nil {
+		if !errors.Is(err, auth.ErrNotFound) {
+			return nil, err
+		}
 		a, err = auth.NewPasswordLessAccount(user.GetUsername(), user.GetEmail())
 		if err != nil {
 			return nil, err
@@ -206,11 +209,14 @@ func ProcessOAuthLink(r *http.Request, las auth.LinkAccountStore, code string, s
 
 	// Check if platform account is linked to an account
 	la, err := las.GetLinkedAccountByPlatformID(state.Platform, user.GetID())
-	if err == nil {
+	switch {
+	case err == nil:
 		// Return an error if the linked account is not the same as the current session
 		if session.UserID != la.UserID {
 			return nil, errors.New("platform account already linked to another account")
 		}
+	case !errors.Is(err, auth.ErrNotFound):
+		return nil, err
 	}
 
 	// Link account

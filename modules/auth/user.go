@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"errors"
 	"log"
 	"time"
 
@@ -86,6 +87,9 @@ func (s *userService) UpdateUserFromPlatform(platform Platform, platformID strin
 	// If the user doesn't exist, create a new account
 	la, err := s.als.GetLinkedAccountByPlatformID(platform, platformID)
 	if err != nil {
+		if !errors.Is(err, ErrNotFound) {
+			return nil, err
+		}
 		a, err := NewIDOnlyAccount()
 		if err != nil {
 			return nil, err
