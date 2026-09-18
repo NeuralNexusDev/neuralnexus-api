@@ -6,6 +6,9 @@ import (
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/twitch"
+
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
@@ -94,12 +97,35 @@ func UpdateUserFromPlatformHandler(service auth.UserService) http.HandlerFunc {
 		}
 		platform := auth.Platform(r.PathValue("platform"))
 		platformID := r.PathValue("platform_id")
+
 		var data auth.PlatformData
-		err := responses.DecodeStruct(r, &data)
-		if err != nil {
-			responses.BadRequest(w, r, "Invalid request body")
+		switch platform {
+		case auth.PlatformDiscord:
+			var d linking.DiscordData
+			if err := responses.DecodeStruct(r, &d); err != nil {
+				responses.BadRequest(w, r, "Invalid request body")
+				return
+			}
+			data = &d
+		case auth.PlatformMinecraft:
+			var d linking.MinecraftData
+			if err := responses.DecodeStruct(r, &d); err != nil {
+				responses.BadRequest(w, r, "Invalid request body")
+				return
+			}
+			data = &d
+		case auth.PlatformTwitch:
+			var d twitch.Data
+			if err := responses.DecodeStruct(r, &d); err != nil {
+				responses.BadRequest(w, r, "Invalid request body")
+				return
+			}
+			data = &d
+		default:
+			responses.BadRequest(w, r, "Unsupported platform")
 			return
 		}
+
 		user, err := service.UpdateUserFromPlatform(platform, platformID, data)
 		if err != nil {
 			responses.BadRequest(w, r, "Failed to update user")
