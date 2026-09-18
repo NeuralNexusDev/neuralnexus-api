@@ -76,19 +76,20 @@ func NewIDOnlyAccount() (*Account, error) {
 	}, nil
 }
 
-// TODO: this reaches into golang.org/x/crypto/argon2's unexported
-// deriveKey/argon2id via go:linkname purely to pass a pepper as the
-// "secret" parameter, which the public argon2.IDKey doesn't expose. That's
-// fragile (an unversioned dependency on another module's internals, which
-// a stricter Go toolchain or an x/crypto refactor could break outright) and
-// current params (time=1) are on the low end of current guidance. The pepper
-// itself will need rotating eventually, and rotating it invalidates every
-// existing stored hash (this mixes the pepper into the hash output itself,
-// not just appended-and-checked separately) - both of these are worth fixing
-// together, since either one requires the same migration: verify against the
-// old format once, then transparently rehash into the new format on that
-// user's next successful login. Do this the next time the pepper rotates
-// rather than as a standalone change now.
+// This reaches into golang.org/x/crypto/argon2's unexported deriveKey via
+// go:linkname to pass a pepper as the real Argon2 "secret" parameter,
+// which the public argon2.IDKey doesn't expose (it hardcodes secret=nil).
+// That's a deliberate choice, not an oversight: it keeps the pepper as an
+// explicit, first-class part of the KDF call rather than folded into the
+// password bytes before hashing. It does mean depending on an unversioned
+// internal of another module, which a stricter Go toolchain or an
+// x/crypto refactor could break - if that ever happens, the fallback is
+// switching to argon2.IDKey(append(password, pepper...), salt, ...).
+// The pepper itself will need rotating eventually, and rotating it
+// invalidates every existing stored hash (it's mixed into the hash output
+// itself, not just appended-and-checked separately) - handle that with a
+// rehash-on-next-successful-login migration when it happens, not a
+// flip-the-switch change.
 //go:linkname deriveKey golang.org/x/crypto/argon2.deriveKey
 //goland:noinspection GoUnusedParameter
 func deriveKey(mode int, password, salt, secret, data []byte, time, memory uint32, threads uint8, keyLen uint32) []byte
@@ -108,7 +109,7 @@ func (user *Account) HashPassword(password string) error {
 	if err != nil {
 		return err
 	}
-	hashedSecret := IDKeyWithSecret([]byte(password), salt, pepper, 1, 64*1024, 4, 32)
+	hashedSecret := IDKeyWithSecret([]byte(password), salt, pepper, 3, 64*1024, 4, 32)
 	user.HashedSecret = hashedSecret
 	user.Salt = salt
 	return nil
@@ -119,7 +120,7 @@ func (user *Account) ValidateUser(password string) bool {
 	if user.HashedSecret == nil || user.Salt == nil {
 		return false
 	}
-	hashedSecret := IDKeyWithSecret([]byte(password), user.Salt, pepper, 1, 64*1024, 4, 32)
+	hashedSecret := IDKeyWithSecret([]byte(password), user.Salt, pepper, 3, 64*1024, 4, 32)
 	return subtle.ConstantTimeCompare(hashedSecret, user.HashedSecret) == 1
 }
 
