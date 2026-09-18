@@ -647,6 +647,41 @@ func TestStore_GetGeyserPlayerByGamertag_NotFound(t *testing.T) {
 	}
 }
 
+// TestStore_GetGeyserPlayerByGamertag_HandlesGamertagReuse guards against a
+// released gamertag being picked up by a different Xbox account: nothing
+// stops two different xuids from carrying the same gamertag at once (the
+// old xuid's row simply hasn't gone stale yet), so the lookup must resolve
+// to one row deterministically instead of erroring on multiple matches.
+func TestStore_GetGeyserPlayerByGamertag_HandlesGamertagReuse(t *testing.T) {
+	s := setupStore(t)
+	const otherXUID int64 = 9999999999999999
+
+	older := &GeyserPlayer{Gamertag: "DupTag", XUID: testGeyserPlayer.XUID}
+	if err := s.UpsertGeyserPlayer(older); err != nil {
+		t.Fatalf("failed to insert older player: %v", err)
+	}
+
+	time.Sleep(10 * time.Millisecond)
+
+	newer := &GeyserPlayer{Gamertag: "DupTag", XUID: otherXUID}
+	if err := s.UpsertGeyserPlayer(newer); err != nil {
+		t.Fatalf("failed to insert newer player: %v", err)
+	}
+
+	got, err := s.GetGeyserPlayerByGamertag("DupTag")
+	if err != nil {
+		t.Fatalf("unexpected error on duplicate gamertag: %v", err)
+	}
+	if got.XUID != otherXUID {
+		t.Errorf("expected the most recently seen xuid %d, got %d", otherXUID, got.XUID)
+	}
+
+	t.Cleanup(func() {
+		db := setupRawDB(t)
+		db.Exec(context.Background(), "DELETE FROM geyser_players WHERE xuid = $1", otherXUID)
+	})
+}
+
 func TestStore_UpsertGeyserSkin_Insert(t *testing.T) {
 	s := setupStore(t)
 	if err := s.UpsertGeyserPlayer(testGeyserPlayer); err != nil {

@@ -601,6 +601,21 @@ func TestHandler_GetGeyserXUIDHandler_InternalError(t *testing.T) {
 	}
 }
 
+func TestHandler_GetGeyserXUIDHandler_InvalidGamertag(t *testing.T) {
+	svc := &mockService{err: ErrInvalidGeyserRequest}
+	handler := GetGeyserXUIDHandler(svc)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/geyser/xuid/this-gamertag-is-way-too-long", nil)
+	r.SetPathValue("gamertag", "this-gamertag-is-way-too-long")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
 func TestHandler_GetGeyserSkinHandler_OK(t *testing.T) {
 	svc := &mockService{geyserSkin: &GeyserSkin{
 		Hash:      "abc123",
@@ -671,5 +686,20 @@ func TestHandler_GetGeyserSkinHandler_InternalError(t *testing.T) {
 
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("expected 500, got %d", w.Code)
+	}
+}
+
+func TestHandler_GetGeyserSkinHandler_UpstreamRejectedXUID(t *testing.T) {
+	svc := &mockService{err: ErrInvalidGeyserRequest}
+	handler := GetGeyserSkinHandler(svc)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/geyser/skin/2535457445285308", nil)
+	r.SetPathValue("xuid", "2535457445285308")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
 	}
 }

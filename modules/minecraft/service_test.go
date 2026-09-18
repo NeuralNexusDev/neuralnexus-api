@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -831,6 +833,64 @@ func TestService_GetGeyserXUID_OK(t *testing.T) {
 	}
 }
 
+// TestService_GetGeyserXUID_EscapesGamertagSpecialCharacters guards against a
+// gamertag being concatenated raw into the upstream URL. Real Xbox gamertags
+// can contain spaces and a "#dddd" discriminator suffix; unescaped, '#'
+// truncates the request at the fragment and '?'/'/' inject extra query/path
+// structure into the request actually sent to Geyser.
+func TestService_GetGeyserXUID_EscapesGamertagSpecialCharacters(t *testing.T) {
+	gamertags := []string{"Foo#1234", "Foo?bar=1", "Foo/Bar", "Foo%1234", "Foo Bar", "Notch"}
+	for _, gamertag := range gamertags {
+		t.Run(gamertag, func(t *testing.T) {
+			var gotSegment string
+			geyser := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// Recover exactly the escaped last path segment as sent on
+				// the wire — r.URL.Path is pre-decoded by net/http and would
+				// misreport an escaped '/' as an extra path segment.
+				escaped := r.URL.EscapedPath()
+				seg := escaped[strings.LastIndex(escaped, "/")+1:]
+				unescaped, err := url.PathUnescape(seg)
+				if err != nil {
+					t.Fatalf("failed to unescape segment %q: %v", seg, err)
+				}
+				gotSegment = unescaped
+				w.WriteHeader(http.StatusOK)
+				json.NewEncoder(w).Encode(map[string]int64{"xuid": 1})
+			}))
+			defer geyser.Close()
+
+			store := &mockStore{}
+			svc := NewService(store, geyser.Client(), "http://localhost/texture/")
+			s := svc.(*service)
+			s.geyserXUIDLookup = geyser.URL + "/"
+
+			if _, err := svc.GetGeyserXUID(gamertag); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if gotSegment != gamertag {
+				t.Errorf("expected upstream request for gamertag %q, got %q", gamertag, gotSegment)
+			}
+		})
+	}
+}
+
+func TestService_GetGeyserXUID_InvalidGamertag(t *testing.T) {
+	geyser := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	defer geyser.Close()
+
+	store := &mockStore{}
+	svc := NewService(store, geyser.Client(), "http://localhost/texture/")
+	s := svc.(*service)
+	s.geyserXUIDLookup = geyser.URL + "/"
+
+	_, err := svc.GetGeyserXUID("this-gamertag-is-way-too-long-for-xbox")
+	if !errors.Is(err, ErrInvalidGeyserRequest) {
+		t.Errorf("expected ErrInvalidGeyserRequest, got %v", err)
+	}
+}
+
 func TestService_GetGeyserXUID_NotFound(t *testing.T) {
 	// Geyser's API has no 404 for this endpoint: an unknown gamertag comes
 	// back as 200 with an empty object.
@@ -1011,6 +1071,23 @@ func TestService_GetGeyserSkin_UpstreamError(t *testing.T) {
 	_, err := svc.GetGeyserSkin(2535457445285308)
 	if err == nil {
 		t.Fatal("expected an error for a non-200 upstream response")
+	}
+}
+
+func TestService_GetGeyserSkin_InvalidXUID(t *testing.T) {
+	geyser := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	defer geyser.Close()
+
+	store := &mockStore{}
+	svc := NewService(store, geyser.Client(), "http://localhost/texture/")
+	s := svc.(*service)
+	s.geyserSkinLookup = geyser.URL + "/"
+
+	_, err := svc.GetGeyserSkin(2535457445285308)
+	if !errors.Is(err, ErrInvalidGeyserRequest) {
+		t.Errorf("expected ErrInvalidGeyserRequest, got %v", err)
 	}
 }
 

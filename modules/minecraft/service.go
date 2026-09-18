@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -397,15 +398,23 @@ func (s *service) GetGeyserXUID(gamertag string) (*GeyserPlayer, error) {
 		return dbPlayer, nil
 	}
 
-	resp, err := s.client.Get(s.geyserXUIDLookup + gamertag)
+	// PathEscape, not raw concatenation: a gamertag can legitimately contain
+	// spaces, and Xbox gamertags commonly carry a "#dddd" discriminator
+	// suffix — unescaped, '#' truncates the request at the fragment and '?'
+	// or '/' inject extra query/path structure into the upstream request.
+	resp, err := s.client.Get(s.geyserXUIDLookup + url.PathEscape(gamertag))
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	// Geyser's API has no 404 for this endpoint: an unknown gamertag comes
-	// back as 200 with an empty object. 503 means Xbox Live itself is
-	// rate-limited or not configured on Geyser's end.
+	// 400 means Geyser rejected the gamertag itself (empty or >16 chars).
+	if resp.StatusCode == http.StatusBadRequest {
+		return nil, ErrInvalidGeyserRequest
+	}
+	// Otherwise Geyser's API has no 404 for this endpoint: an unknown
+	// gamertag comes back as 200 with an empty object. 503 means Xbox Live
+	// itself is rate-limited or not configured on Geyser's end.
 	if resp.StatusCode != http.StatusOK {
 		return nil, errors.New("geyser API error: " + resp.Status)
 	}
@@ -449,7 +458,7 @@ func (s *service) GetGeyserSkin(xuid int64) (*GeyserSkin, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusBadRequest {
-		return nil, errors.New("invalid xuid: " + strconv.FormatInt(xuid, 10))
+		return nil, ErrInvalidGeyserRequest
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, errors.New("geyser API error: " + resp.Status)

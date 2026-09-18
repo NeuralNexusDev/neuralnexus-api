@@ -157,6 +157,10 @@ func GetGeyserXUIDHandler(s Service) http.HandlerFunc {
 				responses.NotFound(w, r, ErrPlayerNotFound.Error())
 				return
 			}
+			if errors.Is(err, ErrInvalidGeyserRequest) {
+				responses.BadRequest(w, r, "Invalid gamertag")
+				return
+			}
 			log.Println("Failed to get Geyser XUID:\n\t", err)
 			responses.InternalServerError(w, r, "Failed to get Geyser XUID")
 			return
@@ -178,6 +182,10 @@ func GetGeyserSkinHandler(s Service) http.HandlerFunc {
 		if err != nil {
 			if errors.Is(err, ErrSkinNotFound) {
 				responses.NoContent(w, r)
+				return
+			}
+			if errors.Is(err, ErrInvalidGeyserRequest) {
+				responses.BadRequest(w, r, "Invalid xuid")
 				return
 			}
 			log.Println("Failed to get Geyser skin:\n\t", err)

@@ -224,6 +224,12 @@ func (p *GeyserPlayer) IsStale() bool {
 // skin API returns 200 with an empty object rather than a 404 for this case)
 var ErrSkinNotFound = errors.New("skin not found")
 
+// ErrInvalidGeyserRequest - Geyser's API rejected the request as malformed
+// (an invalid gamertag on the xuid-lookup endpoint, or an invalid xuid on the
+// skin endpoint) — distinct from ErrPlayerNotFound/ErrSkinNotFound, which
+// cover a well-formed request that simply has no match.
+var ErrInvalidGeyserRequest = errors.New("invalid request")
+
 // GeyserSkin - a Bedrock player's most recently converted skin, as returned by
 // Geyser's skin API. Shaped like a Java player's textures property
 // (hash/value/signature), but keyed by XUID instead of UUID and carrying
