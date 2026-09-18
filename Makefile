@@ -23,6 +23,14 @@ update:
 TEST_POSTGRES_URL ?= postgres://neuralnexus:neuralnexus@localhost:55432/neuralnexus_test
 TEST_REDIS_URL ?= redis://localhost:56379
 
+# Not real secrets - fixed fixture values the auth package's init() requires
+# to be non-empty (see modules/auth/types.go and modules/auth/session.go).
+# Overridable, but any non-empty value works since nothing here is deployed.
+TEST_JWT_SECRET ?= test-jwt-secret
+TEST_PEPPER ?= test-pepper
+TEST_NN_SITE_URL ?= https://neuralnexus.test
+TEST_NN_API_URL ?= https://api.neuralnexus.test
+
 test-env-up:
 	docker compose -f docker-compose.test.yml up -d --wait
 
@@ -36,7 +44,7 @@ vet:
 	go vet ./...
 
 test:
-	go test ./...
+	JWT_SECRET=$(TEST_JWT_SECRET) PEPPER=$(TEST_PEPPER) NN_SITE_URL=$(TEST_NN_SITE_URL) NN_API_URL=$(TEST_NN_API_URL) go test ./...
 
 # Brings up the test containers, vets and tests against them, then tears
 # them down regardless of outcome. Use test-env-up/test-env-down directly
