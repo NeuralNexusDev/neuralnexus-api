@@ -140,7 +140,13 @@ func (s *sessionService) DeleteSession(id string) error {
 	if err != nil {
 		return err
 	}
-	s.store.DeleteSessionFromCache(id)
+	// Unlike AddSessionToCache, a failure here can't be left fail-open:
+	// GetSession trusts a cache hit without ever consulting the DB, so a
+	// session that failed to clear from cache would keep validating from
+	// there - silently undoing revocation - until it naturally expires.
+	if err := s.store.DeleteSessionFromCache(id); err != nil {
+		return fmt.Errorf("session deleted from db but failed to evict from cache: %w", err)
+	}
 	return nil
 }
 
