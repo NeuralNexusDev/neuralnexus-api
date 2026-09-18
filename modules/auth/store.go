@@ -350,6 +350,17 @@ type LinkAccountStore interface {
 // treating this as a hard failure.
 var ErrAlreadyLinked = errors.New("platform account already linked")
 
+// ErrDuplicateLinkedAccount is returned by GetLinkedAccountByPlatformID
+// when more than one linked_accounts row matches the same (platform,
+// platform_id) pair. Until linked_accounts_platform_unique (see the
+// schema comment above) is applied to the live database, that pair isn't
+// actually guaranteed unique, so this can happen. Unlike ErrAlreadyLinked,
+// there's no safe automatic recovery here - which row is "correct" isn't
+// knowable from this query alone (Postgres doesn't guarantee an order
+// without ORDER BY), so this fails closed instead of guessing and
+// silently routing someone to the wrong account. Needs a manual data fix.
+var ErrDuplicateLinkedAccount = errors.New("multiple linked accounts found for platform ID")
+
 // AddLinkedAccountToDB adds a linked account to the database
 func (s *store) AddLinkedAccountToDB(la *LinkedAccount) error {
 	_, err := s.db.Exec(context.Background(), "INSERT INTO linked_accounts (user_id, platform, platform_username, platform_id, data) VALUES ($1, $2, $3, $4, $5)", la.UserID, la.Platform, la.PlatformUsername, la.PlatformID, la.Data)
@@ -383,6 +394,9 @@ func (s *store) GetLinkedAccountByPlatformID(platform Platform, platformID strin
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
+		}
+		if errors.Is(err, pgx.ErrTooManyRows) {
+			return nil, ErrDuplicateLinkedAccount
 		}
 		return nil, err
 	}
