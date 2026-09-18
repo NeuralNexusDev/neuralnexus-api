@@ -97,10 +97,6 @@ func (s *sessionService) AddSession(session *Session) error {
 	if err != nil {
 		return err
 	}
-	// Caching is a best-effort accelerator, not the source of truth (the DB
-	// write above already succeeded), so a cache failure here doesn't fail
-	// the request - it just costs a DB round trip on the next read. Log it
-	// so a struggling/unreachable cache is still visible.
 	if err := s.store.AddSessionToCache(session); err != nil {
 		log.Println("failed to add session to cache:\n\t", err)
 	}
@@ -140,10 +136,7 @@ func (s *sessionService) DeleteSession(id string) error {
 	if err != nil {
 		return err
 	}
-	// Unlike AddSessionToCache, a failure here can't be left fail-open:
-	// GetSession trusts a cache hit without ever consulting the DB, so a
-	// session that failed to clear from cache would keep validating from
-	// there - silently undoing revocation - until it naturally expires.
+	// Unlike AddSessionToCache, this can't be fail-open: a stale cache entry would keep a revoked session valid until it expires.
 	if err := s.store.DeleteSessionFromCache(id); err != nil {
 		return fmt.Errorf("session deleted from db but failed to evict from cache: %w", err)
 	}

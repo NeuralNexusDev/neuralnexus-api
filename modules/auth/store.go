@@ -263,11 +263,8 @@ func (s *store) AddSessionToCache(session *Session) error {
 		return err
 	}
 
-	// ExpiresAt == 0 means the session never expires (see Session.IsValid),
-	// which Redis represents as a TTL of 0 (no expiration). A non-zero
-	// ExpiresAt that has already passed would otherwise produce a negative
-	// duration, which Redis rejects on SET; skip caching it instead since
-	// an already-expired session has nothing useful to serve from cache.
+	// ExpiresAt == 0 means never-expires (TTL 0); a past ExpiresAt would
+	// otherwise yield a negative TTL, which Redis rejects, so skip caching it.
 	var ttl time.Duration
 	if session.ExpiresAt != 0 {
 		ttl = time.Until(time.Unix(session.ExpiresAt, 0))
@@ -457,12 +454,8 @@ func (s *store) IncrementRateLimit(key string) error {
 	if err != nil {
 		return err
 	}
-	// Only set the window's expiry if this increment created the key; an
-	// existing key's TTL must be left alone so the window doesn't reset on
-	// every request. Incr+ExpireNX are each atomic individually, and the
-	// key can never end up with no TTL once this succeeds, unlike the
-	// previous TTL-then-Expire sequence which could observe a fresh key's
-	// missing TTL as -2 and delete it immediately after creating it.
+	// Only set the TTL if this increment created the key, so an existing
+	// key's window doesn't reset on every request.
 	_, err = s.rdb.ExpireNX(context.Background(), rediskey, time.Minute).Result()
 	if err != nil {
 		return err
