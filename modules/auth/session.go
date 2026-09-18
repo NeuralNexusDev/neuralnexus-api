@@ -25,6 +25,12 @@ func init() {
 	if len(JWT_SECRET) == 0 {
 		log.Fatal("JWT_SECRET environment variable must be set")
 	}
+	// If left unset, validAudiences would contain empty strings, which would
+	// make ReadJWT's audience check accept a token with an empty-string aud
+	// entry - defeating the check silently rather than failing loudly here.
+	if NN_SITE_URL == "" || NN_API_URL == "" {
+		log.Fatal("NN_SITE_URL and NN_API_URL environment variables must be set")
+	}
 }
 
 // Session struct
@@ -151,10 +157,18 @@ type SessionClaims struct {
 
 // CreateJWT creates a JWT for a session
 func (s *sessionService) CreateJWT(session *Session) (string, error) {
+	// ExpiresAt == 0 means the session never expires (see Session.IsValid and
+	// store.AddSessionToCache). Encoding that literally would set the JWT's
+	// exp claim to 1970-01-01, which ReadJWT would immediately reject as
+	// expired, so omit the exp claim entirely in that case instead.
+	var expiresAt *jwt.NumericDate
+	if session.ExpiresAt != 0 {
+		expiresAt = jwt.NewNumericDate(time.Unix(session.ExpiresAt, 0))
+	}
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, SessionClaims{
 		session.Permissions,
 		jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Unix(session.ExpiresAt, 0)),
+			ExpiresAt: expiresAt,
 			IssuedAt:  jwt.NewNumericDate(time.Unix(session.IssuedAt, 0)),
 			Issuer:    NN_API_URL,
 			Subject:   session.UserID,
@@ -178,8 +192,17 @@ func (s *sessionService) ReadJWT(tokenStr string) (*Session, error) {
 		return nil, errors.New("invalid token claims")
 	}
 
-	// Validate audience
+	// Validate audience: an empty/missing aud claim must fail closed rather
+	// than vacuously pass the loop below with no entries to check.
+	if len(claims.Audience) == 0 {
+		return nil, errors.New("missing audience")
+	}
 	for _, aud := range claims.Audience {
+		// An empty entry must never validate, even if validAudiences itself
+		// were ever misconfigured to contain one (e.g. an unset URL env var).
+		if aud == "" {
+			return nil, errors.New("empty audience entry")
+		}
 		valid := false
 		for _, validAud := range validAudiences {
 			if aud == validAud {
