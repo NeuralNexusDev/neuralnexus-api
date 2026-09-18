@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -118,6 +119,161 @@ func (m *mockLinkAccountStore) GetLinkedAccountByPlatformName(auth.Platform, str
 
 func (m *mockLinkAccountStore) GetLinkedAccountByUserID(string, auth.Platform) (*auth.LinkedAccount, error) {
 	return nil, auth.ErrNotFound
+}
+
+// concurrentAccountService is a goroutine-safe variant of mockAccountService.
+// The plain-map mock above is intentionally unsynchronized (it's only ever
+// driven sequentially by the other tests); reusing it under concurrent
+// goroutines would trip -race on the test double itself rather than on
+// resolveOrCreateAccountForPlatformUser.
+type concurrentAccountService struct {
+	mu       sync.Mutex
+	accounts map[string]*auth.Account
+	deleted  []string
+}
+
+var _ auth.AccountService = (*concurrentAccountService)(nil)
+
+func newConcurrentAccountService() *concurrentAccountService {
+	return &concurrentAccountService{accounts: make(map[string]*auth.Account)}
+}
+
+func (m *concurrentAccountService) AddAccount(a *auth.Account) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.accounts[a.UserID] = a
+	return nil
+}
+
+func (m *concurrentAccountService) GetAccountByID(userID string) (*auth.Account, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if a, ok := m.accounts[userID]; ok {
+		return a, nil
+	}
+	return nil, auth.ErrNotFound
+}
+
+func (m *concurrentAccountService) GetAccountByUsername(string) (*auth.Account, error) {
+	return nil, auth.ErrNotFound
+}
+
+func (m *concurrentAccountService) GetAccountByEmail(string) (*auth.Account, error) {
+	return nil, auth.ErrNotFound
+}
+
+func (m *concurrentAccountService) UpdateAccount(a *auth.Account) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.accounts[a.UserID] = a
+	return nil
+}
+
+func (m *concurrentAccountService) DeleteAccount(userID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.accounts, userID)
+	m.deleted = append(m.deleted, userID)
+	return nil
+}
+
+func (m *concurrentAccountService) remaining() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.accounts)
+}
+
+// concurrentLinkAccountStore enforces a unique-constraint-like guarantee on
+// (platform, platformID) atomically under a mutex, mirroring the real
+// Postgres unique index this logic depends on for correctness.
+type concurrentLinkAccountStore struct {
+	mu    sync.Mutex
+	byKey map[string]*auth.LinkedAccount
+}
+
+var _ auth.LinkAccountStore = (*concurrentLinkAccountStore)(nil)
+
+func newConcurrentLinkAccountStore() *concurrentLinkAccountStore {
+	return &concurrentLinkAccountStore{byKey: make(map[string]*auth.LinkedAccount)}
+}
+
+func linkKey(platform auth.Platform, platformID string) string {
+	return string(platform) + ":" + platformID
+}
+
+func (m *concurrentLinkAccountStore) AddLinkedAccountToDB(la *auth.LinkedAccount) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := linkKey(la.Platform, la.PlatformID)
+	if _, exists := m.byKey[key]; exists {
+		return auth.ErrAlreadyLinked
+	}
+	m.byKey[key] = la
+	return nil
+}
+
+func (m *concurrentLinkAccountStore) UpdateLinkedAccount(*auth.LinkedAccount) error { return nil }
+
+func (m *concurrentLinkAccountStore) GetLinkedAccountByPlatformID(platform auth.Platform, platformID string) (*auth.LinkedAccount, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if la, ok := m.byKey[linkKey(platform, platformID)]; ok {
+		return la, nil
+	}
+	return nil, auth.ErrNotFound
+}
+
+func (m *concurrentLinkAccountStore) GetLinkedAccountByPlatformName(auth.Platform, string) (*auth.LinkedAccount, error) {
+	return nil, auth.ErrNotFound
+}
+
+func (m *concurrentLinkAccountStore) GetLinkedAccountByUserID(string, auth.Platform) (*auth.LinkedAccount, error) {
+	return nil, auth.ErrNotFound
+}
+
+// TestResolveOrCreateAccountForPlatformUserConcurrentRaceExactlyOneWinner
+// drives many goroutines through resolveOrCreateAccountForPlatformUser at
+// once for the *same* platform identity, mirroring two clients starting an
+// OAuth login for the same external account at nearly the same time. Unlike
+// the sequential race-simulation test above (which scripts a single retry
+// via canned mock return values), this exercises the real
+// AddLinkedAccountToDB/DeleteAccount/GetLinkedAccountByPlatformID call
+// sequence under actual goroutine contention against a store that enforces
+// the uniqueness guarantee the real Postgres constraint provides.
+func TestResolveOrCreateAccountForPlatformUserConcurrentRaceExactlyOneWinner(t *testing.T) {
+	const n = 20
+	as := newConcurrentAccountService()
+	als := newConcurrentLinkAccountStore()
+	user := &fakePlatformData{id: "pid-race", username: "racer"}
+
+	var wg sync.WaitGroup
+	accounts := make([]*auth.Account, n)
+	errs := make([]error, n)
+	wg.Add(n)
+	for i := 0; i < n; i++ {
+		go func(i int) {
+			defer wg.Done()
+			accounts[i], errs[i] = resolveOrCreateAccountForPlatformUser(as, als, auth.PlatformDiscord, user)
+		}(i)
+	}
+	wg.Wait()
+
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("goroutine %d: resolveOrCreateAccountForPlatformUser returned error: %v", i, err)
+		}
+	}
+
+	winner := accounts[0].UserID
+	for i, a := range accounts {
+		if a.UserID != winner {
+			t.Errorf("goroutine %d returned a different account (%q) than goroutine 0 (%q); all callers linking the same platform identity concurrently must converge on one account", i, a.UserID, winner)
+		}
+	}
+
+	if got := as.remaining(); got != 1 {
+		t.Errorf("expected exactly one account to survive the race (all losing placeholders cleaned up), got %d", got)
+	}
 }
 
 // -------------- resolveOrCreateAccountForPlatformUser tests --------------
