@@ -157,38 +157,40 @@ func (s *sessionService) ReadJWT(tokenStr string) (*Session, error) {
 		return nil, err
 	}
 
-	if claims, ok := token.Claims.(*SessionClaims); ok {
-		// Validate audience
-		for _, aud := range claims.Audience {
-			valid := false
-			for _, validAud := range validAudiences {
-				if aud == validAud {
-					valid = true
-					break
-				}
-			}
-			if !valid {
-				return nil, fmt.Errorf("invalid audience: %s", aud)
-			}
-		}
-
-		// Populate session
-		session := &Session{
-			ID:          claims.ID,
-			UserID:      claims.Subject,
-			Permissions: claims.Scope,
-			IssuedAt:    claims.IssuedAt.Unix(),
-			LastUsedAt:  time.Now().Unix(),
-			ExpiresAt:   claims.ExpiresAt.Unix(),
-		}
-
-		err = s.UpdateSession(session)
-		if err != nil {
-			return nil, err
-		}
-
-		return session, nil
-	} else {
+	claims, ok := token.Claims.(*SessionClaims)
+	if !ok {
 		return nil, errors.New("invalid token claims")
 	}
+
+	// Validate audience
+	for _, aud := range claims.Audience {
+		valid := false
+		for _, validAud := range validAudiences {
+			if aud == validAud {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			return nil, fmt.Errorf("invalid audience: %s", aud)
+		}
+	}
+
+	// The session must still exist in the store; a deleted/logged-out
+	// session must not be revivable just because its JWT hasn't expired yet.
+	session, err := s.GetSession(claims.ID)
+	if err != nil {
+		return nil, fmt.Errorf("session not found: %w", err)
+	}
+	if session.UserID != claims.Subject {
+		return nil, errors.New("session does not match token subject")
+	}
+
+	session.LastUsedAt = time.Now().Unix()
+	err = s.UpdateSession(session)
+	if err != nil {
+		return nil, err
+	}
+
+	return session, nil
 }

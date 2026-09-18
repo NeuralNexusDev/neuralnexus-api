@@ -124,13 +124,7 @@ func SessionMiddleware(service auth.SessionService) Middleware {
 					return
 				}
 
-				err = service.UpdateSession(session)
-				if err != nil {
-					responses.InternalServerError(w, r, "Error updating session")
-					LogRequest(r.Context(), "Error updating session:\n\t", err.Error())
-					return
-				}
-
+				// ReadJWT already persisted the refreshed LastUsedAt.
 				ctx := r.Context()
 				ctx = context.WithValue(ctx, SessionKey, session)
 				r = r.WithContext(ctx)

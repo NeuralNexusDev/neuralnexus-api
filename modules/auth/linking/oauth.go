@@ -7,7 +7,6 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/twitch"
 	"golang.org/x/oauth2"
-	"log"
 	"net/http"
 	"time"
 )
@@ -95,14 +94,6 @@ func RefreshToken(config *oauth2.Config, token *oauth2.Token) (*auth.OAuthToken,
 	return scopedToken, nil
 }
 
-// DeferStoreSession adds a session to the session service and logs an error if it fails
-func DeferStoreSession(ss auth.SessionService, session *auth.Session) {
-	err := ss.AddSession(session)
-	if err != nil {
-		log.Println("failed to add session:\n\t", err)
-	}
-}
-
 // ProcessOAuthLogin processes the OAuth2 code and returns a session
 func ProcessOAuthLogin(as auth.AccountService, las auth.LinkAccountStore, ss auth.SessionService, code string, state *OAuthState) (*auth.Session, error) {
 	var err error
@@ -159,7 +150,9 @@ func ProcessOAuthLogin(as auth.AccountService, las auth.LinkAccountStore, ss aut
 		return nil, err
 	}
 
-	defer DeferStoreSession(ss, session)
+	if err = ss.AddSession(session); err != nil {
+		return nil, err
+	}
 	return session, nil
 }
 
@@ -199,7 +192,7 @@ func ProcessOAuthLink(r *http.Request, las auth.LinkAccountStore, code string, s
 	if !ok || session == nil {
 		return nil, errors.New("session not found")
 	}
-	if session.IsValid() {
+	if !session.IsValid() {
 		return nil, errors.New("session expired")
 	}
 
