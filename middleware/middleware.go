@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -86,7 +87,19 @@ func IPMiddleware(next http.Handler) http.Handler {
 		if cfConnectingIP != "" {
 			r.RemoteAddr = cfConnectingIP
 		} else if forwardedFor != "" {
-			r.RemoteAddr = forwardedFor
+			// X-Forwarded-For can be a comma-separated proxy chain
+			// ("client, proxy1, proxy2, ..."); per RFC 7239/XFF convention
+			// the leftmost entry is the original client, so use only that -
+			// otherwise a multi-hop value falls through to RateLimitMiddleware
+			// and collides every hop into one rate-limit key. If that leftmost
+			// entry is empty/whitespace (a malformed or leading-comma header),
+			// leave RemoteAddr as the real socket-level address rather than
+			// overwriting it with "", which would collapse unrelated clients
+			// onto the same empty-string rate-limit bucket.
+			clientIP, _, _ := strings.Cut(forwardedFor, ",")
+			if clientIP = strings.TrimSpace(clientIP); clientIP != "" {
+				r.RemoteAddr = clientIP
+			}
 		}
 
 		ctx := r.Context()
@@ -153,8 +166,18 @@ func RateLimitMiddleware(service auth.RateLimitService, prefix string, sessionLi
 					return
 				}
 			} else {
-				ip := strings.Split(r.RemoteAddr, ":")[0]
-				err := service.IncrRateLimit(prefix + ":" + ip)
+				// net.SplitHostPort (not strings.Split on ":") because an
+				// IPv6 address contains colons of its own - splitting on the
+				// first one truncates it to its first hextet, colliding
+				// unrelated IPv6 clients into the same rate-limit bucket.
+				// RemoteAddr may also arrive with no port at all (IPMiddleware
+				// can set it to a bare IP from a header), so fall back to the
+				// raw value when there's nothing to split.
+				ip, _, err := net.SplitHostPort(r.RemoteAddr)
+				if err != nil {
+					ip = r.RemoteAddr
+				}
+				err = service.IncrRateLimit(prefix + ":" + ip)
 				if err != nil {
 					LogRequest(r.Context(), "Error incrementing rate limit:\n\t", err.Error())
 					return
