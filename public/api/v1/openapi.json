@@ -716,6 +716,38 @@
                 }
             }
         },
+        "/mc/geyser/skin/{xuid}": {
+            "get": {
+                "summary": "Get a Bedrock player's most recently converted skin by XUID",
+                "description": "Looks up a Bedrock player's most recently converted skin, DB-cache-first (24h staleness) with a fallback to Geyser's skin API on a miss or stale entry. Only the skin's metadata (hash/value/signature/texture_id) is archived; the raw image bytes are not fetched or stored in S3. Returns 204 (not 404) when the player has no converted skin yet, matching Geyser's own API (200 with an empty object) rather than treating it as a client error.",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XUIDSlug"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GeyserSkin"
+                                }
+                            }
+                        }
+                    },
+                    "204": {
+                        "$ref": "#/components/responses/204NoContent"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
         "/mc/geyser/xuid/{gamertag}": {
             "get": {
                 "summary": "Look up a Bedrock player's XUID and derived UUID by gamertag",
@@ -2197,6 +2229,38 @@
                         "description": "Synthesized from the XUID, not a real Mojang UUID."
                     }
                 }
+            },
+            "GeyserSkin": {
+                "type": "object",
+                "description": "A Bedrock player's most recently converted skin, as returned by Geyser's skin API. Shaped like a Java player's textures property (hash/value/signature), but carries is_steve instead of a slim/classic model string, and Geyser has no cape equivalent.",
+                "required": [
+                    "hash",
+                    "is_steve",
+                    "texture_id",
+                    "value"
+                ],
+                "properties": {
+                    "hash": {
+                        "type": "string",
+                        "description": "Hash of the skin bytes."
+                    },
+                    "is_steve": {
+                        "type": "boolean",
+                        "description": "True for the classic (Steve) model, false for slim (Alex)."
+                    },
+                    "signature": {
+                        "type": "string",
+                        "description": "The signature of the skin data used by Minecraft."
+                    },
+                    "texture_id": {
+                        "type": "string",
+                        "description": "The texture ID used by Minecraft."
+                    },
+                    "value": {
+                        "type": "string",
+                        "description": "Base64-encoded skin property value, same shape as a Mojang textures property value."
+                    }
+                }
             }
         },
         "parameters": {
@@ -2391,6 +2455,16 @@
                     "type": "string"
                 },
                 "description": "Xbox gamertag of a Geyser Bedrock player."
+            },
+            "XUIDSlug": {
+                "name": "xuid",
+                "in": "path",
+                "required": true,
+                "schema": {
+                    "type": "integer",
+                    "format": "int64"
+                },
+                "description": "A Bedrock player's Xbox XUID."
             }
         },
         "securitySchemes": {

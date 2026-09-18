@@ -26,6 +26,7 @@ type mockStore struct {
 	putErr                error
 	upsertedTextureHashes []string
 	geyserPlayers         map[string]*GeyserPlayer
+	geyserSkins           map[int64]*GeyserSkin
 }
 
 func (m *mockStore) GetPlayerByUUID(id string) (*Player, error) {
@@ -134,6 +135,21 @@ func (m *mockStore) UpsertGeyserPlayer(player *GeyserPlayer) error {
 		m.geyserPlayers = make(map[string]*GeyserPlayer)
 	}
 	m.geyserPlayers[player.Gamertag] = player
+	return nil
+}
+
+func (m *mockStore) GetGeyserSkin(xuid int64) (*GeyserSkin, error) {
+	if s, ok := m.geyserSkins[xuid]; ok {
+		return s, nil
+	}
+	return nil, ErrSkinNotFound
+}
+
+func (m *mockStore) UpsertGeyserSkin(xuid int64, skin *GeyserSkin) error {
+	if m.geyserSkins == nil {
+		m.geyserSkins = make(map[int64]*GeyserSkin)
+	}
+	m.geyserSkins[xuid] = skin
 	return nil
 }
 
@@ -813,8 +829,11 @@ func TestService_GetGeyserXUID_OK(t *testing.T) {
 }
 
 func TestService_GetGeyserXUID_NotFound(t *testing.T) {
+	// Geyser's API has no 404 for this endpoint: an unknown gamertag comes
+	// back as 200 with an empty object.
 	geyser := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("{}"))
 	}))
 	defer geyser.Close()
 
@@ -922,5 +941,143 @@ func TestXUIDToUUID(t *testing.T) {
 	want := "00000000-0000-0000-0009-01fc305e8dbc"
 	if got != want {
 		t.Errorf("expected %s, got %s", want, got)
+	}
+}
+
+func TestService_GetGeyserSkin_OK(t *testing.T) {
+	geyser := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/2535457445285308" {
+			t.Errorf("expected xuid in path, got %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(GeyserSkin{
+			Hash:      "abc123",
+			IsSteve:   true,
+			TextureID: "def456",
+			Value:     "base64value",
+		})
+	}))
+	defer geyser.Close()
+
+	store := &mockStore{}
+	svc := NewService(store, geyser.Client(), "http://localhost/texture/")
+	s := svc.(*service)
+	s.geyserSkinLookup = geyser.URL + "/"
+
+	skin, err := svc.GetGeyserSkin(2535457445285308)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if skin.Hash != "abc123" {
+		t.Errorf("expected abc123, got %s", skin.Hash)
+	}
+	if !skin.IsSteve {
+		t.Error("expected IsSteve to be true")
+	}
+}
+
+func TestService_GetGeyserSkin_NotFound(t *testing.T) {
+	geyser := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("{}"))
+	}))
+	defer geyser.Close()
+
+	store := &mockStore{}
+	svc := NewService(store, geyser.Client(), "http://localhost/texture/")
+	s := svc.(*service)
+	s.geyserSkinLookup = geyser.URL + "/"
+
+	_, err := svc.GetGeyserSkin(2535457445285308)
+	if !errors.Is(err, ErrSkinNotFound) {
+		t.Errorf("expected ErrSkinNotFound, got %v", err)
+	}
+}
+
+func TestService_GetGeyserSkin_UpstreamError(t *testing.T) {
+	geyser := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer geyser.Close()
+
+	store := &mockStore{}
+	svc := NewService(store, geyser.Client(), "http://localhost/texture/")
+	s := svc.(*service)
+	s.geyserSkinLookup = geyser.URL + "/"
+
+	_, err := svc.GetGeyserSkin(2535457445285308)
+	if err == nil {
+		t.Fatal("expected an error for a non-200 upstream response")
+	}
+}
+
+func TestService_GetGeyserSkin_DBCacheHit(t *testing.T) {
+	store := &mockStore{
+		geyserSkins: map[int64]*GeyserSkin{
+			2535457445285308: {Hash: "cached-hash", IsSteve: true, LastSeen: time.Now().UnixMilli()},
+		},
+	}
+	// No mock Geyser server: a network call here would fail the test.
+	svc := NewService(store, nil, "http://localhost/texture/")
+
+	skin, err := svc.GetGeyserSkin(2535457445285308)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if skin.Hash != "cached-hash" {
+		t.Errorf("expected cached-hash, got %s", skin.Hash)
+	}
+}
+
+func TestService_GetGeyserSkin_StaleDBEntry_RefetchesFromGeyser(t *testing.T) {
+	var geyserHits int
+	geyser := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		geyserHits++
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(GeyserSkin{Hash: "fresh-hash", TextureID: "id", Value: "val"})
+	}))
+	defer geyser.Close()
+
+	store := &mockStore{
+		geyserSkins: map[int64]*GeyserSkin{
+			2535457445285308: {
+				Hash:     "stale-hash",
+				LastSeen: time.Now().Add(-48 * time.Hour).UnixMilli(),
+			},
+		},
+	}
+	svc := NewService(store, geyser.Client(), "http://localhost/texture/")
+	s := svc.(*service)
+	s.geyserSkinLookup = geyser.URL + "/"
+
+	skin, err := svc.GetGeyserSkin(2535457445285308)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if geyserHits != 1 {
+		t.Errorf("expected a refetch from Geyser for a stale DB entry, got %d hits", geyserHits)
+	}
+	if skin.Hash != "fresh-hash" {
+		t.Errorf("expected fresh-hash, got %s", skin.Hash)
+	}
+}
+
+func TestService_GetGeyserSkin_UpsertsOnFetch(t *testing.T) {
+	geyser := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(GeyserSkin{Hash: "abc123", TextureID: "id", Value: "val"})
+	}))
+	defer geyser.Close()
+
+	store := &mockStore{}
+	svc := NewService(store, geyser.Client(), "http://localhost/texture/")
+	s := svc.(*service)
+	s.geyserSkinLookup = geyser.URL + "/"
+
+	if _, err := svc.GetGeyserSkin(2535457445285308); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := store.geyserSkins[2535457445285308]; !ok {
+		t.Error("expected the fetched skin to be persisted")
 	}
 }

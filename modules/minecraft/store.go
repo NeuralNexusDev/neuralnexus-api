@@ -53,6 +53,9 @@ type Store interface {
 
 	GetGeyserPlayerByGamertag(gamertag string) (*GeyserPlayer, error)
 	UpsertGeyserPlayer(player *GeyserPlayer) error
+
+	GetGeyserSkin(xuid int64) (*GeyserSkin, error)
+	UpsertGeyserSkin(xuid int64, skin *GeyserSkin) error
 }
 
 // store - Minecraft player store implementation
@@ -348,6 +351,42 @@ func (s *store) UpsertGeyserPlayer(player *GeyserPlayer) error {
 			last_seen = EXCLUDED.last_seen
 		`,
 		player.XUID, player.Gamertag, now,
+	)
+	return err
+}
+
+// GetGeyserSkin gets a Bedrock player's most recently seen converted skin from the database
+func (s *store) GetGeyserSkin(xuid int64) (*GeyserSkin, error) {
+	rows, err := s.db.Query(context.Background(), `
+		SELECT hash, is_steve, COALESCE(signature, '') AS signature, texture_id, value, first_seen, last_seen
+		FROM geyser_player_textures
+		WHERE xuid = $1
+		ORDER BY last_seen DESC
+		LIMIT 1`, xuid)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[GeyserSkin])
+}
+
+// UpsertGeyserSkin upserts a Bedrock player's converted skin into the database
+func (s *store) UpsertGeyserSkin(xuid int64, skin *GeyserSkin) error {
+	now := time.Now().UnixMilli()
+	var signature *string
+	if skin.Signature != "" {
+		signature = &skin.Signature
+	}
+	_, err := s.db.Exec(context.Background(), `
+		INSERT INTO geyser_player_textures (xuid, hash, is_steve, signature, texture_id, value, first_seen, last_seen)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
+		ON CONFLICT (xuid, hash) DO UPDATE SET
+			is_steve   = EXCLUDED.is_steve,
+			signature  = EXCLUDED.signature,
+			texture_id = EXCLUDED.texture_id,
+			value      = EXCLUDED.value,
+			last_seen  = EXCLUDED.last_seen
+		`,
+		xuid, skin.Hash, skin.IsSteve, signature, skin.TextureID, skin.Value, now,
 	)
 	return err
 }

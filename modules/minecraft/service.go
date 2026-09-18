@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/goccy/go-json"
@@ -37,6 +38,9 @@ const mojangTextureURL = "http://textures.minecraft.net/texture/"
 // https://api.geysermc.org/v2/xbox/xuid/<gamertag>
 const geyserXUIDLookup = "https://api.geysermc.org/v2/xbox/xuid/"
 
+// https://api.geysermc.org/v2/skin/<xuid>
+const geyserSkinLookup = "https://api.geysermc.org/v2/skin/"
+
 // Service - Minecraft player service
 type Service interface {
 	GetMojangPlayerByName(name string) (*Player, error)
@@ -46,6 +50,7 @@ type Service interface {
 	GetProfile(id string) (*Profile, error)
 	GetTextureContent(hash string) (*TextureResult, error)
 	GetGeyserXUID(gamertag string) (*GeyserPlayer, error)
+	GetGeyserSkin(xuid int64) (*GeyserSkin, error)
 }
 
 // service - Minecraft player service implementation
@@ -58,6 +63,7 @@ type service struct {
 	lookupProfile    string
 	lookupTexture    string
 	geyserXUIDLookup string
+	geyserSkinLookup string
 	nnTextureUrl     string
 }
 
@@ -75,6 +81,7 @@ func NewService(store Store, client *http.Client, nnTextureUrl string) Service {
 		lookupProfile:    mojangLookupProfile,
 		lookupTexture:    mojangTextureURL,
 		geyserXUIDLookup: geyserXUIDLookup,
+		geyserSkinLookup: geyserSkinLookup,
 		nnTextureUrl:     nnTextureUrl,
 	}
 }
@@ -399,9 +406,9 @@ func (s *service) GetGeyserXUID(gamertag string) (*GeyserPlayer, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, ErrPlayerNotFound
-	}
+	// Geyser's API has no 404 for this endpoint: an unknown gamertag comes
+	// back as 200 with an empty object. 503 means Xbox Live itself is
+	// rate-limited or not configured on Geyser's end.
 	if resp.StatusCode != http.StatusOK {
 		return nil, errors.New("geyser API error: " + resp.Status)
 	}
@@ -411,6 +418,9 @@ func (s *service) GetGeyserXUID(gamertag string) (*GeyserPlayer, error) {
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, err
+	}
+	if result.XUID == 0 {
+		return nil, ErrPlayerNotFound
 	}
 
 	player := &GeyserPlayer{
@@ -423,6 +433,44 @@ func (s *service) GetGeyserXUID(gamertag string) (*GeyserPlayer, error) {
 		return nil, err
 	}
 	return player, nil
+}
+
+// GetGeyserSkin gets a Bedrock player's most recently converted skin by XUID,
+// DB-cache-first with a fallback to Geyser's skin API. Only the skin's
+// metadata (hash/value/signature/texture_id) is archived here — the raw
+// image bytes are not fetched or stored in S3 yet.
+func (s *service) GetGeyserSkin(xuid int64) (*GeyserSkin, error) {
+	dbSkin, _ := s.store.GetGeyserSkin(xuid)
+	if dbSkin != nil && !dbSkin.IsStale() {
+		return dbSkin, nil
+	}
+
+	resp, err := s.client.Get(s.geyserSkinLookup + strconv.FormatInt(xuid, 10))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusBadRequest {
+		return nil, errors.New("invalid xuid: " + strconv.FormatInt(xuid, 10))
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.New("geyser API error: " + resp.Status)
+	}
+
+	var skin GeyserSkin
+	if err := json.NewDecoder(resp.Body).Decode(&skin); err != nil {
+		return nil, err
+	}
+	// An unconverted (or nonexistent) player comes back as 200 with an empty object.
+	if skin.Hash == "" {
+		return nil, ErrSkinNotFound
+	}
+
+	if err := s.store.UpsertGeyserSkin(xuid, &skin); err != nil {
+		return nil, err
+	}
+	return &skin, nil
 }
 
 // GetTextureContent returns the texture's bytes and content type, fetching from

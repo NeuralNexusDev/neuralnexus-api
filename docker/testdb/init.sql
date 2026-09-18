@@ -57,3 +57,24 @@ CREATE TABLE IF NOT EXISTS geyser_players (
     first_seen BIGINT NOT NULL,
     last_seen BIGINT NOT NULL
 );
+
+-- Bedrock players' converted skins, half-mirroring player_textures: every
+-- skin ever seen for a xuid is kept (deduped by hash), most recent wins.
+-- No S3 archiving yet (unlike player_textures/textures) -- this only
+-- persists the metadata Geyser's skin API returns, not the raw image bytes.
+-- Geyser's API has no cape equivalent, and uses is_steve (boolean) instead
+-- of a slim/classic model string.
+CREATE TABLE IF NOT EXISTS geyser_player_textures (
+    xuid BIGINT NOT NULL REFERENCES geyser_players(xuid),
+    hash TEXT NOT NULL,
+    is_steve BOOLEAN NOT NULL,
+    signature TEXT,
+    texture_id TEXT NOT NULL,
+    value TEXT NOT NULL,
+    first_seen BIGINT NOT NULL,
+    last_seen BIGINT NOT NULL,
+    CONSTRAINT geyser_player_textures_hash_not_empty CHECK (hash <> '')
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS geyser_player_textures_unique
+    ON geyser_player_textures (xuid, hash);

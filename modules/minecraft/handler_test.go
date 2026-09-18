@@ -19,6 +19,7 @@ type mockService struct {
 	players            []*Player
 	profile            *Profile
 	geyserPlayer       *GeyserPlayer
+	geyserSkin         *GeyserSkin
 	err                error
 	textureBody        []byte
 	textureContentType string
@@ -46,6 +47,10 @@ func (m *mockService) GetProfile(_ string) (*Profile, error) {
 
 func (m *mockService) GetGeyserXUID(_ string) (*GeyserPlayer, error) {
 	return m.geyserPlayer, m.err
+}
+
+func (m *mockService) GetGeyserSkin(_ int64) (*GeyserSkin, error) {
+	return m.geyserSkin, m.err
 }
 
 func (m *mockService) GetTextureContent(_ string) (*TextureResult, error) {
@@ -587,6 +592,79 @@ func TestHandler_GetGeyserXUIDHandler_InternalError(t *testing.T) {
 
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/geyser/xuid/Notch", nil)
 	r.SetPathValue("gamertag", "Notch")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500, got %d", w.Code)
+	}
+}
+
+func TestHandler_GetGeyserSkinHandler_OK(t *testing.T) {
+	svc := &mockService{geyserSkin: &GeyserSkin{
+		Hash:      "abc123",
+		IsSteve:   true,
+		TextureID: "def456",
+		Value:     "base64value",
+	}}
+	handler := GetGeyserSkinHandler(svc)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/geyser/skin/2535457445285308", nil)
+	r.SetPathValue("xuid", "2535457445285308")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	var got GeyserSkin
+	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if got.Hash != "abc123" {
+		t.Errorf("expected abc123, got %s", got.Hash)
+	}
+}
+
+func TestHandler_GetGeyserSkinHandler_InvalidXUID(t *testing.T) {
+	svc := &mockService{}
+	handler := GetGeyserSkinHandler(svc)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/geyser/skin/not-a-number", nil)
+	r.SetPathValue("xuid", "not-a-number")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandler_GetGeyserSkinHandler_NotFound(t *testing.T) {
+	svc := &mockService{err: ErrSkinNotFound}
+	handler := GetGeyserSkinHandler(svc)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/geyser/skin/2535457445285308", nil)
+	r.SetPathValue("xuid", "2535457445285308")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusNoContent {
+		t.Errorf("expected 204, got %d", w.Code)
+	}
+}
+
+func TestHandler_GetGeyserSkinHandler_InternalError(t *testing.T) {
+	svc := &mockService{err: errors.New("geyser API error: 500")}
+	handler := GetGeyserSkinHandler(svc)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/geyser/skin/2535457445285308", nil)
+	r.SetPathValue("xuid", "2535457445285308")
 	w := httptest.NewRecorder()
 
 	handler.ServeHTTP(w, r)

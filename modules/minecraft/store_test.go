@@ -41,6 +41,7 @@ func setupStore(t *testing.T) Store {
 		db.Exec(context.Background(), "DELETE FROM player_names WHERE player_id = '853c80ef-3c37-49fd-aa49-938b674adae6'")
 		db.Exec(context.Background(), "DELETE FROM player_textures WHERE player_id = '853c80ef-3c37-49fd-aa49-938b674adae6'")
 		db.Exec(context.Background(), "DELETE FROM players WHERE id = '853c80ef-3c37-49fd-aa49-938b674adae6'")
+		db.Exec(context.Background(), "DELETE FROM geyser_player_textures WHERE xuid = 2535457445285308")
 		db.Exec(context.Background(), "DELETE FROM geyser_players WHERE xuid = 2535457445285308")
 		rdb.Del(context.Background(),
 			CachePlayer+"853c80ef-3c37-49fd-aa49-938b674adae6", CachePlayer+"jeb_",
@@ -643,5 +644,116 @@ func TestStore_GetGeyserPlayerByGamertag_NotFound(t *testing.T) {
 	_, err := s.GetGeyserPlayerByGamertag("nonexistent_gamertag_xyz")
 	if err == nil {
 		t.Error("expected error for unknown gamertag")
+	}
+}
+
+func TestStore_UpsertGeyserSkin_Insert(t *testing.T) {
+	s := setupStore(t)
+	if err := s.UpsertGeyserPlayer(testGeyserPlayer); err != nil {
+		t.Fatalf("failed to seed geyser player: %v", err)
+	}
+
+	skin := &GeyserSkin{Hash: "abc123", IsSteve: true, Signature: "sig123", TextureID: "def456", Value: "base64value"}
+	if err := s.UpsertGeyserSkin(testGeyserPlayer.XUID, skin); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got, err := s.GetGeyserSkin(testGeyserPlayer.XUID)
+	if err != nil {
+		t.Fatalf("failed to get geyser skin: %v", err)
+	}
+	if got.Hash != "abc123" || got.TextureID != "def456" || got.Value != "base64value" {
+		t.Errorf("unexpected skin: %+v", got)
+	}
+	if got.Signature != "sig123" {
+		t.Errorf("expected signature sig123, got %s", got.Signature)
+	}
+	if !got.IsSteve {
+		t.Error("expected IsSteve to be true")
+	}
+}
+
+func TestStore_UpsertGeyserSkin_NoSignature(t *testing.T) {
+	s := setupStore(t)
+	if err := s.UpsertGeyserPlayer(testGeyserPlayer); err != nil {
+		t.Fatalf("failed to seed geyser player: %v", err)
+	}
+
+	skin := &GeyserSkin{Hash: "abc123", TextureID: "def456", Value: "base64value"}
+	if err := s.UpsertGeyserSkin(testGeyserPlayer.XUID, skin); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got, err := s.GetGeyserSkin(testGeyserPlayer.XUID)
+	if err != nil {
+		t.Fatalf("failed to get geyser skin: %v", err)
+	}
+	if got.Signature != "" {
+		t.Errorf("expected empty signature, got %s", got.Signature)
+	}
+}
+
+func TestStore_UpsertGeyserSkin_UpdateLastSeen(t *testing.T) {
+	s := setupStore(t)
+	if err := s.UpsertGeyserPlayer(testGeyserPlayer); err != nil {
+		t.Fatalf("failed to seed geyser player: %v", err)
+	}
+
+	skin := &GeyserSkin{Hash: "abc123", TextureID: "def456", Value: "base64value"}
+	if err := s.UpsertGeyserSkin(testGeyserPlayer.XUID, skin); err != nil {
+		t.Fatalf("first upsert failed: %v", err)
+	}
+
+	got1, _ := s.GetGeyserSkin(testGeyserPlayer.XUID)
+	firstSeen := got1.FirstSeen
+
+	time.Sleep(10 * time.Millisecond)
+
+	if err := s.UpsertGeyserSkin(testGeyserPlayer.XUID, skin); err != nil {
+		t.Fatalf("second upsert failed: %v", err)
+	}
+
+	got2, _ := s.GetGeyserSkin(testGeyserPlayer.XUID)
+	if got2.FirstSeen != firstSeen {
+		t.Error("first_seen should not change on upsert")
+	}
+	if got2.LastSeen <= got1.LastSeen {
+		t.Error("last_seen should be updated on upsert")
+	}
+}
+
+func TestStore_GetGeyserSkin_ReturnsMostRecent(t *testing.T) {
+	s := setupStore(t)
+	if err := s.UpsertGeyserPlayer(testGeyserPlayer); err != nil {
+		t.Fatalf("failed to seed geyser player: %v", err)
+	}
+
+	older := &GeyserSkin{Hash: "older-hash", TextureID: "id1", Value: "val1"}
+	if err := s.UpsertGeyserSkin(testGeyserPlayer.XUID, older); err != nil {
+		t.Fatalf("failed to insert older skin: %v", err)
+	}
+
+	time.Sleep(10 * time.Millisecond)
+
+	newer := &GeyserSkin{Hash: "newer-hash", TextureID: "id2", Value: "val2"}
+	if err := s.UpsertGeyserSkin(testGeyserPlayer.XUID, newer); err != nil {
+		t.Fatalf("failed to insert newer skin: %v", err)
+	}
+
+	got, err := s.GetGeyserSkin(testGeyserPlayer.XUID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Hash != "newer-hash" {
+		t.Errorf("expected newer-hash, got %s", got.Hash)
+	}
+}
+
+func TestStore_GetGeyserSkin_NotFound(t *testing.T) {
+	s := setupStore(t)
+
+	_, err := s.GetGeyserSkin(999999999999999)
+	if err == nil {
+		t.Error("expected error for unknown xuid")
 	}
 }

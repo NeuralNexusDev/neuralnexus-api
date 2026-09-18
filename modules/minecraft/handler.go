@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"github.com/goccy/go-json"
@@ -161,6 +162,29 @@ func GetGeyserXUIDHandler(s Service) http.HandlerFunc {
 			return
 		}
 		responses.StructOK(w, r, player)
+	}
+}
+
+// GetGeyserSkinHandler - Get a Bedrock player's most recently converted skin by XUID
+func GetGeyserSkinHandler(s Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		xuid, err := strconv.ParseInt(r.PathValue("xuid"), 10, 64)
+		if err != nil {
+			responses.BadRequest(w, r, "Invalid xuid")
+			return
+		}
+
+		skin, err := s.GetGeyserSkin(xuid)
+		if err != nil {
+			if errors.Is(err, ErrSkinNotFound) {
+				responses.NoContent(w, r)
+				return
+			}
+			log.Println("Failed to get Geyser skin:\n\t", err)
+			responses.InternalServerError(w, r, "Failed to get Geyser skin")
+			return
+		}
+		responses.StructOK(w, r, skin)
 	}
 }
 

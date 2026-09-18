@@ -220,6 +220,29 @@ func (p *GeyserPlayer) IsStale() bool {
 	return time.Now().UnixMilli()-p.LastSeen > stalenessThreshold.Milliseconds()
 }
 
+// ErrSkinNotFound - the Bedrock player has no converted skin yet (Geyser's
+// skin API returns 200 with an empty object rather than a 404 for this case)
+var ErrSkinNotFound = errors.New("skin not found")
+
+// GeyserSkin - a Bedrock player's most recently converted skin, as returned by
+// Geyser's skin API. Shaped like a Java player's textures property
+// (hash/value/signature), but keyed by XUID instead of UUID and carrying
+// IsSteve instead of a slim/classic model string; Geyser has no cape equivalent.
+type GeyserSkin struct {
+	Hash      string `json:"hash"                db:"hash"`
+	IsSteve   bool   `json:"is_steve"            db:"is_steve"`
+	Signature string `json:"signature,omitempty" db:"signature"`
+	TextureID string `json:"texture_id"          db:"texture_id"`
+	Value     string `json:"value"               db:"value"`
+	FirstSeen int64  `json:"-"                   db:"first_seen"`
+	LastSeen  int64  `json:"-"                   db:"last_seen"`
+}
+
+// IsStale returns true if the skin's last_seen is older than the staleness threshold
+func (s *GeyserSkin) IsStale() bool {
+	return time.Now().UnixMilli()-s.LastSeen > stalenessThreshold.Milliseconds()
+}
+
 // xuidToUUID derives a Bedrock player's synthetic UUID from their Xbox XUID:
 // the XUID's hex representation, left-padded with zeros to 32 hex digits and
 // formatted as a standard UUID (00000000-0000-0000-xxxx-xxxxxxxxxxxx).
