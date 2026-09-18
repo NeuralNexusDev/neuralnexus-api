@@ -97,7 +97,13 @@ func (s *sessionService) AddSession(session *Session) error {
 	if err != nil {
 		return err
 	}
-	s.store.AddSessionToCache(session)
+	// Caching is a best-effort accelerator, not the source of truth (the DB
+	// write above already succeeded), so a cache failure here doesn't fail
+	// the request - it just costs a DB round trip on the next read. Log it
+	// so a struggling/unreachable cache is still visible.
+	if err := s.store.AddSessionToCache(session); err != nil {
+		log.Println("failed to add session to cache:\n\t", err)
+	}
 	return nil
 }
 
@@ -109,7 +115,9 @@ func (s *sessionService) GetSession(id string) (*Session, error) {
 		if err != nil {
 			return nil, err
 		}
-		s.store.AddSessionToCache(session)
+		if err := s.store.AddSessionToCache(session); err != nil {
+			log.Println("failed to re-populate session cache after a cache miss:\n\t", err)
+		}
 	}
 	return session, nil
 }
@@ -120,7 +128,9 @@ func (s *sessionService) UpdateSession(session *Session) error {
 	if err != nil {
 		return err
 	}
-	s.store.AddSessionToCache(session)
+	if err := s.store.AddSessionToCache(session); err != nil {
+		log.Println("failed to update session in cache:\n\t", err)
+	}
 	return nil
 }
 
