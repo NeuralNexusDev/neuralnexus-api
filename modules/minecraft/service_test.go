@@ -123,8 +123,11 @@ func (m *mockStore) SetSignedProfileInCache(player *Player) error {
 	return nil
 }
 
+// GetGeyserPlayerByGamertag mirrors the real store's contract: UUID is
+// derived from XUID on read, not trusted from whatever the test fixture set.
 func (m *mockStore) GetGeyserPlayerByGamertag(gamertag string) (*GeyserPlayer, error) {
 	if p, ok := m.geyserPlayers[gamertag]; ok {
+		p.UUID = xuidToUUID(p.XUID)
 		return p, nil
 	}
 	return nil, ErrPlayerNotFound

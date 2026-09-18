@@ -394,9 +394,6 @@ func (s *service) fetchProfileFromMojang(id string, signed bool) (*Player, *Prof
 func (s *service) GetGeyserXUID(gamertag string) (*GeyserPlayer, error) {
 	dbPlayer, _ := s.store.GetGeyserPlayerByGamertag(gamertag)
 	if dbPlayer != nil && !dbPlayer.IsStale() {
-		// UUID is derived, not stored — compute it here rather than trusting
-		// every Store implementation to have set it.
-		dbPlayer.UUID = xuidToUUID(dbPlayer.XUID)
 		return dbPlayer, nil
 	}
 
