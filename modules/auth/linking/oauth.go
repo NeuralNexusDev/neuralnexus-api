@@ -156,10 +156,7 @@ func ProcessOAuthLogin(as auth.AccountService, las auth.LinkAccountStore, ss aut
 			if !errors.Is(err, auth.ErrAlreadyLinked) {
 				return nil, err
 			}
-			// Lost the race to link this platform account: another
-			// request's insert won between our lookup and our own insert.
-			// Clean up the account we just created for it and use the
-			// winner's account instead.
+			// Lost the race: clean up the account we just created and use the winner's instead.
 			if delErr := as.DeleteAccount(a.UserID); delErr != nil {
 				return nil, delErr
 			}

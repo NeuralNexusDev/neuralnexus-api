@@ -124,7 +124,6 @@ func SessionMiddleware(service auth.SessionService) Middleware {
 					return
 				}
 
-				// ReadJWT already persisted the refreshed LastUsedAt.
 				ctx := r.Context()
 				ctx = context.WithValue(ctx, SessionKey, session)
 				r = r.WithContext(ctx)
