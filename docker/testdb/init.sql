@@ -64,8 +64,15 @@ CREATE TABLE IF NOT EXISTS geyser_players (
 -- persists the metadata Geyser's skin API returns, not the raw image bytes.
 -- Geyser's API has no cape equivalent, and uses is_steve (boolean) instead
 -- of a slim/classic model string.
+--
+-- Deliberately NOT a foreign key to geyser_players(xuid): unlike the Java
+-- flow (where a single Mojang profile fetch always yields both player and
+-- texture data together, letting UpsertPlayer run first), a xuid can reach
+-- GetGeyserSkin without ever having been resolved through the gamertag->xuid
+-- endpoint -- e.g. a caller that already has the xuid from a Floodgate
+-- handshake. These two tables track genuinely independent Geyser API calls.
 CREATE TABLE IF NOT EXISTS geyser_player_textures (
-    xuid BIGINT NOT NULL REFERENCES geyser_players(xuid),
+    xuid BIGINT NOT NULL,
     hash TEXT NOT NULL,
     is_steve BOOLEAN NOT NULL,
     signature TEXT,

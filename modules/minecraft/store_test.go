@@ -673,6 +673,33 @@ func TestStore_UpsertGeyserSkin_Insert(t *testing.T) {
 	}
 }
 
+func TestStore_UpsertGeyserSkin_WithoutKnownGeyserPlayer(t *testing.T) {
+	// A xuid can reach GetGeyserSkin without ever being resolved through
+	// GetGeyserXUID/UpsertGeyserPlayer first (e.g. a caller that already has
+	// the xuid from elsewhere), so geyser_player_textures must not require a
+	// geyser_players row to already exist.
+	s := setupStore(t)
+	const unknownXUID int64 = 1111111111111111
+
+	skin := &GeyserSkin{Hash: "abc123", TextureID: "def456", Value: "base64value"}
+	if err := s.UpsertGeyserSkin(unknownXUID, skin); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got, err := s.GetGeyserSkin(unknownXUID)
+	if err != nil {
+		t.Fatalf("failed to get geyser skin: %v", err)
+	}
+	if got.Hash != "abc123" {
+		t.Errorf("expected abc123, got %s", got.Hash)
+	}
+
+	t.Cleanup(func() {
+		db := setupRawDB(t)
+		db.Exec(context.Background(), "DELETE FROM geyser_player_textures WHERE xuid = $1", unknownXUID)
+	})
+}
+
 func TestStore_UpsertGeyserSkin_NoSignature(t *testing.T) {
 	s := setupStore(t)
 	if err := s.UpsertGeyserPlayer(testGeyserPlayer); err != nil {
