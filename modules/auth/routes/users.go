@@ -15,7 +15,16 @@ import (
 // GetUserHandler - Get a user
 func GetUserHandler(service auth.UserService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		userID := r.PathValue("user_id")
+		// Locked down to self-lookup and admins for now. Cross-user lookup
+		// with the target's consent is a planned feature (for account-link
+		// integrations) but isn't implemented yet - don't open this up
+		// generally until that consent mechanism actually exists.
+		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
+			responses.Forbidden(w, r, "You do not have permission to get this user")
+			return
+		}
 		user, err := service.GetUser(userID)
 		if err != nil {
 			responses.NotFound(w, r, "User not found")
