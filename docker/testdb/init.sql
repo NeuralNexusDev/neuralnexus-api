@@ -47,10 +47,8 @@ CREATE TABLE IF NOT EXISTS player_names (
     PRIMARY KEY (player_id, name)
 );
 
--- Bedrock players' gamertag<->XUID mapping. Keyed by xuid (stable, like
--- players.id) since a gamertag can be changed by its owner while keeping
--- the same XUID. The synthetic UUID is derived from xuid at read time
--- (xuidToUUID), never stored.
+-- Bedrock players' gamertag<->XUID mapping. Keyed by xuid (stable across
+-- gamertag changes); the synthetic UUID is derived at read time, never stored.
 CREATE TABLE IF NOT EXISTS geyser_players (
     xuid BIGINT PRIMARY KEY NOT NULL,
     gamertag TEXT NOT NULL,
@@ -58,19 +56,9 @@ CREATE TABLE IF NOT EXISTS geyser_players (
     last_seen BIGINT NOT NULL
 );
 
--- Bedrock players' converted skins, half-mirroring player_textures: every
--- skin ever seen for a xuid is kept (deduped by hash), most recent wins.
--- No S3 archiving yet (unlike player_textures/textures) -- this only
--- persists the metadata Geyser's skin API returns, not the raw image bytes.
--- Geyser's API has no cape equivalent, and uses is_steve (boolean) instead
--- of a slim/classic model string.
---
--- Deliberately NOT a foreign key to geyser_players(xuid): unlike the Java
--- flow (where a single Mojang profile fetch always yields both player and
--- texture data together, letting UpsertPlayer run first), a xuid can reach
--- GetGeyserSkin without ever having been resolved through the gamertag->xuid
--- endpoint -- e.g. a caller that already has the xuid from a Floodgate
--- handshake. These two tables track genuinely independent Geyser API calls.
+-- Bedrock players' converted skins, half-mirroring player_textures (metadata
+-- only, no S3 archiving yet). No FK to geyser_players(xuid): a xuid can reach
+-- this table without ever going through the gamertag->xuid lookup first.
 CREATE TABLE IF NOT EXISTS geyser_player_textures (
     xuid BIGINT NOT NULL,
     hash TEXT NOT NULL,

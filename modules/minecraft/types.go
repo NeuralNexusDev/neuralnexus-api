@@ -224,16 +224,13 @@ func (p *GeyserPlayer) IsStale() bool {
 // skin API returns 200 with an empty object rather than a 404 for this case)
 var ErrSkinNotFound = errors.New("skin not found")
 
-// ErrInvalidGeyserRequest - Geyser's API rejected the request as malformed
-// (an invalid gamertag on the xuid-lookup endpoint, or an invalid xuid on the
-// skin endpoint) — distinct from ErrPlayerNotFound/ErrSkinNotFound, which
-// cover a well-formed request that simply has no match.
+// ErrInvalidGeyserRequest - Geyser's API rejected the request as malformed,
+// distinct from ErrPlayerNotFound/ErrSkinNotFound (well-formed, just no match).
 var ErrInvalidGeyserRequest = errors.New("invalid request")
 
-// GeyserSkin - a Bedrock player's most recently converted skin, as returned by
-// Geyser's skin API. Shaped like a Java player's textures property
-// (hash/value/signature), but keyed by XUID instead of UUID and carrying
-// IsSteve instead of a slim/classic model string; Geyser has no cape equivalent.
+// GeyserSkin - a Bedrock player's most recently converted skin. Shaped like a
+// Java textures property, but keyed by XUID and carrying IsSteve instead of
+// a slim/classic model string; Geyser has no cape equivalent.
 type GeyserSkin struct {
 	Hash      string `json:"hash"                db:"hash"`
 	IsSteve   bool   `json:"is_steve"            db:"is_steve"`
@@ -249,9 +246,8 @@ func (s *GeyserSkin) IsStale() bool {
 	return time.Now().UnixMilli()-s.LastSeen > stalenessThreshold.Milliseconds()
 }
 
-// xuidToUUID derives a Bedrock player's synthetic UUID from their Xbox XUID:
-// the XUID's hex representation, left-padded with zeros to 32 hex digits and
-// formatted as a standard UUID (00000000-0000-0000-xxxx-xxxxxxxxxxxx).
+// xuidToUUID derives a synthetic UUID from an Xbox XUID: its zero-padded hex
+// representation, formatted as a standard UUID.
 func xuidToUUID(xuid int64) string {
 	hex := fmt.Sprintf("%032x", uint64(xuid))
 	return hex[0:8] + "-" + hex[8:12] + "-" + hex[12:16] + "-" + hex[16:20] + "-" + hex[20:32]
