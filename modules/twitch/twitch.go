@@ -25,10 +25,8 @@ var (
 		},
 		RedirectURL: REDIRECT_URI,
 	}
-	// APIBaseURL overrides helix's default Twitch API base URL. Empty means
-	// "use helix's own default" - exported and left as a var (rather than a
-	// literal in GetUser's helix.Options below) so tests can point it at a
-	// local server instead of the real Twitch API.
+	// APIBaseURL overrides helix's default Twitch API base URL, letting
+	// tests point it at a local server. Empty uses helix's own default.
 	APIBaseURL string
 )
 
