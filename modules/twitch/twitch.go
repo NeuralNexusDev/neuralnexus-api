@@ -25,6 +25,9 @@ var (
 		},
 		RedirectURL: REDIRECT_URI,
 	}
+	// APIBaseURL overrides helix's default Twitch API base URL, letting
+	// tests point it at a local server. Empty uses helix's own default.
+	APIBaseURL string
 )
 
 // Data struct
@@ -63,6 +66,7 @@ func GetUser(token *auth.OAuthToken) (*Data, error) {
 	client, err := helix.NewClient(&helix.Options{
 		ClientID:        CLIENT_ID,
 		UserAccessToken: token.AccessToken,
+		APIBaseURL:      APIBaseURL,
 	})
 	if err != nil {
 		return nil, err

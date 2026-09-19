@@ -130,6 +130,13 @@ func UpdateUserFromPlatformHandler(service auth.UserService) http.HandlerFunc {
 				return
 			}
 			data = &d
+		case auth.PlatformXboxLive:
+			var d linking.XboxLiveData
+			if err := responses.DecodeStruct(r, &d); err != nil {
+				responses.BadRequest(w, r, "Invalid request body")
+				return
+			}
+			data = &d
 		default:
 			responses.BadRequest(w, r, "Unsupported platform")
 			return

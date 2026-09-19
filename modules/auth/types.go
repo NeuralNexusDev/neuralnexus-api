@@ -208,4 +208,5 @@ var (
 	PlatformDiscord   Platform = "discord"
 	PlatformMinecraft Platform = "minecraft"
 	PlatformTwitch    Platform = "twitch"
+	PlatformXboxLive  Platform = "xboxlive"
 )
