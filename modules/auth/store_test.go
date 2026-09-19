@@ -9,6 +9,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+func strPtr(s string) *string { return &s }
+
 func setupAccountStore(t *testing.T) AccountStore {
 	t.Helper()
 
@@ -55,12 +57,12 @@ func setupAccountStore(t *testing.T) AccountStore {
 func TestStoreAddAccountToDBDuplicateEmailTranslatesToSentinel(t *testing.T) {
 	as := setupAccountStore(t)
 
-	a1 := &Account{UserID: "900000000000000001", Username: "storetest1", Email: emailPtr("storetest-shared@example.com")}
+	a1 := &Account{UserID: "900000000000000001", Username: "storetest1", Email: strPtr("storetest-shared@example.com")}
 	if err := as.AddAccountToDB(a1); err != nil {
 		t.Fatalf("first AddAccountToDB returned error: %v", err)
 	}
 
-	a2 := &Account{UserID: "900000000000000002", Username: "storetest2", Email: emailPtr("storetest-shared@example.com")}
+	a2 := &Account{UserID: "900000000000000002", Username: "storetest2", Email: strPtr("storetest-shared@example.com")}
 	err := as.AddAccountToDB(a2)
 	if !errors.Is(err, ErrEmailAlreadyExists) {
 		t.Errorf("expected ErrEmailAlreadyExists for a duplicate email insert, got: %v", err)
@@ -191,12 +193,12 @@ func TestStoreAddAccountToDBEmptyUsernamesDoNotCollide(t *testing.T) {
 func TestStoreAddAccountToDBDuplicateUsernameTranslatesToSentinel(t *testing.T) {
 	as := setupAccountStore(t)
 
-	a1 := &Account{UserID: "900000000000000007", Username: "storetest-shared-username", Email: emailPtr("storetest-username1@example.com")}
+	a1 := &Account{UserID: "900000000000000007", Username: "storetest-shared-username", Email: strPtr("storetest-username1@example.com")}
 	if err := as.AddAccountToDB(a1); err != nil {
 		t.Fatalf("first AddAccountToDB returned error: %v", err)
 	}
 
-	a2 := &Account{UserID: "900000000000000008", Username: "storetest-shared-username", Email: emailPtr("storetest-username2@example.com")}
+	a2 := &Account{UserID: "900000000000000008", Username: "storetest-shared-username", Email: strPtr("storetest-username2@example.com")}
 	err := as.AddAccountToDB(a2)
 	if !errors.Is(err, ErrUsernameAlreadyExists) {
 		t.Errorf("expected ErrUsernameAlreadyExists for a duplicate username insert, got: %v", err)

@@ -23,9 +23,7 @@ func init() {
 	}
 }
 
-// Account struct. Email is nullable: accounts.email is UNIQUE, and several
-// platforms (e.g. Minecraft) never provide one, so "no email" is a real,
-// permanent state rather than a placeholder to work around.
+// Account struct
 type Account struct {
 	UserID       string    `db:"user_id" validate:"required" json:"user_id" xml:"user_id"`
 	Username     string    `db:"username" json:"username" xml:"username"`
@@ -34,16 +32,6 @@ type Account struct {
 	Salt         []byte    `db:"salt" json:"-" xml:"-"`
 	Roles        []string  `db:"roles" json:"roles" xml:"roles"`
 	UpdatedAt    time.Time `db:"updated_at" json:"updated_at" xml:"updated_at"`
-}
-
-// emailPtr converts an empty string to a nil *string, so an absent email is
-// stored as SQL NULL rather than "" (which would collide with any other
-// account with no email under accounts.email's UNIQUE constraint).
-func emailPtr(email string) *string {
-	if email == "" {
-		return nil
-	}
-	return &email
 }
 
 // NewAccount creates a new account
@@ -55,7 +43,9 @@ func NewAccount(username, email, password string) (*Account, error) {
 	user := &Account{
 		UserID:   id,
 		Username: username,
-		Email:    emailPtr(email),
+	}
+	if email != "" {
+		user.Email = &email
 	}
 	err = user.HashPassword(password)
 	if err != nil {
@@ -70,16 +60,17 @@ func NewPasswordLessAccount(username, email string) (*Account, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Account{
+	account := &Account{
 		UserID:   id,
 		Username: username,
-		Email:    emailPtr(email),
-	}, nil
+	}
+	if email != "" {
+		account.Email = &email
+	}
+	return account, nil
 }
 
-// NewIDOnlyAccount creates a new account with only an ID - no username,
-// email, or password. Used for platforms (e.g. Minecraft) that don't
-// provide an email and haven't been assigned a username yet.
+// NewIDOnlyAccount creates a new account with only an ID
 func NewIDOnlyAccount() (*Account, error) {
 	id, err := database.GenSnowflake()
 	if err != nil {

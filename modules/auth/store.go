@@ -114,12 +114,7 @@ func translateAccountConstraintErr(err error) error {
 	return err
 }
 
-// AddAccountToDB creates an account in the database. An empty
-// account.Username is stored as SQL NULL rather than "", since
-// accounts.username is UNIQUE but nullable and Postgres allows any number
-// of NULLs under a UNIQUE constraint. account.Email needs no such
-// conversion: it's already a *string, so a nil Email is passed through as
-// NULL directly.
+// AddAccountToDB creates an account in the database
 func (s *store) AddAccountToDB(account *Account) error {
 	_, err := s.db.Exec(context.Background(),
 		"INSERT INTO accounts (user_id, username, email, hashed_secret, salt, roles) VALUES ($1, NULLIF($2, ''), $3, $4, $5, $6)",
@@ -182,8 +177,7 @@ func (s *store) GetAccountByEmail(email string) (*Account, error) {
 	return account, nil
 }
 
-// UpdateAccountInDB updates an account in the database. See AddAccountToDB
-// for why an empty username is stored as NULL rather than "".
+// UpdateAccountInDB updates an account in the database
 func (s *store) UpdateAccountInDB(account *Account) error {
 	_, err := s.db.Exec(context.Background(),
 		"UPDATE accounts SET username = NULLIF($2, ''), email = $3, hashed_secret = $4, salt = $5, roles = $6 WHERE user_id = $1",
