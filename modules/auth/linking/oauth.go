@@ -131,10 +131,8 @@ func ProcessOAuthLogin(as auth.AccountService, las auth.LinkAccountStore, ss aut
 			if xbox == nil {
 				return nil, xboxErr
 			}
-			// Xbox Live authentication itself succeeded; the failure was
-			// only in the optional Java-ownership check, which is allowed
-			// to come back empty for a legitimate Bedrock-only player
-			// anyway - don't fail the whole login over a non-blocking step.
+			// Xbox Live succeeded; the failure was only in the optional
+			// Java-ownership check, which isn't blocking.
 			log.Println("Java profile lookup failed during Microsoft OAuth login, continuing with Xbox Live identity only:\n\t", xboxErr)
 			java = nil
 		}
@@ -256,10 +254,8 @@ func ProcessOAuthLink(r *http.Request, las auth.LinkAccountStore, code string, s
 			if xbox == nil {
 				return nil, xboxErr
 			}
-			// Xbox Live authentication itself succeeded; the failure was
-			// only in the optional Java-ownership check, which is allowed
-			// to come back empty for a legitimate Bedrock-only player
-			// anyway - don't fail the whole link over a non-blocking step.
+			// Xbox Live succeeded; the failure was only in the optional
+			// Java-ownership check, which isn't blocking.
 			log.Println("Java profile lookup failed during Microsoft OAuth link, continuing with Xbox Live identity only:\n\t", xboxErr)
 			java = nil
 		}
@@ -321,12 +317,11 @@ var errConflictingMicrosoftIdentities = errors.New("this Microsoft account's Xbo
 // resolveOrCreateAccountForMicrosoftUser resolves the auth.Account for a
 // Microsoft-authenticated login, which can carry up to two distinct
 // linkable identities from the one Microsoft OAuth exchange: the caller's
-// Xbox Live identity (xbox, always present once XSTS succeeds - Bedrock has
-// no identity beyond the gamertag) and their Minecraft: Java Edition
-// profile (java, only present if they own it). If both are already linked
-// but to two different accounts, that's errConflictingMicrosoftIdentities.
-// Whichever identity/identities aren't linked yet get linked to the
-// resolved (or freshly created) account.
+// Xbox Live identity (xbox, always present once XSTS succeeds) and their
+// Minecraft: Java Edition profile (java, only present if they own it). If
+// both are already linked but to two different accounts, that's
+// errConflictingMicrosoftIdentities. Whichever identity/identities aren't
+// linked yet get linked to the resolved (or freshly created) account.
 func resolveOrCreateAccountForMicrosoftUser(as auth.AccountService, las auth.LinkAccountStore, xbox *XboxLiveData, java *MinecraftData) (*auth.Account, error) {
 	xboxAccountID, err := existingAccountIDForPlatformUser(las, auth.PlatformXboxLive, xbox.GetID())
 	if err != nil {

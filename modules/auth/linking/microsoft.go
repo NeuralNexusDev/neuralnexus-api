@@ -20,11 +20,7 @@ var (
 	MICROSOFT_CLIENT_ID     = os.Getenv("MICROSOFT_CLIENT_ID")
 	MICROSOFT_CLIENT_SECRET = os.Getenv("MICROSOFT_CLIENT_SECRET")
 	MICROSOFT_REDIRECT_URI  = os.Getenv("MICROSOFT_REDIRECT_URI")
-	// MicrosoftConfig uses the "consumers" tenant, not a specific tenant ID -
-	// this is a personal-Microsoft-account (Xbox/Minecraft) flow, and using
-	// the app registration's own tenant ID here would restrict sign-in to
-	// organizational accounts in that tenant, locking out every real player.
-	MicrosoftConfig = &oauth2.Config{
+	MicrosoftConfig         = &oauth2.Config{
 		ClientID:     MICROSOFT_CLIENT_ID,
 		ClientSecret: MICROSOFT_CLIENT_SECRET,
 		Endpoint: oauth2.Endpoint{
@@ -79,9 +75,7 @@ func xstsErrForCode(code int64) error {
 // -------------- Structs --------------
 
 // XboxLiveData is a verified Xbox Live identity (XUID + gamertag), sourced
-// from the XSTS token claims. Unlike Minecraft: Java Edition, Bedrock has no
-// account identity of its own beyond this - the gamertag *is* the in-game
-// name, so this is the whole picture for a Bedrock player, not a partial one.
+// from the XSTS token claims.
 type XboxLiveData struct {
 	XUID     string `json:"xuid" validate:"required"`
 	Gamertag string `json:"gamertag" validate:"required"`
@@ -236,13 +230,10 @@ func xstsAuthorize(xblToken string) (xstsToken, userHash, xuid, gamertag string,
 	defer resp.Body.Close()
 
 	var xstsResp xstsAuthResponse
-	// Decode before checking status: a documented XSTS failure (XErr) comes
-	// back with a non-2xx status and a JSON body we still need to read to
-	// tell the specific failure apart (see xstsErrForCode). decodeErr is
-	// only surfaced below, after the clearer status-based error has had a
-	// chance to apply - an intermediary returning a non-JSON error page for
-	// a genuine 5xx should report as "xsts authorization error: 503 ...",
-	// not an opaque JSON-syntax error.
+	// Decode first: an XErr failure still needs the body read to tell which
+	// one (see xstsErrForCode). decodeErr is only surfaced after the status
+	// checks below, so a non-JSON error page on a genuine 5xx still reports
+	// as a clean status error.
 	decodeErr := json.NewDecoder(resp.Body).Decode(&xstsResp)
 
 	if xstsResp.XErr != 0 {
@@ -258,11 +249,6 @@ func xstsAuthorize(xblToken string) (xstsToken, userHash, xuid, gamertag string,
 		return "", "", "", "", errors.New("xsts authorization response missing Token or DisplayClaims")
 	}
 
-	// uhs identifies the account to Minecraft Services; xid/gtg are the
-	// actual Xbox Live identity (XUID/gamertag) this gets persisted as - all
-	// three must be present, not just uhs, or a missing xid/gtg would
-	// silently produce an empty platform ID that could collide with another
-	// such account under the (platform, platform_id) UNIQUE constraint.
 	claims := xstsResp.DisplayClaims.Xui[0]
 	if claims.Uhs == "" || claims.Xid == "" || claims.Gtg == "" {
 		return "", "", "", "", errors.New("xsts authorization response missing uhs, xid, or gtg in DisplayClaims")
@@ -279,9 +265,7 @@ type mcLoginWithXboxResponse struct {
 }
 
 // minecraftLoginWithXbox exchanges an XSTS token for a Minecraft Services
-// access token. This succeeds for any Xbox Live account, regardless of
-// whether it owns Minecraft: Java Edition - ownership is only checked by the
-// profile call that follows.
+// access token.
 func minecraftLoginWithXbox(userHash, xstsToken string) (string, error) {
 	reqBody := mcLoginWithXboxRequest{
 		IdentityToken: fmt.Sprintf("XBL3.0 x=%s;%s", userHash, xstsToken),
@@ -327,8 +311,8 @@ type mcProfileResponse struct {
 }
 
 // getMinecraftProfile fetches the caller's Minecraft: Java Edition profile.
-// A nil profile with a nil error means the account simply doesn't own Java
-// (a normal, expected state for a Bedrock-only player) - it's not a failure.
+// A nil profile with a nil error means the account simply doesn't own Java -
+// not a failure.
 func getMinecraftProfile(mcAccessToken string) (*MinecraftData, error) {
 	req, err := http.NewRequest(http.MethodGet, minecraftProfileURL, nil)
 	if err != nil {
@@ -343,11 +327,9 @@ func getMinecraftProfile(mcAccessToken string) (*MinecraftData, error) {
 	defer resp.Body.Close()
 
 	var profile mcProfileResponse
-	// Decode before checking status, same reasoning as xstsAuthorize: the
-	// "doesn't own Java" case is only distinguishable from the decoded body
-	// (profile.Error), but decodeErr itself is only surfaced below so a
-	// non-JSON error page on a genuine 5xx still reports the clean
-	// status-based message instead of an opaque JSON-syntax error.
+	// Decode first, same reasoning as xstsAuthorize: "doesn't own Java" is
+	// only visible in the decoded body, so decodeErr is surfaced after the
+	// status checks below.
 	decodeErr := json.NewDecoder(resp.Body).Decode(&profile)
 
 	if resp.StatusCode == http.StatusNotFound || profile.Error == "NOT_FOUND" {
@@ -375,17 +357,12 @@ func getMinecraftProfile(mcAccessToken string) (*MinecraftData, error) {
 // GetXboxAndMinecraftUser exchanges a Microsoft OAuth access token for the
 // caller's Xbox Live identity and, if they own it, their Minecraft: Java
 // Edition profile. Three outcomes:
-//   - (xbox, java, nil): full success. java is still nil here if the
-//     account doesn't own Java Edition - a normal state for a Bedrock-only
-//     player, not a failure.
-//   - (xbox, nil, err): Xbox Live authentication itself succeeded, but one
-//     of the trailing Minecraft Services steps (login-with-Xbox, or the
-//     profile fetch) failed - xbox is still a fully valid identity on its
-//     own. Callers must check whether xbox is non-nil before giving up on
-//     err alone, or they'll needlessly discard a good Xbox Live login over
-//     a failure in the optional Java-ownership check.
-//   - (nil, nil, err): Xbox Live authentication itself failed; no identity
-//     was established at all.
+//   - (xbox, java, nil): full success. java is nil if the account doesn't
+//     own Java Edition - that's not a failure.
+//   - (xbox, nil, err): Xbox Live succeeded but a later Minecraft Services
+//     step failed. xbox is still a valid identity - callers must check it
+//     before discarding a good login over a failed Java-ownership check.
+//   - (nil, nil, err): Xbox Live authentication itself failed.
 func GetXboxAndMinecraftUser(token *auth.OAuthToken) (xbox *XboxLiveData, java *MinecraftData, err error) {
 	xblToken, err := xblAuthenticate(token.AccessToken)
 	if err != nil {
