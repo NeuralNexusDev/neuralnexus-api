@@ -137,6 +137,13 @@ func UpdateUserFromPlatformHandler(service auth.UserService) http.HandlerFunc {
 				return
 			}
 			data = &d
+		case auth.PlatformMicrosoft:
+			var d linking.MicrosoftUserData
+			if err := responses.DecodeStruct(r, &d); err != nil {
+				responses.BadRequest(w, r, "Invalid request body")
+				return
+			}
+			data = &d
 		default:
 			responses.BadRequest(w, r, "Unsupported platform")
 			return

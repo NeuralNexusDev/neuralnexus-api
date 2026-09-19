@@ -1981,7 +1981,7 @@
             },
             "PlatformData": {
                 "type": "object",
-                "description": "Platform-specific linked-account data. Shape depends on the platform: for 'discord' this mirrors a Discord user object, for 'minecraft' a Mojang profile, for 'twitch' a Twitch user object. Sent as-is to the provider's account-linking record.",
+                "description": "Platform-specific linked-account data. Shape depends on the platform: for 'discord' this mirrors a Discord user object, for 'minecraft' a Mojang profile, for 'twitch' a Twitch user object, for 'xboxlive' an XUID/gamertag pair, for 'microsoft' a plain Microsoft account identity (sub/name/email). Sent as-is to the provider's account-linking record.",
                 "additionalProperties": true
             },
             "DataStore": {
@@ -2209,7 +2209,7 @@
                 "schema": {
                     "type": "string"
                 },
-                "description": "One of: discord, minecraft, twitch."
+                "description": "One of: discord, minecraft, twitch, xboxlive, microsoft."
             },
             "PlatformIdSlug": {
                 "name": "platform_id",

@@ -40,6 +40,49 @@ func newMinecraftOAuthState() *OAuthState {
 	return &OAuthState{Platform: auth.PlatformMinecraft, Nonce: "n", RedirectURI: "https://example.com/done", Mode: ModeLogin}
 }
 
+func newXboxLiveOAuthState() *OAuthState {
+	return &OAuthState{Platform: auth.PlatformXboxLive, Nonce: "n", RedirectURI: "https://example.com/done", Mode: ModeLogin}
+}
+
+func newMicrosoftOAuthState() *OAuthState {
+	return &OAuthState{Platform: auth.PlatformMicrosoft, Nonce: "n", RedirectURI: "https://example.com/done", Mode: ModeLogin}
+}
+
+// newMicrosoftLoginServer wires up a fake Microsoft OIDC token endpoint
+// (overriding MicrosoftLoginConfig, not MicrosoftConfig - the plain
+// "sign in with Microsoft" login never touches XBL/XSTS/Minecraft Services
+// at all) plus the userinfo endpoint, returning the given sub/name/email.
+func newMicrosoftLoginServer(t *testing.T, sub, name, email string) {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ms-login-token", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"access_token": "ms-login-access-token",
+			"token_type":   "Bearer",
+			"expires_in":   3600,
+			"scope":        "openid profile email offline_access",
+		})
+	})
+	mux.HandleFunc("/userinfo", func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer ms-login-access-token" {
+			t.Errorf("expected Authorization: Bearer ms-login-access-token, got %q", got)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"sub": sub, "name": name, "email": email})
+	})
+
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+
+	originalTokenURL := MicrosoftLoginConfig.Endpoint.TokenURL
+	t.Cleanup(func() { MicrosoftLoginConfig.Endpoint.TokenURL = originalTokenURL })
+	MicrosoftLoginConfig.Endpoint.TokenURL = server.URL + "/ms-login-token"
+
+	originalUserInfoURL := microsoftUserInfoURL
+	t.Cleanup(func() { microsoftUserInfoURL = originalUserInfoURL })
+	microsoftUserInfoURL = server.URL + "/userinfo"
+}
+
 // -------------- ProcessOAuthLogin (Minecraft/Microsoft) end to end --------------
 
 func TestProcessOAuthLoginMinecraftOwnsJavaCreatesAccountWithBothIdentities(t *testing.T) {
@@ -355,5 +398,171 @@ func TestProcessOAuthLinkMinecraftJavaProfileFailureFallsBackToXboxOnly(t *testi
 	}
 	if len(als.addCalls) != 1 || als.addCalls[0].Platform != auth.PlatformXboxLive {
 		t.Fatalf("expected only the Xbox Live identity to be linked, got: %+v", als.addCalls)
+	}
+}
+
+// -------------- ProcessOAuthLogin/Link (Xbox Live only) end to end --------------
+
+// TestProcessOAuthLoginXboxLiveOnlyNeverLinksJavaEvenIfOwned is the core
+// regression test for wanting distinct Xbox Live vs Java linking: the
+// account in this test DOES own Java (newFullChainServer(t, true)), but a
+// caller that explicitly asked for auth.PlatformXboxLive must still end up
+// with only the Xbox Live identity linked - proving Java is skipped by
+// request, not just by accident of ownership.
+func TestProcessOAuthLoginXboxLiveOnlyNeverLinksJavaEvenIfOwned(t *testing.T) {
+	newFullChainServer(t, true)
+	as := newMockAccountService()
+	als := &mockLinkAccountStore{
+		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
+			return nil, auth.ErrNotFound
+		},
+	}
+	ss := &mockSessionService{}
+
+	session, err := ProcessOAuthLogin(as, als, ss, "some-code", newXboxLiveOAuthState())
+	if err != nil {
+		t.Fatalf("ProcessOAuthLogin returned error: %v", err)
+	}
+	if session == nil {
+		t.Fatal("expected a session")
+	}
+	if len(als.addCalls) != 1 || als.addCalls[0].Platform != auth.PlatformXboxLive {
+		t.Fatalf("expected only the Xbox Live identity to be linked even though Java is owned, got: %+v", als.addCalls)
+	}
+}
+
+func TestProcessOAuthLinkXboxLiveOnlyNeverLinksJavaEvenIfOwned(t *testing.T) {
+	newFullChainServer(t, true)
+	session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
+	als := &mockLinkAccountStore{
+		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
+			return nil, auth.ErrNotFound
+		},
+	}
+	state := newXboxLiveOAuthState()
+	state.Mode = ModeLink
+
+	got, err := ProcessOAuthLink(linkRequestWithSession(session), als, "some-code", state)
+	if err != nil {
+		t.Fatalf("ProcessOAuthLink returned error: %v", err)
+	}
+	if got != session {
+		t.Error("expected the same session to be returned")
+	}
+	if len(als.addCalls) != 1 || als.addCalls[0].Platform != auth.PlatformXboxLive {
+		t.Fatalf("expected only the Xbox Live identity to be linked even though Java is owned, got: %+v", als.addCalls)
+	}
+}
+
+func TestProcessOAuthLinkXboxLiveOnlyAlreadyLinkedToDifferentAccountRejected(t *testing.T) {
+	newFullChainServer(t, false)
+	session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
+	als := &mockLinkAccountStore{
+		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
+			return &auth.LinkedAccount{UserID: "someone-else"}, nil
+		},
+	}
+	state := newXboxLiveOAuthState()
+	state.Mode = ModeLink
+
+	_, err := ProcessOAuthLink(linkRequestWithSession(session), als, "some-code", state)
+	if err == nil {
+		t.Fatal("expected an error when the Xbox Live identity is already linked to a different account")
+	}
+	if len(als.addCalls) != 0 {
+		t.Errorf("expected no links to be attempted, got: %+v", als.addCalls)
+	}
+}
+
+// -------------- ProcessOAuthLogin/Link (plain Microsoft) end to end --------------
+
+func TestProcessOAuthLoginMicrosoftCreatesAccount(t *testing.T) {
+	newMicrosoftLoginServer(t, "ms-oid-1", "Jane Doe", "jane@example.com")
+	as := newMockAccountService()
+	als := &mockLinkAccountStore{
+		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
+			return nil, auth.ErrNotFound
+		},
+	}
+	ss := &mockSessionService{}
+
+	session, err := ProcessOAuthLogin(as, als, ss, "some-code", newMicrosoftOAuthState())
+	if err != nil {
+		t.Fatalf("ProcessOAuthLogin returned error: %v", err)
+	}
+	if session == nil || ss.addedOnce != session {
+		t.Fatal("expected the new session to be added via SessionService")
+	}
+	if len(as.accounts) != 1 {
+		t.Fatalf("expected exactly one account to be created, got %d", len(as.accounts))
+	}
+	if len(als.addCalls) != 1 || als.addCalls[0].Platform != auth.PlatformMicrosoft || als.addCalls[0].PlatformID != "ms-oid-1" {
+		t.Fatalf("expected the Microsoft identity to be linked, got: %+v", als.addCalls)
+	}
+}
+
+func TestProcessOAuthLoginMicrosoftReusesExistingLinkedAccount(t *testing.T) {
+	newMicrosoftLoginServer(t, "ms-oid-1", "Jane Doe", "jane@example.com")
+	as := newMockAccountService()
+	as.accounts["existing-acct"] = &auth.Account{UserID: "existing-acct", Username: "existing"}
+	als := &mockLinkAccountStore{
+		getByPlatformIDFunc: func(platform auth.Platform, platformID string) (*auth.LinkedAccount, error) {
+			return &auth.LinkedAccount{UserID: "existing-acct"}, nil
+		},
+	}
+	ss := &mockSessionService{}
+
+	session, err := ProcessOAuthLogin(as, als, ss, "some-code", newMicrosoftOAuthState())
+	if err != nil {
+		t.Fatalf("ProcessOAuthLogin returned error: %v", err)
+	}
+	if session.UserID != "existing-acct" {
+		t.Errorf("expected the session to belong to the existing account, got %q", session.UserID)
+	}
+	if len(as.accounts) != 1 {
+		t.Errorf("expected no new account to be created, got %d", len(as.accounts))
+	}
+}
+
+func TestProcessOAuthLinkMicrosoftLinksToSession(t *testing.T) {
+	newMicrosoftLoginServer(t, "ms-oid-1", "Jane Doe", "jane@example.com")
+	session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
+	als := &mockLinkAccountStore{
+		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
+			return nil, auth.ErrNotFound
+		},
+	}
+	state := newMicrosoftOAuthState()
+	state.Mode = ModeLink
+
+	got, err := ProcessOAuthLink(linkRequestWithSession(session), als, "some-code", state)
+	if err != nil {
+		t.Fatalf("ProcessOAuthLink returned error: %v", err)
+	}
+	if got != session {
+		t.Error("expected the same session to be returned")
+	}
+	if len(als.addCalls) != 1 || als.addCalls[0].Platform != auth.PlatformMicrosoft || als.addCalls[0].UserID != "u1" {
+		t.Fatalf("expected the Microsoft identity to be linked to the session's account, got: %+v", als.addCalls)
+	}
+}
+
+func TestProcessOAuthLinkMicrosoftAlreadyLinkedToDifferentAccountRejected(t *testing.T) {
+	newMicrosoftLoginServer(t, "ms-oid-1", "Jane Doe", "jane@example.com")
+	session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
+	als := &mockLinkAccountStore{
+		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
+			return &auth.LinkedAccount{UserID: "someone-else"}, nil
+		},
+	}
+	state := newMicrosoftOAuthState()
+	state.Mode = ModeLink
+
+	_, err := ProcessOAuthLink(linkRequestWithSession(session), als, "some-code", state)
+	if err == nil {
+		t.Fatal("expected an error when the Microsoft identity is already linked to a different account")
+	}
+	if len(als.addCalls) != 0 {
+		t.Errorf("expected no links to be attempted, got: %+v", als.addCalls)
 	}
 }

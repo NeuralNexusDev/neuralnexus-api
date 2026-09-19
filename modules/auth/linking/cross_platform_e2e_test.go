@@ -1,6 +1,7 @@
 package linking
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -286,5 +287,113 @@ func TestProcessOAuthLinkFourPlatformsOnOneAccount(t *testing.T) {
 		if la, err := store.GetLinkedAccountByPlatformID(platform, id); err != nil || la.UserID != "acct-a" {
 			t.Errorf("expected %s identity %q to be linked to acct-a, got la=%v err=%v", platform, id, la, err)
 		}
+	}
+}
+
+// -------------- Link-matrix leak test: Xbox Live only + plain Microsoft --------------
+//
+// These specifically target the split added for wanting distinct Xbox Live
+// vs Java linking, plus the new plain "sign in with Microsoft" platform:
+// proving that neither ever leaks an identity the caller didn't ask for
+// into the store, and that all three Microsoft-family platforms (plain
+// Microsoft, Xbox Live, Java) can coexist on one account without colliding,
+// since their platform IDs (sub/xuid/profile UUID) are naturally distinct.
+
+// TestProcessOAuthLinkXboxLiveOnlyThenMicrosoftThenDiscordNoJavaLeak links
+// Xbox Live only, then plain Microsoft, then Discord to the same account -
+// the fixture account DOES own Java (newFullChainServer(t, true)), so this
+// fails if the Xbox-only link ever leaks a Java row into the store.
+func TestProcessOAuthLinkXboxLiveOnlyThenMicrosoftThenDiscordNoJavaLeak(t *testing.T) {
+	newFullChainServer(t, true)
+	store := newConcurrentLinkAccountStore()
+	session := newLinkSession("acct-a")
+
+	xblState := newXboxLiveOAuthState()
+	xblState.Mode = ModeLink
+	if _, err := ProcessOAuthLink(linkRequestWithSession(session), store, "xbl-code", xblState); err != nil {
+		t.Fatalf("Xbox Live link failed: %v", err)
+	}
+	if got := countLinksForUser(store, "acct-a"); got != 1 {
+		t.Fatalf("expected only Xbox Live linked (Java must not leak in), got %d links", got)
+	}
+
+	newMicrosoftLoginServer(t, "ms-oid-1", "Jane Doe", "jane@example.com")
+	msState := newMicrosoftOAuthState()
+	msState.Mode = ModeLink
+	if _, err := ProcessOAuthLink(linkRequestWithSession(session), store, "ms-code", msState); err != nil {
+		t.Fatalf("Microsoft link failed: %v", err)
+	}
+
+	newDiscordOAuthServer(t)
+	if _, err := ProcessOAuthLink(linkRequestWithSession(session), store, "discord-code", newDiscordOAuthState(ModeLink)); err != nil {
+		t.Fatalf("Discord link failed: %v", err)
+	}
+
+	if got := countLinksForUser(store, "acct-a"); got != 3 {
+		t.Fatalf("expected exactly Xbox Live + Microsoft + Discord linked, got %d links", got)
+	}
+	if _, err := store.GetLinkedAccountByPlatformID(auth.PlatformMinecraft, "069a79f4-44e9-4726-a5be-fca90e38aaf6"); !errors.Is(err, auth.ErrNotFound) {
+		t.Error("expected the Java identity to never have leaked into the store as a linked_accounts row")
+	}
+}
+
+// TestProcessOAuthLinkMicrosoftXboxLiveAndJavaCoexistOnOneAccount links all
+// three Microsoft-family identities to one account and confirms none of
+// them collide or overwrite each other in the store.
+func TestProcessOAuthLinkMicrosoftXboxLiveAndJavaCoexistOnOneAccount(t *testing.T) {
+	store := newConcurrentLinkAccountStore()
+	session := newLinkSession("acct-a")
+
+	newMicrosoftLoginServer(t, "ms-oid-1", "Jane Doe", "jane@example.com")
+	msState := newMicrosoftOAuthState()
+	msState.Mode = ModeLink
+	if _, err := ProcessOAuthLink(linkRequestWithSession(session), store, "ms-code", msState); err != nil {
+		t.Fatalf("Microsoft link failed: %v", err)
+	}
+
+	newFullChainServer(t, true)
+	mcState := newMinecraftOAuthState()
+	mcState.Mode = ModeLink
+	if _, err := ProcessOAuthLink(linkRequestWithSession(session), store, "mc-code", mcState); err != nil {
+		t.Fatalf("Minecraft (Xbox Live + Java) link failed: %v", err)
+	}
+
+	if got := countLinksForUser(store, "acct-a"); got != 3 {
+		t.Fatalf("expected Microsoft + Xbox Live + Java all linked, got %d links", got)
+	}
+	fixedIDs := map[auth.Platform]string{
+		auth.PlatformMicrosoft: "ms-oid-1",
+		auth.PlatformXboxLive:  "9999",
+		auth.PlatformMinecraft: "069a79f4-44e9-4726-a5be-fca90e38aaf6",
+	}
+	for platform, id := range fixedIDs {
+		if la, err := store.GetLinkedAccountByPlatformID(platform, id); err != nil || la.UserID != "acct-a" {
+			t.Errorf("expected %s identity %q to be linked to acct-a, got la=%v err=%v", platform, id, la, err)
+		}
+	}
+}
+
+func TestProcessOAuthLinkXboxLiveThenMicrosoftAlreadyDifferentAccountRejected(t *testing.T) {
+	newFullChainServer(t, false)
+	store := newConcurrentLinkAccountStore()
+	session := newLinkSession("acct-a")
+
+	xblState := newXboxLiveOAuthState()
+	xblState.Mode = ModeLink
+	if _, err := ProcessOAuthLink(linkRequestWithSession(session), store, "xbl-code", xblState); err != nil {
+		t.Fatalf("Xbox Live link failed: %v", err)
+	}
+
+	newMicrosoftLoginServer(t, "ms-oid-1", "Jane Doe", "jane@example.com")
+	seedLink(t, store, "acct-b", auth.PlatformMicrosoft, "ms-oid-1")
+
+	msState := newMicrosoftOAuthState()
+	msState.Mode = ModeLink
+	_, err := ProcessOAuthLink(linkRequestWithSession(session), store, "ms-code", msState)
+	if err == nil {
+		t.Fatal("expected an error when the Microsoft identity already belongs to a different account")
+	}
+	if got := countLinksForUser(store, "acct-a"); got != 1 {
+		t.Errorf("expected acct-a's Xbox Live link to be untouched and nothing new added, got %d links", got)
 	}
 }
