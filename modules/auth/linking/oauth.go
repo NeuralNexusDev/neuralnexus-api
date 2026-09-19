@@ -260,17 +260,9 @@ func ProcessOAuthLink(r *http.Request, las auth.LinkAccountStore, code string, s
 			java = nil
 		}
 
-		// Check both identities against the session's account up front,
-		// before committing either link. Linking Xbox first and only then
-		// discovering Java belongs to a different, pre-existing account
-		// would leave Xbox already linked with no way to roll it back -
-		// AddLinkedAccountToDB has no corresponding delete. This narrows
-		// but doesn't fully close a race between this check and the writes
-		// below (a genuinely concurrent request could still slip in) -
-		// linkPlatformUserToSession's own real-time recheck still catches
-		// that, it just can't undo an already-committed Xbox link either;
-		// that residual window matches the pre-existing single-identity
-		// behavior this function already had for every other platform.
+		// Check both identities up front, before committing either link:
+		// linking Xbox and only then rejecting Java would leave Xbox linked
+		// with no way to undo it (AddLinkedAccountToDB has no delete).
 		if err := checkPlatformUserBelongsToSession(las, session, auth.PlatformXboxLive, xbox); err != nil {
 			return nil, err
 		}
@@ -308,20 +300,15 @@ func ProcessOAuthLink(r *http.Request, las auth.LinkAccountStore, code string, s
 }
 
 // errConflictingMicrosoftIdentities is returned when a Microsoft account's
-// Xbox Live and Minecraft: Java Edition identities resolve to two different
-// NN accounts - the same way linkPlatformUserToSession refuses to silently
-// steal a platform identity already linked elsewhere, this refuses to
-// silently pick one over the other.
+// Xbox Live and Minecraft: Java Edition identities are linked to two
+// different NN accounts.
 var errConflictingMicrosoftIdentities = errors.New("this Microsoft account's Xbox Live and Minecraft: Java Edition identities are linked to two different accounts; unlink one before linking via Microsoft again")
 
 // resolveOrCreateAccountForMicrosoftUser resolves the auth.Account for a
-// Microsoft-authenticated login, which can carry up to two distinct
-// linkable identities from the one Microsoft OAuth exchange: the caller's
-// Xbox Live identity (xbox, always present once XSTS succeeds) and their
-// Minecraft: Java Edition profile (java, only present if they own it). If
-// both are already linked but to two different accounts, that's
-// errConflictingMicrosoftIdentities. Whichever identity/identities aren't
-// linked yet get linked to the resolved (or freshly created) account.
+// Microsoft-authenticated login, given the caller's Xbox Live identity
+// (always present) and Java Edition profile (present only if owned).
+// Whichever identity/identities aren't linked yet get linked to the
+// resolved (or freshly created) account.
 func resolveOrCreateAccountForMicrosoftUser(as auth.AccountService, las auth.LinkAccountStore, xbox *XboxLiveData, java *MinecraftData) (*auth.Account, error) {
 	xboxAccountID, err := existingAccountIDForPlatformUser(las, auth.PlatformXboxLive, xbox.GetID())
 	if err != nil {
@@ -346,10 +333,8 @@ func resolveOrCreateAccountForMicrosoftUser(as auth.AccountService, las auth.Lin
 	var a *auth.Account
 	isNewAccount := accountID == ""
 	if isNewAccount {
-		// Prefer the Java username when both identities are present: it's
-		// the player's own chosen Minecraft name, while the gamertag is
-		// just whatever their Xbox profile happens to be set to - Java's is
-		// the more recognizable default for an account seeded from either.
+		// Prefer the Java username when both identities are present - it's
+		// the player's own chosen name, unlike the Xbox gamertag.
 		username := xbox.GetUsername()
 		if java != nil {
 			username = java.GetUsername()
@@ -384,36 +369,17 @@ func resolveOrCreateAccountForMicrosoftUser(as auth.AccountService, las auth.Lin
 	return a, nil
 }
 
-// ensureMicrosoftIdentityLinked links the given identity to account a,
-// which the caller has established doesn't have it linked yet. isNewAccount
-// marks whether a was just created for this login and therefore has no
-// *other* Microsoft identity linked to it yet either - that's the only
-// state in which it's safe to delete a on a lost race, since linked_accounts
-// has no ON DELETE CASCADE back to accounts: deleting an account that
-// already has a real linked identity (e.g. this same account, just linked
-// via its *other* identity moments ago) would violate that foreign key
-// rather than cleanly roll anything back, and there's no
-// DeleteLinkedAccount on the store to unwind that first. So once a isn't
-// fresh, a lost race here is left as a surfaced conflict rather than
-// resolved automatically - the caller can retry, at which point either it
-// resolves cleanly or comes back as the same conflict for a human to sort
-// out, rather than this function silently mis-attributing an identity.
+// ensureMicrosoftIdentityLinked links the given identity to account a.
+// isNewAccount marks a as a bare placeholder with nothing else linked to it
+// yet, the only state where it's safe to delete on a lost race; otherwise a
+// lost race surfaces as a conflict for the caller to retry.
 func ensureMicrosoftIdentityLinked(as auth.AccountService, las auth.LinkAccountStore, a *auth.Account, isNewAccount bool, platform auth.Platform, user auth.PlatformData) (*auth.Account, bool, error) {
 	err := linkIdentityToAccountID(las, a.UserID, platform, user)
 	if err == nil {
-		// a now has a real, committed link - it's never a bare, safe-to-
-		// delete placeholder again, even if it was isNewAccount coming in.
 		return a, false, nil
 	}
 	if !errors.Is(err, auth.ErrAlreadyLinked) {
 		if isNewAccount {
-			// Whatever went wrong, the freshly-created placeholder account
-			// is now orphaned (nothing links to it) - clean it up before
-			// propagating err, exactly like
-			// resolveOrCreateAccountForPlatformUser does for the
-			// single-identity case. Only safe when isNewAccount: an
-			// existing account that already has a real link elsewhere must
-			// never be deleted here.
 			if delErr := as.DeleteAccount(a.UserID); delErr != nil {
 				return nil, false, fmt.Errorf("failed to link account (%w) and failed to clean up the orphaned placeholder account: %w", err, delErr)
 			}
@@ -421,25 +387,19 @@ func ensureMicrosoftIdentityLinked(as auth.AccountService, las auth.LinkAccountS
 		return nil, false, err
 	}
 
-	// Whoever holds this identity now might actually be us already (a
-	// concurrent identical Microsoft login finished first and linked both
-	// identities) rather than a genuine conflict - check before deciding.
+	// We might already be the owner (a concurrent identical login won the
+	// race for both identities) rather than facing a genuine conflict.
 	actualOwnerID, lookupErr := existingAccountIDForPlatformUser(las, platform, user.GetID())
 	if lookupErr != nil {
 		return nil, false, lookupErr
 	}
 	if actualOwnerID == a.UserID {
-		// Same reasoning as the success path above: a demonstrably already
-		// has this identity linked, so it's not a bare placeholder either.
 		return a, false, nil
 	}
 	if !isNewAccount {
 		return nil, false, errConflictingMicrosoftIdentities
 	}
 
-	// Lost the race for a brand-new account that has nothing else linked to
-	// it yet - safe to delete and defer to whoever won, exactly like
-	// resolveOrCreateAccountForPlatformUser does for a single identity.
 	if delErr := as.DeleteAccount(a.UserID); delErr != nil {
 		return nil, false, fmt.Errorf("failed to link account (%w) and failed to clean up the orphaned placeholder account: %w", err, delErr)
 	}
