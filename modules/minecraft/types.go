@@ -208,7 +208,6 @@ func (p *Profile) ToPlayer() (*Player, error) {
 }
 
 // GeyserPlayer - a Bedrock player's identity derived from Geyser's Xbox XUID lookup.
-// Bedrock players have no Mojang profile, so this carries only what Geyser/Xbox Live expose.
 type GeyserPlayer struct {
 	Gamertag  string `json:"gamertag"     db:"gamertag"`
 	XUID      int64  `json:"xuid"         db:"xuid"`
@@ -230,8 +229,7 @@ var ErrSkinNotFound = errors.New("skin not found")
 // distinct from ErrPlayerNotFound/ErrSkinNotFound (well-formed, just no match).
 var ErrInvalidGeyserRequest = errors.New("invalid request")
 
-// GeyserSkin - a Bedrock player's most recently converted skin. Like a Java
-// textures property, but keyed by XUID, IsSteve instead of a model string, and no cape.
+// GeyserSkin - a Bedrock player's most recently converted skin.
 type GeyserSkin struct {
 	Hash      string `json:"hash"                db:"hash"`
 	IsSteve   bool   `json:"is_steve"            db:"is_steve"`

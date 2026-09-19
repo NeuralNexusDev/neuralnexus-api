@@ -2306,7 +2306,7 @@
             },
             "GeyserPlayer": {
                 "type": "object",
-                "description": "A Bedrock player's identity derived from Geyser's Xbox XUID lookup. Bedrock players have no Mojang profile, so this carries only what Geyser/Xbox Live expose.",
+                "description": "A Bedrock player's identity derived from Geyser's Xbox XUID lookup.",
                 "required": [
                     "gamertag",
                     "xuid",
@@ -2328,7 +2328,7 @@
             },
             "GeyserSkin": {
                 "type": "object",
-                "description": "A Bedrock player's most recently converted skin, as returned by Geyser's skin API. Shaped like a Java player's textures property (hash/value/signature), but carries is_steve instead of a slim/classic model string, and Geyser has no cape equivalent.",
+                "description": "A Bedrock player's most recently converted skin, as returned by Geyser's skin API.",
                 "required": [
                     "hash",
                     "is_steve",
