@@ -325,9 +325,8 @@ func (s *store) IsTextureInS3(hash string) (bool, error) {
 	return true, nil
 }
 
-// GetGeyserPlayerByGamertag gets a Bedrock player's gamertag->XUID mapping.
-// Gamertags aren't unique long-term (a released one can be reused), so
-// ORDER BY + LIMIT 1 picks the most recently seen match deterministically.
+// GetGeyserPlayerByGamertag gets a Bedrock player's gamertag->XUID mapping,
+// picking the most recently seen match since gamertags can be reused.
 func (s *store) GetGeyserPlayerByGamertag(gamertag string) (*GeyserPlayer, error) {
 	rows, err := s.db.Query(context.Background(), `
 		SELECT xuid, gamertag, first_seen, last_seen
@@ -346,8 +345,8 @@ func (s *store) GetGeyserPlayerByGamertag(gamertag string) (*GeyserPlayer, error
 	return player, nil
 }
 
-// GetGeyserPlayerByXUID gets a Bedrock player's gamertag->XUID mapping by its
-// stable key (xuid is the table's primary key, so no reuse-collision handling needed).
+// GetGeyserPlayerByXUID gets a Bedrock player's gamertag->XUID mapping by xuid,
+// the table's primary key.
 func (s *store) GetGeyserPlayerByXUID(xuid int64) (*GeyserPlayer, error) {
 	rows, err := s.db.Query(context.Background(), `
 		SELECT xuid, gamertag, first_seen, last_seen

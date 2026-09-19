@@ -142,7 +142,7 @@ func GetProfileHandler(s Service) http.HandlerFunc {
 	}
 }
 
-// GetProfileByNameHandler - Get a player's profile with textures decoded, by name
+// GetProfileByNameHandler - Get a player's profile by name
 func GetProfileByNameHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		name := r.PathValue("name")
@@ -165,7 +165,7 @@ func GetProfileByNameHandler(s Service) http.HandlerFunc {
 	}
 }
 
-// GetGeyserXUIDHandler - Look up a Bedrock player's XUID and derived UUID by gamertag
+// GetGeyserXUIDHandler - Look up a Bedrock player's XUID by gamertag
 func GetGeyserXUIDHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		gamertag := r.PathValue("gamertag")
@@ -192,7 +192,7 @@ func GetGeyserXUIDHandler(s Service) http.HandlerFunc {
 	}
 }
 
-// GetGeyserSkinHandler - Get a Bedrock player's most recently converted skin by XUID
+// GetGeyserSkinHandler - Get a Bedrock player's skin by XUID
 func GetGeyserSkinHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		xuid, err := strconv.ParseInt(r.PathValue("xuid"), 10, 64)
@@ -219,7 +219,7 @@ func GetGeyserSkinHandler(s Service) http.HandlerFunc {
 	}
 }
 
-// GetGeyserProfileHandler - Get a Bedrock player's full profile (identity + skin) by derived UUID
+// GetGeyserProfileHandler - Get a Bedrock player's full profile by UUID
 func GetGeyserProfileHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("uuid")
@@ -247,7 +247,7 @@ func GetGeyserProfileHandler(s Service) http.HandlerFunc {
 	}
 }
 
-// GetGeyserProfileByNameHandler - Get a Bedrock player's full profile (identity + skin) by gamertag
+// GetGeyserProfileByNameHandler - Get a Bedrock player's full profile by gamertag
 func GetGeyserProfileByNameHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		gamertag := r.PathValue("name")
