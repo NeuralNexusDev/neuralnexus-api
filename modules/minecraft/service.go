@@ -530,8 +530,7 @@ func (s *service) resolveGeyserPlayerByXUID(xuid int64) (*GeyserPlayer, error) {
 }
 
 // GetGeyserProfile gets a Bedrock player's full profile (identity + skin) by
-// XUID, the Geyser analog of GetProfile. A player with no converted skin yet
-// still resolves, with Skin left nil.
+// XUID, the Geyser analog of GetProfile. A missing skin leaves Skin nil.
 func (s *service) GetGeyserProfile(xuid int64) (*GeyserProfile, error) {
 	player, err := s.resolveGeyserPlayerByXUID(xuid)
 	if err != nil {

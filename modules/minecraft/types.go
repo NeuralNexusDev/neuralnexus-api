@@ -255,9 +255,8 @@ func xuidToUUID(xuid int64) string {
 	return hex[0:8] + "-" + hex[8:12] + "-" + hex[12:16] + "-" + hex[16:20] + "-" + hex[20:32]
 }
 
-// uuidToXUID reverses xuidToUUID. It errors if id isn't a syntactically valid
-// UUID, or if its high 64 bits aren't zero (i.e. it's a real Java UUID rather
-// than one of ours).
+// uuidToXUID reverses xuidToUUID. It errors on a malformed UUID or one whose
+// high 64 bits aren't zero (i.e. a real Java UUID, not one of ours).
 func uuidToXUID(id string) (int64, error) {
 	parsed, err := uuid.Parse(id)
 	if err != nil {
