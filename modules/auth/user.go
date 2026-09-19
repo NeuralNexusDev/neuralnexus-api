@@ -74,7 +74,7 @@ func (s *userService) UpdateUser(user *Account) error {
 	if user.Username != "" {
 		account.Username = user.Username
 	}
-	if user.Email != "" {
+	if user.Email != nil {
 		account.Email = user.Email
 	}
 	if user.Roles != nil {

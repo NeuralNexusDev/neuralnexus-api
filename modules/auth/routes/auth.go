@@ -1,6 +1,7 @@
 package authroutes
 
 import (
+	"context"
 	"encoding/base64"
 	"github.com/goccy/go-json"
 	"log"
@@ -147,9 +148,30 @@ func OAuthHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Ses
 		switch state.Mode {
 		case linking.ModeLogin:
 			session, err = linking.ProcessOAuthLogin(as, las, ss, code, &state)
+		case linking.ModeLink:
+			// This route never runs SessionMiddleware (which reads a bearer
+			// token from the Authorization header), since it's hit by a
+			// browser redirect from the OAuth provider that can't carry a
+			// custom header - so read the session cookie directly instead.
+			var linkSession *auth.Session
+			sessionCookie, cookieErr := r.Cookie("session")
+			if cookieErr != nil {
+				log.Println("Failed to read session for link mode:\n\t", cookieErr)
+				responses.Unauthorized(w, r, "You must be logged in to link an account")
+				return
+			}
+			linkSession, err = ss.ReadJWT(sessionCookie.Value)
+			if err != nil || !linkSession.IsValid() {
+				log.Println("Failed to read session for link mode:\n\t", err)
+				responses.Unauthorized(w, r, "You must be logged in to link an account")
+				return
+			}
+			ctx := context.WithValue(r.Context(), mw.SessionKey, linkSession)
+			session, err = linking.ProcessOAuthLink(r.WithContext(ctx), las, code, &state)
 		default:
 			log.Println("Invalid mode")
 			responses.BadRequest(w, r, "Invalid state")
+			return
 		}
 
 		if err != nil {

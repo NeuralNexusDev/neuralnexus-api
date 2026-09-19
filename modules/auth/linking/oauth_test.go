@@ -51,6 +51,17 @@ func (m *mockAccountService) AddAccount(a *auth.Account) error {
 	if m.addErr != nil {
 		return m.addErr
 	}
+	// Mirrors the real accounts.username UNIQUE constraint (a genuine,
+	// non-empty duplicate only - see store.go's NULLIF/COALESCE handling)
+	// so tests can exercise a platform-supplied username that collides
+	// with an existing account's username.
+	if a.Username != "" {
+		for _, existing := range m.accounts {
+			if existing.Username == a.Username {
+				return auth.ErrUsernameAlreadyExists
+			}
+		}
+	}
 	m.accounts[a.UserID] = a
 	return nil
 }
@@ -298,7 +309,7 @@ func TestResolveOrCreateAccountForPlatformUserCreatesNewAccount(t *testing.T) {
 	if account.UserID == "" {
 		t.Error("expected the returned account to have a UserID")
 	}
-	if account.Username != "someuser" || account.Email != "someuser@example.com" {
+	if account.Username != "someuser" || account.Email == nil || *account.Email != "someuser@example.com" {
 		t.Errorf("expected the new account to be seeded from the platform data, got: %+v", account)
 	}
 	if len(als.addCalls) != 1 {
@@ -306,6 +317,40 @@ func TestResolveOrCreateAccountForPlatformUserCreatesNewAccount(t *testing.T) {
 	}
 	if als.addCalls[0].PlatformID != "pid1" || als.addCalls[0].UserID != account.UserID {
 		t.Errorf("linked account not associated with the new account: %+v", als.addCalls[0])
+	}
+}
+
+// TestResolveOrCreateAccountForPlatformUserUsernameCollisionPropagatesCleanly
+// covers a scenario from the "platform data collides with an existing
+// account" family: a brand-new platform identity (no linked_accounts row
+// yet) reports a username that collides with a completely unrelated,
+// already-existing account's username. AddAccount fails before any linked
+// account row is ever inserted, so there is nothing to clean up - this
+// pins down that the error surfaces as the ErrUsernameAlreadyExists
+// sentinel (not a raw DB error) and that no linked account or extra
+// account is left behind.
+func TestResolveOrCreateAccountForPlatformUserUsernameCollisionPropagatesCleanly(t *testing.T) {
+	as := newMockAccountService()
+	as.accounts["existing123"] = &auth.Account{UserID: "existing123", Username: "taken-username"}
+	als := &mockLinkAccountStore{
+		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
+			return nil, auth.ErrNotFound
+		},
+	}
+	user := &fakePlatformData{id: "pid-new", username: "taken-username", email: "newperson@example.com"}
+
+	_, err := resolveOrCreateAccountForPlatformUser(as, als, auth.PlatformDiscord, user)
+	if !errors.Is(err, auth.ErrUsernameAlreadyExists) {
+		t.Errorf("expected auth.ErrUsernameAlreadyExists, got: %v", err)
+	}
+	if len(as.accounts) != 1 {
+		t.Errorf("expected only the original account to remain, got %d: %v", len(as.accounts), as.accounts)
+	}
+	if len(as.deletedIDs) != 0 {
+		t.Errorf("nothing should need cleanup since AddAccount never created anything, got deletedIDs: %v", as.deletedIDs)
+	}
+	if len(als.addCalls) != 0 {
+		t.Errorf("AddLinkedAccountToDB should never be called when AddAccount fails first, got %d calls", len(als.addCalls))
 	}
 }
 
@@ -487,5 +532,113 @@ func TestProcessOAuthLinkExpiredSession(t *testing.T) {
 	}
 	if err.Error() != "session expired" {
 		t.Errorf("expected \"session expired\", got: %v", err)
+	}
+}
+
+// -------------- linkPlatformUserToSession tests --------------
+
+func TestLinkPlatformUserToSessionNotYetLinked(t *testing.T) {
+	session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
+	als := &mockLinkAccountStore{
+		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
+			return nil, auth.ErrNotFound
+		},
+	}
+	user := &fakePlatformData{id: "pid1", username: "someuser"}
+
+	got, err := linkPlatformUserToSession(als, session, auth.PlatformDiscord, user)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != session {
+		t.Error("expected the same session to be returned")
+	}
+	if len(als.addCalls) != 1 {
+		t.Fatalf("expected AddLinkedAccountToDB to be called once, got %d calls", len(als.addCalls))
+	}
+	if als.addCalls[0].UserID != session.UserID {
+		t.Errorf("expected the new link to be created for the session's user %q, got %q", session.UserID, als.addCalls[0].UserID)
+	}
+}
+
+func TestLinkPlatformUserToSessionAlreadyLinkedToSameAccount(t *testing.T) {
+	session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
+	als := &mockLinkAccountStore{
+		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
+			return &auth.LinkedAccount{UserID: "u1"}, nil
+		},
+	}
+	user := &fakePlatformData{id: "pid1", username: "someuser"}
+
+	got, err := linkPlatformUserToSession(als, session, auth.PlatformDiscord, user)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != session {
+		t.Error("expected the same session to be returned")
+	}
+	if len(als.addCalls) != 0 {
+		t.Errorf("re-linking a platform account already linked to the same account should be a no-op, but AddLinkedAccountToDB was called %d time(s)", len(als.addCalls))
+	}
+}
+
+func TestLinkPlatformUserToSessionAlreadyLinkedToDifferentAccount(t *testing.T) {
+	session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
+	als := &mockLinkAccountStore{
+		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
+			return &auth.LinkedAccount{UserID: "someone-else"}, nil
+		},
+	}
+	user := &fakePlatformData{id: "pid1", username: "someuser"}
+
+	_, err := linkPlatformUserToSession(als, session, auth.PlatformDiscord, user)
+	if err == nil {
+		t.Fatal("expected an error when the platform account is already linked to a different account")
+	}
+	if err.Error() != "this platform account is already linked to a different account; log in with it directly if you want to use that account, or unlink it there first" {
+		t.Errorf("expected the already-linked-to-a-different-account message, got: %v", err)
+	}
+	if len(als.addCalls) != 0 {
+		t.Errorf("AddLinkedAccountToDB should not be called when the platform account belongs to a different account, got %d calls", len(als.addCalls))
+	}
+}
+
+func TestLinkPlatformUserToSessionAddFails(t *testing.T) {
+	session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
+	als := &mockLinkAccountStore{
+		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
+			return nil, auth.ErrNotFound
+		},
+		addFunc: func(*auth.LinkedAccount) error {
+			return errors.New("db exploded")
+		},
+	}
+	user := &fakePlatformData{id: "pid1", username: "someuser"}
+
+	_, err := linkPlatformUserToSession(als, session, auth.PlatformDiscord, user)
+	if err == nil {
+		t.Fatal("expected an error when AddLinkedAccountToDB fails")
+	}
+	if err.Error() != "failed to link account" {
+		t.Errorf("expected \"failed to link account\", got: %v", err)
+	}
+}
+
+func TestLinkPlatformUserToSessionLookupError(t *testing.T) {
+	session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
+	wantErr := errors.New("db exploded")
+	als := &mockLinkAccountStore{
+		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
+			return nil, wantErr
+		},
+	}
+	user := &fakePlatformData{id: "pid1", username: "someuser"}
+
+	_, err := linkPlatformUserToSession(als, session, auth.PlatformDiscord, user)
+	if !errors.Is(err, wantErr) {
+		t.Errorf("expected the lookup error to propagate, got: %v", err)
+	}
+	if len(als.addCalls) != 0 {
+		t.Error("AddLinkedAccountToDB should not be called when the initial lookup fails for an unexpected reason")
 	}
 }

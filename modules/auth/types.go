@@ -27,7 +27,7 @@ func init() {
 type Account struct {
 	UserID       string    `db:"user_id" validate:"required" json:"user_id" xml:"user_id"`
 	Username     string    `db:"username" json:"username" xml:"username"`
-	Email        string    `db:"email" json:"-" xml:"-"`
+	Email        *string   `db:"email" json:"-" xml:"-"`
 	HashedSecret []byte    `db:"hashed_secret" json:"-" xml:"-"`
 	Salt         []byte    `db:"salt" json:"-" xml:"-"`
 	Roles        []string  `db:"roles" json:"roles" xml:"roles"`
@@ -43,7 +43,9 @@ func NewAccount(username, email, password string) (*Account, error) {
 	user := &Account{
 		UserID:   id,
 		Username: username,
-		Email:    email,
+	}
+	if email != "" {
+		user.Email = &email
 	}
 	err = user.HashPassword(password)
 	if err != nil {
@@ -52,17 +54,20 @@ func NewAccount(username, email, password string) (*Account, error) {
 	return user, nil
 }
 
-// NewPasswordLessAccount creates a new account without a password
+// NewPasswordLessAccount creates a new account without a password.
 func NewPasswordLessAccount(username, email string) (*Account, error) {
 	id, err := database.GenSnowflake()
 	if err != nil {
 		return nil, err
 	}
-	return &Account{
+	account := &Account{
 		UserID:   id,
 		Username: username,
-		Email:    email,
-	}, nil
+	}
+	if email != "" {
+		account.Email = &email
+	}
+	return account, nil
 }
 
 // NewIDOnlyAccount creates a new account with only an ID
@@ -80,6 +85,7 @@ func NewIDOnlyAccount() (*Account, error) {
 // pepper as a real Argon2 "secret" rather than folding it into the
 // password bytes - the public argon2.IDKey hardcodes secret=nil. Fallback
 // if x/crypto ever breaks this: argon2.IDKey(append(password, pepper...), salt, ...).
+//
 //go:linkname deriveKey golang.org/x/crypto/argon2.deriveKey
 //goland:noinspection GoUnusedParameter
 func deriveKey(mode int, password, salt, secret, data []byte, time, memory uint32, threads uint8, keyLen uint32) []byte

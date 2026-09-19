@@ -154,3 +154,35 @@ func TestAccountNewSessionSkipsUnknownRole(t *testing.T) {
 		t.Errorf("expected no permissions for an unknown role, got: %v", session.Permissions)
 	}
 }
+
+// -------------- NewPasswordLessAccount / NewIDOnlyAccount email tests --------------
+
+func TestNewPasswordLessAccountKeepsRealEmail(t *testing.T) {
+	a, err := NewPasswordLessAccount("someuser", "someuser@example.com")
+	if err != nil {
+		t.Fatalf("NewPasswordLessAccount returned error: %v", err)
+	}
+	if a.Email == nil || *a.Email != "someuser@example.com" {
+		t.Errorf("expected the real email to be kept as-is, got %v", a.Email)
+	}
+}
+
+func TestNewPasswordLessAccountNilWhenEmailEmpty(t *testing.T) {
+	a, err := NewPasswordLessAccount("someuser", "")
+	if err != nil {
+		t.Fatalf("NewPasswordLessAccount returned error: %v", err)
+	}
+	if a.Email != nil {
+		t.Errorf("expected a nil email when none is given, got %q", *a.Email)
+	}
+}
+
+func TestNewIDOnlyAccountEmailIsNil(t *testing.T) {
+	a, err := NewIDOnlyAccount()
+	if err != nil {
+		t.Fatalf("NewIDOnlyAccount returned error: %v", err)
+	}
+	if a.Email != nil {
+		t.Errorf("expected a nil email, got %q", *a.Email)
+	}
+}
