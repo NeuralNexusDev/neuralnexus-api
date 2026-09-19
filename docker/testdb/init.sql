@@ -56,9 +56,9 @@ CREATE TABLE IF NOT EXISTS geyser_players (
     last_seen BIGINT NOT NULL
 );
 
--- Bedrock players' converted skins, half-mirroring player_textures (metadata
--- only, no S3 archiving yet). No FK to geyser_players(xuid): a xuid can reach
--- this table without ever going through the gamertag->xuid lookup first.
+-- Bedrock players' converted skins, half-mirroring player_textures. No FK to
+-- geyser_players(xuid): a xuid can reach this table without ever going
+-- through the gamertag->xuid lookup first.
 CREATE TABLE IF NOT EXISTS geyser_player_textures (
     xuid BIGINT NOT NULL,
     hash TEXT NOT NULL,

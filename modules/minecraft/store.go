@@ -27,6 +27,7 @@ const (
 	CacheProfileSigned = CacheProfile + "signed:"
 	S3Bucket           = "mca"
 	S3KeyPrefix        = "texture/"
+	GeyserS3KeyPrefix  = "texture/geyser/"
 )
 
 // Store - Minecraft player store
@@ -56,7 +57,11 @@ type Store interface {
 	UpsertGeyserPlayer(player *GeyserPlayer) error
 
 	GetGeyserSkin(xuid int64) (*GeyserSkin, error)
+	GetGeyserSkinByHash(hash string) (*GeyserSkin, error)
 	UpsertGeyserSkin(xuid int64, skin *GeyserSkin) error
+
+	IsGeyserTextureInS3(hash string) (bool, error)
+	PutGeyserTextureInS3(hash string, body io.ReadCloser) error
 }
 
 // store - Minecraft player store implementation
@@ -391,6 +396,28 @@ func (s *store) GetGeyserSkin(xuid int64) (*GeyserSkin, error) {
 	return pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[GeyserSkin])
 }
 
+// GetGeyserSkinByHash gets any row carrying the given hash (multiple xuids
+// can share one, so any match's Value decodes to the same bytes), or nil if
+// the hash isn't known.
+func (s *store) GetGeyserSkinByHash(hash string) (*GeyserSkin, error) {
+	rows, err := s.db.Query(context.Background(), `
+		SELECT hash, is_steve, COALESCE(signature, '') AS signature, texture_id, value, first_seen, last_seen
+		FROM geyser_player_textures
+		WHERE hash = $1
+		LIMIT 1`, hash)
+	if err != nil {
+		return nil, err
+	}
+	skin, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[GeyserSkin])
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return skin, nil
+}
+
 // UpsertGeyserSkin upserts a Bedrock player's converted skin into the database
 func (s *store) UpsertGeyserSkin(xuid int64, skin *GeyserSkin) error {
 	now := time.Now().UnixMilli()
@@ -418,6 +445,43 @@ func (s *store) PutTextureInS3(hash string, body io.ReadCloser) error {
 	input := &s3.PutObjectInput{
 		Bucket:      aws.String(S3Bucket),
 		Key:         aws.String(S3KeyPrefix + hash),
+		Body:        body,
+		ContentType: aws.String("image/png"),
+	}
+	if lr, ok := body.(interface{ Len() int }); ok {
+		input.ContentLength = aws.Int64(int64(lr.Len()))
+	}
+
+	_, err := s.s3.PutObject(context.Background(), input)
+	if err != nil {
+		return fmt.Errorf("failed to upload to s3: %w", err)
+	}
+	return nil
+}
+
+// IsGeyserTextureInS3 checks if a Bedrock skin's bytes are archived in S3
+func (s *store) IsGeyserTextureInS3(hash string) (bool, error) {
+	_, err := s.s3.HeadObject(context.Background(), &s3.HeadObjectInput{
+		Bucket: aws.String(S3Bucket),
+		Key:    aws.String(GeyserS3KeyPrefix + hash),
+	})
+	if err != nil {
+		var sue smithy.APIError
+		if errors.As(err, &sue) {
+			if sue.ErrorCode() == "NotFound" || sue.ErrorCode() == "NoSuchKey" {
+				return false, nil
+			}
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+// PutGeyserTextureInS3 uploads a Bedrock skin's bytes to S3
+func (s *store) PutGeyserTextureInS3(hash string, body io.ReadCloser) error {
+	input := &s3.PutObjectInput{
+		Bucket:      aws.String(S3Bucket),
+		Key:         aws.String(GeyserS3KeyPrefix + hash),
 		Body:        body,
 		ContentType: aws.String("image/png"),
 	}

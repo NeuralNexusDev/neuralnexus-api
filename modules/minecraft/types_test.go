@@ -322,3 +322,30 @@ func TestTypes_Profile_ToPlayer_NoTextures(t *testing.T) {
 		t.Errorf("expected no properties when the profile has no textures, got %v", player.Properties)
 	}
 }
+
+func TestTypes_GeyserSkin_SkinURL_Valid(t *testing.T) {
+	value := TexturesValue{
+		Textures: Textures{SKIN: &Texture{URL: "https://example.com/skins/abc123"}},
+	}
+	skin := &GeyserSkin{Value: encodedTextures(t, value)}
+
+	if got := skin.SkinURL(); got != "https://example.com/skins/abc123" {
+		t.Errorf("expected decoded skin URL, got %q", got)
+	}
+}
+
+func TestTypes_GeyserSkin_SkinURL_NotBase64(t *testing.T) {
+	skin := &GeyserSkin{Value: "not-base64!!!"}
+	if got := skin.SkinURL(); got != "" {
+		t.Errorf("expected empty string for undecodable value, got %q", got)
+	}
+}
+
+func TestTypes_GeyserSkin_SkinURL_NoSkinTexture(t *testing.T) {
+	value := TexturesValue{ProfileID: "abc"}
+	skin := &GeyserSkin{Value: encodedTextures(t, value)}
+
+	if got := skin.SkinURL(); got != "" {
+		t.Errorf("expected empty string when no SKIN texture is present, got %q", got)
+	}
+}

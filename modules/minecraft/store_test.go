@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -845,5 +846,91 @@ func TestStore_GetGeyserSkin_NotFound(t *testing.T) {
 	_, err := s.GetGeyserSkin(999999999999999)
 	if err == nil {
 		t.Error("expected error for unknown xuid")
+	}
+}
+
+func TestStore_GetGeyserSkinByHash(t *testing.T) {
+	s := setupStore(t)
+	if err := s.UpsertGeyserPlayer(testGeyserPlayer); err != nil {
+		t.Fatalf("failed to seed geyser player: %v", err)
+	}
+
+	skin := &GeyserSkin{Hash: "abc123", TextureID: "def456", Value: "base64value"}
+	if err := s.UpsertGeyserSkin(testGeyserPlayer.XUID, skin); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got, err := s.GetGeyserSkinByHash("abc123")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil || got.Value != "base64value" {
+		t.Errorf("expected the seeded skin, got %+v", got)
+	}
+}
+
+func TestStore_GetGeyserSkinByHash_NotFound(t *testing.T) {
+	s := setupStore(t)
+
+	got, err := s.GetGeyserSkinByHash("nonexistent_hash_xyz")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != nil {
+		t.Errorf("expected nil for unknown hash, got %+v", got)
+	}
+}
+
+func TestStore_IsGeyserTextureInS3_Exists(t *testing.T) {
+	client := setupMockS3(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodHead {
+			t.Errorf("expected HEAD request, got %s", r.Method)
+		}
+		if !strings.Contains(r.URL.Path, GeyserS3KeyPrefix) {
+			t.Errorf("expected key to use the Geyser prefix, got %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+
+	s := &store{s3: client}
+	exists, err := s.IsGeyserTextureInS3("mockhash")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !exists {
+		t.Error("expected texture to exist")
+	}
+}
+
+func TestStore_IsGeyserTextureInS3_NotFound(t *testing.T) {
+	client := setupMockS3(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?><Error><Code>NoSuchKey</Code></Error>`))
+	})
+
+	s := &store{s3: client}
+	exists, err := s.IsGeyserTextureInS3("mockhash")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if exists {
+		t.Error("expected texture to not exist")
+	}
+}
+
+func TestStore_PutGeyserTextureInS3(t *testing.T) {
+	client := setupMockS3(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("expected PUT request, got %s", r.Method)
+		}
+		if !strings.Contains(r.URL.Path, GeyserS3KeyPrefix) {
+			t.Errorf("expected key to use the Geyser prefix, got %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+
+	s := &store{s3: client}
+	if err := s.PutGeyserTextureInS3("mockhash", nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

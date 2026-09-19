@@ -58,6 +58,7 @@ type Service interface {
 	GetGeyserSkin(xuid int64) (*GeyserSkin, error)
 	GetGeyserProfile(xuid int64) (*GeyserProfile, error)
 	GetGeyserProfileByGamertag(gamertag string) (*GeyserProfile, error)
+	GetGeyserTextureContent(hash string) (*TextureResult, error)
 }
 
 // service - Minecraft player service implementation
@@ -73,6 +74,7 @@ type service struct {
 	geyserSkinLookup     string
 	geyserGamertagLookup string
 	nnTextureUrl         string
+	nnGeyserTextureUrl   string
 }
 
 // NewService - Create a new Minecraft player service
@@ -92,6 +94,7 @@ func NewService(store Store, client *http.Client, nnTextureUrl string) Service {
 		geyserSkinLookup:     geyserSkinLookup,
 		geyserGamertagLookup: geyserGamertagLookup,
 		nnTextureUrl:         nnTextureUrl,
+		nnGeyserTextureUrl:   nnTextureUrl + "geyser/",
 	}
 }
 
@@ -452,7 +455,6 @@ func (s *service) GetGeyserXUID(gamertag string) (*GeyserPlayer, error) {
 }
 
 // GetGeyserSkin gets a Bedrock player's most recently converted skin by XUID.
-// Metadata only — the raw image bytes are not archived to S3 yet.
 func (s *service) GetGeyserSkin(xuid int64) (*GeyserSkin, error) {
 	dbSkin, _ := s.store.GetGeyserSkin(xuid)
 	if dbSkin != nil && !dbSkin.IsStale() {
@@ -629,6 +631,91 @@ func (s *service) fetchAndArchive(hash string) (*TextureResult, error) {
 		log.Println("Failed to upload texture to S3:\n\t", err)
 	} else if err := s.store.UpsertTextureHash(hash); err != nil {
 		log.Println("Failed to store texture hash:\n\t", err)
+	}
+
+	return &TextureResult{Body: io.NopCloser(bytes.NewReader(data)), ContentType: contentType}, nil
+}
+
+// GetGeyserTextureContent returns a Bedrock skin's bytes and content type,
+// archiving to S3 on a miss.
+func (s *service) GetGeyserTextureContent(hash string) (*TextureResult, error) {
+	present, err := s.store.IsGeyserTextureInS3(hash)
+	if err != nil {
+		return nil, err
+	}
+
+	if present {
+		return s.serveGeyserFromS3(hash)
+	}
+	return s.fetchAndArchiveGeyserTexture(hash)
+}
+
+// serveGeyserFromS3 fetches an already-archived Bedrock skin straight from the CDN/S3
+func (s *service) serveGeyserFromS3(hash string) (*TextureResult, error) {
+	resp, err := s.client.Get(s.nnGeyserTextureUrl + hash)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode == http.StatusNotFound {
+		resp.Body.Close()
+		return nil, ErrTextureNotFound
+	}
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		return nil, fmt.Errorf("bad status code from S3: %d", resp.StatusCode)
+	}
+
+	contentType := resp.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "image/png"
+	}
+	return &TextureResult{Body: resp.Body, ContentType: contentType}, nil
+}
+
+// fetchAndArchiveGeyserTexture fetches a Bedrock skin's bytes from the URL
+// embedded in its GeyserSkin.Value (Geyser hosts converted skins itself,
+// not on Mojang's texture CDN), archives it to S3, and returns a second
+// reader over the same bytes to serve the client.
+func (s *service) fetchAndArchiveGeyserTexture(hash string) (*TextureResult, error) {
+	skin, err := s.store.GetGeyserSkinByHash(hash)
+	if err != nil {
+		return nil, err
+	}
+	if skin == nil {
+		return nil, ErrTextureNotFound
+	}
+	skinURL := skin.SkinURL()
+	if skinURL == "" {
+		return nil, ErrTextureNotFound
+	}
+
+	resp, err := s.client.Get(skinURL)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, ErrTextureNotFound
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("bad status code from remote URL: %d", resp.StatusCode)
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	contentType := resp.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "image/png"
+	}
+
+	// Archival failure shouldn't fail the client's request — degrade gracefully.
+	if err := s.store.PutGeyserTextureInS3(hash, bytesReadCloser{bytes.NewReader(data)}); err != nil {
+		log.Println("Failed to upload Geyser texture to S3:\n\t", err)
 	}
 
 	return &TextureResult{Body: io.NopCloser(bytes.NewReader(data)), ContentType: contentType}, nil

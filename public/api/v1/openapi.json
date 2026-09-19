@@ -719,7 +719,7 @@
         "/mc/geyser/skin/{xuid}": {
             "get": {
                 "summary": "Get a Bedrock player's most recently converted skin by XUID",
-                "description": "Looks up a Bedrock player's most recently converted skin, DB-cache-first (24h staleness) with a fallback to Geyser's skin API on a miss or stale entry. Only the skin's metadata (hash/value/signature/texture_id) is archived; the raw image bytes are not fetched or stored in S3. Returns 204 (not 404) when the player has no converted skin yet, matching Geyser's own API (200 with an empty object) rather than treating it as a client error.",
+                "description": "Looks up a Bedrock player's most recently converted skin, DB-cache-first (24h staleness) with a fallback to Geyser's skin API on a miss or stale entry. Returns 204 (not 404) when the player has no converted skin yet, matching Geyser's own API (200 with an empty object) rather than treating it as a client error.",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/XUIDSlug"
@@ -1014,6 +1014,39 @@
                     },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/mc/texture/geyser/{hash}": {
+            "get": {
+                "summary": "Get a Bedrock skin's raw image bytes",
+                "description": "Fetches from the URL embedded in the skin's Value on first request and archives to S3; served straight from S3/CDN thereafter.",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/MCHashSlug"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "image/png": {
+                                "schema": {
+                                    "type": "string",
+                                    "format": "binary"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "502": {
+                        "$ref": "#/components/responses/502BadGateway"
                     }
                 }
             }

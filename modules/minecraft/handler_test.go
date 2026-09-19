@@ -81,6 +81,10 @@ func (m *mockService) GetTextureContent(_ string) (*TextureResult, error) {
 	return &TextureResult{Body: io.NopCloser(bytes.NewReader(body)), ContentType: contentType}, nil
 }
 
+func (m *mockService) GetGeyserTextureContent(_ string) (*TextureResult, error) {
+	return m.GetTextureContent("")
+}
+
 // --- Tests ---
 
 func TestHandler_GetMojangPlayerByNameHandler_OK(t *testing.T) {
@@ -889,5 +893,71 @@ func TestHandler_GetGeyserProfileByNameHandler_NotFound(t *testing.T) {
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("expected 404, got %d", w.Code)
+	}
+}
+
+func TestHandler_GetGeyserTextureHandler_OK(t *testing.T) {
+	svc := &mockService{textureBody: []byte("mock-geyser-texture-data"), textureContentType: "image/png"}
+	handler := GetGeyserTextureHandler(svc)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/texture/geyser/abc123hash", nil)
+	r.SetPathValue("hash", "abc123hash")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	if w.Header().Get("Content-Type") != "image/png" {
+		t.Errorf("expected image/png, got %s", w.Header().Get("Content-Type"))
+	}
+	if w.Body.String() != "mock-geyser-texture-data" {
+		t.Errorf("expected body mock-geyser-texture-data, got %s", w.Body.String())
+	}
+}
+
+func TestHandler_GetGeyserTextureHandler_EmptyHash(t *testing.T) {
+	svc := &mockService{}
+	handler := GetGeyserTextureHandler(svc)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/texture/geyser/", nil)
+	r.SetPathValue("hash", "")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandler_GetGeyserTextureHandler_NotFound(t *testing.T) {
+	svc := &mockService{err: ErrTextureNotFound}
+	handler := GetGeyserTextureHandler(svc)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/texture/geyser/abc123hash", nil)
+	r.SetPathValue("hash", "abc123hash")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", w.Code)
+	}
+}
+
+func TestHandler_GetGeyserTextureHandler_ServiceError(t *testing.T) {
+	svc := &mockService{err: errors.New("upstream issue")}
+	handler := GetGeyserTextureHandler(svc)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/texture/geyser/abc123hash", nil)
+	r.SetPathValue("hash", "abc123hash")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusBadGateway {
+		t.Errorf("expected 502, got %d", w.Code)
 	}
 }
