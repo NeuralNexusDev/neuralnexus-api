@@ -309,7 +309,7 @@ func TestResolveOrCreateAccountForPlatformUserCreatesNewAccount(t *testing.T) {
 	if account.UserID == "" {
 		t.Error("expected the returned account to have a UserID")
 	}
-	if account.Username != "someuser" || account.Email != "someuser@example.com" {
+	if account.Username != "someuser" || account.Email == nil || *account.Email != "someuser@example.com" {
 		t.Errorf("expected the new account to be seeded from the platform data, got: %+v", account)
 	}
 	if len(als.addCalls) != 1 {

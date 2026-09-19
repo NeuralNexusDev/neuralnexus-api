@@ -77,9 +77,7 @@ func (s *store) OAuthToken() OAuthTokenStore {
 // 	hashed_secret BYTEA,
 // 	salt BYTEA,
 // 	roles TEXT[],
-//  updated_at timestamp with time zone default current_timestamp,
-//  CONSTRAINT email_unique CHECK (email IS NOT NULL),
-//  CONSTRAINT password_enforced CHECK (email IS NOT NULL OR hashed_secret IS NOT NULL)
+//  updated_at timestamp with time zone default current_timestamp
 // );
 
 // AccountStore interface
@@ -92,20 +90,12 @@ type AccountStore interface {
 	DeleteAccountFromDB(userID string) error
 }
 
-// ErrEmailAlreadyExists is returned by AddAccountToDB when a concurrent
-// insert already created an account with this exact email first - the
-// caller lost the race and should re-fetch via GetAccountByEmail and use
-// the winner's account instead of treating this as a hard failure.
+// ErrEmailAlreadyExists is returned by AddAccountToDB when another account
+// already has this exact email.
 var ErrEmailAlreadyExists = errors.New("account with this email already exists")
 
 // ErrUsernameAlreadyExists is returned by AddAccountToDB/UpdateAccountInDB
-// when another account already has this exact, non-empty username -
-// unlike email (which is forced NOT NULL by the password_enforced CHECK
-// constraint and so always needs a real value or a synthetic placeholder),
-// username has no such constraint, so an empty username is stored as SQL
-// NULL (see the NULLIF/COALESCE handling below) rather than colliding on
-// accounts_username_key; this sentinel only ever fires for a genuine
-// clash between two real, non-empty usernames.
+// when another account already has this exact, non-empty username.
 var ErrUsernameAlreadyExists = errors.New("account with this username already exists")
 
 // translateAccountConstraintErr maps a Postgres unique-violation on the
@@ -125,13 +115,11 @@ func translateAccountConstraintErr(err error) error {
 }
 
 // AddAccountToDB creates an account in the database. An empty
-// account.Username is stored as SQL NULL rather than the literal empty
-// string: accounts.username is UNIQUE but nullable (unlike email, which is
-// forced NOT NULL), and Postgres allows any number of NULLs under a UNIQUE
-// constraint, so this is what lets multiple usernameless accounts (e.g.
-// auth.NewIDOnlyAccount placeholders from the admin
-// PUT /api/v1/users/{platform}/{platform_id} endpoint) coexist instead of
-// every account after the first failing on accounts_username_key.
+// account.Username is stored as SQL NULL rather than "", since
+// accounts.username is UNIQUE but nullable and Postgres allows any number
+// of NULLs under a UNIQUE constraint. account.Email needs no such
+// conversion: it's already a *string, so a nil Email is passed through as
+// NULL directly.
 func (s *store) AddAccountToDB(account *Account) error {
 	_, err := s.db.Exec(context.Background(),
 		"INSERT INTO accounts (user_id, username, email, hashed_secret, salt, roles) VALUES ($1, NULLIF($2, ''), $3, $4, $5, $6)",

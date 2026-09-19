@@ -23,15 +23,27 @@ func init() {
 	}
 }
 
-// Account struct
+// Account struct. Email is nullable: accounts.email is UNIQUE, and several
+// platforms (e.g. Minecraft) never provide one, so "no email" is a real,
+// permanent state rather than a placeholder to work around.
 type Account struct {
 	UserID       string    `db:"user_id" validate:"required" json:"user_id" xml:"user_id"`
 	Username     string    `db:"username" json:"username" xml:"username"`
-	Email        string    `db:"email" json:"-" xml:"-"`
+	Email        *string   `db:"email" json:"-" xml:"-"`
 	HashedSecret []byte    `db:"hashed_secret" json:"-" xml:"-"`
 	Salt         []byte    `db:"salt" json:"-" xml:"-"`
 	Roles        []string  `db:"roles" json:"roles" xml:"roles"`
 	UpdatedAt    time.Time `db:"updated_at" json:"updated_at" xml:"updated_at"`
+}
+
+// emailPtr converts an empty string to a nil *string, so an absent email is
+// stored as SQL NULL rather than "" (which would collide with any other
+// account with no email under accounts.email's UNIQUE constraint).
+func emailPtr(email string) *string {
+	if email == "" {
+		return nil
+	}
+	return &email
 }
 
 // NewAccount creates a new account
@@ -43,7 +55,7 @@ func NewAccount(username, email, password string) (*Account, error) {
 	user := &Account{
 		UserID:   id,
 		Username: username,
-		Email:    email,
+		Email:    emailPtr(email),
 	}
 	err = user.HashPassword(password)
 	if err != nil {
@@ -52,29 +64,22 @@ func NewAccount(username, email, password string) (*Account, error) {
 	return user, nil
 }
 
-// NewPasswordLessAccount creates a new account without a password. If email
-// is empty (the caller has no email for this person), a placeholder unique
-// to this account is stored instead: accounts.email is UNIQUE, so two real,
-// unrelated accounts with no email would otherwise collide on the shared ""
-// value and the second one could never be created.
+// NewPasswordLessAccount creates a new account without a password.
 func NewPasswordLessAccount(username, email string) (*Account, error) {
 	id, err := database.GenSnowflake()
 	if err != nil {
 		return nil, err
 	}
-	if email == "" {
-		email = noEmailPlaceholder(id)
-	}
 	return &Account{
 		UserID:   id,
 		Username: username,
-		Email:    email,
+		Email:    emailPtr(email),
 	}, nil
 }
 
-// NewIDOnlyAccount creates a new account with only an ID. Email still gets a
-// unique placeholder for the same reason as NewPasswordLessAccount: leaving
-// it "" would collide with any other account created the same way.
+// NewIDOnlyAccount creates a new account with only an ID - no username,
+// email, or password. Used for platforms (e.g. Minecraft) that don't
+// provide an email and haven't been assigned a username yet.
 func NewIDOnlyAccount() (*Account, error) {
 	id, err := database.GenSnowflake()
 	if err != nil {
@@ -82,21 +87,14 @@ func NewIDOnlyAccount() (*Account, error) {
 	}
 	return &Account{
 		UserID: id,
-		Email:  noEmailPlaceholder(id),
 	}, nil
-}
-
-// noEmailPlaceholder returns a value for accounts.email that can never
-// collide with another account's placeholder or with a real email (it
-// contains no "@" and is derived from this account's unique ID).
-func noEmailPlaceholder(userID string) string {
-	return "noemail:" + userID
 }
 
 // Deliberate go:linkname into argon2's unexported deriveKey, to pass a
 // pepper as a real Argon2 "secret" rather than folding it into the
 // password bytes - the public argon2.IDKey hardcodes secret=nil. Fallback
 // if x/crypto ever breaks this: argon2.IDKey(append(password, pepper...), salt, ...).
+//
 //go:linkname deriveKey golang.org/x/crypto/argon2.deriveKey
 //goland:noinspection GoUnusedParameter
 func deriveKey(mode int, password, salt, secret, data []byte, time, memory uint32, threads uint8, keyLen uint32) []byte

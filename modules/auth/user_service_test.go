@@ -22,18 +22,17 @@ func (m *mockAccountStore) AddAccountToDB(a *Account) error {
 	if m.addErr != nil {
 		return m.addErr
 	}
-	// Mirrors the real accounts.email UNIQUE constraint so tests can catch
-	// two accounts colliding on the same (or both empty) email.
-	for _, existing := range m.accounts {
-		if existing.Email == a.Email {
-			return ErrEmailAlreadyExists
+	// Mirrors the real accounts.email UNIQUE constraint: a nil Email is
+	// stored as SQL NULL, and Postgres never treats two NULLs as colliding
+	// under a UNIQUE constraint - only a genuine, non-nil duplicate does.
+	if a.Email != nil {
+		for _, existing := range m.accounts {
+			if existing.Email != nil && *existing.Email == *a.Email {
+				return ErrEmailAlreadyExists
+			}
 		}
 	}
-	// Mirrors the real accounts.username UNIQUE constraint: unlike email
-	// (forced NOT NULL, so an empty value must get a synthetic placeholder),
-	// an empty username is stored as SQL NULL by the real store, and
-	// Postgres never treats two NULLs as colliding under a UNIQUE
-	// constraint - only a genuine, non-empty duplicate does.
+	// Mirrors the real accounts.username UNIQUE constraint the same way.
 	if a.Username != "" {
 		for _, existing := range m.accounts {
 			if existing.Username == a.Username {
@@ -106,6 +105,26 @@ func (m *mockLinkAccountStore) GetLinkedAccountByUserID(string, Platform) (*Link
 	return nil, ErrNotFound
 }
 
+// Regression test for mockAccountStore.AddAccountToDB itself: Email became
+// *string, and a naive existing.Email == a.Email comparison compares
+// pointers, not content, so two accounts with the same real email string
+// (necessarily different *string values) would never be caught as a
+// collision by this mock, letting bugs the mock is supposed to catch slip
+// through silently.
+func TestMockAccountStoreDetectsEmailCollisionByValueNotPointer(t *testing.T) {
+	as := newMockAccountStore()
+	email1 := "shared@example.com"
+	email2 := "shared@example.com"
+
+	if err := as.AddAccountToDB(&Account{UserID: "u1", Email: &email1}); err != nil {
+		t.Fatalf("first AddAccountToDB returned error: %v", err)
+	}
+	err := as.AddAccountToDB(&Account{UserID: "u2", Email: &email2})
+	if !errors.Is(err, ErrEmailAlreadyExists) {
+		t.Errorf("expected ErrEmailAlreadyExists for two accounts sharing an email value (via distinct *string pointers), got: %v", err)
+	}
+}
+
 func TestUserServiceUpdateUserFromPlatformCreatesNewAccount(t *testing.T) {
 	as := newMockAccountStore()
 	als := &mockLinkAccountStore{
@@ -140,8 +159,8 @@ func TestUserServiceUpdateUserFromPlatformCreatesNewAccount(t *testing.T) {
 // Regression test: NewIDOnlyAccount used to leave Email as "", and
 // accounts.email is UNIQUE, so a second platform identity with no email data
 // (e.g. a second Minecraft UUID linked via this admin endpoint) would
-// permanently fail to ever get its own account. NewIDOnlyAccount now gives
-// each account a unique placeholder email instead.
+// permanently fail to ever get its own account. Email is nil instead now,
+// and nils never collide under the UNIQUE constraint.
 func TestUserServiceUpdateUserFromPlatformCreatesSeparateAccountsWithNoEmailData(t *testing.T) {
 	as := newMockAccountStore()
 	callCount := 0

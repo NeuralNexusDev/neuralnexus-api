@@ -53,7 +53,7 @@ func (m *mockLinkAccountStore) GetLinkedAccountByUserID(string, auth.Platform) (
 }
 
 // mockSessionService implements auth.SessionService for unit testing
-// sessionFromCookie.
+// OAuthHandler's ModeLink cookie handling.
 type mockSessionService struct {
 	readJWTFunc func(token string) (*auth.Session, error)
 }
@@ -69,72 +69,70 @@ func (m *mockSessionService) ReadJWT(token string) (*auth.Session, error) {
 	return m.readJWTFunc(token)
 }
 
-func TestSessionFromCookieNoCookie(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/api/oauth", nil)
-	ss := &mockSessionService{}
-
-	_, err := sessionFromCookie(r, ss)
-	if err == nil {
-		t.Fatal("expected an error when the session cookie is missing")
+// newModeLinkRequest builds a request that passes OAuthHandler's state/nonce
+// checks and reaches the ModeLink branch, so tests can focus on its session
+// cookie handling.
+func newModeLinkRequest(t *testing.T) *http.Request {
+	t.Helper()
+	state := linking.OAuthState{
+		Platform:    auth.PlatformDiscord,
+		Nonce:       "test-nonce",
+		RedirectURI: "https://example.com/done",
+		Mode:        linking.ModeLink,
 	}
-	if err.Error() != "not logged in" {
-		t.Errorf("expected \"not logged in\", got: %v", err)
+	stateJSON, err := json.Marshal(state)
+	if err != nil {
+		t.Fatalf("failed to marshal state: %v", err)
+	}
+	stateB64 := base64.URLEncoding.EncodeToString(stateJSON)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/oauth?code=somecode&state="+stateB64, nil)
+	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
+	return r
+}
+
+func TestOAuthHandlerLinkModeNoSessionCookieRejected(t *testing.T) {
+	r := newModeLinkRequest(t)
+	w := httptest.NewRecorder()
+
+	OAuthHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 when the session cookie is missing, got %d", w.Code)
 	}
 }
 
-func TestSessionFromCookieReadJWTErrorPropagates(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/api/oauth", nil)
+func TestOAuthHandlerLinkModeReadJWTErrorRejected(t *testing.T) {
+	r := newModeLinkRequest(t)
 	r.AddCookie(&http.Cookie{Name: "session", Value: "not-a-real-jwt"})
-	wantErr := errors.New("malformed token")
+	w := httptest.NewRecorder()
 	ss := &mockSessionService{
 		readJWTFunc: func(string) (*auth.Session, error) {
-			return nil, wantErr
+			return nil, errors.New("malformed token")
 		},
 	}
 
-	_, err := sessionFromCookie(r, ss)
-	if !errors.Is(err, wantErr) {
-		t.Errorf("expected the ReadJWT error to propagate, got: %v", err)
+	OAuthHandler(&mockAccountService{}, &mockLinkAccountStore{}, ss)(w, r)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 when ReadJWT fails, got %d", w.Code)
 	}
 }
 
-func TestSessionFromCookieExpiredSessionRejected(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/api/oauth", nil)
+func TestOAuthHandlerLinkModeExpiredSessionRejected(t *testing.T) {
+	r := newModeLinkRequest(t)
 	r.AddCookie(&http.Cookie{Name: "session", Value: "expired-jwt"})
+	w := httptest.NewRecorder()
 	ss := &mockSessionService{
 		readJWTFunc: func(string) (*auth.Session, error) {
 			return &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}, nil
 		},
 	}
 
-	_, err := sessionFromCookie(r, ss)
-	if err == nil {
-		t.Fatal("expected an error for an expired session")
-	}
-	if err.Error() != "session expired" {
-		t.Errorf("expected \"session expired\", got: %v", err)
-	}
-}
+	OAuthHandler(&mockAccountService{}, &mockLinkAccountStore{}, ss)(w, r)
 
-func TestSessionFromCookieValidSessionReturned(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/api/oauth", nil)
-	r.AddCookie(&http.Cookie{Name: "session", Value: "valid-jwt"})
-	want := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
-	ss := &mockSessionService{
-		readJWTFunc: func(token string) (*auth.Session, error) {
-			if token != "valid-jwt" {
-				t.Errorf("expected ReadJWT to be called with the cookie's value, got %q", token)
-			}
-			return want, nil
-		},
-	}
-
-	got, err := sessionFromCookie(r, ss)
-	if err != nil {
-		t.Fatalf("sessionFromCookie returned error: %v", err)
-	}
-	if got != want {
-		t.Error("expected the session returned by ReadJWT to be passed through")
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for an expired session, got %d", w.Code)
 	}
 }
 

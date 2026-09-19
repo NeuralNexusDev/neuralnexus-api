@@ -159,14 +159,6 @@ func ProcessOAuthLogin(as auth.AccountService, las auth.LinkAccountStore, ss aut
 // winner's linked account/account are re-fetched and returned instead of
 // treating it as a hard failure; any other error is returned as-is (wrapped
 // together with a cleanup failure, if the cleanup itself also failed).
-//
-// This deliberately never attaches to a different, pre-existing account by
-// matching GetEmail(): a platform can report an email before its owner has
-// ever proven they control it (e.g. Discord returns an unverified address
-// as-is), so trusting it here would let anyone take over any account whose
-// email they can simply type into their own platform profile. The only
-// supported way to attach a second platform to an existing account is the
-// explicit, already-authenticated linkPlatformUserToSession flow below.
 func resolveOrCreateAccountForPlatformUser(as auth.AccountService, las auth.LinkAccountStore, platform auth.Platform, user auth.PlatformData) (*auth.Account, error) {
 	la, err := las.GetLinkedAccountByPlatformID(platform, user.GetID())
 	if err == nil {
@@ -253,17 +245,9 @@ func ProcessOAuthLink(r *http.Request, las auth.LinkAccountStore, code string, s
 }
 
 // linkPlatformUserToSession links the given platform identity to the
-// session's account, unless it's already linked to a different account (in
-// which case that's returned as an error). This is intentional even when the
-// two accounts share an email: unlike ProcessOAuthLogin, which only ever
-// attaches a brand-new, never-before-seen platform identity to an account,
-// linking here would be reconciling two already-established accounts (each
-// potentially with its own roles, sessions, and other linked platforms) -
-// silently merging those on a login-time email match is a materially bigger
-// and riskier operation than this function performs, so it's left as an
-// explicit, deliberate action instead. If it's already linked to this same
-// account, linking is a no-op: re-running AddLinkedAccountToDB would only
-// fail on the linked_accounts_unique constraint for no benefit.
+// session's account. If it's already linked to a different account, that's
+// returned as an error; if it's already linked to this same account, linking
+// is a no-op.
 func linkPlatformUserToSession(las auth.LinkAccountStore, session *auth.Session, platform auth.Platform, user auth.PlatformData) (*auth.Session, error) {
 	la, err := las.GetLinkedAccountByPlatformID(platform, user.GetID())
 	switch {

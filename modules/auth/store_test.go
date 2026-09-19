@@ -1,13 +1,5 @@
 package auth
 
-// These are integration tests against a real Postgres instance, mirroring
-// the pattern used by modules/minecraft/store_test.go. They're skipped
-// unless TEST_POSTGRES_URL is set (see docker-compose.test.yml / Makefile),
-// since the store layer talks to *pgxpool.Pool directly with no interface
-// to mock, so the pgx error-translation logic in store.go (ErrNotFound,
-// ErrEmailAlreadyExists, and the exact Postgres constraint name they key
-// off) can only be verified against a real database.
-
 import (
 	"context"
 	"errors"
@@ -38,9 +30,7 @@ func setupAccountStore(t *testing.T) AccountStore {
 			hashed_secret BYTEA,
 			salt BYTEA,
 			roles TEXT[],
-			updated_at timestamp with time zone default current_timestamp,
-			CONSTRAINT email_unique CHECK (email IS NOT NULL),
-			CONSTRAINT password_enforced CHECK (email IS NOT NULL OR hashed_secret IS NOT NULL)
+			updated_at timestamp with time zone default current_timestamp
 		)
 	`)
 	if err != nil {
@@ -65,12 +55,12 @@ func setupAccountStore(t *testing.T) AccountStore {
 func TestStoreAddAccountToDBDuplicateEmailTranslatesToSentinel(t *testing.T) {
 	as := setupAccountStore(t)
 
-	a1 := &Account{UserID: "900000000000000001", Username: "storetest1", Email: "storetest-shared@example.com"}
+	a1 := &Account{UserID: "900000000000000001", Username: "storetest1", Email: emailPtr("storetest-shared@example.com")}
 	if err := as.AddAccountToDB(a1); err != nil {
 		t.Fatalf("first AddAccountToDB returned error: %v", err)
 	}
 
-	a2 := &Account{UserID: "900000000000000002", Username: "storetest2", Email: "storetest-shared@example.com"}
+	a2 := &Account{UserID: "900000000000000002", Username: "storetest2", Email: emailPtr("storetest-shared@example.com")}
 	err := as.AddAccountToDB(a2)
 	if !errors.Is(err, ErrEmailAlreadyExists) {
 		t.Errorf("expected ErrEmailAlreadyExists for a duplicate email insert, got: %v", err)
@@ -100,12 +90,12 @@ func TestStoreGetAccountByUsernameNotFoundTranslatesToSentinel(t *testing.T) {
 	}
 }
 
-// TestStoreAddAccountToDBEmptyEmailPlaceholdersDoNotCollide is the
-// end-to-end version of the NewIDOnlyAccount/NewPasswordLessAccount unit
-// tests: two accounts that would previously both store Email = "" (and so
-// violate accounts_email_key on the second insert) must both succeed once
-// they're given the unique noEmailPlaceholder value instead.
-func TestStoreAddAccountToDBEmptyEmailPlaceholdersDoNotCollide(t *testing.T) {
+// TestStoreAddAccountToDBNilEmailsDoNotCollide is the end-to-end version of
+// the NewIDOnlyAccount unit test: two accounts with a nil Email (e.g. two
+// Minecraft-linked accounts, which never get a real email) must both
+// succeed, since Postgres never treats two NULLs as colliding under
+// accounts.email's UNIQUE constraint.
+func TestStoreAddAccountToDBNilEmailsDoNotCollide(t *testing.T) {
 	as := setupAccountStore(t)
 
 	a1, err := NewIDOnlyAccount()
@@ -126,6 +116,14 @@ func TestStoreAddAccountToDBEmptyEmailPlaceholdersDoNotCollide(t *testing.T) {
 	a2.Username = "storetest-noemail2"
 	if err := as.AddAccountToDB(a2); err != nil {
 		t.Fatalf("second no-email AddAccountToDB returned error: %v", err)
+	}
+
+	got, err := as.GetAccountByID(a1.UserID)
+	if err != nil {
+		t.Fatalf("GetAccountByID(a1) returned error: %v", err)
+	}
+	if got.Email != nil {
+		t.Errorf("expected a1's email to round-trip as nil, got %q", *got.Email)
 	}
 }
 
@@ -193,12 +191,12 @@ func TestStoreAddAccountToDBEmptyUsernamesDoNotCollide(t *testing.T) {
 func TestStoreAddAccountToDBDuplicateUsernameTranslatesToSentinel(t *testing.T) {
 	as := setupAccountStore(t)
 
-	a1 := &Account{UserID: "900000000000000007", Username: "storetest-shared-username", Email: "storetest-username1@example.com"}
+	a1 := &Account{UserID: "900000000000000007", Username: "storetest-shared-username", Email: emailPtr("storetest-username1@example.com")}
 	if err := as.AddAccountToDB(a1); err != nil {
 		t.Fatalf("first AddAccountToDB returned error: %v", err)
 	}
 
-	a2 := &Account{UserID: "900000000000000008", Username: "storetest-shared-username", Email: "storetest-username2@example.com"}
+	a2 := &Account{UserID: "900000000000000008", Username: "storetest-shared-username", Email: emailPtr("storetest-username2@example.com")}
 	err := as.AddAccountToDB(a2)
 	if !errors.Is(err, ErrUsernameAlreadyExists) {
 		t.Errorf("expected ErrUsernameAlreadyExists for a duplicate username insert, got: %v", err)
