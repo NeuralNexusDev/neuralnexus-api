@@ -52,11 +52,18 @@ func NewAccount(username, email, password string) (*Account, error) {
 	return user, nil
 }
 
-// NewPasswordLessAccount creates a new account without a password
+// NewPasswordLessAccount creates a new account without a password. If email
+// is empty (the caller has no email for this person), a placeholder unique
+// to this account is stored instead: accounts.email is UNIQUE, so two real,
+// unrelated accounts with no email would otherwise collide on the shared ""
+// value and the second one could never be created.
 func NewPasswordLessAccount(username, email string) (*Account, error) {
 	id, err := database.GenSnowflake()
 	if err != nil {
 		return nil, err
+	}
+	if email == "" {
+		email = noEmailPlaceholder(id)
 	}
 	return &Account{
 		UserID:   id,
@@ -65,7 +72,9 @@ func NewPasswordLessAccount(username, email string) (*Account, error) {
 	}, nil
 }
 
-// NewIDOnlyAccount creates a new account with only an ID
+// NewIDOnlyAccount creates a new account with only an ID. Email still gets a
+// unique placeholder for the same reason as NewPasswordLessAccount: leaving
+// it "" would collide with any other account created the same way.
 func NewIDOnlyAccount() (*Account, error) {
 	id, err := database.GenSnowflake()
 	if err != nil {
@@ -73,7 +82,15 @@ func NewIDOnlyAccount() (*Account, error) {
 	}
 	return &Account{
 		UserID: id,
+		Email:  noEmailPlaceholder(id),
 	}, nil
+}
+
+// noEmailPlaceholder returns a value for accounts.email that can never
+// collide with another account's placeholder or with a real email (it
+// contains no "@" and is derived from this account's unique ID).
+func noEmailPlaceholder(userID string) string {
+	return "noemail:" + userID
 }
 
 // Deliberate go:linkname into argon2's unexported deriveKey, to pass a

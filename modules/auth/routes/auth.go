@@ -1,7 +1,9 @@
 package authroutes
 
 import (
+	"context"
 	"encoding/base64"
+	"errors"
 	"github.com/goccy/go-json"
 	"log"
 	"net/http"
@@ -147,9 +149,20 @@ func OAuthHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Ses
 		switch state.Mode {
 		case linking.ModeLogin:
 			session, err = linking.ProcessOAuthLogin(as, las, ss, code, &state)
+		case linking.ModeLink:
+			var linkSession *auth.Session
+			linkSession, err = sessionFromCookie(r, ss)
+			if err != nil {
+				log.Println("Failed to read session for link mode:\n\t", err)
+				responses.Unauthorized(w, r, "You must be logged in to link an account")
+				return
+			}
+			ctx := context.WithValue(r.Context(), mw.SessionKey, linkSession)
+			session, err = linking.ProcessOAuthLink(r.WithContext(ctx), las, code, &state)
 		default:
 			log.Println("Invalid mode")
 			responses.BadRequest(w, r, "Invalid state")
+			return
 		}
 
 		if err != nil {
@@ -178,4 +191,28 @@ func OAuthHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Ses
 
 		http.Redirect(w, r, state.RedirectURI, http.StatusSeeOther)
 	}
+}
+
+// sessionFromCookie reads and validates the session cookie set by this same
+// handler's login flow. This route never runs SessionMiddleware (which
+// reads a bearer token from the Authorization header) - it's hit by a
+// browser redirect from the OAuth provider, which can't carry a custom
+// header, so a link-mode request's existing session can only arrive via the
+// cookie the browser attaches automatically. The nonce check earlier in
+// OAuthHandler (comparing state.Nonce against the "nonce" cookie) already
+// guards this endpoint against CSRF, so reusing the session cookie here
+// doesn't introduce a new attack surface.
+func sessionFromCookie(r *http.Request, ss auth.SessionService) (*auth.Session, error) {
+	cookie, err := r.Cookie("session")
+	if err != nil {
+		return nil, errors.New("not logged in")
+	}
+	session, err := ss.ReadJWT(cookie.Value)
+	if err != nil {
+		return nil, err
+	}
+	if !session.IsValid() {
+		return nil, errors.New("session expired")
+	}
+	return session, nil
 }

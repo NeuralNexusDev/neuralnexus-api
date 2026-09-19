@@ -22,6 +22,25 @@ func (m *mockAccountStore) AddAccountToDB(a *Account) error {
 	if m.addErr != nil {
 		return m.addErr
 	}
+	// Mirrors the real accounts.email UNIQUE constraint so tests can catch
+	// two accounts colliding on the same (or both empty) email.
+	for _, existing := range m.accounts {
+		if existing.Email == a.Email {
+			return ErrEmailAlreadyExists
+		}
+	}
+	// Mirrors the real accounts.username UNIQUE constraint: unlike email
+	// (forced NOT NULL, so an empty value must get a synthetic placeholder),
+	// an empty username is stored as SQL NULL by the real store, and
+	// Postgres never treats two NULLs as colliding under a UNIQUE
+	// constraint - only a genuine, non-empty duplicate does.
+	if a.Username != "" {
+		for _, existing := range m.accounts {
+			if existing.Username == a.Username {
+				return ErrUsernameAlreadyExists
+			}
+		}
+	}
 	m.accounts[a.UserID] = a
 	return nil
 }
@@ -115,6 +134,39 @@ func TestUserServiceUpdateUserFromPlatformCreatesNewAccount(t *testing.T) {
 	}
 	if len(als.updateCalls) != 1 {
 		t.Errorf("expected UpdateLinkedAccount to be called once to persist the platform data, got %d", len(als.updateCalls))
+	}
+}
+
+// Regression test: NewIDOnlyAccount used to leave Email as "", and
+// accounts.email is UNIQUE, so a second platform identity with no email data
+// (e.g. a second Minecraft UUID linked via this admin endpoint) would
+// permanently fail to ever get its own account. NewIDOnlyAccount now gives
+// each account a unique placeholder email instead.
+func TestUserServiceUpdateUserFromPlatformCreatesSeparateAccountsWithNoEmailData(t *testing.T) {
+	as := newMockAccountStore()
+	callCount := 0
+	als := &mockLinkAccountStore{
+		getByPlatformIDFunc: func(Platform, string) (*LinkedAccount, error) {
+			callCount++
+			return nil, ErrNotFound
+		},
+	}
+	svc := &userService{as: as, als: als}
+
+	account1, err := svc.UpdateUserFromPlatform(PlatformMinecraft, "uuid1", nil)
+	if err != nil {
+		t.Fatalf("first UpdateUserFromPlatform call returned error: %v", err)
+	}
+	account2, err := svc.UpdateUserFromPlatform(PlatformMinecraft, "uuid2", nil)
+	if err != nil {
+		t.Fatalf("second UpdateUserFromPlatform call returned error: %v", err)
+	}
+
+	if account1.UserID == account2.UserID {
+		t.Fatal("expected two distinct platform identities to get two distinct accounts")
+	}
+	if len(as.accounts) != 2 {
+		t.Errorf("expected both accounts to be persisted, got %d", len(as.accounts))
 	}
 }
 

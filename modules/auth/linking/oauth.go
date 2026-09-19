@@ -159,46 +159,52 @@ func ProcessOAuthLogin(as auth.AccountService, las auth.LinkAccountStore, ss aut
 // winner's linked account/account are re-fetched and returned instead of
 // treating it as a hard failure; any other error is returned as-is (wrapped
 // together with a cleanup failure, if the cleanup itself also failed).
+//
+// This deliberately never attaches to a different, pre-existing account by
+// matching GetEmail(): a platform can report an email before its owner has
+// ever proven they control it (e.g. Discord returns an unverified address
+// as-is), so trusting it here would let anyone take over any account whose
+// email they can simply type into their own platform profile. The only
+// supported way to attach a second platform to an existing account is the
+// explicit, already-authenticated linkPlatformUserToSession flow below.
 func resolveOrCreateAccountForPlatformUser(as auth.AccountService, las auth.LinkAccountStore, platform auth.Platform, user auth.PlatformData) (*auth.Account, error) {
 	la, err := las.GetLinkedAccountByPlatformID(platform, user.GetID())
-	if err != nil {
-		if !errors.Is(err, auth.ErrNotFound) {
-			return nil, err
-		}
-		a, err := auth.NewPasswordLessAccount(user.GetUsername(), user.GetEmail())
-		if err != nil {
-			return nil, err
-		}
-		err = as.AddAccount(a)
-		if err != nil {
-			return nil, err
-		}
-
-		la = auth.NewLinkedAccount(a.UserID, platform, user.GetUsername(), user.GetID(), user)
-		err = las.AddLinkedAccountToDB(la)
-		if err != nil {
-			// Whatever went wrong, the account created above is now
-			// orphaned - clean it up before deciding how to handle err.
-			if delErr := as.DeleteAccount(a.UserID); delErr != nil {
-				return nil, fmt.Errorf("failed to link account (%w) and failed to clean up the orphaned placeholder account: %w", err, delErr)
-			}
-			if !errors.Is(err, auth.ErrAlreadyLinked) {
-				return nil, err
-			}
-			// Lost the race: use the winner's account instead.
-			la, err = las.GetLinkedAccountByPlatformID(platform, user.GetID())
-			if err != nil {
-				return nil, err
-			}
-			a, err = as.GetAccountByID(la.UserID)
-			if err != nil {
-				return nil, err
-			}
-		}
-		return a, nil
+	if err == nil {
+		return as.GetAccountByID(la.UserID)
+	}
+	if !errors.Is(err, auth.ErrNotFound) {
+		return nil, err
 	}
 
-	return as.GetAccountByID(la.UserID)
+	a, err := auth.NewPasswordLessAccount(user.GetUsername(), user.GetEmail())
+	if err != nil {
+		return nil, err
+	}
+	if err := as.AddAccount(a); err != nil {
+		return nil, err
+	}
+
+	la = auth.NewLinkedAccount(a.UserID, platform, user.GetUsername(), user.GetID(), user)
+	if err := las.AddLinkedAccountToDB(la); err != nil {
+		// Whatever went wrong, the account created above is now orphaned -
+		// clean it up before deciding how to handle err.
+		if delErr := as.DeleteAccount(a.UserID); delErr != nil {
+			return nil, fmt.Errorf("failed to link account (%w) and failed to clean up the orphaned placeholder account: %w", err, delErr)
+		}
+		if !errors.Is(err, auth.ErrAlreadyLinked) {
+			return nil, err
+		}
+		// Lost the race: use the winner's account instead.
+		la, err = las.GetLinkedAccountByPlatformID(platform, user.GetID())
+		if err != nil {
+			return nil, err
+		}
+		a, err = as.GetAccountByID(la.UserID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return a, nil
 }
 
 // ProcessOAuthLink links an account to an existing user
@@ -243,22 +249,36 @@ func ProcessOAuthLink(r *http.Request, las auth.LinkAccountStore, code string, s
 		return nil, err
 	}
 
-	// Check if platform account is linked to an account
-	la, err := las.GetLinkedAccountByPlatformID(state.Platform, user.GetID())
+	return linkPlatformUserToSession(las, session, state.Platform, user)
+}
+
+// linkPlatformUserToSession links the given platform identity to the
+// session's account, unless it's already linked to a different account (in
+// which case that's returned as an error). This is intentional even when the
+// two accounts share an email: unlike ProcessOAuthLogin, which only ever
+// attaches a brand-new, never-before-seen platform identity to an account,
+// linking here would be reconciling two already-established accounts (each
+// potentially with its own roles, sessions, and other linked platforms) -
+// silently merging those on a login-time email match is a materially bigger
+// and riskier operation than this function performs, so it's left as an
+// explicit, deliberate action instead. If it's already linked to this same
+// account, linking is a no-op: re-running AddLinkedAccountToDB would only
+// fail on the linked_accounts_unique constraint for no benefit.
+func linkPlatformUserToSession(las auth.LinkAccountStore, session *auth.Session, platform auth.Platform, user auth.PlatformData) (*auth.Session, error) {
+	la, err := las.GetLinkedAccountByPlatformID(platform, user.GetID())
 	switch {
 	case err == nil:
-		// Return an error if the linked account is not the same as the current session
-		if session.UserID != la.UserID {
-			return nil, errors.New("platform account already linked to another account")
+		if session.UserID == la.UserID {
+			return session, nil
 		}
+		return nil, errors.New("this platform account is already linked to a different account; log in with it directly if you want to use that account, or unlink it there first")
 	case !errors.Is(err, auth.ErrNotFound):
 		return nil, err
 	}
 
 	// Link account
-	la = auth.NewLinkedAccount(session.UserID, state.Platform, user.GetUsername(), user.GetID(), user)
-	err = las.AddLinkedAccountToDB(la)
-	if err != nil {
+	la = auth.NewLinkedAccount(session.UserID, platform, user.GetUsername(), user.GetID(), user)
+	if err := las.AddLinkedAccountToDB(la); err != nil {
 		return nil, errors.New("failed to link account")
 	}
 

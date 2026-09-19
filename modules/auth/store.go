@@ -92,27 +92,69 @@ type AccountStore interface {
 	DeleteAccountFromDB(userID string) error
 }
 
-// AddAccountToDB creates an account in the database
+// ErrEmailAlreadyExists is returned by AddAccountToDB when a concurrent
+// insert already created an account with this exact email first - the
+// caller lost the race and should re-fetch via GetAccountByEmail and use
+// the winner's account instead of treating this as a hard failure.
+var ErrEmailAlreadyExists = errors.New("account with this email already exists")
+
+// ErrUsernameAlreadyExists is returned by AddAccountToDB/UpdateAccountInDB
+// when another account already has this exact, non-empty username -
+// unlike email (which is forced NOT NULL by the password_enforced CHECK
+// constraint and so always needs a real value or a synthetic placeholder),
+// username has no such constraint, so an empty username is stored as SQL
+// NULL (see the NULLIF/COALESCE handling below) rather than colliding on
+// accounts_username_key; this sentinel only ever fires for a genuine
+// clash between two real, non-empty usernames.
+var ErrUsernameAlreadyExists = errors.New("account with this username already exists")
+
+// translateAccountConstraintErr maps a Postgres unique-violation on the
+// accounts table to the matching sentinel, so callers never see a raw,
+// driver-specific error for a condition they're expected to recover from.
+func translateAccountConstraintErr(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		switch pgErr.ConstraintName {
+		case "accounts_email_key":
+			return ErrEmailAlreadyExists
+		case "accounts_username_key":
+			return ErrUsernameAlreadyExists
+		}
+	}
+	return err
+}
+
+// AddAccountToDB creates an account in the database. An empty
+// account.Username is stored as SQL NULL rather than the literal empty
+// string: accounts.username is UNIQUE but nullable (unlike email, which is
+// forced NOT NULL), and Postgres allows any number of NULLs under a UNIQUE
+// constraint, so this is what lets multiple usernameless accounts (e.g.
+// auth.NewIDOnlyAccount placeholders from the admin
+// PUT /api/v1/users/{platform}/{platform_id} endpoint) coexist instead of
+// every account after the first failing on accounts_username_key.
 func (s *store) AddAccountToDB(account *Account) error {
 	_, err := s.db.Exec(context.Background(),
-		"INSERT INTO accounts (user_id, username, email, hashed_secret, salt, roles) VALUES ($1, $2, $3, $4, $5, $6)",
+		"INSERT INTO accounts (user_id, username, email, hashed_secret, salt, roles) VALUES ($1, NULLIF($2, ''), $3, $4, $5, $6)",
 		account.UserID, account.Username, account.Email, account.HashedSecret, account.Salt, account.Roles,
 	)
 	if err != nil {
-		return err
+		return translateAccountConstraintErr(err)
 	}
 	return nil
 }
 
 // GetAccountByID gets an account by ID
 func (s *store) GetAccountByID(userID string) (*Account, error) {
-	rows, err := s.db.Query(context.Background(), "SELECT * FROM accounts WHERE user_id = $1", userID)
+	rows, err := s.db.Query(context.Background(), "SELECT user_id, COALESCE(username, '') AS username, email, hashed_secret, salt, roles, updated_at FROM accounts WHERE user_id = $1", userID)
 	if err != nil {
 		return nil, err
 	}
 
 	account, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Account])
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
 		return nil, err
 	}
 	return account, nil
@@ -120,13 +162,16 @@ func (s *store) GetAccountByID(userID string) (*Account, error) {
 
 // GetAccountByUsername gets an account by username
 func (s *store) GetAccountByUsername(username string) (*Account, error) {
-	rows, err := s.db.Query(context.Background(), "SELECT * FROM accounts WHERE username = $1", username)
+	rows, err := s.db.Query(context.Background(), "SELECT user_id, COALESCE(username, '') AS username, email, hashed_secret, salt, roles, updated_at FROM accounts WHERE username = $1", username)
 	if err != nil {
 		return nil, err
 	}
 
 	account, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Account])
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
 		return nil, err
 	}
 	return account, nil
@@ -134,26 +179,30 @@ func (s *store) GetAccountByUsername(username string) (*Account, error) {
 
 // GetAccountByEmail gets an account by email
 func (s *store) GetAccountByEmail(email string) (*Account, error) {
-	rows, err := s.db.Query(context.Background(), "SELECT * FROM accounts WHERE email = $1", email)
+	rows, err := s.db.Query(context.Background(), "SELECT user_id, COALESCE(username, '') AS username, email, hashed_secret, salt, roles, updated_at FROM accounts WHERE email = $1", email)
 	if err != nil {
 		return nil, err
 	}
 
 	account, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Account])
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
 		return nil, err
 	}
 	return account, nil
 }
 
-// UpdateAccountInDB updates an account in the database
+// UpdateAccountInDB updates an account in the database. See AddAccountToDB
+// for why an empty username is stored as NULL rather than "".
 func (s *store) UpdateAccountInDB(account *Account) error {
 	_, err := s.db.Exec(context.Background(),
-		"UPDATE accounts SET username = $2, email = $3, hashed_secret = $4, salt = $5, roles = $6 WHERE user_id = $1",
+		"UPDATE accounts SET username = NULLIF($2, ''), email = $3, hashed_secret = $4, salt = $5, roles = $6 WHERE user_id = $1",
 		account.UserID, account.Username, account.Email, account.HashedSecret, account.Salt, account.Roles,
 	)
 	if err != nil {
-		return err
+		return translateAccountConstraintErr(err)
 	}
 	return nil
 }

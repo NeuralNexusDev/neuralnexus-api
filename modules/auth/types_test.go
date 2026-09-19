@@ -154,3 +154,69 @@ func TestAccountNewSessionSkipsUnknownRole(t *testing.T) {
 		t.Errorf("expected no permissions for an unknown role, got: %v", session.Permissions)
 	}
 }
+
+// -------------- NewPasswordLessAccount / NewIDOnlyAccount email placeholder tests --------------
+
+func TestNewPasswordLessAccountKeepsRealEmail(t *testing.T) {
+	a, err := NewPasswordLessAccount("someuser", "someuser@example.com")
+	if err != nil {
+		t.Fatalf("NewPasswordLessAccount returned error: %v", err)
+	}
+	if a.Email != "someuser@example.com" {
+		t.Errorf("expected the real email to be kept as-is, got %q", a.Email)
+	}
+}
+
+func TestNewPasswordLessAccountGeneratesPlaceholderWhenEmailEmpty(t *testing.T) {
+	a, err := NewPasswordLessAccount("someuser", "")
+	if err != nil {
+		t.Fatalf("NewPasswordLessAccount returned error: %v", err)
+	}
+	if a.Email == "" {
+		t.Fatal("expected a non-empty placeholder email, accounts.email is UNIQUE and \"\" collides across accounts")
+	}
+	if a.Email != "noemail:"+a.UserID {
+		t.Errorf("expected the placeholder to be derived from the account's UserID, got %q for UserID %q", a.Email, a.UserID)
+	}
+}
+
+func TestNewPasswordLessAccountPlaceholdersAreUnique(t *testing.T) {
+	a1, err := NewPasswordLessAccount("user1", "")
+	if err != nil {
+		t.Fatalf("NewPasswordLessAccount returned error: %v", err)
+	}
+	a2, err := NewPasswordLessAccount("user2", "")
+	if err != nil {
+		t.Fatalf("NewPasswordLessAccount returned error: %v", err)
+	}
+	if a1.Email == a2.Email {
+		t.Errorf("expected two different no-email accounts to get different placeholders, both got %q", a1.Email)
+	}
+}
+
+func TestNewIDOnlyAccountGeneratesPlaceholderEmail(t *testing.T) {
+	a, err := NewIDOnlyAccount()
+	if err != nil {
+		t.Fatalf("NewIDOnlyAccount returned error: %v", err)
+	}
+	if a.Email == "" {
+		t.Fatal("expected a non-empty placeholder email, accounts.email is UNIQUE and \"\" collides across accounts")
+	}
+	if a.Email != "noemail:"+a.UserID {
+		t.Errorf("expected the placeholder to be derived from the account's UserID, got %q for UserID %q", a.Email, a.UserID)
+	}
+}
+
+func TestNewIDOnlyAccountPlaceholdersAreUnique(t *testing.T) {
+	a1, err := NewIDOnlyAccount()
+	if err != nil {
+		t.Fatalf("NewIDOnlyAccount returned error: %v", err)
+	}
+	a2, err := NewIDOnlyAccount()
+	if err != nil {
+		t.Fatalf("NewIDOnlyAccount returned error: %v", err)
+	}
+	if a1.Email == a2.Email {
+		t.Errorf("expected two different ID-only accounts to get different placeholders, both got %q", a1.Email)
+	}
+}
