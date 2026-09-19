@@ -406,8 +406,7 @@ func (s *service) fetchProfileFromMojang(id string, signed bool) (*Player, *Prof
 	return &player, profile, nil
 }
 
-// GetGeyserXUID looks up a Bedrock player's Xbox XUID by gamertag, DB-cache-first
-// with a fallback to Geyser's API.
+// GetGeyserXUID looks up a Bedrock player's Xbox XUID by gamertag.
 func (s *service) GetGeyserXUID(gamertag string) (*GeyserPlayer, error) {
 	dbPlayer, _ := s.store.GetGeyserPlayerByGamertag(gamertag)
 	if dbPlayer != nil && !dbPlayer.IsStale() {
@@ -452,9 +451,8 @@ func (s *service) GetGeyserXUID(gamertag string) (*GeyserPlayer, error) {
 	return player, nil
 }
 
-// GetGeyserSkin gets a Bedrock player's most recently converted skin by XUID,
-// DB-cache-first with a fallback to Geyser's skin API. Metadata only — the
-// raw image bytes are not archived to S3 yet.
+// GetGeyserSkin gets a Bedrock player's most recently converted skin by XUID.
+// Metadata only — the raw image bytes are not archived to S3 yet.
 func (s *service) GetGeyserSkin(xuid int64) (*GeyserSkin, error) {
 	dbSkin, _ := s.store.GetGeyserSkin(xuid)
 	if dbSkin != nil && !dbSkin.IsStale() {
@@ -489,8 +487,7 @@ func (s *service) GetGeyserSkin(xuid int64) (*GeyserSkin, error) {
 	return &skin, nil
 }
 
-// resolveGeyserPlayerByXUID is the reverse of GetGeyserXUID: DB-cache-first,
-// falling back to Geyser's reverse gamertag lookup on a miss or stale entry.
+// resolveGeyserPlayerByXUID is the reverse of GetGeyserXUID.
 func (s *service) resolveGeyserPlayerByXUID(xuid int64) (*GeyserPlayer, error) {
 	dbPlayer, _ := s.store.GetGeyserPlayerByXUID(xuid)
 	if dbPlayer != nil && !dbPlayer.IsStale() {
