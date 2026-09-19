@@ -2,13 +2,16 @@ package minecraft
 
 import (
 	"encoding/base64"
+	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"strings"
 	"time"
 
 	"github.com/goccy/go-json"
+	"github.com/google/uuid"
 )
 
 var ErrPlayerNotFound = errors.New("player not found")
@@ -202,6 +205,89 @@ func (p *Profile) ToPlayer() (*Player, error) {
 		player.Properties = []Property{*prop}
 	}
 	return player, nil
+}
+
+// GeyserPlayer - a Bedrock player's identity derived from Geyser's Xbox XUID lookup.
+type GeyserPlayer struct {
+	Gamertag  string `json:"gamertag"     db:"gamertag"`
+	XUID      int64  `json:"xuid"         db:"xuid"`
+	UUID      string `json:"uuid"         db:"-"`
+	FirstSeen int64  `json:"-"            db:"first_seen"`
+	LastSeen  int64  `json:"-"            db:"last_seen"`
+}
+
+// IsStale returns true if the GeyserPlayer's last_seen is older than the staleness threshold
+func (p *GeyserPlayer) IsStale() bool {
+	return time.Now().UnixMilli()-p.LastSeen > stalenessThreshold.Milliseconds()
+}
+
+// ErrSkinNotFound - the Bedrock player has no converted skin yet (Geyser's
+// skin API returns 200 with an empty object rather than a 404 for this case)
+var ErrSkinNotFound = errors.New("skin not found")
+
+// ErrInvalidGeyserRequest - Geyser's API rejected the request as malformed,
+// distinct from ErrPlayerNotFound/ErrSkinNotFound (well-formed, just no match).
+var ErrInvalidGeyserRequest = errors.New("invalid request")
+
+// GeyserSkin - a Bedrock player's most recently converted skin.
+type GeyserSkin struct {
+	Hash      string `json:"hash"                db:"hash"`
+	IsSteve   bool   `json:"is_steve"            db:"is_steve"`
+	Signature string `json:"signature,omitempty" db:"signature"`
+	TextureID string `json:"texture_id"          db:"texture_id"`
+	Value     string `json:"value"               db:"value"`
+	FirstSeen int64  `json:"-"                   db:"first_seen"`
+	LastSeen  int64  `json:"-"                   db:"last_seen"`
+}
+
+// IsStale returns true if the skin's last_seen is older than the staleness threshold
+func (s *GeyserSkin) IsStale() bool {
+	return time.Now().UnixMilli()-s.LastSeen > stalenessThreshold.Milliseconds()
+}
+
+// SkinURL decodes the download URL embedded in Value (base64 JSON shaped
+// like a Java textures property), or "" if it can't be decoded.
+func (s *GeyserSkin) SkinURL() string {
+	decoded, err := base64.StdEncoding.DecodeString(s.Value)
+	if err != nil {
+		return ""
+	}
+	var textures TexturesValue
+	if err := json.Unmarshal(decoded, &textures); err != nil || textures.Textures.SKIN == nil {
+		return ""
+	}
+	return textures.Textures.SKIN.URL
+}
+
+// xuidToUUID derives a synthetic UUID from an Xbox XUID: its zero-padded hex
+// representation, formatted as a standard UUID.
+func xuidToUUID(xuid int64) string {
+	hex := fmt.Sprintf("%032x", uint64(xuid))
+	return hex[0:8] + "-" + hex[8:12] + "-" + hex[12:16] + "-" + hex[16:20] + "-" + hex[20:32]
+}
+
+// uuidToXUID reverses xuidToUUID. It errors on a malformed UUID or one whose
+// high 64 bits aren't zero (i.e. a real Java UUID, not one of ours).
+func uuidToXUID(id string) (int64, error) {
+	parsed, err := uuid.Parse(id)
+	if err != nil {
+		return 0, err
+	}
+	for _, b := range parsed[:8] {
+		if b != 0 {
+			return 0, errors.New("not a derived Bedrock UUID")
+		}
+	}
+	return int64(binary.BigEndian.Uint64(parsed[8:16])), nil
+}
+
+// GeyserProfile - a Bedrock player's full profile: identity plus their most
+// recently converted skin.
+type GeyserProfile struct {
+	UUID     string      `json:"uuid"`
+	XUID     int64       `json:"xuid"`
+	Gamertag string      `json:"gamertag"`
+	Skin     *GeyserSkin `json:"skin,omitempty"`
 }
 
 // TexturesRow represents a texture in the database

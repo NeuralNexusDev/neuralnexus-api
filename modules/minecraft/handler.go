@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"github.com/goccy/go-json"
@@ -141,6 +142,138 @@ func GetProfileHandler(s Service) http.HandlerFunc {
 	}
 }
 
+// GetProfileByNameHandler - Get a player's profile by name
+func GetProfileByNameHandler(s Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		name := r.PathValue("name")
+		if name == "" {
+			responses.BadRequest(w, r, "Invalid name")
+			return
+		}
+
+		profile, err := s.GetProfileByName(name)
+		if err != nil {
+			if errors.Is(err, ErrPlayerNotFound) {
+				responses.NoContent(w, r)
+				return
+			}
+			log.Println("Failed to get player profile by name:\n\t", err)
+			responses.InternalServerError(w, r, "Failed to get player profile")
+			return
+		}
+		responses.StructOK(w, r, profile)
+	}
+}
+
+// GetGeyserXUIDHandler - Look up a Bedrock player's XUID by gamertag
+func GetGeyserXUIDHandler(s Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		gamertag := r.PathValue("gamertag")
+		if gamertag == "" {
+			responses.BadRequest(w, r, "Invalid gamertag")
+			return
+		}
+
+		player, err := s.GetGeyserXUID(gamertag)
+		if err != nil {
+			if errors.Is(err, ErrPlayerNotFound) {
+				responses.NotFound(w, r, ErrPlayerNotFound.Error())
+				return
+			}
+			if errors.Is(err, ErrInvalidGeyserRequest) {
+				responses.BadRequest(w, r, "Invalid gamertag")
+				return
+			}
+			log.Println("Failed to get Geyser XUID:\n\t", err)
+			responses.InternalServerError(w, r, "Failed to get Geyser XUID")
+			return
+		}
+		responses.StructOK(w, r, player)
+	}
+}
+
+// GetGeyserSkinHandler - Get a Bedrock player's skin by XUID
+func GetGeyserSkinHandler(s Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		xuid, err := strconv.ParseInt(r.PathValue("xuid"), 10, 64)
+		if err != nil {
+			responses.BadRequest(w, r, "Invalid xuid")
+			return
+		}
+
+		skin, err := s.GetGeyserSkin(xuid)
+		if err != nil {
+			if errors.Is(err, ErrSkinNotFound) {
+				responses.NoContent(w, r)
+				return
+			}
+			if errors.Is(err, ErrInvalidGeyserRequest) {
+				responses.BadRequest(w, r, "Invalid xuid")
+				return
+			}
+			log.Println("Failed to get Geyser skin:\n\t", err)
+			responses.InternalServerError(w, r, "Failed to get Geyser skin")
+			return
+		}
+		responses.StructOK(w, r, skin)
+	}
+}
+
+// GetGeyserProfileHandler - Get a Bedrock player's full profile by UUID
+func GetGeyserProfileHandler(s Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("uuid")
+		xuid, err := uuidToXUID(id)
+		if err != nil {
+			responses.BadRequest(w, r, "Not a valid Bedrock UUID: "+id)
+			return
+		}
+
+		profile, err := s.GetGeyserProfile(xuid)
+		if err != nil {
+			if errors.Is(err, ErrPlayerNotFound) {
+				responses.NotFound(w, r, ErrPlayerNotFound.Error())
+				return
+			}
+			if errors.Is(err, ErrInvalidGeyserRequest) {
+				responses.BadRequest(w, r, "Invalid xuid")
+				return
+			}
+			log.Println("Failed to get Geyser profile:\n\t", err)
+			responses.InternalServerError(w, r, "Failed to get Geyser profile")
+			return
+		}
+		responses.StructOK(w, r, profile)
+	}
+}
+
+// GetGeyserProfileByNameHandler - Get a Bedrock player's full profile by gamertag
+func GetGeyserProfileByNameHandler(s Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		gamertag := r.PathValue("name")
+		if gamertag == "" {
+			responses.BadRequest(w, r, "Invalid gamertag")
+			return
+		}
+
+		profile, err := s.GetGeyserProfileByGamertag(gamertag)
+		if err != nil {
+			if errors.Is(err, ErrPlayerNotFound) {
+				responses.NotFound(w, r, ErrPlayerNotFound.Error())
+				return
+			}
+			if errors.Is(err, ErrInvalidGeyserRequest) {
+				responses.BadRequest(w, r, "Invalid gamertag")
+				return
+			}
+			log.Println("Failed to get Geyser profile by name:\n\t", err)
+			responses.InternalServerError(w, r, "Failed to get Geyser profile")
+			return
+		}
+		responses.StructOK(w, r, profile)
+	}
+}
+
 // GetTextureHandler - Serve a texture's bytes, fetching from the backend exactly once
 func GetTextureHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -158,6 +291,32 @@ func GetTextureHandler(s Service) http.HandlerFunc {
 			}
 			responses.BadGateway(w, r, "Failed to get texture")
 			log.Println("Failed to get texture:\n\t", err)
+			return
+		}
+		defer result.Body.Close()
+
+		w.Header().Set("Content-Type", result.ContentType)
+		_, _ = io.Copy(w, result.Body)
+	}
+}
+
+// GetGeyserTextureHandler - Serve a Bedrock skin's bytes, fetching from the backend exactly once
+func GetGeyserTextureHandler(s Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		hash := r.PathValue("hash")
+		if hash == "" {
+			responses.BadRequest(w, r, "Invalid hash")
+			return
+		}
+
+		result, err := s.GetGeyserTextureContent(hash)
+		if err != nil {
+			if errors.Is(err, ErrTextureNotFound) {
+				responses.NotFound(w, r, "Texture not found")
+				return
+			}
+			responses.BadGateway(w, r, "Failed to get texture")
+			log.Println("Failed to get Geyser texture:\n\t", err)
 			return
 		}
 		defer result.Body.Close()
