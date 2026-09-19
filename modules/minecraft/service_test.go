@@ -28,6 +28,7 @@ type mockStore struct {
 	putErr                error
 	upsertedTextureHashes []string
 	geyserPlayers         map[string]*GeyserPlayer
+	geyserPlayersByXUID   map[int64]*GeyserPlayer
 	geyserSkins           map[int64]*GeyserSkin
 }
 
@@ -135,11 +136,23 @@ func (m *mockStore) GetGeyserPlayerByGamertag(gamertag string) (*GeyserPlayer, e
 	return nil, ErrPlayerNotFound
 }
 
+func (m *mockStore) GetGeyserPlayerByXUID(xuid int64) (*GeyserPlayer, error) {
+	if p, ok := m.geyserPlayersByXUID[xuid]; ok {
+		p.UUID = xuidToUUID(p.XUID)
+		return p, nil
+	}
+	return nil, ErrPlayerNotFound
+}
+
 func (m *mockStore) UpsertGeyserPlayer(player *GeyserPlayer) error {
 	if m.geyserPlayers == nil {
 		m.geyserPlayers = make(map[string]*GeyserPlayer)
 	}
+	if m.geyserPlayersByXUID == nil {
+		m.geyserPlayersByXUID = make(map[int64]*GeyserPlayer)
+	}
 	m.geyserPlayers[player.Gamertag] = player
+	m.geyserPlayersByXUID[player.XUID] = player
 	return nil
 }
 
@@ -1007,6 +1020,29 @@ func TestXUIDToUUID(t *testing.T) {
 	}
 }
 
+func TestUUIDToXUID_RoundTrip(t *testing.T) {
+	const xuid int64 = 2535457445285308
+	got, err := uuidToXUID(xuidToUUID(xuid))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != xuid {
+		t.Errorf("expected %d, got %d", xuid, got)
+	}
+}
+
+func TestUUIDToXUID_RejectsNonDerivedUUID(t *testing.T) {
+	if _, err := uuidToXUID("853c80ef-3c37-49fd-aa49-938b674adae6"); err == nil {
+		t.Error("expected error for a UUID with nonzero high bits")
+	}
+}
+
+func TestUUIDToXUID_RejectsMalformedUUID(t *testing.T) {
+	if _, err := uuidToXUID("not-a-uuid"); err == nil {
+		t.Error("expected error for a malformed UUID")
+	}
+}
+
 func TestService_GetGeyserSkin_OK(t *testing.T) {
 	geyser := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/2535457445285308" {
@@ -1159,5 +1195,202 @@ func TestService_GetGeyserSkin_UpsertsOnFetch(t *testing.T) {
 	}
 	if _, ok := store.geyserSkins[2535457445285308]; !ok {
 		t.Error("expected the fetched skin to be persisted")
+	}
+}
+
+func TestService_GetProfileByName_ResolvesNameThenProfile(t *testing.T) {
+	id := "853c80ef3c3749fdaa49938b674adae6"
+	mojang := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(Player{ID: id, Name: "jeb_"})
+	}))
+	defer mojang.Close()
+
+	store := &mockStore{
+		profilesByUUID: map[string]*Profile{
+			id: {ID: id, Name: "jeb_", LastSeen: time.Now().UnixMilli()},
+		},
+	}
+	svc := NewService(store, mojang.Client(), "http://localhost/texture/")
+	s := svc.(*service)
+	s.lookupByName = mojang.URL + "/"
+
+	profile, err := svc.GetProfileByName("jeb_")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if profile.ID != id {
+		t.Errorf("expected id %s, got %s", id, profile.ID)
+	}
+}
+
+func TestService_GetProfileByName_NotFound(t *testing.T) {
+	mojang := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer mojang.Close()
+
+	store := &mockStore{}
+	svc := NewService(store, mojang.Client(), "http://localhost/texture/")
+	s := svc.(*service)
+	s.lookupByName = mojang.URL + "/"
+
+	_, err := svc.GetProfileByName("nonexistent")
+	if !errors.Is(err, ErrPlayerNotFound) {
+		t.Errorf("expected ErrPlayerNotFound, got %v", err)
+	}
+}
+
+func TestService_GetGeyserProfile_ComposesPlayerAndSkin(t *testing.T) {
+	const xuid int64 = 2535457445285308
+	store := &mockStore{
+		geyserPlayersByXUID: map[int64]*GeyserPlayer{
+			xuid: {Gamertag: "Notch", XUID: xuid, LastSeen: time.Now().UnixMilli()},
+		},
+		geyserSkins: map[int64]*GeyserSkin{
+			xuid: {Hash: "abc123", TextureID: "def456", Value: "val", LastSeen: time.Now().UnixMilli()},
+		},
+	}
+	// No mock Geyser server: both lookups should be satisfied from the store.
+	svc := NewService(store, nil, "http://localhost/texture/")
+
+	profile, err := svc.GetGeyserProfile(xuid)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if profile.Gamertag != "Notch" || profile.XUID != xuid {
+		t.Errorf("expected composed identity, got %+v", profile)
+	}
+	if profile.Skin == nil || profile.Skin.Hash != "abc123" {
+		t.Errorf("expected composed skin, got %+v", profile.Skin)
+	}
+}
+
+func TestService_GetGeyserProfile_NoSkinYet(t *testing.T) {
+	const xuid int64 = 2535457445285308
+	geyser := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(GeyserSkin{})
+	}))
+	defer geyser.Close()
+
+	store := &mockStore{
+		geyserPlayersByXUID: map[int64]*GeyserPlayer{
+			xuid: {Gamertag: "Notch", XUID: xuid, LastSeen: time.Now().UnixMilli()},
+		},
+	}
+	svc := NewService(store, geyser.Client(), "http://localhost/texture/")
+	s := svc.(*service)
+	s.geyserSkinLookup = geyser.URL + "/"
+
+	profile, err := svc.GetGeyserProfile(xuid)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if profile.Skin != nil {
+		t.Errorf("expected nil skin, got %+v", profile.Skin)
+	}
+}
+
+func TestService_GetGeyserProfile_UnknownXUID_FetchesGamertagFromGeyser(t *testing.T) {
+	geyser := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/gamertag/"):
+			json.NewEncoder(w).Encode(map[string]string{"gamertag": "Notch"})
+		case strings.HasPrefix(r.URL.Path, "/skin/"):
+			json.NewEncoder(w).Encode(GeyserSkin{})
+		}
+	}))
+	defer geyser.Close()
+
+	store := &mockStore{}
+	svc := NewService(store, geyser.Client(), "http://localhost/texture/")
+	s := svc.(*service)
+	s.geyserGamertagLookup = geyser.URL + "/gamertag/"
+	s.geyserSkinLookup = geyser.URL + "/skin/"
+
+	profile, err := svc.GetGeyserProfile(2535457445285308)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if profile.Gamertag != "Notch" {
+		t.Errorf("expected gamertag Notch, got %s", profile.Gamertag)
+	}
+	if _, ok := store.geyserPlayersByXUID[2535457445285308]; !ok {
+		t.Error("expected the resolved player to be persisted")
+	}
+}
+
+func TestService_GetGeyserProfile_UnknownXUID_NotFound(t *testing.T) {
+	geyser := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]string{})
+	}))
+	defer geyser.Close()
+
+	store := &mockStore{}
+	svc := NewService(store, geyser.Client(), "http://localhost/texture/")
+	s := svc.(*service)
+	s.geyserGamertagLookup = geyser.URL + "/"
+
+	_, err := svc.GetGeyserProfile(2535457445285308)
+	if !errors.Is(err, ErrPlayerNotFound) {
+		t.Errorf("expected ErrPlayerNotFound, got %v", err)
+	}
+}
+
+func TestService_GetGeyserProfile_InvalidXUID_UpstreamRejected(t *testing.T) {
+	geyser := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	defer geyser.Close()
+
+	store := &mockStore{}
+	svc := NewService(store, geyser.Client(), "http://localhost/texture/")
+	s := svc.(*service)
+	s.geyserGamertagLookup = geyser.URL + "/"
+
+	_, err := svc.GetGeyserProfile(-1)
+	if !errors.Is(err, ErrInvalidGeyserRequest) {
+		t.Errorf("expected ErrInvalidGeyserRequest, got %v", err)
+	}
+}
+
+func TestService_GetGeyserProfileByGamertag_ComposesPlayerAndSkin(t *testing.T) {
+	const xuid int64 = 2535457445285308
+	store := &mockStore{
+		geyserPlayers: map[string]*GeyserPlayer{
+			"Notch": {Gamertag: "Notch", XUID: xuid, LastSeen: time.Now().UnixMilli()},
+		},
+		geyserSkins: map[int64]*GeyserSkin{
+			xuid: {Hash: "abc123", TextureID: "def456", Value: "val", LastSeen: time.Now().UnixMilli()},
+		},
+	}
+	svc := NewService(store, nil, "http://localhost/texture/")
+
+	profile, err := svc.GetGeyserProfileByGamertag("Notch")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if profile.UUID != xuidToUUID(xuid) {
+		t.Errorf("expected derived UUID %s, got %s", xuidToUUID(xuid), profile.UUID)
+	}
+	if profile.Skin == nil || profile.Skin.Hash != "abc123" {
+		t.Errorf("expected composed skin, got %+v", profile.Skin)
+	}
+}
+
+func TestService_GetGeyserProfileByGamertag_PropagatesNotFound(t *testing.T) {
+	geyser := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]int64{})
+	}))
+	defer geyser.Close()
+
+	store := &mockStore{}
+	svc := NewService(store, geyser.Client(), "http://localhost/texture/")
+	s := svc.(*service)
+	s.geyserXUIDLookup = geyser.URL + "/"
+
+	_, err := svc.GetGeyserProfileByGamertag("nonexistent")
+	if !errors.Is(err, ErrPlayerNotFound) {
+		t.Errorf("expected ErrPlayerNotFound, got %v", err)
 	}
 }

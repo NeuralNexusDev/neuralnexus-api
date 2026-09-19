@@ -52,6 +52,7 @@ type Store interface {
 	PutTextureInS3(hash string, body io.ReadCloser) error
 
 	GetGeyserPlayerByGamertag(gamertag string) (*GeyserPlayer, error)
+	GetGeyserPlayerByXUID(xuid int64) (*GeyserPlayer, error)
 	UpsertGeyserPlayer(player *GeyserPlayer) error
 
 	GetGeyserSkin(xuid int64) (*GeyserSkin, error)
@@ -334,6 +335,24 @@ func (s *store) GetGeyserPlayerByGamertag(gamertag string) (*GeyserPlayer, error
 		WHERE gamertag = $1
 		ORDER BY last_seen DESC
 		LIMIT 1`, gamertag)
+	if err != nil {
+		return nil, err
+	}
+	player, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[GeyserPlayer])
+	if err != nil {
+		return nil, err
+	}
+	player.UUID = xuidToUUID(player.XUID)
+	return player, nil
+}
+
+// GetGeyserPlayerByXUID gets a Bedrock player's gamertag->XUID mapping by its
+// stable key (xuid is the table's primary key, so no reuse-collision handling needed).
+func (s *store) GetGeyserPlayerByXUID(xuid int64) (*GeyserPlayer, error) {
+	rows, err := s.db.Query(context.Background(), `
+		SELECT xuid, gamertag, first_seen, last_seen
+		FROM geyser_players
+		WHERE xuid = $1`, xuid)
 	if err != nil {
 		return nil, err
 	}

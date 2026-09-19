@@ -20,6 +20,7 @@ type mockService struct {
 	profile            *Profile
 	geyserPlayer       *GeyserPlayer
 	geyserSkin         *GeyserSkin
+	geyserProfile      *GeyserProfile
 	err                error
 	textureBody        []byte
 	textureContentType string
@@ -45,12 +46,24 @@ func (m *mockService) GetProfile(_ string) (*Profile, error) {
 	return m.profile, m.err
 }
 
+func (m *mockService) GetProfileByName(_ string) (*Profile, error) {
+	return m.profile, m.err
+}
+
 func (m *mockService) GetGeyserXUID(_ string) (*GeyserPlayer, error) {
 	return m.geyserPlayer, m.err
 }
 
 func (m *mockService) GetGeyserSkin(_ int64) (*GeyserSkin, error) {
 	return m.geyserSkin, m.err
+}
+
+func (m *mockService) GetGeyserProfile(_ int64) (*GeyserProfile, error) {
+	return m.geyserProfile, m.err
+}
+
+func (m *mockService) GetGeyserProfileByGamertag(_ string) (*GeyserProfile, error) {
+	return m.geyserProfile, m.err
 }
 
 func (m *mockService) GetTextureContent(_ string) (*TextureResult, error) {
@@ -701,5 +714,180 @@ func TestHandler_GetGeyserSkinHandler_UpstreamRejectedXUID(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandler_GetProfileByNameHandler_OK(t *testing.T) {
+	svc := &mockService{profile: &Profile{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}}
+	handler := GetProfileByNameHandler(svc)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/name/jeb_", nil)
+	r.SetPathValue("name", "jeb_")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var got Profile
+	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if got.Name != "jeb_" {
+		t.Errorf("expected jeb_, got %s", got.Name)
+	}
+}
+
+func TestHandler_GetProfileByNameHandler_EmptyName(t *testing.T) {
+	svc := &mockService{}
+	handler := GetProfileByNameHandler(svc)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/name/", nil)
+	r.SetPathValue("name", "")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandler_GetProfileByNameHandler_NotFound(t *testing.T) {
+	svc := &mockService{err: ErrPlayerNotFound}
+	handler := GetProfileByNameHandler(svc)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/name/nonexistent", nil)
+	r.SetPathValue("name", "nonexistent")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusNoContent {
+		t.Errorf("expected 204, got %d", w.Code)
+	}
+}
+
+func TestHandler_GetGeyserProfileHandler_OK(t *testing.T) {
+	svc := &mockService{geyserProfile: &GeyserProfile{
+		UUID:     "00000000-0000-0000-0009-01fc305e8dbc",
+		XUID:     2535457445285308,
+		Gamertag: "Notch",
+	}}
+	handler := GetGeyserProfileHandler(svc)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/bedrock/00000000-0000-0000-0009-01fc305e8dbc", nil)
+	r.SetPathValue("uuid", "00000000-0000-0000-0009-01fc305e8dbc")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var got GeyserProfile
+	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if got.Gamertag != "Notch" {
+		t.Errorf("expected Notch, got %s", got.Gamertag)
+	}
+}
+
+func TestHandler_GetGeyserProfileHandler_InvalidUUID(t *testing.T) {
+	svc := &mockService{}
+	handler := GetGeyserProfileHandler(svc)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/bedrock/not-a-uuid", nil)
+	r.SetPathValue("uuid", "not-a-uuid")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandler_GetGeyserProfileHandler_RealJavaUUIDRejected(t *testing.T) {
+	svc := &mockService{}
+	handler := GetGeyserProfileHandler(svc)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/bedrock/853c80ef-3c37-49fd-aa49-938b674adae6", nil)
+	r.SetPathValue("uuid", "853c80ef-3c37-49fd-aa49-938b674adae6")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for a UUID that isn't a derived Bedrock UUID, got %d", w.Code)
+	}
+}
+
+func TestHandler_GetGeyserProfileHandler_NotFound(t *testing.T) {
+	svc := &mockService{err: ErrPlayerNotFound}
+	handler := GetGeyserProfileHandler(svc)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/bedrock/00000000-0000-0000-0009-01fc305e8dbc", nil)
+	r.SetPathValue("uuid", "00000000-0000-0000-0009-01fc305e8dbc")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", w.Code)
+	}
+}
+
+func TestHandler_GetGeyserProfileByNameHandler_OK(t *testing.T) {
+	svc := &mockService{geyserProfile: &GeyserProfile{Gamertag: "Notch", XUID: 2535457445285308}}
+	handler := GetGeyserProfileByNameHandler(svc)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/bedrock/name/Notch", nil)
+	r.SetPathValue("name", "Notch")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var got GeyserProfile
+	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if got.Gamertag != "Notch" {
+		t.Errorf("expected Notch, got %s", got.Gamertag)
+	}
+}
+
+func TestHandler_GetGeyserProfileByNameHandler_EmptyGamertag(t *testing.T) {
+	svc := &mockService{}
+	handler := GetGeyserProfileByNameHandler(svc)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/bedrock/name/", nil)
+	r.SetPathValue("name", "")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestHandler_GetGeyserProfileByNameHandler_NotFound(t *testing.T) {
+	svc := &mockService{err: ErrPlayerNotFound}
+	handler := GetGeyserProfileByNameHandler(svc)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/bedrock/name/nonexistent", nil)
+	r.SetPathValue("name", "nonexistent")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", w.Code)
 	}
 }

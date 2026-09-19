@@ -142,6 +142,29 @@ func GetProfileHandler(s Service) http.HandlerFunc {
 	}
 }
 
+// GetProfileByNameHandler - Get a player's profile with textures decoded, by name
+func GetProfileByNameHandler(s Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		name := r.PathValue("name")
+		if name == "" {
+			responses.BadRequest(w, r, "Invalid name")
+			return
+		}
+
+		profile, err := s.GetProfileByName(name)
+		if err != nil {
+			if errors.Is(err, ErrPlayerNotFound) {
+				responses.NoContent(w, r)
+				return
+			}
+			log.Println("Failed to get player profile by name:\n\t", err)
+			responses.InternalServerError(w, r, "Failed to get player profile")
+			return
+		}
+		responses.StructOK(w, r, profile)
+	}
+}
+
 // GetGeyserXUIDHandler - Look up a Bedrock player's XUID and derived UUID by gamertag
 func GetGeyserXUIDHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -193,6 +216,61 @@ func GetGeyserSkinHandler(s Service) http.HandlerFunc {
 			return
 		}
 		responses.StructOK(w, r, skin)
+	}
+}
+
+// GetGeyserProfileHandler - Get a Bedrock player's full profile (identity + skin) by derived UUID
+func GetGeyserProfileHandler(s Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("uuid")
+		xuid, err := uuidToXUID(id)
+		if err != nil {
+			responses.BadRequest(w, r, "Not a valid Bedrock UUID: "+id)
+			return
+		}
+
+		profile, err := s.GetGeyserProfile(xuid)
+		if err != nil {
+			if errors.Is(err, ErrPlayerNotFound) {
+				responses.NotFound(w, r, ErrPlayerNotFound.Error())
+				return
+			}
+			if errors.Is(err, ErrInvalidGeyserRequest) {
+				responses.BadRequest(w, r, "Invalid xuid")
+				return
+			}
+			log.Println("Failed to get Geyser profile:\n\t", err)
+			responses.InternalServerError(w, r, "Failed to get Geyser profile")
+			return
+		}
+		responses.StructOK(w, r, profile)
+	}
+}
+
+// GetGeyserProfileByNameHandler - Get a Bedrock player's full profile (identity + skin) by gamertag
+func GetGeyserProfileByNameHandler(s Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		gamertag := r.PathValue("name")
+		if gamertag == "" {
+			responses.BadRequest(w, r, "Invalid gamertag")
+			return
+		}
+
+		profile, err := s.GetGeyserProfileByGamertag(gamertag)
+		if err != nil {
+			if errors.Is(err, ErrPlayerNotFound) {
+				responses.NotFound(w, r, ErrPlayerNotFound.Error())
+				return
+			}
+			if errors.Is(err, ErrInvalidGeyserRequest) {
+				responses.BadRequest(w, r, "Invalid gamertag")
+				return
+			}
+			log.Println("Failed to get Geyser profile by name:\n\t", err)
+			responses.InternalServerError(w, r, "Failed to get Geyser profile")
+			return
+		}
+		responses.StructOK(w, r, profile)
 	}
 }
 

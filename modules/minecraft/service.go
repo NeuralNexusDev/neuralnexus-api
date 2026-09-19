@@ -42,6 +42,9 @@ const geyserXUIDLookup = "https://api.geysermc.org/v2/xbox/xuid/"
 // https://api.geysermc.org/v2/skin/<xuid>
 const geyserSkinLookup = "https://api.geysermc.org/v2/skin/"
 
+// https://api.geysermc.org/v2/xbox/gamertag/<xuid>
+const geyserGamertagLookup = "https://api.geysermc.org/v2/xbox/gamertag/"
+
 // Service - Minecraft player service
 type Service interface {
 	GetMojangPlayerByName(name string) (*Player, error)
@@ -49,23 +52,27 @@ type Service interface {
 	GetMojangPlayersByNames(names []string) ([]*Player, error)
 	GetMojangProfile(id string, signed bool) (*Player, error)
 	GetProfile(id string) (*Profile, error)
+	GetProfileByName(name string) (*Profile, error)
 	GetTextureContent(hash string) (*TextureResult, error)
 	GetGeyserXUID(gamertag string) (*GeyserPlayer, error)
 	GetGeyserSkin(xuid int64) (*GeyserSkin, error)
+	GetGeyserProfile(xuid int64) (*GeyserProfile, error)
+	GetGeyserProfileByGamertag(gamertag string) (*GeyserProfile, error)
 }
 
 // service - Minecraft player service implementation
 type service struct {
-	store            Store
-	client           *http.Client
-	lookupByName     string
-	lookupByUUID     string
-	lookupBulk       string
-	lookupProfile    string
-	lookupTexture    string
-	geyserXUIDLookup string
-	geyserSkinLookup string
-	nnTextureUrl     string
+	store                Store
+	client               *http.Client
+	lookupByName         string
+	lookupByUUID         string
+	lookupBulk           string
+	lookupProfile        string
+	lookupTexture        string
+	geyserXUIDLookup     string
+	geyserSkinLookup     string
+	geyserGamertagLookup string
+	nnTextureUrl         string
 }
 
 // NewService - Create a new Minecraft player service
@@ -74,16 +81,17 @@ func NewService(store Store, client *http.Client, nnTextureUrl string) Service {
 		client = http.DefaultClient
 	}
 	return &service{
-		store:            store,
-		client:           client,
-		lookupByName:     mojangLookupByName,
-		lookupByUUID:     mojangLookupByUUID,
-		lookupBulk:       mojangLookupBulk,
-		lookupProfile:    mojangLookupProfile,
-		lookupTexture:    mojangTextureURL,
-		geyserXUIDLookup: geyserXUIDLookup,
-		geyserSkinLookup: geyserSkinLookup,
-		nnTextureUrl:     nnTextureUrl,
+		store:                store,
+		client:               client,
+		lookupByName:         mojangLookupByName,
+		lookupByUUID:         mojangLookupByUUID,
+		lookupBulk:           mojangLookupBulk,
+		lookupProfile:        mojangLookupProfile,
+		lookupTexture:        mojangTextureURL,
+		geyserXUIDLookup:     geyserXUIDLookup,
+		geyserSkinLookup:     geyserSkinLookup,
+		geyserGamertagLookup: geyserGamertagLookup,
+		nnTextureUrl:         nnTextureUrl,
 	}
 }
 
@@ -293,6 +301,15 @@ func (s *service) GetProfile(id string) (*Profile, error) {
 	return profile, nil
 }
 
+// GetProfileByName resolves a Java username to its profile, the name-keyed analog of GetProfile.
+func (s *service) GetProfileByName(name string) (*Profile, error) {
+	player, err := s.GetMojangPlayerByName(name)
+	if err != nil {
+		return nil, err
+	}
+	return s.GetProfile(player.ID)
+}
+
 // resolveProfile gets a player's canonical Profile from cache or the
 // database, fetching live from Mojang when needed.
 func (s *service) resolveProfile(id string) (*Profile, error) {
@@ -472,6 +489,73 @@ func (s *service) GetGeyserSkin(xuid int64) (*GeyserSkin, error) {
 		return nil, err
 	}
 	return &skin, nil
+}
+
+// resolveGeyserPlayerByXUID is the reverse of GetGeyserXUID: DB-cache-first,
+// falling back to Geyser's reverse gamertag lookup on a miss or stale entry.
+func (s *service) resolveGeyserPlayerByXUID(xuid int64) (*GeyserPlayer, error) {
+	dbPlayer, _ := s.store.GetGeyserPlayerByXUID(xuid)
+	if dbPlayer != nil && !dbPlayer.IsStale() {
+		return dbPlayer, nil
+	}
+
+	resp, err := s.client.Get(s.geyserGamertagLookup + strconv.FormatInt(xuid, 10))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusBadRequest {
+		return nil, ErrInvalidGeyserRequest
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.New("geyser API error: " + resp.Status)
+	}
+
+	var result struct {
+		Gamertag string `json:"gamertag"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	if result.Gamertag == "" {
+		return nil, ErrPlayerNotFound
+	}
+
+	player := &GeyserPlayer{Gamertag: result.Gamertag, XUID: xuid, UUID: xuidToUUID(xuid)}
+	if err := s.store.UpsertGeyserPlayer(player); err != nil {
+		return nil, err
+	}
+	return player, nil
+}
+
+// GetGeyserProfile gets a Bedrock player's full profile (identity + skin) by
+// XUID, the Geyser analog of GetProfile. A player with no converted skin yet
+// still resolves, with Skin left nil.
+func (s *service) GetGeyserProfile(xuid int64) (*GeyserProfile, error) {
+	player, err := s.resolveGeyserPlayerByXUID(xuid)
+	if err != nil {
+		return nil, err
+	}
+	skin, err := s.GetGeyserSkin(xuid)
+	if err != nil && !errors.Is(err, ErrSkinNotFound) {
+		return nil, err
+	}
+	return &GeyserProfile{UUID: player.UUID, XUID: player.XUID, Gamertag: player.Gamertag, Skin: skin}, nil
+}
+
+// GetGeyserProfileByGamertag resolves a Bedrock player's full profile by
+// gamertag, the Geyser analog of GetProfileByName.
+func (s *service) GetGeyserProfileByGamertag(gamertag string) (*GeyserProfile, error) {
+	player, err := s.GetGeyserXUID(gamertag)
+	if err != nil {
+		return nil, err
+	}
+	skin, err := s.GetGeyserSkin(player.XUID)
+	if err != nil && !errors.Is(err, ErrSkinNotFound) {
+		return nil, err
+	}
+	return &GeyserProfile{UUID: player.UUID, XUID: player.XUID, Gamertag: player.Gamertag, Skin: skin}, nil
 }
 
 // GetTextureContent returns the texture's bytes and content type, fetching from

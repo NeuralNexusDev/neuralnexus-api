@@ -2,6 +2,7 @@ package minecraft
 
 import (
 	"encoding/base64"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/goccy/go-json"
+	"github.com/google/uuid"
 )
 
 var ErrPlayerNotFound = errors.New("player not found")
@@ -251,6 +253,31 @@ func (s *GeyserSkin) IsStale() bool {
 func xuidToUUID(xuid int64) string {
 	hex := fmt.Sprintf("%032x", uint64(xuid))
 	return hex[0:8] + "-" + hex[8:12] + "-" + hex[12:16] + "-" + hex[16:20] + "-" + hex[20:32]
+}
+
+// uuidToXUID reverses xuidToUUID. It errors if id isn't a syntactically valid
+// UUID, or if its high 64 bits aren't zero (i.e. it's a real Java UUID rather
+// than one of ours).
+func uuidToXUID(id string) (int64, error) {
+	parsed, err := uuid.Parse(id)
+	if err != nil {
+		return 0, err
+	}
+	for _, b := range parsed[:8] {
+		if b != 0 {
+			return 0, errors.New("not a derived Bedrock UUID")
+		}
+	}
+	return int64(binary.BigEndian.Uint64(parsed[8:16])), nil
+}
+
+// GeyserProfile - a Bedrock player's full profile: identity plus their most
+// recently converted skin, the Geyser analog of Profile.
+type GeyserProfile struct {
+	UUID     string      `json:"uuid"`
+	XUID     int64       `json:"xuid"`
+	Gamertag string      `json:"gamertag"`
+	Skin     *GeyserSkin `json:"skin,omitempty"`
 }
 
 // TexturesRow represents a texture in the database

@@ -780,6 +780,70 @@
                 }
             }
         },
+        "/mc/profile/bedrock/name/{name}": {
+            "get": {
+                "summary": "Get a Bedrock player's full profile (identity + skin) by gamertag",
+                "description": "The Geyser analog of GET /mc/profile/name/{name}, keyed by Xbox gamertag instead of XUID.",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/BedrockGamertagNameSlug"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GeyserProfile"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/mc/profile/bedrock/{uuid}": {
+            "get": {
+                "summary": "Get a Bedrock player's full profile (identity + skin) by derived UUID",
+                "description": "The Geyser analog of GET /mc/profile/{uuid}, keyed by the synthetic UUID derived from an Xbox XUID (see GeyserPlayer.uuid). Returns 400 if the UUID isn't a validly-derived Bedrock UUID.",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/BedrockUUIDSlug"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GeyserProfile"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
         "/mc/profile/lookup/bulk/byname": {
             "post": {
                 "summary": "Look up players by name in batch",
@@ -880,6 +944,38 @@
                     },
                     "404": {
                         "$ref": "#/components/responses/404NotFound"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/mc/profile/name/{name}": {
+            "get": {
+                "summary": "Get a player's full profile by name",
+                "description": "The name-keyed analog of GET /mc/profile/{uuid}: resolves the name to a UUID via Mojang, then returns the decoded profile. Returns 204 (not 404) when the profile can't be found.",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/MCNameSlug"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MCPlayer"
+                                }
+                            }
+                        }
+                    },
+                    "204": {
+                        "$ref": "#/components/responses/204NoContent"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
                     },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
@@ -2261,6 +2357,31 @@
                         "description": "Base64-encoded skin property value, same shape as a Mojang textures property value."
                     }
                 }
+            },
+            "GeyserProfile": {
+                "type": "object",
+                "description": "A Bedrock player's full profile: identity plus their most recently converted skin, the Geyser analog of a Java player's full profile.",
+                "required": [
+                    "gamertag",
+                    "xuid",
+                    "uuid"
+                ],
+                "properties": {
+                    "gamertag": {
+                        "type": "string"
+                    },
+                    "xuid": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "uuid": {
+                        "type": "string",
+                        "description": "Synthesized from the XUID, not a real Mojang UUID."
+                    },
+                    "skin": {
+                        "$ref": "#/components/schemas/GeyserSkin"
+                    }
+                }
             }
         },
         "parameters": {
@@ -2465,6 +2586,24 @@
                     "format": "int64"
                 },
                 "description": "A Bedrock player's Xbox XUID."
+            },
+            "BedrockUUIDSlug": {
+                "name": "uuid",
+                "in": "path",
+                "required": true,
+                "schema": {
+                    "type": "string"
+                },
+                "description": "A Bedrock player's synthetic UUID, derived from their Xbox XUID (see GeyserPlayer.uuid). Not a real Mojang UUID."
+            },
+            "BedrockGamertagNameSlug": {
+                "name": "name",
+                "in": "path",
+                "required": true,
+                "schema": {
+                    "type": "string"
+                },
+                "description": "Xbox gamertag of a Geyser Bedrock player. Named 'name' for path symmetry with /mc/profile/name/{name}."
             }
         },
         "securitySchemes": {

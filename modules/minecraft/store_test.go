@@ -647,6 +647,34 @@ func TestStore_GetGeyserPlayerByGamertag_NotFound(t *testing.T) {
 	}
 }
 
+func TestStore_GetGeyserPlayerByXUID(t *testing.T) {
+	s := setupStore(t)
+
+	if err := s.UpsertGeyserPlayer(testGeyserPlayer); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got, err := s.GetGeyserPlayerByXUID(testGeyserPlayer.XUID)
+	if err != nil {
+		t.Fatalf("failed to get geyser player: %v", err)
+	}
+	if got.Gamertag != testGeyserPlayer.Gamertag {
+		t.Errorf("expected gamertag %s, got %s", testGeyserPlayer.Gamertag, got.Gamertag)
+	}
+	if got.UUID != xuidToUUID(testGeyserPlayer.XUID) {
+		t.Errorf("expected derived UUID %s, got %s", xuidToUUID(testGeyserPlayer.XUID), got.UUID)
+	}
+}
+
+func TestStore_GetGeyserPlayerByXUID_NotFound(t *testing.T) {
+	s := setupStore(t)
+
+	_, err := s.GetGeyserPlayerByXUID(1234567890)
+	if err == nil {
+		t.Error("expected error for unknown xuid")
+	}
+}
+
 // TestStore_GetGeyserPlayerByGamertag_HandlesGamertagReuse guards against a
 // released gamertag being picked up by a different Xbox account: nothing
 // stops two different xuids from carrying the same gamertag at once (the
