@@ -30,6 +30,22 @@ var (
 		Scopes:      []string{"XboxLive.signin", "offline_access"},
 		RedirectURL: MICROSOFT_REDIRECT_URI,
 	}
+
+	// MicrosoftLoginConfig is for a plain "sign in with Microsoft" login that
+	// only needs the account's identity (sub/name/email), not proof of Xbox
+	// Live or Minecraft ownership - kept separate from MicrosoftConfig so its
+	// OIDC scopes can never affect the access token XBL authentication
+	// depends on.
+	MicrosoftLoginConfig = &oauth2.Config{
+		ClientID:     MICROSOFT_CLIENT_ID,
+		ClientSecret: MICROSOFT_CLIENT_SECRET,
+		Endpoint: oauth2.Endpoint{
+			AuthURL:  "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize",
+			TokenURL: "https://login.microsoftonline.com/consumers/oauth2/v2.0/token",
+		},
+		Scopes:      []string{"openid", "profile", "email", "offline_access"},
+		RedirectURL: MICROSOFT_REDIRECT_URI,
+	}
 )
 
 var microsoftHTTPClient = &http.Client{Timeout: 10 * time.Second}
@@ -41,6 +57,7 @@ var (
 	xstsAuthorizeURL        = "https://xsts.auth.xboxlive.com/xsts/authorize"
 	minecraftLoginURL       = "https://api.minecraftservices.com/authentication/login_with_xbox"
 	minecraftProfileURL     = "https://api.minecraftservices.com/minecraft/profile"
+	microsoftUserInfoURL    = "https://graph.microsoft.com/oidc/userinfo"
 )
 
 // XErr codes returned by xsts.auth.xboxlive.com/xsts/authorize when the
@@ -105,6 +122,71 @@ func (x *XboxLiveData) GetData() string {
 // CreateLinkedAccount creates a linked account
 func (x *XboxLiveData) CreateLinkedAccount(userID string) *auth.LinkedAccount {
 	return auth.NewLinkedAccount(userID, auth.PlatformXboxLive, x.Gamertag, x.XUID, x)
+}
+
+// MicrosoftUserData is a plain Microsoft account identity, sourced from the
+// OIDC userinfo endpoint - unrelated to Xbox Live or Minecraft ownership.
+type MicrosoftUserData struct {
+	Sub   string `json:"sub" validate:"required"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+// GetID returns the platform ID
+func (m *MicrosoftUserData) GetID() string {
+	return m.Sub
+}
+
+// GetEmail returns the platform email
+func (m *MicrosoftUserData) GetEmail() string {
+	return m.Email
+}
+
+// GetUsername returns the platform username
+func (m *MicrosoftUserData) GetUsername() string {
+	return m.Name
+}
+
+// GetData returns the platform data
+func (m *MicrosoftUserData) GetData() string {
+	data, _ := json.Marshal(m)
+	return string(data)
+}
+
+// CreateLinkedAccount creates a linked account
+func (m *MicrosoftUserData) CreateLinkedAccount(userID string) *auth.LinkedAccount {
+	return auth.NewLinkedAccount(userID, auth.PlatformMicrosoft, m.Name, m.Sub, m)
+}
+
+// GetMicrosoftUser fetches the caller's plain Microsoft account identity from
+// the OIDC userinfo endpoint, for a "sign in with Microsoft" login that isn't
+// about Xbox Live or Minecraft ownership.
+func GetMicrosoftUser(token *auth.OAuthToken) (*MicrosoftUserData, error) {
+	req, err := http.NewRequest(http.MethodGet, microsoftUserInfoURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := microsoftHTTPClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("microsoft userinfo lookup error: %s", resp.Status)
+	}
+
+	var user MicrosoftUserData
+	if err := json.NewDecoder(resp.Body).Decode(&user); err != nil {
+		return nil, err
+	}
+	if user.Sub == "" {
+		return nil, errors.New("microsoft userinfo response missing sub")
+	}
+	return &user, nil
 }
 
 // -------------- XBL/XSTS/Minecraft chain --------------
@@ -354,6 +436,31 @@ func getMinecraftProfile(mcAccessToken string) (*MinecraftData, error) {
 	}, nil
 }
 
+// authenticateXboxLive runs the Microsoft OAuth -> XBL -> XSTS chain,
+// returning the caller's Xbox Live identity plus the user hash and XSTS
+// token the Minecraft Services calls need next.
+func authenticateXboxLive(msAccessToken string) (*XboxLiveData, string, string, error) {
+	xblToken, err := xblAuthenticate(msAccessToken)
+	if err != nil {
+		return nil, "", "", err
+	}
+
+	xstsToken, userHash, xuid, gamertag, err := xstsAuthorize(xblToken)
+	if err != nil {
+		return nil, "", "", err
+	}
+	return &XboxLiveData{XUID: xuid, Gamertag: gamertag}, userHash, xstsToken, nil
+}
+
+// GetXboxUser exchanges a Microsoft OAuth access token for the caller's
+// verified Xbox Live identity, without touching Minecraft Services at all -
+// for callers that want to link Xbox Live without also linking (or checking
+// ownership of) Minecraft: Java Edition.
+func GetXboxUser(token *auth.OAuthToken) (*XboxLiveData, error) {
+	xbox, _, _, err := authenticateXboxLive(token.AccessToken)
+	return xbox, err
+}
+
 // GetXboxAndMinecraftUser exchanges a Microsoft OAuth access token for the
 // caller's Xbox Live identity and, if they own it, their Minecraft: Java
 // Edition profile. Three outcomes:
@@ -364,16 +471,10 @@ func getMinecraftProfile(mcAccessToken string) (*MinecraftData, error) {
 //     before discarding a good login over a failed Java-ownership check.
 //   - (nil, nil, err): Xbox Live authentication itself failed.
 func GetXboxAndMinecraftUser(token *auth.OAuthToken) (xbox *XboxLiveData, java *MinecraftData, err error) {
-	xblToken, err := xblAuthenticate(token.AccessToken)
+	xbox, userHash, xstsToken, err := authenticateXboxLive(token.AccessToken)
 	if err != nil {
 		return nil, nil, err
 	}
-
-	xstsToken, userHash, xuid, gamertag, err := xstsAuthorize(xblToken)
-	if err != nil {
-		return nil, nil, err
-	}
-	xbox = &XboxLiveData{XUID: xuid, Gamertag: gamertag}
 
 	mcAccessToken, err := minecraftLoginWithXbox(userHash, xstsToken)
 	if err != nil {

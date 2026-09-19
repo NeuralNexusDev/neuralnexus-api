@@ -113,8 +113,10 @@ func ProcessOAuthLogin(as auth.AccountService, las auth.LinkAccountStore, ss aut
 		config = discordConfig
 	case auth.PlatformTwitch:
 		config = twitch.Config
-	case auth.PlatformMinecraft:
+	case auth.PlatformMinecraft, auth.PlatformXboxLive:
 		config = MicrosoftConfig
+	case auth.PlatformMicrosoft:
+		config = MicrosoftLoginConfig
 	default:
 		return nil, errors.New("invalid platform")
 	}
@@ -125,8 +127,15 @@ func ProcessOAuthLogin(as auth.AccountService, las auth.LinkAccountStore, ss aut
 	}
 
 	var a *auth.Account
-	if state.Platform == auth.PlatformMinecraft {
-		xbox, java, xboxErr := GetXboxAndMinecraftUser(token)
+	if state.Platform == auth.PlatformMinecraft || state.Platform == auth.PlatformXboxLive {
+		var xbox *XboxLiveData
+		var java *MinecraftData
+		var xboxErr error
+		if state.Platform == auth.PlatformXboxLive {
+			xbox, xboxErr = GetXboxUser(token)
+		} else {
+			xbox, java, xboxErr = GetXboxAndMinecraftUser(token)
+		}
 		if xboxErr != nil {
 			if xbox == nil {
 				return nil, xboxErr
@@ -147,6 +156,10 @@ func ProcessOAuthLogin(as auth.AccountService, las auth.LinkAccountStore, ss aut
 			user, err = GetDiscordUser(token)
 		case auth.PlatformTwitch:
 			user, err = twitch.GetUser(token)
+		case auth.PlatformMicrosoft:
+			user, err = GetMicrosoftUser(token)
+		default:
+			return nil, errors.New("invalid platform")
 		}
 		if err != nil {
 			return nil, err
@@ -237,8 +250,10 @@ func ProcessOAuthLink(r *http.Request, las auth.LinkAccountStore, code string, s
 		config = discordConfig
 	case auth.PlatformTwitch:
 		config = twitch.Config
-	case auth.PlatformMinecraft:
+	case auth.PlatformMinecraft, auth.PlatformXboxLive:
 		config = MicrosoftConfig
+	case auth.PlatformMicrosoft:
+		config = MicrosoftLoginConfig
 	default:
 		return nil, errors.New("invalid platform")
 	}
@@ -248,8 +263,15 @@ func ProcessOAuthLink(r *http.Request, las auth.LinkAccountStore, code string, s
 		return nil, err
 	}
 
-	if state.Platform == auth.PlatformMinecraft {
-		xbox, java, xboxErr := GetXboxAndMinecraftUser(token)
+	if state.Platform == auth.PlatformMinecraft || state.Platform == auth.PlatformXboxLive {
+		var xbox *XboxLiveData
+		var java *MinecraftData
+		var xboxErr error
+		if state.Platform == auth.PlatformXboxLive {
+			xbox, xboxErr = GetXboxUser(token)
+		} else {
+			xbox, java, xboxErr = GetXboxAndMinecraftUser(token)
+		}
 		if xboxErr != nil {
 			if xbox == nil {
 				return nil, xboxErr
@@ -289,6 +311,8 @@ func ProcessOAuthLink(r *http.Request, las auth.LinkAccountStore, code string, s
 		user, err = GetDiscordUser(token)
 	case auth.PlatformTwitch:
 		user, err = twitch.GetUser(token)
+	case auth.PlatformMicrosoft:
+		user, err = GetMicrosoftUser(token)
 	default:
 		return nil, errors.New("invalid platform")
 	}
