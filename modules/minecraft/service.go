@@ -301,7 +301,7 @@ func (s *service) GetProfile(id string) (*Profile, error) {
 	return profile, nil
 }
 
-// GetProfileByName resolves a Java username to its profile, the name-keyed analog of GetProfile.
+// GetProfileByName resolves a Java username to its profile.
 func (s *service) GetProfileByName(name string) (*Profile, error) {
 	player, err := s.GetMojangPlayerByName(name)
 	if err != nil {
@@ -528,7 +528,7 @@ func (s *service) resolveGeyserPlayerByXUID(xuid int64) (*GeyserPlayer, error) {
 }
 
 // GetGeyserProfile gets a Bedrock player's full profile (identity + skin) by
-// XUID, the Geyser analog of GetProfile. A missing skin leaves Skin nil.
+// XUID. A missing skin leaves Skin nil.
 func (s *service) GetGeyserProfile(xuid int64) (*GeyserProfile, error) {
 	player, err := s.resolveGeyserPlayerByXUID(xuid)
 	if err != nil {
@@ -541,8 +541,7 @@ func (s *service) GetGeyserProfile(xuid int64) (*GeyserProfile, error) {
 	return &GeyserProfile{UUID: player.UUID, XUID: player.XUID, Gamertag: player.Gamertag, Skin: skin}, nil
 }
 
-// GetGeyserProfileByGamertag resolves a Bedrock player's full profile by
-// gamertag, the Geyser analog of GetProfileByName.
+// GetGeyserProfileByGamertag resolves a Bedrock player's full profile by gamertag.
 func (s *service) GetGeyserProfileByGamertag(gamertag string) (*GeyserProfile, error) {
 	player, err := s.GetGeyserXUID(gamertag)
 	if err != nil {

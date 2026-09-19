@@ -270,7 +270,7 @@ func uuidToXUID(id string) (int64, error) {
 }
 
 // GeyserProfile - a Bedrock player's full profile: identity plus their most
-// recently converted skin, the Geyser analog of Profile.
+// recently converted skin.
 type GeyserProfile struct {
 	UUID     string      `json:"uuid"`
 	XUID     int64       `json:"xuid"`

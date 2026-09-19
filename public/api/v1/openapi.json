@@ -783,7 +783,7 @@
         "/mc/profile/bedrock/name/{name}": {
             "get": {
                 "summary": "Get a Bedrock player's full profile (identity + skin) by gamertag",
-                "description": "The Geyser analog of GET /mc/profile/name/{name}, keyed by Xbox gamertag instead of XUID.",
+                "description": "Looks up a Bedrock player by Xbox gamertag.",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/BedrockGamertagNameSlug"
@@ -815,7 +815,7 @@
         "/mc/profile/bedrock/{uuid}": {
             "get": {
                 "summary": "Get a Bedrock player's full profile (identity + skin) by derived UUID",
-                "description": "The Geyser analog of GET /mc/profile/{uuid}, keyed by the synthetic UUID derived from an Xbox XUID (see GeyserPlayer.uuid). Returns 400 if the UUID isn't a validly-derived Bedrock UUID.",
+                "description": "Looks up a Bedrock player by their synthetic UUID, derived from an Xbox XUID (see GeyserPlayer.uuid). Returns 400 if the UUID isn't a validly-derived Bedrock UUID.",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/BedrockUUIDSlug"
@@ -954,7 +954,7 @@
         "/mc/profile/name/{name}": {
             "get": {
                 "summary": "Get a player's full profile by name",
-                "description": "The name-keyed analog of GET /mc/profile/{uuid}: resolves the name to a UUID via Mojang, then returns the decoded profile. Returns 204 (not 404) when the profile can't be found.",
+                "description": "Resolves the name to a UUID via Mojang, then returns the decoded profile. Returns 204 (not 404) when the profile can't be found.",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/MCNameSlug"
@@ -2360,7 +2360,7 @@
             },
             "GeyserProfile": {
                 "type": "object",
-                "description": "A Bedrock player's full profile: identity plus their most recently converted skin, the Geyser analog of a Java player's full profile.",
+                "description": "A Bedrock player's full profile: identity plus their most recently converted skin.",
                 "required": [
                     "gamertag",
                     "xuid",
