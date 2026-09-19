@@ -407,8 +407,7 @@ func (s *service) fetchProfileFromMojang(id string, signed bool) (*Player, *Prof
 }
 
 // GetGeyserXUID looks up a Bedrock player's Xbox XUID by gamertag, DB-cache-first
-// with a fallback to Geyser's API. The UUID is always derived from the XUID,
-// never stored.
+// with a fallback to Geyser's API.
 func (s *service) GetGeyserXUID(gamertag string) (*GeyserPlayer, error) {
 	dbPlayer, _ := s.store.GetGeyserPlayerByGamertag(gamertag)
 	if dbPlayer != nil && !dbPlayer.IsStale() {
@@ -454,9 +453,8 @@ func (s *service) GetGeyserXUID(gamertag string) (*GeyserPlayer, error) {
 }
 
 // GetGeyserSkin gets a Bedrock player's most recently converted skin by XUID,
-// DB-cache-first with a fallback to Geyser's skin API. Only the skin's
-// metadata (hash/value/signature/texture_id) is archived here — the raw
-// image bytes are not fetched or stored in S3 yet.
+// DB-cache-first with a fallback to Geyser's skin API. Metadata only — the
+// raw image bytes are not archived to S3 yet.
 func (s *service) GetGeyserSkin(xuid int64) (*GeyserSkin, error) {
 	dbSkin, _ := s.store.GetGeyserSkin(xuid)
 	if dbSkin != nil && !dbSkin.IsStale() {

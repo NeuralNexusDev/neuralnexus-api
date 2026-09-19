@@ -230,9 +230,8 @@ var ErrSkinNotFound = errors.New("skin not found")
 // distinct from ErrPlayerNotFound/ErrSkinNotFound (well-formed, just no match).
 var ErrInvalidGeyserRequest = errors.New("invalid request")
 
-// GeyserSkin - a Bedrock player's most recently converted skin. Shaped like a
-// Java textures property, but keyed by XUID and carrying IsSteve instead of
-// a slim/classic model string; Geyser has no cape equivalent.
+// GeyserSkin - a Bedrock player's most recently converted skin. Like a Java
+// textures property, but keyed by XUID, IsSteve instead of a model string, and no cape.
 type GeyserSkin struct {
 	Hash      string `json:"hash"                db:"hash"`
 	IsSteve   bool   `json:"is_steve"            db:"is_steve"`
