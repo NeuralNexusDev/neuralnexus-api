@@ -1,8 +1,8 @@
 package authroutes
 
 import (
+	"context"
 	"encoding/base64"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -10,6 +10,7 @@ import (
 
 	"github.com/goccy/go-json"
 
+	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
 )
@@ -98,48 +99,60 @@ func newModeLinkRequest(t *testing.T) *http.Request {
 	return r
 }
 
-func TestOAuthHandlerLinkModeNoSessionCookieRejected(t *testing.T) {
+// TestOAuthHandlerLinkModeNoSessionRejected covers OAuthHandler's own,
+// remaining responsibility for ModeLink: reject with a specific message when
+// there's no session in the request context at all. Reading the session
+// cookie and validating the JWT (a malformed token, an expired session) is
+// now SessionMiddleware's job - see middleware_test.go's
+// TestSessionMiddlewareInvalidCookieRejected and
+// TestSessionMiddlewareExpiredSessionRejectedAndDeleted - since a session
+// this handler receives via context is already known-valid, or absent.
+func TestOAuthHandlerLinkModeNoSessionRejected(t *testing.T) {
 	r := newModeLinkRequest(t)
 	w := httptest.NewRecorder()
 
 	OAuthHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
 
 	if w.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401 when the session cookie is missing, got %d", w.Code)
+		t.Errorf("expected 401 when there's no session in context, got %d", w.Code)
 	}
 }
 
-func TestOAuthHandlerLinkModeReadJWTErrorRejected(t *testing.T) {
-	r := newModeLinkRequest(t)
-	r.AddCookie(&http.Cookie{Name: "session", Value: "not-a-real-jwt"})
+// TestOAuthHandlerLinkModeWithSessionProceedsToProcessOAuthLink confirms a
+// session already in context (as SessionMiddleware would have put it there)
+// clears OAuthHandler's own gate and reaches linking.ProcessOAuthLink,
+// instead of being rejected at the handler level. An unsupported platform
+// makes ProcessOAuthLink fail immediately on its own platform switch,
+// without a real network call to any OAuth provider - the point here is
+// only to observe that we got past the session check (a 401 would mean we
+// didn't), not to exercise the OAuth exchange itself.
+func TestOAuthHandlerLinkModeWithSessionProceedsToProcessOAuthLink(t *testing.T) {
+	state := linking.OAuthState{
+		Platform:    auth.Platform("unsupported-platform"),
+		Nonce:       "test-nonce",
+		RedirectURI: "https://example.com/done",
+		Mode:        linking.ModeLink,
+	}
+	stateJSON, err := json.Marshal(state)
+	if err != nil {
+		t.Fatalf("failed to marshal state: %v", err)
+	}
+	stateB64 := base64.URLEncoding.EncodeToString(stateJSON)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/oauth?code=somecode&state="+stateB64, nil)
+	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
+	session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
+	ctx := context.WithValue(r.Context(), mw.SessionKey, session)
+	r = r.WithContext(ctx)
 	w := httptest.NewRecorder()
-	ss := &mockSessionService{
-		readJWTFunc: func(string) (*auth.Session, error) {
-			return nil, errors.New("malformed token")
-		},
+
+	OAuthHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
+
+	if w.Code == http.StatusUnauthorized {
+		t.Fatal("expected the session check to pass and reach ProcessOAuthLink, got 401")
 	}
-
-	OAuthHandler(&mockAccountService{}, &mockLinkAccountStore{}, ss)(w, r)
-
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401 when ReadJWT fails, got %d", w.Code)
-	}
-}
-
-func TestOAuthHandlerLinkModeExpiredSessionRejected(t *testing.T) {
-	r := newModeLinkRequest(t)
-	r.AddCookie(&http.Cookie{Name: "session", Value: "expired-jwt"})
-	w := httptest.NewRecorder()
-	ss := &mockSessionService{
-		readJWTFunc: func(string) (*auth.Session, error) {
-			return &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}, nil
-		},
-	}
-
-	OAuthHandler(&mockAccountService{}, &mockLinkAccountStore{}, ss)(w, r)
-
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401 for an expired session, got %d", w.Code)
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500 from ProcessOAuthLink's own unsupported-platform error, got %d", w.Code)
 	}
 }
 

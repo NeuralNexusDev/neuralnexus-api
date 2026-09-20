@@ -76,13 +76,18 @@ func ApplyRoutes(
 	mux.Handle("/api/oauth", loginRateLimit(authroutes.OAuthHandler(account, authStore.LinkAccount(), session)))
 
 	mux.Handle("GET /api/v1/users/{user_id}", mwAuth(authroutes.GetUserHandler(user)))
+	mux.Handle("GET /api/v1/users/me", mwAuth(mw.SelfUserID(authroutes.GetUserHandler(user))))
 	mux.Handle("GET /api/v1/users/{user_id}/permissions", mwAuth(authroutes.GetUserPermissionsHandler(user)))
+	mux.Handle("GET /api/v1/users/me/permissions", mwAuth(mw.SelfUserID(authroutes.GetUserPermissionsHandler(user))))
 	mux.Handle("GET /api/v1/users/{platform}/{platform_id}", mwAuth(authroutes.GetUserFromPlatformHandler(user)))
 	mux.Handle("PUT /api/v1/users/{user_id}", mwAuth(authroutes.UpdateUserHandler(user)))
 	mux.Handle("PUT /api/v1/users/{platform}/{platform_id}", mwAuth(authroutes.UpdateUserFromPlatformHandler(user)))
 	mux.Handle("GET /api/v1/users/{user_id}/links", mwAuth(authroutes.GetUserLinkedAccountsHandler(user)))
+	mux.Handle("GET /api/v1/users/me/links", mwAuth(mw.SelfUserID(authroutes.GetUserLinkedAccountsHandler(user))))
 	mux.Handle("DELETE /api/v1/users/{user_id}/link/{platform}", mwAuth(authroutes.UnlinkPlatformHandler(user)))
+	mux.Handle("DELETE /api/v1/users/me/link/{platform}", mwAuth(mw.SelfUserID(authroutes.UnlinkPlatformHandler(user))))
 	mux.Handle("PATCH /api/v1/users/{user_id}/link/{platform}", mwAuth(authroutes.SetPlatformLoginEnabledHandler(user)))
+	mux.Handle("PATCH /api/v1/users/me/link/{platform}", mwAuth(mw.SelfUserID(authroutes.SetPlatformLoginEnabledHandler(user))))
 	// mux.HandleFunc("DELETE /api/v1/users/{user_id}", mwAuth(authroutes.DeleteUserHandler(gssService)))
 
 	// --------------- Bee Name Generator ---------------
@@ -208,7 +213,12 @@ func (s *APIServer) Setup() http.Handler {
 	rateLimit := auth.NewRateLimitService(authStore)
 
 	middlewareStack := mw.CreateStack(
-		cors.AllowAll().Handler,
+		cors.New(cors.Options{
+			AllowedOrigins:   []string{auth.NN_SITE_URL},
+			AllowedMethods:   []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete},
+			AllowedHeaders:   []string{"Content-Type", "Authorization"},
+			AllowCredentials: true,
+		}).Handler,
 		mw.IPMiddleware,
 		mw.SessionMiddleware(session),
 		mw.RequestIDMiddleware,

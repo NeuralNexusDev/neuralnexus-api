@@ -31,6 +31,7 @@ const (
 
 const (
 	AuthHeader           = "Authorization"
+	SessionCookieName    = "session"
 	XRequestIDHeader     = "X-Request-ID"
 	XForwardedForHeader  = "X-Forwarded-For"
 	CFConnectingIPHeader = "CF-Connecting-IP"
@@ -114,14 +115,23 @@ func IPMiddleware(next http.Handler) http.Handler {
 func SessionMiddleware(service auth.SessionService) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			authHeader := r.Header.Get(AuthHeader)
-			if authHeader != "" {
+			var token string
+			hasCredential := false
+			if authHeader := r.Header.Get(AuthHeader); authHeader != "" {
 				authStrings := strings.Split(authHeader, "Bearer ")
 				if len(authStrings) != 2 {
 					responses.Unauthorized(w, r, "")
 					return
 				}
-				session, err := service.ReadJWT(authStrings[1])
+				token = authStrings[1]
+				hasCredential = true
+			} else if cookie, err := r.Cookie(SessionCookieName); err == nil {
+				token = cookie.Value
+				hasCredential = true
+			}
+
+			if hasCredential {
+				session, err := service.ReadJWT(token)
 				if err != nil {
 					LogRequest(r.Context(), "Error reading JWT:\n\t", err.Error())
 					responses.Unauthorized(w, r, "")
@@ -255,4 +265,18 @@ func Auth(service auth.SessionService) Middleware {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// SelfUserID rewrites the "user_id" path value to the caller's own session
+// user ID, so a {user_id}-shaped handler can be reused for a "me" route.
+func SelfUserID(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		session, ok := r.Context().Value(SessionKey).(*auth.Session)
+		if !ok || session == nil {
+			responses.Unauthorized(w, r, "")
+			return
+		}
+		r.SetPathValue("user_id", session.UserID)
+		next.ServeHTTP(w, r)
+	})
 }

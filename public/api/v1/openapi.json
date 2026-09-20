@@ -1536,6 +1536,165 @@
                 }
             }
         },
+        "/users/me": {
+            "get": {
+                "summary": "Get the caller's own account",
+                "description": "Requires a valid session. Always resolves to the caller's own account - equivalent to GET /users/{user_id} with the caller's own ID.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Account"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    }
+                }
+            }
+        },
+        "/users/me/link/{platform}": {
+            "delete": {
+                "summary": "Unlink a platform from the caller's own account",
+                "description": "Requires a valid session. Always operates on the caller's own account. Refused with 400 if this is the account's last usable login method (no password and no other verified, login-enabled linked platform).",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/PlatformSlug"
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "$ref": "#/components/responses/204NoContent"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    }
+                }
+            },
+            "patch": {
+                "summary": "Enable or disable a linked platform for login on the caller's own account",
+                "description": "Requires a valid session. Always operates on the caller's own account. Disabling is refused with 400 under the same last-usable-login-method guard as DELETE on this resource. Enabling is refused with 400 if the linked account isn't verified.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/PlatformSlug"
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "login_enabled"
+                                ],
+                                "properties": {
+                                    "login_enabled": {
+                                        "type": "boolean"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "$ref": "#/components/responses/204NoContent"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    }
+                }
+            }
+        },
+        "/users/me/links": {
+            "get": {
+                "summary": "List the caller's own linked platforms",
+                "description": "Requires a valid session. Always resolves to the caller's own linked accounts.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/LinkedAccount"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    }
+                }
+            }
+        },
+        "/users/me/permissions": {
+            "get": {
+                "summary": "Get the caller's own permissions",
+                "description": "Requires a valid session. Always resolves to the caller's own permissions.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    }
+                }
+            }
+        },
         "/users/{platform}/{platform_id}": {
             "get": {
                 "summary": "Get a user by their linked-platform identity",
