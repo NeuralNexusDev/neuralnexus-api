@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"time"
 
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 )
@@ -18,6 +17,14 @@ type UserService interface {
 	UpdateUser(user *Account) error
 	UpdateUserFromPlatform(platform Platform, platformID string, data PlatformData) (*Account, error)
 	DeleteUser(userID string) error
+	// GetUserLinkedAccounts lists every platform linked to userID.
+	GetUserLinkedAccounts(userID string) ([]*LinkedAccount, error)
+	// UnlinkPlatform unlinks a platform from userID. See
+	// LinkAccountStore.DeleteLinkedAccount for the lockout guard.
+	UnlinkPlatform(userID string, platform Platform) error
+	// SetPlatformLoginEnabled toggles whether a linked platform can be used
+	// to log in. See LinkAccountStore.SetLinkedAccountLoginEnabled.
+	SetPlatformLoginEnabled(userID string, platform Platform, enabled bool) error
 }
 
 // userService - The userService struct
@@ -99,14 +106,11 @@ func (s *userService) UpdateUserFromPlatform(platform Platform, platformID strin
 		if err != nil {
 			return nil, err
 		}
-		la = &LinkedAccount{
-			UserID:        a.UserID,
-			Platform:      platform,
-			PlatformID:    platformID,
-			Data:          data,
-			DataUpdatedAt: time.Now(),
-			CreatedAt:     time.Now(),
+		var username string
+		if data != nil {
+			username = data.GetUsername()
 		}
+		la = NewLinkedAccount(a.UserID, platform, username, platformID, data)
 		err = s.als.AddLinkedAccountToDB(la)
 		if err != nil {
 			// Whatever went wrong, the placeholder account created above is
@@ -144,4 +148,19 @@ func (s *userService) UpdateUserFromPlatform(platform Platform, platformID strin
 // DeleteUser - Delete a user
 func (s *userService) DeleteUser(userID string) error {
 	return s.as.DeleteAccountFromDB(userID)
+}
+
+// GetUserLinkedAccounts - List every platform linked to a user
+func (s *userService) GetUserLinkedAccounts(userID string) ([]*LinkedAccount, error) {
+	return s.als.GetLinkedAccountsByUserID(userID)
+}
+
+// UnlinkPlatform - Unlink a platform from a user
+func (s *userService) UnlinkPlatform(userID string, platform Platform) error {
+	return s.als.DeleteLinkedAccount(userID, platform)
+}
+
+// SetPlatformLoginEnabled - Toggle whether a linked platform can log in
+func (s *userService) SetPlatformLoginEnabled(userID string, platform Platform, enabled bool) error {
+	return s.als.SetLinkedAccountLoginEnabled(userID, platform, enabled)
 }

@@ -105,6 +105,18 @@ func (m *mockLinkAccountStore) GetLinkedAccountByUserID(string, Platform) (*Link
 	return nil, ErrNotFound
 }
 
+func (m *mockLinkAccountStore) GetLinkedAccountsByUserID(string) ([]*LinkedAccount, error) {
+	return nil, nil
+}
+
+func (m *mockLinkAccountStore) DeleteLinkedAccount(string, Platform) error {
+	return nil
+}
+
+func (m *mockLinkAccountStore) SetLinkedAccountLoginEnabled(string, Platform, bool) error {
+	return nil
+}
+
 // Regression test for mockAccountStore.AddAccountToDB itself: Email became
 // *string, and a naive existing.Email == a.Email comparison compares
 // pointers, not content, so two accounts with the same real email string
@@ -150,6 +162,13 @@ func TestUserServiceUpdateUserFromPlatformCreatesNewAccount(t *testing.T) {
 	}
 	if als.addCalls[0].PlatformID != "pid1" || als.addCalls[0].UserID != account.UserID {
 		t.Errorf("linked account not associated with the new account: %+v", als.addCalls[0])
+	}
+	// Regression check: this admin endpoint used to build the LinkedAccount
+	// via a raw struct literal instead of NewLinkedAccount, silently leaving
+	// Verified/LoginEnabled at their Go zero value (false) - which would
+	// have made every admin-created link permanently unusable for login.
+	if !als.addCalls[0].Verified || !als.addCalls[0].LoginEnabled {
+		t.Errorf("expected an admin-created link to be Verified and LoginEnabled, got: %+v", als.addCalls[0])
 	}
 	if len(als.updateCalls) != 1 {
 		t.Errorf("expected UpdateLinkedAccount to be called once to persist the platform data, got %d", len(als.updateCalls))

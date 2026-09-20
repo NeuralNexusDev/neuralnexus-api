@@ -51,6 +51,13 @@ func (m *mockLinkAccountStore) GetLinkedAccountByPlatformName(auth.Platform, str
 func (m *mockLinkAccountStore) GetLinkedAccountByUserID(string, auth.Platform) (*auth.LinkedAccount, error) {
 	return nil, auth.ErrNotFound
 }
+func (m *mockLinkAccountStore) GetLinkedAccountsByUserID(string) ([]*auth.LinkedAccount, error) {
+	return nil, nil
+}
+func (m *mockLinkAccountStore) DeleteLinkedAccount(string, auth.Platform) error { return nil }
+func (m *mockLinkAccountStore) SetLinkedAccountLoginEnabled(string, auth.Platform, bool) error {
+	return nil
+}
 
 // mockSessionService implements auth.SessionService for unit testing
 // OAuthHandler's ModeLink cookie handling.

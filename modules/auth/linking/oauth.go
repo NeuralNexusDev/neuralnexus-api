@@ -181,6 +181,18 @@ func ProcessOAuthLogin(as auth.AccountService, las auth.LinkAccountStore, ss aut
 	return session, nil
 }
 
+// errPlatformLoginDisabled is returned when a login attempt resolves to a
+// platform identity that's already linked to an account but not usable for
+// login (unverified, or the user disabled it) - never treated as "unlinked"
+// (that would create a second account for someone who already has one) and
+// never silently allowed through (that would defeat disabling it).
+var errPlatformLoginDisabled = errors.New("this platform account is linked but disabled for login; use another linked platform or your password, or re-enable it first")
+
+// loginEligible reports whether a linked_accounts row can be used to log in.
+func loginEligible(la *auth.LinkedAccount) bool {
+	return la.Verified && la.LoginEnabled
+}
+
 // resolveOrCreateAccountForPlatformUser resolves the auth.Account linked to
 // the given platform user, creating a new placeholder account and linking it
 // if none exists yet. If AddLinkedAccountToDB fails for any reason, the
@@ -193,6 +205,9 @@ func ProcessOAuthLogin(as auth.AccountService, las auth.LinkAccountStore, ss aut
 func resolveOrCreateAccountForPlatformUser(as auth.AccountService, las auth.LinkAccountStore, platform auth.Platform, user auth.PlatformData) (*auth.Account, error) {
 	la, err := las.GetLinkedAccountByPlatformID(platform, user.GetID())
 	if err == nil {
+		if !loginEligible(la) {
+			return nil, errPlatformLoginDisabled
+		}
 		return as.GetAccountByID(la.UserID)
 	}
 	if !errors.Is(err, auth.ErrNotFound) {
@@ -334,19 +349,38 @@ var errConflictingMicrosoftIdentities = errors.New("this Microsoft account's Xbo
 // Whichever identity/identities aren't linked yet get linked to the
 // resolved (or freshly created) account.
 func resolveOrCreateAccountForMicrosoftUser(as auth.AccountService, las auth.LinkAccountStore, xbox *XboxLiveData, java *MinecraftData) (*auth.Account, error) {
-	xboxAccountID, err := existingAccountIDForPlatformUser(las, auth.PlatformXboxLive, xbox.GetID())
+	xboxLA, err := linkedAccountOrNil(las, auth.PlatformXboxLive, xbox.GetID())
 	if err != nil {
 		return nil, err
 	}
-	var javaAccountID string
+	var javaLA *auth.LinkedAccount
 	if java != nil {
-		javaAccountID, err = existingAccountIDForPlatformUser(las, auth.PlatformMinecraft, java.GetID())
+		javaLA, err = linkedAccountOrNil(las, auth.PlatformMinecraft, java.GetID())
 		if err != nil {
 			return nil, err
 		}
 	}
+
+	xboxAccountID, javaAccountID := "", ""
+	if xboxLA != nil {
+		xboxAccountID = xboxLA.UserID
+	}
+	if javaLA != nil {
+		javaAccountID = javaLA.UserID
+	}
 	if xboxAccountID != "" && javaAccountID != "" && xboxAccountID != javaAccountID {
 		return nil, errConflictingMicrosoftIdentities
+	}
+
+	// A linked-but-ineligible identity must never be treated as unlinked
+	// (that would attach the other identity to a brand new, duplicate
+	// account) nor silently logged in anyway - unless the OTHER identity is
+	// itself linked and eligible, in which case login proceeds through that
+	// one and this one's ineligibility is simply not relevant.
+	xboxEligible := xboxLA != nil && loginEligible(xboxLA)
+	javaEligible := javaLA != nil && loginEligible(javaLA)
+	if (xboxLA != nil || javaLA != nil) && !xboxEligible && !javaEligible {
+		return nil, errPlatformLoginDisabled
 	}
 
 	accountID := xboxAccountID
@@ -434,17 +468,27 @@ func ensureMicrosoftIdentityLinked(as auth.AccountService, las auth.LinkAccountS
 	return winner, false, nil
 }
 
+// linkedAccountOrNil returns the linked_accounts row for the given platform
+// identity, or nil if none exists yet.
+func linkedAccountOrNil(las auth.LinkAccountStore, platform auth.Platform, platformID string) (*auth.LinkedAccount, error) {
+	la, err := las.GetLinkedAccountByPlatformID(platform, platformID)
+	if err == nil {
+		return la, nil
+	}
+	if errors.Is(err, auth.ErrNotFound) {
+		return nil, nil
+	}
+	return nil, err
+}
+
 // existingAccountIDForPlatformUser returns the account ID already linked to
 // the given platform identity, or "" if none is linked yet.
 func existingAccountIDForPlatformUser(las auth.LinkAccountStore, platform auth.Platform, platformID string) (string, error) {
-	la, err := las.GetLinkedAccountByPlatformID(platform, platformID)
-	if err == nil {
-		return la.UserID, nil
+	la, err := linkedAccountOrNil(las, platform, platformID)
+	if err != nil || la == nil {
+		return "", err
 	}
-	if errors.Is(err, auth.ErrNotFound) {
-		return "", nil
-	}
-	return "", err
+	return la.UserID, nil
 }
 
 // linkIdentityToAccountID links a platform identity to an already-resolved

@@ -204,3 +204,251 @@ func TestStoreAddAccountToDBDuplicateUsernameTranslatesToSentinel(t *testing.T) 
 		t.Errorf("expected ErrUsernameAlreadyExists for a duplicate username insert, got: %v", err)
 	}
 }
+
+// setupLinkAccountStore returns both stores backed by the same live
+// Postgres connection, with accounts and linked_accounts created fresh -
+// DeleteLinkedAccount/SetLinkedAccountLoginEnabled's guard queries join
+// across both tables, so testing them needs both to exist together.
+func setupLinkAccountStore(t *testing.T) (AccountStore, LinkAccountStore) {
+	t.Helper()
+
+	pgURL := os.Getenv("TEST_POSTGRES_URL")
+	if pgURL == "" {
+		t.Skip("TEST_POSTGRES_URL must be set to run store tests")
+	}
+
+	db, err := pgxpool.New(context.Background(), pgURL)
+	if err != nil {
+		t.Fatalf("failed to connect to postgres: %v", err)
+	}
+
+	_, err = db.Exec(context.Background(), `
+		CREATE TABLE IF NOT EXISTS accounts (
+			user_id BIGINT PRIMARY KEY NOT NULL,
+			username TEXT UNIQUE,
+			email TEXT UNIQUE,
+			hashed_secret BYTEA,
+			salt BYTEA,
+			roles TEXT[],
+			updated_at timestamp with time zone default current_timestamp
+		)
+	`)
+	if err != nil {
+		t.Fatalf("failed to create accounts table: %v", err)
+	}
+	_, err = db.Exec(context.Background(), `
+		CREATE TABLE IF NOT EXISTS linked_accounts (
+			user_id BIGINT NOT NULL,
+			platform TEXT NOT NULL,
+			platform_username TEXT NOT NULL,
+			platform_id TEXT NOT NULL,
+			data JSONB NOT NULL,
+			verified BOOLEAN NOT NULL DEFAULT true,
+			login_enabled BOOLEAN NOT NULL DEFAULT true,
+			created_at timestamp with time zone default current_timestamp,
+			updated_at timestamp with time zone default current_timestamp,
+			FOREIGN KEY (user_id) REFERENCES accounts(user_id),
+			CONSTRAINT linked_accounts_unique UNIQUE (user_id, platform),
+			CONSTRAINT linked_accounts_platform_unique UNIQUE (platform, platform_id)
+		)
+	`)
+	if err != nil {
+		t.Fatalf("failed to create linked_accounts table: %v", err)
+	}
+
+	t.Cleanup(func() {
+		db.Exec(context.Background(), "DELETE FROM linked_accounts WHERE user_id BETWEEN 900000000000000000 AND 900000000000009999")
+		db.Exec(context.Background(), "DELETE FROM accounts WHERE user_id BETWEEN 900000000000000000 AND 900000000000009999")
+		db.Close()
+	})
+
+	s := NewStore(db, nil)
+	return s.Account(), s.LinkAccount()
+}
+
+// seedTestAccount inserts a bare account (no password) for the guard tests
+// to link platforms onto.
+func seedTestAccount(t *testing.T, as AccountStore, userID string) {
+	t.Helper()
+	if err := as.AddAccountToDB(&Account{UserID: userID, Username: "storetest-" + userID}); err != nil {
+		t.Fatalf("failed to seed account %s: %v", userID, err)
+	}
+}
+
+// seedTestLink inserts a linked_accounts row directly (not through
+// NewLinkedAccount) so tests can control Verified/LoginEnabled explicitly,
+// including combinations NewLinkedAccount itself can never produce.
+func seedTestLink(t *testing.T, las LinkAccountStore, userID string, platform Platform, platformID string, verified, loginEnabled bool) {
+	t.Helper()
+	if err := las.AddLinkedAccountToDB(&LinkedAccount{
+		UserID:           userID,
+		Platform:         platform,
+		PlatformUsername: "storetest",
+		PlatformID:       platformID,
+		Data:             map[string]string{},
+		Verified:         verified,
+		LoginEnabled:     loginEnabled,
+	}); err != nil {
+		t.Fatalf("failed to seed %s link for %s: %v", platform, userID, err)
+	}
+}
+
+// TestStoreDeleteLinkedAccountBlockedAsLastLoginMethod is the real-Postgres
+// proof that the guard in hasOtherUsableLoginMethod actually works: a
+// passwordless account with exactly one verified, login-enabled link must
+// not be able to delete it - the row must still exist afterward.
+func TestStoreDeleteLinkedAccountBlockedAsLastLoginMethod(t *testing.T) {
+	as, las := setupLinkAccountStore(t)
+	seedTestAccount(t, as, "900000000000000100")
+	seedTestLink(t, las, "900000000000000100", PlatformDiscord, "storetest-discord-100", true, true)
+
+	err := las.DeleteLinkedAccount("900000000000000100", PlatformDiscord)
+	if !errors.Is(err, ErrWouldLockAccount) {
+		t.Fatalf("expected ErrWouldLockAccount, got: %v", err)
+	}
+	if _, err := las.GetLinkedAccountByUserID("900000000000000100", PlatformDiscord); err != nil {
+		t.Errorf("expected the blocked link to still exist, got: %v", err)
+	}
+}
+
+// TestStoreDeleteLinkedAccountAllowedWithPassword verifies the other half
+// of the guard: an account WITH a password can delete its only linked
+// platform, since the password remains a usable login method.
+func TestStoreDeleteLinkedAccountAllowedWithPassword(t *testing.T) {
+	as, las := setupLinkAccountStore(t)
+	a := &Account{UserID: "900000000000000101", Username: "storetest-101"}
+	if err := a.HashPassword("storetest-password"); err != nil {
+		t.Fatalf("HashPassword returned error: %v", err)
+	}
+	if err := as.AddAccountToDB(a); err != nil {
+		t.Fatalf("failed to seed passworded account: %v", err)
+	}
+	seedTestLink(t, las, "900000000000000101", PlatformDiscord, "storetest-discord-101", true, true)
+
+	if err := las.DeleteLinkedAccount("900000000000000101", PlatformDiscord); err != nil {
+		t.Fatalf("expected the delete to succeed for a passworded account, got: %v", err)
+	}
+	if _, err := las.GetLinkedAccountByUserID("900000000000000101", PlatformDiscord); !errors.Is(err, ErrNotFound) {
+		t.Errorf("expected the link to be gone, got: %v", err)
+	}
+}
+
+// TestStoreDeleteLinkedAccountAllowedWithAnotherEnabledLink verifies a
+// passwordless account CAN unlink one platform as long as another
+// verified, login-enabled one remains - and that the other one is left
+// completely untouched.
+func TestStoreDeleteLinkedAccountAllowedWithAnotherEnabledLink(t *testing.T) {
+	as, las := setupLinkAccountStore(t)
+	seedTestAccount(t, as, "900000000000000102")
+	seedTestLink(t, las, "900000000000000102", PlatformDiscord, "storetest-discord-102", true, true)
+	seedTestLink(t, las, "900000000000000102", PlatformTwitch, "storetest-twitch-102", true, true)
+
+	if err := las.DeleteLinkedAccount("900000000000000102", PlatformDiscord); err != nil {
+		t.Fatalf("expected the delete to succeed, got: %v", err)
+	}
+	if _, err := las.GetLinkedAccountByUserID("900000000000000102", PlatformTwitch); err != nil {
+		t.Errorf("expected the Twitch link to remain untouched, got: %v", err)
+	}
+}
+
+// TestStoreDeleteLinkedAccountNotFound verifies deleting a platform that
+// was never linked returns ErrNotFound, not ErrWouldLockAccount - the two
+// are ambiguous from RowsAffected == 0 alone and must be told apart.
+func TestStoreDeleteLinkedAccountNotFound(t *testing.T) {
+	as, las := setupLinkAccountStore(t)
+	seedTestAccount(t, as, "900000000000000103")
+
+	err := las.DeleteLinkedAccount("900000000000000103", PlatformDiscord)
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("expected ErrNotFound for a platform that was never linked, got: %v", err)
+	}
+}
+
+// TestStoreDeleteLinkedAccountIgnoresDisabledOtherLink verifies the guard
+// counts only OTHER links that are themselves verified and login-enabled -
+// a second linked platform that's already disabled for login doesn't count
+// as a usable fallback, so deleting the last enabled one must still block.
+func TestStoreDeleteLinkedAccountIgnoresDisabledOtherLink(t *testing.T) {
+	as, las := setupLinkAccountStore(t)
+	seedTestAccount(t, as, "900000000000000104")
+	seedTestLink(t, las, "900000000000000104", PlatformDiscord, "storetest-discord-104", true, true)
+	seedTestLink(t, las, "900000000000000104", PlatformTwitch, "storetest-twitch-104", true, false)
+
+	err := las.DeleteLinkedAccount("900000000000000104", PlatformDiscord)
+	if !errors.Is(err, ErrWouldLockAccount) {
+		t.Fatalf("expected ErrWouldLockAccount (Twitch is disabled, so it doesn't count), got: %v", err)
+	}
+}
+
+// TestStoreSetLinkedAccountLoginEnabledBlockedAsLastLoginMethod mirrors the
+// delete guard test for the disable-login toggle.
+func TestStoreSetLinkedAccountLoginEnabledBlockedAsLastLoginMethod(t *testing.T) {
+	as, las := setupLinkAccountStore(t)
+	seedTestAccount(t, as, "900000000000000105")
+	seedTestLink(t, las, "900000000000000105", PlatformDiscord, "storetest-discord-105", true, true)
+
+	err := las.SetLinkedAccountLoginEnabled("900000000000000105", PlatformDiscord, false)
+	if !errors.Is(err, ErrWouldLockAccount) {
+		t.Fatalf("expected ErrWouldLockAccount, got: %v", err)
+	}
+	la, err := las.GetLinkedAccountByUserID("900000000000000105", PlatformDiscord)
+	if err != nil {
+		t.Fatalf("GetLinkedAccountByUserID returned error: %v", err)
+	}
+	if !la.LoginEnabled {
+		t.Error("expected LoginEnabled to remain true after a blocked disable")
+	}
+}
+
+// TestStoreSetLinkedAccountLoginEnabledAllowedWithAnotherEnabledLink mirrors
+// the delete guard's "another usable method remains" success case.
+func TestStoreSetLinkedAccountLoginEnabledAllowedWithAnotherEnabledLink(t *testing.T) {
+	as, las := setupLinkAccountStore(t)
+	seedTestAccount(t, as, "900000000000000106")
+	seedTestLink(t, las, "900000000000000106", PlatformDiscord, "storetest-discord-106", true, true)
+	seedTestLink(t, las, "900000000000000106", PlatformTwitch, "storetest-twitch-106", true, true)
+
+	if err := las.SetLinkedAccountLoginEnabled("900000000000000106", PlatformDiscord, false); err != nil {
+		t.Fatalf("expected the disable to succeed, got: %v", err)
+	}
+	la, err := las.GetLinkedAccountByUserID("900000000000000106", PlatformDiscord)
+	if err != nil {
+		t.Fatalf("GetLinkedAccountByUserID returned error: %v", err)
+	}
+	if la.LoginEnabled {
+		t.Error("expected LoginEnabled to be false")
+	}
+}
+
+// TestStoreSetLinkedAccountLoginEnabledCannotEnableUnverified verifies the
+// second half of the toggle's guard: even though nothing in this package
+// can construct an unverified row today, the store itself refuses to ever
+// make one login-eligible, in case a row ever reaches this table some other
+// way (e.g. a future soft-link feature, or a manual data fix).
+func TestStoreSetLinkedAccountLoginEnabledCannotEnableUnverified(t *testing.T) {
+	as, las := setupLinkAccountStore(t)
+	seedTestAccount(t, as, "900000000000000107")
+	seedTestLink(t, las, "900000000000000107", PlatformDiscord, "storetest-discord-107", false, false)
+
+	err := las.SetLinkedAccountLoginEnabled("900000000000000107", PlatformDiscord, true)
+	if !errors.Is(err, ErrLinkedAccountUnverified) {
+		t.Fatalf("expected ErrLinkedAccountUnverified, got: %v", err)
+	}
+}
+
+// TestStoreGetLinkedAccountsByUserID verifies it returns every platform
+// linked to a user, unlike GetLinkedAccountByUserID which takes one.
+func TestStoreGetLinkedAccountsByUserID(t *testing.T) {
+	as, las := setupLinkAccountStore(t)
+	seedTestAccount(t, as, "900000000000000108")
+	seedTestLink(t, las, "900000000000000108", PlatformDiscord, "storetest-discord-108", true, true)
+	seedTestLink(t, las, "900000000000000108", PlatformTwitch, "storetest-twitch-108", true, true)
+
+	links, err := las.GetLinkedAccountsByUserID("900000000000000108")
+	if err != nil {
+		t.Fatalf("GetLinkedAccountsByUserID returned error: %v", err)
+	}
+	if len(links) != 2 {
+		t.Fatalf("expected 2 linked accounts, got %d: %+v", len(links), links)
+	}
+}

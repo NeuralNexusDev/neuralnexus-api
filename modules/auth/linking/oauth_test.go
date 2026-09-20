@@ -132,6 +132,18 @@ func (m *mockLinkAccountStore) GetLinkedAccountByUserID(string, auth.Platform) (
 	return nil, auth.ErrNotFound
 }
 
+func (m *mockLinkAccountStore) GetLinkedAccountsByUserID(string) ([]*auth.LinkedAccount, error) {
+	return nil, nil
+}
+
+func (m *mockLinkAccountStore) DeleteLinkedAccount(string, auth.Platform) error {
+	return nil
+}
+
+func (m *mockLinkAccountStore) SetLinkedAccountLoginEnabled(string, auth.Platform, bool) error {
+	return nil
+}
+
 // concurrentAccountService is a goroutine-safe variant of mockAccountService.
 // The plain-map mock above is intentionally unsynchronized (it's only ever
 // driven sequentially by the other tests); reusing it under concurrent
@@ -240,6 +252,77 @@ func (m *concurrentLinkAccountStore) GetLinkedAccountByPlatformName(auth.Platfor
 
 func (m *concurrentLinkAccountStore) GetLinkedAccountByUserID(string, auth.Platform) (*auth.LinkedAccount, error) {
 	return nil, auth.ErrNotFound
+}
+
+func (m *concurrentLinkAccountStore) GetLinkedAccountsByUserID(userID string) ([]*auth.LinkedAccount, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var result []*auth.LinkedAccount
+	for _, la := range m.byKey {
+		if la.UserID == userID {
+			result = append(result, la)
+		}
+	}
+	return result, nil
+}
+
+// hasOtherUsableLoginMethodLocked mirrors the real store's guard predicate
+// (minus the password check - none of these tests use a passworded
+// account). Callers must already hold m.mu.
+func hasOtherUsableLoginMethodLocked(byKey map[string]*auth.LinkedAccount, userID string, excludePlatform auth.Platform) bool {
+	for _, la := range byKey {
+		if la.UserID == userID && la.Platform != excludePlatform && la.Verified && la.LoginEnabled {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *concurrentLinkAccountStore) DeleteLinkedAccount(userID string, platform auth.Platform) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key, ok := "", false
+	for k, la := range m.byKey {
+		if la.UserID == userID && la.Platform == platform {
+			key, ok = k, true
+			break
+		}
+	}
+	if !ok {
+		return auth.ErrNotFound
+	}
+	if !hasOtherUsableLoginMethodLocked(m.byKey, userID, platform) {
+		return auth.ErrWouldLockAccount
+	}
+	delete(m.byKey, key)
+	return nil
+}
+
+func (m *concurrentLinkAccountStore) SetLinkedAccountLoginEnabled(userID string, platform auth.Platform, enabled bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var target *auth.LinkedAccount
+	for _, la := range m.byKey {
+		if la.UserID == userID && la.Platform == platform {
+			target = la
+			break
+		}
+	}
+	if target == nil {
+		return auth.ErrNotFound
+	}
+	if enabled {
+		if !target.Verified {
+			return auth.ErrLinkedAccountUnverified
+		}
+		target.LoginEnabled = true
+		return nil
+	}
+	if !hasOtherUsableLoginMethodLocked(m.byKey, userID, platform) {
+		return auth.ErrWouldLockAccount
+	}
+	target.LoginEnabled = false
+	return nil
 }
 
 // TestResolveOrCreateAccountForPlatformUserConcurrentRaceExactlyOneWinner
@@ -359,7 +442,7 @@ func TestResolveOrCreateAccountForPlatformUserUsesExistingLinkedAccount(t *testi
 	as.accounts["existing123"] = &auth.Account{UserID: "existing123", Username: "existing"}
 	als := &mockLinkAccountStore{
 		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
-			return &auth.LinkedAccount{UserID: "existing123", PlatformID: "pid1"}, nil
+			return &auth.LinkedAccount{UserID: "existing123", PlatformID: "pid1", Verified: true, LoginEnabled: true}, nil
 		},
 	}
 	user := &fakePlatformData{id: "pid1", username: "someuser"}
@@ -377,6 +460,55 @@ func TestResolveOrCreateAccountForPlatformUserUsesExistingLinkedAccount(t *testi
 	}
 	if len(as.accounts) != 1 {
 		t.Errorf("expected no new account to be created, got %d accounts", len(as.accounts))
+	}
+}
+
+// TestResolveOrCreateAccountForPlatformUserLoginDisabledRejected is the
+// regression test for the login_enabled/verified infrastructure: a platform
+// identity that's already linked to a real account, but not eligible for
+// login, must be rejected outright - never silently treated as unlinked
+// (which would create a second, duplicate account for someone who already
+// has one) and never silently logged in anyway (which would defeat
+// disabling it in the first place).
+func TestResolveOrCreateAccountForPlatformUserLoginDisabledRejected(t *testing.T) {
+	as := newMockAccountService()
+	as.accounts["existing123"] = &auth.Account{UserID: "existing123", Username: "existing"}
+	als := &mockLinkAccountStore{
+		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
+			return &auth.LinkedAccount{UserID: "existing123", PlatformID: "pid1", Verified: true, LoginEnabled: false}, nil
+		},
+	}
+	user := &fakePlatformData{id: "pid1", username: "someuser"}
+
+	_, err := resolveOrCreateAccountForPlatformUser(as, als, auth.PlatformDiscord, user)
+	if !errors.Is(err, errPlatformLoginDisabled) {
+		t.Fatalf("expected errPlatformLoginDisabled, got: %v", err)
+	}
+	if len(as.accounts) != 1 {
+		t.Errorf("expected no new account to be created, got %d accounts", len(as.accounts))
+	}
+	if len(als.addCalls) != 0 {
+		t.Error("expected no linking attempt for a login-disabled identity")
+	}
+}
+
+// TestResolveOrCreateAccountForPlatformUserUnverifiedRejected mirrors the
+// login-disabled case for an unverified row - defense in depth, since
+// nothing in this package can construct one today, but the login path must
+// still never trust one if it ever exists.
+func TestResolveOrCreateAccountForPlatformUserUnverifiedRejected(t *testing.T) {
+	as := newMockAccountService()
+	as.accounts["existing123"] = &auth.Account{UserID: "existing123", Username: "existing"}
+	als := &mockLinkAccountStore{
+		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
+			return &auth.LinkedAccount{UserID: "existing123", PlatformID: "pid1", Verified: false, LoginEnabled: true}, nil
+		},
+	}
+	user := &fakePlatformData{id: "pid1", username: "someuser"}
+
+	_, err := resolveOrCreateAccountForPlatformUser(as, als, auth.PlatformDiscord, user)
+	if !errors.Is(err, errPlatformLoginDisabled) {
+		t.Fatalf("expected errPlatformLoginDisabled, got: %v", err)
 	}
 }
 

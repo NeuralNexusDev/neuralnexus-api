@@ -176,11 +176,23 @@ type LinkedAccount struct {
 	PlatformUsername string      `db:"platform_username" validate:"required_without=GetID"`
 	PlatformID       string      `db:"platform_id" validate:"required_without=GetUsername"`
 	Data             interface{} `db:"data" validate:"required"`
-	DataUpdatedAt    time.Time   `db:"updated_at"`
-	CreatedAt        time.Time   `db:"created_at"`
+	// Verified marks that this row was established through a real,
+	// cryptographically-proven link (the OAuth flow) rather than a one-sided
+	// claim - only NewLinkedAccount sets it, and it always sets it true,
+	// since every caller of that constructor today is an OAuth-verified
+	// flow. There is deliberately no way to construct a LinkedAccount with
+	// Verified false through this package.
+	Verified bool `db:"verified"`
+	// LoginEnabled is whether the user wants this identity usable to log in
+	// with, independent of Verified - a user may keep an identity linked
+	// (for its data/for other integrations) while disabling it as a login
+	// method. Defaults true so a fresh link works for login immediately.
+	LoginEnabled  bool      `db:"login_enabled"`
+	DataUpdatedAt time.Time `db:"updated_at"`
+	CreatedAt     time.Time `db:"created_at"`
 }
 
-// NewLinkedAccount creates a new linked account
+// NewLinkedAccount creates a new, verified, login-enabled linked account.
 func NewLinkedAccount(userID string, platform Platform, platformUsername, platformID string, data PlatformData) *LinkedAccount {
 	return &LinkedAccount{
 		UserID:           userID,
@@ -188,6 +200,8 @@ func NewLinkedAccount(userID string, platform Platform, platformUsername, platfo
 		PlatformUsername: platformUsername,
 		PlatformID:       platformID,
 		Data:             data,
+		Verified:         true,
+		LoginEnabled:     true,
 	}
 }
 

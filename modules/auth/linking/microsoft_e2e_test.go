@@ -142,7 +142,7 @@ func TestProcessOAuthLoginMinecraftReusesExistingLinkedAccount(t *testing.T) {
 	as.accounts["existing-acct"] = &auth.Account{UserID: "existing-acct", Username: "existing"}
 	als := &mockLinkAccountStore{
 		getByPlatformIDFunc: func(platform auth.Platform, platformID string) (*auth.LinkedAccount, error) {
-			return &auth.LinkedAccount{UserID: "existing-acct"}, nil
+			return &auth.LinkedAccount{UserID: "existing-acct", Verified: true, LoginEnabled: true}, nil
 		},
 	}
 	ss := &mockSessionService{}
@@ -507,7 +507,7 @@ func TestProcessOAuthLoginMicrosoftReusesExistingLinkedAccount(t *testing.T) {
 	as.accounts["existing-acct"] = &auth.Account{UserID: "existing-acct", Username: "existing"}
 	als := &mockLinkAccountStore{
 		getByPlatformIDFunc: func(platform auth.Platform, platformID string) (*auth.LinkedAccount, error) {
-			return &auth.LinkedAccount{UserID: "existing-acct"}, nil
+			return &auth.LinkedAccount{UserID: "existing-acct", Verified: true, LoginEnabled: true}, nil
 		},
 	}
 	ss := &mockSessionService{}
