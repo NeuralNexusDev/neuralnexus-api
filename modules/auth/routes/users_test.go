@@ -236,3 +236,18 @@ func TestSetPlatformLoginEnabledHandlerInvalidBodyRejected(t *testing.T) {
 		t.Error("expected SetPlatformLoginEnabled to never be called for an invalid body")
 	}
 }
+
+func TestSetPlatformLoginEnabledHandlerMissingFieldRejected(t *testing.T) {
+	svc := &mockUserService{}
+	req := requestWithJSONBody(http.MethodPatch, &auth.Session{UserID: "u1"}, "u1", "discord", `{}`)
+	w := httptest.NewRecorder()
+
+	SetPlatformLoginEnabledHandler(svc)(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 when login_enabled is omitted, got %d: %s", w.Code, w.Body.String())
+	}
+	if len(svc.setEnableCalls) != 0 {
+		t.Error("expected SetPlatformLoginEnabled to never be called when login_enabled is omitted")
+	}
+}

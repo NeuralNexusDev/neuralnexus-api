@@ -416,14 +416,29 @@ var ErrLinkedAccountUnverified = errors.New("this linked account is unverified a
 // hasOtherUsableLoginMethod is the shared guard both DeleteLinkedAccount and
 // SetLinkedAccountLoginEnabled(false) apply: true if userID has a password
 // or a verified, login-enabled link to a platform other than the one being
-// changed. Folded directly into each statement's WHERE clause (rather than
-// checked in a separate read first) so the check and the write happen
-// atomically - two concurrent requests removing this account's last two
-// login methods can't both see "one other remains" and both proceed.
+// changed. Folded directly into each statement's WHERE clause so the check
+// and the write happen in one round trip - but that alone is NOT enough for
+// atomicity across two different platforms: it's an EXISTS subquery with no
+// lock on the row it reads, so two concurrent statements touching DIFFERENT
+// platforms for the same user (e.g. deleting Discord and Twitch at once)
+// each see the other's row as still present under READ COMMITTED and both
+// proceed - a write-skew anomaly, since disjoint-row writes never conflict
+// with each other on their own. lockLinkedAccountsForUser closes that gap.
 const hasOtherUsableLoginMethod = `(
 	EXISTS (SELECT 1 FROM accounts WHERE user_id = $1 AND hashed_secret IS NOT NULL)
 	OR EXISTS (SELECT 1 FROM linked_accounts WHERE user_id = $1 AND platform != $2 AND verified = true AND login_enabled = true)
 )`
+
+// lockLinkedAccountsForUser takes a transaction-scoped Postgres advisory
+// lock keyed on this user, serializing every DeleteLinkedAccount/
+// SetLinkedAccountLoginEnabled(false) call for them against each other -
+// without it, two such calls for different platforms on the same account
+// can both pass hasOtherUsableLoginMethod and leave zero usable login
+// methods (see that constant's comment). The lock releases automatically
+// when the transaction ends. 27745 is an arbitrary fixed namespace so this
+// can never collide with an unrelated future use of advisory locks
+// elsewhere in this codebase.
+const lockLinkedAccountsForUser = "SELECT pg_advisory_xact_lock(27745, hashtext($1))"
 
 // AddLinkedAccountToDB adds a linked account to the database
 func (s *store) AddLinkedAccountToDB(la *LinkedAccount) error {
@@ -516,10 +531,24 @@ func (s *store) GetLinkedAccountsByUserID(userID string) ([]*LinkedAccount, erro
 // guard blocked it" - the follow-up lookup tells them apart without
 // weakening the atomicity of the guarded delete itself.
 func (s *store) DeleteLinkedAccount(userID string, platform Platform) error {
-	tag, err := s.db.Exec(context.Background(), "DELETE FROM linked_accounts WHERE user_id = $1 AND platform = $2 AND "+hasOtherUsableLoginMethod, userID, platform)
+	ctx := context.Background()
+	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return err
 	}
+	defer tx.Rollback(ctx)
+
+	if _, err := tx.Exec(ctx, lockLinkedAccountsForUser, userID); err != nil {
+		return err
+	}
+	tag, err := tx.Exec(ctx, "DELETE FROM linked_accounts WHERE user_id = $1 AND platform = $2 AND "+hasOtherUsableLoginMethod, userID, platform)
+	if err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+
 	if tag.RowsAffected() > 0 {
 		return nil
 	}
@@ -533,20 +562,41 @@ func (s *store) DeleteLinkedAccount(userID string, platform Platform) error {
 // platform. Disabling shares DeleteLinkedAccount's atomic guard; enabling
 // additionally requires the row to be Verified.
 func (s *store) SetLinkedAccountLoginEnabled(userID string, platform Platform, enabled bool) error {
+	ctx := context.Background()
 	var tag pgconn.CommandTag
-	var err error
+
 	if enabled {
-		tag, err = s.db.Exec(context.Background(), "UPDATE linked_accounts SET login_enabled = true, updated_at = current_timestamp WHERE user_id = $1 AND platform = $2 AND verified = true", userID, platform)
+		// Enabling never removes a login method, so there's no cross-row
+		// invariant to protect here and no lock is needed - unlike
+		// disabling, two concurrent enables can't leave the account worse
+		// off than before either of them ran.
+		var err error
+		tag, err = s.db.Exec(ctx, "UPDATE linked_accounts SET login_enabled = true, updated_at = current_timestamp WHERE user_id = $1 AND platform = $2 AND verified = true", userID, platform)
+		if err != nil {
+			return err
+		}
 	} else {
-		tag, err = s.db.Exec(context.Background(), "UPDATE linked_accounts SET login_enabled = false, updated_at = current_timestamp WHERE user_id = $1 AND platform = $2 AND "+hasOtherUsableLoginMethod, userID, platform)
+		tx, err := s.db.Begin(ctx)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback(ctx)
+
+		if _, err := tx.Exec(ctx, lockLinkedAccountsForUser, userID); err != nil {
+			return err
+		}
+		tag, err = tx.Exec(ctx, "UPDATE linked_accounts SET login_enabled = false, updated_at = current_timestamp WHERE user_id = $1 AND platform = $2 AND "+hasOtherUsableLoginMethod, userID, platform)
+		if err != nil {
+			return err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return err
+		}
 	}
-	if err != nil {
-		return err
-	}
+
 	if tag.RowsAffected() > 0 {
 		return nil
 	}
-
 	if _, err := s.GetLinkedAccountByUserID(userID, platform); err != nil {
 		return err
 	}

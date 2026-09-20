@@ -221,7 +221,9 @@ func UnlinkPlatformHandler(service auth.UserService) http.HandlerFunc {
 
 // SetPlatformLoginEnabledRequest - Body for SetPlatformLoginEnabledHandler
 type SetPlatformLoginEnabledRequest struct {
-	LoginEnabled bool `json:"login_enabled" xml:"login_enabled"`
+	// LoginEnabled is a pointer so a missing field is rejected instead of
+	// silently defaulting to false.
+	LoginEnabled *bool `json:"login_enabled" xml:"login_enabled"`
 }
 
 // SetPlatformLoginEnabledHandler - Toggle whether a linked platform can log in
@@ -235,12 +237,12 @@ func SetPlatformLoginEnabledHandler(service auth.UserService) http.HandlerFunc {
 		}
 		platform := auth.Platform(r.PathValue("platform"))
 		var body SetPlatformLoginEnabledRequest
-		if err := responses.DecodeStruct(r, &body); err != nil {
+		if err := responses.DecodeStruct(r, &body); err != nil || body.LoginEnabled == nil {
 			responses.BadRequest(w, r, "Invalid request body")
 			return
 		}
 
-		err := service.SetPlatformLoginEnabled(userID, platform, body.LoginEnabled)
+		err := service.SetPlatformLoginEnabled(userID, platform, *body.LoginEnabled)
 		switch {
 		case err == nil:
 			responses.NoContent(w, r)

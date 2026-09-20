@@ -3,7 +3,9 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -450,5 +452,110 @@ func TestStoreGetLinkedAccountsByUserID(t *testing.T) {
 	}
 	if len(links) != 2 {
 		t.Fatalf("expected 2 linked accounts, got %d: %+v", len(links), links)
+	}
+}
+
+// TestStoreDeleteLinkedAccountConcurrentDifferentPlatformsNeverBothSucceed
+// is the regression test for the review pipeline's critical finding:
+// hasOtherUsableLoginMethod alone is not atomic across two concurrent
+// requests that each target a DIFFERENT platform on the same account. It's
+// an EXISTS check with no lock on the row it reads, and each statement
+// only locks the row it writes - so under READ COMMITTED, two deletes for
+// two different platforms each see the other's row as still present and
+// eligible, and both proceed. This is a write-skew anomaly (the two writes
+// touch disjoint rows, so Postgres never needs to block them against each
+// other), and it reproduced in ~299/300 trials before
+// lockLinkedAccountsForUser was added. Run many trials, not one, since the
+// race is real but timing-dependent.
+func TestStoreDeleteLinkedAccountConcurrentDifferentPlatformsNeverBothSucceed(t *testing.T) {
+	as, las := setupLinkAccountStore(t)
+
+	const trials = 50
+	for i := 0; i < trials; i++ {
+		userID := fmt.Sprintf("90000000000000%04d", 1000+i)
+		seedTestAccount(t, as, userID)
+		seedTestLink(t, las, userID, PlatformDiscord, "storetest-discord-"+userID, true, true)
+		seedTestLink(t, las, userID, PlatformTwitch, "storetest-twitch-"+userID, true, true)
+
+		var wg sync.WaitGroup
+		results := make([]error, 2)
+		wg.Add(2)
+		go func() { defer wg.Done(); results[0] = las.DeleteLinkedAccount(userID, PlatformDiscord) }()
+		go func() { defer wg.Done(); results[1] = las.DeleteLinkedAccount(userID, PlatformTwitch) }()
+		wg.Wait()
+
+		successes := 0
+		for _, err := range results {
+			switch {
+			case err == nil:
+				successes++
+			case errors.Is(err, ErrWouldLockAccount):
+				// expected for the loser
+			default:
+				t.Fatalf("trial %d: unexpected error: %v", i, err)
+			}
+		}
+		if successes != 1 {
+			t.Fatalf("trial %d: expected exactly 1 of 2 concurrent deletes to succeed, got %d (results: %v)", i, successes, results)
+		}
+
+		remaining, err := las.GetLinkedAccountsByUserID(userID)
+		if err != nil {
+			t.Fatalf("trial %d: GetLinkedAccountsByUserID returned error: %v", i, err)
+		}
+		if len(remaining) != 1 {
+			t.Fatalf("trial %d: expected exactly 1 link to remain (never 0), got %d", i, len(remaining))
+		}
+	}
+}
+
+// TestStoreSetLinkedAccountLoginEnabledConcurrentDifferentPlatformsNeverBothSucceed
+// mirrors the delete test above for the disable-login toggle, which shares
+// the same guard and the same fix.
+func TestStoreSetLinkedAccountLoginEnabledConcurrentDifferentPlatformsNeverBothSucceed(t *testing.T) {
+	as, las := setupLinkAccountStore(t)
+
+	const trials = 50
+	for i := 0; i < trials; i++ {
+		userID := fmt.Sprintf("90000000000000%04d", 2000+i)
+		seedTestAccount(t, as, userID)
+		seedTestLink(t, las, userID, PlatformDiscord, "storetest-discord-"+userID, true, true)
+		seedTestLink(t, las, userID, PlatformTwitch, "storetest-twitch-"+userID, true, true)
+
+		var wg sync.WaitGroup
+		results := make([]error, 2)
+		wg.Add(2)
+		go func() { defer wg.Done(); results[0] = las.SetLinkedAccountLoginEnabled(userID, PlatformDiscord, false) }()
+		go func() { defer wg.Done(); results[1] = las.SetLinkedAccountLoginEnabled(userID, PlatformTwitch, false) }()
+		wg.Wait()
+
+		successes := 0
+		for _, err := range results {
+			switch {
+			case err == nil:
+				successes++
+			case errors.Is(err, ErrWouldLockAccount):
+				// expected for the loser
+			default:
+				t.Fatalf("trial %d: unexpected error: %v", i, err)
+			}
+		}
+		if successes != 1 {
+			t.Fatalf("trial %d: expected exactly 1 of 2 concurrent disables to succeed, got %d (results: %v)", i, successes, results)
+		}
+
+		links, err := las.GetLinkedAccountsByUserID(userID)
+		if err != nil {
+			t.Fatalf("trial %d: GetLinkedAccountsByUserID returned error: %v", i, err)
+		}
+		enabledCount := 0
+		for _, la := range links {
+			if la.LoginEnabled {
+				enabledCount++
+			}
+		}
+		if enabledCount != 1 {
+			t.Fatalf("trial %d: expected exactly 1 login-enabled link to remain (never 0), got %d", i, enabledCount)
+		}
 	}
 }
