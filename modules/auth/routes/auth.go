@@ -154,7 +154,7 @@ func OAuthHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Ses
 			// browser redirect from the OAuth provider that can't carry a
 			// custom header - so read the session cookie directly instead.
 			var linkSession *auth.Session
-			sessionCookie, cookieErr := r.Cookie("session")
+			sessionCookie, cookieErr := r.Cookie(mw.SessionCookieName)
 			if cookieErr != nil {
 				log.Println("Failed to read session for link mode:\n\t", cookieErr)
 				responses.Unauthorized(w, r, "You must be logged in to link an account")
@@ -188,7 +188,7 @@ func OAuthHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Ses
 			return
 		}
 		http.SetCookie(w, &http.Cookie{
-			Name:     "session",
+			Name:     mw.SessionCookieName,
 			Value:    jwtString,
 			Domain:   ".neuralnexus.dev",
 			Path:     "/",

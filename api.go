@@ -208,7 +208,18 @@ func (s *APIServer) Setup() http.Handler {
 	rateLimit := auth.NewRateLimitService(authStore)
 
 	middlewareStack := mw.CreateStack(
-		cors.AllowAll().Handler,
+		// Locked to the frontend's own origin (not www.: it redirects to the
+		// bare domain, so allowing it too would just be dead weight) with
+		// credentials enabled, so the browser will actually attach the
+		// session cookie on cross-origin requests from it. A wildcard origin
+		// can't be paired with AllowCredentials per the CORS spec anyway -
+		// browsers reject that combination outright.
+		cors.New(cors.Options{
+			AllowedOrigins:   []string{auth.NN_SITE_URL},
+			AllowedMethods:   []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete},
+			AllowedHeaders:   []string{"Content-Type", "Authorization"},
+			AllowCredentials: true,
+		}).Handler,
 		mw.IPMiddleware,
 		mw.SessionMiddleware(session),
 		mw.RequestIDMiddleware,

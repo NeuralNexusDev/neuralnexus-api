@@ -31,6 +31,7 @@ const (
 
 const (
 	AuthHeader           = "Authorization"
+	SessionCookieName    = "session"
 	XRequestIDHeader     = "X-Request-ID"
 	XForwardedForHeader  = "X-Forwarded-For"
 	CFConnectingIPHeader = "CF-Connecting-IP"
@@ -110,18 +111,31 @@ func IPMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// SessionMiddleware - Read the session from the request
+// SessionMiddleware - Read the session from the request, either from a
+// "Bearer <token>" Authorization header (bots/integrations) or, failing
+// that, the session cookie (browser frontend, which can't attach a custom
+// header of its own to a cookie it can't read - see SessionCookieName).
+// The header takes priority when both are present.
 func SessionMiddleware(service auth.SessionService) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			authHeader := r.Header.Get(AuthHeader)
-			if authHeader != "" {
+			var token string
+			hasCredential := false
+			if authHeader := r.Header.Get(AuthHeader); authHeader != "" {
 				authStrings := strings.Split(authHeader, "Bearer ")
 				if len(authStrings) != 2 {
 					responses.Unauthorized(w, r, "")
 					return
 				}
-				session, err := service.ReadJWT(authStrings[1])
+				token = authStrings[1]
+				hasCredential = true
+			} else if cookie, err := r.Cookie(SessionCookieName); err == nil {
+				token = cookie.Value
+				hasCredential = true
+			}
+
+			if hasCredential {
+				session, err := service.ReadJWT(token)
 				if err != nil {
 					LogRequest(r.Context(), "Error reading JWT:\n\t", err.Error())
 					responses.Unauthorized(w, r, "")
