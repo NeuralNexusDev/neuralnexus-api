@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,9 +18,13 @@ import (
 )
 
 // mockAccountService implements auth.AccountService for unit testing
-// OAuthHandler. None of its methods should ever be called for an invalid
-// state.Mode, since that's rejected before any account/session work happens.
-type mockAccountService struct{}
+// OAuthHandler and LoginHandler. None of its methods should ever be called
+// for an invalid state.Mode, since that's rejected before any account/
+// session work happens. account, when set, is returned by both
+// GetAccountByUsername and GetAccountByEmail instead of auth.ErrNotFound.
+type mockAccountService struct {
+	account *auth.Account
+}
 
 var _ auth.AccountService = (*mockAccountService)(nil)
 
@@ -28,9 +33,15 @@ func (m *mockAccountService) GetAccountByID(string) (*auth.Account, error) {
 	return nil, auth.ErrNotFound
 }
 func (m *mockAccountService) GetAccountByUsername(string) (*auth.Account, error) {
+	if m.account != nil {
+		return m.account, nil
+	}
 	return nil, auth.ErrNotFound
 }
 func (m *mockAccountService) GetAccountByEmail(string) (*auth.Account, error) {
+	if m.account != nil {
+		return m.account, nil
+	}
 	return nil, auth.ErrNotFound
 }
 func (m *mockAccountService) UpdateAccount(*auth.Account) error { return nil }
@@ -65,20 +76,27 @@ func (m *mockLinkAccountStore) SetLinkedAccountLoginEnabled(string, auth.Platfor
 // OAuthHandler's ModeLink cookie handling and LogoutHandler.
 type mockSessionService struct {
 	readJWTFunc      func(token string) (*auth.Session, error)
+	createJWTFunc    func(session *auth.Session) (string, error)
+	addSessionErr    error
 	deleteSessionErr error
 	deletedIDs       []string
 }
 
 var _ auth.SessionService = (*mockSessionService)(nil)
 
-func (m *mockSessionService) AddSession(*auth.Session) error           { return nil }
+func (m *mockSessionService) AddSession(*auth.Session) error           { return m.addSessionErr }
 func (m *mockSessionService) GetSession(string) (*auth.Session, error) { return nil, auth.ErrNotFound }
 func (m *mockSessionService) UpdateSession(*auth.Session) error        { return nil }
 func (m *mockSessionService) DeleteSession(id string) error {
 	m.deletedIDs = append(m.deletedIDs, id)
 	return m.deleteSessionErr
 }
-func (m *mockSessionService) CreateJWT(*auth.Session) (string, error) { return "", nil }
+func (m *mockSessionService) CreateJWT(session *auth.Session) (string, error) {
+	if m.createJWTFunc != nil {
+		return m.createJWTFunc(session)
+	}
+	return "", nil
+}
 func (m *mockSessionService) ReadJWT(token string) (*auth.Session, error) {
 	return m.readJWTFunc(token)
 }
@@ -256,6 +274,123 @@ func TestLogoutHandlerDoesNotClearCookieOnDeleteSessionError(t *testing.T) {
 	for _, c := range w.Result().Cookies() {
 		if c.Name == mw.SessionCookieName {
 			t.Error("expected no session cookie to be set when DeleteSession fails")
+		}
+	}
+}
+
+// -------------- LoginHandler --------------
+
+// TestLoginHandlerSetsSessionCookie is the regression test for a gap
+// alongside the LogoutHandler fix above: LoginHandler returned the JWT in
+// the response body but never set the session cookie, unlike OAuthHandler,
+// leaving the browser frontend with no cookie after a plain username/
+// password login.
+func TestLoginHandlerSetsSessionCookie(t *testing.T) {
+	account, err := auth.NewAccount("testuser", "test@example.com", "correct-password")
+	if err != nil {
+		t.Fatalf("failed to build test account: %v", err)
+	}
+	as := &mockAccountService{account: account}
+	ss := &mockSessionService{
+		createJWTFunc: func(*auth.Session) (string, error) { return "test-jwt", nil },
+	}
+	body := `{"username":"testuser","password":"correct-password"}`
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	LoginHandler(as, ss)(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var sessionCookie *http.Cookie
+	for _, c := range w.Result().Cookies() {
+		if c.Name == mw.SessionCookieName {
+			sessionCookie = c
+		}
+	}
+	if sessionCookie == nil {
+		t.Fatal("expected LoginHandler to set a session cookie, got none")
+	}
+	if sessionCookie.Value != "test-jwt" {
+		t.Errorf("expected the session cookie's value to be the JWT, got %q", sessionCookie.Value)
+	}
+	if !sessionCookie.Expires.After(time.Now()) {
+		t.Errorf("expected the cookie's Expires to be in the future, got %v", sessionCookie.Expires)
+	}
+}
+
+func TestLoginHandlerRejectsBadPasswordWithoutCookie(t *testing.T) {
+	account, err := auth.NewAccount("testuser", "test@example.com", "correct-password")
+	if err != nil {
+		t.Fatalf("failed to build test account: %v", err)
+	}
+	as := &mockAccountService{account: account}
+	ss := &mockSessionService{}
+	body := `{"username":"testuser","password":"wrong-password"}`
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	LoginHandler(as, ss)(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	for _, c := range w.Result().Cookies() {
+		if c.Name == mw.SessionCookieName {
+			t.Error("expected no session cookie to be set on a failed login")
+		}
+	}
+}
+
+func TestLoginHandlerNoCookieOnCreateJWTError(t *testing.T) {
+	account, err := auth.NewAccount("testuser", "test@example.com", "correct-password")
+	if err != nil {
+		t.Fatalf("failed to build test account: %v", err)
+	}
+	as := &mockAccountService{account: account}
+	ss := &mockSessionService{
+		createJWTFunc: func(*auth.Session) (string, error) { return "", errors.New("jwt signing failed") },
+	}
+	body := `{"username":"testuser","password":"correct-password"}`
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	LoginHandler(as, ss)(w, r)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
+	}
+	for _, c := range w.Result().Cookies() {
+		if c.Name == mw.SessionCookieName {
+			t.Error("expected no session cookie to be set when CreateJWT fails")
+		}
+	}
+}
+
+func TestLoginHandlerNoCookieOnAddSessionError(t *testing.T) {
+	account, err := auth.NewAccount("testuser", "test@example.com", "correct-password")
+	if err != nil {
+		t.Fatalf("failed to build test account: %v", err)
+	}
+	as := &mockAccountService{account: account}
+	ss := &mockSessionService{
+		createJWTFunc: func(*auth.Session) (string, error) { return "test-jwt", nil },
+		addSessionErr: errors.New("db exploded"),
+	}
+	body := `{"username":"testuser","password":"correct-password"}`
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	LoginHandler(as, ss)(w, r)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
+	}
+	for _, c := range w.Result().Cookies() {
+		if c.Name == mw.SessionCookieName {
+			t.Error("expected no session cookie to be set when AddSession fails")
 		}
 	}
 }

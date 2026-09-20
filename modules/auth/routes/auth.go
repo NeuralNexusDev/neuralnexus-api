@@ -71,6 +71,7 @@ func LoginHandler(as auth.AccountService, ss auth.SessionService) http.HandlerFu
 			responses.InternalServerError(w, r, "Authentication failed")
 			return
 		}
+		http.SetCookie(w, sessionCookie(jwt, time.Unix(session.ExpiresAt, 0)))
 		responses.StructOK(w, r, ReturnedJWT{jwt})
 	}
 }
