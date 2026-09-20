@@ -456,6 +456,11 @@ func ensureMicrosoftIdentityLinked(as auth.AccountService, las auth.LinkAccountS
 	// race for both identities) rather than facing a genuine conflict.
 	actualOwnerLA, lookupErr := las.GetLinkedAccountByPlatformID(platform, user.GetID())
 	if lookupErr != nil && !errors.Is(lookupErr, auth.ErrNotFound) {
+		if isNewAccount {
+			if delErr := as.DeleteAccount(a.UserID); delErr != nil {
+				return nil, false, fmt.Errorf("failed to link account (%w) and failed to clean up the orphaned placeholder account: %w", lookupErr, delErr)
+			}
+		}
 		return nil, false, lookupErr
 	}
 	actualOwnerID := ""

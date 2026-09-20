@@ -399,6 +399,46 @@ func TestResolveOrCreateAccountForMicrosoftUserCleansUpPlaceholderOnGenericLinkE
 	}
 }
 
+// TestResolveOrCreateAccountForMicrosoftUserPropagatesGenericErrorFromRaceRecoveryLookup
+// covers a path the review pipeline flagged as untested: AddLinkedAccountToDB
+// races and returns auth.ErrAlreadyLinked, then the recovery re-lookup
+// (checking whether we're already the owner) itself fails with a genuine,
+// unexpected error rather than auth.ErrNotFound. That error must propagate,
+// and - like the sibling AddLinkedAccountToDB-failure branch just above it -
+// the freshly-created placeholder account must not be left orphaned.
+func TestResolveOrCreateAccountForMicrosoftUserPropagatesGenericErrorFromRaceRecoveryLookup(t *testing.T) {
+	as := newMockAccountService()
+	wantErr := errors.New("connection reset by peer")
+	xboxLookupCall := 0
+	als := &mockLinkAccountStore{
+		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
+			xboxLookupCall++
+			if xboxLookupCall == 1 {
+				// Upfront pre-check: not linked yet.
+				return nil, auth.ErrNotFound
+			}
+			// Race-recovery re-lookup after ErrAlreadyLinked: a genuine,
+			// unexpected error, not auth.ErrNotFound.
+			return nil, wantErr
+		},
+		addFunc: func(*auth.LinkedAccount) error {
+			return auth.ErrAlreadyLinked
+		},
+	}
+	xbox := &XboxLiveData{XUID: "xuid1", Gamertag: "GamerTag"}
+
+	_, err := resolveOrCreateAccountForMicrosoftUser(as, als, xbox, nil)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("expected the race-recovery lookup's error to propagate, got: %v", err)
+	}
+	if len(as.accounts) != 0 {
+		t.Errorf("expected the orphaned placeholder account to be cleaned up, got %d accounts remaining: %v", len(as.accounts), as.accounts)
+	}
+	if len(as.deletedIDs) != 1 {
+		t.Errorf("expected DeleteAccount to be called once to clean up the orphaned account, got: %v", as.deletedIDs)
+	}
+}
+
 // -------------- login_enabled / verified eligibility --------------
 
 // TestResolveOrCreateAccountForMicrosoftUserXboxDisabledNoJavaRejected is
