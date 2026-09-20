@@ -3,6 +3,7 @@ package authroutes
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -61,9 +62,11 @@ func (m *mockLinkAccountStore) SetLinkedAccountLoginEnabled(string, auth.Platfor
 }
 
 // mockSessionService implements auth.SessionService for unit testing
-// OAuthHandler's ModeLink cookie handling.
+// OAuthHandler's ModeLink cookie handling and LogoutHandler.
 type mockSessionService struct {
-	readJWTFunc func(token string) (*auth.Session, error)
+	readJWTFunc      func(token string) (*auth.Session, error)
+	deleteSessionErr error
+	deletedIDs       []string
 }
 
 var _ auth.SessionService = (*mockSessionService)(nil)
@@ -71,8 +74,11 @@ var _ auth.SessionService = (*mockSessionService)(nil)
 func (m *mockSessionService) AddSession(*auth.Session) error           { return nil }
 func (m *mockSessionService) GetSession(string) (*auth.Session, error) { return nil, auth.ErrNotFound }
 func (m *mockSessionService) UpdateSession(*auth.Session) error        { return nil }
-func (m *mockSessionService) DeleteSession(string) error               { return nil }
-func (m *mockSessionService) CreateJWT(*auth.Session) (string, error)  { return "", nil }
+func (m *mockSessionService) DeleteSession(id string) error {
+	m.deletedIDs = append(m.deletedIDs, id)
+	return m.deleteSessionErr
+}
+func (m *mockSessionService) CreateJWT(*auth.Session) (string, error) { return "", nil }
 func (m *mockSessionService) ReadJWT(token string) (*auth.Session, error) {
 	return m.readJWTFunc(token)
 }
@@ -102,11 +108,12 @@ func newModeLinkRequest(t *testing.T) *http.Request {
 // TestOAuthHandlerLinkModeNoSessionRejected covers OAuthHandler's own,
 // remaining responsibility for ModeLink: reject with a specific message when
 // there's no session in the request context at all. Reading the session
-// cookie and validating the JWT (a malformed token, an expired session) is
-// now SessionMiddleware's job - see middleware_test.go's
-// TestSessionMiddlewareInvalidCookieRejected and
-// TestSessionMiddlewareExpiredSessionRejectedAndDeleted - since a session
-// this handler receives via context is already known-valid, or absent.
+// cookie and validating the JWT is now SessionMiddleware's job - see
+// middleware_test.go's TestSessionMiddlewareInvalidCookieFailsOpen and
+// TestSessionMiddlewareExpiredCookieFailsOpenAndDeletesSession - since a
+// session this handler receives via context is already known-valid, or
+// absent (an invalid/expired cookie fails open rather than being rejected,
+// so it looks the same as "absent" from here).
 func TestOAuthHandlerLinkModeNoSessionRejected(t *testing.T) {
 	r := newModeLinkRequest(t)
 	w := httptest.NewRecorder()
@@ -191,5 +198,64 @@ func TestOAuthHandlerInvalidModeRejectedWithoutPanic(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected 400 Bad Request for an invalid mode, got %d", w.Code)
+	}
+}
+
+// -------------- LogoutHandler --------------
+
+// TestLogoutHandlerClearsSessionCookie is the regression test for a real
+// bug: LogoutHandler deleted the server-side session but never cleared the
+// browser's session cookie, which kept sending it (SessionMiddleware now
+// reads that cookie) until its own ~24h expiry - see auth.go's sessionCookie
+// helper, now shared between setting and clearing it.
+func TestLogoutHandlerClearsSessionCookie(t *testing.T) {
+	session := &auth.Session{ID: "s1", UserID: "u1"}
+	ctx := context.WithValue(context.Background(), mw.SessionKey, session)
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil).WithContext(ctx)
+	w := httptest.NewRecorder()
+	ss := &mockSessionService{}
+
+	LogoutHandler(ss)(w, r)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
+	}
+	if len(ss.deletedIDs) != 1 || ss.deletedIDs[0] != "s1" {
+		t.Errorf("expected DeleteSession to be called with the session ID, got: %v", ss.deletedIDs)
+	}
+
+	var sessionCookie *http.Cookie
+	for _, c := range w.Result().Cookies() {
+		if c.Name == mw.SessionCookieName {
+			sessionCookie = c
+		}
+	}
+	if sessionCookie == nil {
+		t.Fatal("expected LogoutHandler to set a Set-Cookie clearing the session cookie, got none")
+	}
+	if sessionCookie.Value != "" {
+		t.Errorf("expected the cleared cookie's value to be empty, got %q", sessionCookie.Value)
+	}
+	if !sessionCookie.Expires.Before(time.Now()) {
+		t.Errorf("expected the cleared cookie's Expires to be in the past, got %v", sessionCookie.Expires)
+	}
+}
+
+func TestLogoutHandlerDoesNotClearCookieOnDeleteSessionError(t *testing.T) {
+	session := &auth.Session{ID: "s1", UserID: "u1"}
+	ctx := context.WithValue(context.Background(), mw.SessionKey, session)
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil).WithContext(ctx)
+	w := httptest.NewRecorder()
+	ss := &mockSessionService{deleteSessionErr: errors.New("db exploded")}
+
+	LogoutHandler(ss)(w, r)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
+	}
+	for _, c := range w.Result().Cookies() {
+		if c.Name == mw.SessionCookieName {
+			t.Error("expected no session cookie to be set when DeleteSession fails")
+		}
 	}
 }

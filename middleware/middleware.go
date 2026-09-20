@@ -115,23 +115,13 @@ func IPMiddleware(next http.Handler) http.Handler {
 func SessionMiddleware(service auth.SessionService) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			var token string
-			hasCredential := false
 			if authHeader := r.Header.Get(AuthHeader); authHeader != "" {
 				authStrings := strings.Split(authHeader, "Bearer ")
 				if len(authStrings) != 2 {
 					responses.Unauthorized(w, r, "")
 					return
 				}
-				token = authStrings[1]
-				hasCredential = true
-			} else if cookie, err := r.Cookie(SessionCookieName); err == nil {
-				token = cookie.Value
-				hasCredential = true
-			}
-
-			if hasCredential {
-				session, err := service.ReadJWT(token)
+				session, err := service.ReadJWT(authStrings[1])
 				if err != nil {
 					LogRequest(r.Context(), "Error reading JWT:\n\t", err.Error())
 					responses.Unauthorized(w, r, "")
@@ -140,16 +130,26 @@ func SessionMiddleware(service auth.SessionService) Middleware {
 
 				if !session.IsValid() {
 					responses.Unauthorized(w, r, "")
-					err = service.DeleteSession(session.ID)
-					if err != nil {
-						LogRequest(r.Context(), "Error deleting session:\n\t", err.Error())
+					if delErr := service.DeleteSession(session.ID); delErr != nil {
+						LogRequest(r.Context(), "Error deleting session:\n\t", delErr.Error())
 					}
 					return
 				}
 
-				ctx := r.Context()
-				ctx = context.WithValue(ctx, SessionKey, session)
+				ctx := context.WithValue(r.Context(), SessionKey, session)
 				r = r.WithContext(ctx)
+			} else if cookie, err := r.Cookie(SessionCookieName); err == nil {
+				session, jwtErr := service.ReadJWT(cookie.Value)
+				if jwtErr != nil {
+					LogRequest(r.Context(), "Error reading JWT from cookie:\n\t", jwtErr.Error())
+				} else if !session.IsValid() {
+					if delErr := service.DeleteSession(session.ID); delErr != nil {
+						LogRequest(r.Context(), "Error deleting session:\n\t", delErr.Error())
+					}
+				} else {
+					ctx := context.WithValue(r.Context(), SessionKey, session)
+					r = r.WithContext(ctx)
+				}
 			}
 
 			next.ServeHTTP(w, r)

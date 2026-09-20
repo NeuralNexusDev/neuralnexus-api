@@ -247,19 +247,54 @@ func TestSessionMiddlewareValidCookieSetsContextAndCallsNext(t *testing.T) {
 	}
 }
 
-func TestSessionMiddlewareInvalidCookieRejected(t *testing.T) {
+// TestSessionMiddlewareInvalidCookieFailsOpen is the regression test for a
+// real bug: a cookie is ambient (the browser attaches it to every request,
+// not just ones that need auth), so a stale one - e.g. right after logout,
+// before it naturally expires - must not block the request the way an
+// invalid Authorization header does. Routes that actually require a session
+// still reject via Auth, since no session ends up in context either way.
+func TestSessionMiddlewareInvalidCookieFailsOpen(t *testing.T) {
 	svc := &mockSessionService{
 		readJWTFunc: func(string) (*auth.Session, error) {
 			return nil, errors.New("invalid token")
 		},
 	}
-	w, nextCalled, _ := runSessionMiddleware(svc, newTestRequestWithCookie("", "badtoken"))
+	w, nextCalled, gotSession := runSessionMiddleware(svc, newTestRequestWithCookie("", "badtoken"))
 
-	if nextCalled {
-		t.Error("expected the request to be rejected before reaching the next handler")
+	if !nextCalled {
+		t.Fatal("expected the request to fail open and reach the next handler")
 	}
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401, got %d", w.Code)
+	if gotSession != nil {
+		t.Errorf("expected no session in context, got: %+v", gotSession)
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", w.Code)
+	}
+}
+
+// TestSessionMiddlewareExpiredCookieFailsOpenAndDeletesSession pins the same
+// fail-open behavior for an expired (rather than malformed) cookie-sourced
+// session, while confirming the server-side cleanup still happens.
+func TestSessionMiddlewareExpiredCookieFailsOpenAndDeletesSession(t *testing.T) {
+	session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
+	svc := &mockSessionService{
+		readJWTFunc: func(string) (*auth.Session, error) {
+			return session, nil
+		},
+	}
+	w, nextCalled, gotSession := runSessionMiddleware(svc, newTestRequestWithCookie("", "expiredtoken"))
+
+	if !nextCalled {
+		t.Fatal("expected the request to fail open and reach the next handler")
+	}
+	if gotSession != nil {
+		t.Errorf("expected no session in context, got: %+v", gotSession)
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", w.Code)
+	}
+	if len(svc.deletedIDs) != 1 || svc.deletedIDs[0] != "s1" {
+		t.Errorf("expected the expired session to still be deleted, deletedIDs: %v", svc.deletedIDs)
 	}
 }
 

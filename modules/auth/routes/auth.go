@@ -89,6 +89,7 @@ func LogoutHandler(ss auth.SessionService) http.HandlerFunc {
 			responses.InternalServerError(w, r, "Failed to delete session")
 			return
 		}
+		http.SetCookie(w, sessionCookie("", time.Unix(0, 0)))
 		responses.NoContent(w, r)
 	}
 }
@@ -172,17 +173,22 @@ func OAuthHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Ses
 			responses.InternalServerError(w, r, "Authentication failed")
 			return
 		}
-		http.SetCookie(w, &http.Cookie{
-			Name:     mw.SessionCookieName,
-			Value:    jwtString,
-			Domain:   ".neuralnexus.dev",
-			Path:     "/",
-			Expires:  time.Unix(session.ExpiresAt, 0),
-			Secure:   true,
-			HttpOnly: true,
-			SameSite: http.SameSiteLaxMode,
-		})
+		http.SetCookie(w, sessionCookie(jwtString, time.Unix(session.ExpiresAt, 0)))
 
 		http.Redirect(w, r, state.RedirectURI, http.StatusSeeOther)
+	}
+}
+
+// sessionCookie builds the session cookie
+func sessionCookie(value string, expires time.Time) *http.Cookie {
+	return &http.Cookie{
+		Name:     mw.SessionCookieName,
+		Value:    value,
+		Domain:   ".neuralnexus.dev",
+		Path:     "/",
+		Expires:  expires,
+		Secure:   true,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
 	}
 }
