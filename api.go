@@ -80,6 +80,9 @@ func ApplyRoutes(
 	mux.Handle("GET /api/v1/users/{platform}/{platform_id}", mwAuth(authroutes.GetUserFromPlatformHandler(user)))
 	mux.Handle("PUT /api/v1/users/{user_id}", mwAuth(authroutes.UpdateUserHandler(user)))
 	mux.Handle("PUT /api/v1/users/{platform}/{platform_id}", mwAuth(authroutes.UpdateUserFromPlatformHandler(user)))
+	mux.Handle("GET /api/v1/users/{user_id}/links", mwAuth(authroutes.GetUserLinkedAccountsHandler(user)))
+	mux.Handle("DELETE /api/v1/users/{user_id}/link/{platform}", mwAuth(authroutes.UnlinkPlatformHandler(user)))
+	mux.Handle("PATCH /api/v1/users/{user_id}/link/{platform}", mwAuth(authroutes.SetPlatformLoginEnabledHandler(user)))
 	// mux.HandleFunc("DELETE /api/v1/users/{user_id}", mwAuth(authroutes.DeleteUserHandler(gssService)))
 
 	// --------------- Bee Name Generator ---------------

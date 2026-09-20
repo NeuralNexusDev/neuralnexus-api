@@ -84,7 +84,7 @@ func TestProcessOAuthLoginTwitchReusesExistingLinkedAccount(t *testing.T) {
 	as.accounts["existing-acct"] = &auth.Account{UserID: "existing-acct", Username: "existing"}
 	als := &mockLinkAccountStore{
 		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
-			return &auth.LinkedAccount{UserID: "existing-acct"}, nil
+			return &auth.LinkedAccount{UserID: "existing-acct", Verified: true, LoginEnabled: true}, nil
 		},
 	}
 	ss := &mockSessionService{}

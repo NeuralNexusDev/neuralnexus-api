@@ -1,6 +1,7 @@
 package authroutes
 
 import (
+	"errors"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"net/http"
 
@@ -173,5 +174,86 @@ func DeleteUserHandler(service auth.UserService) http.HandlerFunc {
 			return
 		}
 		responses.NoContent(w, r)
+	}
+}
+
+// GetUserLinkedAccountsHandler - List a user's linked platforms
+func GetUserLinkedAccountsHandler(service auth.UserService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		session := r.Context().Value(mw.SessionKey).(*auth.Session)
+		userID := r.PathValue("user_id")
+		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
+			responses.Forbidden(w, r, "You do not have permission to view this user's linked accounts")
+			return
+		}
+		links, err := service.GetUserLinkedAccounts(userID)
+		if err != nil {
+			responses.InternalServerError(w, r, "Failed to get linked accounts")
+			return
+		}
+		responses.StructOK(w, r, links)
+	}
+}
+
+// UnlinkPlatformHandler - Unlink a platform from a user
+func UnlinkPlatformHandler(service auth.UserService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		session := r.Context().Value(mw.SessionKey).(*auth.Session)
+		userID := r.PathValue("user_id")
+		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
+			responses.Forbidden(w, r, "You do not have permission to unlink this user's platforms")
+			return
+		}
+		platform := auth.Platform(r.PathValue("platform"))
+		err := service.UnlinkPlatform(userID, platform)
+		switch {
+		case err == nil:
+			responses.NoContent(w, r)
+		case errors.Is(err, auth.ErrNotFound):
+			responses.NotFound(w, r, "This platform isn't linked to this user")
+		case errors.Is(err, auth.ErrWouldLockAccount):
+			responses.BadRequest(w, r, "Set a password or link another platform before unlinking your last one")
+		default:
+			responses.InternalServerError(w, r, "Failed to unlink platform")
+		}
+	}
+}
+
+// SetPlatformLoginEnabledRequest - Body for SetPlatformLoginEnabledHandler
+type SetPlatformLoginEnabledRequest struct {
+	// LoginEnabled is a pointer so a missing field is rejected instead of
+	// silently defaulting to false.
+	LoginEnabled *bool `json:"login_enabled" xml:"login_enabled"`
+}
+
+// SetPlatformLoginEnabledHandler - Toggle whether a linked platform can log in
+func SetPlatformLoginEnabledHandler(service auth.UserService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		session := r.Context().Value(mw.SessionKey).(*auth.Session)
+		userID := r.PathValue("user_id")
+		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
+			responses.Forbidden(w, r, "You do not have permission to update this user's platforms")
+			return
+		}
+		platform := auth.Platform(r.PathValue("platform"))
+		var body SetPlatformLoginEnabledRequest
+		if err := responses.DecodeStruct(r, &body); err != nil || body.LoginEnabled == nil {
+			responses.BadRequest(w, r, "Invalid request body")
+			return
+		}
+
+		err := service.SetPlatformLoginEnabled(userID, platform, *body.LoginEnabled)
+		switch {
+		case err == nil:
+			responses.NoContent(w, r)
+		case errors.Is(err, auth.ErrNotFound):
+			responses.NotFound(w, r, "This platform isn't linked to this user")
+		case errors.Is(err, auth.ErrWouldLockAccount):
+			responses.BadRequest(w, r, "Set a password or link another platform before disabling your last login method")
+		case errors.Is(err, auth.ErrLinkedAccountUnverified):
+			responses.BadRequest(w, r, "This linked account is unverified and can't be enabled for login")
+		default:
+			responses.InternalServerError(w, r, "Failed to update platform")
+		}
 	}
 }

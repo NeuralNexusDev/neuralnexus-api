@@ -61,7 +61,7 @@ func TestResolveOrCreateAccountForMicrosoftUserUsesExistingXboxAccountAndLinksJa
 	als := &mockLinkAccountStore{
 		getByPlatformIDFunc: func(platform auth.Platform, platformID string) (*auth.LinkedAccount, error) {
 			if platform == auth.PlatformXboxLive {
-				return &auth.LinkedAccount{UserID: "existing-xbox-acct"}, nil
+				return &auth.LinkedAccount{UserID: "existing-xbox-acct", Verified: true, LoginEnabled: true}, nil
 			}
 			return nil, auth.ErrNotFound
 		},
@@ -90,7 +90,7 @@ func TestResolveOrCreateAccountForMicrosoftUserUsesExistingJavaAccountAndLinksXb
 	als := &mockLinkAccountStore{
 		getByPlatformIDFunc: func(platform auth.Platform, platformID string) (*auth.LinkedAccount, error) {
 			if platform == auth.PlatformMinecraft {
-				return &auth.LinkedAccount{UserID: "existing-java-acct"}, nil
+				return &auth.LinkedAccount{UserID: "existing-java-acct", Verified: true, LoginEnabled: true}, nil
 			}
 			return nil, auth.ErrNotFound
 		},
@@ -115,7 +115,7 @@ func TestResolveOrCreateAccountForMicrosoftUserBothAlreadyLinkedSameAccountIsNoO
 	as.accounts["acct1"] = &auth.Account{UserID: "acct1"}
 	als := &mockLinkAccountStore{
 		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
-			return &auth.LinkedAccount{UserID: "acct1"}, nil
+			return &auth.LinkedAccount{UserID: "acct1", Verified: true, LoginEnabled: true}, nil
 		},
 	}
 	xbox := &XboxLiveData{XUID: "xuid1", Gamertag: "GamerTag"}
@@ -241,7 +241,7 @@ func TestResolveOrCreateAccountForMicrosoftUserRaceAlreadyUsIsNoOp(t *testing.T)
 	als := &mockLinkAccountStore{
 		getByPlatformIDFunc: func(platform auth.Platform, platformID string) (*auth.LinkedAccount, error) {
 			if platform == auth.PlatformXboxLive {
-				return &auth.LinkedAccount{UserID: "acct1"}, nil
+				return &auth.LinkedAccount{UserID: "acct1", Verified: true, LoginEnabled: true}, nil
 			}
 			// Java: the upfront pre-check finds it unlinked, but by the
 			// time we try to link it, a concurrent identical Microsoft
@@ -284,7 +284,7 @@ func TestResolveOrCreateAccountForMicrosoftUserRaceOnExistingAccountIsConflict(t
 	als := &mockLinkAccountStore{
 		getByPlatformIDFunc: func(platform auth.Platform, platformID string) (*auth.LinkedAccount, error) {
 			if platform == auth.PlatformXboxLive {
-				return &auth.LinkedAccount{UserID: "xbox-acct"}, nil
+				return &auth.LinkedAccount{UserID: "xbox-acct", Verified: true, LoginEnabled: true}, nil
 			}
 			// Java: the upfront pre-check finds it unlinked, but by the
 			// time we try to link it, a concurrent request has already
@@ -396,5 +396,124 @@ func TestResolveOrCreateAccountForMicrosoftUserCleansUpPlaceholderOnGenericLinkE
 	}
 	if len(as.deletedIDs) != 1 {
 		t.Errorf("expected DeleteAccount to be called once to clean up the orphaned account, got: %v", as.deletedIDs)
+	}
+}
+
+// TestResolveOrCreateAccountForMicrosoftUserPropagatesGenericErrorFromRaceRecoveryLookup
+// covers a path the review pipeline flagged as untested: AddLinkedAccountToDB
+// races and returns auth.ErrAlreadyLinked, then the recovery re-lookup
+// (checking whether we're already the owner) itself fails with a genuine,
+// unexpected error rather than auth.ErrNotFound. That error must propagate,
+// and - like the sibling AddLinkedAccountToDB-failure branch just above it -
+// the freshly-created placeholder account must not be left orphaned.
+func TestResolveOrCreateAccountForMicrosoftUserPropagatesGenericErrorFromRaceRecoveryLookup(t *testing.T) {
+	as := newMockAccountService()
+	wantErr := errors.New("connection reset by peer")
+	xboxLookupCall := 0
+	als := &mockLinkAccountStore{
+		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
+			xboxLookupCall++
+			if xboxLookupCall == 1 {
+				// Upfront pre-check: not linked yet.
+				return nil, auth.ErrNotFound
+			}
+			// Race-recovery re-lookup after ErrAlreadyLinked: a genuine,
+			// unexpected error, not auth.ErrNotFound.
+			return nil, wantErr
+		},
+		addFunc: func(*auth.LinkedAccount) error {
+			return auth.ErrAlreadyLinked
+		},
+	}
+	xbox := &XboxLiveData{XUID: "xuid1", Gamertag: "GamerTag"}
+
+	_, err := resolveOrCreateAccountForMicrosoftUser(as, als, xbox, nil)
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("expected the race-recovery lookup's error to propagate, got: %v", err)
+	}
+	if len(as.accounts) != 0 {
+		t.Errorf("expected the orphaned placeholder account to be cleaned up, got %d accounts remaining: %v", len(as.accounts), as.accounts)
+	}
+	if len(as.deletedIDs) != 1 {
+		t.Errorf("expected DeleteAccount to be called once to clean up the orphaned account, got: %v", as.deletedIDs)
+	}
+}
+
+// -------------- login_enabled / verified eligibility --------------
+
+// TestResolveOrCreateAccountForMicrosoftUserXboxDisabledNoJavaRejected is
+// the core regression test for wanting to disable Xbox Live for login
+// without losing Java: Xbox is linked to a real account but disabled for
+// login, and this account doesn't own Java at all (java == nil, same as a
+// genuine Bedrock-only player). This must be rejected outright, not treated
+// as "Xbox unlinked" (which would create a brand new, duplicate account).
+func TestResolveOrCreateAccountForMicrosoftUserXboxDisabledNoJavaRejected(t *testing.T) {
+	as := newMockAccountService()
+	as.accounts["existing-acct"] = &auth.Account{UserID: "existing-acct"}
+	als := &mockLinkAccountStore{
+		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
+			return &auth.LinkedAccount{UserID: "existing-acct", Verified: true, LoginEnabled: false}, nil
+		},
+	}
+	xbox := &XboxLiveData{XUID: "xuid1", Gamertag: "GamerTag"}
+
+	_, err := resolveOrCreateAccountForMicrosoftUser(as, als, xbox, nil)
+	if !errors.Is(err, errPlatformLoginDisabled) {
+		t.Fatalf("expected errPlatformLoginDisabled, got: %v", err)
+	}
+	if len(as.accounts) != 1 {
+		t.Errorf("expected no new account to be created, got %d: %v", len(as.accounts), as.accounts)
+	}
+	if len(als.addCalls) != 0 {
+		t.Error("expected no linking attempt")
+	}
+}
+
+// TestResolveOrCreateAccountForMicrosoftUserXboxDisabledJavaEligibleSucceeds
+// verifies the other half: disabling Xbox Live for login must NOT break
+// login via Java on the same account - they're independent identities, and
+// as long as one of them is eligible, login proceeds through it.
+func TestResolveOrCreateAccountForMicrosoftUserXboxDisabledJavaEligibleSucceeds(t *testing.T) {
+	as := newMockAccountService()
+	as.accounts["existing-acct"] = &auth.Account{UserID: "existing-acct"}
+	als := &mockLinkAccountStore{
+		getByPlatformIDFunc: func(platform auth.Platform, platformID string) (*auth.LinkedAccount, error) {
+			if platform == auth.PlatformXboxLive {
+				return &auth.LinkedAccount{UserID: "existing-acct", Verified: true, LoginEnabled: false}, nil
+			}
+			return &auth.LinkedAccount{UserID: "existing-acct", Verified: true, LoginEnabled: true}, nil
+		},
+	}
+	xbox := &XboxLiveData{XUID: "xuid1", Gamertag: "GamerTag"}
+	java := &MinecraftData{Username: "JavaName"}
+
+	a, err := resolveOrCreateAccountForMicrosoftUser(as, als, xbox, java)
+	if err != nil {
+		t.Fatalf("expected login to succeed via the still-eligible Java identity, got: %v", err)
+	}
+	if a.UserID != "existing-acct" {
+		t.Errorf("expected existing-acct, got %q", a.UserID)
+	}
+}
+
+// TestResolveOrCreateAccountForMicrosoftUserBothLinkedBothDisabledRejected
+// covers both identities being linked (to the same account) but BOTH
+// disabled for login - unlike the single-identity case, this confirms the
+// eligibility check looks at every identity present, not just the first
+// one checked.
+func TestResolveOrCreateAccountForMicrosoftUserBothLinkedBothDisabledRejected(t *testing.T) {
+	as := newMockAccountService()
+	as.accounts["existing-acct"] = &auth.Account{UserID: "existing-acct"}
+	als := &mockLinkAccountStore{
+		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
+			return &auth.LinkedAccount{UserID: "existing-acct", Verified: true, LoginEnabled: false}, nil
+		},
+	}
+	xbox := &XboxLiveData{XUID: "xuid1", Gamertag: "GamerTag"}
+	java := &MinecraftData{Username: "JavaName"}
+
+	_, err := resolveOrCreateAccountForMicrosoftUser(as, als, xbox, java)
+	if !errors.Is(err, errPlatformLoginDisabled) {
+		t.Fatalf("expected errPlatformLoginDisabled, got: %v", err)
 	}
 }

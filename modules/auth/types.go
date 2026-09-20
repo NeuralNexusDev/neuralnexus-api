@@ -171,16 +171,18 @@ func (user *Account) NewSession(expiresAt int64) (*Session, error) {
 
 // LinkedAccount struct
 type LinkedAccount struct {
-	UserID           string      `db:"user_id" validate:"required"`
-	Platform         Platform    `db:"platform" validate:"required"`
-	PlatformUsername string      `db:"platform_username" validate:"required_without=GetID"`
-	PlatformID       string      `db:"platform_id" validate:"required_without=GetUsername"`
-	Data             interface{} `db:"data" validate:"required"`
-	DataUpdatedAt    time.Time   `db:"updated_at"`
-	CreatedAt        time.Time   `db:"created_at"`
+	UserID           string      `db:"user_id" validate:"required" json:"user_id" xml:"user_id"`
+	Platform         Platform    `db:"platform" validate:"required" json:"platform" xml:"platform"`
+	PlatformUsername string      `db:"platform_username" validate:"required_without=GetID" json:"platform_username" xml:"platform_username"`
+	PlatformID       string      `db:"platform_id" validate:"required_without=GetUsername" json:"platform_id" xml:"platform_id"`
+	Data             interface{} `db:"data" validate:"required" json:"data" xml:"data"`
+	Verified         bool        `db:"verified" json:"verified" xml:"verified"`
+	LoginEnabled     bool        `db:"login_enabled" json:"login_enabled" xml:"login_enabled"`
+	DataUpdatedAt    time.Time   `db:"updated_at" json:"updated_at" xml:"updated_at"`
+	CreatedAt        time.Time   `db:"created_at" json:"created_at" xml:"created_at"`
 }
 
-// NewLinkedAccount creates a new linked account
+// NewLinkedAccount creates a new, verified, login-enabled linked account.
 func NewLinkedAccount(userID string, platform Platform, platformUsername, platformID string, data PlatformData) *LinkedAccount {
 	return &LinkedAccount{
 		UserID:           userID,
@@ -188,6 +190,8 @@ func NewLinkedAccount(userID string, platform Platform, platformUsername, platfo
 		PlatformUsername: platformUsername,
 		PlatformID:       platformID,
 		Data:             data,
+		Verified:         true,
+		LoginEnabled:     true,
 	}
 }
 
