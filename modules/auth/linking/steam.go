@@ -73,12 +73,8 @@ func (s *SteamData) CreateLinkedAccount(userID string) *auth.LinkedAccount {
 
 // -------------- Functions --------------
 
-// VerifySteamOpenIDCallback verifies an OpenID 2.0 assertion from Steam via
-// the stateless "check_authentication" mode - the full query is POSTed back
-// to Steam's own, hardcoded endpoint rather than whatever
-// openid.op_endpoint the query claims, so an assertion signed by a
-// different, attacker-controlled provider can't be fed in. Returns the
-// caller's SteamID64, extracted from openid.claimed_id.
+// VerifySteamOpenIDCallback verifies an OpenID 2.0 assertion by POSTing it
+// back to Steam's own endpoint, returning the caller's SteamID64.
 func VerifySteamOpenIDCallback(query url.Values) (string, error) {
 	if query.Get("openid.mode") != "id_res" {
 		return "", errors.New("unexpected openid.mode")
