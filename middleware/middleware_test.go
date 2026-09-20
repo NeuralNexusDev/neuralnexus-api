@@ -666,3 +666,61 @@ func TestSessionMiddlewareExpiredSessionDeleteErrorIsLoggedNotFatal(t *testing.T
 		t.Errorf("expected status 401 regardless of the DeleteSession error, got %d", w.Code)
 	}
 }
+
+func runSelfUserID(r *http.Request) (w *httptest.ResponseRecorder, nextCalled bool, gotUserID string) {
+	w = httptest.NewRecorder()
+	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		nextCalled = true
+		gotUserID = r.PathValue("user_id")
+	})
+	SelfUserID(next).ServeHTTP(w, r)
+	return w, nextCalled, gotUserID
+}
+
+func TestSelfUserIDSetsPathValueFromSessionAndCallsNext(t *testing.T) {
+	session := &auth.Session{ID: "s1", UserID: "u1"}
+	ctx := context.WithValue(context.Background(), SessionKey, session)
+	r := httptest.NewRequest(http.MethodGet, "/users/me", nil).WithContext(ctx)
+
+	w, nextCalled, gotUserID := runSelfUserID(r)
+
+	if !nextCalled {
+		t.Fatal("expected the request to reach the next handler")
+	}
+	if gotUserID != "u1" {
+		t.Errorf("expected user_id path value to be set to the session's UserID, got %q", gotUserID)
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", w.Code)
+	}
+}
+
+// TestSelfUserIDOverridesAnyExistingPathValue guards against a route that
+// mistakenly still has a {user_id} wildcard segment (or any other source
+// setting one) - the session's own ID must always win for a /me route,
+// never something already present on the request.
+func TestSelfUserIDOverridesAnyExistingPathValue(t *testing.T) {
+	session := &auth.Session{ID: "s1", UserID: "u1"}
+	ctx := context.WithValue(context.Background(), SessionKey, session)
+	r := httptest.NewRequest(http.MethodGet, "/users/me", nil).WithContext(ctx)
+	r.SetPathValue("user_id", "someone-else")
+
+	_, _, gotUserID := runSelfUserID(r)
+
+	if gotUserID != "u1" {
+		t.Errorf("expected the session's own UserID to win, got %q", gotUserID)
+	}
+}
+
+func TestSelfUserIDNoSessionRejected(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/users/me", nil)
+
+	w, nextCalled, _ := runSelfUserID(r)
+
+	if nextCalled {
+		t.Error("expected the request to be rejected before reaching the next handler")
+	}
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected status 401 when there's no session in context, got %d", w.Code)
+	}
+}

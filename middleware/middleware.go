@@ -270,3 +270,21 @@ func Auth(service auth.SessionService) Middleware {
 		})
 	}
 }
+
+// SelfUserID rewrites the "user_id" path value to the caller's own session
+// user ID, so a literal "me" route (e.g. "GET /users/me" registered
+// alongside "GET /users/{user_id}" - the literal takes precedence per
+// net/http.ServeMux's matching rules) can reuse a {user_id}-shaped handler
+// unchanged. Must run behind Auth (or another middleware that guarantees a
+// session), but checks for one anyway rather than assuming it.
+func SelfUserID(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		session, ok := r.Context().Value(SessionKey).(*auth.Session)
+		if !ok || session == nil {
+			responses.Unauthorized(w, r, "")
+			return
+		}
+		r.SetPathValue("user_id", session.UserID)
+		next.ServeHTTP(w, r)
+	})
+}
