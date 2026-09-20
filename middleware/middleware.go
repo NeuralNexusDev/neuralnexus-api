@@ -111,11 +111,7 @@ func IPMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// SessionMiddleware - Read the session from the request, either from a
-// "Bearer <token>" Authorization header (bots/integrations) or, failing
-// that, the session cookie (browser frontend, which can't attach a custom
-// header of its own to a cookie it can't read - see SessionCookieName).
-// The header takes priority when both are present.
+// SessionMiddleware - Read the session from the request
 func SessionMiddleware(service auth.SessionService) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -272,11 +268,7 @@ func Auth(service auth.SessionService) Middleware {
 }
 
 // SelfUserID rewrites the "user_id" path value to the caller's own session
-// user ID, so a literal "me" route (e.g. "GET /users/me" registered
-// alongside "GET /users/{user_id}" - the literal takes precedence per
-// net/http.ServeMux's matching rules) can reuse a {user_id}-shaped handler
-// unchanged. Must run behind Auth (or another middleware that guarantees a
-// session), but checks for one anyway rather than assuming it.
+// user ID, so a {user_id}-shaped handler can be reused for a "me" route.
 func SelfUserID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		session, ok := r.Context().Value(SessionKey).(*auth.Session)
