@@ -224,4 +224,5 @@ var (
 	PlatformTwitch    Platform = "twitch"
 	PlatformXboxLive  Platform = "xboxlive"
 	PlatformMicrosoft Platform = "microsoft"
+	PlatformSteam     Platform = "steam"
 )

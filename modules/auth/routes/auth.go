@@ -187,6 +187,112 @@ func OAuthHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Ses
 	}
 }
 
+// OpenIDHandler handles the Steam OpenID 2.0 login/link callback. Unlike
+// OAuthHandler, there's no code-for-token exchange - Steam's response is a
+// signed assertion in the query string, verified via
+// linking.VerifySteamOpenIDCallback's check_authentication round-trip.
+func OpenIDHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.SessionService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		stateB64 := r.URL.Query().Get("state")
+		if stateB64 == "" {
+			log.Println("No state provided")
+			responses.BadRequest(w, r, "Invalid request")
+			return
+		}
+		stateBytes, err := base64.URLEncoding.DecodeString(stateB64)
+		if err != nil {
+			log.Println("Failed to decode state:\n\t", err)
+			responses.BadRequest(w, r, "Invalid state")
+			return
+		}
+		var state linking.OAuthState
+		if err := json.Unmarshal(stateBytes, &state); err != nil {
+			log.Println("Failed to unmarshal state:\n\t", err)
+			responses.BadRequest(w, r, "Invalid state")
+			return
+		}
+		if state.Nonce == "" || state.RedirectURI == "" || state.Mode == "" {
+			log.Println("Invalid state")
+			responses.BadRequest(w, r, "Invalid state")
+			return
+		}
+		if !isAllowedRedirect(state.RedirectURI) {
+			log.Println("Redirect URI is not allowed:\n\t", state.RedirectURI)
+			responses.BadRequest(w, r, "Invalid state")
+			return
+		}
+
+		// Verify that the nonce matches the value in the browser's cookie
+		cookie, err := r.Cookie("nonce")
+		if err != nil {
+			log.Println("Failed to get nonce cookie:\n\t", err)
+			responses.BadRequest(w, r, "Invalid state")
+			return
+		}
+		if cookie.Value != state.Nonce {
+			log.Println("Nonce does not match")
+			responses.BadRequest(w, r, "Invalid state")
+			return
+		}
+
+		// Check the mode - and, for a link, that there's actually a session to
+		// link to - before doing any of the expensive work below: there's no
+		// point verifying the assertion with Steam or fetching the caller's
+		// profile for a request that's going to be rejected anyway.
+		switch state.Mode {
+		case linking.ModeLogin:
+		case linking.ModeLink:
+			if linkSession, ok := r.Context().Value(mw.SessionKey).(*auth.Session); !ok || linkSession == nil {
+				responses.Unauthorized(w, r, "You must be logged in to link an account")
+				return
+			}
+		default:
+			log.Println("Invalid mode")
+			responses.BadRequest(w, r, "Invalid state")
+			return
+		}
+
+		steamID64, err := linking.VerifySteamOpenIDCallback(r.URL.Query())
+		if err != nil {
+			log.Println("Failed to verify Steam OpenID callback:\n\t", err)
+			responses.BadRequest(w, r, "Invalid state")
+			return
+		}
+
+		user, err := linking.GetSteamUser(steamID64)
+		if err != nil {
+			log.Println("Failed to get Steam user:\n\t", err)
+			responses.InternalServerError(w, r, "Authentication failed")
+			return
+		}
+
+		var session *auth.Session
+		switch state.Mode {
+		case linking.ModeLogin:
+			session, err = linking.ProcessSteamLogin(as, las, ss, user)
+		case linking.ModeLink:
+			session, err = linking.ProcessSteamLink(r, las, user)
+		}
+
+		if err != nil {
+			log.Println("Failed to process Steam OpenID:\n\t", err)
+			responses.InternalServerError(w, r, "Authentication failed")
+			return
+		}
+
+		// Set the session cookie and redirect the user
+		jwtString, err := ss.CreateJWT(session)
+		if err != nil {
+			log.Println("Failed to create JWT:\n\t", err)
+			responses.InternalServerError(w, r, "Authentication failed")
+			return
+		}
+		http.SetCookie(w, sessionCookie(jwtString, time.Unix(session.ExpiresAt, 0)))
+
+		http.Redirect(w, r, state.RedirectURI, http.StatusSeeOther)
+	}
+}
+
 // isAllowedRedirect reports whether redirectURI's scheme and host match
 // NN_SITE_URL, rejecting an attacker-controlled state.RedirectURI rather
 // than sending the browser (and its fresh session cookie) wherever it says.

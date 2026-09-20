@@ -74,6 +74,7 @@ func ApplyRoutes(
 	mux.Handle("POST /api/v1/auth/logout", loginRateLimit(mwAuth(authroutes.LogoutHandler(session))))
 
 	mux.Handle("/api/oauth", loginRateLimit(authroutes.OAuthHandler(account, authStore.LinkAccount(), session)))
+	mux.Handle("/api/openid", loginRateLimit(authroutes.OpenIDHandler(account, authStore.LinkAccount(), session)))
 
 	mux.Handle("GET /api/v1/users/{user_id}", mwAuth(authroutes.GetUserHandler(user)))
 	mux.Handle("GET /api/v1/users/me", mwAuth(mw.SelfUserID(authroutes.GetUserHandler(user))))

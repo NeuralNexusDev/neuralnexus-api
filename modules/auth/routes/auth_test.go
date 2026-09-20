@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -279,6 +280,142 @@ func TestOAuthHandlerAllowsRedirectMatchingSiteOrigin(t *testing.T) {
 	}
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("expected 500 from ProcessOAuthLogin's own unsupported-platform error, got %d", w.Code)
+	}
+}
+
+// -------------- OpenIDHandler --------------
+
+// newOpenIDRequest builds a Steam OpenID callback request carrying a valid,
+// base64-encoded state param and a matching nonce cookie (unless nonce is
+// empty, in which case no cookie is set at all), plus any extra openid.*
+// query params a test wants to layer on.
+func newOpenIDRequest(t *testing.T, mode linking.Mode, redirectURI, nonce string, extra url.Values) *http.Request {
+	t.Helper()
+	state := linking.OAuthState{
+		Platform:    auth.PlatformSteam,
+		Nonce:       "test-nonce",
+		RedirectURI: redirectURI,
+		Mode:        mode,
+	}
+	stateJSON, err := json.Marshal(state)
+	if err != nil {
+		t.Fatalf("failed to marshal state: %v", err)
+	}
+	stateB64 := base64.URLEncoding.EncodeToString(stateJSON)
+
+	q := url.Values{}
+	for k, v := range extra {
+		q[k] = v
+	}
+	q.Set("state", stateB64)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/openid?"+q.Encode(), nil)
+	if nonce != "" {
+		r.AddCookie(&http.Cookie{Name: "nonce", Value: nonce})
+	}
+	return r
+}
+
+func TestOpenIDHandlerNoStateRejected(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/api/openid", nil)
+	w := httptest.NewRecorder()
+
+	OpenIDHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 when no state is provided, got %d", w.Code)
+	}
+}
+
+func TestOpenIDHandlerRejectsRedirectOutsideSiteOrigin(t *testing.T) {
+	r := newOpenIDRequest(t, linking.ModeLogin, "https://evil.example.com/phish", "", nil)
+	w := httptest.NewRecorder()
+
+	OpenIDHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for a redirect URI outside the site origin, got %d", w.Code)
+	}
+}
+
+func TestOpenIDHandlerMissingNonceCookieRejected(t *testing.T) {
+	r := newOpenIDRequest(t, linking.ModeLogin, "https://neuralnexus.test/done", "", nil)
+	w := httptest.NewRecorder()
+
+	OpenIDHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 when there's no nonce cookie, got %d", w.Code)
+	}
+}
+
+func TestOpenIDHandlerNonceMismatchRejected(t *testing.T) {
+	r := newOpenIDRequest(t, linking.ModeLogin, "https://neuralnexus.test/done", "wrong-nonce", nil)
+	w := httptest.NewRecorder()
+
+	OpenIDHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 when the nonce cookie doesn't match state.Nonce, got %d", w.Code)
+	}
+}
+
+func TestOpenIDHandlerInvalidModeRejectedWithoutPanic(t *testing.T) {
+	r := newOpenIDRequest(t, linking.Mode("bogus-mode"), "https://neuralnexus.test/done", "test-nonce", nil)
+	w := httptest.NewRecorder()
+
+	handler := OpenIDHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})
+	defer func() {
+		if p := recover(); p != nil {
+			t.Fatalf("OpenIDHandler panicked on an invalid mode instead of returning an error response: %v", p)
+		}
+	}()
+	handler(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 Bad Request for an invalid mode, got %d", w.Code)
+	}
+}
+
+// TestOpenIDHandlerLinkModeNoSessionRejected is the regression test for
+// checking the mode/session before doing any of the expensive Steam
+// verification work: a ModeLink request with no session in context must be
+// rejected without ever reaching linking.VerifySteamOpenIDCallback (which
+// would otherwise burn a real network round-trip to Steam for a request
+// that's going to be rejected anyway).
+func TestOpenIDHandlerLinkModeNoSessionRejected(t *testing.T) {
+	r := newOpenIDRequest(t, linking.ModeLink, "https://neuralnexus.test/done", "test-nonce", nil)
+	w := httptest.NewRecorder()
+
+	OpenIDHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 when there's no session in context, got %d", w.Code)
+	}
+}
+
+// TestOpenIDHandlerLinkModeWithSessionProceedsPastSessionCheck confirms a
+// session already in context clears OpenIDHandler's own gate and reaches
+// linking.VerifySteamOpenIDCallback - an openid.mode other than "id_res"
+// makes that fail immediately on its own, without a real call to Steam, so
+// this only observes that we got past the session check (401 would mean we
+// didn't), not that the OpenID exchange itself succeeds.
+func TestOpenIDHandlerLinkModeWithSessionProceedsPastSessionCheck(t *testing.T) {
+	r := newOpenIDRequest(t, linking.ModeLink, "https://neuralnexus.test/done", "test-nonce", url.Values{
+		"openid.mode": {"cancel"},
+	})
+	session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
+	ctx := context.WithValue(r.Context(), mw.SessionKey, session)
+	r = r.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	OpenIDHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
+
+	if w.Code == http.StatusUnauthorized {
+		t.Fatal("expected the session check to pass and reach VerifySteamOpenIDCallback, got 401")
+	}
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 from VerifySteamOpenIDCallback's own openid.mode check, got %d", w.Code)
 	}
 }
 
