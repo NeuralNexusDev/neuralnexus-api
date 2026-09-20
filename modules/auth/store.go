@@ -355,18 +355,6 @@ func (s *store) DeleteSessionFromCache(id string) error {
 //   CONSTRAINT linked_accounts_platform_unique UNIQUE (platform, platform_id)
 // );
 
-// The verified/login_enabled columns above are NOT YET APPLIED to any live
-// schema as of this comment. Needs a manual migration:
-//   ALTER TABLE linked_accounts
-//     ADD COLUMN verified BOOLEAN NOT NULL DEFAULT false,
-//     ADD COLUMN login_enabled BOOLEAN NOT NULL DEFAULT false;
-// DEFAULT false on both is deliberate: a row that bypasses NewLinkedAccount
-// (the only place either field is ever set, always to true) should never be
-// trusted for login just because nobody set it explicitly. This does mean
-// every row already in the table needs a one-time manual backfill to true
-// right after the ALTER runs, since NewLinkedAccount only sets these on
-// INSERT, not on the rows that already exist.
-
 // LinkAccountStore - Account Link Store
 type LinkAccountStore interface {
 	AddLinkedAccountToDB(la *LinkedAccount) error
@@ -374,18 +362,8 @@ type LinkAccountStore interface {
 	GetLinkedAccountByPlatformID(platform Platform, platformID string) (*LinkedAccount, error)
 	GetLinkedAccountByPlatformName(platform Platform, platformName string) (*LinkedAccount, error)
 	GetLinkedAccountByUserID(userID string, platform Platform) (*LinkedAccount, error)
-	// GetLinkedAccountsByUserID returns every platform linked to userID,
-	// unlike GetLinkedAccountByUserID which takes one specific platform.
 	GetLinkedAccountsByUserID(userID string) ([]*LinkedAccount, error)
-	// DeleteLinkedAccount unlinks a platform from an account. It refuses
-	// (ErrWouldLockAccount) if doing so would leave the account with no
-	// remaining way to log in - no password and no other verified,
-	// login-enabled linked platform.
 	DeleteLinkedAccount(userID string, platform Platform) error
-	// SetLinkedAccountLoginEnabled toggles whether a linked platform can be
-	// used to log in, independent of unlinking it entirely. Disabling is
-	// refused (ErrWouldLockAccount) under the same guard as
-	// DeleteLinkedAccount; enabling is refused if the row isn't Verified.
 	SetLinkedAccountLoginEnabled(userID string, platform Platform, enabled bool) error
 }
 
@@ -403,42 +381,13 @@ var ErrAlreadyLinked = errors.New("platform account already linked")
 // fails closed and needs a manual data fix instead of guessing.
 var ErrDuplicateLinkedAccount = errors.New("multiple linked accounts found for platform ID")
 
-// ErrWouldLockAccount is returned by DeleteLinkedAccount and
-// SetLinkedAccountLoginEnabled(false) when the requested change would leave
-// the account with no password and no other usable login method.
+// ErrWouldLockAccount means the change would leave the account with no
+// password and no other usable login method.
 var ErrWouldLockAccount = errors.New("this is the account's last usable login method; set a password or link another platform first")
 
-// ErrLinkedAccountUnverified is returned by SetLinkedAccountLoginEnabled(true)
-// for a row that isn't Verified - login can never be enabled for a link
-// that was never cryptographically proven.
+// ErrLinkedAccountUnverified means login can't be enabled for a row that
+// isn't Verified.
 var ErrLinkedAccountUnverified = errors.New("this linked account is unverified and can't be enabled for login")
-
-// hasOtherUsableLoginMethod is the shared guard both DeleteLinkedAccount and
-// SetLinkedAccountLoginEnabled(false) apply: true if userID has a password
-// or a verified, login-enabled link to a platform other than the one being
-// changed. Folded directly into each statement's WHERE clause so the check
-// and the write happen in one round trip - but that alone is NOT enough for
-// atomicity across two different platforms: it's an EXISTS subquery with no
-// lock on the row it reads, so two concurrent statements touching DIFFERENT
-// platforms for the same user (e.g. deleting Discord and Twitch at once)
-// each see the other's row as still present under READ COMMITTED and both
-// proceed - a write-skew anomaly, since disjoint-row writes never conflict
-// with each other on their own. lockLinkedAccountsForUser closes that gap.
-const hasOtherUsableLoginMethod = `(
-	EXISTS (SELECT 1 FROM accounts WHERE user_id = $1 AND hashed_secret IS NOT NULL)
-	OR EXISTS (SELECT 1 FROM linked_accounts WHERE user_id = $1 AND platform != $2 AND verified = true AND login_enabled = true)
-)`
-
-// lockLinkedAccountsForUser takes a transaction-scoped Postgres advisory
-// lock keyed on this user, serializing every DeleteLinkedAccount/
-// SetLinkedAccountLoginEnabled(false) call for them against each other -
-// without it, two such calls for different platforms on the same account
-// can both pass hasOtherUsableLoginMethod and leave zero usable login
-// methods (see that constant's comment). The lock releases automatically
-// when the transaction ends. 27745 is an arbitrary fixed namespace so this
-// can never collide with an unrelated future use of advisory locks
-// elsewhere in this codebase.
-const lockLinkedAccountsForUser = "SELECT pg_advisory_xact_lock(27745, hashtext($1))"
 
 // AddLinkedAccountToDB adds a linked account to the database
 func (s *store) AddLinkedAccountToDB(la *LinkedAccount) error {
@@ -525,11 +474,10 @@ func (s *store) GetLinkedAccountsByUserID(userID string) ([]*LinkedAccount, erro
 	return pgx.CollectRows(rows, pgx.RowToAddrOfStructByName[LinkedAccount])
 }
 
-// DeleteLinkedAccount unlinks a platform from an account, guarded by
-// hasOtherUsableLoginMethod so the account can never end up with zero ways
-// to log in. RowsAffected == 0 is ambiguous between "no such link" and "the
-// guard blocked it" - the follow-up lookup tells them apart without
-// weakening the atomicity of the guarded delete itself.
+// DeleteLinkedAccount unlinks a platform from an account. It refuses if
+// doing so would leave the account with no password and no other verified,
+// login-enabled linked platform. If RowsAffected == 0, a follow-up lookup
+// tells "no such link" apart from "the guard blocked it".
 func (s *store) DeleteLinkedAccount(userID string, platform Platform) error {
 	ctx := context.Background()
 	tx, err := s.db.Begin(ctx)
@@ -538,10 +486,13 @@ func (s *store) DeleteLinkedAccount(userID string, platform Platform) error {
 	}
 	defer tx.Rollback(ctx)
 
-	if _, err := tx.Exec(ctx, lockLinkedAccountsForUser, userID); err != nil {
+	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(27745, hashtext($1))", userID); err != nil {
 		return err
 	}
-	tag, err := tx.Exec(ctx, "DELETE FROM linked_accounts WHERE user_id = $1 AND platform = $2 AND "+hasOtherUsableLoginMethod, userID, platform)
+	tag, err := tx.Exec(ctx, `DELETE FROM linked_accounts WHERE user_id = $1 AND platform = $2 AND (
+		EXISTS (SELECT 1 FROM accounts WHERE user_id = $1 AND hashed_secret IS NOT NULL)
+		OR EXISTS (SELECT 1 FROM linked_accounts WHERE user_id = $1 AND platform != $2 AND verified = true AND login_enabled = true)
+	)`, userID, platform)
 	if err != nil {
 		return err
 	}
@@ -559,17 +510,13 @@ func (s *store) DeleteLinkedAccount(userID string, platform Platform) error {
 }
 
 // SetLinkedAccountLoginEnabled toggles login eligibility for a linked
-// platform. Disabling shares DeleteLinkedAccount's atomic guard; enabling
-// additionally requires the row to be Verified.
+// platform. Disabling shares DeleteLinkedAccount's guard; enabling requires
+// the row to be Verified.
 func (s *store) SetLinkedAccountLoginEnabled(userID string, platform Platform, enabled bool) error {
 	ctx := context.Background()
 	var tag pgconn.CommandTag
 
 	if enabled {
-		// Enabling never removes a login method, so there's no cross-row
-		// invariant to protect here and no lock is needed - unlike
-		// disabling, two concurrent enables can't leave the account worse
-		// off than before either of them ran.
 		var err error
 		tag, err = s.db.Exec(ctx, "UPDATE linked_accounts SET login_enabled = true, updated_at = current_timestamp WHERE user_id = $1 AND platform = $2 AND verified = true", userID, platform)
 		if err != nil {
@@ -582,10 +529,13 @@ func (s *store) SetLinkedAccountLoginEnabled(userID string, platform Platform, e
 		}
 		defer tx.Rollback(ctx)
 
-		if _, err := tx.Exec(ctx, lockLinkedAccountsForUser, userID); err != nil {
+		if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(27745, hashtext($1))", userID); err != nil {
 			return err
 		}
-		tag, err = tx.Exec(ctx, "UPDATE linked_accounts SET login_enabled = false, updated_at = current_timestamp WHERE user_id = $1 AND platform = $2 AND "+hasOtherUsableLoginMethod, userID, platform)
+		tag, err = tx.Exec(ctx, `UPDATE linked_accounts SET login_enabled = false, updated_at = current_timestamp WHERE user_id = $1 AND platform = $2 AND (
+			EXISTS (SELECT 1 FROM accounts WHERE user_id = $1 AND hashed_secret IS NOT NULL)
+			OR EXISTS (SELECT 1 FROM linked_accounts WHERE user_id = $1 AND platform != $2 AND verified = true AND login_enabled = true)
+		)`, userID, platform)
 		if err != nil {
 			return err
 		}

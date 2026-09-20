@@ -17,13 +17,8 @@ type UserService interface {
 	UpdateUser(user *Account) error
 	UpdateUserFromPlatform(platform Platform, platformID string, data PlatformData) (*Account, error)
 	DeleteUser(userID string) error
-	// GetUserLinkedAccounts lists every platform linked to userID.
 	GetUserLinkedAccounts(userID string) ([]*LinkedAccount, error)
-	// UnlinkPlatform unlinks a platform from userID. See
-	// LinkAccountStore.DeleteLinkedAccount for the lockout guard.
 	UnlinkPlatform(userID string, platform Platform) error
-	// SetPlatformLoginEnabled toggles whether a linked platform can be used
-	// to log in. See LinkAccountStore.SetLinkedAccountLoginEnabled.
 	SetPlatformLoginEnabled(userID string, platform Platform, enabled bool) error
 }
 

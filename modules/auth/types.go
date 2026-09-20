@@ -176,20 +176,10 @@ type LinkedAccount struct {
 	PlatformUsername string      `db:"platform_username" validate:"required_without=GetID" json:"platform_username" xml:"platform_username"`
 	PlatformID       string      `db:"platform_id" validate:"required_without=GetUsername" json:"platform_id" xml:"platform_id"`
 	Data             interface{} `db:"data" validate:"required" json:"data" xml:"data"`
-	// Verified marks that this row was established through a real,
-	// cryptographically-proven link (the OAuth flow) rather than a one-sided
-	// claim - only NewLinkedAccount sets it, and it always sets it true,
-	// since every caller of that constructor today is an OAuth-verified
-	// flow. There is deliberately no way to construct a LinkedAccount with
-	// Verified false through this package.
-	Verified bool `db:"verified" json:"verified" xml:"verified"`
-	// LoginEnabled is whether the user wants this identity usable to log in
-	// with, independent of Verified - a user may keep an identity linked
-	// (for its data/for other integrations) while disabling it as a login
-	// method. Defaults true so a fresh link works for login immediately.
-	LoginEnabled  bool      `db:"login_enabled" json:"login_enabled" xml:"login_enabled"`
-	DataUpdatedAt time.Time `db:"updated_at" json:"updated_at" xml:"updated_at"`
-	CreatedAt     time.Time `db:"created_at" json:"created_at" xml:"created_at"`
+	Verified         bool        `db:"verified" json:"verified" xml:"verified"`
+	LoginEnabled     bool        `db:"login_enabled" json:"login_enabled" xml:"login_enabled"`
+	DataUpdatedAt    time.Time   `db:"updated_at" json:"updated_at" xml:"updated_at"`
+	CreatedAt        time.Time   `db:"created_at" json:"created_at" xml:"created_at"`
 }
 
 // NewLinkedAccount creates a new, verified, login-enabled linked account.
