@@ -678,12 +678,9 @@ func TestLinkPlatformUserToSessionNotYetLinked(t *testing.T) {
 	}
 	user := &fakePlatformData{id: "pid1", username: "someuser"}
 
-	got, err := linkPlatformUserToSession(als, session, auth.PlatformDiscord, user)
+	err := linkPlatformUserToSession(als, session.UserID, auth.PlatformDiscord, user)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
-	}
-	if got != session {
-		t.Error("expected the same session to be returned")
 	}
 	if len(als.addCalls) != 1 {
 		t.Fatalf("expected AddLinkedAccountToDB to be called once, got %d calls", len(als.addCalls))
@@ -702,12 +699,9 @@ func TestLinkPlatformUserToSessionAlreadyLinkedToSameAccount(t *testing.T) {
 	}
 	user := &fakePlatformData{id: "pid1", username: "someuser"}
 
-	got, err := linkPlatformUserToSession(als, session, auth.PlatformDiscord, user)
+	err := linkPlatformUserToSession(als, session.UserID, auth.PlatformDiscord, user)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
-	}
-	if got != session {
-		t.Error("expected the same session to be returned")
 	}
 	if len(als.addCalls) != 0 {
 		t.Errorf("re-linking a platform account already linked to the same account should be a no-op, but AddLinkedAccountToDB was called %d time(s)", len(als.addCalls))
@@ -723,7 +717,7 @@ func TestLinkPlatformUserToSessionAlreadyLinkedToDifferentAccount(t *testing.T) 
 	}
 	user := &fakePlatformData{id: "pid1", username: "someuser"}
 
-	_, err := linkPlatformUserToSession(als, session, auth.PlatformDiscord, user)
+	err := linkPlatformUserToSession(als, session.UserID, auth.PlatformDiscord, user)
 	if err == nil {
 		t.Fatal("expected an error when the platform account is already linked to a different account")
 	}
@@ -747,7 +741,7 @@ func TestLinkPlatformUserToSessionAddFails(t *testing.T) {
 	}
 	user := &fakePlatformData{id: "pid1", username: "someuser"}
 
-	_, err := linkPlatformUserToSession(als, session, auth.PlatformDiscord, user)
+	err := linkPlatformUserToSession(als, session.UserID, auth.PlatformDiscord, user)
 	if err == nil {
 		t.Fatal("expected an error when AddLinkedAccountToDB fails")
 	}
@@ -766,7 +760,7 @@ func TestLinkPlatformUserToSessionLookupError(t *testing.T) {
 	}
 	user := &fakePlatformData{id: "pid1", username: "someuser"}
 
-	_, err := linkPlatformUserToSession(als, session, auth.PlatformDiscord, user)
+	err := linkPlatformUserToSession(als, session.UserID, auth.PlatformDiscord, user)
 	if !errors.Is(err, wantErr) {
 		t.Errorf("expected the lookup error to propagate, got: %v", err)
 	}

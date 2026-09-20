@@ -185,11 +185,6 @@ func ProcessOAuthLogin(as auth.AccountService, las auth.LinkAccountStore, ss aut
 // usable for login (unverified, or disabled) - never treated as unlinked.
 var errPlatformLoginDisabled = errors.New("this platform account is linked but disabled for login; use another linked platform or your password, or re-enable it first")
 
-// loginEligible reports whether a linked_accounts row can be used to log in.
-func loginEligible(la *auth.LinkedAccount) bool {
-	return la.Verified && la.LoginEnabled
-}
-
 // resolveOrCreateAccountForPlatformUser resolves the auth.Account linked to
 // the given platform user, creating a new placeholder account and linking it
 // if none exists yet. If AddLinkedAccountToDB fails for any reason, the
@@ -202,7 +197,7 @@ func loginEligible(la *auth.LinkedAccount) bool {
 func resolveOrCreateAccountForPlatformUser(as auth.AccountService, las auth.LinkAccountStore, platform auth.Platform, user auth.PlatformData) (*auth.Account, error) {
 	la, err := las.GetLinkedAccountByPlatformID(platform, user.GetID())
 	if err == nil {
-		if !loginEligible(la) {
+		if !(la.Verified && la.LoginEnabled) {
 			return nil, errPlatformLoginDisabled
 		}
 		return as.GetAccountByID(la.UserID)
@@ -297,20 +292,28 @@ func ProcessOAuthLink(r *http.Request, las auth.LinkAccountStore, code string, s
 		// Check both identities up front, before committing either link:
 		// linking Xbox and only then rejecting Java would leave Xbox linked
 		// with no way to undo it (AddLinkedAccountToDB has no delete).
-		if err := checkPlatformUserBelongsToSession(las, session, auth.PlatformXboxLive, xbox); err != nil {
+		if la, err := las.GetLinkedAccountByPlatformID(auth.PlatformXboxLive, xbox.GetID()); err == nil {
+			if la.UserID != session.UserID {
+				return nil, errPlatformAlreadyLinkedToDifferentAccount
+			}
+		} else if !errors.Is(err, auth.ErrNotFound) {
 			return nil, err
 		}
 		if java != nil {
-			if err := checkPlatformUserBelongsToSession(las, session, auth.PlatformMinecraft, java); err != nil {
+			if la, err := las.GetLinkedAccountByPlatformID(auth.PlatformMinecraft, java.GetID()); err == nil {
+				if la.UserID != session.UserID {
+					return nil, errPlatformAlreadyLinkedToDifferentAccount
+				}
+			} else if !errors.Is(err, auth.ErrNotFound) {
 				return nil, err
 			}
 		}
 
-		if _, err := linkPlatformUserToSession(las, session, auth.PlatformXboxLive, xbox); err != nil {
+		if err := linkPlatformUserToSession(las, session.UserID, auth.PlatformXboxLive, xbox); err != nil {
 			return nil, err
 		}
 		if java != nil {
-			if _, err := linkPlatformUserToSession(las, session, auth.PlatformMinecraft, java); err != nil {
+			if err := linkPlatformUserToSession(las, session.UserID, auth.PlatformMinecraft, java); err != nil {
 				return nil, err
 			}
 		}
@@ -332,7 +335,10 @@ func ProcessOAuthLink(r *http.Request, las auth.LinkAccountStore, code string, s
 		return nil, err
 	}
 
-	return linkPlatformUserToSession(las, session, state.Platform, user)
+	if err := linkPlatformUserToSession(las, session.UserID, state.Platform, user); err != nil {
+		return nil, err
+	}
+	return session, nil
 }
 
 // errConflictingMicrosoftIdentities is returned when a Microsoft account's
@@ -377,8 +383,8 @@ func resolveOrCreateAccountForMicrosoftUser(as auth.AccountService, las auth.Lin
 
 	// An ineligible identity only blocks login if the other one isn't
 	// eligible either.
-	xboxEligible := xboxLA != nil && loginEligible(xboxLA)
-	javaEligible := javaLA != nil && loginEligible(javaLA)
+	xboxEligible := xboxLA != nil && xboxLA.Verified && xboxLA.LoginEnabled
+	javaEligible := javaLA != nil && javaLA.Verified && javaLA.LoginEnabled
 	if (xboxLA != nil || javaLA != nil) && !xboxEligible && !javaEligible {
 		return nil, errPlatformLoginDisabled
 	}
@@ -473,51 +479,30 @@ func ensureMicrosoftIdentityLinked(as auth.AccountService, las auth.LinkAccountS
 	return winner, false, nil
 }
 
-// errPlatformAlreadyLinkedToDifferentAccount is returned by both
-// linkPlatformUserToSession and checkPlatformUserBelongsToSession when a
-// platform identity belongs to an account other than the one being linked
-// into - shared so the two checks (one that writes, one read-only) can't
-// drift apart on wording.
+// errPlatformAlreadyLinkedToDifferentAccount is returned when a platform
+// identity belongs to an account other than the one being linked into.
 var errPlatformAlreadyLinkedToDifferentAccount = errors.New("this platform account is already linked to a different account; log in with it directly if you want to use that account, or unlink it there first")
 
-// linkPlatformUserToSession links the given platform identity to the
-// session's account. If it's already linked to a different account, that's
-// returned as an error; if it's already linked to this same account, linking
-// is a no-op.
-func linkPlatformUserToSession(las auth.LinkAccountStore, session *auth.Session, platform auth.Platform, user auth.PlatformData) (*auth.Session, error) {
+// linkPlatformUserToSession links the given platform identity to userID. If
+// it's already linked to a different account, that's returned as an error;
+// if it's already linked to this same account, linking is a no-op.
+func linkPlatformUserToSession(las auth.LinkAccountStore, userID string, platform auth.Platform, user auth.PlatformData) error {
 	la, err := las.GetLinkedAccountByPlatformID(platform, user.GetID())
 	switch {
 	case err == nil:
-		if session.UserID == la.UserID {
-			return session, nil
+		if userID == la.UserID {
+			return nil
 		}
-		return nil, errPlatformAlreadyLinkedToDifferentAccount
+		return errPlatformAlreadyLinkedToDifferentAccount
 	case !errors.Is(err, auth.ErrNotFound):
-		return nil, err
+		return err
 	}
 
 	// Link account
-	la = auth.NewLinkedAccount(session.UserID, platform, user.GetUsername(), user.GetID(), user)
+	la = auth.NewLinkedAccount(userID, platform, user.GetUsername(), user.GetID(), user)
 	if err := las.AddLinkedAccountToDB(la); err != nil {
-		return nil, errors.New("failed to link account")
+		return errors.New("failed to link account")
 	}
 
-	return session, nil
-}
-
-// checkPlatformUserBelongsToSession verifies the given platform identity is
-// either unlinked or already linked to the session's own account, without
-// writing anything. Used to validate every identity a multi-identity
-// Microsoft login carries up front, before committing any of their links -
-// see the comment at its call site in ProcessOAuthLink for why that order
-// matters.
-func checkPlatformUserBelongsToSession(las auth.LinkAccountStore, session *auth.Session, platform auth.Platform, user auth.PlatformData) error {
-	la, err := las.GetLinkedAccountByPlatformID(platform, user.GetID())
-	if err == nil && la.UserID != session.UserID {
-		return errPlatformAlreadyLinkedToDifferentAccount
-	}
-	if err != nil && !errors.Is(err, auth.ErrNotFound) {
-		return err
-	}
 	return nil
 }
