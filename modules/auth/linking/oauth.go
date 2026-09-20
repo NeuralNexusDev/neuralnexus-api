@@ -432,7 +432,8 @@ func resolveOrCreateAccountForMicrosoftUser(as auth.AccountService, las auth.Lin
 // yet, the only state where it's safe to delete on a lost race; otherwise a
 // lost race surfaces as a conflict for the caller to retry.
 func ensureMicrosoftIdentityLinked(as auth.AccountService, las auth.LinkAccountStore, a *auth.Account, isNewAccount bool, platform auth.Platform, user auth.PlatformData) (*auth.Account, bool, error) {
-	err := linkIdentityToAccountID(las, a.UserID, platform, user)
+	la := auth.NewLinkedAccount(a.UserID, platform, user.GetUsername(), user.GetID(), user)
+	err := las.AddLinkedAccountToDB(la)
 	if err == nil {
 		return a, false, nil
 	}
@@ -470,17 +471,6 @@ func ensureMicrosoftIdentityLinked(as auth.AccountService, las auth.LinkAccountS
 		return nil, false, getErr
 	}
 	return winner, false, nil
-}
-
-// linkIdentityToAccountID links a platform identity to an already-resolved
-// account ID. Unlike resolveOrCreateAccountForPlatformUser's login path,
-// this doesn't retry against a concurrent winner on auth.ErrAlreadyLinked -
-// the caller already established the identity was unlinked moments ago, so
-// a race here is left as a surfaced error for the user to retry rather than
-// a silently resolved one.
-func linkIdentityToAccountID(las auth.LinkAccountStore, accountID string, platform auth.Platform, user auth.PlatformData) error {
-	la := auth.NewLinkedAccount(accountID, platform, user.GetUsername(), user.GetID(), user)
-	return las.AddLinkedAccountToDB(la)
 }
 
 // errPlatformAlreadyLinkedToDifferentAccount is returned by both
