@@ -298,6 +298,38 @@ func TestSessionMiddlewareExpiredCookieFailsOpenAndDeletesSession(t *testing.T) 
 	}
 }
 
+// TestSessionMiddlewareStackOrderDoesNotPanicOnStaleCookie pins the real
+// dependency that newTestRequestWithCookie's manual context seeding papers
+// over: LogRequest (called from SessionMiddleware's cookie-error branches)
+// type-asserts RequestIDKey/RemoteAddrKey without an ok-check, so
+// SessionMiddleware must run after both IPMiddleware and RequestIDMiddleware
+// in the stack, exactly as api.go orders it.
+func TestSessionMiddlewareStackOrderDoesNotPanicOnStaleCookie(t *testing.T) {
+	svc := &mockSessionService{
+		readJWTFunc: func(string) (*auth.Session, error) {
+			return nil, errors.New("stale cookie")
+		},
+	}
+	stack := CreateStack(
+		IPMiddleware,
+		RequestIDMiddleware,
+		SessionMiddleware(svc),
+	)
+	handler := stack(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r.AddCookie(&http.Cookie{Name: SessionCookieName, Value: "stale-cookie"})
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected the request to fail open through the real stack, got %d", w.Code)
+	}
+}
+
 func TestSessionMiddlewareNoHeaderNoCookiePassesThrough(t *testing.T) {
 	svc := &mockSessionService{}
 	w, nextCalled, gotSession := runSessionMiddleware(svc, newTestRequestWithCookie("", ""))

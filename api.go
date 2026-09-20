@@ -220,8 +220,8 @@ func (s *APIServer) Setup() http.Handler {
 			AllowCredentials: true,
 		}).Handler,
 		mw.IPMiddleware,
-		mw.SessionMiddleware(session),
 		mw.RequestIDMiddleware,
+		mw.SessionMiddleware(session),
 		mw.RateLimitMiddleware(rateLimit, "default", 300, 60),
 		mw.RequestLoggerMiddleware,
 	)
