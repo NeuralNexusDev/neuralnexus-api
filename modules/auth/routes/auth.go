@@ -5,6 +5,7 @@ import (
 	"github.com/goccy/go-json"
 	"log"
 	"net/http"
+	"net/url"
 	"time"
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
@@ -42,6 +43,7 @@ func LoginHandler(as auth.AccountService, ss auth.SessionService) http.HandlerFu
 			account, err = as.GetAccountByEmail(login.Email)
 		}
 		if err != nil {
+			auth.DummyValidateUser(login.Password)
 			responses.BadRequest(w, r, "Invalid username or password")
 			return
 		}
@@ -131,6 +133,11 @@ func OAuthHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Ses
 			responses.BadRequest(w, r, "Invalid state")
 			return
 		}
+		if !isAllowedRedirect(state.RedirectURI) {
+			log.Println("Redirect URI is not allowed:\n\t", state.RedirectURI)
+			responses.BadRequest(w, r, "Invalid state")
+			return
+		}
 
 		// Verify that the nonce matches the value in the browser's cookie
 		cookie, err := r.Cookie("nonce")
@@ -178,6 +185,21 @@ func OAuthHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Ses
 
 		http.Redirect(w, r, state.RedirectURI, http.StatusSeeOther)
 	}
+}
+
+// isAllowedRedirect reports whether redirectURI's scheme and host match
+// NN_SITE_URL, rejecting an attacker-controlled state.RedirectURI rather
+// than sending the browser (and its fresh session cookie) wherever it says.
+func isAllowedRedirect(redirectURI string) bool {
+	siteURL, err := url.Parse(auth.NN_SITE_URL)
+	if err != nil {
+		return false
+	}
+	target, err := url.Parse(redirectURI)
+	if err != nil {
+		return false
+	}
+	return target.Scheme == siteURL.Scheme && target.Host == siteURL.Host
 }
 
 // sessionCookie builds the session cookie

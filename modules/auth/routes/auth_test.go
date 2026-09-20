@@ -109,7 +109,7 @@ func newModeLinkRequest(t *testing.T) *http.Request {
 	state := linking.OAuthState{
 		Platform:    auth.PlatformDiscord,
 		Nonce:       "test-nonce",
-		RedirectURI: "https://example.com/done",
+		RedirectURI: "https://neuralnexus.test/done",
 		Mode:        linking.ModeLink,
 	}
 	stateJSON, err := json.Marshal(state)
@@ -155,7 +155,7 @@ func TestOAuthHandlerLinkModeWithSessionProceedsToProcessOAuthLink(t *testing.T)
 	state := linking.OAuthState{
 		Platform:    auth.Platform("unsupported-platform"),
 		Nonce:       "test-nonce",
-		RedirectURI: "https://example.com/done",
+		RedirectURI: "https://neuralnexus.test/done",
 		Mode:        linking.ModeLink,
 	}
 	stateJSON, err := json.Marshal(state)
@@ -192,7 +192,7 @@ func TestOAuthHandlerInvalidModeRejectedWithoutPanic(t *testing.T) {
 	state := linking.OAuthState{
 		Platform:    auth.PlatformDiscord,
 		Nonce:       "test-nonce",
-		RedirectURI: "https://example.com/done",
+		RedirectURI: "https://neuralnexus.test/done",
 		Mode:        linking.Mode("bogus-mode"),
 	}
 	stateJSON, err := json.Marshal(state)
@@ -216,6 +216,69 @@ func TestOAuthHandlerInvalidModeRejectedWithoutPanic(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected 400 Bad Request for an invalid mode, got %d", w.Code)
+	}
+}
+
+// TestOAuthHandlerRejectsRedirectOutsideSiteOrigin is the regression test for
+// an open redirect: state.RedirectURI is attacker-controlled (client-supplied,
+// base64-encoded JSON) and used to be passed straight to http.Redirect with no
+// allow-list check, sending the browser - and the fresh session cookie set
+// right before the redirect - to any URL an attacker chose.
+func TestOAuthHandlerRejectsRedirectOutsideSiteOrigin(t *testing.T) {
+	state := linking.OAuthState{
+		Platform:    auth.PlatformDiscord,
+		Nonce:       "test-nonce",
+		RedirectURI: "https://evil.example.com/phish",
+		Mode:        linking.ModeLogin,
+	}
+	stateJSON, err := json.Marshal(state)
+	if err != nil {
+		t.Fatalf("failed to marshal state: %v", err)
+	}
+	stateB64 := base64.URLEncoding.EncodeToString(stateJSON)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/oauth?code=somecode&state="+stateB64, nil)
+	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
+	w := httptest.NewRecorder()
+
+	OAuthHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for a redirect URI outside the site origin, got %d", w.Code)
+	}
+	if location := w.Header().Get("Location"); location != "" {
+		t.Errorf("expected no redirect to be issued, got Location: %q", location)
+	}
+}
+
+// TestOAuthHandlerAllowsRedirectMatchingSiteOrigin confirms a same-origin
+// RedirectURI still clears the allow-list check (an unsupported platform then
+// fails ProcessOAuthLogin's own switch with 500, without any network call -
+// the point is only to confirm we got past the redirect check, not 400).
+func TestOAuthHandlerAllowsRedirectMatchingSiteOrigin(t *testing.T) {
+	state := linking.OAuthState{
+		Platform:    auth.Platform("unsupported-platform"),
+		Nonce:       "test-nonce",
+		RedirectURI: "https://neuralnexus.test/done",
+		Mode:        linking.ModeLogin,
+	}
+	stateJSON, err := json.Marshal(state)
+	if err != nil {
+		t.Fatalf("failed to marshal state: %v", err)
+	}
+	stateB64 := base64.URLEncoding.EncodeToString(stateJSON)
+
+	r := httptest.NewRequest(http.MethodGet, "/api/oauth?code=somecode&state="+stateB64, nil)
+	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
+	w := httptest.NewRecorder()
+
+	OAuthHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
+
+	if w.Code == http.StatusBadRequest {
+		t.Fatal("expected the redirect check to pass and reach ProcessOAuthLogin, got 400")
+	}
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500 from ProcessOAuthLogin's own unsupported-platform error, got %d", w.Code)
 	}
 }
 
@@ -392,5 +455,32 @@ func TestLoginHandlerNoCookieOnAddSessionError(t *testing.T) {
 		if c.Name == mw.SessionCookieName {
 			t.Error("expected no session cookie to be set when AddSession fails")
 		}
+	}
+}
+
+// TestLoginHandlerPaysHashCostOnUnknownAccount is the regression test for a
+// username/email enumeration timing side channel: a nonexistent account used
+// to fail instantly, while an existing account with a wrong password paid the
+// full Argon2id cost - letting an attacker infer account existence from
+// response time. LoginHandler now burns the same cost via
+// auth.DummyValidateUser on a lookup miss. 20ms is a wide margin below the
+// real cost (~140ms measured for these Argon2id params) while comfortably
+// above what an instant ErrNotFound return would take.
+func TestLoginHandlerPaysHashCostOnUnknownAccount(t *testing.T) {
+	as := &mockAccountService{}
+	ss := &mockSessionService{}
+	body := `{"username":"no-such-user","password":"whatever"}`
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	start := time.Now()
+	LoginHandler(as, ss)(w, r)
+	elapsed := time.Since(start)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	if elapsed < 20*time.Millisecond {
+		t.Errorf("expected the lookup-miss path to pay the dummy hash cost (~140ms), took %v", elapsed)
 	}
 }

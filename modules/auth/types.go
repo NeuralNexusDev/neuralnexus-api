@@ -120,6 +120,16 @@ func (user *Account) ValidateUser(password string) bool {
 	return subtle.ConstantTimeCompare(hashedSecret, user.HashedSecret) == 1
 }
 
+// DummyValidateUser burns the same Argon2id cost as Account.ValidateUser
+// without checking anything, so a failed account lookup can take as long as
+// a real one with a wrong password - otherwise response timing would leak
+// which usernames/emails have accounts.
+func DummyValidateUser(password string) {
+	salt := make([]byte, 16)
+	_, _ = rand.Read(salt)
+	IDKeyWithSecret([]byte(password), salt, pepper, 3, 64*1024, 4, 32)
+}
+
 // AddRole adds a role to an account
 func (user *Account) AddRole(role string) {
 	user.Roles = append(user.Roles, role)
