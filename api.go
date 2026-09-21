@@ -151,7 +151,13 @@ func ApplyRoutes(
 	mux.Handle("POST /api/v1/mc/mojang/lookup/bulk/byname", mc.GetMojangPlayersByNamesHandler(mcService))
 	mux.Handle("GET /api/v1/mc/mojang/profile/{uuid}", mc.GetMojangProfileHandler(mcService))
 	mux.Handle("GET /api/v1/mc/profile/{uuid}", mc.GetProfileHandler(mcService))
+	mux.Handle("GET /api/v1/mc/profile/name/{name}", mc.GetProfileByNameHandler(mcService))
+	mux.Handle("GET /api/v1/mc/profile/bedrock/{uuid}", mc.GetGeyserProfileHandler(mcService))
+	mux.Handle("GET /api/v1/mc/profile/bedrock/name/{name}", mc.GetGeyserProfileByNameHandler(mcService))
 	mux.Handle("GET /api/v1/mc/texture/{hash}", mc.GetTextureHandler(mcService))
+	mux.Handle("GET /api/v1/mc/texture/geyser/{hash}", mc.GetGeyserTextureHandler(mcService))
+	mux.Handle("GET /api/v1/mc/geyser/xuid/{gamertag}", mc.GetGeyserXUIDHandler(mcService))
+	mux.Handle("GET /api/v1/mc/geyser/skin/{xuid}", mc.GetGeyserSkinHandler(mcService))
 
 	// --------------- Minecraft Status ---------------
 	mcsService := mcs.NewService()

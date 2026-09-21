@@ -27,6 +27,7 @@ const (
 	CacheProfileSigned = CacheProfile + "signed:"
 	S3Bucket           = "mca"
 	S3KeyPrefix        = "texture/"
+	GeyserS3KeyPrefix  = "texture/geyser/"
 )
 
 // Store - Minecraft player store
@@ -50,6 +51,17 @@ type Store interface {
 
 	IsTextureInS3(hash string) (bool, error)
 	PutTextureInS3(hash string, body io.ReadCloser) error
+
+	GetGeyserPlayerByGamertag(gamertag string) (*GeyserPlayer, error)
+	GetGeyserPlayerByXUID(xuid int64) (*GeyserPlayer, error)
+	UpsertGeyserPlayer(player *GeyserPlayer) error
+
+	GetGeyserSkin(xuid int64) (*GeyserSkin, error)
+	GetGeyserSkinByHash(hash string) (*GeyserSkin, error)
+	UpsertGeyserSkin(xuid int64, skin *GeyserSkin) error
+
+	IsGeyserTextureInS3(hash string) (bool, error)
+	PutGeyserTextureInS3(hash string, body io.ReadCloser) error
 }
 
 // store - Minecraft player store implementation
@@ -318,11 +330,158 @@ func (s *store) IsTextureInS3(hash string) (bool, error) {
 	return true, nil
 }
 
+// GetGeyserPlayerByGamertag gets a Bedrock player's gamertag->XUID mapping.
+func (s *store) GetGeyserPlayerByGamertag(gamertag string) (*GeyserPlayer, error) {
+	rows, err := s.db.Query(context.Background(), `
+		SELECT xuid, gamertag, first_seen, last_seen
+		FROM geyser_players
+		WHERE gamertag = $1
+		ORDER BY last_seen DESC
+		LIMIT 1`, gamertag)
+	if err != nil {
+		return nil, err
+	}
+	player, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[GeyserPlayer])
+	if err != nil {
+		return nil, err
+	}
+	player.UUID = xuidToUUID(player.XUID)
+	return player, nil
+}
+
+// GetGeyserPlayerByXUID gets a Bedrock player's gamertag->XUID mapping by xuid,
+// the table's primary key.
+func (s *store) GetGeyserPlayerByXUID(xuid int64) (*GeyserPlayer, error) {
+	rows, err := s.db.Query(context.Background(), `
+		SELECT xuid, gamertag, first_seen, last_seen
+		FROM geyser_players
+		WHERE xuid = $1`, xuid)
+	if err != nil {
+		return nil, err
+	}
+	player, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[GeyserPlayer])
+	if err != nil {
+		return nil, err
+	}
+	player.UUID = xuidToUUID(player.XUID)
+	return player, nil
+}
+
+// UpsertGeyserPlayer upserts a Bedrock player's gamertag->XUID mapping into the database
+func (s *store) UpsertGeyserPlayer(player *GeyserPlayer) error {
+	now := time.Now().UnixMilli()
+	_, err := s.db.Exec(context.Background(), `
+		INSERT INTO geyser_players (xuid, gamertag, first_seen, last_seen)
+		VALUES ($1, $2, $3, $3)
+		ON CONFLICT (xuid) DO UPDATE SET
+			gamertag  = EXCLUDED.gamertag,
+			last_seen = EXCLUDED.last_seen
+		`,
+		player.XUID, player.Gamertag, now,
+	)
+	return err
+}
+
+// GetGeyserSkin gets a Bedrock player's most recently seen converted skin from the database
+func (s *store) GetGeyserSkin(xuid int64) (*GeyserSkin, error) {
+	rows, err := s.db.Query(context.Background(), `
+		SELECT hash, is_steve, COALESCE(signature, '') AS signature, texture_id, value, first_seen, last_seen
+		FROM geyser_player_textures
+		WHERE xuid = $1
+		ORDER BY last_seen DESC
+		LIMIT 1`, xuid)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[GeyserSkin])
+}
+
+// GetGeyserSkinByHash gets any row carrying the given hash (multiple xuids
+// can share one, so any match's Value decodes to the same bytes), or nil if
+// the hash isn't known.
+func (s *store) GetGeyserSkinByHash(hash string) (*GeyserSkin, error) {
+	rows, err := s.db.Query(context.Background(), `
+		SELECT hash, is_steve, COALESCE(signature, '') AS signature, texture_id, value, first_seen, last_seen
+		FROM geyser_player_textures
+		WHERE hash = $1
+		LIMIT 1`, hash)
+	if err != nil {
+		return nil, err
+	}
+	skin, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[GeyserSkin])
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return skin, nil
+}
+
+// UpsertGeyserSkin upserts a Bedrock player's converted skin into the database
+func (s *store) UpsertGeyserSkin(xuid int64, skin *GeyserSkin) error {
+	now := time.Now().UnixMilli()
+	var signature *string
+	if skin.Signature != "" {
+		signature = &skin.Signature
+	}
+	_, err := s.db.Exec(context.Background(), `
+		INSERT INTO geyser_player_textures (xuid, hash, is_steve, signature, texture_id, value, first_seen, last_seen)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
+		ON CONFLICT (xuid, hash) DO UPDATE SET
+			is_steve   = EXCLUDED.is_steve,
+			signature  = EXCLUDED.signature,
+			texture_id = EXCLUDED.texture_id,
+			value      = EXCLUDED.value,
+			last_seen  = EXCLUDED.last_seen
+		`,
+		xuid, skin.Hash, skin.IsSteve, signature, skin.TextureID, skin.Value, now,
+	)
+	return err
+}
+
 // PutTextureInS3 upload a texture to S3
 func (s *store) PutTextureInS3(hash string, body io.ReadCloser) error {
 	input := &s3.PutObjectInput{
 		Bucket:      aws.String(S3Bucket),
 		Key:         aws.String(S3KeyPrefix + hash),
+		Body:        body,
+		ContentType: aws.String("image/png"),
+	}
+	if lr, ok := body.(interface{ Len() int }); ok {
+		input.ContentLength = aws.Int64(int64(lr.Len()))
+	}
+
+	_, err := s.s3.PutObject(context.Background(), input)
+	if err != nil {
+		return fmt.Errorf("failed to upload to s3: %w", err)
+	}
+	return nil
+}
+
+// IsGeyserTextureInS3 checks if a Bedrock skin's bytes are archived in S3
+func (s *store) IsGeyserTextureInS3(hash string) (bool, error) {
+	_, err := s.s3.HeadObject(context.Background(), &s3.HeadObjectInput{
+		Bucket: aws.String(S3Bucket),
+		Key:    aws.String(GeyserS3KeyPrefix + hash),
+	})
+	if err != nil {
+		var sue smithy.APIError
+		if errors.As(err, &sue) {
+			if sue.ErrorCode() == "NotFound" || sue.ErrorCode() == "NoSuchKey" {
+				return false, nil
+			}
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+// PutGeyserTextureInS3 uploads a Bedrock skin's bytes to S3
+func (s *store) PutGeyserTextureInS3(hash string, body io.ReadCloser) error {
+	input := &s3.PutObjectInput{
+		Bucket:      aws.String(S3Bucket),
+		Key:         aws.String(GeyserS3KeyPrefix + hash),
 		Body:        body,
 		ContentType: aws.String("image/png"),
 	}

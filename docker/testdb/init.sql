@@ -46,3 +46,30 @@ CREATE TABLE IF NOT EXISTS player_names (
     last_seen BIGINT NOT NULL,
     PRIMARY KEY (player_id, name)
 );
+
+-- Bedrock players' gamertag<->XUID mapping. Keyed by xuid (stable across
+-- gamertag changes); the synthetic UUID is derived at read time, never stored.
+CREATE TABLE IF NOT EXISTS geyser_players (
+    xuid BIGINT PRIMARY KEY NOT NULL,
+    gamertag TEXT NOT NULL,
+    first_seen BIGINT NOT NULL,
+    last_seen BIGINT NOT NULL
+);
+
+-- Bedrock players' converted skins, half-mirroring player_textures. No FK to
+-- geyser_players(xuid): a xuid can reach this table without ever going
+-- through the gamertag->xuid lookup first.
+CREATE TABLE IF NOT EXISTS geyser_player_textures (
+    xuid BIGINT NOT NULL,
+    hash TEXT NOT NULL,
+    is_steve BOOLEAN NOT NULL,
+    signature TEXT,
+    texture_id TEXT NOT NULL,
+    value TEXT NOT NULL,
+    first_seen BIGINT NOT NULL,
+    last_seen BIGINT NOT NULL,
+    CONSTRAINT geyser_player_textures_hash_not_empty CHECK (hash <> '')
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS geyser_player_textures_unique
+    ON geyser_player_textures (xuid, hash);
