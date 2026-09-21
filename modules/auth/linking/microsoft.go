@@ -65,7 +65,7 @@ var (
 // party legitimately gets uhs alone, so the two need separate XSTS calls.
 const (
 	xstsMinecraftRelyingParty = "rp://api.minecraftservices.com/"
-	xstsXboxLiveRelyingParty  = "http://xboxlive.com/"
+	xstsXboxLiveRelyingParty  = "http://xboxlive.com"
 )
 
 // XErr codes returned by xsts.auth.xboxlive.com/xsts/authorize when the
