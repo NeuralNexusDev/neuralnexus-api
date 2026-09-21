@@ -8,7 +8,6 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/twitch"
 	"golang.org/x/oauth2"
-	"log"
 	"net/http"
 	"time"
 )
@@ -137,13 +136,7 @@ func ProcessOAuthLogin(as auth.AccountService, las auth.LinkAccountStore, ss aut
 			xbox, java, xboxErr = GetXboxAndMinecraftUser(token)
 		}
 		if xboxErr != nil {
-			if xbox == nil {
-				return nil, xboxErr
-			}
-			// Xbox Live succeeded; the failure was only in the optional
-			// Java-ownership check, which isn't blocking.
-			log.Println("Java profile lookup failed during Microsoft OAuth login, continuing with Xbox Live identity only:\n\t", xboxErr)
-			java = nil
+			return nil, xboxErr
 		}
 		a, err = resolveOrCreateAccountForMicrosoftUser(as, las, xbox, java)
 		if err != nil {
@@ -280,13 +273,7 @@ func ProcessOAuthLink(r *http.Request, las auth.LinkAccountStore, code string, s
 			xbox, java, xboxErr = GetXboxAndMinecraftUser(token)
 		}
 		if xboxErr != nil {
-			if xbox == nil {
-				return nil, xboxErr
-			}
-			// Xbox Live succeeded; the failure was only in the optional
-			// Java-ownership check, which isn't blocking.
-			log.Println("Java profile lookup failed during Microsoft OAuth link, continuing with Xbox Live identity only:\n\t", xboxErr)
-			java = nil
+			return nil, xboxErr
 		}
 
 		// Check both identities up front, before committing either link:

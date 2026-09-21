@@ -192,13 +192,14 @@ func TestProcessOAuthLoginMinecraftXstsErrorPropagates(t *testing.T) {
 	}
 }
 
-// TestProcessOAuthLoginMinecraftJavaProfileFailureFallsBackToXboxOnly is a
-// regression test from the review pipeline (Finding B): a transient failure
-// in the Java-ownership check, after Xbox Live authentication has already
-// fully succeeded, must not fail the whole login - it should fall back to
-// the Xbox Live identity alone, the same as a legitimate Bedrock-only
-// account with no Java profile at all.
-func TestProcessOAuthLoginMinecraftJavaProfileFailureFallsBackToXboxOnly(t *testing.T) {
+// TestProcessOAuthLoginMinecraftJavaProfileFailureIsSurfaced: a real failure
+// checking Java ownership (as opposed to a legitimate Bedrock-only account,
+// where getMinecraftProfile returns nil, nil rather than an error) must
+// surface as a login failure, not silently fall back to logging the user in
+// with just their Xbox Live identity - someone who asked to log in with
+// Minecraft should be told when that couldn't be verified, not quietly
+// handed a different kind of account.
+func TestProcessOAuthLoginMinecraftJavaProfileFailureIsSurfaced(t *testing.T) {
 	withServer(t, &xboxLiveAuthenticateURL, func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(xblAuthResponse{Token: "xbl-token"})
 	})
@@ -234,14 +235,17 @@ func TestProcessOAuthLoginMinecraftJavaProfileFailureFallsBackToXboxOnly(t *test
 	ss := &mockSessionService{}
 
 	session, err := ProcessOAuthLogin(as, als, ss, "some-code", newMinecraftOAuthState())
-	if err != nil {
-		t.Fatalf("expected the login to fall back to Xbox-only instead of failing, got error: %v", err)
+	if err == nil {
+		t.Fatal("expected the login to fail when the Java-ownership check itself fails")
 	}
-	if session == nil {
-		t.Fatal("expected a session despite the Java profile lookup failing")
+	if session != nil {
+		t.Errorf("expected no session when Java ownership couldn't be verified, got: %+v", session)
 	}
-	if len(als.addCalls) != 1 || als.addCalls[0].Platform != auth.PlatformXboxLive {
-		t.Fatalf("expected only the Xbox Live identity to be linked, got: %+v", als.addCalls)
+	if len(as.accounts) != 0 {
+		t.Errorf("expected no account to be created, got %d", len(as.accounts))
+	}
+	if len(als.addCalls) != 0 {
+		t.Errorf("expected no identity to be linked, got: %+v", als.addCalls)
 	}
 }
 
@@ -350,10 +354,10 @@ func TestProcessOAuthLinkMinecraftJavaAlreadyLinkedToDifferentAccountCommitsNoth
 	}
 }
 
-// TestProcessOAuthLinkMinecraftJavaProfileFailureFallsBackToXboxOnly mirrors
-// TestProcessOAuthLoginMinecraftJavaProfileFailureFallsBackToXboxOnly for the
-// link path.
-func TestProcessOAuthLinkMinecraftJavaProfileFailureFallsBackToXboxOnly(t *testing.T) {
+// TestProcessOAuthLinkMinecraftJavaProfileFailureIsSurfaced mirrors
+// TestProcessOAuthLoginMinecraftJavaProfileFailureIsSurfaced for the link
+// path.
+func TestProcessOAuthLinkMinecraftJavaProfileFailureIsSurfaced(t *testing.T) {
 	withServer(t, &xboxLiveAuthenticateURL, func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(xblAuthResponse{Token: "xbl-token"})
 	})
@@ -390,14 +394,14 @@ func TestProcessOAuthLinkMinecraftJavaProfileFailureFallsBackToXboxOnly(t *testi
 	state.Mode = ModeLink
 
 	got, err := ProcessOAuthLink(linkRequestWithSession(session), als, "some-code", state)
-	if err != nil {
-		t.Fatalf("expected the link to fall back to Xbox-only instead of failing, got error: %v", err)
+	if err == nil {
+		t.Fatal("expected the link to fail when the Java-ownership check itself fails")
 	}
-	if got != session {
-		t.Error("expected the same session to be returned")
+	if got != nil {
+		t.Errorf("expected no session returned, got: %+v", got)
 	}
-	if len(als.addCalls) != 1 || als.addCalls[0].Platform != auth.PlatformXboxLive {
-		t.Fatalf("expected only the Xbox Live identity to be linked, got: %+v", als.addCalls)
+	if len(als.addCalls) != 0 {
+		t.Errorf("expected no identity to be linked, got: %+v", als.addCalls)
 	}
 }
 
