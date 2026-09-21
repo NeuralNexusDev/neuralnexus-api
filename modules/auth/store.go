@@ -20,6 +20,7 @@ var ErrNotFound = errors.New("not found")
 // Store interface
 type Store interface {
 	Account() AccountStore
+	AccountSettings() AccountSettingsStore
 	Session() SessionStore
 	LinkAccount() LinkAccountStore
 	RateLimit() RateLimitStore
@@ -43,6 +44,11 @@ func NewStore(db *pgxpool.Pool, rdb *redis.Client) Store {
 // Account gets the account store
 func (s *store) Account() AccountStore {
 	return AccountStore(s)
+}
+
+// AccountSettings gets the account settings store
+func (s *store) AccountSettings() AccountSettingsStore {
+	return AccountSettingsStore(s)
 }
 
 // Session gets the session store
@@ -490,7 +496,10 @@ func (s *store) DeleteLinkedAccount(userID string, platform Platform) error {
 		return err
 	}
 	tag, err := tx.Exec(ctx, `DELETE FROM linked_accounts WHERE user_id = $1 AND platform = $2 AND (
-		EXISTS (SELECT 1 FROM accounts WHERE user_id = $1 AND hashed_secret IS NOT NULL)
+		EXISTS (
+			SELECT 1 FROM accounts WHERE user_id = $1 AND hashed_secret IS NOT NULL
+			AND COALESCE((SELECT password_auth_enabled FROM account_settings WHERE user_id = $1), true)
+		)
 		OR EXISTS (SELECT 1 FROM linked_accounts WHERE user_id = $1 AND platform != $2 AND verified = true AND login_enabled = true)
 	)`, userID, platform)
 	if err != nil {
@@ -533,7 +542,10 @@ func (s *store) SetLinkedAccountLoginEnabled(userID string, platform Platform, e
 			return err
 		}
 		tag, err = tx.Exec(ctx, `UPDATE linked_accounts SET login_enabled = false, updated_at = current_timestamp WHERE user_id = $1 AND platform = $2 AND (
-			EXISTS (SELECT 1 FROM accounts WHERE user_id = $1 AND hashed_secret IS NOT NULL)
+			EXISTS (
+				SELECT 1 FROM accounts WHERE user_id = $1 AND hashed_secret IS NOT NULL
+				AND COALESCE((SELECT password_auth_enabled FROM account_settings WHERE user_id = $1), true)
+			)
 			OR EXISTS (SELECT 1 FROM linked_accounts WHERE user_id = $1 AND platform != $2 AND verified = true AND login_enabled = true)
 		)`, userID, platform)
 		if err != nil {
@@ -552,6 +564,92 @@ func (s *store) SetLinkedAccountLoginEnabled(userID string, platform Platform, e
 	}
 	if enabled {
 		return ErrLinkedAccountUnverified
+	}
+	return ErrWouldLockAccount
+}
+
+//CREATE TRIGGER update_account_settings_modtime
+//BEFORE UPDATE ON account_settings
+//FOR EACH ROW
+//EXECUTE PROCEDURE update_modified_column();
+
+// CREATE TABLE account_settings (
+//   user_id BIGINT PRIMARY KEY NOT NULL REFERENCES accounts(user_id),
+//   password_auth_enabled BOOLEAN NOT NULL DEFAULT true,
+//   updated_at timestamp with time zone default current_timestamp
+// );
+//
+// A row is created lazily the first time a setting is changed away from
+// its default - a missing row means every setting is still at its default
+// (see GetAccountSettings).
+
+// AccountSettingsStore interface
+type AccountSettingsStore interface {
+	GetAccountSettings(userID string) (*AccountSettings, error)
+	SetPasswordAuthEnabled(userID string, enabled bool) error
+}
+
+// ErrNoPasswordSet is returned by SetPasswordAuthEnabled(userID, true) when
+// the account has no hashed_secret to enable login with.
+var ErrNoPasswordSet = errors.New("this account has no password set")
+
+// GetAccountSettings returns userID's settings, or the defaults if it has
+// no account_settings row yet.
+func (s *store) GetAccountSettings(userID string) (*AccountSettings, error) {
+	rows, err := s.db.Query(context.Background(), "SELECT * FROM account_settings WHERE user_id = $1", userID)
+	if err != nil {
+		return nil, err
+	}
+
+	settings, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[AccountSettings])
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return DefaultAccountSettings(userID), nil
+		}
+		return nil, err
+	}
+	return settings, nil
+}
+
+// SetPasswordAuthEnabled toggles whether userID's password can be used to
+// log in. Disabling shares DeleteLinkedAccount/SetLinkedAccountLoginEnabled's
+// guard: it's refused if the account has no other verified, login-enabled
+// linked platform. Enabling is refused if the account has no password to
+// enable in the first place.
+func (s *store) SetPasswordAuthEnabled(userID string, enabled bool) error {
+	ctx := context.Background()
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(27745, hashtext($1))", userID); err != nil {
+		return err
+	}
+
+	var tag pgconn.CommandTag
+	if enabled {
+		tag, err = tx.Exec(ctx, `INSERT INTO account_settings (user_id, password_auth_enabled)
+			SELECT $1, true WHERE EXISTS (SELECT 1 FROM accounts WHERE user_id = $1 AND hashed_secret IS NOT NULL)
+			ON CONFLICT (user_id) DO UPDATE SET password_auth_enabled = true, updated_at = current_timestamp`, userID)
+	} else {
+		tag, err = tx.Exec(ctx, `INSERT INTO account_settings (user_id, password_auth_enabled)
+			SELECT $1, false WHERE EXISTS (SELECT 1 FROM linked_accounts WHERE user_id = $1 AND verified = true AND login_enabled = true)
+			ON CONFLICT (user_id) DO UPDATE SET password_auth_enabled = false, updated_at = current_timestamp`, userID)
+	}
+	if err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+
+	if tag.RowsAffected() > 0 {
+		return nil
+	}
+	if enabled {
+		return ErrNoPasswordSet
 	}
 	return ErrWouldLockAccount
 }

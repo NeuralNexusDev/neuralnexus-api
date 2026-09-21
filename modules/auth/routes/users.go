@@ -257,3 +257,39 @@ func SetPlatformLoginEnabledHandler(service auth.UserService) http.HandlerFunc {
 		}
 	}
 }
+
+// SetPasswordAuthEnabledRequest - Body for SetPasswordAuthEnabledHandler
+type SetPasswordAuthEnabledRequest struct {
+	// PasswordAuthEnabled is a pointer so a missing field is rejected instead
+	// of silently defaulting to false.
+	PasswordAuthEnabled *bool `json:"password_auth_enabled" xml:"password_auth_enabled"`
+}
+
+// SetPasswordAuthEnabledHandler - Toggle whether a user's password can log in
+func SetPasswordAuthEnabledHandler(service auth.UserService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		session := r.Context().Value(mw.SessionKey).(*auth.Session)
+		userID := r.PathValue("user_id")
+		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
+			responses.Forbidden(w, r, "You do not have permission to update this user's settings")
+			return
+		}
+		var body SetPasswordAuthEnabledRequest
+		if err := responses.DecodeStruct(r, &body); err != nil || body.PasswordAuthEnabled == nil {
+			responses.BadRequest(w, r, "Invalid request body")
+			return
+		}
+
+		err := service.SetPasswordAuthEnabled(userID, *body.PasswordAuthEnabled)
+		switch {
+		case err == nil:
+			responses.NoContent(w, r)
+		case errors.Is(err, auth.ErrWouldLockAccount):
+			responses.BadRequest(w, r, "Link and enable another login method before disabling your password")
+		case errors.Is(err, auth.ErrNoPasswordSet):
+			responses.BadRequest(w, r, "Set a password before enabling password login")
+		default:
+			responses.InternalServerError(w, r, "Failed to update user settings")
+		}
+	}
+}

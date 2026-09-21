@@ -8,16 +8,18 @@ type AccountService interface {
 	GetAccountByEmail(email string) (*Account, error)
 	UpdateAccount(account *Account) error
 	DeleteAccount(userID string) error
+	IsPasswordAuthEnabled(userID string) (bool, error)
 }
 
 // userService - The userService struct
 type accountService struct {
-	as AccountStore
+	as  AccountStore
+	ass AccountSettingsStore
 }
 
 // NewAccountService - Create a new userService
 func NewAccountService(store Store) AccountService {
-	return &accountService{store.Account()}
+	return &accountService{store.Account(), store.AccountSettings()}
 }
 
 // GetAccountByID - Get an account by its ID
@@ -48,4 +50,13 @@ func (s *accountService) UpdateAccount(account *Account) error {
 // DeleteAccount - Delete an account from the database
 func (s *accountService) DeleteAccount(userID string) error {
 	return s.as.DeleteAccountFromDB(userID)
+}
+
+// IsPasswordAuthEnabled - Check whether userID's password can be used to log in
+func (s *accountService) IsPasswordAuthEnabled(userID string) (bool, error) {
+	settings, err := s.ass.GetAccountSettings(userID)
+	if err != nil {
+		return false, err
+	}
+	return settings.PasswordAuthEnabled, nil
 }

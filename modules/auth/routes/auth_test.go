@@ -24,7 +24,9 @@ import (
 // session work happens. account, when set, is returned by both
 // GetAccountByUsername and GetAccountByEmail instead of auth.ErrNotFound.
 type mockAccountService struct {
-	account *auth.Account
+	account              *auth.Account
+	passwordAuthDisabled bool
+	passwordAuthErr      error
 }
 
 var _ auth.AccountService = (*mockAccountService)(nil)
@@ -47,6 +49,9 @@ func (m *mockAccountService) GetAccountByEmail(string) (*auth.Account, error) {
 }
 func (m *mockAccountService) UpdateAccount(*auth.Account) error { return nil }
 func (m *mockAccountService) DeleteAccount(string) error        { return nil }
+func (m *mockAccountService) IsPasswordAuthEnabled(string) (bool, error) {
+	return !m.passwordAuthDisabled, m.passwordAuthErr
+}
 
 // mockLinkAccountStore implements auth.LinkAccountStore for unit testing
 // OAuthHandler, for the same reason as mockAccountService above.
@@ -694,6 +699,59 @@ func TestLoginHandlerPersistsSessionBeforeCreatingJWT(t *testing.T) {
 // auth.DummyValidateUser on a lookup miss. 20ms is a wide margin below the
 // real cost (~140ms measured for these Argon2id params) while comfortably
 // above what an instant ErrNotFound return would take.
+// TestLoginHandlerRejectsCorrectPasswordWhenPasswordAuthDisabled is the
+// regression test for the account_settings guard: a correct password must
+// still be rejected, with the same generic message and no session cookie,
+// once password auth has been disabled for that account.
+func TestLoginHandlerRejectsCorrectPasswordWhenPasswordAuthDisabled(t *testing.T) {
+	account, err := auth.NewAccount("testuser", "test@example.com", "correct-password")
+	if err != nil {
+		t.Fatalf("failed to build test account: %v", err)
+	}
+	as := &mockAccountService{account: account, passwordAuthDisabled: true}
+	ss := &mockSessionService{}
+	body := `{"username":"testuser","password":"correct-password"}`
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	LoginHandler(as, ss)(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	for _, c := range w.Result().Cookies() {
+		if c.Name == mw.SessionCookieName {
+			t.Error("expected no session cookie to be set when password auth is disabled")
+		}
+	}
+}
+
+// TestLoginHandlerPasswordAuthCheckErrorMapsTo500 verifies a failure to
+// check the password-auth setting fails closed (500, no cookie) rather than
+// silently letting the login through.
+func TestLoginHandlerPasswordAuthCheckErrorMapsTo500(t *testing.T) {
+	account, err := auth.NewAccount("testuser", "test@example.com", "correct-password")
+	if err != nil {
+		t.Fatalf("failed to build test account: %v", err)
+	}
+	as := &mockAccountService{account: account, passwordAuthErr: errors.New("db exploded")}
+	ss := &mockSessionService{}
+	body := `{"username":"testuser","password":"correct-password"}`
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	LoginHandler(as, ss)(w, r)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
+	}
+	for _, c := range w.Result().Cookies() {
+		if c.Name == mw.SessionCookieName {
+			t.Error("expected no session cookie to be set when the password-auth check fails")
+		}
+	}
+}
+
 func TestLoginHandlerPaysHashCostOnUnknownAccount(t *testing.T) {
 	as := &mockAccountService{}
 	ss := &mockSessionService{}
