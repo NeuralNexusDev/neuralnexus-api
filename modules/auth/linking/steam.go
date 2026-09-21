@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -85,6 +86,13 @@ func VerifySteamOpenIDCallback(query url.Values) (string, error) {
 		return "", errors.New("invalid or missing openid.claimed_id")
 	}
 	steamID64 := matches[1]
+
+	// check_authentication only confirms the signature is valid over
+	// whatever fields openid.signed lists - it says nothing about whether
+	// claimed_id was one of them, so that has to be checked separately.
+	if !slices.Contains(strings.Split(query.Get("openid.signed"), ","), "claimed_id") {
+		return "", errors.New("openid.signed does not cover claimed_id")
+	}
 
 	checkValues := url.Values{}
 	for k, v := range query {

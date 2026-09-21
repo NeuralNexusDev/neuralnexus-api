@@ -38,7 +38,7 @@ func newValidSteamCallbackQuery() url.Values {
 		"openid.mode":       {"id_res"},
 		"openid.claimed_id": {"https://steamcommunity.com/openid/id/76561198000000000"},
 		"openid.sig":        {"fake-sig"},
-		"openid.signed":     {"signed,fields"},
+		"openid.signed":     {"op_endpoint,claimed_id,identity,return_to"},
 	}
 }
 
@@ -90,6 +90,19 @@ func TestVerifySteamOpenIDCallbackInvalidClaimedID(t *testing.T) {
 				t.Errorf("expected an error for claimed_id %q", claimedID)
 			}
 		})
+	}
+}
+
+func TestVerifySteamOpenIDCallbackSignedDoesNotCoverClaimedIDRejected(t *testing.T) {
+	withServer(t, &steamOpenIDLoginURL, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("ns:http://specs.openid.net/auth/2.0\nis_valid:true\n"))
+	})
+
+	query := newValidSteamCallbackQuery()
+	query.Set("openid.signed", "op_endpoint,identity,return_to")
+
+	if _, err := VerifySteamOpenIDCallback(query); err == nil {
+		t.Fatal("expected an error when openid.signed does not list claimed_id, even if Steam reports is_valid:true")
 	}
 }
 
