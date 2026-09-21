@@ -394,6 +394,26 @@ func TestOpenIDHandlerLinkModeNoSessionRejected(t *testing.T) {
 	}
 }
 
+// TestOpenIDHandlerLinkModeExpiredSessionRejected is the regression test for
+// a session present but expired: requireValidModeAndSession must reject it
+// at the gate (before any Steam network call), the same as no session at
+// all - previously only presence was checked here, and an expired session
+// fell through to ProcessSteamLink's own IsValid() check, by which point
+// VerifySteamOpenIDCallback and GetSteamUser had already run.
+func TestOpenIDHandlerLinkModeExpiredSessionRejected(t *testing.T) {
+	r := newOpenIDRequest(t, linking.ModeLink, "https://neuralnexus.test/done", "test-nonce", nil)
+	session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
+	ctx := context.WithValue(r.Context(), mw.SessionKey, session)
+	r = r.WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	OpenIDHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for an expired session before any Steam network call, got %d", w.Code)
+	}
+}
+
 // TestOpenIDHandlerLinkModeWithSessionProceedsPastSessionCheck confirms a
 // session already in context clears OpenIDHandler's own gate and reaches
 // linking.VerifySteamOpenIDCallback - an openid.mode other than "id_res"

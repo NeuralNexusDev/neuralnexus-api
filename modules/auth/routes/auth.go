@@ -224,14 +224,15 @@ func decodeAndValidateState(w http.ResponseWriter, r *http.Request) (linking.OAu
 }
 
 // requireValidModeAndSession checks that mode is recognized and, for
-// ModeLink, that there's a session in r's context to link to - before any
-// protocol-specific work for a request that's going to be rejected anyway.
+// ModeLink, that there's a live session in r's context to link to - before
+// any protocol-specific work for a request that's going to be rejected
+// anyway.
 func requireValidModeAndSession(w http.ResponseWriter, r *http.Request, mode linking.Mode) bool {
 	switch mode {
 	case linking.ModeLogin:
 		return true
 	case linking.ModeLink:
-		if session, ok := r.Context().Value(mw.SessionKey).(*auth.Session); ok && session != nil {
+		if session, ok := r.Context().Value(mw.SessionKey).(*auth.Session); ok && session != nil && session.IsValid() {
 			return true
 		}
 		responses.Unauthorized(w, r, "You must be logged in to link an account")
