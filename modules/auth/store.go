@@ -578,10 +578,6 @@ func (s *store) SetLinkedAccountLoginEnabled(userID string, platform Platform, e
 //   password_auth BOOLEAN NOT NULL DEFAULT true,
 //   updated_at timestamp with time zone default current_timestamp
 // );
-//
-// A row is created lazily the first time a setting is changed away from
-// its default - a missing row means every setting is still at its default
-// (see GetAccountSettings).
 
 // AccountSettingsStore interface
 type AccountSettingsStore interface {
