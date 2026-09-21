@@ -151,7 +151,7 @@ func (user *Account) RemoveRole(role string) {
 // accounts table itself.
 type AccountSettings struct {
 	UserID              string    `db:"user_id" json:"user_id" xml:"user_id"`
-	PasswordAuthEnabled bool      `db:"password_auth" json:"password_auth_enabled" xml:"password_auth_enabled"`
+	PasswordAuthEnabled bool      `db:"password_auth" json:"password_auth" xml:"password_auth"`
 	UpdatedAt           time.Time `db:"updated_at" json:"updated_at" xml:"updated_at"`
 }
 

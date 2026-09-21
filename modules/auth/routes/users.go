@@ -276,6 +276,14 @@ func GetAccountSettingsHandler(service auth.UserService) http.HandlerFunc {
 	}
 }
 
+// UpdateAccountSettingsRequest - Body for UpdateAccountSettingsHandler. Each
+// field is a pointer so a PATCH can update one setting without touching the
+// others - a nil field means "leave this alone," the usual PATCH contract
+// once there's more than one setting to change independently.
+type UpdateAccountSettingsRequest struct {
+	PasswordAuthEnabled *bool `json:"password_auth" xml:"password_auth"`
+}
+
 // UpdateAccountSettingsHandler - Update a user's account settings
 func UpdateAccountSettingsHandler(service auth.UserService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -285,13 +293,13 @@ func UpdateAccountSettingsHandler(service auth.UserService) http.HandlerFunc {
 			responses.Forbidden(w, r, "You do not have permission to update this user's settings")
 			return
 		}
-		var settings auth.AccountSettings
-		if err := responses.DecodeStruct(r, &settings); err != nil {
+		var body UpdateAccountSettingsRequest
+		if err := responses.DecodeStruct(r, &body); err != nil || body.PasswordAuthEnabled == nil {
 			responses.BadRequest(w, r, "Invalid request body")
 			return
 		}
 
-		err := service.SetPasswordAuthEnabled(userID, settings.PasswordAuthEnabled)
+		err := service.SetPasswordAuthEnabled(userID, *body.PasswordAuthEnabled)
 		switch {
 		case err == nil:
 			responses.NoContent(w, r)

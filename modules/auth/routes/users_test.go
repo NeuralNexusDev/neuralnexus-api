@@ -318,7 +318,7 @@ func TestSetPlatformLoginEnabledHandlerMissingFieldRejected(t *testing.T) {
 
 func TestUpdateAccountSettingsHandlerCrossUserForbidden(t *testing.T) {
 	svc := &mockUserService{}
-	req := requestWithJSONBody(http.MethodPatch, &auth.Session{UserID: "u1"}, "someone-else", "", `{"password_auth_enabled":false}`)
+	req := requestWithJSONBody(http.MethodPatch, &auth.Session{UserID: "u1"}, "someone-else", "", `{"password_auth":false}`)
 	w := httptest.NewRecorder()
 
 	UpdateAccountSettingsHandler(svc)(w, req)
@@ -333,7 +333,7 @@ func TestUpdateAccountSettingsHandlerCrossUserForbidden(t *testing.T) {
 
 func TestUpdateAccountSettingsHandlerSuccess(t *testing.T) {
 	svc := &mockUserService{}
-	req := requestWithJSONBody(http.MethodPatch, &auth.Session{UserID: "u1"}, "u1", "", `{"password_auth_enabled":false}`)
+	req := requestWithJSONBody(http.MethodPatch, &auth.Session{UserID: "u1"}, "u1", "", `{"password_auth":false}`)
 	w := httptest.NewRecorder()
 
 	UpdateAccountSettingsHandler(svc)(w, req)
@@ -348,7 +348,7 @@ func TestUpdateAccountSettingsHandlerSuccess(t *testing.T) {
 
 func TestUpdateAccountSettingsHandlerWouldLockAccountMapsTo400(t *testing.T) {
 	svc := &mockUserService{setPasswordAuthErr: auth.ErrWouldLockAccount}
-	req := requestWithJSONBody(http.MethodPatch, &auth.Session{UserID: "u1"}, "u1", "", `{"password_auth_enabled":false}`)
+	req := requestWithJSONBody(http.MethodPatch, &auth.Session{UserID: "u1"}, "u1", "", `{"password_auth":false}`)
 	w := httptest.NewRecorder()
 
 	UpdateAccountSettingsHandler(svc)(w, req)
@@ -360,7 +360,7 @@ func TestUpdateAccountSettingsHandlerWouldLockAccountMapsTo400(t *testing.T) {
 
 func TestUpdateAccountSettingsHandlerNoPasswordSetMapsTo400(t *testing.T) {
 	svc := &mockUserService{setPasswordAuthErr: auth.ErrNoPasswordSet}
-	req := requestWithJSONBody(http.MethodPatch, &auth.Session{UserID: "u1"}, "u1", "", `{"password_auth_enabled":true}`)
+	req := requestWithJSONBody(http.MethodPatch, &auth.Session{UserID: "u1"}, "u1", "", `{"password_auth":true}`)
 	w := httptest.NewRecorder()
 
 	UpdateAccountSettingsHandler(svc)(w, req)
@@ -370,22 +370,17 @@ func TestUpdateAccountSettingsHandlerNoPasswordSetMapsTo400(t *testing.T) {
 	}
 }
 
-// TestUpdateAccountSettingsHandlerMissingFieldDefaultsToFalse verifies the
-// handler decodes straight into auth.AccountSettings rather than a
-// pointer-typed request struct: an omitted password_auth_enabled field
-// decodes to Go's bool zero value and is passed through as false, the
-// fail-closed (disabled) direction, rather than being rejected.
-func TestUpdateAccountSettingsHandlerMissingFieldDefaultsToFalse(t *testing.T) {
+func TestUpdateAccountSettingsHandlerMissingFieldRejected(t *testing.T) {
 	svc := &mockUserService{}
 	req := requestWithJSONBody(http.MethodPatch, &auth.Session{UserID: "u1"}, "u1", "", `{}`)
 	w := httptest.NewRecorder()
 
 	UpdateAccountSettingsHandler(svc)(w, req)
 
-	if w.Code != http.StatusNoContent {
-		t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 when password_auth is omitted, got %d: %s", w.Code, w.Body.String())
 	}
-	if len(svc.setPasswordAuthCalls) != 1 || svc.setPasswordAuthCalls[0] != false {
-		t.Errorf("expected SetPasswordAuthEnabled(false) to be called, got: %v", svc.setPasswordAuthCalls)
+	if len(svc.setPasswordAuthCalls) != 0 {
+		t.Error("expected SetPasswordAuthEnabled to never be called when password_auth is omitted")
 	}
 }
