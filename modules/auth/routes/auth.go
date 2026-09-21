@@ -122,7 +122,12 @@ func OAuthHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Ses
 			return
 		}
 
-		issueSessionAndRedirect(w, r, ss, session, state.RedirectURI)
+		if err := createSessionJWTAndSetCookie(ss, w, session); err != nil {
+			log.Println("Failed to create JWT:\n\t", err)
+			redirectInternalServerError(w, r, state.RedirectURI, "Authentication failed")
+			return
+		}
+		http.Redirect(w, r, state.RedirectURI, http.StatusSeeOther)
 	}
 }
 
@@ -168,7 +173,12 @@ func OpenIDHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Se
 			return
 		}
 
-		issueSessionAndRedirect(w, r, ss, session, state.RedirectURI)
+		if err := createSessionJWTAndSetCookie(ss, w, session); err != nil {
+			log.Println("Failed to create JWT:\n\t", err)
+			redirectInternalServerError(w, r, state.RedirectURI, "Authentication failed")
+			return
+		}
+		http.Redirect(w, r, state.RedirectURI, http.StatusSeeOther)
 	}
 }
 
@@ -251,16 +261,6 @@ func createSessionJWTAndSetCookie(ss auth.SessionService, w http.ResponseWriter,
 	}
 	http.SetCookie(w, sessionCookie(jwtString, time.Unix(session.ExpiresAt, 0)))
 	return nil
-}
-
-// issueSessionAndRedirect sets the session cookie and redirects to redirectURI.
-func issueSessionAndRedirect(w http.ResponseWriter, r *http.Request, ss auth.SessionService, session *auth.Session, redirectURI string) {
-	if err := createSessionJWTAndSetCookie(ss, w, session); err != nil {
-		log.Println("Failed to create JWT:\n\t", err)
-		redirectInternalServerError(w, r, redirectURI, "Authentication failed")
-		return
-	}
-	http.Redirect(w, r, redirectURI, http.StatusSeeOther)
 }
 
 // redirectWithError redirects to target with an RFC 9457 problem, base64
