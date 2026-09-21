@@ -142,7 +142,7 @@ func TestXstsAuthorizeSuccess(t *testing.T) {
 		})
 	})
 
-	xstsToken, uhs, xuid, gamertag, err := xstsAuthorize("xbl-token")
+	xstsToken, uhs, xuid, gamertag, err := xstsAuthorize("xbl-token", xstsXboxLiveRelyingParty)
 	if err != nil {
 		t.Fatalf("xstsAuthorize returned error: %v", err)
 	}
@@ -160,7 +160,7 @@ func TestXstsAuthorizeXErrTranslated(t *testing.T) {
 		})
 	})
 
-	_, _, _, _, err := xstsAuthorize("xbl-token")
+	_, _, _, _, err := xstsAuthorize("xbl-token", xstsXboxLiveRelyingParty)
 	if err != ErrNoXboxAccount {
 		t.Errorf("expected ErrNoXboxAccount, got: %v", err)
 	}
@@ -171,19 +171,21 @@ func TestXstsAuthorizeMissingClaims(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{"Token": "xsts-token"})
 	})
 
-	_, _, _, _, err := xstsAuthorize("xbl-token")
+	_, _, _, _, err := xstsAuthorize("xbl-token", xstsXboxLiveRelyingParty)
 	if err == nil {
 		t.Fatal("expected an error when DisplayClaims/uhs is missing from an otherwise-200 response")
 	}
 }
 
-// TestXstsAuthorizeMissingXidOrGtg is a regression test from the review
-// pipeline: the original validation only checked Token and Uhs were
-// non-empty, never Xid/Gtg - so a response with uhs but no xid/gtg would
-// silently produce an XboxLiveData{XUID: "", Gamertag: ""}, and a second
-// such account would incorrectly resolve to the first under the
-// (platform, platform_id) UNIQUE constraint instead of erroring.
-func TestXstsAuthorizeMissingXidOrGtg(t *testing.T) {
+// TestXstsAuthorizeMinecraftRelyingPartyUhsOnlySucceeds is the regression
+// test for the prod outage this fixes: Xbox Live's real XSTS response for
+// the Minecraft relying party only ever includes uhs in DisplayClaims, never
+// xid/gtg - a prior fix wrongly required all three from every XSTS call,
+// so every real Xbox/Minecraft login started failing with "xsts
+// authorization response missing uhs, xid, or gtg in DisplayClaims".
+// xstsAuthorize itself must accept a uhs-only response; requiring xid/gtg
+// is authenticateXboxLive's job, and only for the Xbox Live relying party.
+func TestXstsAuthorizeMinecraftRelyingPartyUhsOnlySucceeds(t *testing.T) {
 	withServer(t, &xstsAuthorizeURL, func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"Token": "xsts-token",
@@ -193,9 +195,40 @@ func TestXstsAuthorizeMissingXidOrGtg(t *testing.T) {
 		})
 	})
 
-	_, _, _, _, err := xstsAuthorize("xbl-token")
+	xstsToken, uhs, xuid, gamertag, err := xstsAuthorize("xbl-token", xstsMinecraftRelyingParty)
+	if err != nil {
+		t.Fatalf("expected a uhs-only response to succeed, got: %v", err)
+	}
+	if xstsToken != "xsts-token" || uhs != "user-hash-1" || xuid != "" || gamertag != "" {
+		t.Errorf("unexpected result: token=%q uhs=%q xuid=%q gamertag=%q", xstsToken, uhs, xuid, gamertag)
+	}
+}
+
+// TestAuthenticateXboxLiveMissingXidOrGtgFromXboxLiveRelyingPartyRejected
+// pins the other half of the split: xid/gtg missing from the Xbox Live
+// relying party's response (as opposed to the Minecraft one, which never
+// has them) is still a real error - it means an XboxLiveData{XUID: "",
+// Gamertag: ""} would otherwise resolve to whatever other account already
+// holds that (platform, platform_id) under the UNIQUE constraint.
+func TestAuthenticateXboxLiveMissingXidOrGtgFromXboxLiveRelyingPartyRejected(t *testing.T) {
+	withServer(t, &xboxLiveAuthenticateURL, func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(xblAuthResponse{Token: "xbl-token"})
+	})
+	withServer(t, &xstsAuthorizeURL, func(w http.ResponseWriter, r *http.Request) {
+		// Every call - Minecraft-scoped or Xbox Live-scoped - gets a
+		// uhs-only response, which is what a real Xbox Live-scoped miss
+		// looks like; the Minecraft-scoped call is fine with that.
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"Token": "xsts-token",
+			"DisplayClaims": map[string]interface{}{
+				"xui": []map[string]string{{"uhs": "user-hash-1"}},
+			},
+		})
+	})
+
+	_, _, _, err := authenticateXboxLive("ms-access-token")
 	if err == nil {
-		t.Fatal("expected an error when xid/gtg are missing even though uhs is present")
+		t.Fatal("expected an error when the Xbox Live relying party's response is missing xid/gtg")
 	}
 }
 
@@ -336,10 +369,19 @@ func newFullChainServer(t *testing.T, hasJavaProfile bool) {
 		_ = json.NewEncoder(w).Encode(xblAuthResponse{Token: "xbl-token"})
 	})
 	mux.HandleFunc("/xsts-authorize", func(w http.ResponseWriter, r *http.Request) {
+		// Mirrors the real split: only the Xbox Live relying party gets
+		// xid/gtg in DisplayClaims, the Minecraft one gets uhs alone.
+		var reqBody xstsAuthRequest
+		_ = json.NewDecoder(r.Body).Decode(&reqBody)
+		xui := map[string]string{"uhs": "uhs-1"}
+		if reqBody.RelyingParty == xstsXboxLiveRelyingParty {
+			xui["xid"] = "9999"
+			xui["gtg"] = "TestGamer"
+		}
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"Token": "xsts-token",
 			"DisplayClaims": map[string]interface{}{
-				"xui": []map[string]string{{"uhs": "uhs-1", "xid": "9999", "gtg": "TestGamer"}},
+				"xui": []map[string]string{xui},
 			},
 		})
 	})
