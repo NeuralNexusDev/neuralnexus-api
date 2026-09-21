@@ -167,7 +167,11 @@ func GetSteamUser(steamID64 string) (*SteamData, error) {
 	if len(parsed.Response.Players) == 0 {
 		return nil, errors.New("steam player summary response contained no players")
 	}
-	return &parsed.Response.Players[0], nil
+	player := &parsed.Response.Players[0]
+	if player.SteamID64 != steamID64 {
+		return nil, fmt.Errorf("steam player summary response steamid %q does not match requested %q", player.SteamID64, steamID64)
+	}
+	return player, nil
 }
 
 // ProcessSteamLogin resolves or creates an account for the given,

@@ -194,6 +194,17 @@ func TestGetSteamUserSuccess(t *testing.T) {
 	}
 }
 
+func TestGetSteamUserMismatchedSteamIDRejected(t *testing.T) {
+	withServer(t, &steamPlayerSummaryURL, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"response":{"players":[{"steamid":"99999999999999999","personaname":"WrongPlayer"}]}}`))
+	})
+	t.Cleanup(setSteamAPIKey(t, "test-key"))
+
+	if _, err := GetSteamUser("76561198000000000"); err == nil {
+		t.Fatal("expected an error when the returned player's steamid doesn't match the requested one")
+	}
+}
+
 func TestGetSteamUserMissingAPIKey(t *testing.T) {
 	t.Cleanup(setSteamAPIKey(t, ""))
 
