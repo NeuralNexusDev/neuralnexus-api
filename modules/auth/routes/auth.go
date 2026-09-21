@@ -96,7 +96,7 @@ func OAuthHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Ses
 		code := r.URL.Query().Get("code")
 		if code == "" {
 			log.Println("No code provided")
-			redirectWithError(w, r, auth.NN_SITE_URL, "Invalid request")
+			redirectBadRequest(w, r, auth.NN_SITE_URL, "Invalid request")
 			return
 		}
 
@@ -118,7 +118,7 @@ func OAuthHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Ses
 		}
 		if err != nil {
 			log.Println("Failed to process OAuth:\n\t", err)
-			redirectWithError(w, r, state.RedirectURI, "Authentication failed")
+			redirectInternalServerError(w, r, state.RedirectURI, "Authentication failed")
 			return
 		}
 
@@ -141,9 +141,9 @@ func OpenIDHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Se
 		if err != nil {
 			log.Println("Failed to verify Steam OpenID callback:\n\t", err)
 			if errors.Is(err, linking.ErrInvalidAssertion) {
-				redirectWithError(w, r, state.RedirectURI, "Invalid state")
+				redirectBadRequest(w, r, state.RedirectURI, "Invalid state")
 			} else {
-				redirectWithError(w, r, state.RedirectURI, "Authentication failed")
+				redirectInternalServerError(w, r, state.RedirectURI, "Authentication failed")
 			}
 			return
 		}
@@ -151,7 +151,7 @@ func OpenIDHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Se
 		user, err := linking.GetSteamUser(steamID64)
 		if err != nil {
 			log.Println("Failed to get Steam user:\n\t", err)
-			redirectWithError(w, r, state.RedirectURI, "Authentication failed")
+			redirectInternalServerError(w, r, state.RedirectURI, "Authentication failed")
 			return
 		}
 
@@ -164,7 +164,7 @@ func OpenIDHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Se
 		}
 		if err != nil {
 			log.Println("Failed to process Steam OpenID:\n\t", err)
-			redirectWithError(w, r, state.RedirectURI, "Authentication failed")
+			redirectInternalServerError(w, r, state.RedirectURI, "Authentication failed")
 			return
 		}
 
@@ -182,40 +182,40 @@ func decodeAndValidateState(w http.ResponseWriter, r *http.Request) (linking.OAu
 	stateB64 := r.URL.Query().Get("state")
 	if stateB64 == "" {
 		log.Println("No state provided")
-		redirectWithError(w, r, auth.NN_SITE_URL, "Invalid request")
+		redirectBadRequest(w, r, auth.NN_SITE_URL, "Invalid request")
 		return state, false
 	}
 	stateBytes, err := base64.URLEncoding.DecodeString(stateB64)
 	if err != nil {
 		log.Println("Failed to decode state:\n\t", err)
-		redirectWithError(w, r, auth.NN_SITE_URL, "Invalid state")
+		redirectBadRequest(w, r, auth.NN_SITE_URL, "Invalid state")
 		return state, false
 	}
 	if err := json.Unmarshal(stateBytes, &state); err != nil {
 		log.Println("Failed to unmarshal state:\n\t", err)
-		redirectWithError(w, r, auth.NN_SITE_URL, "Invalid state")
+		redirectBadRequest(w, r, auth.NN_SITE_URL, "Invalid state")
 		return state, false
 	}
 	if state.Platform == "" || state.Nonce == "" || state.RedirectURI == "" || state.Mode == "" {
 		log.Println("Invalid state")
-		redirectWithError(w, r, auth.NN_SITE_URL, "Invalid state")
+		redirectBadRequest(w, r, auth.NN_SITE_URL, "Invalid state")
 		return state, false
 	}
 	if !isAllowedRedirect(state.RedirectURI) {
 		log.Println("Redirect URI is not allowed:\n\t", state.RedirectURI)
-		redirectWithError(w, r, auth.NN_SITE_URL, "Invalid state")
+		redirectBadRequest(w, r, auth.NN_SITE_URL, "Invalid state")
 		return state, false
 	}
 
 	cookie, err := r.Cookie("nonce")
 	if err != nil {
 		log.Println("Failed to get nonce cookie:\n\t", err)
-		redirectWithError(w, r, auth.NN_SITE_URL, "Invalid state")
+		redirectBadRequest(w, r, auth.NN_SITE_URL, "Invalid state")
 		return state, false
 	}
 	if cookie.Value != state.Nonce {
 		log.Println("Nonce does not match")
-		redirectWithError(w, r, auth.NN_SITE_URL, "Invalid state")
+		redirectBadRequest(w, r, auth.NN_SITE_URL, "Invalid state")
 		return state, false
 	}
 
@@ -233,11 +233,11 @@ func requireValidModeAndSession(w http.ResponseWriter, r *http.Request, mode lin
 		if session, ok := r.Context().Value(mw.SessionKey).(*auth.Session); ok && session != nil && session.IsValid() {
 			return true
 		}
-		redirectWithError(w, r, redirectURI, "You must be logged in to link an account")
+		redirectUnauthorized(w, r, redirectURI, "You must be logged in to link an account")
 		return false
 	default:
 		log.Println("Invalid mode")
-		redirectWithError(w, r, redirectURI, "Invalid state")
+		redirectBadRequest(w, r, redirectURI, "Invalid state")
 		return false
 	}
 }
@@ -257,26 +257,49 @@ func createSessionJWTAndSetCookie(ss auth.SessionService, w http.ResponseWriter,
 func issueSessionAndRedirect(w http.ResponseWriter, r *http.Request, ss auth.SessionService, session *auth.Session, redirectURI string) {
 	if _, err := createSessionJWTAndSetCookie(ss, w, session); err != nil {
 		log.Println("Failed to create JWT:\n\t", err)
-		redirectWithError(w, r, redirectURI, "Authentication failed")
+		redirectInternalServerError(w, r, redirectURI, "Authentication failed")
 		return
 	}
 	http.Redirect(w, r, redirectURI, http.StatusSeeOther)
 }
 
-// redirectWithError redirects to target with an "error" query param set to
-// message, so a browser mid OAuth/OpenID flow lands back on the frontend
-// instead of a raw API response - the caller has already logged the real
-// error, and message is always one of the same short, generic strings used
-// elsewhere for direct API responses, never provider or internal detail.
-func redirectWithError(w http.ResponseWriter, r *http.Request, target, message string) {
+// redirectWithError redirects to target with an RFC 9457 problem, base64
+// (URL-safe) encoded into a "problem" query param, so a browser mid OAuth/
+// OpenID flow lands back on the frontend instead of a raw API response. The
+// caller has already logged the real error; detail is always one of the
+// same short, generic strings used elsewhere for direct API responses,
+// never provider or internal detail.
+func redirectWithError(w http.ResponseWriter, r *http.Request, target string, status int, title, detail string) {
+	problemJSON, err := json.Marshal(responses.NewProblem("about:blank", status, title, detail, "").Problem)
+	if err != nil {
+		log.Println("Failed to marshal error problem:\n\t", err)
+		http.Redirect(w, r, target, http.StatusSeeOther)
+		return
+	}
+	problemB64 := base64.URLEncoding.EncodeToString(problemJSON)
+
 	redirectURL := target
 	if u, err := url.Parse(target); err == nil {
 		q := u.Query()
-		q.Set("error", message)
+		q.Set("problem", problemB64)
 		u.RawQuery = q.Encode()
 		redirectURL = u.String()
 	}
 	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
+}
+
+// redirectBadRequest, redirectUnauthorized, and redirectInternalServerError
+// mirror responses.BadRequest/Unauthorized/InternalServerError's status and
+// title, but as a redirect carrying a problem+json instead of a direct
+// response body - see redirectWithError.
+func redirectBadRequest(w http.ResponseWriter, r *http.Request, target, detail string) {
+	redirectWithError(w, r, target, http.StatusBadRequest, "Bad Request", detail)
+}
+func redirectUnauthorized(w http.ResponseWriter, r *http.Request, target, detail string) {
+	redirectWithError(w, r, target, http.StatusUnauthorized, "Unauthorized", detail)
+}
+func redirectInternalServerError(w http.ResponseWriter, r *http.Request, target, detail string) {
+	redirectWithError(w, r, target, http.StatusInternalServerError, "Internal Server Error", detail)
 }
 
 // isAllowedRedirect reports whether redirectURI's scheme and host match

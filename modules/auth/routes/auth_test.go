@@ -124,11 +124,21 @@ func newModeLinkRequest(t *testing.T) *http.Request {
 	return r
 }
 
+// redirectProblem mirrors the JSON shape of problempb.Problem, just enough
+// to decode what redirectWithError embeds in the "problem" query param.
+type redirectProblem struct {
+	Type     string `json:"type"`
+	Status   int    `json:"status"`
+	Title    string `json:"title"`
+	Detail   string `json:"detail"`
+	Instance string `json:"instance"`
+}
+
 // assertRedirectWithError checks the handler issued a 303 redirect whose
 // target (scheme+host+path, ignoring query) matches expectedTarget and whose
-// "error" query param matches expectedMessage, and that no session cookie
-// was set alongside it.
-func assertRedirectWithError(t *testing.T, w *httptest.ResponseRecorder, expectedTarget, expectedMessage string) {
+// base64-encoded "problem" query param decodes to the given status/title/
+// detail, with no session cookie set alongside it.
+func assertRedirectWithError(t *testing.T, w *httptest.ResponseRecorder, expectedTarget string, expectedStatus int, expectedTitle, expectedDetail string) {
 	t.Helper()
 	if w.Code != http.StatusSeeOther {
 		t.Fatalf("expected 303 redirect, got %d: %s", w.Code, w.Body.String())
@@ -142,9 +152,29 @@ func assertRedirectWithError(t *testing.T, w *httptest.ResponseRecorder, expecte
 	if target != expectedTarget {
 		t.Errorf("expected redirect target %q, got %q (full Location: %q)", expectedTarget, target, location)
 	}
-	if got := u.Query().Get("error"); got != expectedMessage {
-		t.Errorf("expected error=%q, got %q (full Location: %q)", expectedMessage, got, location)
+
+	problemB64 := u.Query().Get("problem")
+	if problemB64 == "" {
+		t.Fatalf("expected a problem query param, got none (full Location: %q)", location)
 	}
+	problemJSON, err := base64.URLEncoding.DecodeString(problemB64)
+	if err != nil {
+		t.Fatalf("failed to base64-decode problem param %q: %v", problemB64, err)
+	}
+	var p redirectProblem
+	if err := json.Unmarshal(problemJSON, &p); err != nil {
+		t.Fatalf("failed to unmarshal problem JSON %q: %v", problemJSON, err)
+	}
+	if p.Status != expectedStatus {
+		t.Errorf("expected problem status %d, got %d", expectedStatus, p.Status)
+	}
+	if p.Title != expectedTitle {
+		t.Errorf("expected problem title %q, got %q", expectedTitle, p.Title)
+	}
+	if p.Detail != expectedDetail {
+		t.Errorf("expected problem detail %q, got %q", expectedDetail, p.Detail)
+	}
+
 	for _, c := range w.Result().Cookies() {
 		if c.Name == mw.SessionCookieName {
 			t.Error("expected no session cookie to be set on an error redirect")
@@ -167,7 +197,7 @@ func TestOAuthHandlerLinkModeNoSessionRejected(t *testing.T) {
 
 	OAuthHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
 
-	assertRedirectWithError(t, w, "https://neuralnexus.test/done", "You must be logged in to link an account")
+	assertRedirectWithError(t, w, "https://neuralnexus.test/done", 401, "Unauthorized", "You must be logged in to link an account")
 }
 
 // TestOAuthHandlerLinkModeWithSessionProceedsToProcessOAuthLink confirms a
@@ -200,7 +230,7 @@ func TestOAuthHandlerLinkModeWithSessionProceedsToProcessOAuthLink(t *testing.T)
 
 	OAuthHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
 
-	assertRedirectWithError(t, w, "https://neuralnexus.test/done", "Authentication failed")
+	assertRedirectWithError(t, w, "https://neuralnexus.test/done", 500, "Internal Server Error", "Authentication failed")
 }
 
 // Regression test: an invalid/unrecognized state.Mode used to fall through
@@ -236,7 +266,7 @@ func TestOAuthHandlerInvalidModeRejectedWithoutPanic(t *testing.T) {
 	}()
 	handler(w, r)
 
-	assertRedirectWithError(t, w, "https://neuralnexus.test/done", "Invalid state")
+	assertRedirectWithError(t, w, "https://neuralnexus.test/done", 400, "Bad Request", "Invalid state")
 }
 
 // TestOAuthHandlerRejectsRedirectOutsideSiteOrigin is the regression test for
@@ -268,7 +298,7 @@ func TestOAuthHandlerRejectsRedirectOutsideSiteOrigin(t *testing.T) {
 	if location := w.Header().Get("Location"); strings.Contains(location, "evil.example.com") {
 		t.Fatalf("expected no redirect to the attacker's URL, got Location: %q", location)
 	}
-	assertRedirectWithError(t, w, auth.NN_SITE_URL, "Invalid state")
+	assertRedirectWithError(t, w, auth.NN_SITE_URL, 400, "Bad Request", "Invalid state")
 }
 
 // TestOAuthHandlerAllowsRedirectMatchingSiteOrigin confirms a same-origin
@@ -295,7 +325,7 @@ func TestOAuthHandlerAllowsRedirectMatchingSiteOrigin(t *testing.T) {
 
 	OAuthHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
 
-	assertRedirectWithError(t, w, "https://neuralnexus.test/done", "Authentication failed")
+	assertRedirectWithError(t, w, "https://neuralnexus.test/done", 500, "Internal Server Error", "Authentication failed")
 }
 
 // -------------- OpenIDHandler --------------
@@ -337,7 +367,7 @@ func TestOpenIDHandlerNoStateRejected(t *testing.T) {
 
 	OpenIDHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
 
-	assertRedirectWithError(t, w, auth.NN_SITE_URL, "Invalid request")
+	assertRedirectWithError(t, w, auth.NN_SITE_URL, 400, "Bad Request", "Invalid request")
 }
 
 // TestOpenIDHandlerRejectsRedirectOutsideSiteOrigin mirrors the OAuth version
@@ -352,7 +382,7 @@ func TestOpenIDHandlerRejectsRedirectOutsideSiteOrigin(t *testing.T) {
 	if location := w.Header().Get("Location"); strings.Contains(location, "evil.example.com") {
 		t.Fatalf("expected no redirect to the attacker's URL, got Location: %q", location)
 	}
-	assertRedirectWithError(t, w, auth.NN_SITE_URL, "Invalid state")
+	assertRedirectWithError(t, w, auth.NN_SITE_URL, 400, "Bad Request", "Invalid state")
 }
 
 func TestOpenIDHandlerMissingNonceCookieRejected(t *testing.T) {
@@ -361,7 +391,7 @@ func TestOpenIDHandlerMissingNonceCookieRejected(t *testing.T) {
 
 	OpenIDHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
 
-	assertRedirectWithError(t, w, auth.NN_SITE_URL, "Invalid state")
+	assertRedirectWithError(t, w, auth.NN_SITE_URL, 400, "Bad Request", "Invalid state")
 }
 
 func TestOpenIDHandlerNonceMismatchRejected(t *testing.T) {
@@ -370,7 +400,7 @@ func TestOpenIDHandlerNonceMismatchRejected(t *testing.T) {
 
 	OpenIDHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
 
-	assertRedirectWithError(t, w, auth.NN_SITE_URL, "Invalid state")
+	assertRedirectWithError(t, w, auth.NN_SITE_URL, 400, "Bad Request", "Invalid state")
 }
 
 func TestOpenIDHandlerInvalidModeRejectedWithoutPanic(t *testing.T) {
@@ -385,7 +415,7 @@ func TestOpenIDHandlerInvalidModeRejectedWithoutPanic(t *testing.T) {
 	}()
 	handler(w, r)
 
-	assertRedirectWithError(t, w, "https://neuralnexus.test/done", "Invalid state")
+	assertRedirectWithError(t, w, "https://neuralnexus.test/done", 400, "Bad Request", "Invalid state")
 }
 
 // TestOpenIDHandlerLinkModeNoSessionRejected is the regression test for
@@ -400,7 +430,7 @@ func TestOpenIDHandlerLinkModeNoSessionRejected(t *testing.T) {
 
 	OpenIDHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
 
-	assertRedirectWithError(t, w, "https://neuralnexus.test/done", "You must be logged in to link an account")
+	assertRedirectWithError(t, w, "https://neuralnexus.test/done", 401, "Unauthorized", "You must be logged in to link an account")
 }
 
 // TestOpenIDHandlerLinkModeExpiredSessionRejected is the regression test for
@@ -418,7 +448,7 @@ func TestOpenIDHandlerLinkModeExpiredSessionRejected(t *testing.T) {
 
 	OpenIDHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
 
-	assertRedirectWithError(t, w, "https://neuralnexus.test/done", "You must be logged in to link an account")
+	assertRedirectWithError(t, w, "https://neuralnexus.test/done", 401, "Unauthorized", "You must be logged in to link an account")
 }
 
 // TestOpenIDHandlerLinkModeWithSessionProceedsPastSessionCheck confirms a
@@ -439,7 +469,7 @@ func TestOpenIDHandlerLinkModeWithSessionProceedsPastSessionCheck(t *testing.T) 
 
 	OpenIDHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
 
-	assertRedirectWithError(t, w, "https://neuralnexus.test/done", "Invalid state")
+	assertRedirectWithError(t, w, "https://neuralnexus.test/done", 400, "Bad Request", "Invalid state")
 }
 
 // -------------- LogoutHandler --------------
