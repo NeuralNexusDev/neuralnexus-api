@@ -2,6 +2,7 @@ package authroutes
 
 import (
 	"encoding/base64"
+	"errors"
 	"github.com/goccy/go-json"
 	"log"
 	"net/http"
@@ -19,11 +20,6 @@ type Login struct {
 	Username string `json:"username" xml:"username" validate:"required_without=GetEmail"`
 	Email    string `json:"email" xml:"email" validate:"required_without=GetUsername"`
 	Password string `json:"password" xml:"password" validate:"required"`
-}
-
-// ReturnedJWT struct for JWT session
-type ReturnedJWT struct {
-	Session string `json:"session" xml:"session"`
 }
 
 // LoginHandler handles the login route
@@ -60,21 +56,18 @@ func LoginHandler(as auth.AccountService, ss auth.SessionService) http.HandlerFu
 			return
 		}
 
-		jwt, err := ss.CreateJWT(session)
-		if err != nil {
-			log.Println("Failed to create JWT:\n\t", err)
-			responses.InternalServerError(w, r, "Authentication failed")
-			return
-		}
-
-		err = ss.AddSession(session)
-		if err != nil {
+		if err = ss.AddSession(session); err != nil {
 			log.Println("Failed to add session:\n\t", err)
 			responses.InternalServerError(w, r, "Authentication failed")
 			return
 		}
-		http.SetCookie(w, sessionCookie(jwt, time.Unix(session.ExpiresAt, 0)))
-		responses.StructOK(w, r, ReturnedJWT{jwt})
+
+		if err := createSessionJWTAndSetCookie(ss, w, session); err != nil {
+			log.Println("Failed to create JWT:\n\t", err)
+			responses.InternalServerError(w, r, "Authentication failed")
+			return
+		}
+		responses.NoContent(w, r)
 	}
 }
 
@@ -100,96 +93,207 @@ func LogoutHandler(ss auth.SessionService) http.HandlerFunc {
 // OAuthHandler handles the OAuth route
 func OAuthHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.SessionService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var err error
-
 		code := r.URL.Query().Get("code")
 		if code == "" {
 			log.Println("No code provided")
-			responses.BadRequest(w, r, "Invalid request")
+			redirectBadRequest(w, r, auth.NN_SITE_URL, "Invalid request")
 			return
 		}
 
-		stateB64 := r.URL.Query().Get("state")
-		if stateB64 == "" {
-			log.Println("No state provided")
-			responses.BadRequest(w, r, "Invalid request")
+		state, ok := decodeAndValidateState(w, r)
+		if !ok {
 			return
 		}
-		stateBytes, err := base64.URLEncoding.DecodeString(stateB64)
-		if err != nil {
-			log.Println("Failed to decode state:\n\t", err)
-			responses.BadRequest(w, r, "Invalid state")
-			return
-		}
-		var state linking.OAuthState
-		err = json.Unmarshal(stateBytes, &state)
-		if err != nil {
-			log.Println("Failed to unmarshal state:\n\t", err)
-			responses.BadRequest(w, r, "Invalid state")
-			return
-		}
-		if state.Platform == "" || state.Nonce == "" || state.RedirectURI == "" || state.Mode == "" {
-			log.Println("Invalid state")
-			responses.BadRequest(w, r, "Invalid state")
-			return
-		}
-		if !isAllowedRedirect(state.RedirectURI) {
-			log.Println("Redirect URI is not allowed:\n\t", state.RedirectURI)
-			responses.BadRequest(w, r, "Invalid state")
+		if !requireValidModeAndSession(w, r, state.Mode, state.RedirectURI) {
 			return
 		}
 
-		// Verify that the nonce matches the value in the browser's cookie
-		cookie, err := r.Cookie("nonce")
+		var session *auth.Session
+		var err error
+		switch state.Mode {
+		case linking.ModeLogin:
+			session, err = linking.ProcessOAuthLogin(as, las, ss, code, &state)
+		case linking.ModeLink:
+			session, err = linking.ProcessOAuthLink(r, las, code, &state)
+		}
 		if err != nil {
-			log.Println("Failed to get nonce cookie:\n\t", err)
-			responses.BadRequest(w, r, "Invalid state")
+			log.Println("Failed to process OAuth:\n\t", err)
+			redirectInternalServerError(w, r, state.RedirectURI, "Authentication failed")
 			return
 		}
-		if cookie.Value != state.Nonce {
-			log.Println("Nonce does not match")
-			responses.BadRequest(w, r, "Invalid state")
+
+		if err := createSessionJWTAndSetCookie(ss, w, session); err != nil {
+			log.Println("Failed to create JWT:\n\t", err)
+			redirectInternalServerError(w, r, state.RedirectURI, "Authentication failed")
+			return
+		}
+		http.Redirect(w, r, state.RedirectURI, http.StatusSeeOther)
+	}
+}
+
+// OpenIDHandler handles the Steam OpenID 2.0 login/link callback.
+func OpenIDHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.SessionService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		state, ok := decodeAndValidateState(w, r)
+		if !ok {
+			return
+		}
+		if !requireValidModeAndSession(w, r, state.Mode, state.RedirectURI) {
+			return
+		}
+
+		steamID64, err := linking.VerifySteamOpenIDCallback(r.URL.Query())
+		if err != nil {
+			log.Println("Failed to verify Steam OpenID callback:\n\t", err)
+			if errors.Is(err, linking.ErrInvalidAssertion) {
+				redirectBadRequest(w, r, state.RedirectURI, "Invalid state")
+			} else {
+				redirectInternalServerError(w, r, state.RedirectURI, "Authentication failed")
+			}
+			return
+		}
+
+		user, err := linking.GetSteamUser(steamID64)
+		if err != nil {
+			log.Println("Failed to get Steam user:\n\t", err)
+			redirectInternalServerError(w, r, state.RedirectURI, "Authentication failed")
 			return
 		}
 
 		var session *auth.Session
 		switch state.Mode {
 		case linking.ModeLogin:
-			session, err = linking.ProcessOAuthLogin(as, las, ss, code, &state)
+			session, err = linking.ProcessSteamLogin(as, las, ss, user)
 		case linking.ModeLink:
-			if linkSession, ok := r.Context().Value(mw.SessionKey).(*auth.Session); !ok || linkSession == nil {
-				responses.Unauthorized(w, r, "You must be logged in to link an account")
-				return
-			}
-			session, err = linking.ProcessOAuthLink(r, las, code, &state)
-		default:
-			log.Println("Invalid mode")
-			responses.BadRequest(w, r, "Invalid state")
+			session, err = linking.ProcessSteamLink(r, las, user)
+		}
+		if err != nil {
+			log.Println("Failed to process Steam OpenID:\n\t", err)
+			redirectInternalServerError(w, r, state.RedirectURI, "Authentication failed")
 			return
 		}
 
-		if err != nil {
-			log.Println("Failed to process OAuth:\n\t", err)
-			responses.InternalServerError(w, r, "Authentication failed")
-			return
-		}
-
-		// Set the session cookie and redirect the user
-		jwtString, err := ss.CreateJWT(session)
-		if err != nil {
+		if err := createSessionJWTAndSetCookie(ss, w, session); err != nil {
 			log.Println("Failed to create JWT:\n\t", err)
-			responses.InternalServerError(w, r, "Authentication failed")
+			redirectInternalServerError(w, r, state.RedirectURI, "Authentication failed")
 			return
 		}
-		http.SetCookie(w, sessionCookie(jwtString, time.Unix(session.ExpiresAt, 0)))
-
 		http.Redirect(w, r, state.RedirectURI, http.StatusSeeOther)
 	}
 }
 
-// isAllowedRedirect reports whether redirectURI's scheme and host match
-// NN_SITE_URL, rejecting an attacker-controlled state.RedirectURI rather
-// than sending the browser (and its fresh session cookie) wherever it says.
+// decodeAndValidateState decodes state from the query param, checking it
+// against the redirect allowlist and the nonce cookie.
+func decodeAndValidateState(w http.ResponseWriter, r *http.Request) (linking.OAuthState, bool) {
+	var state linking.OAuthState
+
+	stateB64 := r.URL.Query().Get("state")
+	if stateB64 == "" {
+		log.Println("No state provided")
+		redirectBadRequest(w, r, auth.NN_SITE_URL, "Invalid request")
+		return state, false
+	}
+	stateBytes, err := base64.URLEncoding.DecodeString(stateB64)
+	if err != nil {
+		log.Println("Failed to decode state:\n\t", err)
+		redirectBadRequest(w, r, auth.NN_SITE_URL, "Invalid state")
+		return state, false
+	}
+	if err := json.Unmarshal(stateBytes, &state); err != nil {
+		log.Println("Failed to unmarshal state:\n\t", err)
+		redirectBadRequest(w, r, auth.NN_SITE_URL, "Invalid state")
+		return state, false
+	}
+	if state.Platform == "" || state.Nonce == "" || state.RedirectURI == "" || state.Mode == "" {
+		log.Println("Invalid state")
+		redirectBadRequest(w, r, auth.NN_SITE_URL, "Invalid state")
+		return state, false
+	}
+	if !isAllowedRedirect(state.RedirectURI) {
+		log.Println("Redirect URI is not allowed:\n\t", state.RedirectURI)
+		redirectBadRequest(w, r, auth.NN_SITE_URL, "Invalid state")
+		return state, false
+	}
+
+	cookie, err := r.Cookie("nonce")
+	if err != nil {
+		log.Println("Failed to get nonce cookie:\n\t", err)
+		redirectBadRequest(w, r, auth.NN_SITE_URL, "Invalid state")
+		return state, false
+	}
+	if cookie.Value != state.Nonce {
+		log.Println("Nonce does not match")
+		redirectBadRequest(w, r, auth.NN_SITE_URL, "Invalid state")
+		return state, false
+	}
+
+	return state, true
+}
+
+// requireValidModeAndSession checks mode is recognized and, for ModeLink,
+// that there's a live session to link to.
+func requireValidModeAndSession(w http.ResponseWriter, r *http.Request, mode linking.Mode, redirectURI string) bool {
+	switch mode {
+	case linking.ModeLogin:
+		return true
+	case linking.ModeLink:
+		if session, ok := r.Context().Value(mw.SessionKey).(*auth.Session); ok && session != nil && session.IsValid() {
+			return true
+		}
+		redirectUnauthorized(w, r, redirectURI, "You must be logged in to link an account")
+		return false
+	default:
+		log.Println("Invalid mode")
+		redirectBadRequest(w, r, redirectURI, "Invalid state")
+		return false
+	}
+}
+
+// createSessionJWTAndSetCookie creates a JWT for an already-persisted
+// session and sets it as the session cookie.
+func createSessionJWTAndSetCookie(ss auth.SessionService, w http.ResponseWriter, session *auth.Session) error {
+	jwtString, err := ss.CreateJWT(session)
+	if err != nil {
+		return err
+	}
+	http.SetCookie(w, sessionCookie(jwtString, time.Unix(session.ExpiresAt, 0)))
+	return nil
+}
+
+// redirectWithError redirects to target with an RFC 9457 problem base64
+// (URL-safe) encoded into a "problem" query param.
+func redirectWithError(w http.ResponseWriter, r *http.Request, target string, status int, title, detail string) {
+	problemJSON, err := json.Marshal(responses.NewProblem("about:blank", status, title, detail, "").Problem)
+	if err != nil {
+		log.Println("Failed to marshal error problem:\n\t", err)
+		http.Redirect(w, r, target, http.StatusSeeOther)
+		return
+	}
+	problemB64 := base64.URLEncoding.EncodeToString(problemJSON)
+
+	redirectURL := target
+	if u, err := url.Parse(target); err == nil {
+		q := u.Query()
+		q.Set("problem", problemB64)
+		u.RawQuery = q.Encode()
+		redirectURL = u.String()
+	}
+	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
+}
+
+// redirectBadRequest, redirectUnauthorized, and redirectInternalServerError
+// mirror responses.BadRequest/Unauthorized/InternalServerError.
+func redirectBadRequest(w http.ResponseWriter, r *http.Request, target, detail string) {
+	redirectWithError(w, r, target, http.StatusBadRequest, "Bad Request", detail)
+}
+func redirectUnauthorized(w http.ResponseWriter, r *http.Request, target, detail string) {
+	redirectWithError(w, r, target, http.StatusUnauthorized, "Unauthorized", detail)
+}
+func redirectInternalServerError(w http.ResponseWriter, r *http.Request, target, detail string) {
+	redirectWithError(w, r, target, http.StatusInternalServerError, "Internal Server Error", detail)
+}
+
+// isAllowedRedirect reports whether redirectURI's scheme and host match NN_SITE_URL.
 func isAllowedRedirect(redirectURI string) bool {
 	siteURL, err := url.Parse(auth.NN_SITE_URL)
 	if err != nil {
