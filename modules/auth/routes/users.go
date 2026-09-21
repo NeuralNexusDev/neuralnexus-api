@@ -258,6 +258,24 @@ func SetPlatformLoginEnabledHandler(service auth.UserService) http.HandlerFunc {
 	}
 }
 
+// GetAccountSettingsHandler - Get a user's account settings
+func GetAccountSettingsHandler(service auth.UserService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		session := r.Context().Value(mw.SessionKey).(*auth.Session)
+		userID := r.PathValue("user_id")
+		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
+			responses.Forbidden(w, r, "You do not have permission to view this user's settings")
+			return
+		}
+		settings, err := service.GetAccountSettings(userID)
+		if err != nil {
+			responses.InternalServerError(w, r, "Failed to get account settings")
+			return
+		}
+		responses.StructOK(w, r, settings)
+	}
+}
+
 // SetPasswordAuthEnabledRequest - Body for SetPasswordAuthEnabledHandler
 type SetPasswordAuthEnabledRequest struct {
 	// PasswordAuthEnabled is a pointer so a missing field is rejected instead

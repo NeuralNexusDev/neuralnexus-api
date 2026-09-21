@@ -2,6 +2,7 @@ package authroutes
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -19,6 +20,8 @@ type mockUserService struct {
 	links              []*auth.LinkedAccount
 	unlinkErr          error
 	setEnableErr       error
+	settings           *auth.AccountSettings
+	getSettingsErr     error
 	setPasswordAuthErr error
 
 	unlinkCalls          []auth.Platform
@@ -49,6 +52,9 @@ func (m *mockUserService) UnlinkPlatform(_ string, platform auth.Platform) error
 func (m *mockUserService) SetPlatformLoginEnabled(_ string, _ auth.Platform, enabled bool) error {
 	m.setEnableCalls = append(m.setEnableCalls, enabled)
 	return m.setEnableErr
+}
+func (m *mockUserService) GetAccountSettings(string) (*auth.AccountSettings, error) {
+	return m.settings, m.getSettingsErr
 }
 func (m *mockUserService) SetPasswordAuthEnabled(_ string, enabled bool) error {
 	m.setPasswordAuthCalls = append(m.setPasswordAuthCalls, enabled)
@@ -107,6 +113,56 @@ func TestGetUserLinkedAccountsHandlerAdminAllowedCrossUser(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200 for an admin request, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// -------------- GetAccountSettingsHandler --------------
+
+func TestGetAccountSettingsHandlerSelfAllowed(t *testing.T) {
+	svc := &mockUserService{settings: &auth.AccountSettings{UserID: "u1", PasswordAuthEnabled: true}}
+	req := requestAsSession(http.MethodGet, &auth.Session{UserID: "u1"}, "u1", "")
+	w := httptest.NewRecorder()
+
+	GetAccountSettingsHandler(svc)(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestGetAccountSettingsHandlerCrossUserForbidden(t *testing.T) {
+	svc := &mockUserService{}
+	req := requestAsSession(http.MethodGet, &auth.Session{UserID: "u1"}, "someone-else", "")
+	w := httptest.NewRecorder()
+
+	GetAccountSettingsHandler(svc)(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for a cross-user request, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestGetAccountSettingsHandlerAdminAllowedCrossUser(t *testing.T) {
+	svc := &mockUserService{settings: &auth.AccountSettings{UserID: "someone-else", PasswordAuthEnabled: true}}
+	req := requestAsSession(http.MethodGet, adminSession("admin1"), "someone-else", "")
+	w := httptest.NewRecorder()
+
+	GetAccountSettingsHandler(svc)(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for an admin request, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestGetAccountSettingsHandlerErrorMapsTo500(t *testing.T) {
+	svc := &mockUserService{getSettingsErr: errors.New("db exploded")}
+	req := requestAsSession(http.MethodGet, &auth.Session{UserID: "u1"}, "u1", "")
+	w := httptest.NewRecorder()
+
+	GetAccountSettingsHandler(svc)(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
 	}
 }
 

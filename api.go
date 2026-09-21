@@ -89,6 +89,8 @@ func ApplyRoutes(
 	mux.Handle("DELETE /api/v1/users/me/link/{platform}", mwAuth(mw.SelfUserID(authroutes.UnlinkPlatformHandler(user))))
 	mux.Handle("PATCH /api/v1/users/{user_id}/link/{platform}", mwAuth(authroutes.SetPlatformLoginEnabledHandler(user)))
 	mux.Handle("PATCH /api/v1/users/me/link/{platform}", mwAuth(mw.SelfUserID(authroutes.SetPlatformLoginEnabledHandler(user))))
+	mux.Handle("GET /api/v1/users/{user_id}/password-auth", mwAuth(authroutes.GetAccountSettingsHandler(user)))
+	mux.Handle("GET /api/v1/users/me/password-auth", mwAuth(mw.SelfUserID(authroutes.GetAccountSettingsHandler(user))))
 	mux.Handle("PATCH /api/v1/users/{user_id}/password-auth", mwAuth(authroutes.SetPasswordAuthEnabledHandler(user)))
 	mux.Handle("PATCH /api/v1/users/me/password-auth", mwAuth(mw.SelfUserID(authroutes.SetPasswordAuthEnabledHandler(user))))
 	// mux.HandleFunc("DELETE /api/v1/users/{user_id}", mwAuth(authroutes.DeleteUserHandler(gssService)))
