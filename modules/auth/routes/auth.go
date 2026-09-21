@@ -183,9 +183,7 @@ func OpenIDHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Se
 }
 
 // decodeAndValidateState decodes state from the query param, checking it
-// against the redirect allowlist and the nonce cookie. Every failure here
-// happens before state.RedirectURI can be trusted, so errors redirect to
-// the site root rather than anywhere client-supplied.
+// against the redirect allowlist and the nonce cookie.
 func decodeAndValidateState(w http.ResponseWriter, r *http.Request) (linking.OAuthState, bool) {
 	var state linking.OAuthState
 
@@ -233,8 +231,7 @@ func decodeAndValidateState(w http.ResponseWriter, r *http.Request) (linking.OAu
 }
 
 // requireValidModeAndSession checks mode is recognized and, for ModeLink,
-// that there's a live session to link to - before any network calls.
-// redirectURI is state.RedirectURI, already cleared by decodeAndValidateState.
+// that there's a live session to link to.
 func requireValidModeAndSession(w http.ResponseWriter, r *http.Request, mode linking.Mode, redirectURI string) bool {
 	switch mode {
 	case linking.ModeLogin:
@@ -263,12 +260,8 @@ func createSessionJWTAndSetCookie(ss auth.SessionService, w http.ResponseWriter,
 	return nil
 }
 
-// redirectWithError redirects to target with an RFC 9457 problem, base64
-// (URL-safe) encoded into a "problem" query param, so a browser mid OAuth/
-// OpenID flow lands back on the frontend instead of a raw API response. The
-// caller has already logged the real error; detail is always one of the
-// same short, generic strings used elsewhere for direct API responses,
-// never provider or internal detail.
+// redirectWithError redirects to target with an RFC 9457 problem base64
+// (URL-safe) encoded into a "problem" query param.
 func redirectWithError(w http.ResponseWriter, r *http.Request, target string, status int, title, detail string) {
 	problemJSON, err := json.Marshal(responses.NewProblem("about:blank", status, title, detail, "").Problem)
 	if err != nil {
@@ -289,9 +282,7 @@ func redirectWithError(w http.ResponseWriter, r *http.Request, target string, st
 }
 
 // redirectBadRequest, redirectUnauthorized, and redirectInternalServerError
-// mirror responses.BadRequest/Unauthorized/InternalServerError's status and
-// title, but as a redirect carrying a problem+json instead of a direct
-// response body - see redirectWithError.
+// mirror responses.BadRequest/Unauthorized/InternalServerError.
 func redirectBadRequest(w http.ResponseWriter, r *http.Request, target, detail string) {
 	redirectWithError(w, r, target, http.StatusBadRequest, "Bad Request", detail)
 }
