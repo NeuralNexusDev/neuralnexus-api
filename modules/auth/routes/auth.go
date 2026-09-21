@@ -302,9 +302,7 @@ func redirectInternalServerError(w http.ResponseWriter, r *http.Request, target,
 	redirectWithError(w, r, target, http.StatusInternalServerError, "Internal Server Error", detail)
 }
 
-// isAllowedRedirect reports whether redirectURI's scheme and host match
-// NN_SITE_URL, rejecting an attacker-controlled state.RedirectURI rather
-// than sending the browser (and its fresh session cookie) wherever it says.
+// isAllowedRedirect reports whether redirectURI's scheme and host match NN_SITE_URL.
 func isAllowedRedirect(redirectURI string) bool {
 	siteURL, err := url.Parse(auth.NN_SITE_URL)
 	if err != nil {
