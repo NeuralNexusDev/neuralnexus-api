@@ -2,6 +2,7 @@ package authroutes
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -16,12 +17,16 @@ import (
 // self-or-admin auth boundary and error-to-status mapping on the new
 // linked-account endpoints, without needing a real store.
 type mockUserService struct {
-	links        []*auth.LinkedAccount
-	unlinkErr    error
-	setEnableErr error
+	links              []*auth.LinkedAccount
+	unlinkErr          error
+	setEnableErr       error
+	settings           *auth.AccountSettings
+	getSettingsErr     error
+	setPasswordAuthErr error
 
-	unlinkCalls    []auth.Platform
-	setEnableCalls []bool
+	unlinkCalls          []auth.Platform
+	setEnableCalls       []bool
+	setPasswordAuthCalls []bool
 }
 
 var _ auth.UserService = (*mockUserService)(nil)
@@ -47,6 +52,13 @@ func (m *mockUserService) UnlinkPlatform(_ string, platform auth.Platform) error
 func (m *mockUserService) SetPlatformLoginEnabled(_ string, _ auth.Platform, enabled bool) error {
 	m.setEnableCalls = append(m.setEnableCalls, enabled)
 	return m.setEnableErr
+}
+func (m *mockUserService) GetAccountSettings(string) (*auth.AccountSettings, error) {
+	return m.settings, m.getSettingsErr
+}
+func (m *mockUserService) SetPasswordAuthEnabled(_ string, enabled bool) error {
+	m.setPasswordAuthCalls = append(m.setPasswordAuthCalls, enabled)
+	return m.setPasswordAuthErr
 }
 
 // requestAsSession builds a request with the given session in context and
@@ -101,6 +113,56 @@ func TestGetUserLinkedAccountsHandlerAdminAllowedCrossUser(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200 for an admin request, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// -------------- GetAccountSettingsHandler --------------
+
+func TestGetAccountSettingsHandlerSelfAllowed(t *testing.T) {
+	svc := &mockUserService{settings: &auth.AccountSettings{UserID: "u1", PasswordAuthEnabled: true}}
+	req := requestAsSession(http.MethodGet, &auth.Session{UserID: "u1"}, "u1", "")
+	w := httptest.NewRecorder()
+
+	GetAccountSettingsHandler(svc)(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestGetAccountSettingsHandlerCrossUserForbidden(t *testing.T) {
+	svc := &mockUserService{}
+	req := requestAsSession(http.MethodGet, &auth.Session{UserID: "u1"}, "someone-else", "")
+	w := httptest.NewRecorder()
+
+	GetAccountSettingsHandler(svc)(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for a cross-user request, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestGetAccountSettingsHandlerAdminAllowedCrossUser(t *testing.T) {
+	svc := &mockUserService{settings: &auth.AccountSettings{UserID: "someone-else", PasswordAuthEnabled: true}}
+	req := requestAsSession(http.MethodGet, adminSession("admin1"), "someone-else", "")
+	w := httptest.NewRecorder()
+
+	GetAccountSettingsHandler(svc)(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for an admin request, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestGetAccountSettingsHandlerErrorMapsTo500(t *testing.T) {
+	svc := &mockUserService{getSettingsErr: errors.New("db exploded")}
+	req := requestAsSession(http.MethodGet, &auth.Session{UserID: "u1"}, "u1", "")
+	w := httptest.NewRecorder()
+
+	GetAccountSettingsHandler(svc)(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
 	}
 }
 
@@ -249,5 +311,76 @@ func TestSetPlatformLoginEnabledHandlerMissingFieldRejected(t *testing.T) {
 	}
 	if len(svc.setEnableCalls) != 0 {
 		t.Error("expected SetPlatformLoginEnabled to never be called when login_enabled is omitted")
+	}
+}
+
+// -------------- UpdateAccountSettingsHandler --------------
+
+func TestUpdateAccountSettingsHandlerCrossUserForbidden(t *testing.T) {
+	svc := &mockUserService{}
+	req := requestWithJSONBody(http.MethodPatch, &auth.Session{UserID: "u1"}, "someone-else", "", `{"password_auth":false}`)
+	w := httptest.NewRecorder()
+
+	UpdateAccountSettingsHandler(svc)(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", w.Code, w.Body.String())
+	}
+	if len(svc.setPasswordAuthCalls) != 0 {
+		t.Error("expected SetPasswordAuthEnabled to never be called for a forbidden request")
+	}
+}
+
+func TestUpdateAccountSettingsHandlerSuccess(t *testing.T) {
+	svc := &mockUserService{}
+	req := requestWithJSONBody(http.MethodPatch, &auth.Session{UserID: "u1"}, "u1", "", `{"password_auth":false}`)
+	w := httptest.NewRecorder()
+
+	UpdateAccountSettingsHandler(svc)(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
+	}
+	if len(svc.setPasswordAuthCalls) != 1 || svc.setPasswordAuthCalls[0] != false {
+		t.Errorf("expected SetPasswordAuthEnabled(false) to be called, got: %v", svc.setPasswordAuthCalls)
+	}
+}
+
+func TestUpdateAccountSettingsHandlerWouldLockAccountMapsTo400(t *testing.T) {
+	svc := &mockUserService{setPasswordAuthErr: auth.ErrWouldLockAccount}
+	req := requestWithJSONBody(http.MethodPatch, &auth.Session{UserID: "u1"}, "u1", "", `{"password_auth":false}`)
+	w := httptest.NewRecorder()
+
+	UpdateAccountSettingsHandler(svc)(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for ErrWouldLockAccount, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestUpdateAccountSettingsHandlerNoPasswordSetMapsTo400(t *testing.T) {
+	svc := &mockUserService{setPasswordAuthErr: auth.ErrNoPasswordSet}
+	req := requestWithJSONBody(http.MethodPatch, &auth.Session{UserID: "u1"}, "u1", "", `{"password_auth":true}`)
+	w := httptest.NewRecorder()
+
+	UpdateAccountSettingsHandler(svc)(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for ErrNoPasswordSet, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestUpdateAccountSettingsHandlerMissingFieldRejected(t *testing.T) {
+	svc := &mockUserService{}
+	req := requestWithJSONBody(http.MethodPatch, &auth.Session{UserID: "u1"}, "u1", "", `{}`)
+	w := httptest.NewRecorder()
+
+	UpdateAccountSettingsHandler(svc)(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 when password_auth is omitted, got %d: %s", w.Code, w.Body.String())
+	}
+	if len(svc.setPasswordAuthCalls) != 0 {
+		t.Error("expected SetPasswordAuthEnabled to never be called when password_auth is omitted")
 	}
 }

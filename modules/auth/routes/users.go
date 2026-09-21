@@ -257,3 +257,58 @@ func SetPlatformLoginEnabledHandler(service auth.UserService) http.HandlerFunc {
 		}
 	}
 }
+
+// GetAccountSettingsHandler - Get a user's account settings
+func GetAccountSettingsHandler(service auth.UserService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		session := r.Context().Value(mw.SessionKey).(*auth.Session)
+		userID := r.PathValue("user_id")
+		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
+			responses.Forbidden(w, r, "You do not have permission to view this user's settings")
+			return
+		}
+		settings, err := service.GetAccountSettings(userID)
+		if err != nil {
+			responses.InternalServerError(w, r, "Failed to get account settings")
+			return
+		}
+		responses.StructOK(w, r, settings)
+	}
+}
+
+// UpdateAccountSettingsRequest - Body for UpdateAccountSettingsHandler. Each
+// field is a pointer so a PATCH can update one setting without touching the
+// others - a nil field means "leave this alone," the usual PATCH contract
+// once there's more than one setting to change independently.
+type UpdateAccountSettingsRequest struct {
+	PasswordAuthEnabled *bool `json:"password_auth" xml:"password_auth"`
+}
+
+// UpdateAccountSettingsHandler - Update a user's account settings
+func UpdateAccountSettingsHandler(service auth.UserService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		session := r.Context().Value(mw.SessionKey).(*auth.Session)
+		userID := r.PathValue("user_id")
+		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
+			responses.Forbidden(w, r, "You do not have permission to update this user's settings")
+			return
+		}
+		var body UpdateAccountSettingsRequest
+		if err := responses.DecodeStruct(r, &body); err != nil || body.PasswordAuthEnabled == nil {
+			responses.BadRequest(w, r, "Invalid request body")
+			return
+		}
+
+		err := service.SetPasswordAuthEnabled(userID, *body.PasswordAuthEnabled)
+		switch {
+		case err == nil:
+			responses.NoContent(w, r)
+		case errors.Is(err, auth.ErrWouldLockAccount):
+			responses.BadRequest(w, r, "Link and enable another login method before disabling your password")
+		case errors.Is(err, auth.ErrNoPasswordSet):
+			responses.BadRequest(w, r, "Set a password before enabling password login")
+		default:
+			responses.InternalServerError(w, r, "Failed to update user settings")
+		}
+	}
+}

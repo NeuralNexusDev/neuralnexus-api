@@ -207,11 +207,12 @@ func TestStoreAddAccountToDBDuplicateUsernameTranslatesToSentinel(t *testing.T) 
 	}
 }
 
-// setupLinkAccountStore returns both stores backed by the same live
-// Postgres connection, with accounts and linked_accounts created fresh -
-// DeleteLinkedAccount/SetLinkedAccountLoginEnabled's guard queries join
-// across both tables, so testing them needs both to exist together.
-func setupLinkAccountStore(t *testing.T) (AccountStore, LinkAccountStore) {
+// setupLinkAccountStore returns all three stores backed by the same live
+// Postgres connection, with accounts, linked_accounts, and account_settings
+// created fresh - DeleteLinkedAccount/SetLinkedAccountLoginEnabled/
+// SetPasswordAuthEnabled's guard queries join across all three tables, so
+// testing them needs all three to exist together.
+func setupLinkAccountStore(t *testing.T) (AccountStore, LinkAccountStore, AccountSettingsStore) {
 	t.Helper()
 
 	pgURL := os.Getenv("TEST_POSTGRES_URL")
@@ -257,15 +258,26 @@ func setupLinkAccountStore(t *testing.T) (AccountStore, LinkAccountStore) {
 	if err != nil {
 		t.Fatalf("failed to create linked_accounts table: %v", err)
 	}
+	_, err = db.Exec(context.Background(), `
+		CREATE TABLE IF NOT EXISTS account_settings (
+			user_id BIGINT PRIMARY KEY NOT NULL REFERENCES accounts(user_id),
+			password_auth BOOLEAN NOT NULL DEFAULT true,
+			updated_at timestamp with time zone default current_timestamp
+		)
+	`)
+	if err != nil {
+		t.Fatalf("failed to create account_settings table: %v", err)
+	}
 
 	t.Cleanup(func() {
+		db.Exec(context.Background(), "DELETE FROM account_settings WHERE user_id BETWEEN 900000000000000000 AND 900000000000009999")
 		db.Exec(context.Background(), "DELETE FROM linked_accounts WHERE user_id BETWEEN 900000000000000000 AND 900000000000009999")
 		db.Exec(context.Background(), "DELETE FROM accounts WHERE user_id BETWEEN 900000000000000000 AND 900000000000009999")
 		db.Close()
 	})
 
 	s := NewStore(db, nil)
-	return s.Account(), s.LinkAccount()
+	return s.Account(), s.LinkAccount(), s.AccountSettings()
 }
 
 // seedTestAccount inserts a bare account (no password) for the guard tests
@@ -300,7 +312,7 @@ func seedTestLink(t *testing.T, las LinkAccountStore, userID string, platform Pl
 // passwordless account with exactly one verified, login-enabled link must
 // not be able to delete it - the row must still exist afterward.
 func TestStoreDeleteLinkedAccountBlockedAsLastLoginMethod(t *testing.T) {
-	as, las := setupLinkAccountStore(t)
+	as, las, _ := setupLinkAccountStore(t)
 	seedTestAccount(t, as, "900000000000000100")
 	seedTestLink(t, las, "900000000000000100", PlatformDiscord, "storetest-discord-100", true, true)
 
@@ -317,7 +329,7 @@ func TestStoreDeleteLinkedAccountBlockedAsLastLoginMethod(t *testing.T) {
 // of the guard: an account WITH a password can delete its only linked
 // platform, since the password remains a usable login method.
 func TestStoreDeleteLinkedAccountAllowedWithPassword(t *testing.T) {
-	as, las := setupLinkAccountStore(t)
+	as, las, _ := setupLinkAccountStore(t)
 	a := &Account{UserID: "900000000000000101", Username: "storetest-101"}
 	if err := a.HashPassword("storetest-password"); err != nil {
 		t.Fatalf("HashPassword returned error: %v", err)
@@ -340,7 +352,7 @@ func TestStoreDeleteLinkedAccountAllowedWithPassword(t *testing.T) {
 // verified, login-enabled one remains - and that the other one is left
 // completely untouched.
 func TestStoreDeleteLinkedAccountAllowedWithAnotherEnabledLink(t *testing.T) {
-	as, las := setupLinkAccountStore(t)
+	as, las, _ := setupLinkAccountStore(t)
 	seedTestAccount(t, as, "900000000000000102")
 	seedTestLink(t, las, "900000000000000102", PlatformDiscord, "storetest-discord-102", true, true)
 	seedTestLink(t, las, "900000000000000102", PlatformTwitch, "storetest-twitch-102", true, true)
@@ -357,7 +369,7 @@ func TestStoreDeleteLinkedAccountAllowedWithAnotherEnabledLink(t *testing.T) {
 // was never linked returns ErrNotFound, not ErrWouldLockAccount - the two
 // are ambiguous from RowsAffected == 0 alone and must be told apart.
 func TestStoreDeleteLinkedAccountNotFound(t *testing.T) {
-	as, las := setupLinkAccountStore(t)
+	as, las, _ := setupLinkAccountStore(t)
 	seedTestAccount(t, as, "900000000000000103")
 
 	err := las.DeleteLinkedAccount("900000000000000103", PlatformDiscord)
@@ -371,7 +383,7 @@ func TestStoreDeleteLinkedAccountNotFound(t *testing.T) {
 // a second linked platform that's already disabled for login doesn't count
 // as a usable fallback, so deleting the last enabled one must still block.
 func TestStoreDeleteLinkedAccountIgnoresDisabledOtherLink(t *testing.T) {
-	as, las := setupLinkAccountStore(t)
+	as, las, _ := setupLinkAccountStore(t)
 	seedTestAccount(t, as, "900000000000000104")
 	seedTestLink(t, las, "900000000000000104", PlatformDiscord, "storetest-discord-104", true, true)
 	seedTestLink(t, las, "900000000000000104", PlatformTwitch, "storetest-twitch-104", true, false)
@@ -385,7 +397,7 @@ func TestStoreDeleteLinkedAccountIgnoresDisabledOtherLink(t *testing.T) {
 // TestStoreSetLinkedAccountLoginEnabledBlockedAsLastLoginMethod mirrors the
 // delete guard test for the disable-login toggle.
 func TestStoreSetLinkedAccountLoginEnabledBlockedAsLastLoginMethod(t *testing.T) {
-	as, las := setupLinkAccountStore(t)
+	as, las, _ := setupLinkAccountStore(t)
 	seedTestAccount(t, as, "900000000000000105")
 	seedTestLink(t, las, "900000000000000105", PlatformDiscord, "storetest-discord-105", true, true)
 
@@ -405,7 +417,7 @@ func TestStoreSetLinkedAccountLoginEnabledBlockedAsLastLoginMethod(t *testing.T)
 // TestStoreSetLinkedAccountLoginEnabledAllowedWithAnotherEnabledLink mirrors
 // the delete guard's "another usable method remains" success case.
 func TestStoreSetLinkedAccountLoginEnabledAllowedWithAnotherEnabledLink(t *testing.T) {
-	as, las := setupLinkAccountStore(t)
+	as, las, _ := setupLinkAccountStore(t)
 	seedTestAccount(t, as, "900000000000000106")
 	seedTestLink(t, las, "900000000000000106", PlatformDiscord, "storetest-discord-106", true, true)
 	seedTestLink(t, las, "900000000000000106", PlatformTwitch, "storetest-twitch-106", true, true)
@@ -428,7 +440,7 @@ func TestStoreSetLinkedAccountLoginEnabledAllowedWithAnotherEnabledLink(t *testi
 // make one login-eligible, in case a row ever reaches this table some other
 // way (e.g. a future soft-link feature, or a manual data fix).
 func TestStoreSetLinkedAccountLoginEnabledCannotEnableUnverified(t *testing.T) {
-	as, las := setupLinkAccountStore(t)
+	as, las, _ := setupLinkAccountStore(t)
 	seedTestAccount(t, as, "900000000000000107")
 	seedTestLink(t, las, "900000000000000107", PlatformDiscord, "storetest-discord-107", false, false)
 
@@ -441,7 +453,7 @@ func TestStoreSetLinkedAccountLoginEnabledCannotEnableUnverified(t *testing.T) {
 // TestStoreGetLinkedAccountsByUserID verifies it returns every platform
 // linked to a user, unlike GetLinkedAccountByUserID which takes one.
 func TestStoreGetLinkedAccountsByUserID(t *testing.T) {
-	as, las := setupLinkAccountStore(t)
+	as, las, _ := setupLinkAccountStore(t)
 	seedTestAccount(t, as, "900000000000000108")
 	seedTestLink(t, las, "900000000000000108", PlatformDiscord, "storetest-discord-108", true, true)
 	seedTestLink(t, las, "900000000000000108", PlatformTwitch, "storetest-twitch-108", true, true)
@@ -468,7 +480,7 @@ func TestStoreGetLinkedAccountsByUserID(t *testing.T) {
 // lockLinkedAccountsForUser was added. Run many trials, not one, since the
 // race is real but timing-dependent.
 func TestStoreDeleteLinkedAccountConcurrentDifferentPlatformsNeverBothSucceed(t *testing.T) {
-	as, las := setupLinkAccountStore(t)
+	as, las, _ := setupLinkAccountStore(t)
 
 	const trials = 50
 	for i := 0; i < trials; i++ {
@@ -513,7 +525,7 @@ func TestStoreDeleteLinkedAccountConcurrentDifferentPlatformsNeverBothSucceed(t 
 // mirrors the delete test above for the disable-login toggle, which shares
 // the same guard and the same fix.
 func TestStoreSetLinkedAccountLoginEnabledConcurrentDifferentPlatformsNeverBothSucceed(t *testing.T) {
-	as, las := setupLinkAccountStore(t)
+	as, las, _ := setupLinkAccountStore(t)
 
 	const trials = 50
 	for i := 0; i < trials; i++ {
@@ -556,6 +568,287 @@ func TestStoreSetLinkedAccountLoginEnabledConcurrentDifferentPlatformsNeverBothS
 		}
 		if enabledCount != 1 {
 			t.Fatalf("trial %d: expected exactly 1 login-enabled link to remain (never 0), got %d", i, enabledCount)
+		}
+	}
+}
+
+// -------------- AccountSettings / password auth toggle --------------
+
+// TestStoreGetAccountSettingsDefaultsWhenNoRow verifies the lazy-row design:
+// an account with no account_settings row yet must behave as if password
+// auth were enabled, not error or read as disabled.
+func TestStoreGetAccountSettingsDefaultsWhenNoRow(t *testing.T) {
+	as, _, ass := setupLinkAccountStore(t)
+	seedTestAccount(t, as, "900000000000000115")
+
+	settings, err := ass.GetAccountSettings("900000000000000115")
+	if err != nil {
+		t.Fatalf("GetAccountSettings returned error: %v", err)
+	}
+	if !settings.PasswordAuthEnabled {
+		t.Error("expected password auth to default to enabled with no account_settings row")
+	}
+}
+
+// TestStoreSetPasswordAuthEnabledDisableBlockedAsLastLoginMethod verifies
+// SetPasswordAuthEnabled shares the same guard as unlinking/disabling a
+// platform: an account with a password and no linked platform can't disable
+// that password, since it would leave no usable login method at all.
+func TestStoreSetPasswordAuthEnabledDisableBlockedAsLastLoginMethod(t *testing.T) {
+	as, _, ass := setupLinkAccountStore(t)
+	a := &Account{UserID: "900000000000000111", Username: "storetest-111"}
+	if err := a.HashPassword("storetest-password"); err != nil {
+		t.Fatalf("HashPassword returned error: %v", err)
+	}
+	if err := as.AddAccountToDB(a); err != nil {
+		t.Fatalf("failed to seed passworded account: %v", err)
+	}
+
+	err := ass.SetPasswordAuthEnabled(a.UserID, false)
+	if !errors.Is(err, ErrWouldLockAccount) {
+		t.Fatalf("expected ErrWouldLockAccount for an account with no linked platform, got: %v", err)
+	}
+	settings, err := ass.GetAccountSettings(a.UserID)
+	if err != nil {
+		t.Fatalf("GetAccountSettings returned error: %v", err)
+	}
+	if !settings.PasswordAuthEnabled {
+		t.Error("expected password auth to remain enabled after a blocked disable")
+	}
+}
+
+// TestStoreSetPasswordAuthEnabledDisableAllowedWithLinkedAccount verifies the
+// other half: disabling password auth succeeds once a verified,
+// login-enabled linked platform exists as the fallback.
+func TestStoreSetPasswordAuthEnabledDisableAllowedWithLinkedAccount(t *testing.T) {
+	as, las, ass := setupLinkAccountStore(t)
+	a := &Account{UserID: "900000000000000112", Username: "storetest-112"}
+	if err := a.HashPassword("storetest-password"); err != nil {
+		t.Fatalf("HashPassword returned error: %v", err)
+	}
+	if err := as.AddAccountToDB(a); err != nil {
+		t.Fatalf("failed to seed passworded account: %v", err)
+	}
+	seedTestLink(t, las, a.UserID, PlatformDiscord, "storetest-discord-112", true, true)
+
+	if err := ass.SetPasswordAuthEnabled(a.UserID, false); err != nil {
+		t.Fatalf("expected the disable to succeed, got: %v", err)
+	}
+	settings, err := ass.GetAccountSettings(a.UserID)
+	if err != nil {
+		t.Fatalf("GetAccountSettings returned error: %v", err)
+	}
+	if settings.PasswordAuthEnabled {
+		t.Error("expected password auth to be disabled")
+	}
+}
+
+// TestStoreSetPasswordAuthEnabledEnableBlockedWithNoPassword verifies
+// enabling password auth is refused when the account has no hashed_secret
+// to enable in the first place.
+func TestStoreSetPasswordAuthEnabledEnableBlockedWithNoPassword(t *testing.T) {
+	as, _, ass := setupLinkAccountStore(t)
+	seedTestAccount(t, as, "900000000000000113")
+
+	err := ass.SetPasswordAuthEnabled("900000000000000113", true)
+	if !errors.Is(err, ErrNoPasswordSet) {
+		t.Fatalf("expected ErrNoPasswordSet for an account with no password, got: %v", err)
+	}
+}
+
+// TestStoreSetPasswordAuthEnabledEnableAllowedWithPassword round-trips a
+// disable followed by a re-enable, both of which must succeed for an
+// account that has both a password and a linked fallback.
+func TestStoreSetPasswordAuthEnabledEnableAllowedWithPassword(t *testing.T) {
+	as, las, ass := setupLinkAccountStore(t)
+	a := &Account{UserID: "900000000000000114", Username: "storetest-114"}
+	if err := a.HashPassword("storetest-password"); err != nil {
+		t.Fatalf("HashPassword returned error: %v", err)
+	}
+	if err := as.AddAccountToDB(a); err != nil {
+		t.Fatalf("failed to seed passworded account: %v", err)
+	}
+	seedTestLink(t, las, a.UserID, PlatformDiscord, "storetest-discord-114", true, true)
+
+	if err := ass.SetPasswordAuthEnabled(a.UserID, false); err != nil {
+		t.Fatalf("expected the disable to succeed, got: %v", err)
+	}
+	if err := ass.SetPasswordAuthEnabled(a.UserID, true); err != nil {
+		t.Fatalf("expected the re-enable to succeed, got: %v", err)
+	}
+	settings, err := ass.GetAccountSettings(a.UserID)
+	if err != nil {
+		t.Fatalf("GetAccountSettings returned error: %v", err)
+	}
+	if !settings.PasswordAuthEnabled {
+		t.Error("expected password auth to be re-enabled")
+	}
+}
+
+// TestStoreDeleteLinkedAccountBlockedWhenPasswordAuthDisabled verifies the
+// updated DeleteLinkedAccount guard: a non-null hashed_secret alone is no
+// longer enough once password_auth has been explicitly turned off -
+// the account's only remaining linked platform must not be removable.
+func TestStoreDeleteLinkedAccountBlockedWhenPasswordAuthDisabled(t *testing.T) {
+	as, las, ass := setupLinkAccountStore(t)
+	a := &Account{UserID: "900000000000000109", Username: "storetest-109"}
+	if err := a.HashPassword("storetest-password"); err != nil {
+		t.Fatalf("HashPassword returned error: %v", err)
+	}
+	if err := as.AddAccountToDB(a); err != nil {
+		t.Fatalf("failed to seed passworded account: %v", err)
+	}
+	seedTestLink(t, las, a.UserID, PlatformDiscord, "storetest-discord-109", true, true)
+
+	if err := ass.SetPasswordAuthEnabled(a.UserID, false); err != nil {
+		t.Fatalf("expected disabling password auth to succeed with a linked account present, got: %v", err)
+	}
+
+	err := las.DeleteLinkedAccount(a.UserID, PlatformDiscord)
+	if !errors.Is(err, ErrWouldLockAccount) {
+		t.Fatalf("expected ErrWouldLockAccount once password auth is disabled and this is the only link, got: %v", err)
+	}
+}
+
+// TestStoreSetLinkedAccountLoginEnabledBlockedWhenPasswordAuthDisabled mirrors
+// the delete case above for the disable-login toggle.
+func TestStoreSetLinkedAccountLoginEnabledBlockedWhenPasswordAuthDisabled(t *testing.T) {
+	as, las, ass := setupLinkAccountStore(t)
+	a := &Account{UserID: "900000000000000110", Username: "storetest-110"}
+	if err := a.HashPassword("storetest-password"); err != nil {
+		t.Fatalf("HashPassword returned error: %v", err)
+	}
+	if err := as.AddAccountToDB(a); err != nil {
+		t.Fatalf("failed to seed passworded account: %v", err)
+	}
+	seedTestLink(t, las, a.UserID, PlatformDiscord, "storetest-discord-110", true, true)
+
+	if err := ass.SetPasswordAuthEnabled(a.UserID, false); err != nil {
+		t.Fatalf("expected disabling password auth to succeed, got: %v", err)
+	}
+
+	err := las.SetLinkedAccountLoginEnabled(a.UserID, PlatformDiscord, false)
+	if !errors.Is(err, ErrWouldLockAccount) {
+		t.Fatalf("expected ErrWouldLockAccount once password auth is disabled and this is the only enabled link, got: %v", err)
+	}
+}
+
+// TestStoreSetPasswordAuthEnabledConcurrentWithDeleteLinkedAccountNeverBothSucceed
+// is the cross-guard version of the write-skew regression tests above:
+// SetPasswordAuthEnabled(false) and DeleteLinkedAccount race against the SAME
+// underlying invariant from two different entry points. Both share the
+// pg_advisory_xact_lock(27745, hashtext(userID)) lock, so exactly one must
+// win - if both won, the account would end up with neither a working
+// password nor a linked platform.
+func TestStoreSetPasswordAuthEnabledConcurrentWithDeleteLinkedAccountNeverBothSucceed(t *testing.T) {
+	as, las, ass := setupLinkAccountStore(t)
+
+	const trials = 50
+	for i := 0; i < trials; i++ {
+		userID := fmt.Sprintf("90000000000000%04d", 3000+i)
+		a := &Account{UserID: userID, Username: "storetest-" + userID}
+		if err := a.HashPassword("storetest-password"); err != nil {
+			t.Fatalf("trial %d: HashPassword returned error: %v", i, err)
+		}
+		if err := as.AddAccountToDB(a); err != nil {
+			t.Fatalf("trial %d: failed to seed passworded account: %v", i, err)
+		}
+		seedTestLink(t, las, userID, PlatformDiscord, "storetest-discord-"+userID, true, true)
+
+		var wg sync.WaitGroup
+		results := make([]error, 2)
+		wg.Add(2)
+		go func() { defer wg.Done(); results[0] = ass.SetPasswordAuthEnabled(userID, false) }()
+		go func() { defer wg.Done(); results[1] = las.DeleteLinkedAccount(userID, PlatformDiscord) }()
+		wg.Wait()
+
+		successes := 0
+		for _, err := range results {
+			switch {
+			case err == nil:
+				successes++
+			case errors.Is(err, ErrWouldLockAccount):
+				// expected for the loser
+			default:
+				t.Fatalf("trial %d: unexpected error: %v", i, err)
+			}
+		}
+		if successes != 1 {
+			t.Fatalf("trial %d: expected exactly 1 of 2 concurrent operations to succeed, got %d (results: %v)", i, successes, results)
+		}
+
+		settings, err := ass.GetAccountSettings(userID)
+		if err != nil {
+			t.Fatalf("trial %d: GetAccountSettings returned error: %v", i, err)
+		}
+		links, err := las.GetLinkedAccountsByUserID(userID)
+		if err != nil {
+			t.Fatalf("trial %d: GetLinkedAccountsByUserID returned error: %v", i, err)
+		}
+		if !settings.PasswordAuthEnabled && len(links) == 0 {
+			t.Fatalf("trial %d: account left with NO usable login method (password disabled and link gone)", i)
+		}
+	}
+}
+
+// TestStoreSetPasswordAuthEnabledConcurrentWithSetLinkedAccountLoginEnabledNeverBothSucceed
+// mirrors the DeleteLinkedAccount cross-guard test above for the OTHER
+// disable entry point: SetPasswordAuthEnabled(false) and
+// SetLinkedAccountLoginEnabled(platform, false) race to disable the two
+// halves of the same account's last-usable-login-method pair. Both share
+// the pg_advisory_xact_lock(27745, hashtext(userID)) lock, so exactly one
+// must win - if both won, the account would end up with neither a working
+// password nor an enabled linked platform.
+func TestStoreSetPasswordAuthEnabledConcurrentWithSetLinkedAccountLoginEnabledNeverBothSucceed(t *testing.T) {
+	as, las, ass := setupLinkAccountStore(t)
+
+	const trials = 50
+	for i := 0; i < trials; i++ {
+		userID := fmt.Sprintf("90000000000000%04d", 4000+i)
+		a := &Account{UserID: userID, Username: "storetest-" + userID}
+		if err := a.HashPassword("storetest-password"); err != nil {
+			t.Fatalf("trial %d: HashPassword returned error: %v", i, err)
+		}
+		if err := as.AddAccountToDB(a); err != nil {
+			t.Fatalf("trial %d: failed to seed passworded account: %v", i, err)
+		}
+		seedTestLink(t, las, userID, PlatformDiscord, "storetest-discord-"+userID, true, true)
+
+		var wg sync.WaitGroup
+		results := make([]error, 2)
+		wg.Add(2)
+		go func() { defer wg.Done(); results[0] = ass.SetPasswordAuthEnabled(userID, false) }()
+		go func() {
+			defer wg.Done()
+			results[1] = las.SetLinkedAccountLoginEnabled(userID, PlatformDiscord, false)
+		}()
+		wg.Wait()
+
+		successes := 0
+		for _, err := range results {
+			switch {
+			case err == nil:
+				successes++
+			case errors.Is(err, ErrWouldLockAccount):
+				// expected for the loser
+			default:
+				t.Fatalf("trial %d: unexpected error: %v", i, err)
+			}
+		}
+		if successes != 1 {
+			t.Fatalf("trial %d: expected exactly 1 of 2 concurrent operations to succeed, got %d (results: %v)", i, successes, results)
+		}
+
+		settings, err := ass.GetAccountSettings(userID)
+		if err != nil {
+			t.Fatalf("trial %d: GetAccountSettings returned error: %v", i, err)
+		}
+		link, err := las.GetLinkedAccountByUserID(userID, PlatformDiscord)
+		if err != nil {
+			t.Fatalf("trial %d: GetLinkedAccountByUserID returned error: %v", i, err)
+		}
+		if !settings.PasswordAuthEnabled && !link.LoginEnabled {
+			t.Fatalf("trial %d: account left with NO usable login method (password disabled and link login-disabled)", i)
 		}
 	}
 }

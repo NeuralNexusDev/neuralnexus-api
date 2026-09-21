@@ -20,17 +20,20 @@ type UserService interface {
 	GetUserLinkedAccounts(userID string) ([]*LinkedAccount, error)
 	UnlinkPlatform(userID string, platform Platform) error
 	SetPlatformLoginEnabled(userID string, platform Platform, enabled bool) error
+	GetAccountSettings(userID string) (*AccountSettings, error)
+	SetPasswordAuthEnabled(userID string, enabled bool) error
 }
 
 // userService - The userService struct
 type userService struct {
 	as  AccountStore
 	als LinkAccountStore
+	ass AccountSettingsStore
 }
 
 // NewUserService - Create a new userService
 func NewUserService(store Store) UserService {
-	return &userService{store.Account(), store.LinkAccount()}
+	return &userService{store.Account(), store.LinkAccount(), store.AccountSettings()}
 }
 
 // GetUser - Get a user by their ID
@@ -158,4 +161,14 @@ func (s *userService) UnlinkPlatform(userID string, platform Platform) error {
 // SetPlatformLoginEnabled - Toggle whether a linked platform can log in
 func (s *userService) SetPlatformLoginEnabled(userID string, platform Platform, enabled bool) error {
 	return s.als.SetLinkedAccountLoginEnabled(userID, platform, enabled)
+}
+
+// GetAccountSettings - Get a user's account settings
+func (s *userService) GetAccountSettings(userID string) (*AccountSettings, error) {
+	return s.ass.GetAccountSettings(userID)
+}
+
+// SetPasswordAuthEnabled - Toggle whether a user's password can log in
+func (s *userService) SetPasswordAuthEnabled(userID string, enabled bool) error {
+	return s.ass.SetPasswordAuthEnabled(userID, enabled)
 }

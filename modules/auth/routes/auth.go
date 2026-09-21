@@ -49,6 +49,17 @@ func LoginHandler(as auth.AccountService, ss auth.SessionService) http.HandlerFu
 			return
 		}
 
+		enabled, err := as.IsPasswordAuthEnabled(account.UserID)
+		if err != nil {
+			log.Println("Failed to check password auth setting:\n\t", err)
+			responses.InternalServerError(w, r, "Authentication failed")
+			return
+		}
+		if !enabled {
+			responses.BadRequest(w, r, "Invalid username or password")
+			return
+		}
+
 		session, err := account.NewSession(time.Now().Add(time.Hour * 24).Unix())
 		if err != nil {
 			log.Println("Failed to create session:\n\t", err)

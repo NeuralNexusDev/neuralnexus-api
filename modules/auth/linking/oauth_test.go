@@ -86,6 +86,10 @@ func (m *mockAccountService) UpdateAccount(a *auth.Account) error {
 	return nil
 }
 
+func (m *mockAccountService) IsPasswordAuthEnabled(string) (bool, error) {
+	return true, nil
+}
+
 func (m *mockAccountService) DeleteAccount(userID string) error {
 	if m.deleteErr != nil {
 		return m.deleteErr
@@ -198,6 +202,10 @@ func (m *concurrentAccountService) DeleteAccount(userID string) error {
 	delete(m.accounts, userID)
 	m.deleted = append(m.deleted, userID)
 	return nil
+}
+
+func (m *concurrentAccountService) IsPasswordAuthEnabled(string) (bool, error) {
+	return true, nil
 }
 
 func (m *concurrentAccountService) remaining() int {

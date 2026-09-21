@@ -19,4 +19,4 @@ jobs:
           go-version-file: go.mod
 
       - name: Run test suite
-        run: make test-integration
+        run: make test

@@ -145,6 +145,22 @@ func (user *Account) RemoveRole(role string) {
 	}
 }
 
+// -------------- Account Settings --------------
+
+// AccountSettings holds account-level toggles that live outside the
+// accounts table itself.
+type AccountSettings struct {
+	UserID              string    `db:"user_id" json:"user_id" xml:"user_id"`
+	PasswordAuthEnabled bool      `db:"password_auth" json:"password_auth" xml:"password_auth"`
+	UpdatedAt           time.Time `db:"updated_at" json:"updated_at" xml:"updated_at"`
+}
+
+// DefaultAccountSettings is what userID's settings are before its first
+// account_settings row is ever created.
+func DefaultAccountSettings(userID string) *AccountSettings {
+	return &AccountSettings{UserID: userID, PasswordAuthEnabled: true}
+}
+
 // -------------- Session --------------
 
 // NewSession creates a new session
