@@ -130,6 +130,23 @@ func TestVerifySteamOpenIDCallbackRejectedByServer(t *testing.T) {
 	}
 }
 
+// TestVerifySteamOpenIDCallbackSubstringFalsePositiveRejected is the
+// regression test for parsing is_valid as an exact key/value line rather
+// than substring-matching the whole body: a body whose actual is_valid line
+// says false, but which happens to also contain the literal text
+// "is_valid:true" elsewhere (e.g. echoed back inside another field's
+// value), must still be rejected.
+func TestVerifySteamOpenIDCallbackSubstringFalsePositiveRejected(t *testing.T) {
+	withServer(t, &steamOpenIDLoginURL, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("ns:http://specs.openid.net/auth/2.0\nresponse_nonce:is_valid:true-lookalike\nis_valid:false\n"))
+	})
+
+	err := requireVerifyError(t, newValidSteamCallbackQuery())
+	if !errors.Is(err, ErrInvalidAssertion) {
+		t.Errorf("expected ErrInvalidAssertion despite the lookalike substring, got: %v", err)
+	}
+}
+
 // TestVerifySteamOpenIDCallbackNonOKStatus is the regression test for the
 // error-category split: a Steam-side outage/error must NOT be
 // ErrInvalidAssertion, so callers map it to a 5xx (their fault, not the

@@ -126,11 +126,24 @@ func VerifySteamOpenIDCallback(query url.Values) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if !strings.Contains(string(body), "is_valid:true") {
+	if !responseIsValid(body) {
 		return "", fmt.Errorf("%w: steam rejected the openid assertion", ErrInvalidAssertion)
 	}
 
 	return steamID64, nil
+}
+
+// responseIsValid reports whether Steam's check_authentication response
+// body has an is_valid key/value line equal to "true", parsing it exactly
+// rather than substring-matching the whole body.
+func responseIsValid(body []byte) bool {
+	for _, line := range strings.Split(string(body), "\n") {
+		key, value, found := strings.Cut(strings.TrimSpace(line), ":")
+		if found && key == "is_valid" && value == "true" {
+			return true
+		}
+	}
+	return false
 }
 
 // GetSteamUser fetches the caller's public profile via the Steam Web API,
