@@ -2288,7 +2288,7 @@
                     },
                     "verified": {
                         "type": "boolean",
-                        "description": "Whether this link was established through a real, cryptographically-proven OAuth flow."
+                        "description": "Whether this link was established through a real, cryptographically-proven OAuth or OpenID flow."
                     },
                     "login_enabled": {
                         "type": "boolean",
