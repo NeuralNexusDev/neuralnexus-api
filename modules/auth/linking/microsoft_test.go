@@ -184,7 +184,8 @@ func TestXstsAuthorizeMissingClaims(t *testing.T) {
 // so every real Xbox/Minecraft login started failing with "xsts
 // authorization response missing uhs, xid, or gtg in DisplayClaims".
 // xstsAuthorize itself must accept a uhs-only response; requiring xid/gtg
-// is authenticateXboxLive's job, and only for the Xbox Live relying party.
+// is authenticateXboxLiveIdentity's job, and only for the Xbox Live relying
+// party.
 func TestXstsAuthorizeMinecraftRelyingPartyUhsOnlySucceeds(t *testing.T) {
 	withServer(t, &xstsAuthorizeURL, func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
@@ -204,20 +205,13 @@ func TestXstsAuthorizeMinecraftRelyingPartyUhsOnlySucceeds(t *testing.T) {
 	}
 }
 
-// TestAuthenticateXboxLiveMissingXidOrGtgFromXboxLiveRelyingPartyRejected
-// pins the other half of the split: xid/gtg missing from the Xbox Live
-// relying party's response (as opposed to the Minecraft one, which never
-// has them) is still a real error - it means an XboxLiveData{XUID: "",
+// TestAuthenticateXboxLiveIdentityMissingXidOrGtgRejected pins the other
+// half of the split: xid/gtg missing from the Xbox Live relying party's
+// response is still a real error - it means an XboxLiveData{XUID: "",
 // Gamertag: ""} would otherwise resolve to whatever other account already
 // holds that (platform, platform_id) under the UNIQUE constraint.
-func TestAuthenticateXboxLiveMissingXidOrGtgFromXboxLiveRelyingPartyRejected(t *testing.T) {
-	withServer(t, &xboxLiveAuthenticateURL, func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(xblAuthResponse{Token: "xbl-token"})
-	})
+func TestAuthenticateXboxLiveIdentityMissingXidOrGtgRejected(t *testing.T) {
 	withServer(t, &xstsAuthorizeURL, func(w http.ResponseWriter, r *http.Request) {
-		// Every call - Minecraft-scoped or Xbox Live-scoped - gets a
-		// uhs-only response, which is what a real Xbox Live-scoped miss
-		// looks like; the Minecraft-scoped call is fine with that.
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"Token": "xsts-token",
 			"DisplayClaims": map[string]interface{}{
@@ -226,7 +220,7 @@ func TestAuthenticateXboxLiveMissingXidOrGtgFromXboxLiveRelyingPartyRejected(t *
 		})
 	})
 
-	_, _, _, err := authenticateXboxLive("ms-access-token")
+	_, err := authenticateXboxLiveIdentity("xbl-token")
 	if err == nil {
 		t.Fatal("expected an error when the Xbox Live relying party's response is missing xid/gtg")
 	}
@@ -452,6 +446,61 @@ func TestGetXboxAndMinecraftUserBedrockOnly(t *testing.T) {
 	}
 }
 
+// TestGetXboxAndMinecraftUserCompletesMinecraftChainBeforeXboxLiveIdentity
+// pins the fix for a second prod incident: requesting the Xbox Live-scoped
+// XSTS token before minecraftLoginWithXbox consumed the Minecraft-scoped one
+// started causing login_with_xbox to fail with 403s. The Minecraft chain
+// (XSTS -> login -> profile) must fully complete before the Xbox Live
+// identity is ever requested.
+func TestGetXboxAndMinecraftUserCompletesMinecraftChainBeforeXboxLiveIdentity(t *testing.T) {
+	var events []string
+	withServer(t, &xboxLiveAuthenticateURL, func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(xblAuthResponse{Token: "xbl-token"})
+	})
+	withServer(t, &xstsAuthorizeURL, func(w http.ResponseWriter, r *http.Request) {
+		var reqBody xstsAuthRequest
+		_ = json.NewDecoder(r.Body).Decode(&reqBody)
+		xui := map[string]string{"uhs": "uhs-1"}
+		if reqBody.RelyingParty == xstsXboxLiveRelyingParty {
+			events = append(events, "xsts:xboxlive")
+			xui["xid"] = "9999"
+			xui["gtg"] = "TestGamer"
+		} else {
+			events = append(events, "xsts:minecraft")
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"Token": "xsts-token",
+			"DisplayClaims": map[string]interface{}{
+				"xui": []map[string]string{xui},
+			},
+		})
+	})
+	withServer(t, &minecraftLoginURL, func(w http.ResponseWriter, r *http.Request) {
+		events = append(events, "login_with_xbox")
+		_ = json.NewEncoder(w).Encode(mcLoginWithXboxResponse{AccessToken: "mc-token"})
+	})
+	withServer(t, &minecraftProfileURL, func(w http.ResponseWriter, r *http.Request) {
+		events = append(events, "profile")
+		w.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "NOT_FOUND"})
+	})
+
+	if _, _, err := GetXboxAndMinecraftUser(&auth.OAuthToken{AccessToken: "ms-token"}); err != nil {
+		t.Fatalf("GetXboxAndMinecraftUser returned error: %v", err)
+	}
+
+	want := []string{"xsts:minecraft", "login_with_xbox", "profile", "xsts:xboxlive"}
+	if len(events) != len(want) {
+		t.Fatalf("unexpected event sequence: got %v, want %v", events, want)
+	}
+	for i := range want {
+		if events[i] != want[i] {
+			t.Errorf("unexpected event sequence: got %v, want %v", events, want)
+			break
+		}
+	}
+}
+
 // -------------- GetXboxUser (Xbox-only, no Minecraft Services calls) --------------
 
 // TestGetXboxUserNeverTouchesMinecraftServices is the core regression test
@@ -463,7 +512,11 @@ func TestGetXboxUserNeverTouchesMinecraftServices(t *testing.T) {
 	withServer(t, &xboxLiveAuthenticateURL, func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(xblAuthResponse{Token: "xbl-token"})
 	})
+	var gotRelyingParties []string
 	withServer(t, &xstsAuthorizeURL, func(w http.ResponseWriter, r *http.Request) {
+		var reqBody xstsAuthRequest
+		_ = json.NewDecoder(r.Body).Decode(&reqBody)
+		gotRelyingParties = append(gotRelyingParties, reqBody.RelyingParty)
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"Token": "xsts-token",
 			"DisplayClaims": map[string]interface{}{
@@ -490,6 +543,9 @@ func TestGetXboxUserNeverTouchesMinecraftServices(t *testing.T) {
 	}
 	if minecraftServicesCalled {
 		t.Error("GetXboxUser must never call Minecraft Services")
+	}
+	if len(gotRelyingParties) != 1 || gotRelyingParties[0] != xstsXboxLiveRelyingParty {
+		t.Errorf("expected GetXboxUser to request only the Xbox Live relying party, got: %v", gotRelyingParties)
 	}
 }
 
