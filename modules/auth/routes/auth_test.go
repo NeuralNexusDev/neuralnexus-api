@@ -615,6 +615,41 @@ func TestLoginHandlerNoCookieOnAddSessionError(t *testing.T) {
 	}
 }
 
+// TestLoginHandlerPersistsSessionBeforeCreatingJWT is the regression test for
+// matching OAuthHandler/OpenIDHandler's order: those persist the session
+// (inside Process*Login) before ever minting a JWT via
+// issueSessionAndRedirect, whereas LoginHandler used to create the JWT
+// first and persist the session after - harmless today since CreateJWT has
+// no store dependency, but inconsistent, and would silently paper over a
+// future CreateJWT that assumes the session already exists in the store.
+// TestLoginHandlerNoCookieOnAddSessionError can't tell the two orders apart
+// (both produce a 500 with no cookie either way), so this asserts directly
+// that CreateJWT is never reached once AddSession has already failed.
+func TestLoginHandlerPersistsSessionBeforeCreatingJWT(t *testing.T) {
+	account, err := auth.NewAccount("testuser", "test@example.com", "correct-password")
+	if err != nil {
+		t.Fatalf("failed to build test account: %v", err)
+	}
+	as := &mockAccountService{account: account}
+	createJWTCalled := false
+	ss := &mockSessionService{
+		createJWTFunc: func(*auth.Session) (string, error) {
+			createJWTCalled = true
+			return "test-jwt", nil
+		},
+		addSessionErr: errors.New("db exploded"),
+	}
+	body := `{"username":"testuser","password":"correct-password"}`
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	LoginHandler(as, ss)(w, r)
+
+	if createJWTCalled {
+		t.Error("expected CreateJWT to never be called once AddSession has already failed")
+	}
+}
+
 // TestLoginHandlerPaysHashCostOnUnknownAccount is the regression test for a
 // username/email enumeration timing side channel: a nonexistent account used
 // to fail instantly, while an existing account with a wrong password paid the
