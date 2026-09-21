@@ -498,7 +498,7 @@ func (s *store) DeleteLinkedAccount(userID string, platform Platform) error {
 	tag, err := tx.Exec(ctx, `DELETE FROM linked_accounts WHERE user_id = $1 AND platform = $2 AND (
 		EXISTS (
 			SELECT 1 FROM accounts WHERE user_id = $1 AND hashed_secret IS NOT NULL
-			AND COALESCE((SELECT password_auth_enabled FROM account_settings WHERE user_id = $1), true)
+			AND COALESCE((SELECT password_auth FROM account_settings WHERE user_id = $1), true)
 		)
 		OR EXISTS (SELECT 1 FROM linked_accounts WHERE user_id = $1 AND platform != $2 AND verified = true AND login_enabled = true)
 	)`, userID, platform)
@@ -544,7 +544,7 @@ func (s *store) SetLinkedAccountLoginEnabled(userID string, platform Platform, e
 		tag, err = tx.Exec(ctx, `UPDATE linked_accounts SET login_enabled = false, updated_at = current_timestamp WHERE user_id = $1 AND platform = $2 AND (
 			EXISTS (
 				SELECT 1 FROM accounts WHERE user_id = $1 AND hashed_secret IS NOT NULL
-				AND COALESCE((SELECT password_auth_enabled FROM account_settings WHERE user_id = $1), true)
+				AND COALESCE((SELECT password_auth FROM account_settings WHERE user_id = $1), true)
 			)
 			OR EXISTS (SELECT 1 FROM linked_accounts WHERE user_id = $1 AND platform != $2 AND verified = true AND login_enabled = true)
 		)`, userID, platform)
@@ -575,7 +575,7 @@ func (s *store) SetLinkedAccountLoginEnabled(userID string, platform Platform, e
 
 // CREATE TABLE account_settings (
 //   user_id BIGINT PRIMARY KEY NOT NULL REFERENCES accounts(user_id),
-//   password_auth_enabled BOOLEAN NOT NULL DEFAULT true,
+//   password_auth BOOLEAN NOT NULL DEFAULT true,
 //   updated_at timestamp with time zone default current_timestamp
 // );
 //
@@ -630,13 +630,13 @@ func (s *store) SetPasswordAuthEnabled(userID string, enabled bool) error {
 
 	var tag pgconn.CommandTag
 	if enabled {
-		tag, err = tx.Exec(ctx, `INSERT INTO account_settings (user_id, password_auth_enabled)
+		tag, err = tx.Exec(ctx, `INSERT INTO account_settings (user_id, password_auth)
 			SELECT $1, true WHERE EXISTS (SELECT 1 FROM accounts WHERE user_id = $1 AND hashed_secret IS NOT NULL)
-			ON CONFLICT (user_id) DO UPDATE SET password_auth_enabled = true, updated_at = current_timestamp`, userID)
+			ON CONFLICT (user_id) DO UPDATE SET password_auth = true, updated_at = current_timestamp`, userID)
 	} else {
-		tag, err = tx.Exec(ctx, `INSERT INTO account_settings (user_id, password_auth_enabled)
+		tag, err = tx.Exec(ctx, `INSERT INTO account_settings (user_id, password_auth)
 			SELECT $1, false WHERE EXISTS (SELECT 1 FROM linked_accounts WHERE user_id = $1 AND verified = true AND login_enabled = true)
-			ON CONFLICT (user_id) DO UPDATE SET password_auth_enabled = false, updated_at = current_timestamp`, userID)
+			ON CONFLICT (user_id) DO UPDATE SET password_auth = false, updated_at = current_timestamp`, userID)
 	}
 	if err != nil {
 		return err

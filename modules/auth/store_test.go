@@ -261,7 +261,7 @@ func setupLinkAccountStore(t *testing.T) (AccountStore, LinkAccountStore, Accoun
 	_, err = db.Exec(context.Background(), `
 		CREATE TABLE IF NOT EXISTS account_settings (
 			user_id BIGINT PRIMARY KEY NOT NULL REFERENCES accounts(user_id),
-			password_auth_enabled BOOLEAN NOT NULL DEFAULT true,
+			password_auth BOOLEAN NOT NULL DEFAULT true,
 			updated_at timestamp with time zone default current_timestamp
 		)
 	`)
@@ -687,7 +687,7 @@ func TestStoreSetPasswordAuthEnabledEnableAllowedWithPassword(t *testing.T) {
 
 // TestStoreDeleteLinkedAccountBlockedWhenPasswordAuthDisabled verifies the
 // updated DeleteLinkedAccount guard: a non-null hashed_secret alone is no
-// longer enough once password_auth_enabled has been explicitly turned off -
+// longer enough once password_auth has been explicitly turned off -
 // the account's only remaining linked platform must not be removable.
 func TestStoreDeleteLinkedAccountBlockedWhenPasswordAuthDisabled(t *testing.T) {
 	as, las, ass := setupLinkAccountStore(t)
