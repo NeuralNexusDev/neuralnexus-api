@@ -22,11 +22,6 @@ type Login struct {
 	Password string `json:"password" xml:"password" validate:"required"`
 }
 
-// ReturnedJWT struct for JWT session
-type ReturnedJWT struct {
-	Session string `json:"session" xml:"session"`
-}
-
 // LoginHandler handles the login route
 func LoginHandler(as auth.AccountService, ss auth.SessionService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -67,11 +62,10 @@ func LoginHandler(as auth.AccountService, ss auth.SessionService) http.HandlerFu
 			return
 		}
 
-		jwt, ok := createSessionJWTAndSetCookie(w, r, ss, session)
-		if !ok {
+		if _, ok := createSessionJWTAndSetCookie(w, r, ss, session); !ok {
 			return
 		}
-		responses.StructOK(w, r, ReturnedJWT{jwt})
+		responses.NoContent(w, r)
 	}
 }
 

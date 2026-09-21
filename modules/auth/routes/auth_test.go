@@ -500,11 +500,11 @@ func TestLogoutHandlerDoesNotClearCookieOnDeleteSessionError(t *testing.T) {
 
 // -------------- LoginHandler --------------
 
-// TestLoginHandlerSetsSessionCookie is the regression test for a gap
-// alongside the LogoutHandler fix above: LoginHandler returned the JWT in
-// the response body but never set the session cookie, unlike OAuthHandler,
-// leaving the browser frontend with no cookie after a plain username/
-// password login.
+// TestLoginHandlerSetsSessionCookie confirms LoginHandler sets the session
+// cookie on a successful login - the JWT is only ever handed to the client
+// via that HttpOnly cookie, never echoed back in the response body, which
+// would otherwise let page JS (or an XSS) read it straight out of the
+// response and defeat the point of HttpOnly.
 func TestLoginHandlerSetsSessionCookie(t *testing.T) {
 	account, err := auth.NewAccount("testuser", "test@example.com", "correct-password")
 	if err != nil {
@@ -520,8 +520,11 @@ func TestLoginHandlerSetsSessionCookie(t *testing.T) {
 
 	LoginHandler(as, ss)(w, r)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
+	}
+	if w.Body.Len() != 0 {
+		t.Errorf("expected an empty response body, got %q", w.Body.String())
 	}
 
 	var sessionCookie *http.Cookie
