@@ -60,6 +60,14 @@ var (
 	microsoftUserInfoURL    = "https://graph.microsoft.com/oidc/userinfo"
 )
 
+// XSTS relying parties. Xbox Live only ever puts xid/gtg in DisplayClaims
+// for the xboxLive one - an authorization scoped to the Minecraft relying
+// party legitimately gets uhs alone, so the two need separate XSTS calls.
+const (
+	xstsMinecraftRelyingParty = "rp://api.minecraftservices.com/"
+	xstsXboxLiveRelyingParty  = "http://xboxlive.com/"
+)
+
 // XErr codes returned by xsts.auth.xboxlive.com/xsts/authorize when the
 // Microsoft account can't be authorized against Xbox Live. Undocumented by
 // Microsoft, but well established from the Minecraft launcher community
@@ -281,16 +289,16 @@ type xstsAuthResponse struct {
 }
 
 // xstsAuthorize exchanges an XBL user token for an XSTS token scoped to
-// Minecraft Services, returning that token alongside the caller's Xbox Live
-// identity (XUID, gamertag, user hash) straight from the DisplayClaims - the
-// same response this pulls the Minecraft login credential from.
-func xstsAuthorize(xblToken string) (xstsToken, userHash, xuid, gamertag string, err error) {
+// relyingParty, returning that token alongside whatever DisplayClaims Xbox
+// Live includes for it. xuid/gamertag are only populated when relyingParty
+// is xstsXboxLiveRelyingParty - see the const doc comment above.
+func xstsAuthorize(xblToken, relyingParty string) (xstsToken, userHash, xuid, gamertag string, err error) {
 	reqBody := xstsAuthRequest{
 		Properties: xstsAuthProperties{
 			SandboxId:  "RETAIL",
 			UserTokens: []string{xblToken},
 		},
-		RelyingParty: "rp://api.minecraftservices.com/",
+		RelyingParty: relyingParty,
 		TokenType:    "JWT",
 	}
 	body, err := json.Marshal(reqBody)
@@ -332,8 +340,8 @@ func xstsAuthorize(xblToken string) (xstsToken, userHash, xuid, gamertag string,
 	}
 
 	claims := xstsResp.DisplayClaims.Xui[0]
-	if claims.Uhs == "" || claims.Xid == "" || claims.Gtg == "" {
-		return "", "", "", "", errors.New("xsts authorization response missing uhs, xid, or gtg in DisplayClaims")
+	if claims.Uhs == "" {
+		return "", "", "", "", errors.New("xsts authorization response missing uhs in DisplayClaims")
 	}
 	return xstsResp.Token, claims.Uhs, claims.Xid, claims.Gtg, nil
 }
@@ -439,17 +447,31 @@ func getMinecraftProfile(mcAccessToken string) (*MinecraftData, error) {
 // authenticateXboxLive runs the Microsoft OAuth -> XBL -> XSTS chain,
 // returning the caller's Xbox Live identity plus the user hash and XSTS
 // token the Minecraft Services calls need next.
+//
+// This needs two XSTS authorizations against the same XBL token: one scoped
+// to Minecraft Services for the uhs/token minecraftLoginWithXbox needs, and
+// a separate one scoped to Xbox Live itself for xuid/gamertag, since Xbox
+// Live only includes those in DisplayClaims for that relying party.
 func authenticateXboxLive(msAccessToken string) (*XboxLiveData, string, string, error) {
 	xblToken, err := xblAuthenticate(msAccessToken)
 	if err != nil {
 		return nil, "", "", err
 	}
 
-	xstsToken, userHash, xuid, gamertag, err := xstsAuthorize(xblToken)
+	mcXstsToken, userHash, _, _, err := xstsAuthorize(xblToken, xstsMinecraftRelyingParty)
 	if err != nil {
 		return nil, "", "", err
 	}
-	return &XboxLiveData{XUID: xuid, Gamertag: gamertag}, userHash, xstsToken, nil
+
+	_, _, xuid, gamertag, err := xstsAuthorize(xblToken, xstsXboxLiveRelyingParty)
+	if err != nil {
+		return nil, "", "", err
+	}
+	if xuid == "" || gamertag == "" {
+		return nil, "", "", errors.New("xsts authorization response missing xid or gtg in DisplayClaims")
+	}
+
+	return &XboxLiveData{XUID: xuid, Gamertag: gamertag}, userHash, mcXstsToken, nil
 }
 
 // GetXboxUser exchanges a Microsoft OAuth access token for the caller's
