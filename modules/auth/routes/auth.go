@@ -2,6 +2,7 @@ package authroutes
 
 import (
 	"encoding/base64"
+	"errors"
 	"github.com/goccy/go-json"
 	"log"
 	"net/http"
@@ -147,7 +148,11 @@ func OpenIDHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Se
 		steamID64, err := linking.VerifySteamOpenIDCallback(r.URL.Query())
 		if err != nil {
 			log.Println("Failed to verify Steam OpenID callback:\n\t", err)
-			responses.BadRequest(w, r, "Invalid state")
+			if errors.Is(err, linking.ErrInvalidAssertion) {
+				responses.BadRequest(w, r, "Invalid state")
+			} else {
+				responses.InternalServerError(w, r, "Authentication failed")
+			}
 			return
 		}
 

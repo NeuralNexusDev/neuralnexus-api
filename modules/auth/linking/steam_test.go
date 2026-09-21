@@ -1,6 +1,7 @@
 package linking
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -69,8 +70,12 @@ func TestVerifySteamOpenIDCallbackWrongMode(t *testing.T) {
 	query := newValidSteamCallbackQuery()
 	query.Set("openid.mode", "cancel")
 
-	if _, err := VerifySteamOpenIDCallback(query); err == nil {
+	_, err := VerifySteamOpenIDCallback(query)
+	if err == nil {
 		t.Fatal("expected an error when openid.mode is not id_res")
+	}
+	if !errors.Is(err, ErrInvalidAssertion) {
+		t.Errorf("expected ErrInvalidAssertion (a client-fault, 400-worthy rejection), got: %v", err)
 	}
 }
 
@@ -86,8 +91,12 @@ func TestVerifySteamOpenIDCallbackInvalidClaimedID(t *testing.T) {
 			query := newValidSteamCallbackQuery()
 			query.Set("openid.claimed_id", claimedID)
 
-			if _, err := VerifySteamOpenIDCallback(query); err == nil {
-				t.Errorf("expected an error for claimed_id %q", claimedID)
+			_, err := VerifySteamOpenIDCallback(query)
+			if err == nil {
+				t.Fatalf("expected an error for claimed_id %q", claimedID)
+			}
+			if !errors.Is(err, ErrInvalidAssertion) {
+				t.Errorf("expected ErrInvalidAssertion for claimed_id %q, got: %v", claimedID, err)
 			}
 		})
 	}
@@ -101,8 +110,12 @@ func TestVerifySteamOpenIDCallbackSignedDoesNotCoverClaimedIDRejected(t *testing
 	query := newValidSteamCallbackQuery()
 	query.Set("openid.signed", "op_endpoint,identity,return_to")
 
-	if _, err := VerifySteamOpenIDCallback(query); err == nil {
+	_, err := VerifySteamOpenIDCallback(query)
+	if err == nil {
 		t.Fatal("expected an error when openid.signed does not list claimed_id, even if Steam reports is_valid:true")
+	}
+	if !errors.Is(err, ErrInvalidAssertion) {
+		t.Errorf("expected ErrInvalidAssertion, got: %v", err)
 	}
 }
 
@@ -111,19 +124,54 @@ func TestVerifySteamOpenIDCallbackRejectedByServer(t *testing.T) {
 		w.Write([]byte("ns:http://specs.openid.net/auth/2.0\nis_valid:false\n"))
 	})
 
-	if _, err := VerifySteamOpenIDCallback(newValidSteamCallbackQuery()); err == nil {
-		t.Fatal("expected an error when Steam reports is_valid:false")
+	err := requireVerifyError(t, newValidSteamCallbackQuery())
+	if !errors.Is(err, ErrInvalidAssertion) {
+		t.Errorf("expected ErrInvalidAssertion when Steam reports is_valid:false, got: %v", err)
 	}
 }
 
+// TestVerifySteamOpenIDCallbackNonOKStatus is the regression test for the
+// error-category split: a Steam-side outage/error must NOT be
+// ErrInvalidAssertion, so callers map it to a 5xx (their fault, not the
+// caller's), unlike a genuinely rejected assertion.
 func TestVerifySteamOpenIDCallbackNonOKStatus(t *testing.T) {
 	withServer(t, &steamOpenIDLoginURL, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	})
 
-	if _, err := VerifySteamOpenIDCallback(newValidSteamCallbackQuery()); err == nil {
-		t.Fatal("expected an error for a non-2xx response from Steam")
+	err := requireVerifyError(t, newValidSteamCallbackQuery())
+	if errors.Is(err, ErrInvalidAssertion) {
+		t.Errorf("expected a non-2xx response from Steam to NOT be ErrInvalidAssertion, got: %v", err)
 	}
+}
+
+// TestVerifySteamOpenIDCallbackNetworkErrorIsNotInvalidAssertion covers the
+// other outage shape - Steam unreachable entirely, rather than reachable but
+// erroring - which must also fall outside ErrInvalidAssertion.
+func TestVerifySteamOpenIDCallbackNetworkErrorIsNotInvalidAssertion(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	unreachableURL := server.URL
+	server.Close() // closed immediately, so the client's request will fail to connect
+
+	original := steamOpenIDLoginURL
+	steamOpenIDLoginURL = unreachableURL
+	t.Cleanup(func() { steamOpenIDLoginURL = original })
+
+	err := requireVerifyError(t, newValidSteamCallbackQuery())
+	if errors.Is(err, ErrInvalidAssertion) {
+		t.Errorf("expected a network failure reaching Steam to NOT be ErrInvalidAssertion, got: %v", err)
+	}
+}
+
+// requireVerifyError calls VerifySteamOpenIDCallback and fails the test if
+// it doesn't return an error, returning that error for further assertions.
+func requireVerifyError(t *testing.T, query url.Values) error {
+	t.Helper()
+	_, err := VerifySteamOpenIDCallback(query)
+	if err == nil {
+		t.Fatal("expected VerifySteamOpenIDCallback to return an error")
+	}
+	return err
 }
 
 // -------------- GetSteamUser --------------

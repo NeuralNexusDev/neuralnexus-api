@@ -36,6 +36,12 @@ var (
 // openid.claimed_id, capturing the numeric SteamID64.
 var steamClaimedIDPattern = regexp.MustCompile(`^https://steamcommunity\.com/openid/id/(\d+)$`)
 
+// ErrInvalidAssertion marks a rejection of the caller's own OpenID
+// assertion (malformed, unsigned, or rejected by Steam) as distinct from a
+// network/service failure reaching Steam, so callers can map the two to
+// different response codes.
+var ErrInvalidAssertion = errors.New("invalid openid assertion")
+
 // -------------- Structs --------------
 
 // SteamData struct
@@ -78,12 +84,12 @@ func (s *SteamData) CreateLinkedAccount(userID string) *auth.LinkedAccount {
 // back to Steam's own endpoint, returning the caller's SteamID64.
 func VerifySteamOpenIDCallback(query url.Values) (string, error) {
 	if query.Get("openid.mode") != "id_res" {
-		return "", errors.New("unexpected openid.mode")
+		return "", fmt.Errorf("%w: unexpected openid.mode", ErrInvalidAssertion)
 	}
 
 	matches := steamClaimedIDPattern.FindStringSubmatch(query.Get("openid.claimed_id"))
 	if matches == nil {
-		return "", errors.New("invalid or missing openid.claimed_id")
+		return "", fmt.Errorf("%w: invalid or missing openid.claimed_id", ErrInvalidAssertion)
 	}
 	steamID64 := matches[1]
 
@@ -91,7 +97,7 @@ func VerifySteamOpenIDCallback(query url.Values) (string, error) {
 	// whatever fields openid.signed lists - it says nothing about whether
 	// claimed_id was one of them, so that has to be checked separately.
 	if !slices.Contains(strings.Split(query.Get("openid.signed"), ","), "claimed_id") {
-		return "", errors.New("openid.signed does not cover claimed_id")
+		return "", fmt.Errorf("%w: openid.signed does not cover claimed_id", ErrInvalidAssertion)
 	}
 
 	checkValues := url.Values{}
@@ -121,7 +127,7 @@ func VerifySteamOpenIDCallback(query url.Values) (string, error) {
 		return "", err
 	}
 	if !strings.Contains(string(body), "is_valid:true") {
-		return "", errors.New("steam rejected the openid assertion")
+		return "", fmt.Errorf("%w: steam rejected the openid assertion", ErrInvalidAssertion)
 	}
 
 	return steamID64, nil
