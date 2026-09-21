@@ -314,14 +314,14 @@ func TestSetPlatformLoginEnabledHandlerMissingFieldRejected(t *testing.T) {
 	}
 }
 
-// -------------- SetPasswordAuthEnabledHandler --------------
+// -------------- UpdateAccountSettingsHandler --------------
 
-func TestSetPasswordAuthEnabledHandlerCrossUserForbidden(t *testing.T) {
+func TestUpdateAccountSettingsHandlerCrossUserForbidden(t *testing.T) {
 	svc := &mockUserService{}
 	req := requestWithJSONBody(http.MethodPatch, &auth.Session{UserID: "u1"}, "someone-else", "", `{"password_auth_enabled":false}`)
 	w := httptest.NewRecorder()
 
-	SetPasswordAuthEnabledHandler(svc)(w, req)
+	UpdateAccountSettingsHandler(svc)(w, req)
 
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d: %s", w.Code, w.Body.String())
@@ -331,12 +331,12 @@ func TestSetPasswordAuthEnabledHandlerCrossUserForbidden(t *testing.T) {
 	}
 }
 
-func TestSetPasswordAuthEnabledHandlerSuccess(t *testing.T) {
+func TestUpdateAccountSettingsHandlerSuccess(t *testing.T) {
 	svc := &mockUserService{}
 	req := requestWithJSONBody(http.MethodPatch, &auth.Session{UserID: "u1"}, "u1", "", `{"password_auth_enabled":false}`)
 	w := httptest.NewRecorder()
 
-	SetPasswordAuthEnabledHandler(svc)(w, req)
+	UpdateAccountSettingsHandler(svc)(w, req)
 
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
@@ -346,36 +346,36 @@ func TestSetPasswordAuthEnabledHandlerSuccess(t *testing.T) {
 	}
 }
 
-func TestSetPasswordAuthEnabledHandlerWouldLockAccountMapsTo400(t *testing.T) {
+func TestUpdateAccountSettingsHandlerWouldLockAccountMapsTo400(t *testing.T) {
 	svc := &mockUserService{setPasswordAuthErr: auth.ErrWouldLockAccount}
 	req := requestWithJSONBody(http.MethodPatch, &auth.Session{UserID: "u1"}, "u1", "", `{"password_auth_enabled":false}`)
 	w := httptest.NewRecorder()
 
-	SetPasswordAuthEnabledHandler(svc)(w, req)
+	UpdateAccountSettingsHandler(svc)(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for ErrWouldLockAccount, got %d: %s", w.Code, w.Body.String())
 	}
 }
 
-func TestSetPasswordAuthEnabledHandlerNoPasswordSetMapsTo400(t *testing.T) {
+func TestUpdateAccountSettingsHandlerNoPasswordSetMapsTo400(t *testing.T) {
 	svc := &mockUserService{setPasswordAuthErr: auth.ErrNoPasswordSet}
 	req := requestWithJSONBody(http.MethodPatch, &auth.Session{UserID: "u1"}, "u1", "", `{"password_auth_enabled":true}`)
 	w := httptest.NewRecorder()
 
-	SetPasswordAuthEnabledHandler(svc)(w, req)
+	UpdateAccountSettingsHandler(svc)(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for ErrNoPasswordSet, got %d: %s", w.Code, w.Body.String())
 	}
 }
 
-func TestSetPasswordAuthEnabledHandlerMissingFieldRejected(t *testing.T) {
+func TestUpdateAccountSettingsHandlerMissingFieldRejected(t *testing.T) {
 	svc := &mockUserService{}
 	req := requestWithJSONBody(http.MethodPatch, &auth.Session{UserID: "u1"}, "u1", "", `{}`)
 	w := httptest.NewRecorder()
 
-	SetPasswordAuthEnabledHandler(svc)(w, req)
+	UpdateAccountSettingsHandler(svc)(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 when password_auth_enabled is omitted, got %d: %s", w.Code, w.Body.String())

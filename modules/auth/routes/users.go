@@ -276,15 +276,15 @@ func GetAccountSettingsHandler(service auth.UserService) http.HandlerFunc {
 	}
 }
 
-// SetPasswordAuthEnabledRequest - Body for SetPasswordAuthEnabledHandler
-type SetPasswordAuthEnabledRequest struct {
+// UpdateAccountSettingsRequest - Body for UpdateAccountSettingsHandler
+type UpdateAccountSettingsRequest struct {
 	// PasswordAuthEnabled is a pointer so a missing field is rejected instead
 	// of silently defaulting to false.
 	PasswordAuthEnabled *bool `json:"password_auth_enabled" xml:"password_auth_enabled"`
 }
 
-// SetPasswordAuthEnabledHandler - Toggle whether a user's password can log in
-func SetPasswordAuthEnabledHandler(service auth.UserService) http.HandlerFunc {
+// UpdateAccountSettingsHandler - Update a user's account settings
+func UpdateAccountSettingsHandler(service auth.UserService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		userID := r.PathValue("user_id")
@@ -292,7 +292,7 @@ func SetPasswordAuthEnabledHandler(service auth.UserService) http.HandlerFunc {
 			responses.Forbidden(w, r, "You do not have permission to update this user's settings")
 			return
 		}
-		var body SetPasswordAuthEnabledRequest
+		var body UpdateAccountSettingsRequest
 		if err := responses.DecodeStruct(r, &body); err != nil || body.PasswordAuthEnabled == nil {
 			responses.BadRequest(w, r, "Invalid request body")
 			return
