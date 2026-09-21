@@ -124,6 +124,34 @@ func newModeLinkRequest(t *testing.T) *http.Request {
 	return r
 }
 
+// assertRedirectWithError checks the handler issued a 303 redirect whose
+// target (scheme+host+path, ignoring query) matches expectedTarget and whose
+// "error" query param matches expectedMessage, and that no session cookie
+// was set alongside it.
+func assertRedirectWithError(t *testing.T, w *httptest.ResponseRecorder, expectedTarget, expectedMessage string) {
+	t.Helper()
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303 redirect, got %d: %s", w.Code, w.Body.String())
+	}
+	location := w.Header().Get("Location")
+	u, err := url.Parse(location)
+	if err != nil {
+		t.Fatalf("failed to parse Location header %q: %v", location, err)
+	}
+	target := (&url.URL{Scheme: u.Scheme, Host: u.Host, Path: u.Path}).String()
+	if target != expectedTarget {
+		t.Errorf("expected redirect target %q, got %q (full Location: %q)", expectedTarget, target, location)
+	}
+	if got := u.Query().Get("error"); got != expectedMessage {
+		t.Errorf("expected error=%q, got %q (full Location: %q)", expectedMessage, got, location)
+	}
+	for _, c := range w.Result().Cookies() {
+		if c.Name == mw.SessionCookieName {
+			t.Error("expected no session cookie to be set on an error redirect")
+		}
+	}
+}
+
 // TestOAuthHandlerLinkModeNoSessionRejected covers OAuthHandler's own,
 // remaining responsibility for ModeLink: reject with a specific message when
 // there's no session in the request context at all. Reading the session
@@ -139,9 +167,7 @@ func TestOAuthHandlerLinkModeNoSessionRejected(t *testing.T) {
 
 	OAuthHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
 
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401 when there's no session in context, got %d", w.Code)
-	}
+	assertRedirectWithError(t, w, "https://neuralnexus.test/done", "You must be logged in to link an account")
 }
 
 // TestOAuthHandlerLinkModeWithSessionProceedsToProcessOAuthLink confirms a
@@ -174,12 +200,7 @@ func TestOAuthHandlerLinkModeWithSessionProceedsToProcessOAuthLink(t *testing.T)
 
 	OAuthHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
 
-	if w.Code == http.StatusUnauthorized {
-		t.Fatal("expected the session check to pass and reach ProcessOAuthLink, got 401")
-	}
-	if w.Code != http.StatusInternalServerError {
-		t.Errorf("expected 500 from ProcessOAuthLink's own unsupported-platform error, got %d", w.Code)
-	}
+	assertRedirectWithError(t, w, "https://neuralnexus.test/done", "Authentication failed")
 }
 
 // Regression test: an invalid/unrecognized state.Mode used to fall through
@@ -215,16 +236,16 @@ func TestOAuthHandlerInvalidModeRejectedWithoutPanic(t *testing.T) {
 	}()
 	handler(w, r)
 
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400 Bad Request for an invalid mode, got %d", w.Code)
-	}
+	assertRedirectWithError(t, w, "https://neuralnexus.test/done", "Invalid state")
 }
 
 // TestOAuthHandlerRejectsRedirectOutsideSiteOrigin is the regression test for
 // an open redirect: state.RedirectURI is attacker-controlled (client-supplied,
 // base64-encoded JSON) and used to be passed straight to http.Redirect with no
 // allow-list check, sending the browser - and the fresh session cookie set
-// right before the redirect - to any URL an attacker chose.
+// right before the redirect - to any URL an attacker chose. An error is now
+// redirected too, so the assertion here is specifically that the redirect
+// target is the safe NN_SITE_URL fallback, never the attacker's own URL.
 func TestOAuthHandlerRejectsRedirectOutsideSiteOrigin(t *testing.T) {
 	state := linking.OAuthState{
 		Platform:    auth.PlatformDiscord,
@@ -244,18 +265,17 @@ func TestOAuthHandlerRejectsRedirectOutsideSiteOrigin(t *testing.T) {
 
 	OAuthHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
 
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400 for a redirect URI outside the site origin, got %d", w.Code)
+	if location := w.Header().Get("Location"); strings.Contains(location, "evil.example.com") {
+		t.Fatalf("expected no redirect to the attacker's URL, got Location: %q", location)
 	}
-	if location := w.Header().Get("Location"); location != "" {
-		t.Errorf("expected no redirect to be issued, got Location: %q", location)
-	}
+	assertRedirectWithError(t, w, auth.NN_SITE_URL, "Invalid state")
 }
 
 // TestOAuthHandlerAllowsRedirectMatchingSiteOrigin confirms a same-origin
 // RedirectURI still clears the allow-list check (an unsupported platform then
-// fails ProcessOAuthLogin's own switch with 500, without any network call -
-// the point is only to confirm we got past the redirect check, not 400).
+// fails ProcessOAuthLogin's own switch, redirecting back to that RedirectURI
+// with an error - the point is only to confirm we got past the redirect
+// check, not that we landed at the site root fallback).
 func TestOAuthHandlerAllowsRedirectMatchingSiteOrigin(t *testing.T) {
 	state := linking.OAuthState{
 		Platform:    auth.Platform("unsupported-platform"),
@@ -275,12 +295,7 @@ func TestOAuthHandlerAllowsRedirectMatchingSiteOrigin(t *testing.T) {
 
 	OAuthHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
 
-	if w.Code == http.StatusBadRequest {
-		t.Fatal("expected the redirect check to pass and reach ProcessOAuthLogin, got 400")
-	}
-	if w.Code != http.StatusInternalServerError {
-		t.Errorf("expected 500 from ProcessOAuthLogin's own unsupported-platform error, got %d", w.Code)
-	}
+	assertRedirectWithError(t, w, "https://neuralnexus.test/done", "Authentication failed")
 }
 
 // -------------- OpenIDHandler --------------
@@ -322,20 +337,22 @@ func TestOpenIDHandlerNoStateRejected(t *testing.T) {
 
 	OpenIDHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
 
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400 when no state is provided, got %d", w.Code)
-	}
+	assertRedirectWithError(t, w, auth.NN_SITE_URL, "Invalid request")
 }
 
+// TestOpenIDHandlerRejectsRedirectOutsideSiteOrigin mirrors the OAuth version
+// above: the redirect target for this error must be the safe NN_SITE_URL
+// fallback, never the attacker's own URL.
 func TestOpenIDHandlerRejectsRedirectOutsideSiteOrigin(t *testing.T) {
 	r := newOpenIDRequest(t, linking.ModeLogin, "https://evil.example.com/phish", "", nil)
 	w := httptest.NewRecorder()
 
 	OpenIDHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
 
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400 for a redirect URI outside the site origin, got %d", w.Code)
+	if location := w.Header().Get("Location"); strings.Contains(location, "evil.example.com") {
+		t.Fatalf("expected no redirect to the attacker's URL, got Location: %q", location)
 	}
+	assertRedirectWithError(t, w, auth.NN_SITE_URL, "Invalid state")
 }
 
 func TestOpenIDHandlerMissingNonceCookieRejected(t *testing.T) {
@@ -344,9 +361,7 @@ func TestOpenIDHandlerMissingNonceCookieRejected(t *testing.T) {
 
 	OpenIDHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
 
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400 when there's no nonce cookie, got %d", w.Code)
-	}
+	assertRedirectWithError(t, w, auth.NN_SITE_URL, "Invalid state")
 }
 
 func TestOpenIDHandlerNonceMismatchRejected(t *testing.T) {
@@ -355,9 +370,7 @@ func TestOpenIDHandlerNonceMismatchRejected(t *testing.T) {
 
 	OpenIDHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
 
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400 when the nonce cookie doesn't match state.Nonce, got %d", w.Code)
-	}
+	assertRedirectWithError(t, w, auth.NN_SITE_URL, "Invalid state")
 }
 
 func TestOpenIDHandlerInvalidModeRejectedWithoutPanic(t *testing.T) {
@@ -372,9 +385,7 @@ func TestOpenIDHandlerInvalidModeRejectedWithoutPanic(t *testing.T) {
 	}()
 	handler(w, r)
 
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400 Bad Request for an invalid mode, got %d", w.Code)
-	}
+	assertRedirectWithError(t, w, "https://neuralnexus.test/done", "Invalid state")
 }
 
 // TestOpenIDHandlerLinkModeNoSessionRejected is the regression test for
@@ -389,9 +400,7 @@ func TestOpenIDHandlerLinkModeNoSessionRejected(t *testing.T) {
 
 	OpenIDHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
 
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401 when there's no session in context, got %d", w.Code)
-	}
+	assertRedirectWithError(t, w, "https://neuralnexus.test/done", "You must be logged in to link an account")
 }
 
 // TestOpenIDHandlerLinkModeExpiredSessionRejected is the regression test for
@@ -409,17 +418,16 @@ func TestOpenIDHandlerLinkModeExpiredSessionRejected(t *testing.T) {
 
 	OpenIDHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
 
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401 for an expired session before any Steam network call, got %d", w.Code)
-	}
+	assertRedirectWithError(t, w, "https://neuralnexus.test/done", "You must be logged in to link an account")
 }
 
 // TestOpenIDHandlerLinkModeWithSessionProceedsPastSessionCheck confirms a
 // session already in context clears OpenIDHandler's own gate and reaches
 // linking.VerifySteamOpenIDCallback - an openid.mode other than "id_res"
 // makes that fail immediately on its own, without a real call to Steam, so
-// this only observes that we got past the session check (401 would mean we
-// didn't), not that the OpenID exchange itself succeeds.
+// this only observes that we got past the session check (the "must be
+// logged in" error would mean we didn't), not that the OpenID exchange
+// itself succeeds.
 func TestOpenIDHandlerLinkModeWithSessionProceedsPastSessionCheck(t *testing.T) {
 	r := newOpenIDRequest(t, linking.ModeLink, "https://neuralnexus.test/done", "test-nonce", url.Values{
 		"openid.mode": {"cancel"},
@@ -431,12 +439,7 @@ func TestOpenIDHandlerLinkModeWithSessionProceedsPastSessionCheck(t *testing.T) 
 
 	OpenIDHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
 
-	if w.Code == http.StatusUnauthorized {
-		t.Fatal("expected the session check to pass and reach VerifySteamOpenIDCallback, got 401")
-	}
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400 from VerifySteamOpenIDCallback's own openid.mode check, got %d", w.Code)
-	}
+	assertRedirectWithError(t, w, "https://neuralnexus.test/done", "Invalid state")
 }
 
 // -------------- LogoutHandler --------------
