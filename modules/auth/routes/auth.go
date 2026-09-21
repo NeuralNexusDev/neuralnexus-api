@@ -62,7 +62,7 @@ func LoginHandler(as auth.AccountService, ss auth.SessionService) http.HandlerFu
 			return
 		}
 
-		if _, err := createSessionJWTAndSetCookie(ss, w, session); err != nil {
+		if err := createSessionJWTAndSetCookie(ss, w, session); err != nil {
 			log.Println("Failed to create JWT:\n\t", err)
 			responses.InternalServerError(w, r, "Authentication failed")
 			return
@@ -243,19 +243,19 @@ func requireValidModeAndSession(w http.ResponseWriter, r *http.Request, mode lin
 }
 
 // createSessionJWTAndSetCookie creates a JWT for an already-persisted
-// session and sets it as the session cookie, returning the JWT string.
-func createSessionJWTAndSetCookie(ss auth.SessionService, w http.ResponseWriter, session *auth.Session) (string, error) {
+// session and sets it as the session cookie.
+func createSessionJWTAndSetCookie(ss auth.SessionService, w http.ResponseWriter, session *auth.Session) error {
 	jwtString, err := ss.CreateJWT(session)
 	if err != nil {
-		return "", err
+		return err
 	}
 	http.SetCookie(w, sessionCookie(jwtString, time.Unix(session.ExpiresAt, 0)))
-	return jwtString, nil
+	return nil
 }
 
 // issueSessionAndRedirect sets the session cookie and redirects to redirectURI.
 func issueSessionAndRedirect(w http.ResponseWriter, r *http.Request, ss auth.SessionService, session *auth.Session, redirectURI string) {
-	if _, err := createSessionJWTAndSetCookie(ss, w, session); err != nil {
+	if err := createSessionJWTAndSetCookie(ss, w, session); err != nil {
 		log.Println("Failed to create JWT:\n\t", err)
 		redirectInternalServerError(w, r, redirectURI, "Authentication failed")
 		return
