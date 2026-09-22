@@ -63,7 +63,7 @@ func HandleDiscordWebhook() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		publicKeyStr := os.Getenv("DISCORD_PUBLIC_KEY")
 		publicKey, err := hex.DecodeString(publicKeyStr)
-		if publicKeyStr == "" || err != nil {
+		if publicKeyStr == "" || err != nil || len(publicKey) != ed25519.PublicKeySize {
 			responses.InternalServerError(w, r, "DISCORD_PUBLIC_KEY environment variable not set")
 			return
 		}
@@ -71,30 +71,24 @@ func HandleDiscordWebhook() http.HandlerFunc {
 		signature, err := hex.DecodeString(signatureStr)
 		timestamp := r.Header.Get(XSignatureTimestamp)
 		if signatureStr == "" || err != nil || timestamp == "" {
-			responses.BadRequest(w, r, "Invalid signature")
+			responses.Unauthorized(w, r, "Invalid signature")
 			return
 		}
 		defer r.Body.Close()
 
-		var b []byte
-		buffer := bytes.NewBuffer(b)
-		if _, err = buffer.Read([]byte(timestamp)); err != nil {
+		bodyBytes, err := io.ReadAll(r.Body)
+		if err != nil {
 			log.Println("Error reading body:\n\t", err)
-			responses.BadRequest(w, r, "Invalid signature")
+			responses.Unauthorized(w, r, "Invalid signature")
 			return
 		}
 
-		var body []byte
-		body, err = io.ReadAll(r.Body)
-		if _, err = buffer.Read(body); err != nil {
-			log.Println("Error reading body:\n\t", err)
-			responses.BadRequest(w, r, "Invalid signature")
-			return
-		}
+		var buffer bytes.Buffer
+		buffer.WriteString(timestamp)
+		buffer.Write(bodyBytes)
 
-		verified := ed25519.Verify(publicKey, body, signature)
-		if !verified {
-			responses.BadRequest(w, r, "Invalid signature")
+		if !ed25519.Verify(publicKey, buffer.Bytes(), signature) {
+			responses.Unauthorized(w, r, "Invalid signature")
 			return
 		}
 
@@ -104,7 +98,7 @@ func HandleDiscordWebhook() http.HandlerFunc {
 		}
 
 		var event WebhookEvent
-		if err := json.NewDecoder(bytes.NewReader(body)).Decode(&event); err != nil {
+		if err := json.NewDecoder(bytes.NewReader(bodyBytes)).Decode(&event); err != nil {
 			responses.BadRequest(w, r, "Invalid request body")
 			return
 		}
