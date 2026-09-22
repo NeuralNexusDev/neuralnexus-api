@@ -1,17 +1,12 @@
 package discord
 
 import (
-	"bytes"
-	"encoding/hex"
-	"io"
 	"log"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"github.com/goccy/go-json"
-	"golang.org/x/crypto/ed25519"
 )
 
 type WebhookType int
@@ -51,11 +46,7 @@ type EventBody struct {
 	Data      *interface{} `json:"data"`
 }
 
-const (
-	ContentType         string = "Content-Type"
-	XSignatureEd25519   string = "X-Signature-Ed25519"
-	XSignatureTimestamp string = "X-Signature-Timestamp"
-)
+const ContentType string = "Content-Type"
 
 const ApplicationJSON string = "application/json"
 
@@ -63,18 +54,14 @@ const ApplicationJSON string = "application/json"
 
 func HandleDiscordWebhook() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		bodyBytes, verified := verifyPayload(w, r)
-		if !verified {
-			return // Already responded
-		}
-
 		if r.Header.Get(ContentType) != ApplicationJSON {
 			responses.UnsupportedMediaType(w, r, "Request must be of type application/json")
 			return
 		}
+		defer r.Body.Close()
 
 		var event WebhookEvent
-		if err := json.NewDecoder(bytes.NewReader(bodyBytes)).Decode(&event); err != nil {
+		if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
 			responses.BadRequest(w, r, "Invalid request body")
 			return
 		}
@@ -90,39 +77,4 @@ func HandleDiscordWebhook() http.HandlerFunc {
 			return
 		}
 	}
-}
-
-// TODO: Make this middleware?
-func verifyPayload(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
-	publicKeyStr := os.Getenv("DISCORD_PUBLIC_KEY")
-	publicKey, err := hex.DecodeString(publicKeyStr)
-	if publicKeyStr == "" || err != nil || len(publicKey) != ed25519.PublicKeySize {
-		responses.InternalServerError(w, r, "DISCORD_PUBLIC_KEY environment variable not set")
-		return nil, false
-	}
-	signatureStr := r.Header.Get(XSignatureEd25519)
-	signature, err := hex.DecodeString(signatureStr)
-	timestamp := r.Header.Get(XSignatureTimestamp)
-	if signatureStr == "" || err != nil || timestamp == "" {
-		responses.Unauthorized(w, r, "Invalid signature")
-		return nil, false
-	}
-	defer r.Body.Close()
-
-	bodyBytes, err := io.ReadAll(r.Body)
-	if err != nil {
-		log.Println("Error reading body:\n\t", err)
-		responses.Unauthorized(w, r, "Invalid signature")
-		return nil, false
-	}
-
-	var buffer bytes.Buffer
-	buffer.WriteString(timestamp)
-	buffer.Write(bodyBytes)
-
-	if !ed25519.Verify(publicKey, buffer.Bytes(), signature) {
-		responses.Unauthorized(w, r, "Invalid signature")
-		return nil, false
-	}
-	return bodyBytes, true
 }

@@ -1,7 +1,6 @@
 package discord
 
 import (
-	"bytes"
 	"log"
 	"net/http"
 
@@ -48,18 +47,14 @@ type Interaction struct {
 
 func HandleDiscordInteraction() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		bodyBytes, verified := verifyPayload(w, r)
-		if !verified {
-			return // Already responded
-		}
-
 		if r.Header.Get(ContentType) != ApplicationJSON {
 			responses.UnsupportedMediaType(w, r, "Request must be of type application/json")
 			return
 		}
+		defer r.Body.Close()
 
 		var interaction Interaction
-		if err := json.NewDecoder(bytes.NewReader(bodyBytes)).Decode(&interaction); err != nil {
+		if err := json.NewDecoder(r.Body).Decode(&interaction); err != nil {
 			responses.BadRequest(w, r, "Invalid request body")
 			return
 		}

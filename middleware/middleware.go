@@ -1,8 +1,11 @@
 package mw
 
 import (
+	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -12,6 +15,7 @@ import (
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
+	"golang.org/x/crypto/ed25519"
 )
 
 // Middleware - Middleware type
@@ -35,6 +39,8 @@ const (
 	XRequestIDHeader     = "X-Request-ID"
 	XForwardedForHeader  = "X-Forwarded-For"
 	CFConnectingIPHeader = "CF-Connecting-IP"
+	XSignatureEd25519    = "X-Signature-Ed25519"
+	XSignatureTimestamp  = "X-Signature-Timestamp"
 
 	RetryAfter = 60
 )
@@ -88,15 +94,6 @@ func IPMiddleware(next http.Handler) http.Handler {
 		if cfConnectingIP != "" {
 			r.RemoteAddr = cfConnectingIP
 		} else if forwardedFor != "" {
-			// X-Forwarded-For can be a comma-separated proxy chain
-			// ("client, proxy1, proxy2, ..."); per RFC 7239/XFF convention
-			// the leftmost entry is the original client, so use only that -
-			// otherwise a multi-hop value falls through to RateLimitMiddleware
-			// and collides every hop into one rate-limit key. If that leftmost
-			// entry is empty/whitespace (a malformed or leading-comma header),
-			// leave RemoteAddr as the real socket-level address rather than
-			// overwriting it with "", which would collapse unrelated clients
-			// onto the same empty-string rate-limit bucket.
 			clientIP, _, _ := strings.Cut(forwardedFor, ",")
 			if clientIP = strings.TrimSpace(clientIP); clientIP != "" {
 				r.RemoteAddr = clientIP
@@ -176,13 +173,6 @@ func RateLimitMiddleware(service auth.RateLimitService, prefix string, sessionLi
 					return
 				}
 			} else {
-				// net.SplitHostPort (not strings.Split on ":") because an
-				// IPv6 address contains colons of its own - splitting on the
-				// first one truncates it to its first hextet, colliding
-				// unrelated IPv6 clients into the same rate-limit bucket.
-				// RemoteAddr may also arrive with no port at all (IPMiddleware
-				// can set it to a bare IP from a header), so fall back to the
-				// raw value when there's nothing to split.
 				ip, _, err := net.SplitHostPort(r.RemoteAddr)
 				if err != nil {
 					ip = r.RemoteAddr
@@ -279,4 +269,42 @@ func SelfUserID(next http.Handler) http.Handler {
 		r.SetPathValue("user_id", session.UserID)
 		next.ServeHTTP(w, r)
 	})
+}
+
+// VerifyEd25519Middleware verifies the body's signature, generally used by Discord
+func VerifyEd25519Middleware(publicKey ed25519.PublicKey) Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			signatureStr := r.Header.Get(XSignatureEd25519)
+			signature, err := hex.DecodeString(signatureStr)
+			timestamp := r.Header.Get(XSignatureTimestamp)
+			if signatureStr == "" || timestamp == "" {
+				if err != nil {
+					LogRequest(r.Context(), "Error decoding signature:\n\t", err.Error())
+				}
+				responses.Unauthorized(w, r, "Invalid signature")
+				return
+			}
+
+			bodyBytes, err := io.ReadAll(r.Body)
+			if err != nil {
+				LogRequest(r.Context(), "Error reading body:\n\t", err.Error())
+				responses.Unauthorized(w, r, "Invalid signature")
+				return
+			}
+
+			var buffer bytes.Buffer
+			buffer.WriteString(timestamp)
+			buffer.Write(bodyBytes)
+			if !ed25519.Verify(publicKey, buffer.Bytes(), signature) {
+				responses.Unauthorized(w, r, "Invalid signature")
+				return
+			}
+
+			r.Body.Close()
+			r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+			next.ServeHTTP(w, r)
+		})
+	}
 }

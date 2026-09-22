@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"log"
 	"net"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/cors"
+	"golang.org/x/crypto/ed25519"
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
@@ -126,8 +128,16 @@ func ApplyRoutes(
 	mux.Handle("DELETE /api/v1/datastore/number", mwAuth(nds.DeleteNumberHandler(nService)))
 
 	// --------------- Discord ---------------
-	mux.Handle("POST /api/discord/webhook", discord.HandleDiscordWebhook())
-	mux.Handle("POST /api/discord/interactions", discord.HandleDiscordInteraction())
+	publicKeyStr := os.Getenv("DISCORD_PUBLIC_KEY")
+	publicKey, err := hex.DecodeString(publicKeyStr)
+	if publicKeyStr == "" || err != nil || len(publicKey) != ed25519.PublicKeySize {
+		log.Fatal("DISCORD_PUBLIC_KEY is not set")
+		return nil
+	}
+	verify := mw.VerifyEd25519Middleware(publicKey)
+
+	mux.Handle("POST /api/discord/webhook", verify(discord.HandleDiscordWebhook()))
+	mux.Handle("POST /api/discord/interactions", verify(discord.HandleDiscordInteraction()))
 
 	// --------------- Game Server Status ---------------
 	gssService := gss.NewService()
