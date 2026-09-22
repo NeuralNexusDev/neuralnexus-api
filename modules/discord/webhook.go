@@ -17,8 +17,8 @@ import (
 type WebhookType int
 
 const (
-	PING  WebhookType = 0
-	Event WebhookType = 1
+	WEBHOOK_PING WebhookType = 0
+	Event        WebhookType = 1
 )
 
 type WebhookEvent struct {
@@ -59,37 +59,13 @@ const (
 
 const ApplicationJSON string = "application/json"
 
+// https://docs.discord.com/developers/events/webhook-events#application-authorized
+
 func HandleDiscordWebhook() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		publicKeyStr := os.Getenv("DISCORD_PUBLIC_KEY")
-		publicKey, err := hex.DecodeString(publicKeyStr)
-		if publicKeyStr == "" || err != nil || len(publicKey) != ed25519.PublicKeySize {
-			responses.InternalServerError(w, r, "DISCORD_PUBLIC_KEY environment variable not set")
-			return
-		}
-		signatureStr := r.Header.Get(XSignatureEd25519)
-		signature, err := hex.DecodeString(signatureStr)
-		timestamp := r.Header.Get(XSignatureTimestamp)
-		if signatureStr == "" || err != nil || timestamp == "" {
-			responses.Unauthorized(w, r, "Invalid signature")
-			return
-		}
-		defer r.Body.Close()
-
-		bodyBytes, err := io.ReadAll(r.Body)
-		if err != nil {
-			log.Println("Error reading body:\n\t", err)
-			responses.Unauthorized(w, r, "Invalid signature")
-			return
-		}
-
-		var buffer bytes.Buffer
-		buffer.WriteString(timestamp)
-		buffer.Write(bodyBytes)
-
-		if !ed25519.Verify(publicKey, buffer.Bytes(), signature) {
-			responses.Unauthorized(w, r, "Invalid signature")
-			return
+		bodyBytes, verified := verifyPayload(w, r)
+		if !verified {
+			return // Already responded
 		}
 
 		if r.Header.Get(ContentType) != ApplicationJSON {
@@ -104,11 +80,49 @@ func HandleDiscordWebhook() http.HandlerFunc {
 		}
 
 		switch event.Type {
-		case PING:
+		case WEBHOOK_PING:
 			responses.NoContent(w, r)
 			return
 		case Event:
 		default:
+			responses.BadRequest(w, r, "Unknown Webhook type")
+			log.Printf("Unknown Webhook type: %v", event.Type)
+			return
 		}
 	}
+}
+
+// TODO: Make this middleware?
+func verifyPayload(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
+	publicKeyStr := os.Getenv("DISCORD_PUBLIC_KEY")
+	publicKey, err := hex.DecodeString(publicKeyStr)
+	if publicKeyStr == "" || err != nil || len(publicKey) != ed25519.PublicKeySize {
+		responses.InternalServerError(w, r, "DISCORD_PUBLIC_KEY environment variable not set")
+		return nil, false
+	}
+	signatureStr := r.Header.Get(XSignatureEd25519)
+	signature, err := hex.DecodeString(signatureStr)
+	timestamp := r.Header.Get(XSignatureTimestamp)
+	if signatureStr == "" || err != nil || timestamp == "" {
+		responses.Unauthorized(w, r, "Invalid signature")
+		return nil, false
+	}
+	defer r.Body.Close()
+
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Println("Error reading body:\n\t", err)
+		responses.Unauthorized(w, r, "Invalid signature")
+		return nil, false
+	}
+
+	var buffer bytes.Buffer
+	buffer.WriteString(timestamp)
+	buffer.Write(bodyBytes)
+
+	if !ed25519.Verify(publicKey, buffer.Bytes(), signature) {
+		responses.Unauthorized(w, r, "Invalid signature")
+		return nil, false
+	}
+	return bodyBytes, true
 }

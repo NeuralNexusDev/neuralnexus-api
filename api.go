@@ -127,6 +127,7 @@ func ApplyRoutes(
 
 	// --------------- Discord ---------------
 	mux.Handle("POST /api/discord/webhook", discord.HandleDiscordWebhook())
+	mux.Handle("POST /api/discord/interactions", discord.HandleDiscordInteraction())
 
 	// --------------- Game Server Status ---------------
 	gssService := gss.NewService()
