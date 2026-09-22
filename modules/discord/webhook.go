@@ -2,6 +2,7 @@ package discord
 
 import (
 	"bytes"
+	"encoding/hex"
 	"io"
 	"log"
 	"net/http"
@@ -60,27 +61,38 @@ const ApplicationJSON string = "application/json"
 
 func HandleDiscordWebhook() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		signature := r.Header.Get(XSignatureEd25519)
-		timestamp := r.Header.Get(XSignatureTimestamp)
-		publicKey := os.Getenv("DISCORD_PUBLIC_KEY")
-		if publicKey == "" {
+		publicKeyStr := os.Getenv("DISCORD_PUBLIC_KEY")
+		publicKey, err := hex.DecodeString(publicKeyStr)
+		if publicKeyStr == "" || err != nil {
 			responses.InternalServerError(w, r, "DISCORD_PUBLIC_KEY environment variable not set")
 			return
 		}
-		if signature == "" || timestamp == "" {
+		signatureStr := r.Header.Get(XSignatureEd25519)
+		signature, err := hex.DecodeString(signatureStr)
+		timestamp := r.Header.Get(XSignatureTimestamp)
+		if signatureStr == "" || err != nil || timestamp == "" {
 			responses.BadRequest(w, r, "Invalid signature")
 			return
 		}
+		defer r.Body.Close()
 
-		var body []byte
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
+		var b []byte
+		buffer := bytes.NewBuffer(b)
+		if _, err = buffer.Read([]byte(timestamp)); err != nil {
 			log.Println("Error reading body:\n\t", err)
 			responses.BadRequest(w, r, "Invalid signature")
 			return
 		}
 
-		verified := ed25519.Verify([]byte(publicKey), body, []byte(signature))
+		var body []byte
+		body, err = io.ReadAll(r.Body)
+		if _, err = buffer.Read(body); err != nil {
+			log.Println("Error reading body:\n\t", err)
+			responses.BadRequest(w, r, "Invalid signature")
+			return
+		}
+
+		verified := ed25519.Verify(publicKey, body, signature)
 		if !verified {
 			responses.BadRequest(w, r, "Invalid signature")
 			return
