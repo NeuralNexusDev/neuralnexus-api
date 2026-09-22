@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/discord"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/twitch"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
@@ -123,6 +124,9 @@ func ApplyRoutes(
 	mux.Handle("GET /api/v1/datastore/number", nds.ReadNumberHandler(nService))
 	mux.Handle("PUT /api/v1/datastore/number", mwAuth(nds.UpdateNumberHandler(nService)))
 	mux.Handle("DELETE /api/v1/datastore/number", mwAuth(nds.DeleteNumberHandler(nService)))
+
+	// --------------- Discord ---------------
+	mux.Handle("POST /api/webhook/discord", discord.HandleDiscordWebhook())
 
 	// --------------- Game Server Status ---------------
 	gssService := gss.NewService()
