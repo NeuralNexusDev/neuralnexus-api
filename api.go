@@ -126,7 +126,7 @@ func ApplyRoutes(
 	mux.Handle("DELETE /api/v1/datastore/number", mwAuth(nds.DeleteNumberHandler(nService)))
 
 	// --------------- Discord ---------------
-	mux.Handle("POST /api/webhook/discord", discord.HandleDiscordWebhook())
+	mux.Handle("POST /api/discord/webhook", discord.HandleDiscordWebhook())
 
 	// --------------- Game Server Status ---------------
 	gssService := gss.NewService()
