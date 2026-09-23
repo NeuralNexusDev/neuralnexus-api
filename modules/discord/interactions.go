@@ -1,13 +1,5 @@
 package discord
 
-import (
-	"log"
-	"net/http"
-
-	"github.com/NeuralNexusDev/neuralnexus-api/responses"
-	"github.com/goccy/go-json"
-)
-
 type InteractionType int
 
 const (
@@ -43,30 +35,4 @@ const (
 
 type Interaction struct {
 	Type InteractionType `json:"type"`
-}
-
-func HandleDiscordInteraction() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get(ContentType) != ApplicationJSON {
-			responses.UnsupportedMediaType(w, r, "Request must be of type application/json")
-			return
-		}
-		defer r.Body.Close()
-
-		var interaction Interaction
-		if err := json.NewDecoder(r.Body).Decode(&interaction); err != nil {
-			responses.BadRequest(w, r, "Invalid request body")
-			return
-		}
-
-		switch interaction.Type {
-		case INTERACTION_PING:
-			responses.SendStruct(w, r, http.StatusOK, Interaction{Type: INTERACTION_PING})
-			return
-		default:
-			responses.BadRequest(w, r, "Unknown Interaction")
-			log.Printf("Unknown Interaction type: %v", interaction.Type)
-			return
-		}
-	}
 }

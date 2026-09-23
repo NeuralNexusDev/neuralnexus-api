@@ -1,28 +1,34 @@
 package discord
 
 import (
-	"log"
-	"net/http"
 	"time"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/responses"
+	"github.com/bwmarrin/discordgo"
 	"github.com/goccy/go-json"
 )
 
 type WebhookType int
 
 const (
-	WEBHOOK_PING WebhookType = 0
-	Event        WebhookType = 1
+	WebhookPing  WebhookType = 0 // PING event sent to verify your Webhook Event URL is active
+	WebhookEvent WebhookType = 1 // Webhook event
 )
 
-type WebhookEvent struct {
-	Version       int         `json:"version"`
-	ApplicationId string      `json:"application_id"`
-	Type          WebhookType `json:"type"`
-	Event         *EventBody  `json:"event"`
+// WebhookPayload payload delivered to the webhook endpoint
+// https://docs.discord.com/developers/events/webhook-events
+type WebhookPayload struct {
+	// Version scheme for the webhook event. Currently, always 1
+	Version int `json:"version"`
+	// ID of your app
+	ApplicationId string `json:"application_id"`
+	// Type of webhook, either 0 for PING or 1 for webhook events
+	Type WebhookType `json:"type"`
+	// Event data payload
+	Event *EventBody `json:"event"`
 }
 
+// EventType string type for the Discord Webhook event
+// https://docs.discord.com/developers/events/webhook-events#event-types
 type EventType string
 
 const (
@@ -41,40 +47,34 @@ const (
 )
 
 type EventBody struct {
-	Type      EventType    `json:"type"`
-	Timestamp time.Time    `json:"timestamp"`
-	Data      *interface{} `json:"data"`
+	Type      EventType        `json:"type"`
+	Timestamp time.Time        `json:"timestamp"`
+	Data      *json.RawMessage `json:"data"`
 }
 
-const ContentType string = "Content-Type"
+type InstallationContext int
 
-const ApplicationJSON string = "application/json"
+const (
+	GUILD_INSTALL InstallationContext = 0 // App is installable to guilds/servers
+	USER_INSTALL  InstallationContext = 1 // App is installable to users
+)
 
+// ApplicationAuthorizedEvent Websocket Event for application authorizations
 // https://docs.discord.com/developers/events/webhook-events#application-authorized
+type ApplicationAuthorizedEvent struct {
+	// InstallationContext for the authorization. Either guild (0) if installed to a server or user (1) if installed to a user’s account
+	IntegrationType *InstallationContext `json:"integration_type"`
+	// discordgo.User who authorized the app
+	User discordgo.User `json:"user"`
+	// List of scopes the user authorized
+	Scopes []string `json:"scopes"`
+	// [Server/Guild](discordgo.Guild) which app was authorized for (when integration type is 0)
+	Guild discordgo.Guild `json:"guild"`
+}
 
-func HandleDiscordWebhook() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get(ContentType) != ApplicationJSON {
-			responses.UnsupportedMediaType(w, r, "Request must be of type application/json")
-			return
-		}
-		defer r.Body.Close()
-
-		var event WebhookEvent
-		if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
-			responses.BadRequest(w, r, "Invalid request body")
-			return
-		}
-
-		switch event.Type {
-		case WEBHOOK_PING:
-			responses.NoContent(w, r)
-			return
-		case Event:
-		default:
-			responses.BadRequest(w, r, "Unknown Webhook type")
-			log.Printf("Unknown Webhook type: %v", event.Type)
-			return
-		}
-	}
+// ApplicationDeauthorizedEvent Websocket Event for application Deauthorizations
+// https://docs.discord.com/developers/events/webhook-events#application-deauthorized
+type ApplicationDeauthorizedEvent struct {
+	// discordgo.User who deauthorized the app
+	User discordgo.User `json:"user"`
 }
