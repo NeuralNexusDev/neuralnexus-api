@@ -1,6 +1,7 @@
 package linking
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -8,354 +9,558 @@ import (
 	"testing"
 	"time"
 
+	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
+	"github.com/goccy/go-json"
 )
 
-// -------------- SteamData --------------
-
-func TestSteamDataImplementsPlatformData(t *testing.T) {
-	s := &SteamData{SteamID64: "1234", PersonaName: "TestPlayer", ProfileURL: "https://steamcommunity.com/id/testplayer"}
-
-	if s.GetID() != "1234" {
-		t.Errorf("expected GetID() to return the SteamID64, got %q", s.GetID())
-	}
-	if s.GetUsername() != "TestPlayer" {
-		t.Errorf("expected GetUsername() to return the persona name, got %q", s.GetUsername())
-	}
-	if s.GetEmail() != "" {
-		t.Errorf("expected GetEmail() to always be empty, got %q", s.GetEmail())
-	}
-
-	la := s.CreateLinkedAccount("user-1")
-	if la.Platform != auth.PlatformSteam || la.PlatformID != "1234" || la.PlatformUsername != "TestPlayer" {
-		t.Errorf("unexpected linked account: %+v", la)
-	}
+// stMockAccountService is a minimal, self-contained auth.AccountService
+// double for steam_test.go only.
+type stMockAccountService struct {
+	accounts        map[string]*auth.Account
+	addAccountErr   error
+	getByIDErr      error
+	deleteErr       error
+	deleteCalls     int
+	addAccountCalls int
 }
 
-// -------------- VerifySteamOpenIDCallback --------------
+var _ auth.AccountService = (*stMockAccountService)(nil)
 
-func newValidSteamCallbackQuery() url.Values {
-	return url.Values{
-		"openid.mode":       {"id_res"},
-		"openid.claimed_id": {"https://steamcommunity.com/openid/id/76561198000000000"},
-		"openid.sig":        {"fake-sig"},
-		"openid.signed":     {"op_endpoint,claimed_id,identity,return_to"},
-	}
+func newSTMockAccountService() *stMockAccountService {
+	return &stMockAccountService{accounts: map[string]*auth.Account{}}
 }
 
-func TestVerifySteamOpenIDCallbackSuccess(t *testing.T) {
-	withServer(t, &steamOpenIDLoginURL, func(w http.ResponseWriter, r *http.Request) {
-		if err := r.ParseForm(); err != nil {
-			t.Fatalf("failed to parse check_authentication request body: %v", err)
+func (m *stMockAccountService) AddAccount(a *auth.Account) error {
+	m.addAccountCalls++
+	if m.addAccountErr != nil {
+		return m.addAccountErr
+	}
+	m.accounts[a.UserID] = a
+	return nil
+}
+func (m *stMockAccountService) GetAccountByID(userID string) (*auth.Account, error) {
+	if m.getByIDErr != nil {
+		return nil, m.getByIDErr
+	}
+	a, ok := m.accounts[userID]
+	if !ok {
+		return nil, auth.ErrNotFound
+	}
+	return a, nil
+}
+func (m *stMockAccountService) GetAccountByUsername(string) (*auth.Account, error) {
+	return nil, auth.ErrNotFound
+}
+func (m *stMockAccountService) GetAccountByEmail(string) (*auth.Account, error) {
+	return nil, auth.ErrNotFound
+}
+func (m *stMockAccountService) UpdateAccount(a *auth.Account) error {
+	m.accounts[a.UserID] = a
+	return nil
+}
+func (m *stMockAccountService) DeleteAccount(userID string) error {
+	m.deleteCalls++
+	if m.deleteErr != nil {
+		return m.deleteErr
+	}
+	delete(m.accounts, userID)
+	return nil
+}
+func (m *stMockAccountService) IsPasswordAuthEnabled(string) (bool, error) { return false, nil }
+
+// stMockLinkAccountStore is a minimal, self-contained auth.LinkAccountStore
+// double for steam_test.go only.
+type stMockLinkAccountStore struct {
+	byPlatformID map[auth.Platform]map[string]*auth.LinkedAccount
+	getErr       error
+	addErr       error
+	addCalls     int
+}
+
+var _ auth.LinkAccountStore = (*stMockLinkAccountStore)(nil)
+
+func newSTMockLinkAccountStore() *stMockLinkAccountStore {
+	return &stMockLinkAccountStore{byPlatformID: map[auth.Platform]map[string]*auth.LinkedAccount{}}
+}
+
+func (m *stMockLinkAccountStore) AddLinkedAccountToDB(la *auth.LinkedAccount) error {
+	m.addCalls++
+	if m.addErr != nil {
+		return m.addErr
+	}
+	if m.byPlatformID[la.Platform] == nil {
+		m.byPlatformID[la.Platform] = map[string]*auth.LinkedAccount{}
+	}
+	m.byPlatformID[la.Platform][la.PlatformID] = la
+	return nil
+}
+func (m *stMockLinkAccountStore) UpdateLinkedAccount(*auth.LinkedAccount) error { return nil }
+func (m *stMockLinkAccountStore) GetLinkedAccountByPlatformID(platform auth.Platform, platformID string) (*auth.LinkedAccount, error) {
+	if m.getErr != nil {
+		return nil, m.getErr
+	}
+	la, ok := m.byPlatformID[platform][platformID]
+	if !ok {
+		return nil, auth.ErrNotFound
+	}
+	return la, nil
+}
+func (m *stMockLinkAccountStore) GetLinkedAccountByPlatformName(auth.Platform, string) (*auth.LinkedAccount, error) {
+	return nil, auth.ErrNotFound
+}
+func (m *stMockLinkAccountStore) GetLinkedAccountByUserID(string, auth.Platform) (*auth.LinkedAccount, error) {
+	return nil, auth.ErrNotFound
+}
+func (m *stMockLinkAccountStore) GetLinkedAccountsByUserID(string) ([]*auth.LinkedAccount, error) {
+	return nil, nil
+}
+func (m *stMockLinkAccountStore) DeleteLinkedAccount(string, auth.Platform) error { return nil }
+func (m *stMockLinkAccountStore) SetLinkedAccountLoginEnabled(string, auth.Platform, bool) error {
+	return nil
+}
+
+// stMockSessionService is a minimal, self-contained auth.SessionService
+// double for steam_test.go only.
+type stMockSessionService struct {
+	addSessionErr error
+	added         []*auth.Session
+}
+
+var _ auth.SessionService = (*stMockSessionService)(nil)
+
+func (m *stMockSessionService) AddSession(session *auth.Session) error {
+	if m.addSessionErr != nil {
+		return m.addSessionErr
+	}
+	m.added = append(m.added, session)
+	return nil
+}
+func (m *stMockSessionService) GetSession(string) (*auth.Session, error) {
+	return nil, auth.ErrNotFound
+}
+func (m *stMockSessionService) UpdateSession(*auth.Session) error       { return nil }
+func (m *stMockSessionService) DeleteSession(string) error              { return nil }
+func (m *stMockSessionService) CreateJWT(*auth.Session) (string, error) { return "", nil }
+func (m *stMockSessionService) ReadJWT(string) (*auth.Session, error)   { return nil, auth.ErrNotFound }
+
+// stRequestWithSession builds a request carrying session in its context,
+// the way middleware would have placed it there.
+func stRequestWithSession(session *auth.Session) *http.Request {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	if session == nil {
+		return req
+	}
+	ctx := context.WithValue(req.Context(), mw.SessionKey, session)
+	return req.WithContext(ctx)
+}
+
+func TestST01to04SteamDataAccessors(t *testing.T) {
+	s := &SteamData{SteamID64: "76500000000000001", PersonaName: "bob", ProfileURL: "https://steamcommunity.com/id/bob", AvatarURL: "https://avatar.test/bob.png"}
+
+	t.Run("ST-01_GetID", func(t *testing.T) {
+		if got := s.GetID(); got != "76500000000000001" {
+			t.Errorf("GetID() = %q, want %q", got, "76500000000000001")
 		}
-		if got := r.PostForm.Get("openid.mode"); got != "check_authentication" {
-			t.Errorf("expected openid.mode=check_authentication in the verification request, got %q", got)
+	})
+	t.Run("ST-02_GetUsername", func(t *testing.T) {
+		if got := s.GetUsername(); got != "bob" {
+			t.Errorf("GetUsername() = %q, want %q", got, "bob")
 		}
-		if got := r.PostForm.Get("openid.sig"); got != "fake-sig" {
-			t.Errorf("expected the original assertion's fields to be echoed back, got openid.sig=%q", got)
+	})
+	t.Run("ST-03_GetEmail", func(t *testing.T) {
+		if got := s.GetEmail(); got != "" {
+			t.Errorf("GetEmail() = %q, want empty string", got)
 		}
-		w.Write([]byte("ns:http://specs.openid.net/auth/2.0\nis_valid:true\n"))
+	})
+	t.Run("ST-04_GetData", func(t *testing.T) {
+		data := s.GetData()
+		var roundTripped SteamData
+		if err := json.Unmarshal([]byte(data), &roundTripped); err != nil {
+			t.Fatalf("GetData() did not round-trip as JSON: %v", err)
+		}
+		if roundTripped != *s {
+			t.Errorf("GetData() round-trip mismatch: got %+v, want %+v", roundTripped, *s)
+		}
+	})
+}
+
+func TestST05CreateLinkedAccount(t *testing.T) {
+	t.Run("ST-05_CreateLinkedAccount", func(t *testing.T) {
+		s := &SteamData{SteamID64: "76500000000000001", PersonaName: "bob"}
+		la := s.CreateLinkedAccount("user-1")
+
+		if la.UserID != "user-1" || la.Platform != auth.PlatformSteam || la.PlatformUsername != "bob" || la.PlatformID != "76500000000000001" {
+			t.Errorf("CreateLinkedAccount() = %+v, want UserID=user-1 Platform=steam PlatformUsername=bob PlatformID=76500000000000001", la)
+		}
+		if !la.Verified || !la.LoginEnabled {
+			t.Errorf("expected Verified and LoginEnabled true, got Verified=%v LoginEnabled=%v", la.Verified, la.LoginEnabled)
+		}
+	})
+}
+
+func validSteamQuery(claimedID string) url.Values {
+	q := url.Values{}
+	q.Set("openid.mode", "id_res")
+	q.Set("openid.claimed_id", "https://steamcommunity.com/openid/id/"+claimedID)
+	q.Set("openid.identity", "https://steamcommunity.com/openid/id/"+claimedID)
+	q.Set("openid.signed", "op_endpoint,claimed_id,identity,return_to,response_nonce,assoc_handle")
+	q.Set("openid.sig", "deadbeef")
+	q.Set("openid.ns", "http://specs.openid.net/auth/2.0")
+	return q
+}
+
+func TestST06to12VerifySteamOpenIDCallback(t *testing.T) {
+	t.Run("ST-06_Success", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/" {
+				t.Errorf("unexpected path: %s", r.URL.Path)
+			}
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("failed to parse check_authentication body: %v", err)
+			}
+			if got := r.PostForm.Get("openid.mode"); got != "check_authentication" {
+				t.Errorf("openid.mode sent to Steam = %q, want check_authentication", got)
+			}
+			_, _ = w.Write([]byte("ns:http://specs.openid.net/auth/2.0\nis_valid:true\n"))
+		}))
+		defer ts.Close()
+		restore := setSteamURLs(ts.URL, "")
+		defer restore()
+
+		got, err := VerifySteamOpenIDCallback(validSteamQuery("76500000000000001"))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "76500000000000001" {
+			t.Errorf("VerifySteamOpenIDCallback() = %q, want %q", got, "76500000000000001")
+		}
 	})
 
-	steamID64, err := VerifySteamOpenIDCallback(newValidSteamCallbackQuery())
-	if err != nil {
-		t.Fatalf("VerifySteamOpenIDCallback returned error: %v", err)
+	t.Run("ST-07_WrongMode", func(t *testing.T) {
+		q := validSteamQuery("76500000000000001")
+		q.Set("openid.mode", "cancel")
+		_, err := VerifySteamOpenIDCallback(q)
+		if !errors.Is(err, ErrInvalidAssertion) {
+			t.Fatalf("expected ErrInvalidAssertion, got %v", err)
+		}
+	})
+
+	t.Run("ST-08_InvalidClaimedID", func(t *testing.T) {
+		q := validSteamQuery("76500000000000001")
+		q.Set("openid.claimed_id", "not-a-steam-url")
+		_, err := VerifySteamOpenIDCallback(q)
+		if !errors.Is(err, ErrInvalidAssertion) {
+			t.Fatalf("expected ErrInvalidAssertion, got %v", err)
+		}
+	})
+
+	t.Run("ST-09_SignedDoesNotCoverClaimedID", func(t *testing.T) {
+		q := validSteamQuery("76500000000000001")
+		q.Set("openid.signed", "op_endpoint,identity,return_to")
+		_, err := VerifySteamOpenIDCallback(q)
+		if !errors.Is(err, ErrInvalidAssertion) {
+			t.Fatalf("expected ErrInvalidAssertion, got %v", err)
+		}
+	})
+
+	t.Run("ST-10_NetworkErrorIsNotInvalidAssertion", func(t *testing.T) {
+		restore := setSteamURLs("http://127.0.0.1:1", "")
+		defer restore()
+
+		_, err := VerifySteamOpenIDCallback(validSteamQuery("76500000000000001"))
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+		if errors.Is(err, ErrInvalidAssertion) {
+			t.Errorf("network failure should not be classified as ErrInvalidAssertion, got %v", err)
+		}
+	})
+
+	t.Run("ST-11_NonOKStatus", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer ts.Close()
+		restore := setSteamURLs(ts.URL, "")
+		defer restore()
+
+		_, err := VerifySteamOpenIDCallback(validSteamQuery("76500000000000001"))
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+		if errors.Is(err, ErrInvalidAssertion) {
+			t.Errorf("non-OK status should not be classified as ErrInvalidAssertion, got %v", err)
+		}
+	})
+
+	t.Run("ST-12_RejectedByServer", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte("ns:http://specs.openid.net/auth/2.0\nis_valid:false\n"))
+		}))
+		defer ts.Close()
+		restore := setSteamURLs(ts.URL, "")
+		defer restore()
+
+		_, err := VerifySteamOpenIDCallback(validSteamQuery("76500000000000001"))
+		if !errors.Is(err, ErrInvalidAssertion) {
+			t.Fatalf("expected ErrInvalidAssertion, got %v", err)
+		}
+	})
+}
+
+// setSteamURLs points the package's Steam endpoint vars at test values,
+// returning a func that restores the originals.
+func setSteamURLs(openIDLoginURL, playerSummaryURL string) func() {
+	origLogin, origSummary := steamOpenIDLoginURL, steamPlayerSummaryURL
+	if openIDLoginURL != "" {
+		steamOpenIDLoginURL = openIDLoginURL
 	}
-	if steamID64 != "76561198000000000" {
-		t.Errorf("expected the extracted SteamID64, got %q", steamID64)
+	if playerSummaryURL != "" {
+		steamPlayerSummaryURL = playerSummaryURL
+	}
+	return func() {
+		steamOpenIDLoginURL = origLogin
+		steamPlayerSummaryURL = origSummary
 	}
 }
 
-func TestVerifySteamOpenIDCallbackWrongMode(t *testing.T) {
-	query := newValidSteamCallbackQuery()
-	query.Set("openid.mode", "cancel")
-
-	_, err := VerifySteamOpenIDCallback(query)
-	if err == nil {
-		t.Fatal("expected an error when openid.mode is not id_res")
+func TestST13to15ResponseIsValid(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want bool
+	}{
+		{"ST-13_IsValidTrue", "ns:foo\nis_valid:true\n", true},
+		{"ST-14_IsValidFalseOrAbsent", "ns:foo\nis_valid:false\n", false},
+		{"ST-15_EmptyBody", "", false},
 	}
-	if !errors.Is(err, ErrInvalidAssertion) {
-		t.Errorf("expected ErrInvalidAssertion (a client-fault, 400-worthy rejection), got: %v", err)
-	}
-}
-
-func TestVerifySteamOpenIDCallbackInvalidClaimedID(t *testing.T) {
-	tests := []string{
-		"",
-		"not-a-url",
-		"https://evil.example.com/openid/id/76561198000000000",
-		"https://steamcommunity.com/openid/id/not-numeric",
-	}
-	for _, claimedID := range tests {
-		t.Run(claimedID, func(t *testing.T) {
-			query := newValidSteamCallbackQuery()
-			query.Set("openid.claimed_id", claimedID)
-
-			_, err := VerifySteamOpenIDCallback(query)
-			if err == nil {
-				t.Fatalf("expected an error for claimed_id %q", claimedID)
-			}
-			if !errors.Is(err, ErrInvalidAssertion) {
-				t.Errorf("expected ErrInvalidAssertion for claimed_id %q, got: %v", claimedID, err)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := responseIsValid([]byte(tc.body)); got != tc.want {
+				t.Errorf("responseIsValid(%q) = %v, want %v", tc.body, got, tc.want)
 			}
 		})
 	}
 }
 
-func TestVerifySteamOpenIDCallbackSignedDoesNotCoverClaimedIDRejected(t *testing.T) {
-	withServer(t, &steamOpenIDLoginURL, func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("ns:http://specs.openid.net/auth/2.0\nis_valid:true\n"))
-	})
+func TestST16to22GetSteamUser(t *testing.T) {
+	t.Run("ST-16_Success", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"response":{"players":[{"steamid":"76500000000000001","personaname":"bob","profileurl":"https://steamcommunity.com/id/bob","avatarfull":"https://avatar.test/bob.png"}]}}`))
+		}))
+		defer ts.Close()
+		restore := setSteamURLs("", ts.URL+"/")
+		restoreKey := setSteamAPIKeyForTest(t, "test-key")
+		defer restore()
+		defer restoreKey()
 
-	query := newValidSteamCallbackQuery()
-	query.Set("openid.signed", "op_endpoint,identity,return_to")
-
-	_, err := VerifySteamOpenIDCallback(query)
-	if err == nil {
-		t.Fatal("expected an error when openid.signed does not list claimed_id, even if Steam reports is_valid:true")
-	}
-	if !errors.Is(err, ErrInvalidAssertion) {
-		t.Errorf("expected ErrInvalidAssertion, got: %v", err)
-	}
-}
-
-func TestVerifySteamOpenIDCallbackRejectedByServer(t *testing.T) {
-	withServer(t, &steamOpenIDLoginURL, func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("ns:http://specs.openid.net/auth/2.0\nis_valid:false\n"))
-	})
-
-	err := requireVerifyError(t, newValidSteamCallbackQuery())
-	if !errors.Is(err, ErrInvalidAssertion) {
-		t.Errorf("expected ErrInvalidAssertion when Steam reports is_valid:false, got: %v", err)
-	}
-}
-
-// TestVerifySteamOpenIDCallbackSubstringFalsePositiveRejected is the
-// regression test for parsing is_valid as an exact key/value line rather
-// than substring-matching the whole body: a body whose actual is_valid line
-// says false, but which happens to also contain the literal text
-// "is_valid:true" elsewhere (e.g. echoed back inside another field's
-// value), must still be rejected.
-func TestVerifySteamOpenIDCallbackSubstringFalsePositiveRejected(t *testing.T) {
-	withServer(t, &steamOpenIDLoginURL, func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("ns:http://specs.openid.net/auth/2.0\nresponse_nonce:is_valid:true-lookalike\nis_valid:false\n"))
-	})
-
-	err := requireVerifyError(t, newValidSteamCallbackQuery())
-	if !errors.Is(err, ErrInvalidAssertion) {
-		t.Errorf("expected ErrInvalidAssertion despite the lookalike substring, got: %v", err)
-	}
-}
-
-// TestVerifySteamOpenIDCallbackNonOKStatus is the regression test for the
-// error-category split: a Steam-side outage/error must NOT be
-// ErrInvalidAssertion, so callers map it to a 5xx (their fault, not the
-// caller's), unlike a genuinely rejected assertion.
-func TestVerifySteamOpenIDCallbackNonOKStatus(t *testing.T) {
-	withServer(t, &steamOpenIDLoginURL, func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-	})
-
-	err := requireVerifyError(t, newValidSteamCallbackQuery())
-	if errors.Is(err, ErrInvalidAssertion) {
-		t.Errorf("expected a non-2xx response from Steam to NOT be ErrInvalidAssertion, got: %v", err)
-	}
-}
-
-// TestVerifySteamOpenIDCallbackNetworkErrorIsNotInvalidAssertion covers the
-// other outage shape - Steam unreachable entirely, rather than reachable but
-// erroring - which must also fall outside ErrInvalidAssertion.
-func TestVerifySteamOpenIDCallbackNetworkErrorIsNotInvalidAssertion(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
-	unreachableURL := server.URL
-	server.Close() // closed immediately, so the client's request will fail to connect
-
-	original := steamOpenIDLoginURL
-	steamOpenIDLoginURL = unreachableURL
-	t.Cleanup(func() { steamOpenIDLoginURL = original })
-
-	err := requireVerifyError(t, newValidSteamCallbackQuery())
-	if errors.Is(err, ErrInvalidAssertion) {
-		t.Errorf("expected a network failure reaching Steam to NOT be ErrInvalidAssertion, got: %v", err)
-	}
-}
-
-// requireVerifyError calls VerifySteamOpenIDCallback and fails the test if
-// it doesn't return an error, returning that error for further assertions.
-func requireVerifyError(t *testing.T, query url.Values) error {
-	t.Helper()
-	_, err := VerifySteamOpenIDCallback(query)
-	if err == nil {
-		t.Fatal("expected VerifySteamOpenIDCallback to return an error")
-	}
-	return err
-}
-
-// -------------- GetSteamUser --------------
-
-func TestGetSteamUserSuccess(t *testing.T) {
-	withServer(t, &steamPlayerSummaryURL, func(w http.ResponseWriter, r *http.Request) {
-		if got := r.URL.Query().Get("steamids"); got != "76561198000000000" {
-			t.Errorf("expected steamids=76561198000000000, got %q", got)
+		got, err := GetSteamUser("76500000000000001")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
-		w.Write([]byte(`{"response":{"players":[{"steamid":"76561198000000000","personaname":"TestPlayer","profileurl":"https://steamcommunity.com/id/testplayer","avatarfull":"https://avatar.example/full.jpg"}]}}`))
+		if got.SteamID64 != "76500000000000001" || got.PersonaName != "bob" {
+			t.Errorf("GetSteamUser() = %+v, want steamid=76500000000000001 personaname=bob", got)
+		}
 	})
-	t.Cleanup(setSteamAPIKey(t, "test-key"))
 
-	user, err := GetSteamUser("76561198000000000")
-	if err != nil {
-		t.Fatalf("GetSteamUser returned error: %v", err)
-	}
-	if user.GetID() != "76561198000000000" || user.GetUsername() != "TestPlayer" {
-		t.Errorf("unexpected user: %+v", user)
-	}
-}
+	t.Run("ST-17_MissingAPIKey", func(t *testing.T) {
+		restoreKey := setSteamAPIKeyForTest(t, "")
+		defer restoreKey()
 
-func TestGetSteamUserMismatchedSteamIDRejected(t *testing.T) {
-	withServer(t, &steamPlayerSummaryURL, func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"response":{"players":[{"steamid":"99999999999999999","personaname":"WrongPlayer"}]}}`))
+		_, err := GetSteamUser("76500000000000001")
+		if err == nil || err.Error() != "STEAM_API_KEY is not set" {
+			t.Fatalf("GetSteamUser() error = %v, want \"STEAM_API_KEY is not set\"", err)
+		}
 	})
-	t.Cleanup(setSteamAPIKey(t, "test-key"))
 
-	if _, err := GetSteamUser("76561198000000000"); err == nil {
-		t.Fatal("expected an error when the returned player's steamid doesn't match the requested one")
-	}
-}
+	t.Run("ST-18_NetworkError", func(t *testing.T) {
+		restore := setSteamURLs("", "http://127.0.0.1:1/")
+		restoreKey := setSteamAPIKeyForTest(t, "test-key")
+		defer restore()
+		defer restoreKey()
 
-func TestGetSteamUserMissingAPIKey(t *testing.T) {
-	t.Cleanup(setSteamAPIKey(t, ""))
-
-	if _, err := GetSteamUser("76561198000000000"); err == nil {
-		t.Fatal("expected an error when STEAM_API_KEY is not set")
-	}
-}
-
-func TestGetSteamUserNonOKStatus(t *testing.T) {
-	withServer(t, &steamPlayerSummaryURL, func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
+		_, err := GetSteamUser("76500000000000001")
+		if err == nil {
+			t.Fatal("expected an error")
+		}
 	})
-	t.Cleanup(setSteamAPIKey(t, "test-key"))
 
-	if _, err := GetSteamUser("76561198000000000"); err == nil {
-		t.Fatal("expected an error for a non-2xx response")
-	}
-}
+	t.Run("ST-19_NonOKStatus", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer ts.Close()
+		restore := setSteamURLs("", ts.URL+"/")
+		restoreKey := setSteamAPIKeyForTest(t, "test-key")
+		defer restore()
+		defer restoreKey()
 
-func TestGetSteamUserNoPlayersReturned(t *testing.T) {
-	withServer(t, &steamPlayerSummaryURL, func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"response":{"players":[]}}`))
+		_, err := GetSteamUser("76500000000000001")
+		if err == nil {
+			t.Fatal("expected an error")
+		}
 	})
-	t.Cleanup(setSteamAPIKey(t, "test-key"))
 
-	if _, err := GetSteamUser("76561198000000000"); err == nil {
-		t.Fatal("expected an error when Steam returns no players for the given SteamID64")
-	}
+	t.Run("ST-20_MalformedJSON", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{not-json`))
+		}))
+		defer ts.Close()
+		restore := setSteamURLs("", ts.URL+"/")
+		restoreKey := setSteamAPIKeyForTest(t, "test-key")
+		defer restore()
+		defer restoreKey()
+
+		_, err := GetSteamUser("76500000000000001")
+		if err == nil {
+			t.Fatal("expected a decode error")
+		}
+	})
+
+	t.Run("ST-21_NoPlayersReturned", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"response":{"players":[]}}`))
+		}))
+		defer ts.Close()
+		restore := setSteamURLs("", ts.URL+"/")
+		restoreKey := setSteamAPIKeyForTest(t, "test-key")
+		defer restore()
+		defer restoreKey()
+
+		_, err := GetSteamUser("76500000000000001")
+		if err == nil || err.Error() != "steam player summary response contained no players" {
+			t.Fatalf("GetSteamUser() error = %v, want \"steam player summary response contained no players\"", err)
+		}
+	})
+
+	t.Run("ST-22_MismatchedSteamID", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"response":{"players":[{"steamid":"76500000000000099","personaname":"bob"}]}}`))
+		}))
+		defer ts.Close()
+		restore := setSteamURLs("", ts.URL+"/")
+		restoreKey := setSteamAPIKeyForTest(t, "test-key")
+		defer restore()
+		defer restoreKey()
+
+		_, err := GetSteamUser("76500000000000001")
+		if err == nil {
+			t.Fatal("expected a steamid-mismatch error")
+		}
+	})
 }
 
-// setSteamAPIKey overrides STEAM_API_KEY for the duration of a test,
-// returning a func to restore the original value.
-func setSteamAPIKey(t *testing.T, value string) func() {
+// setSteamAPIKeyForTest overrides the package-level STEAM_API_KEY for the
+// duration of a test, restoring the original value on cleanup.
+func setSteamAPIKeyForTest(t *testing.T, value string) func() {
 	t.Helper()
 	original := STEAM_API_KEY
 	STEAM_API_KEY = value
-	return func() { STEAM_API_KEY = original }
-}
-
-// -------------- ProcessSteamLogin / ProcessSteamLink --------------
-
-func TestProcessSteamLoginCreatesAccount(t *testing.T) {
-	as := newMockAccountService()
-	als := &mockLinkAccountStore{
-		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
-			return nil, auth.ErrNotFound
-		},
-	}
-	ss := &mockSessionService{}
-	user := &SteamData{SteamID64: "76561198000000000", PersonaName: "TestPlayer"}
-
-	session, err := ProcessSteamLogin(as, als, ss, user)
-	if err != nil {
-		t.Fatalf("ProcessSteamLogin returned error: %v", err)
-	}
-	if session == nil || ss.addedOnce != session {
-		t.Fatal("expected the new session to be added via SessionService")
-	}
-	if len(as.accounts) != 1 {
-		t.Fatalf("expected exactly one account to be created, got %d", len(as.accounts))
-	}
-	if len(als.addCalls) != 1 || als.addCalls[0].Platform != auth.PlatformSteam || als.addCalls[0].PlatformID != "76561198000000000" {
-		t.Fatalf("expected the Steam identity to be linked, got: %+v", als.addCalls)
+	return func() {
+		STEAM_API_KEY = original
 	}
 }
 
-func TestProcessSteamLoginReusesExistingLinkedAccount(t *testing.T) {
-	as := newMockAccountService()
-	as.accounts["existing-acct"] = &auth.Account{UserID: "existing-acct", Username: "existing"}
-	als := &mockLinkAccountStore{
-		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
-			return &auth.LinkedAccount{UserID: "existing-acct", Verified: true, LoginEnabled: true}, nil
-		},
-	}
-	ss := &mockSessionService{}
-	user := &SteamData{SteamID64: "76561198000000000", PersonaName: "TestPlayer"}
+func TestST23to25ProcessSteamLogin(t *testing.T) {
+	user := &SteamData{SteamID64: "76500000000000001", PersonaName: "bob"}
 
-	session, err := ProcessSteamLogin(as, als, ss, user)
-	if err != nil {
-		t.Fatalf("ProcessSteamLogin returned error: %v", err)
-	}
-	if session.UserID != "existing-acct" {
-		t.Errorf("expected the session to belong to the existing account, got %q", session.UserID)
-	}
-	if len(as.accounts) != 1 {
-		t.Errorf("expected no new account to be created, got %d accounts", len(as.accounts))
-	}
+	t.Run("ST-23_CreatesAccount", func(t *testing.T) {
+		as := newSTMockAccountService()
+		las := newSTMockLinkAccountStore()
+		ss := &stMockSessionService{}
+
+		session, err := ProcessSteamLogin(as, las, ss, user)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if session == nil {
+			t.Fatal("expected a non-nil session")
+		}
+		if len(ss.added) != 1 {
+			t.Errorf("ss.AddSession called %d times, want 1", len(ss.added))
+		}
+		if as.addAccountCalls != 1 {
+			t.Errorf("as.AddAccount called %d times, want 1", as.addAccountCalls)
+		}
+	})
+
+	t.Run("ST-24_AccountResolutionFails", func(t *testing.T) {
+		as := newSTMockAccountService()
+		as.addAccountErr = errors.New("db down")
+		las := newSTMockLinkAccountStore()
+		ss := &stMockSessionService{}
+
+		_, err := ProcessSteamLogin(as, las, ss, user)
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+	})
+
+	t.Run("ST-25_AddSessionFails", func(t *testing.T) {
+		as := newSTMockAccountService()
+		las := newSTMockLinkAccountStore()
+		ss := &stMockSessionService{addSessionErr: errors.New("session store down")}
+
+		_, err := ProcessSteamLogin(as, las, ss, user)
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+	})
 }
 
-func TestProcessSteamLinkLinksToSession(t *testing.T) {
-	session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
-	als := &mockLinkAccountStore{
-		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
-			return nil, auth.ErrNotFound
-		},
-	}
-	user := &SteamData{SteamID64: "76561198000000000", PersonaName: "TestPlayer"}
+func TestST26to29ProcessSteamLink(t *testing.T) {
+	user := &SteamData{SteamID64: "76500000000000001", PersonaName: "bob"}
 
-	got, err := ProcessSteamLink(linkRequestWithSession(session), als, user)
-	if err != nil {
-		t.Fatalf("ProcessSteamLink returned error: %v", err)
-	}
-	if got != session {
-		t.Error("expected the same session to be returned")
-	}
-	if len(als.addCalls) != 1 || als.addCalls[0].UserID != "u1" || als.addCalls[0].Platform != auth.PlatformSteam {
-		t.Fatalf("expected the Steam identity to be linked to the session's account, got: %+v", als.addCalls)
-	}
-}
+	t.Run("ST-26_LinksToSession", func(t *testing.T) {
+		las := newSTMockLinkAccountStore()
+		session := &auth.Session{ID: "sess-1", UserID: "user-1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
+		req := stRequestWithSession(session)
 
-func TestProcessSteamLinkAlreadyLinkedToDifferentAccountRejected(t *testing.T) {
-	session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
-	als := &mockLinkAccountStore{
-		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
-			return &auth.LinkedAccount{UserID: "someone-else"}, nil
-		},
-	}
-	user := &SteamData{SteamID64: "76561198000000000", PersonaName: "TestPlayer"}
+		got, err := ProcessSteamLink(req, las, user)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != session {
+			t.Errorf("ProcessSteamLink() returned a different session than the one supplied")
+		}
+		if las.addCalls != 1 {
+			t.Errorf("AddLinkedAccountToDB called %d times, want 1", las.addCalls)
+		}
+	})
 
-	_, err := ProcessSteamLink(linkRequestWithSession(session), als, user)
-	if err == nil {
-		t.Fatal("expected an error when the Steam identity is already linked to a different account")
-	}
-	if len(als.addCalls) != 0 {
-		t.Errorf("expected no link to be attempted, got: %+v", als.addCalls)
-	}
-}
+	t.Run("ST-27_NoSessionRejected", func(t *testing.T) {
+		las := newSTMockLinkAccountStore()
+		req := stRequestWithSession(nil)
 
-func TestProcessSteamLinkNoSessionRejected(t *testing.T) {
-	als := &mockLinkAccountStore{}
-	user := &SteamData{SteamID64: "76561198000000000", PersonaName: "TestPlayer"}
+		_, err := ProcessSteamLink(req, las, user)
+		if err == nil || err.Error() != "session not found" {
+			t.Fatalf("ProcessSteamLink() error = %v, want \"session not found\"", err)
+		}
+	})
 
-	r := httptest.NewRequest(http.MethodGet, "/api/openid", nil)
-	if _, err := ProcessSteamLink(r, als, user); err == nil {
-		t.Fatal("expected an error when there's no session in the request context")
-	}
+	t.Run("ST-28_ExpiredSessionRejected", func(t *testing.T) {
+		las := newSTMockLinkAccountStore()
+		session := &auth.Session{ID: "sess-1", UserID: "user-1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
+		req := stRequestWithSession(session)
+
+		_, err := ProcessSteamLink(req, las, user)
+		if err == nil || err.Error() != "session expired" {
+			t.Fatalf("ProcessSteamLink() error = %v, want \"session expired\"", err)
+		}
+	})
+
+	t.Run("ST-29_AlreadyLinkedToDifferentAccountRejected", func(t *testing.T) {
+		las := newSTMockLinkAccountStore()
+		las.byPlatformID[auth.PlatformSteam] = map[string]*auth.LinkedAccount{
+			user.SteamID64: {UserID: "other-user", Platform: auth.PlatformSteam, PlatformID: user.SteamID64},
+		}
+		session := &auth.Session{ID: "sess-1", UserID: "user-1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
+		req := stRequestWithSession(session)
+
+		_, err := ProcessSteamLink(req, las, user)
+		if !errors.Is(err, errPlatformAlreadyLinkedToDifferentAccount) {
+			t.Fatalf("ProcessSteamLink() error = %v, want errPlatformAlreadyLinkedToDifferentAccount", err)
+		}
+	})
 }

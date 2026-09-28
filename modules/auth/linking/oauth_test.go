@@ -3,6 +3,7 @@ package linking
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -11,768 +12,2077 @@ import (
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/twitch"
+	"github.com/bwmarrin/discordgo"
+	"github.com/google/uuid"
+	"golang.org/x/oauth2"
 )
 
-// -------------- Fakes / Mocks --------------
+// mustUUID parses s as a UUID, panicking on failure - only ever used with
+// fixed, known-valid literals in this file.
+func mustUUID(s string) uuid.UUID {
+	return uuid.MustParse(s)
+}
 
-// fakePlatformData is a minimal auth.PlatformData implementation for tests,
-// patterned after DiscordData in discord.go.
-type fakePlatformData struct {
+// oaIdentity is a minimal, configurable auth.PlatformData implementation
+// used by the platform-neutral helper tests in this file.
+type oaIdentity struct {
 	id       string
 	email    string
 	username string
 }
 
-func (f *fakePlatformData) GetID() string       { return f.id }
-func (f *fakePlatformData) GetEmail() string    { return f.email }
-func (f *fakePlatformData) GetUsername() string { return f.username }
-func (f *fakePlatformData) GetData() string     { return "{}" }
-func (f *fakePlatformData) CreateLinkedAccount(userID string) *auth.LinkedAccount {
+func (f *oaIdentity) GetID() string       { return f.id }
+func (f *oaIdentity) GetEmail() string    { return f.email }
+func (f *oaIdentity) GetUsername() string { return f.username }
+func (f *oaIdentity) GetData() string     { return "{}" }
+func (f *oaIdentity) CreateLinkedAccount(userID string) *auth.LinkedAccount {
 	return auth.NewLinkedAccount(userID, auth.PlatformDiscord, f.username, f.id, f)
 }
 
-// mockAccountService implements auth.AccountService for unit testing
-// resolveOrCreateAccountForPlatformUser / ProcessOAuthLogin.
-type mockAccountService struct {
-	accounts  map[string]*auth.Account
-	addErr    error
-	deleteErr error
+// oaMockAccountService is a minimal, self-contained auth.AccountService
+// double for oauth_test.go only.
+type oaMockAccountService struct {
+	AddAccountFunc     func(*auth.Account) error
+	GetAccountByIDFunc func(string) (*auth.Account, error)
+	DeleteAccountFunc  func(string) error
 
-	deletedIDs []string
+	AddAccountCalls     int
+	GetAccountByIDCalls int
+	DeleteAccountCalls  int
 }
 
-var _ auth.AccountService = (*mockAccountService)(nil)
+var _ auth.AccountService = (*oaMockAccountService)(nil)
 
-func newMockAccountService() *mockAccountService {
-	return &mockAccountService{accounts: make(map[string]*auth.Account)}
-}
-
-func (m *mockAccountService) AddAccount(a *auth.Account) error {
-	if m.addErr != nil {
-		return m.addErr
+func (m *oaMockAccountService) AddAccount(a *auth.Account) error {
+	m.AddAccountCalls++
+	if m.AddAccountFunc != nil {
+		return m.AddAccountFunc(a)
 	}
-	// Mirrors the real accounts.username UNIQUE constraint (a genuine,
-	// non-empty duplicate only - see store.go's NULLIF/COALESCE handling)
-	// so tests can exercise a platform-supplied username that collides
-	// with an existing account's username.
-	if a.Username != "" {
-		for _, existing := range m.accounts {
-			if existing.Username == a.Username {
-				return auth.ErrUsernameAlreadyExists
-			}
+	return nil
+}
+func (m *oaMockAccountService) GetAccountByID(userID string) (*auth.Account, error) {
+	m.GetAccountByIDCalls++
+	if m.GetAccountByIDFunc != nil {
+		return m.GetAccountByIDFunc(userID)
+	}
+	return nil, auth.ErrNotFound
+}
+func (m *oaMockAccountService) GetAccountByUsername(string) (*auth.Account, error) {
+	return nil, auth.ErrNotFound
+}
+func (m *oaMockAccountService) GetAccountByEmail(string) (*auth.Account, error) {
+	return nil, auth.ErrNotFound
+}
+func (m *oaMockAccountService) UpdateAccount(*auth.Account) error { return nil }
+func (m *oaMockAccountService) DeleteAccount(userID string) error {
+	m.DeleteAccountCalls++
+	if m.DeleteAccountFunc != nil {
+		return m.DeleteAccountFunc(userID)
+	}
+	return nil
+}
+func (m *oaMockAccountService) IsPasswordAuthEnabled(string) (bool, error) { return false, nil }
+
+// oaMockLinkAccountStore is a minimal, self-contained auth.LinkAccountStore
+// double for oauth_test.go only.
+type oaMockLinkAccountStore struct {
+	GetLinkedAccountByPlatformIDFunc func(auth.Platform, string) (*auth.LinkedAccount, error)
+	AddLinkedAccountToDBFunc         func(*auth.LinkedAccount) error
+
+	GetLinkedAccountByPlatformIDCalls int
+	AddLinkedAccountToDBCalls         int
+	AddedLinkedAccounts               []*auth.LinkedAccount
+}
+
+var _ auth.LinkAccountStore = (*oaMockLinkAccountStore)(nil)
+
+func (m *oaMockLinkAccountStore) AddLinkedAccountToDB(la *auth.LinkedAccount) error {
+	m.AddLinkedAccountToDBCalls++
+	if m.AddLinkedAccountToDBFunc != nil {
+		if err := m.AddLinkedAccountToDBFunc(la); err != nil {
+			return err
 		}
 	}
-	m.accounts[a.UserID] = a
+	m.AddedLinkedAccounts = append(m.AddedLinkedAccounts, la)
 	return nil
 }
-
-func (m *mockAccountService) GetAccountByID(userID string) (*auth.Account, error) {
-	if a, ok := m.accounts[userID]; ok {
-		return a, nil
+func (m *oaMockLinkAccountStore) UpdateLinkedAccount(*auth.LinkedAccount) error { return nil }
+func (m *oaMockLinkAccountStore) GetLinkedAccountByPlatformID(platform auth.Platform, platformID string) (*auth.LinkedAccount, error) {
+	m.GetLinkedAccountByPlatformIDCalls++
+	if m.GetLinkedAccountByPlatformIDFunc != nil {
+		return m.GetLinkedAccountByPlatformIDFunc(platform, platformID)
 	}
 	return nil, auth.ErrNotFound
 }
-
-func (m *mockAccountService) GetAccountByUsername(string) (*auth.Account, error) {
+func (m *oaMockLinkAccountStore) GetLinkedAccountByPlatformName(auth.Platform, string) (*auth.LinkedAccount, error) {
 	return nil, auth.ErrNotFound
 }
-
-func (m *mockAccountService) GetAccountByEmail(string) (*auth.Account, error) {
+func (m *oaMockLinkAccountStore) GetLinkedAccountByUserID(string, auth.Platform) (*auth.LinkedAccount, error) {
 	return nil, auth.ErrNotFound
 }
-
-func (m *mockAccountService) UpdateAccount(a *auth.Account) error {
-	m.accounts[a.UserID] = a
-	return nil
-}
-
-func (m *mockAccountService) IsPasswordAuthEnabled(string) (bool, error) {
-	return true, nil
-}
-
-func (m *mockAccountService) DeleteAccount(userID string) error {
-	if m.deleteErr != nil {
-		return m.deleteErr
-	}
-	delete(m.accounts, userID)
-	m.deletedIDs = append(m.deletedIDs, userID)
-	return nil
-}
-
-// mockLinkAccountStore implements auth.LinkAccountStore for unit testing
-// resolveOrCreateAccountForPlatformUser / ProcessOAuthLogin.
-type mockLinkAccountStore struct {
-	getByPlatformIDFunc func(platform auth.Platform, platformID string) (*auth.LinkedAccount, error)
-	addFunc             func(la *auth.LinkedAccount) error
-
-	addCalls []*auth.LinkedAccount
-	getCalls int
-}
-
-var _ auth.LinkAccountStore = (*mockLinkAccountStore)(nil)
-
-func (m *mockLinkAccountStore) AddLinkedAccountToDB(la *auth.LinkedAccount) error {
-	m.addCalls = append(m.addCalls, la)
-	if m.addFunc != nil {
-		return m.addFunc(la)
-	}
-	return nil
-}
-
-func (m *mockLinkAccountStore) UpdateLinkedAccount(*auth.LinkedAccount) error {
-	return nil
-}
-
-func (m *mockLinkAccountStore) GetLinkedAccountByPlatformID(platform auth.Platform, platformID string) (*auth.LinkedAccount, error) {
-	m.getCalls++
-	return m.getByPlatformIDFunc(platform, platformID)
-}
-
-func (m *mockLinkAccountStore) GetLinkedAccountByPlatformName(auth.Platform, string) (*auth.LinkedAccount, error) {
-	return nil, auth.ErrNotFound
-}
-
-func (m *mockLinkAccountStore) GetLinkedAccountByUserID(string, auth.Platform) (*auth.LinkedAccount, error) {
-	return nil, auth.ErrNotFound
-}
-
-func (m *mockLinkAccountStore) GetLinkedAccountsByUserID(string) ([]*auth.LinkedAccount, error) {
+func (m *oaMockLinkAccountStore) GetLinkedAccountsByUserID(string) ([]*auth.LinkedAccount, error) {
 	return nil, nil
 }
-
-func (m *mockLinkAccountStore) DeleteLinkedAccount(string, auth.Platform) error {
+func (m *oaMockLinkAccountStore) DeleteLinkedAccount(string, auth.Platform) error { return nil }
+func (m *oaMockLinkAccountStore) SetLinkedAccountLoginEnabled(string, auth.Platform, bool) error {
 	return nil
 }
 
-func (m *mockLinkAccountStore) SetLinkedAccountLoginEnabled(string, auth.Platform, bool) error {
-	return nil
+// oaMockSessionService is a minimal, self-contained auth.SessionService
+// double for oauth_test.go only.
+type oaMockSessionService struct {
+	AddSessionFunc  func(*auth.Session) error
+	AddSessionCalls int
 }
 
-// concurrentAccountService is a goroutine-safe variant of mockAccountService.
-// The plain-map mock above is intentionally unsynchronized (it's only ever
-// driven sequentially by the other tests); reusing it under concurrent
-// goroutines would trip -race on the test double itself rather than on
-// resolveOrCreateAccountForPlatformUser.
-type concurrentAccountService struct {
+var _ auth.SessionService = (*oaMockSessionService)(nil)
+
+func (m *oaMockSessionService) AddSession(session *auth.Session) error {
+	m.AddSessionCalls++
+	if m.AddSessionFunc != nil {
+		return m.AddSessionFunc(session)
+	}
+	return nil
+}
+func (m *oaMockSessionService) GetSession(string) (*auth.Session, error) {
+	return nil, auth.ErrNotFound
+}
+func (m *oaMockSessionService) UpdateSession(*auth.Session) error       { return nil }
+func (m *oaMockSessionService) DeleteSession(string) error              { return nil }
+func (m *oaMockSessionService) CreateJWT(*auth.Session) (string, error) { return "", nil }
+func (m *oaMockSessionService) ReadJWT(string) (*auth.Session, error)   { return nil, auth.ErrNotFound }
+
+// oaRequestWithSession builds a request carrying session in its context, or
+// a plain request if session is nil.
+func oaRequestWithSession(session *auth.Session) *http.Request {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	if session == nil {
+		return req
+	}
+	return req.WithContext(context.WithValue(req.Context(), mw.SessionKey, session))
+}
+
+// oaSetVar overwrites *target for the duration of the calling test.
+func oaSetVar(t *testing.T, target *string, value string) {
+	t.Helper()
+	original := *target
+	*target = value
+	t.Cleanup(func() { *target = original })
+}
+
+// oaJSONServer starts an httptest.Server that always answers with the given
+// status and JSON body.
+func oaJSONServer(status int, body string) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(body))
+	}))
+}
+
+// oaSetDiscordUsersEndpoint points discordgo's EndpointUsers at ts for the
+// duration of the calling test (see discord_test.go for why this works).
+func oaSetDiscordUsersEndpoint(t *testing.T, ts *httptest.Server) {
+	t.Helper()
+	original := discordgo.EndpointUsers
+	discordgo.EndpointUsers = ts.URL + "/users/"
+	t.Cleanup(func() { discordgo.EndpointUsers = original })
+}
+
+// oaSetupDiscordPlatform points discordConfig's token endpoint and
+// discordgo's user endpoint at local test servers returning a single fixed
+// Discord identity (id "d1", username "alice", email "a@b.com").
+func oaSetupDiscordPlatform(t *testing.T) {
+	t.Helper()
+	tokenTS := oaJSONServer(http.StatusOK, `{"access_token":"disc-at","token_type":"Bearer","expires_in":3600,"scope":"identify"}`)
+	t.Cleanup(tokenTS.Close)
+	usersTS := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"d1","username":"alice","email":"a@b.com"}`))
+	}))
+	t.Cleanup(usersTS.Close)
+	oaSetDiscordUsersEndpoint(t, usersTS)
+
+	originalTokenURL := discordConfig.Endpoint.TokenURL
+	discordConfig.Endpoint.TokenURL = tokenTS.URL
+	t.Cleanup(func() { discordConfig.Endpoint.TokenURL = originalTokenURL })
+}
+
+// oaSetupDiscordExchangeFailure makes discordConfig's token exchange fail,
+// without touching the Discord user endpoint.
+func oaSetupDiscordExchangeFailure(t *testing.T) {
+	t.Helper()
+	tokenTS := oaJSONServer(http.StatusBadRequest, `{"error":"invalid_grant"}`)
+	t.Cleanup(tokenTS.Close)
+	originalTokenURL := discordConfig.Endpoint.TokenURL
+	discordConfig.Endpoint.TokenURL = tokenTS.URL
+	t.Cleanup(func() { discordConfig.Endpoint.TokenURL = originalTokenURL })
+}
+
+// oaSetupTwitchPlatform points twitch.Config's token endpoint and helix's
+// API base URL at local test servers returning a single fixed Twitch
+// identity (id "tw1", login "alice", email "a@b.com") - the
+// auth.PlatformTwitch dispatch branch, distinct from Discord's.
+func oaSetupTwitchPlatform(t *testing.T) {
+	t.Helper()
+	tokenTS := oaJSONServer(http.StatusOK, `{"access_token":"twitch-at","token_type":"bearer","expires_in":14400,"scope":["user:read:email"]}`)
+	t.Cleanup(tokenTS.Close)
+	originalTokenURL := twitch.Config.Endpoint.TokenURL
+	twitch.Config.Endpoint.TokenURL = tokenTS.URL
+	t.Cleanup(func() { twitch.Config.Endpoint.TokenURL = originalTokenURL })
+
+	usersTS := oaJSONServer(http.StatusOK, `{"data":[{"id":"tw1","login":"alice","email":"a@b.com"}]}`)
+	t.Cleanup(usersTS.Close)
+	originalAPIBaseURL := twitch.APIBaseURL
+	twitch.APIBaseURL = usersTS.URL
+	t.Cleanup(func() { twitch.APIBaseURL = originalAPIBaseURL })
+
+	// helix.NewClient refuses to construct a client without a ClientID,
+	// regardless of APIBaseURL, so fill one in if the test environment
+	// doesn't set TWITCH_CLIENT_ID.
+	if twitch.CLIENT_ID == "" {
+		twitch.CLIENT_ID = "test-client-id"
+		t.Cleanup(func() { twitch.CLIENT_ID = "" })
+	}
+}
+
+// oaSetupMicrosoftLoginPlatform points MicrosoftLoginConfig's token endpoint
+// and microsoftUserInfoURL at local test servers returning a single fixed
+// plain-Microsoft-account identity (sub "ms1", name "Alice", email
+// "a@b.com") - the auth.PlatformMicrosoft dispatch branch, distinct from
+// both Discord and the Minecraft/XboxLive MicrosoftConfig chain.
+func oaSetupMicrosoftLoginPlatform(t *testing.T) {
+	t.Helper()
+	tokenTS := oaJSONServer(http.StatusOK, `{"access_token":"ms-login-at","token_type":"Bearer","expires_in":3600,"scope":"openid profile email"}`)
+	t.Cleanup(tokenTS.Close)
+	originalTokenURL := MicrosoftLoginConfig.Endpoint.TokenURL
+	MicrosoftLoginConfig.Endpoint.TokenURL = tokenTS.URL
+	t.Cleanup(func() { MicrosoftLoginConfig.Endpoint.TokenURL = originalTokenURL })
+
+	userInfoTS := oaJSONServer(http.StatusOK, `{"sub":"ms1","name":"Alice","email":"a@b.com"}`)
+	t.Cleanup(userInfoTS.Close)
+	oaSetVar(t, &microsoftUserInfoURL, userInfoTS.URL)
+}
+
+// oaMicrosoftChainOpts configures oaSetupMicrosoftChain's behavior.
+type oaMicrosoftChainOpts struct {
+	javaUUID          string // empty means the account doesn't own Java
+	xuid, gamertag    string // defaults to "xid1"/"Tag" if empty
+	xstsFails         bool   // XSTS authorize fails outright (both relying parties)
+	mcLoginFails      bool   // minecraftLoginWithXbox fails
+	mcProfileFails    bool   // getMinecraftProfile fails with a server error (not "not found")
+	xstsXboxLiveFails bool   // only the Xbox-Live-relying-party XSTS leg fails
+}
+
+// oaSetupMicrosoftChain points MicrosoftConfig and the XBL/XSTS/Minecraft
+// endpoint vars at local test servers implementing the chain
+// GetXboxUser/GetXboxAndMinecraftUser drive, and returns the xuid used.
+func oaSetupMicrosoftChain(t *testing.T, opts oaMicrosoftChainOpts) string {
+	t.Helper()
+	xuid := opts.xuid
+	if xuid == "" {
+		xuid = "xid1"
+	}
+	gamertag := opts.gamertag
+	if gamertag == "" {
+		gamertag = "Tag"
+	}
+
+	tokenTS := oaJSONServer(http.StatusOK, `{"access_token":"ms-at","token_type":"Bearer","expires_in":3600,"scope":["XboxLive.signin","offline_access"]}`)
+	t.Cleanup(tokenTS.Close)
+	originalTokenURL := MicrosoftConfig.Endpoint.TokenURL
+	MicrosoftConfig.Endpoint.TokenURL = tokenTS.URL
+	t.Cleanup(func() { MicrosoftConfig.Endpoint.TokenURL = originalTokenURL })
+
+	xblTS := oaJSONServer(http.StatusOK, `{"Token":"xbl-t"}`)
+	t.Cleanup(xblTS.Close)
+	oaSetVar(t, &xboxLiveAuthenticateURL, xblTS.URL)
+
+	if opts.xstsFails {
+		xstsTS := oaJSONServer(http.StatusInternalServerError, `{}`)
+		t.Cleanup(xstsTS.Close)
+		oaSetVar(t, &xstsAuthorizeURL, xstsTS.URL)
+		return xuid
+	}
+
+	xstsTS := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			RelyingParty string `json:"RelyingParty"`
+		}
+		_ = readJSONBody(r, &body)
+		w.Header().Set("Content-Type", "application/json")
+		if body.RelyingParty == xstsXboxLiveRelyingParty {
+			if opts.xstsXboxLiveFails {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			_, _ = w.Write([]byte(fmt.Sprintf(`{"Token":"xsts-xbl-t","DisplayClaims":{"xui":[{"uhs":"hash1","xid":%q,"gtg":%q}]}}`, xuid, gamertag)))
+			return
+		}
+		_, _ = w.Write([]byte(`{"Token":"xsts-mc-t","DisplayClaims":{"xui":[{"uhs":"hash1"}]}}`))
+	}))
+	t.Cleanup(xstsTS.Close)
+	oaSetVar(t, &xstsAuthorizeURL, xstsTS.URL)
+
+	mcLoginTS := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if opts.mcLoginFails {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		_, _ = w.Write([]byte(`{"access_token":"mc-t"}`))
+	}))
+	t.Cleanup(mcLoginTS.Close)
+	oaSetVar(t, &minecraftLoginURL, mcLoginTS.URL)
+
+	mcProfileTS := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if opts.mcProfileFails {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if opts.javaUUID == "" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_, _ = w.Write([]byte(fmt.Sprintf(`{"id":%q,"name":"Steve","skins":[],"capes":[]}`, opts.javaUUID)))
+	}))
+	t.Cleanup(mcProfileTS.Close)
+	oaSetVar(t, &minecraftProfileURL, mcProfileTS.URL)
+
+	return xuid
+}
+
+func TestOA01to04ExtCodeForToken(t *testing.T) {
+	t.Run("OA-01_ArrayScope", func(t *testing.T) {
+		ts := oaJSONServer(http.StatusOK, `{"access_token":"AT","token_type":"Bearer","refresh_token":"RT","expires_in":3600,"scope":["identify","email"]}`)
+		defer ts.Close()
+		config := &oauth2.Config{Endpoint: oauth2.Endpoint{TokenURL: ts.URL, AuthStyle: oauth2.AuthStyleInHeader}}
+
+		got, err := ExtCodeForToken(config, "code")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.AccessToken != "AT" || got.TokenType != "Bearer" || got.RefreshToken != "RT" {
+			t.Errorf("token = %+v, want AccessToken=AT TokenType=Bearer RefreshToken=RT", got)
+		}
+		if len(got.Scope) != 2 || got.Scope[0] != "identify" || got.Scope[1] != "email" {
+			t.Errorf("Scope = %v, want [identify email]", got.Scope)
+		}
+	})
+
+	t.Run("OA-02_StringScope", func(t *testing.T) {
+		ts := oaJSONServer(http.StatusOK, `{"access_token":"AT","token_type":"Bearer","expires_in":3600,"scope":"identify"}`)
+		defer ts.Close()
+		config := &oauth2.Config{Endpoint: oauth2.Endpoint{TokenURL: ts.URL, AuthStyle: oauth2.AuthStyleInHeader}}
+
+		got, err := ExtCodeForToken(config, "code")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(got.Scope) != 1 || got.Scope[0] != "identify" {
+			t.Errorf("Scope = %v, want [identify]", got.Scope)
+		}
+	})
+
+	t.Run("OA-03_ExchangeFails", func(t *testing.T) {
+		ts := oaJSONServer(http.StatusBadRequest, `{"error":"invalid_grant"}`)
+		defer ts.Close()
+		config := &oauth2.Config{Endpoint: oauth2.Endpoint{TokenURL: ts.URL, AuthStyle: oauth2.AuthStyleInHeader}}
+
+		got, err := ExtCodeForToken(config, "bad-code")
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+		if got != nil {
+			t.Errorf("expected nil token on error, got %+v", got)
+		}
+	})
+
+	t.Run("OA-04_MissingScope", func(t *testing.T) {
+		ts := oaJSONServer(http.StatusOK, `{"access_token":"AT","token_type":"Bearer","expires_in":3600}`)
+		defer ts.Close()
+		config := &oauth2.Config{Endpoint: oauth2.Endpoint{TokenURL: ts.URL, AuthStyle: oauth2.AuthStyleInHeader}}
+
+		_, err := ExtCodeForToken(config, "code")
+		if err == nil || err.Error() != "failed to get scope from token" {
+			t.Fatalf("ExtCodeForToken() error = %v, want \"failed to get scope from token\"", err)
+		}
+	})
+}
+
+func TestOA05to08RefreshToken(t *testing.T) {
+	expiredToken := func() *oauth2.Token {
+		return &oauth2.Token{AccessToken: "old-at", RefreshToken: "old-rt", Expiry: time.Now().Add(-time.Hour)}
+	}
+
+	t.Run("OA-05_ArrayScope", func(t *testing.T) {
+		ts := oaJSONServer(http.StatusOK, `{"access_token":"NEW","token_type":"Bearer","refresh_token":"NEWRT","expires_in":3600,"scope":["identify","email"]}`)
+		defer ts.Close()
+		config := &oauth2.Config{Endpoint: oauth2.Endpoint{TokenURL: ts.URL, AuthStyle: oauth2.AuthStyleInHeader}}
+
+		got, err := RefreshToken(config, expiredToken())
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.AccessToken != "NEW" || len(got.Scope) != 2 {
+			t.Errorf("token = %+v, want AccessToken=NEW Scope=[identify email]", got)
+		}
+	})
+
+	t.Run("OA-06_StringScope", func(t *testing.T) {
+		ts := oaJSONServer(http.StatusOK, `{"access_token":"NEW","token_type":"Bearer","expires_in":3600,"scope":"identify"}`)
+		defer ts.Close()
+		config := &oauth2.Config{Endpoint: oauth2.Endpoint{TokenURL: ts.URL, AuthStyle: oauth2.AuthStyleInHeader}}
+
+		got, err := RefreshToken(config, expiredToken())
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(got.Scope) != 1 || got.Scope[0] != "identify" {
+			t.Errorf("Scope = %v, want [identify]", got.Scope)
+		}
+	})
+
+	t.Run("OA-07_RefreshFails", func(t *testing.T) {
+		ts := oaJSONServer(http.StatusBadRequest, `{"error":"invalid_grant"}`)
+		defer ts.Close()
+		config := &oauth2.Config{Endpoint: oauth2.Endpoint{TokenURL: ts.URL, AuthStyle: oauth2.AuthStyleInHeader}}
+
+		got, err := RefreshToken(config, expiredToken())
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+		if got != nil {
+			t.Errorf("expected nil token on error, got %+v", got)
+		}
+	})
+
+	t.Run("OA-08_MissingScope", func(t *testing.T) {
+		ts := oaJSONServer(http.StatusOK, `{"access_token":"NEW","token_type":"Bearer","expires_in":3600}`)
+		defer ts.Close()
+		config := &oauth2.Config{Endpoint: oauth2.Endpoint{TokenURL: ts.URL, AuthStyle: oauth2.AuthStyleInHeader}}
+
+		_, err := RefreshToken(config, expiredToken())
+		if err == nil || err.Error() != "failed to get scope from token" {
+			t.Fatalf("RefreshToken() error = %v, want \"failed to get scope from token\"", err)
+		}
+	})
+}
+
+func TestOA09to16ProcessOAuthLogin(t *testing.T) {
+	t.Run("OA-09_DiscordCreatesAccount", func(t *testing.T) {
+		oaSetupDiscordPlatform(t)
+		as := &oaMockAccountService{}
+		las := &oaMockLinkAccountStore{}
+		ss := &oaMockSessionService{}
+
+		session, err := ProcessOAuthLogin(as, las, ss, "code", &OAuthState{Platform: auth.PlatformDiscord, Mode: ModeLogin})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if session == nil {
+			t.Fatal("expected a non-nil session")
+		}
+		if as.AddAccountCalls != 1 {
+			t.Errorf("AddAccount called %d times, want 1", as.AddAccountCalls)
+		}
+		if las.AddLinkedAccountToDBCalls != 1 {
+			t.Errorf("AddLinkedAccountToDB called %d times, want 1", las.AddLinkedAccountToDBCalls)
+		}
+		if ss.AddSessionCalls != 1 {
+			t.Errorf("AddSession called %d times, want 1", ss.AddSessionCalls)
+		}
+	})
+
+	t.Run("OA-10_DiscordReusesExistingLinkedAccount", func(t *testing.T) {
+		oaSetupDiscordPlatform(t)
+		existing := &auth.Account{UserID: "user-1"}
+		as := &oaMockAccountService{
+			GetAccountByIDFunc: func(id string) (*auth.Account, error) {
+				if id == "user-1" {
+					return existing, nil
+				}
+				return nil, auth.ErrNotFound
+			},
+		}
+		las := &oaMockLinkAccountStore{
+			GetLinkedAccountByPlatformIDFunc: func(platform auth.Platform, id string) (*auth.LinkedAccount, error) {
+				return &auth.LinkedAccount{UserID: "user-1", Platform: auth.PlatformDiscord, PlatformID: "d1", Verified: true, LoginEnabled: true}, nil
+			},
+		}
+		ss := &oaMockSessionService{}
+
+		session, err := ProcessOAuthLogin(as, las, ss, "code", &OAuthState{Platform: auth.PlatformDiscord, Mode: ModeLogin})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if session == nil || session.UserID != "user-1" {
+			t.Errorf("session = %+v, want UserID=user-1", session)
+		}
+		if as.AddAccountCalls != 0 {
+			t.Errorf("AddAccount called %d times, want 0 (existing account reused)", as.AddAccountCalls)
+		}
+	})
+
+	t.Run("OA-11_InvalidPlatform", func(t *testing.T) {
+		as := &oaMockAccountService{}
+		las := &oaMockLinkAccountStore{}
+		ss := &oaMockSessionService{}
+
+		_, err := ProcessOAuthLogin(as, las, ss, "code", &OAuthState{Platform: "bogus", Mode: ModeLogin})
+		if err == nil || err.Error() != "invalid platform" {
+			t.Fatalf("ProcessOAuthLogin() error = %v, want \"invalid platform\"", err)
+		}
+		if as.AddAccountCalls != 0 || las.AddLinkedAccountToDBCalls != 0 || ss.AddSessionCalls != 0 {
+			t.Error("expected no store calls for an invalid platform")
+		}
+	})
+
+	t.Run("OA-12_ExchangeFails", func(t *testing.T) {
+		oaSetupDiscordExchangeFailure(t)
+		as := &oaMockAccountService{}
+		las := &oaMockLinkAccountStore{}
+		ss := &oaMockSessionService{}
+
+		_, err := ProcessOAuthLogin(as, las, ss, "bad-code", &OAuthState{Platform: auth.PlatformDiscord, Mode: ModeLogin})
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+		if as.AddAccountCalls != 0 || las.AddLinkedAccountToDBCalls != 0 {
+			t.Error("expected no store calls when the code exchange fails")
+		}
+	})
+
+	t.Run("OA-13_LinkedAccountLoginDisabled", func(t *testing.T) {
+		oaSetupDiscordPlatform(t)
+		as := &oaMockAccountService{}
+		las := &oaMockLinkAccountStore{
+			GetLinkedAccountByPlatformIDFunc: func(platform auth.Platform, id string) (*auth.LinkedAccount, error) {
+				return &auth.LinkedAccount{UserID: "user-1", Platform: auth.PlatformDiscord, PlatformID: "d1", Verified: true, LoginEnabled: false}, nil
+			},
+		}
+		ss := &oaMockSessionService{}
+
+		_, err := ProcessOAuthLogin(as, las, ss, "code", &OAuthState{Platform: auth.PlatformDiscord, Mode: ModeLogin})
+		if !errors.Is(err, errPlatformLoginDisabled) {
+			t.Fatalf("ProcessOAuthLogin() error = %v, want errPlatformLoginDisabled", err)
+		}
+	})
+
+	t.Run("OA-14_MinecraftFullChainNewAccount", func(t *testing.T) {
+		javaUUID := "11111111-1111-1111-1111-111111111111"
+		oaSetupMicrosoftChain(t, oaMicrosoftChainOpts{javaUUID: javaUUID})
+		as := &oaMockAccountService{}
+		las := &oaMockLinkAccountStore{}
+		ss := &oaMockSessionService{}
+
+		session, err := ProcessOAuthLogin(as, las, ss, "code", &OAuthState{Platform: auth.PlatformMinecraft, Mode: ModeLogin})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if session == nil {
+			t.Fatal("expected a non-nil session")
+		}
+		if las.AddLinkedAccountToDBCalls != 2 {
+			t.Errorf("AddLinkedAccountToDB called %d times, want 2 (xbox + java)", las.AddLinkedAccountToDBCalls)
+		}
+	})
+
+	t.Run("OA-15_MinecraftIdentityFetchFails", func(t *testing.T) {
+		oaSetupMicrosoftChain(t, oaMicrosoftChainOpts{xstsFails: true})
+		as := &oaMockAccountService{}
+		las := &oaMockLinkAccountStore{}
+		ss := &oaMockSessionService{}
+
+		_, err := ProcessOAuthLogin(as, las, ss, "code", &OAuthState{Platform: auth.PlatformMinecraft, Mode: ModeLogin})
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+		if las.AddLinkedAccountToDBCalls != 0 || ss.AddSessionCalls != 0 {
+			t.Error("expected no store calls when the identity fetch fails")
+		}
+	})
+
+	t.Run("OA-16_AddSessionFails", func(t *testing.T) {
+		oaSetupDiscordPlatform(t)
+		as := &oaMockAccountService{}
+		las := &oaMockLinkAccountStore{}
+		ss := &oaMockSessionService{AddSessionFunc: func(*auth.Session) error { return errors.New("session store down") }}
+
+		session, err := ProcessOAuthLogin(as, las, ss, "code", &OAuthState{Platform: auth.PlatformDiscord, Mode: ModeLogin})
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+		if session != nil {
+			t.Errorf("expected nil session on error, got %+v", session)
+		}
+	})
+}
+
+func TestOA76to78ProcessOAuthLoginAdditionalPlatformDispatch(t *testing.T) {
+	t.Run("OA-76_TwitchCreatesAccount", func(t *testing.T) {
+		oaSetupTwitchPlatform(t)
+		as := &oaMockAccountService{}
+		las := &oaMockLinkAccountStore{}
+		ss := &oaMockSessionService{}
+
+		session, err := ProcessOAuthLogin(as, las, ss, "code", &OAuthState{Platform: auth.PlatformTwitch, Mode: ModeLogin})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if session == nil {
+			t.Fatal("expected a non-nil session")
+		}
+		if as.AddAccountCalls != 1 {
+			t.Errorf("AddAccount called %d times, want 1", as.AddAccountCalls)
+		}
+		if las.AddLinkedAccountToDBCalls != 1 {
+			t.Errorf("AddLinkedAccountToDB called %d times, want 1", las.AddLinkedAccountToDBCalls)
+		}
+		if len(las.AddedLinkedAccounts) != 1 || las.AddedLinkedAccounts[0].Platform != auth.PlatformTwitch {
+			t.Errorf("expected a Twitch linked account, got %+v", las.AddedLinkedAccounts)
+		}
+		if ss.AddSessionCalls != 1 {
+			t.Errorf("AddSession called %d times, want 1", ss.AddSessionCalls)
+		}
+	})
+
+	t.Run("OA-77_MicrosoftPlainCreatesAccount", func(t *testing.T) {
+		oaSetupMicrosoftLoginPlatform(t)
+		as := &oaMockAccountService{}
+		las := &oaMockLinkAccountStore{}
+		ss := &oaMockSessionService{}
+
+		session, err := ProcessOAuthLogin(as, las, ss, "code", &OAuthState{Platform: auth.PlatformMicrosoft, Mode: ModeLogin})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if session == nil {
+			t.Fatal("expected a non-nil session")
+		}
+		if as.AddAccountCalls != 1 {
+			t.Errorf("AddAccount called %d times, want 1", as.AddAccountCalls)
+		}
+		if las.AddLinkedAccountToDBCalls != 1 {
+			t.Errorf("AddLinkedAccountToDB called %d times, want 1", las.AddLinkedAccountToDBCalls)
+		}
+		if len(las.AddedLinkedAccounts) != 1 || las.AddedLinkedAccounts[0].Platform != auth.PlatformMicrosoft {
+			t.Errorf("expected a Microsoft linked account, got %+v", las.AddedLinkedAccounts)
+		}
+	})
+
+	// OA-78 is the core regression test for keeping Xbox Live and Java
+	// Edition linking distinct: the account in this test DOES own Java
+	// (oaSetupMicrosoftChain with javaUUID set), but a caller that
+	// explicitly asked for auth.PlatformXboxLive must still end up with
+	// only the Xbox Live identity linked, and must never even call the
+	// Minecraft Services endpoints - proving Java is skipped by request,
+	// not just by accident of ownership.
+	t.Run("OA-78_XboxLiveOnlyNeverTouchesJavaEvenIfOwned", func(t *testing.T) {
+		javaUUID := "88888888-8888-8888-8888-888888888888"
+		oaSetupMicrosoftChain(t, oaMicrosoftChainOpts{javaUUID: javaUUID})
+
+		var mcLoginCalled, mcProfileCalled bool
+		mcLoginTS := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			mcLoginCalled = true
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		t.Cleanup(mcLoginTS.Close)
+		oaSetVar(t, &minecraftLoginURL, mcLoginTS.URL)
+		mcProfileTS := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			mcProfileCalled = true
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		t.Cleanup(mcProfileTS.Close)
+		oaSetVar(t, &minecraftProfileURL, mcProfileTS.URL)
+
+		as := &oaMockAccountService{}
+		las := &oaMockLinkAccountStore{}
+		ss := &oaMockSessionService{}
+
+		session, err := ProcessOAuthLogin(as, las, ss, "code", &OAuthState{Platform: auth.PlatformXboxLive, Mode: ModeLogin})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if session == nil {
+			t.Fatal("expected a non-nil session")
+		}
+		if mcLoginCalled || mcProfileCalled {
+			t.Error("expected PlatformXboxLive to never call the Minecraft Services login-with-xbox or profile endpoints, even though the account owns Java")
+		}
+		if las.AddLinkedAccountToDBCalls != 1 {
+			t.Errorf("AddLinkedAccountToDB called %d times, want 1 (xbox only)", las.AddLinkedAccountToDBCalls)
+		}
+		if len(las.AddedLinkedAccounts) != 1 || las.AddedLinkedAccounts[0].Platform != auth.PlatformXboxLive {
+			t.Errorf("expected only the Xbox Live identity to be linked, got %+v", las.AddedLinkedAccounts)
+		}
+	})
+}
+
+func TestOA17to26ResolveOrCreateAccountForPlatformUser(t *testing.T) {
+	user := &oaIdentity{id: "p1", username: "alice", email: "a@b.com"}
+
+	t.Run("OA-17_NoExistingLink", func(t *testing.T) {
+		as := &oaMockAccountService{}
+		las := &oaMockLinkAccountStore{}
+
+		got, err := resolveOrCreateAccountForPlatformUser(as, las, auth.PlatformDiscord, user)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got == nil {
+			t.Fatal("expected a non-nil account")
+		}
+		if as.AddAccountCalls != 1 || las.AddLinkedAccountToDBCalls != 1 {
+			t.Errorf("AddAccountCalls=%d AddLinkedAccountToDBCalls=%d, want 1 and 1", as.AddAccountCalls, las.AddLinkedAccountToDBCalls)
+		}
+	})
+
+	t.Run("OA-18_ExistingVerifiedEnabledLink", func(t *testing.T) {
+		existing := &auth.Account{UserID: "user-1"}
+		as := &oaMockAccountService{GetAccountByIDFunc: func(string) (*auth.Account, error) { return existing, nil }}
+		las := &oaMockLinkAccountStore{
+			GetLinkedAccountByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
+				return &auth.LinkedAccount{UserID: "user-1", Verified: true, LoginEnabled: true}, nil
+			},
+		}
+
+		got, err := resolveOrCreateAccountForPlatformUser(as, las, auth.PlatformDiscord, user)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != existing {
+			t.Errorf("got %+v, want the existing account %+v", got, existing)
+		}
+	})
+
+	t.Run("OA-19_ExistingLinkDisabled", func(t *testing.T) {
+		as := &oaMockAccountService{}
+		las := &oaMockLinkAccountStore{
+			GetLinkedAccountByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
+				return &auth.LinkedAccount{UserID: "user-1", Verified: false, LoginEnabled: true}, nil
+			},
+		}
+
+		_, err := resolveOrCreateAccountForPlatformUser(as, las, auth.PlatformDiscord, user)
+		if !errors.Is(err, errPlatformLoginDisabled) {
+			t.Fatalf("error = %v, want errPlatformLoginDisabled", err)
+		}
+	})
+
+	t.Run("OA-20_LookupErrorPropagates", func(t *testing.T) {
+		wantErr := errors.New("db down")
+		as := &oaMockAccountService{}
+		las := &oaMockLinkAccountStore{GetLinkedAccountByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) { return nil, wantErr }}
+
+		_, err := resolveOrCreateAccountForPlatformUser(as, las, auth.PlatformDiscord, user)
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("error = %v, want %v", err, wantErr)
+		}
+	})
+
+	t.Run("OA-21_AddAccountFails", func(t *testing.T) {
+		wantErr := errors.New("insert failed")
+		as := &oaMockAccountService{AddAccountFunc: func(*auth.Account) error { return wantErr }}
+		las := &oaMockLinkAccountStore{}
+
+		_, err := resolveOrCreateAccountForPlatformUser(as, las, auth.PlatformDiscord, user)
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("error = %v, want %v", err, wantErr)
+		}
+		if las.AddLinkedAccountToDBCalls != 0 {
+			t.Error("AddLinkedAccountToDB should never be called when AddAccount fails")
+		}
+	})
+
+	t.Run("OA-22_AddLinkFailsCleanupSucceeds", func(t *testing.T) {
+		wantErr := errors.New("link insert failed")
+		as := &oaMockAccountService{}
+		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return wantErr }}
+
+		_, err := resolveOrCreateAccountForPlatformUser(as, las, auth.PlatformDiscord, user)
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("error = %v, want %v", err, wantErr)
+		}
+		if as.DeleteAccountCalls != 1 {
+			t.Errorf("DeleteAccount called %d times, want 1 (cleanup)", as.DeleteAccountCalls)
+		}
+	})
+
+	t.Run("OA-23_AddLinkFailsCleanupAlsoFails", func(t *testing.T) {
+		linkErr := errors.New("link insert failed")
+		cleanupErr := errors.New("delete failed")
+		as := &oaMockAccountService{DeleteAccountFunc: func(string) error { return cleanupErr }}
+		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return linkErr }}
+
+		_, err := resolveOrCreateAccountForPlatformUser(as, las, auth.PlatformDiscord, user)
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+		if !errors.Is(err, linkErr) || !errors.Is(err, cleanupErr) {
+			t.Errorf("error = %v, want it to wrap both %v and %v", err, linkErr, cleanupErr)
+		}
+	})
+
+	t.Run("OA-24_RaceLostCleanupAndWinnerFetchSucceed", func(t *testing.T) {
+		winner := &auth.Account{UserID: "winner-1"}
+		as := &oaMockAccountService{GetAccountByIDFunc: func(id string) (*auth.Account, error) {
+			if id == "winner-1" {
+				return winner, nil
+			}
+			return nil, auth.ErrNotFound
+		}}
+		var lookupCalls int
+		las := &oaMockLinkAccountStore{
+			AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return auth.ErrAlreadyLinked },
+			GetLinkedAccountByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
+				lookupCalls++
+				if lookupCalls == 1 {
+					return nil, auth.ErrNotFound
+				}
+				return &auth.LinkedAccount{UserID: "winner-1"}, nil
+			},
+		}
+
+		got, err := resolveOrCreateAccountForPlatformUser(as, las, auth.PlatformDiscord, user)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != winner {
+			t.Errorf("got %+v, want the winner account %+v", got, winner)
+		}
+		if as.DeleteAccountCalls != 1 {
+			t.Errorf("DeleteAccount called %d times, want 1 (placeholder cleanup)", as.DeleteAccountCalls)
+		}
+	})
+
+	t.Run("OA-25_RaceLostWinnerLookupFails", func(t *testing.T) {
+		wantErr := errors.New("lookup failed")
+		as := &oaMockAccountService{}
+		var lookupCalls int
+		las := &oaMockLinkAccountStore{
+			AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return auth.ErrAlreadyLinked },
+			GetLinkedAccountByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
+				lookupCalls++
+				if lookupCalls == 1 {
+					return nil, auth.ErrNotFound
+				}
+				return nil, wantErr
+			},
+		}
+
+		_, err := resolveOrCreateAccountForPlatformUser(as, las, auth.PlatformDiscord, user)
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("error = %v, want %v", err, wantErr)
+		}
+	})
+
+	t.Run("OA-26_RaceLostWinnerAccountFetchFails", func(t *testing.T) {
+		wantErr := errors.New("account fetch failed")
+		as := &oaMockAccountService{GetAccountByIDFunc: func(string) (*auth.Account, error) { return nil, wantErr }}
+		var lookupCalls int
+		las := &oaMockLinkAccountStore{
+			AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return auth.ErrAlreadyLinked },
+			GetLinkedAccountByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
+				lookupCalls++
+				if lookupCalls == 1 {
+					return nil, auth.ErrNotFound
+				}
+				return &auth.LinkedAccount{UserID: "winner-1"}, nil
+			},
+		}
+
+		_, err := resolveOrCreateAccountForPlatformUser(as, las, auth.PlatformDiscord, user)
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("error = %v, want %v", err, wantErr)
+		}
+	})
+}
+
+// oaSetupDiscordUserFailure makes the code exchange succeed but the Discord
+// user-info call fail.
+func oaSetupDiscordUserFailure(t *testing.T) {
+	t.Helper()
+	tokenTS := oaJSONServer(http.StatusOK, `{"access_token":"disc-at","token_type":"Bearer","expires_in":3600,"scope":"identify"}`)
+	t.Cleanup(tokenTS.Close)
+	usersTS := oaJSONServer(http.StatusUnauthorized, `{"message":"401: Unauthorized","code":0}`)
+	t.Cleanup(usersTS.Close)
+	oaSetDiscordUsersEndpoint(t, usersTS)
+
+	originalTokenURL := discordConfig.Endpoint.TokenURL
+	discordConfig.Endpoint.TokenURL = tokenTS.URL
+	t.Cleanup(func() { discordConfig.Endpoint.TokenURL = originalTokenURL })
+}
+
+func TestOA27to42ProcessOAuthLink(t *testing.T) {
+	activeSession := func(userID string) *auth.Session {
+		return &auth.Session{ID: "sess-1", UserID: userID, ExpiresAt: time.Now().Add(time.Hour).Unix()}
+	}
+
+	t.Run("OA-27_DiscordLinksToSession", func(t *testing.T) {
+		oaSetupDiscordPlatform(t)
+		las := &oaMockLinkAccountStore{}
+		req := oaRequestWithSession(activeSession("user-1"))
+
+		session, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: auth.PlatformDiscord, Mode: ModeLink})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if session == nil || session.UserID != "user-1" {
+			t.Errorf("session = %+v, want UserID=user-1", session)
+		}
+		if las.AddLinkedAccountToDBCalls != 1 {
+			t.Errorf("AddLinkedAccountToDB called %d times, want 1", las.AddLinkedAccountToDBCalls)
+		}
+	})
+
+	t.Run("OA-28_NoSessionInContext", func(t *testing.T) {
+		las := &oaMockLinkAccountStore{}
+		req := oaRequestWithSession(nil)
+
+		_, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: auth.PlatformDiscord, Mode: ModeLink})
+		if err == nil || err.Error() != "session not found" {
+			t.Fatalf("error = %v, want \"session not found\"", err)
+		}
+	})
+
+	t.Run("OA-29_ExpiredSession", func(t *testing.T) {
+		las := &oaMockLinkAccountStore{}
+		expired := &auth.Session{ID: "sess-1", UserID: "user-1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
+		req := oaRequestWithSession(expired)
+
+		_, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: auth.PlatformDiscord, Mode: ModeLink})
+		if err == nil || err.Error() != "session expired" {
+			t.Fatalf("error = %v, want \"session expired\"", err)
+		}
+	})
+
+	t.Run("OA-30_InvalidPlatform", func(t *testing.T) {
+		las := &oaMockLinkAccountStore{}
+		req := oaRequestWithSession(activeSession("user-1"))
+
+		_, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: "bogus", Mode: ModeLink})
+		if err == nil || err.Error() != "invalid platform" {
+			t.Fatalf("error = %v, want \"invalid platform\"", err)
+		}
+	})
+
+	t.Run("OA-31_ExchangeFails", func(t *testing.T) {
+		oaSetupDiscordExchangeFailure(t)
+		las := &oaMockLinkAccountStore{}
+		req := oaRequestWithSession(activeSession("user-1"))
+
+		_, err := ProcessOAuthLink(req, las, "bad-code", &OAuthState{Platform: auth.PlatformDiscord, Mode: ModeLink})
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+	})
+
+	t.Run("OA-32_MinecraftBothIdentitiesNew", func(t *testing.T) {
+		javaUUID := "22222222-2222-2222-2222-222222222222"
+		oaSetupMicrosoftChain(t, oaMicrosoftChainOpts{javaUUID: javaUUID})
+		las := &oaMockLinkAccountStore{}
+		req := oaRequestWithSession(activeSession("user-1"))
+
+		session, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: auth.PlatformMinecraft, Mode: ModeLink})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if session == nil {
+			t.Fatal("expected a non-nil session")
+		}
+		if las.AddLinkedAccountToDBCalls != 2 {
+			t.Errorf("AddLinkedAccountToDB called %d times, want 2", las.AddLinkedAccountToDBCalls)
+		}
+	})
+
+	t.Run("OA-33_MinecraftJavaAbsent", func(t *testing.T) {
+		oaSetupMicrosoftChain(t, oaMicrosoftChainOpts{})
+		las := &oaMockLinkAccountStore{}
+		req := oaRequestWithSession(activeSession("user-1"))
+
+		session, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: auth.PlatformMinecraft, Mode: ModeLink})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if session == nil {
+			t.Fatal("expected a non-nil session")
+		}
+		if las.AddLinkedAccountToDBCalls != 1 {
+			t.Errorf("AddLinkedAccountToDB called %d times, want 1 (xbox only)", las.AddLinkedAccountToDBCalls)
+		}
+	})
+
+	t.Run("OA-34_XboxAlreadyLinkedToDifferentAccountRejected", func(t *testing.T) {
+		xuid := oaSetupMicrosoftChain(t, oaMicrosoftChainOpts{javaUUID: "33333333-3333-3333-3333-333333333333"})
+		las := &oaMockLinkAccountStore{
+			GetLinkedAccountByPlatformIDFunc: func(platform auth.Platform, id string) (*auth.LinkedAccount, error) {
+				if platform == auth.PlatformXboxLive && id == xuid {
+					return &auth.LinkedAccount{UserID: "other-user", Platform: platform, PlatformID: id}, nil
+				}
+				return nil, auth.ErrNotFound
+			},
+		}
+		req := oaRequestWithSession(activeSession("user-1"))
+
+		_, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: auth.PlatformXboxLive, Mode: ModeLink})
+		if !errors.Is(err, errPlatformAlreadyLinkedToDifferentAccount) {
+			t.Fatalf("error = %v, want errPlatformAlreadyLinkedToDifferentAccount", err)
+		}
+		if las.AddLinkedAccountToDBCalls != 0 {
+			t.Error("expected no links to be written")
+		}
+	})
+
+	t.Run("OA-35_JavaAlreadyLinkedToDifferentAccountCommitsNothing", func(t *testing.T) {
+		javaUUID := "44444444-4444-4444-4444-444444444444"
+		oaSetupMicrosoftChain(t, oaMicrosoftChainOpts{javaUUID: javaUUID})
+		las := &oaMockLinkAccountStore{
+			GetLinkedAccountByPlatformIDFunc: func(platform auth.Platform, id string) (*auth.LinkedAccount, error) {
+				if platform == auth.PlatformMinecraft && id == javaUUID {
+					return &auth.LinkedAccount{UserID: "other-user", Platform: platform, PlatformID: id}, nil
+				}
+				return nil, auth.ErrNotFound
+			},
+		}
+		req := oaRequestWithSession(activeSession("user-1"))
+
+		_, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: auth.PlatformMinecraft, Mode: ModeLink})
+		if !errors.Is(err, errPlatformAlreadyLinkedToDifferentAccount) {
+			t.Fatalf("error = %v, want errPlatformAlreadyLinkedToDifferentAccount", err)
+		}
+		if las.AddLinkedAccountToDBCalls != 0 {
+			t.Error("expected the Xbox identity to NOT be committed once the Java check fails")
+		}
+	})
+
+	t.Run("OA-36_XboxPrecheckLookupErrorPropagates", func(t *testing.T) {
+		wantErr := errors.New("db down")
+		oaSetupMicrosoftChain(t, oaMicrosoftChainOpts{})
+		las := &oaMockLinkAccountStore{
+			GetLinkedAccountByPlatformIDFunc: func(platform auth.Platform, id string) (*auth.LinkedAccount, error) {
+				if platform == auth.PlatformXboxLive {
+					return nil, wantErr
+				}
+				return nil, auth.ErrNotFound
+			},
+		}
+		req := oaRequestWithSession(activeSession("user-1"))
+
+		_, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: auth.PlatformXboxLive, Mode: ModeLink})
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("error = %v, want %v", err, wantErr)
+		}
+		if las.AddLinkedAccountToDBCalls != 0 {
+			t.Error("expected no links to be written")
+		}
+	})
+
+	t.Run("OA-37_JavaPrecheckLookupErrorPropagates", func(t *testing.T) {
+		wantErr := errors.New("db down")
+		javaUUID := "55555555-5555-5555-5555-555555555555"
+		oaSetupMicrosoftChain(t, oaMicrosoftChainOpts{javaUUID: javaUUID})
+		las := &oaMockLinkAccountStore{
+			GetLinkedAccountByPlatformIDFunc: func(platform auth.Platform, id string) (*auth.LinkedAccount, error) {
+				if platform == auth.PlatformMinecraft {
+					return nil, wantErr
+				}
+				return nil, auth.ErrNotFound
+			},
+		}
+		req := oaRequestWithSession(activeSession("user-1"))
+
+		_, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: auth.PlatformMinecraft, Mode: ModeLink})
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("error = %v, want %v", err, wantErr)
+		}
+		if las.AddLinkedAccountToDBCalls != 0 {
+			t.Error("expected no links to be written")
+		}
+	})
+
+	t.Run("OA-38_BothAlreadyLinkedToSameAccountIsNoOp", func(t *testing.T) {
+		xuid := "xid1"
+		javaUUID := "66666666-6666-6666-6666-666666666666"
+		oaSetupMicrosoftChain(t, oaMicrosoftChainOpts{javaUUID: javaUUID, xuid: xuid})
+		las := &oaMockLinkAccountStore{
+			GetLinkedAccountByPlatformIDFunc: func(platform auth.Platform, id string) (*auth.LinkedAccount, error) {
+				if (platform == auth.PlatformXboxLive && id == xuid) || (platform == auth.PlatformMinecraft && id == javaUUID) {
+					return &auth.LinkedAccount{UserID: "user-1", Platform: platform, PlatformID: id}, nil
+				}
+				return nil, auth.ErrNotFound
+			},
+		}
+		req := oaRequestWithSession(activeSession("user-1"))
+
+		session, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: auth.PlatformMinecraft, Mode: ModeLink})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if session == nil {
+			t.Fatal("expected a non-nil session")
+		}
+		if las.AddLinkedAccountToDBCalls != 0 {
+			t.Errorf("AddLinkedAccountToDB called %d times, want 0 (already linked to this account)", las.AddLinkedAccountToDBCalls)
+		}
+	})
+
+	t.Run("OA-39_IdentityFetchFails", func(t *testing.T) {
+		oaSetupMicrosoftChain(t, oaMicrosoftChainOpts{xstsFails: true})
+		las := &oaMockLinkAccountStore{}
+		req := oaRequestWithSession(activeSession("user-1"))
+
+		_, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: auth.PlatformMinecraft, Mode: ModeLink})
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+		if las.GetLinkedAccountByPlatformIDCalls != 0 || las.AddLinkedAccountToDBCalls != 0 {
+			t.Error("expected no link-store calls when the identity fetch itself fails")
+		}
+	})
+
+	t.Run("OA-40_XboxLinkWriteFailsJavaNeverAttempted", func(t *testing.T) {
+		javaUUID := "77777777-7777-7777-7777-777777777777"
+		oaSetupMicrosoftChain(t, oaMicrosoftChainOpts{javaUUID: javaUUID})
+		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return errors.New("write failed") }}
+		req := oaRequestWithSession(activeSession("user-1"))
+
+		// linkPlatformUserToSession normalizes any AddLinkedAccountToDB
+		// failure to this fixed message (see OA-71).
+		_, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: auth.PlatformMinecraft, Mode: ModeLink})
+		if err == nil || err.Error() != "failed to link account" {
+			t.Fatalf("error = %v, want \"failed to link account\"", err)
+		}
+		if las.AddLinkedAccountToDBCalls != 1 {
+			t.Errorf("AddLinkedAccountToDB called %d times, want 1 (java never attempted)", las.AddLinkedAccountToDBCalls)
+		}
+	})
+
+	t.Run("OA-41_PlatformUserFetchFails", func(t *testing.T) {
+		oaSetupDiscordUserFailure(t)
+		las := &oaMockLinkAccountStore{}
+		req := oaRequestWithSession(activeSession("user-1"))
+
+		_, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: auth.PlatformDiscord, Mode: ModeLink})
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+		if las.AddLinkedAccountToDBCalls != 0 {
+			t.Error("expected no link-store calls when the platform user fetch fails")
+		}
+	})
+
+	t.Run("OA-42_FinalLinkWriteFails", func(t *testing.T) {
+		oaSetupDiscordPlatform(t)
+		wantErr := errors.New("write failed")
+		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return wantErr }}
+		req := oaRequestWithSession(activeSession("user-1"))
+
+		_, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: auth.PlatformDiscord, Mode: ModeLink})
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+	})
+}
+
+func TestOA79to81ProcessOAuthLinkAdditionalPlatformDispatch(t *testing.T) {
+	activeSession := func(userID string) *auth.Session {
+		return &auth.Session{ID: "sess-1", UserID: userID, ExpiresAt: time.Now().Add(time.Hour).Unix()}
+	}
+
+	t.Run("OA-79_TwitchLinksToSession", func(t *testing.T) {
+		oaSetupTwitchPlatform(t)
+		las := &oaMockLinkAccountStore{}
+		req := oaRequestWithSession(activeSession("user-1"))
+
+		session, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: auth.PlatformTwitch, Mode: ModeLink})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if session == nil || session.UserID != "user-1" {
+			t.Errorf("session = %+v, want UserID=user-1", session)
+		}
+		if las.AddLinkedAccountToDBCalls != 1 {
+			t.Errorf("AddLinkedAccountToDB called %d times, want 1", las.AddLinkedAccountToDBCalls)
+		}
+		if len(las.AddedLinkedAccounts) != 1 || las.AddedLinkedAccounts[0].Platform != auth.PlatformTwitch {
+			t.Errorf("expected a Twitch linked account, got %+v", las.AddedLinkedAccounts)
+		}
+	})
+
+	t.Run("OA-80_MicrosoftPlainLinksToSession", func(t *testing.T) {
+		oaSetupMicrosoftLoginPlatform(t)
+		las := &oaMockLinkAccountStore{}
+		req := oaRequestWithSession(activeSession("user-1"))
+
+		session, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: auth.PlatformMicrosoft, Mode: ModeLink})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if session == nil || session.UserID != "user-1" {
+			t.Errorf("session = %+v, want UserID=user-1", session)
+		}
+		if las.AddLinkedAccountToDBCalls != 1 {
+			t.Errorf("AddLinkedAccountToDB called %d times, want 1", las.AddLinkedAccountToDBCalls)
+		}
+		if len(las.AddedLinkedAccounts) != 1 || las.AddedLinkedAccounts[0].Platform != auth.PlatformMicrosoft {
+			t.Errorf("expected a Microsoft linked account, got %+v", las.AddedLinkedAccounts)
+		}
+	})
+
+	// OA-81 is ProcessOAuthLink's counterpart to OA-78: linking explicitly
+	// via auth.PlatformXboxLive must never touch the Minecraft Services
+	// endpoints or link a Java identity, even though the account owns Java.
+	t.Run("OA-81_XboxLiveOnlyNeverTouchesJavaEvenIfOwned", func(t *testing.T) {
+		javaUUID := "99999999-9999-9999-9999-999999999999"
+		oaSetupMicrosoftChain(t, oaMicrosoftChainOpts{javaUUID: javaUUID})
+
+		var mcLoginCalled, mcProfileCalled bool
+		mcLoginTS := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			mcLoginCalled = true
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		t.Cleanup(mcLoginTS.Close)
+		oaSetVar(t, &minecraftLoginURL, mcLoginTS.URL)
+		mcProfileTS := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			mcProfileCalled = true
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		t.Cleanup(mcProfileTS.Close)
+		oaSetVar(t, &minecraftProfileURL, mcProfileTS.URL)
+
+		las := &oaMockLinkAccountStore{}
+		req := oaRequestWithSession(activeSession("user-1"))
+
+		session, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: auth.PlatformXboxLive, Mode: ModeLink})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if session == nil {
+			t.Fatal("expected a non-nil session")
+		}
+		if mcLoginCalled || mcProfileCalled {
+			t.Error("expected PlatformXboxLive to never call the Minecraft Services login-with-xbox or profile endpoints, even though the account owns Java")
+		}
+		if las.AddLinkedAccountToDBCalls != 1 {
+			t.Errorf("AddLinkedAccountToDB called %d times, want 1 (xbox only)", las.AddLinkedAccountToDBCalls)
+		}
+		if len(las.AddedLinkedAccounts) != 1 || las.AddedLinkedAccounts[0].Platform != auth.PlatformXboxLive {
+			t.Errorf("expected only the Xbox Live identity to be linked, got %+v", las.AddedLinkedAccounts)
+		}
+	})
+}
+
+func TestOA43to55ResolveOrCreateAccountForMicrosoftUser(t *testing.T) {
+	xbox := &XboxLiveData{XUID: "xid1", Gamertag: "Tag"}
+	java := &MinecraftData{ID: mustUUID("11111111-1111-1111-1111-111111111111"), Username: "Steve"}
+
+	notFoundStore := func() *oaMockLinkAccountStore {
+		return &oaMockLinkAccountStore{GetLinkedAccountByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) { return nil, auth.ErrNotFound }}
+	}
+
+	t.Run("OA-43_NeitherLinkedJavaPresentPrefersJavaUsername", func(t *testing.T) {
+		as := &oaMockAccountService{}
+		las := notFoundStore()
+
+		got, err := resolveOrCreateAccountForMicrosoftUser(as, las, xbox, java)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got == nil || got.Username != "Steve" {
+			t.Errorf("account = %+v, want Username=Steve", got)
+		}
+		if las.AddLinkedAccountToDBCalls != 2 {
+			t.Errorf("AddLinkedAccountToDB called %d times, want 2", las.AddLinkedAccountToDBCalls)
+		}
+	})
+
+	t.Run("OA-44_NeitherLinkedJavaAbsentUsesGamertag", func(t *testing.T) {
+		as := &oaMockAccountService{}
+		las := notFoundStore()
+
+		got, err := resolveOrCreateAccountForMicrosoftUser(as, las, xbox, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got == nil || got.Username != "Tag" {
+			t.Errorf("account = %+v, want Username=Tag", got)
+		}
+		if las.AddLinkedAccountToDBCalls != 1 {
+			t.Errorf("AddLinkedAccountToDB called %d times, want 1", las.AddLinkedAccountToDBCalls)
+		}
+	})
+
+	t.Run("OA-45_XboxAlreadyLinkedJavaAbsent", func(t *testing.T) {
+		existing := &auth.Account{UserID: "user-1"}
+		as := &oaMockAccountService{GetAccountByIDFunc: func(string) (*auth.Account, error) { return existing, nil }}
+		las := &oaMockLinkAccountStore{
+			GetLinkedAccountByPlatformIDFunc: func(platform auth.Platform, id string) (*auth.LinkedAccount, error) {
+				if platform == auth.PlatformXboxLive {
+					return &auth.LinkedAccount{UserID: "user-1", Verified: true, LoginEnabled: true}, nil
+				}
+				return nil, auth.ErrNotFound
+			},
+		}
+
+		got, err := resolveOrCreateAccountForMicrosoftUser(as, las, xbox, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != existing {
+			t.Errorf("account = %+v, want the existing account", got)
+		}
+		if as.AddAccountCalls != 0 || las.AddLinkedAccountToDBCalls != 0 {
+			t.Error("expected no new account or link writes")
+		}
+	})
+
+	t.Run("OA-46_JavaAlreadyLinkedXboxNot", func(t *testing.T) {
+		existing := &auth.Account{UserID: "user-1"}
+		as := &oaMockAccountService{GetAccountByIDFunc: func(string) (*auth.Account, error) { return existing, nil }}
+		las := &oaMockLinkAccountStore{
+			GetLinkedAccountByPlatformIDFunc: func(platform auth.Platform, id string) (*auth.LinkedAccount, error) {
+				if platform == auth.PlatformMinecraft {
+					return &auth.LinkedAccount{UserID: "user-1", Verified: true, LoginEnabled: true}, nil
+				}
+				return nil, auth.ErrNotFound
+			},
+		}
+
+		got, err := resolveOrCreateAccountForMicrosoftUser(as, las, xbox, java)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != existing {
+			t.Errorf("account = %+v, want the existing account", got)
+		}
+		if las.AddLinkedAccountToDBCalls != 1 {
+			t.Errorf("AddLinkedAccountToDB called %d times, want 1 (xbox linked to the resolved account)", las.AddLinkedAccountToDBCalls)
+		}
+	})
+
+	t.Run("OA-47_BothAlreadyLinkedSameAccountIsNoOp", func(t *testing.T) {
+		existing := &auth.Account{UserID: "user-1"}
+		as := &oaMockAccountService{GetAccountByIDFunc: func(string) (*auth.Account, error) { return existing, nil }}
+		las := &oaMockLinkAccountStore{
+			GetLinkedAccountByPlatformIDFunc: func(platform auth.Platform, id string) (*auth.LinkedAccount, error) {
+				return &auth.LinkedAccount{UserID: "user-1", Verified: true, LoginEnabled: true}, nil
+			},
+		}
+
+		got, err := resolveOrCreateAccountForMicrosoftUser(as, las, xbox, java)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != existing {
+			t.Errorf("account = %+v, want the existing account", got)
+		}
+		if las.AddLinkedAccountToDBCalls != 0 {
+			t.Errorf("AddLinkedAccountToDB called %d times, want 0", las.AddLinkedAccountToDBCalls)
+		}
+	})
+
+	t.Run("OA-48_ConflictingAccountsRejected", func(t *testing.T) {
+		as := &oaMockAccountService{}
+		las := &oaMockLinkAccountStore{
+			GetLinkedAccountByPlatformIDFunc: func(platform auth.Platform, id string) (*auth.LinkedAccount, error) {
+				if platform == auth.PlatformXboxLive {
+					return &auth.LinkedAccount{UserID: "user-1", Verified: true, LoginEnabled: true}, nil
+				}
+				return &auth.LinkedAccount{UserID: "user-2", Verified: true, LoginEnabled: true}, nil
+			},
+		}
+
+		_, err := resolveOrCreateAccountForMicrosoftUser(as, las, xbox, java)
+		if !errors.Is(err, errConflictingMicrosoftIdentities) {
+			t.Fatalf("error = %v, want errConflictingMicrosoftIdentities", err)
+		}
+	})
+
+	t.Run("OA-49_NoEligibleIdentityRejected", func(t *testing.T) {
+		as := &oaMockAccountService{}
+		las := &oaMockLinkAccountStore{
+			GetLinkedAccountByPlatformIDFunc: func(platform auth.Platform, id string) (*auth.LinkedAccount, error) {
+				if platform == auth.PlatformXboxLive {
+					return &auth.LinkedAccount{UserID: "user-1", Verified: true, LoginEnabled: false}, nil
+				}
+				return nil, auth.ErrNotFound
+			},
+		}
+
+		_, err := resolveOrCreateAccountForMicrosoftUser(as, las, xbox, nil)
+		if !errors.Is(err, errPlatformLoginDisabled) {
+			t.Fatalf("error = %v, want errPlatformLoginDisabled", err)
+		}
+	})
+
+	t.Run("OA-50_OneIneligibleOtherEligibleSucceeds", func(t *testing.T) {
+		existing := &auth.Account{UserID: "user-1"}
+		as := &oaMockAccountService{GetAccountByIDFunc: func(string) (*auth.Account, error) { return existing, nil }}
+		las := &oaMockLinkAccountStore{
+			GetLinkedAccountByPlatformIDFunc: func(platform auth.Platform, id string) (*auth.LinkedAccount, error) {
+				if platform == auth.PlatformXboxLive {
+					return &auth.LinkedAccount{UserID: "user-1", Verified: true, LoginEnabled: false}, nil
+				}
+				return &auth.LinkedAccount{UserID: "user-1", Verified: true, LoginEnabled: true}, nil
+			},
+		}
+
+		got, err := resolveOrCreateAccountForMicrosoftUser(as, las, xbox, java)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != existing {
+			t.Errorf("account = %+v, want the existing account", got)
+		}
+	})
+
+	t.Run("OA-51_XboxLookupErrorPropagates", func(t *testing.T) {
+		wantErr := errors.New("db down")
+		as := &oaMockAccountService{}
+		las := &oaMockLinkAccountStore{
+			GetLinkedAccountByPlatformIDFunc: func(platform auth.Platform, id string) (*auth.LinkedAccount, error) {
+				if platform == auth.PlatformXboxLive {
+					return nil, wantErr
+				}
+				return nil, auth.ErrNotFound
+			},
+		}
+
+		_, err := resolveOrCreateAccountForMicrosoftUser(as, las, xbox, nil)
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("error = %v, want %v", err, wantErr)
+		}
+	})
+
+	t.Run("OA-52_JavaLookupErrorPropagates", func(t *testing.T) {
+		wantErr := errors.New("db down")
+		as := &oaMockAccountService{}
+		las := &oaMockLinkAccountStore{
+			GetLinkedAccountByPlatformIDFunc: func(platform auth.Platform, id string) (*auth.LinkedAccount, error) {
+				if platform == auth.PlatformMinecraft {
+					return nil, wantErr
+				}
+				return nil, auth.ErrNotFound
+			},
+		}
+
+		_, err := resolveOrCreateAccountForMicrosoftUser(as, las, xbox, java)
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("error = %v, want %v", err, wantErr)
+		}
+	})
+
+	t.Run("OA-53_AddAccountFails", func(t *testing.T) {
+		wantErr := errors.New("insert failed")
+		as := &oaMockAccountService{AddAccountFunc: func(*auth.Account) error { return wantErr }}
+		las := notFoundStore()
+
+		_, err := resolveOrCreateAccountForMicrosoftUser(as, las, xbox, nil)
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("error = %v, want %v", err, wantErr)
+		}
+	})
+
+	t.Run("OA-54_GetAccountByIDFails", func(t *testing.T) {
+		wantErr := errors.New("fetch failed")
+		as := &oaMockAccountService{GetAccountByIDFunc: func(string) (*auth.Account, error) { return nil, wantErr }}
+		las := &oaMockLinkAccountStore{
+			GetLinkedAccountByPlatformIDFunc: func(platform auth.Platform, id string) (*auth.LinkedAccount, error) {
+				if platform == auth.PlatformXboxLive {
+					return &auth.LinkedAccount{UserID: "user-1", Verified: true, LoginEnabled: true}, nil
+				}
+				return nil, auth.ErrNotFound
+			},
+		}
+
+		_, err := resolveOrCreateAccountForMicrosoftUser(as, las, xbox, nil)
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("error = %v, want %v", err, wantErr)
+		}
+	})
+
+	t.Run("OA-55_EnsureIdentityLinkedFails", func(t *testing.T) {
+		wantErr := errors.New("link failed")
+		as := &oaMockAccountService{}
+		las := &oaMockLinkAccountStore{
+			GetLinkedAccountByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) { return nil, auth.ErrNotFound },
+			AddLinkedAccountToDBFunc:         func(*auth.LinkedAccount) error { return wantErr },
+		}
+
+		_, err := resolveOrCreateAccountForMicrosoftUser(as, las, xbox, nil)
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("error = %v, want %v", err, wantErr)
+		}
+	})
+}
+
+func TestOA56to66EnsureMicrosoftIdentityLinked(t *testing.T) {
+	xbox := &XboxLiveData{XUID: "xid1", Gamertag: "Tag"}
+	account := &auth.Account{UserID: "user-1"}
+
+	t.Run("OA-56_Success", func(t *testing.T) {
+		as := &oaMockAccountService{}
+		las := &oaMockLinkAccountStore{}
+
+		gotAccount, gotIsNew, err := ensureMicrosoftIdentityLinked(as, las, account, true, auth.PlatformXboxLive, xbox)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if gotAccount != account || gotIsNew != false {
+			t.Errorf("got (%+v, %v), want (%+v, false)", gotAccount, gotIsNew, account)
+		}
+	})
+
+	t.Run("OA-57_LinkFailsNewAccountCleanupSucceeds", func(t *testing.T) {
+		wantErr := errors.New("link failed")
+		as := &oaMockAccountService{}
+		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return wantErr }}
+
+		_, _, err := ensureMicrosoftIdentityLinked(as, las, account, true, auth.PlatformXboxLive, xbox)
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("error = %v, want %v", err, wantErr)
+		}
+		if as.DeleteAccountCalls != 1 {
+			t.Errorf("DeleteAccount called %d times, want 1", as.DeleteAccountCalls)
+		}
+	})
+
+	t.Run("OA-58_LinkFailsExistingAccountNoCleanup", func(t *testing.T) {
+		wantErr := errors.New("link failed")
+		as := &oaMockAccountService{}
+		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return wantErr }}
+
+		_, _, err := ensureMicrosoftIdentityLinked(as, las, account, false, auth.PlatformXboxLive, xbox)
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("error = %v, want %v", err, wantErr)
+		}
+		if as.DeleteAccountCalls != 0 {
+			t.Errorf("DeleteAccount called %d times, want 0 (not a new account)", as.DeleteAccountCalls)
+		}
+	})
+
+	t.Run("OA-59_LinkFailsCleanupAlsoFails", func(t *testing.T) {
+		linkErr := errors.New("link failed")
+		cleanupErr := errors.New("cleanup failed")
+		as := &oaMockAccountService{DeleteAccountFunc: func(string) error { return cleanupErr }}
+		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return linkErr }}
+
+		_, _, err := ensureMicrosoftIdentityLinked(as, las, account, true, auth.PlatformXboxLive, xbox)
+		if !errors.Is(err, linkErr) || !errors.Is(err, cleanupErr) {
+			t.Errorf("error = %v, want it to wrap both %v and %v", err, linkErr, cleanupErr)
+		}
+	})
+
+	t.Run("OA-60_AlreadyLinkedButWeAreTheOwner", func(t *testing.T) {
+		as := &oaMockAccountService{}
+		las := &oaMockLinkAccountStore{
+			AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return auth.ErrAlreadyLinked },
+			GetLinkedAccountByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
+				return &auth.LinkedAccount{UserID: "user-1"}, nil
+			},
+		}
+
+		gotAccount, gotIsNew, err := ensureMicrosoftIdentityLinked(as, las, account, true, auth.PlatformXboxLive, xbox)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if gotAccount != account || gotIsNew != false {
+			t.Errorf("got (%+v, %v), want (%+v, false)", gotAccount, gotIsNew, account)
+		}
+		if as.DeleteAccountCalls != 0 {
+			t.Error("expected no cleanup: we already own the identity")
+		}
+	})
+
+	t.Run("OA-61_AlreadyLinkedRefetchFailsNewAccountCleanupSucceeds", func(t *testing.T) {
+		wantErr := errors.New("lookup failed")
+		as := &oaMockAccountService{}
+		las := &oaMockLinkAccountStore{
+			AddLinkedAccountToDBFunc:         func(*auth.LinkedAccount) error { return auth.ErrAlreadyLinked },
+			GetLinkedAccountByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) { return nil, wantErr },
+		}
+
+		_, _, err := ensureMicrosoftIdentityLinked(as, las, account, true, auth.PlatformXboxLive, xbox)
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("error = %v, want %v", err, wantErr)
+		}
+		if as.DeleteAccountCalls != 1 {
+			t.Errorf("DeleteAccount called %d times, want 1", as.DeleteAccountCalls)
+		}
+	})
+
+	t.Run("OA-62_AlreadyLinkedRefetchFailsCleanupAlsoFails", func(t *testing.T) {
+		lookupErr := errors.New("lookup failed")
+		cleanupErr := errors.New("cleanup failed")
+		as := &oaMockAccountService{DeleteAccountFunc: func(string) error { return cleanupErr }}
+		las := &oaMockLinkAccountStore{
+			AddLinkedAccountToDBFunc:         func(*auth.LinkedAccount) error { return auth.ErrAlreadyLinked },
+			GetLinkedAccountByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) { return nil, lookupErr },
+		}
+
+		_, _, err := ensureMicrosoftIdentityLinked(as, las, account, true, auth.PlatformXboxLive, xbox)
+		if !errors.Is(err, lookupErr) || !errors.Is(err, cleanupErr) {
+			t.Errorf("error = %v, want it to wrap both %v and %v", err, lookupErr, cleanupErr)
+		}
+	})
+
+	t.Run("OA-63_RealConflictExistingAccountRejected", func(t *testing.T) {
+		as := &oaMockAccountService{}
+		las := &oaMockLinkAccountStore{
+			AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return auth.ErrAlreadyLinked },
+			GetLinkedAccountByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
+				return &auth.LinkedAccount{UserID: "other-user"}, nil
+			},
+		}
+
+		_, _, err := ensureMicrosoftIdentityLinked(as, las, account, false, auth.PlatformXboxLive, xbox)
+		if !errors.Is(err, errConflictingMicrosoftIdentities) {
+			t.Fatalf("error = %v, want errConflictingMicrosoftIdentities", err)
+		}
+	})
+
+	t.Run("OA-64_RealConflictNewAccountUsesWinner", func(t *testing.T) {
+		winner := &auth.Account{UserID: "other-user"}
+		as := &oaMockAccountService{GetAccountByIDFunc: func(id string) (*auth.Account, error) {
+			if id == "other-user" {
+				return winner, nil
+			}
+			return nil, auth.ErrNotFound
+		}}
+		las := &oaMockLinkAccountStore{
+			AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return auth.ErrAlreadyLinked },
+			GetLinkedAccountByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
+				return &auth.LinkedAccount{UserID: "other-user"}, nil
+			},
+		}
+
+		gotAccount, gotIsNew, err := ensureMicrosoftIdentityLinked(as, las, account, true, auth.PlatformXboxLive, xbox)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if gotAccount != winner || gotIsNew != false {
+			t.Errorf("got (%+v, %v), want (%+v, false)", gotAccount, gotIsNew, winner)
+		}
+		if as.DeleteAccountCalls != 1 {
+			t.Errorf("DeleteAccount called %d times, want 1", as.DeleteAccountCalls)
+		}
+	})
+
+	t.Run("OA-65_RealConflictNewAccountCleanupFails", func(t *testing.T) {
+		cleanupErr := errors.New("cleanup failed")
+		as := &oaMockAccountService{DeleteAccountFunc: func(string) error { return cleanupErr }}
+		las := &oaMockLinkAccountStore{
+			AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return auth.ErrAlreadyLinked },
+			GetLinkedAccountByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
+				return &auth.LinkedAccount{UserID: "other-user"}, nil
+			},
+		}
+
+		_, _, err := ensureMicrosoftIdentityLinked(as, las, account, true, auth.PlatformXboxLive, xbox)
+		if !errors.Is(err, cleanupErr) {
+			t.Fatalf("error = %v, want it to wrap %v", err, cleanupErr)
+		}
+	})
+
+	t.Run("OA-66_RealConflictNewAccountWinnerFetchFails", func(t *testing.T) {
+		wantErr := errors.New("winner fetch failed")
+		as := &oaMockAccountService{GetAccountByIDFunc: func(string) (*auth.Account, error) { return nil, wantErr }}
+		las := &oaMockLinkAccountStore{
+			AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return auth.ErrAlreadyLinked },
+			GetLinkedAccountByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
+				return &auth.LinkedAccount{UserID: "other-user"}, nil
+			},
+		}
+
+		_, _, err := ensureMicrosoftIdentityLinked(as, las, account, true, auth.PlatformXboxLive, xbox)
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("error = %v, want %v", err, wantErr)
+		}
+	})
+}
+
+func TestOA67to71LinkPlatformUserToSession(t *testing.T) {
+	user := &oaIdentity{id: "p1", username: "alice"}
+
+	t.Run("OA-67_NotYetLinked", func(t *testing.T) {
+		las := &oaMockLinkAccountStore{}
+
+		err := linkPlatformUserToSession(las, "user-1", auth.PlatformDiscord, user)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if las.AddLinkedAccountToDBCalls != 1 {
+			t.Errorf("AddLinkedAccountToDB called %d times, want 1", las.AddLinkedAccountToDBCalls)
+		}
+	})
+
+	t.Run("OA-68_AlreadyLinkedToSameAccountNoOp", func(t *testing.T) {
+		las := &oaMockLinkAccountStore{
+			GetLinkedAccountByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
+				return &auth.LinkedAccount{UserID: "user-1"}, nil
+			},
+		}
+
+		err := linkPlatformUserToSession(las, "user-1", auth.PlatformDiscord, user)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if las.AddLinkedAccountToDBCalls != 0 {
+			t.Errorf("AddLinkedAccountToDB called %d times, want 0", las.AddLinkedAccountToDBCalls)
+		}
+	})
+
+	t.Run("OA-69_AlreadyLinkedToDifferentAccountRejected", func(t *testing.T) {
+		las := &oaMockLinkAccountStore{
+			GetLinkedAccountByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
+				return &auth.LinkedAccount{UserID: "other-user"}, nil
+			},
+		}
+
+		err := linkPlatformUserToSession(las, "user-1", auth.PlatformDiscord, user)
+		if !errors.Is(err, errPlatformAlreadyLinkedToDifferentAccount) {
+			t.Fatalf("error = %v, want errPlatformAlreadyLinkedToDifferentAccount", err)
+		}
+	})
+
+	t.Run("OA-70_LookupErrorPropagates", func(t *testing.T) {
+		wantErr := errors.New("db down")
+		las := &oaMockLinkAccountStore{GetLinkedAccountByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) { return nil, wantErr }}
+
+		err := linkPlatformUserToSession(las, "user-1", auth.PlatformDiscord, user)
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("error = %v, want %v", err, wantErr)
+		}
+	})
+
+	t.Run("OA-71_AddLinkedAccountFails", func(t *testing.T) {
+		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return errors.New("insert failed") }}
+
+		err := linkPlatformUserToSession(las, "user-1", auth.PlatformDiscord, user)
+		if err == nil || err.Error() != "failed to link account" {
+			t.Fatalf("error = %v, want \"failed to link account\"", err)
+		}
+	})
+}
+
+//
+// resolveOrCreateAccountForPlatformUser, resolveOrCreateAccountForMicrosoftUser
+// and ensureMicrosoftIdentityLinked never spawn goroutines or hold locks
+// themselves, but their doc comments ("Lost the race: use the winner's
+// account instead", "the only state where it's safe to delete on a lost
+// race") describe a genuine concurrency invariant: two separate HTTP
+// requests (callers) racing to link the same platform identity, arbitrated
+// by the store's (platform, platform_id) uniqueness constraint. The doubles
+// below simulate that constraint faithfully - atomically, under a mutex -
+// so launching real goroutines against them exercises the actual race
+// instead of merely asserting behavior for a canned auth.ErrAlreadyLinked
+// return.
+
+// oaConcurrentAccountService is a mutex-serialized auth.AccountService
+// double that behaves like a real account table under concurrent access.
+type oaConcurrentAccountService struct {
 	mu       sync.Mutex
 	accounts map[string]*auth.Account
-	deleted  []string
 }
 
-var _ auth.AccountService = (*concurrentAccountService)(nil)
+var _ auth.AccountService = (*oaConcurrentAccountService)(nil)
 
-func newConcurrentAccountService() *concurrentAccountService {
-	return &concurrentAccountService{accounts: make(map[string]*auth.Account)}
+func newOAConcurrentAccountService() *oaConcurrentAccountService {
+	return &oaConcurrentAccountService{accounts: map[string]*auth.Account{}}
 }
 
-func (m *concurrentAccountService) AddAccount(a *auth.Account) error {
+func (m *oaConcurrentAccountService) AddAccount(a *auth.Account) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.accounts[a.UserID] = a
 	return nil
 }
-
-func (m *concurrentAccountService) GetAccountByID(userID string) (*auth.Account, error) {
+func (m *oaConcurrentAccountService) GetAccountByID(userID string) (*auth.Account, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if a, ok := m.accounts[userID]; ok {
-		return a, nil
+	a, ok := m.accounts[userID]
+	if !ok {
+		return nil, auth.ErrNotFound
 	}
+	return a, nil
+}
+func (m *oaConcurrentAccountService) GetAccountByUsername(string) (*auth.Account, error) {
 	return nil, auth.ErrNotFound
 }
-
-func (m *concurrentAccountService) GetAccountByUsername(string) (*auth.Account, error) {
+func (m *oaConcurrentAccountService) GetAccountByEmail(string) (*auth.Account, error) {
 	return nil, auth.ErrNotFound
 }
-
-func (m *concurrentAccountService) GetAccountByEmail(string) (*auth.Account, error) {
-	return nil, auth.ErrNotFound
-}
-
-func (m *concurrentAccountService) UpdateAccount(a *auth.Account) error {
+func (m *oaConcurrentAccountService) UpdateAccount(a *auth.Account) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.accounts[a.UserID] = a
 	return nil
 }
-
-func (m *concurrentAccountService) DeleteAccount(userID string) error {
+func (m *oaConcurrentAccountService) DeleteAccount(userID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.accounts, userID)
-	m.deleted = append(m.deleted, userID)
 	return nil
 }
+func (m *oaConcurrentAccountService) IsPasswordAuthEnabled(string) (bool, error) { return false, nil }
 
-func (m *concurrentAccountService) IsPasswordAuthEnabled(string) (bool, error) {
-	return true, nil
-}
-
-func (m *concurrentAccountService) remaining() int {
+func (m *oaConcurrentAccountService) count() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return len(m.accounts)
 }
 
-// concurrentLinkAccountStore enforces a unique-constraint-like guarantee on
-// (platform, platformID) atomically under a mutex, mirroring the real
-// Postgres unique index this logic depends on for correctness.
-type concurrentLinkAccountStore struct {
+// oaLinkKey identifies a linked_accounts row the way its real (platform,
+// platform_id) unique constraint does.
+func oaLinkKey(platform auth.Platform, platformID string) string {
+	return string(platform) + "|" + platformID
+}
+
+// oaConcurrentLinkAccountStore is a mutex-serialized auth.LinkAccountStore
+// double whose AddLinkedAccountToDB enforces the (platform, platform_id)
+// uniqueness constraint atomically, the way the real Postgres constraint
+// does - the first concurrent caller to reach the critical section wins,
+// every other caller for the same key gets auth.ErrAlreadyLinked.
+type oaConcurrentLinkAccountStore struct {
 	mu    sync.Mutex
 	byKey map[string]*auth.LinkedAccount
 }
 
-var _ auth.LinkAccountStore = (*concurrentLinkAccountStore)(nil)
+var _ auth.LinkAccountStore = (*oaConcurrentLinkAccountStore)(nil)
 
-func newConcurrentLinkAccountStore() *concurrentLinkAccountStore {
-	return &concurrentLinkAccountStore{byKey: make(map[string]*auth.LinkedAccount)}
+func newOAConcurrentLinkAccountStore() *oaConcurrentLinkAccountStore {
+	return &oaConcurrentLinkAccountStore{byKey: map[string]*auth.LinkedAccount{}}
 }
 
-func linkKey(platform auth.Platform, platformID string) string {
-	return string(platform) + ":" + platformID
-}
-
-func (m *concurrentLinkAccountStore) AddLinkedAccountToDB(la *auth.LinkedAccount) error {
+func (m *oaConcurrentLinkAccountStore) AddLinkedAccountToDB(la *auth.LinkedAccount) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	key := linkKey(la.Platform, la.PlatformID)
+	key := oaLinkKey(la.Platform, la.PlatformID)
 	if _, exists := m.byKey[key]; exists {
 		return auth.ErrAlreadyLinked
 	}
 	m.byKey[key] = la
 	return nil
 }
-
-func (m *concurrentLinkAccountStore) UpdateLinkedAccount(*auth.LinkedAccount) error { return nil }
-
-func (m *concurrentLinkAccountStore) GetLinkedAccountByPlatformID(platform auth.Platform, platformID string) (*auth.LinkedAccount, error) {
+func (m *oaConcurrentLinkAccountStore) UpdateLinkedAccount(*auth.LinkedAccount) error { return nil }
+func (m *oaConcurrentLinkAccountStore) GetLinkedAccountByPlatformID(platform auth.Platform, platformID string) (*auth.LinkedAccount, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if la, ok := m.byKey[linkKey(platform, platformID)]; ok {
-		return la, nil
-	}
-	return nil, auth.ErrNotFound
-}
-
-func (m *concurrentLinkAccountStore) GetLinkedAccountByPlatformName(auth.Platform, string) (*auth.LinkedAccount, error) {
-	return nil, auth.ErrNotFound
-}
-
-func (m *concurrentLinkAccountStore) GetLinkedAccountByUserID(string, auth.Platform) (*auth.LinkedAccount, error) {
-	return nil, auth.ErrNotFound
-}
-
-func (m *concurrentLinkAccountStore) GetLinkedAccountsByUserID(userID string) ([]*auth.LinkedAccount, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	var result []*auth.LinkedAccount
-	for _, la := range m.byKey {
-		if la.UserID == userID {
-			result = append(result, la)
-		}
-	}
-	return result, nil
-}
-
-// hasOtherUsableLoginMethodLocked mirrors the real store's guard predicate
-// (minus the password check - none of these tests use a passworded
-// account). Callers must already hold m.mu.
-func hasOtherUsableLoginMethodLocked(byKey map[string]*auth.LinkedAccount, userID string, excludePlatform auth.Platform) bool {
-	for _, la := range byKey {
-		if la.UserID == userID && la.Platform != excludePlatform && la.Verified && la.LoginEnabled {
-			return true
-		}
-	}
-	return false
-}
-
-func (m *concurrentLinkAccountStore) DeleteLinkedAccount(userID string, platform auth.Platform) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	key, ok := "", false
-	for k, la := range m.byKey {
-		if la.UserID == userID && la.Platform == platform {
-			key, ok = k, true
-			break
-		}
-	}
+	la, ok := m.byKey[oaLinkKey(platform, platformID)]
 	if !ok {
-		return auth.ErrNotFound
+		return nil, auth.ErrNotFound
 	}
-	if !hasOtherUsableLoginMethodLocked(m.byKey, userID, platform) {
-		return auth.ErrWouldLockAccount
-	}
-	delete(m.byKey, key)
+	return la, nil
+}
+func (m *oaConcurrentLinkAccountStore) GetLinkedAccountByPlatformName(auth.Platform, string) (*auth.LinkedAccount, error) {
+	return nil, auth.ErrNotFound
+}
+func (m *oaConcurrentLinkAccountStore) GetLinkedAccountByUserID(string, auth.Platform) (*auth.LinkedAccount, error) {
+	return nil, auth.ErrNotFound
+}
+func (m *oaConcurrentLinkAccountStore) GetLinkedAccountsByUserID(string) ([]*auth.LinkedAccount, error) {
+	return nil, nil
+}
+func (m *oaConcurrentLinkAccountStore) DeleteLinkedAccount(string, auth.Platform) error { return nil }
+func (m *oaConcurrentLinkAccountStore) SetLinkedAccountLoginEnabled(string, auth.Platform, bool) error {
 	return nil
 }
 
-func (m *concurrentLinkAccountStore) SetLinkedAccountLoginEnabled(userID string, platform auth.Platform, enabled bool) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	var target *auth.LinkedAccount
-	for _, la := range m.byKey {
-		if la.UserID == userID && la.Platform == platform {
-			target = la
-			break
+func TestOA72ResolveOrCreateAccountForPlatformUserConcurrentRace(t *testing.T) {
+	t.Run("OA-72_ConcurrentCallersConvergeOnOneAccount", func(t *testing.T) {
+		as := newOAConcurrentAccountService()
+		las := newOAConcurrentLinkAccountStore()
+		user := &oaIdentity{id: "race-1", username: "alice"}
+
+		const n = 2
+		var wg sync.WaitGroup
+		results := make([]*auth.Account, n)
+		errs := make([]error, n)
+		wg.Add(n)
+		for i := 0; i < n; i++ {
+			i := i
+			go func() {
+				defer wg.Done()
+				results[i], errs[i] = resolveOrCreateAccountForPlatformUser(as, las, auth.PlatformDiscord, user)
+			}()
 		}
-	}
-	if target == nil {
-		return auth.ErrNotFound
-	}
-	if enabled {
-		if !target.Verified {
-			return auth.ErrLinkedAccountUnverified
-		}
-		target.LoginEnabled = true
-		return nil
-	}
-	if !hasOtherUsableLoginMethodLocked(m.byKey, userID, platform) {
-		return auth.ErrWouldLockAccount
-	}
-	target.LoginEnabled = false
-	return nil
-}
+		wg.Wait()
 
-// TestResolveOrCreateAccountForPlatformUserConcurrentRaceExactlyOneWinner
-// drives many goroutines through resolveOrCreateAccountForPlatformUser at
-// once for the *same* platform identity, mirroring two clients starting an
-// OAuth login for the same external account at nearly the same time. Unlike
-// the sequential race-simulation test above (which scripts a single retry
-// via canned mock return values), this exercises the real
-// AddLinkedAccountToDB/DeleteAccount/GetLinkedAccountByPlatformID call
-// sequence under actual goroutine contention against a store that enforces
-// the uniqueness guarantee the real Postgres constraint provides.
-func TestResolveOrCreateAccountForPlatformUserConcurrentRaceExactlyOneWinner(t *testing.T) {
-	const n = 20
-	as := newConcurrentAccountService()
-	als := newConcurrentLinkAccountStore()
-	user := &fakePlatformData{id: "pid-race", username: "racer"}
-
-	var wg sync.WaitGroup
-	accounts := make([]*auth.Account, n)
-	errs := make([]error, n)
-	wg.Add(n)
-	for i := 0; i < n; i++ {
-		go func(i int) {
-			defer wg.Done()
-			accounts[i], errs[i] = resolveOrCreateAccountForPlatformUser(as, als, auth.PlatformDiscord, user)
-		}(i)
-	}
-	wg.Wait()
-
-	for i, err := range errs {
-		if err != nil {
-			t.Fatalf("goroutine %d: resolveOrCreateAccountForPlatformUser returned error: %v", i, err)
-		}
-	}
-
-	winner := accounts[0].UserID
-	for i, a := range accounts {
-		if a.UserID != winner {
-			t.Errorf("goroutine %d returned a different account (%q) than goroutine 0 (%q); all callers linking the same platform identity concurrently must converge on one account", i, a.UserID, winner)
-		}
-	}
-
-	if got := as.remaining(); got != 1 {
-		t.Errorf("expected exactly one account to survive the race (all losing placeholders cleaned up), got %d", got)
-	}
-}
-
-// -------------- resolveOrCreateAccountForPlatformUser tests --------------
-
-func TestResolveOrCreateAccountForPlatformUserCreatesNewAccount(t *testing.T) {
-	as := newMockAccountService()
-	als := &mockLinkAccountStore{
-		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
-			return nil, auth.ErrNotFound
-		},
-	}
-	user := &fakePlatformData{id: "pid1", username: "someuser", email: "someuser@example.com"}
-
-	account, err := resolveOrCreateAccountForPlatformUser(as, als, auth.PlatformDiscord, user)
-	if err != nil {
-		t.Fatalf("resolveOrCreateAccountForPlatformUser returned error: %v", err)
-	}
-
-	if len(as.accounts) != 1 {
-		t.Fatalf("expected exactly one account to be created, got %d", len(as.accounts))
-	}
-	if account.UserID == "" {
-		t.Error("expected the returned account to have a UserID")
-	}
-	if account.Username != "someuser" || account.Email == nil || *account.Email != "someuser@example.com" {
-		t.Errorf("expected the new account to be seeded from the platform data, got: %+v", account)
-	}
-	if len(als.addCalls) != 1 {
-		t.Fatalf("expected AddLinkedAccountToDB to be called once, got %d", len(als.addCalls))
-	}
-	if als.addCalls[0].PlatformID != "pid1" || als.addCalls[0].UserID != account.UserID {
-		t.Errorf("linked account not associated with the new account: %+v", als.addCalls[0])
-	}
-}
-
-// TestResolveOrCreateAccountForPlatformUserUsernameCollisionPropagatesCleanly
-// covers a scenario from the "platform data collides with an existing
-// account" family: a brand-new platform identity (no linked_accounts row
-// yet) reports a username that collides with a completely unrelated,
-// already-existing account's username. AddAccount fails before any linked
-// account row is ever inserted, so there is nothing to clean up - this
-// pins down that the error surfaces as the ErrUsernameAlreadyExists
-// sentinel (not a raw DB error) and that no linked account or extra
-// account is left behind.
-func TestResolveOrCreateAccountForPlatformUserUsernameCollisionPropagatesCleanly(t *testing.T) {
-	as := newMockAccountService()
-	as.accounts["existing123"] = &auth.Account{UserID: "existing123", Username: "taken-username"}
-	als := &mockLinkAccountStore{
-		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
-			return nil, auth.ErrNotFound
-		},
-	}
-	user := &fakePlatformData{id: "pid-new", username: "taken-username", email: "newperson@example.com"}
-
-	_, err := resolveOrCreateAccountForPlatformUser(as, als, auth.PlatformDiscord, user)
-	if !errors.Is(err, auth.ErrUsernameAlreadyExists) {
-		t.Errorf("expected auth.ErrUsernameAlreadyExists, got: %v", err)
-	}
-	if len(as.accounts) != 1 {
-		t.Errorf("expected only the original account to remain, got %d: %v", len(as.accounts), as.accounts)
-	}
-	if len(as.deletedIDs) != 0 {
-		t.Errorf("nothing should need cleanup since AddAccount never created anything, got deletedIDs: %v", as.deletedIDs)
-	}
-	if len(als.addCalls) != 0 {
-		t.Errorf("AddLinkedAccountToDB should never be called when AddAccount fails first, got %d calls", len(als.addCalls))
-	}
-}
-
-func TestResolveOrCreateAccountForPlatformUserUsesExistingLinkedAccount(t *testing.T) {
-	as := newMockAccountService()
-	as.accounts["existing123"] = &auth.Account{UserID: "existing123", Username: "existing"}
-	als := &mockLinkAccountStore{
-		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
-			return &auth.LinkedAccount{UserID: "existing123", PlatformID: "pid1", Verified: true, LoginEnabled: true}, nil
-		},
-	}
-	user := &fakePlatformData{id: "pid1", username: "someuser"}
-
-	account, err := resolveOrCreateAccountForPlatformUser(as, als, auth.PlatformDiscord, user)
-	if err != nil {
-		t.Fatalf("resolveOrCreateAccountForPlatformUser returned error: %v", err)
-	}
-
-	if account.UserID != "existing123" {
-		t.Errorf("expected the existing account to be returned, got UserID %q", account.UserID)
-	}
-	if len(als.addCalls) != 0 {
-		t.Error("expected no new linked account to be created when one already exists")
-	}
-	if len(as.accounts) != 1 {
-		t.Errorf("expected no new account to be created, got %d accounts", len(as.accounts))
-	}
-}
-
-// TestResolveOrCreateAccountForPlatformUserLoginDisabledRejected is the
-// regression test for the login_enabled/verified infrastructure: a platform
-// identity that's already linked to a real account, but not eligible for
-// login, must be rejected outright - never silently treated as unlinked
-// (which would create a second, duplicate account for someone who already
-// has one) and never silently logged in anyway (which would defeat
-// disabling it in the first place).
-func TestResolveOrCreateAccountForPlatformUserLoginDisabledRejected(t *testing.T) {
-	as := newMockAccountService()
-	as.accounts["existing123"] = &auth.Account{UserID: "existing123", Username: "existing"}
-	als := &mockLinkAccountStore{
-		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
-			return &auth.LinkedAccount{UserID: "existing123", PlatformID: "pid1", Verified: true, LoginEnabled: false}, nil
-		},
-	}
-	user := &fakePlatformData{id: "pid1", username: "someuser"}
-
-	_, err := resolveOrCreateAccountForPlatformUser(as, als, auth.PlatformDiscord, user)
-	if !errors.Is(err, errPlatformLoginDisabled) {
-		t.Fatalf("expected errPlatformLoginDisabled, got: %v", err)
-	}
-	if len(as.accounts) != 1 {
-		t.Errorf("expected no new account to be created, got %d accounts", len(as.accounts))
-	}
-	if len(als.addCalls) != 0 {
-		t.Error("expected no linking attempt for a login-disabled identity")
-	}
-}
-
-// TestResolveOrCreateAccountForPlatformUserUnverifiedRejected mirrors the
-// login-disabled case for an unverified row - defense in depth, since
-// nothing in this package can construct one today, but the login path must
-// still never trust one if it ever exists.
-func TestResolveOrCreateAccountForPlatformUserUnverifiedRejected(t *testing.T) {
-	as := newMockAccountService()
-	as.accounts["existing123"] = &auth.Account{UserID: "existing123", Username: "existing"}
-	als := &mockLinkAccountStore{
-		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
-			return &auth.LinkedAccount{UserID: "existing123", PlatformID: "pid1", Verified: false, LoginEnabled: true}, nil
-		},
-	}
-	user := &fakePlatformData{id: "pid1", username: "someuser"}
-
-	_, err := resolveOrCreateAccountForPlatformUser(as, als, auth.PlatformDiscord, user)
-	if !errors.Is(err, errPlatformLoginDisabled) {
-		t.Fatalf("expected errPlatformLoginDisabled, got: %v", err)
-	}
-}
-
-// Under the pre-fix behavior (cleanup only ran when the AddLinkedAccountToDB
-// error was auth.ErrAlreadyLinked, and the winner's account was never
-// re-fetched) this would either fail to clean up or return the deleted
-// placeholder account. resolveOrCreateAccountForPlatformUser must clean up
-// the placeholder and hand back the winner's account instead.
-func TestResolveOrCreateAccountForPlatformUserRaceLostCleansUpAndUsesWinner(t *testing.T) {
-	as := newMockAccountService()
-	as.accounts["winner1"] = &auth.Account{UserID: "winner1"}
-
-	lookupCall := 0
-	als := &mockLinkAccountStore{
-		getByPlatformIDFunc: func(platform auth.Platform, platformID string) (*auth.LinkedAccount, error) {
-			lookupCall++
-			if lookupCall == 1 {
-				return nil, auth.ErrNotFound
+		for i, err := range errs {
+			if err != nil {
+				t.Fatalf("goroutine %d: unexpected error: %v", i, err)
 			}
-			return &auth.LinkedAccount{UserID: "winner1", Platform: platform, PlatformID: platformID}, nil
-		},
-		addFunc: func(*auth.LinkedAccount) error {
-			return auth.ErrAlreadyLinked
-		},
-	}
-	user := &fakePlatformData{id: "pid1", username: "loser"}
-
-	account, err := resolveOrCreateAccountForPlatformUser(as, als, auth.PlatformDiscord, user)
-	if err != nil {
-		t.Fatalf("resolveOrCreateAccountForPlatformUser returned error: %v", err)
-	}
-
-	if account.UserID != "winner1" {
-		t.Errorf("expected the winner's account to be returned, got UserID %q", account.UserID)
-	}
-	if len(as.deletedIDs) != 1 {
-		t.Fatalf("expected the losing placeholder account to be cleaned up, deletedIDs: %v", as.deletedIDs)
-	}
-	if as.deletedIDs[0] == "winner1" {
-		t.Error("cleanup deleted the winner's account instead of the placeholder")
-	}
-	if len(as.accounts) != 1 {
-		t.Errorf("expected only the winner's account to remain, got %d accounts: %v", len(as.accounts), as.accounts)
-	}
-	if lookupCall != 2 {
-		t.Errorf("expected GetLinkedAccountByPlatformID to be called twice (initial miss + post-race re-fetch), got %d", lookupCall)
-	}
+		}
+		if results[0] == nil || results[1] == nil {
+			t.Fatal("expected both goroutines to resolve a non-nil account")
+		}
+		if results[0].UserID != results[1].UserID {
+			t.Errorf("goroutines resolved to different accounts: %s vs %s, want exactly one winner", results[0].UserID, results[1].UserID)
+		}
+		if got := as.count(); got != 1 {
+			t.Errorf("account store has %d accounts after the race, want exactly 1 (no orphaned placeholder)", got)
+		}
+	})
 }
 
-// Under the pre-fix behavior, cleanup only happened when the
-// AddLinkedAccountToDB error was auth.ErrAlreadyLinked, so an unexpected
-// error would leave the placeholder account orphaned. This must clean it up
-// and still propagate the original error.
-func TestResolveOrCreateAccountForPlatformUserUnexpectedAddLinkedAccountErrorPropagatesAndCleansUp(t *testing.T) {
-	as := newMockAccountService()
-	wantErr := errors.New("constraint violation, but not the one we auto-recover from")
-	als := &mockLinkAccountStore{
-		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
-			return nil, auth.ErrNotFound
-		},
-		addFunc: func(*auth.LinkedAccount) error {
-			return wantErr
-		},
-	}
-	user := &fakePlatformData{id: "pid1", username: "someuser"}
+func TestOA73And74EnsureMicrosoftIdentityLinkedConcurrentRace(t *testing.T) {
+	t.Run("OA-73_NeitherLinkedYetConvergesAndCleansUpLoser", func(t *testing.T) {
+		as := newOAConcurrentAccountService()
+		las := newOAConcurrentLinkAccountStore()
+		xbox := &XboxLiveData{XUID: "race-xuid-73", Gamertag: "Tag"}
 
-	_, err := resolveOrCreateAccountForPlatformUser(as, als, auth.PlatformDiscord, user)
-	if !errors.Is(err, wantErr) {
-		t.Errorf("expected the AddLinkedAccountToDB error to propagate, got: %v", err)
-	}
-	if len(as.accounts) != 0 {
-		t.Errorf("expected the placeholder account to be cleaned up, got %d accounts remaining: %v", len(as.accounts), as.accounts)
-	}
-	if len(as.deletedIDs) != 1 {
-		t.Errorf("expected DeleteAccount to be called once to clean up the orphaned account, got: %v", as.deletedIDs)
-	}
+		placeholderA := &auth.Account{UserID: "placeholder-a"}
+		placeholderB := &auth.Account{UserID: "placeholder-b"}
+		_ = as.AddAccount(placeholderA)
+		_ = as.AddAccount(placeholderB)
+
+		var wg sync.WaitGroup
+		var resultA, resultB *auth.Account
+		var errA, errB error
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			resultA, _, errA = ensureMicrosoftIdentityLinked(as, las, placeholderA, true, auth.PlatformXboxLive, xbox)
+		}()
+		go func() {
+			defer wg.Done()
+			resultB, _, errB = ensureMicrosoftIdentityLinked(as, las, placeholderB, true, auth.PlatformXboxLive, xbox)
+		}()
+		wg.Wait()
+
+		if errA != nil {
+			t.Fatalf("goroutine A: unexpected error: %v", errA)
+		}
+		if errB != nil {
+			t.Fatalf("goroutine B: unexpected error: %v", errB)
+		}
+		if resultA.UserID != resultB.UserID {
+			t.Errorf("goroutines converged on different accounts: %s vs %s", resultA.UserID, resultB.UserID)
+		}
+		if got := as.count(); got != 1 {
+			t.Errorf("account store has %d accounts after the race, want exactly 1 (loser's placeholder cleaned up)", got)
+		}
+	})
+
+	t.Run("OA-74_PartialStateRaceNeverDeletesAnExistingAccount", func(t *testing.T) {
+		as := newOAConcurrentAccountService()
+		las := newOAConcurrentLinkAccountStore()
+		xbox := &XboxLiveData{XUID: "race-xuid-74", Gamertag: "Tag2"}
+
+		existingAccount := &auth.Account{UserID: "existing-account"}
+		freshPlaceholder := &auth.Account{UserID: "fresh-placeholder"}
+		_ = as.AddAccount(existingAccount)
+		_ = as.AddAccount(freshPlaceholder)
+
+		// Neither identity is linked yet when the race starts - unlike
+		// OA-73, the two callers are NOT symmetric: A already resolved to
+		// an existing, non-placeholder account (isNewAccount=false, as if
+		// its Java identity was already linked earlier), while B is a
+		// fully fresh login (isNewAccount=true).
+		var wg sync.WaitGroup
+		var resultA, resultB *auth.Account
+		var errA, errB error
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			resultA, _, errA = ensureMicrosoftIdentityLinked(as, las, existingAccount, false, auth.PlatformXboxLive, xbox)
+		}()
+		go func() {
+			defer wg.Done()
+			resultB, _, errB = ensureMicrosoftIdentityLinked(as, las, freshPlaceholder, true, auth.PlatformXboxLive, xbox)
+		}()
+		wg.Wait()
+
+		// Regardless of who won the race, the existing (non-placeholder)
+		// account must never be deleted - that's the cleanup-vs-conflict
+		// distinction isNewAccount exists to enforce.
+		if _, err := as.GetAccountByID(existingAccount.UserID); err != nil {
+			t.Fatalf("existing-account was deleted (or is missing) after the race: %v", err)
+		}
+
+		switch {
+		case errA == nil && errB == nil:
+			// A (the existing account) won outright; B lost but was a
+			// fresh placeholder, so it converges on A's account and
+			// cleans itself up.
+			if resultA.UserID != existingAccount.UserID {
+				t.Errorf("A resolved to %s, want its own account %s", resultA.UserID, existingAccount.UserID)
+			}
+			if resultB.UserID != existingAccount.UserID {
+				t.Errorf("B converged on %s, want the existing account %s", resultB.UserID, existingAccount.UserID)
+			}
+			if _, err := as.GetAccountByID(freshPlaceholder.UserID); !errors.Is(err, auth.ErrNotFound) {
+				t.Errorf("expected B's placeholder to have been deleted after losing, got err=%v", err)
+			}
+			if got := as.count(); got != 1 {
+				t.Errorf("account store has %d accounts, want exactly 1", got)
+			}
+		case errA != nil && errB == nil:
+			// B (the fresh placeholder) won outright; A lost, and since A
+			// was NOT a placeholder (isNewAccount=false), it must report a
+			// real conflict rather than silently disappearing or
+			// converging.
+			if !errors.Is(errA, errConflictingMicrosoftIdentities) {
+				t.Errorf("A's error = %v, want errConflictingMicrosoftIdentities", errA)
+			}
+			if resultB.UserID != freshPlaceholder.UserID {
+				t.Errorf("B resolved to %s, want its own account %s", resultB.UserID, freshPlaceholder.UserID)
+			}
+			if _, err := as.GetAccountByID(freshPlaceholder.UserID); err != nil {
+				t.Errorf("B's account should still exist: %v", err)
+			}
+			if got := as.count(); got != 2 {
+				t.Errorf("account store has %d accounts, want exactly 2 (both survive: A was never deleted, B won)", got)
+			}
+		default:
+			t.Fatalf("unexpected outcome: errA=%v errB=%v", errA, errB)
+		}
+	})
 }
 
-// If the cleanup delete itself also fails, both errors must be surfaced
-// rather than one silently swallowing the other.
-func TestResolveOrCreateAccountForPlatformUserCleanupFailureWrapsBothErrors(t *testing.T) {
-	as := newMockAccountService()
-	addErr := errors.New("constraint violation, but not the one we auto-recover from")
-	deleteErr := errors.New("db unreachable")
-	as.deleteErr = deleteErr
-	als := &mockLinkAccountStore{
-		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
-			return nil, auth.ErrNotFound
-		},
-		addFunc: func(*auth.LinkedAccount) error {
-			return addErr
-		},
-	}
-	user := &fakePlatformData{id: "pid1", username: "someuser"}
+func TestOA75ResolveOrCreateAccountForMicrosoftUserConcurrentRace(t *testing.T) {
+	t.Run("OA-75_ConcurrentFreshLoginsConvergeOnOneAccount", func(t *testing.T) {
+		as := newOAConcurrentAccountService()
+		las := newOAConcurrentLinkAccountStore()
+		xbox := &XboxLiveData{XUID: "race-full-xuid", Gamertag: "Tag3"}
+		java := &MinecraftData{ID: mustUUID("99999999-9999-9999-9999-999999999999"), Username: "Steve3"}
 
-	_, err := resolveOrCreateAccountForPlatformUser(as, als, auth.PlatformDiscord, user)
-	if !errors.Is(err, addErr) {
-		t.Errorf("expected the original AddLinkedAccountToDB error to be wrapped, got: %v", err)
-	}
-	if !errors.Is(err, deleteErr) {
-		t.Errorf("expected the cleanup failure to be wrapped rather than swallowed, got: %v", err)
-	}
-}
+		const n = 2
+		var wg sync.WaitGroup
+		results := make([]*auth.Account, n)
+		errs := make([]error, n)
+		wg.Add(n)
+		for i := 0; i < n; i++ {
+			i := i
+			go func() {
+				defer wg.Done()
+				results[i], errs[i] = resolveOrCreateAccountForMicrosoftUser(as, las, xbox, java)
+			}()
+		}
+		wg.Wait()
 
-func TestResolveOrCreateAccountForPlatformUserUnexpectedLookupErrorPropagates(t *testing.T) {
-	as := newMockAccountService()
-	wantErr := errors.New("db exploded")
-	als := &mockLinkAccountStore{
-		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
-			return nil, wantErr
-		},
-	}
-	user := &fakePlatformData{id: "pid1", username: "someuser"}
+		for i, err := range errs {
+			if err != nil {
+				t.Fatalf("goroutine %d: unexpected error: %v", i, err)
+			}
+		}
+		if results[0].UserID != results[1].UserID {
+			t.Errorf("goroutines converged on different accounts: %s vs %s", results[0].UserID, results[1].UserID)
+		}
+		if got := as.count(); got != 1 {
+			t.Errorf("account store has %d accounts after the race, want exactly 1", got)
+		}
 
-	_, err := resolveOrCreateAccountForPlatformUser(as, als, auth.PlatformDiscord, user)
-	if !errors.Is(err, wantErr) {
-		t.Errorf("expected the lookup error to propagate, got: %v", err)
-	}
-	if len(as.accounts) != 0 {
-		t.Error("no placeholder account should be created when the initial lookup fails for an unexpected reason")
-	}
-	if len(als.addCalls) != 0 {
-		t.Error("AddLinkedAccountToDB should not be called when the initial lookup fails for an unexpected reason")
-	}
-}
-
-// -------------- ProcessOAuthLink cheap early-return tests --------------
-
-func TestProcessOAuthLinkNoSessionInContext(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/", nil)
-	als := &mockLinkAccountStore{}
-	state := &OAuthState{Platform: auth.PlatformDiscord, Mode: ModeLink}
-
-	_, err := ProcessOAuthLink(r, als, "some-code", state)
-	if err == nil {
-		t.Fatal("expected an error when the request has no session in context")
-	}
-	if err.Error() != "session not found" {
-		t.Errorf("expected \"session not found\", got: %v", err)
-	}
-}
-
-func TestProcessOAuthLinkExpiredSession(t *testing.T) {
-	session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
-	ctx := context.WithValue(context.Background(), mw.SessionKey, session)
-	r := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
-	als := &mockLinkAccountStore{}
-	state := &OAuthState{Platform: auth.PlatformDiscord, Mode: ModeLink}
-
-	_, err := ProcessOAuthLink(r, als, "some-code", state)
-	if err == nil {
-		t.Fatal("expected an error when the session in context is expired")
-	}
-	if err.Error() != "session expired" {
-		t.Errorf("expected \"session expired\", got: %v", err)
-	}
-}
-
-// -------------- linkPlatformUserToSession tests --------------
-
-func TestLinkPlatformUserToSessionNotYetLinked(t *testing.T) {
-	session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
-	als := &mockLinkAccountStore{
-		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
-			return nil, auth.ErrNotFound
-		},
-	}
-	user := &fakePlatformData{id: "pid1", username: "someuser"}
-
-	err := linkPlatformUserToSession(als, session.UserID, auth.PlatformDiscord, user)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(als.addCalls) != 1 {
-		t.Fatalf("expected AddLinkedAccountToDB to be called once, got %d calls", len(als.addCalls))
-	}
-	if als.addCalls[0].UserID != session.UserID {
-		t.Errorf("expected the new link to be created for the session's user %q, got %q", session.UserID, als.addCalls[0].UserID)
-	}
-}
-
-func TestLinkPlatformUserToSessionAlreadyLinkedToSameAccount(t *testing.T) {
-	session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
-	als := &mockLinkAccountStore{
-		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
-			return &auth.LinkedAccount{UserID: "u1"}, nil
-		},
-	}
-	user := &fakePlatformData{id: "pid1", username: "someuser"}
-
-	err := linkPlatformUserToSession(als, session.UserID, auth.PlatformDiscord, user)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(als.addCalls) != 0 {
-		t.Errorf("re-linking a platform account already linked to the same account should be a no-op, but AddLinkedAccountToDB was called %d time(s)", len(als.addCalls))
-	}
-}
-
-func TestLinkPlatformUserToSessionAlreadyLinkedToDifferentAccount(t *testing.T) {
-	session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
-	als := &mockLinkAccountStore{
-		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
-			return &auth.LinkedAccount{UserID: "someone-else"}, nil
-		},
-	}
-	user := &fakePlatformData{id: "pid1", username: "someuser"}
-
-	err := linkPlatformUserToSession(als, session.UserID, auth.PlatformDiscord, user)
-	if err == nil {
-		t.Fatal("expected an error when the platform account is already linked to a different account")
-	}
-	if err.Error() != "this platform account is already linked to a different account; log in with it directly if you want to use that account, or unlink it there first" {
-		t.Errorf("expected the already-linked-to-a-different-account message, got: %v", err)
-	}
-	if len(als.addCalls) != 0 {
-		t.Errorf("AddLinkedAccountToDB should not be called when the platform account belongs to a different account, got %d calls", len(als.addCalls))
-	}
-}
-
-func TestLinkPlatformUserToSessionAddFails(t *testing.T) {
-	session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
-	als := &mockLinkAccountStore{
-		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
-			return nil, auth.ErrNotFound
-		},
-		addFunc: func(*auth.LinkedAccount) error {
-			return errors.New("db exploded")
-		},
-	}
-	user := &fakePlatformData{id: "pid1", username: "someuser"}
-
-	err := linkPlatformUserToSession(als, session.UserID, auth.PlatformDiscord, user)
-	if err == nil {
-		t.Fatal("expected an error when AddLinkedAccountToDB fails")
-	}
-	if err.Error() != "failed to link account" {
-		t.Errorf("expected \"failed to link account\", got: %v", err)
-	}
-}
-
-func TestLinkPlatformUserToSessionLookupError(t *testing.T) {
-	session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
-	wantErr := errors.New("db exploded")
-	als := &mockLinkAccountStore{
-		getByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) {
-			return nil, wantErr
-		},
-	}
-	user := &fakePlatformData{id: "pid1", username: "someuser"}
-
-	err := linkPlatformUserToSession(als, session.UserID, auth.PlatformDiscord, user)
-	if !errors.Is(err, wantErr) {
-		t.Errorf("expected the lookup error to propagate, got: %v", err)
-	}
-	if len(als.addCalls) != 0 {
-		t.Error("AddLinkedAccountToDB should not be called when the initial lookup fails for an unexpected reason")
-	}
+		xboxLink, err := las.GetLinkedAccountByPlatformID(auth.PlatformXboxLive, xbox.XUID)
+		if err != nil || xboxLink.UserID != results[0].UserID {
+			t.Errorf("xbox link = %+v (err=%v), want it linked to %s", xboxLink, err, results[0].UserID)
+		}
+		javaLink, err := las.GetLinkedAccountByPlatformID(auth.PlatformMinecraft, java.ID.String())
+		if err != nil || javaLink.UserID != results[0].UserID {
+			t.Errorf("java link = %+v (err=%v), want it linked to %s", javaLink, err, results[0].UserID)
+		}
+	})
 }
