@@ -73,3 +73,16 @@ CREATE TABLE IF NOT EXISTS geyser_player_textures (
 
 CREATE UNIQUE INDEX IF NOT EXISTS geyser_player_textures_unique
     ON geyser_player_textures (xuid, hash);
+
+-- Bee Name Generator module's name/suggestion tables. No uniqueness
+-- constraint on name in either table: AcceptBeeNameSuggestion's
+-- insert-then-delete is not transactional and relies on no such
+-- constraint existing (see test/plans/bee_name_generator.md's SOURCE
+-- BUGS note; not fixed here).
+CREATE TABLE IF NOT EXISTS bee_name (
+    name TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS bee_name_suggestion (
+    name TEXT NOT NULL
+);
