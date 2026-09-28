@@ -1,382 +1,64 @@
 package mw
 
 import (
+	"bytes"
 	"context"
+	"crypto/rand"
 	"errors"
+	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
+	"golang.org/x/crypto/ed25519"
 )
 
-// mockSessionService implements auth.SessionService for unit testing middleware.
-type mockSessionService struct {
-	readJWTFunc       func(token string) (*auth.Session, error)
-	readJWTCalled     bool
-	deleteSessionFunc func(id string) error
-	deletedIDs        []string
+// ----------------------------------------------------------------------
+// Shared test doubles. Named distinctly from anything in
+// middleware_old_test.go (which still compiles alongside this file) to
+// avoid any identifier collision while both exist side by side.
+// ----------------------------------------------------------------------
+
+// mwFakeSessionSvc implements auth.SessionService for this file's tests.
+type mwFakeSessionSvc struct {
+	readJWTFunc   func(token string) (*auth.Session, error)
+	deleteFunc    func(id string) error
+	deletedIDs    []string
+	readJWTCalled bool
 }
 
-var _ auth.SessionService = (*mockSessionService)(nil)
+var _ auth.SessionService = (*mwFakeSessionSvc)(nil)
 
-func (m *mockSessionService) AddSession(*auth.Session) error { return nil }
-func (m *mockSessionService) GetSession(string) (*auth.Session, error) {
+func (f *mwFakeSessionSvc) AddSession(*auth.Session) error { return nil }
+func (f *mwFakeSessionSvc) GetSession(string) (*auth.Session, error) {
 	return nil, errors.New("not implemented")
 }
-func (m *mockSessionService) UpdateSession(*auth.Session) error       { return nil }
-func (m *mockSessionService) CreateJWT(*auth.Session) (string, error) { return "", nil }
+func (f *mwFakeSessionSvc) UpdateSession(*auth.Session) error       { return nil }
+func (f *mwFakeSessionSvc) CreateJWT(*auth.Session) (string, error) { return "", nil }
 
-func (m *mockSessionService) DeleteSession(id string) error {
-	m.deletedIDs = append(m.deletedIDs, id)
-	if m.deleteSessionFunc != nil {
-		return m.deleteSessionFunc(id)
+func (f *mwFakeSessionSvc) DeleteSession(id string) error {
+	f.deletedIDs = append(f.deletedIDs, id)
+	if f.deleteFunc != nil {
+		return f.deleteFunc(id)
 	}
 	return nil
 }
 
-func (m *mockSessionService) ReadJWT(token string) (*auth.Session, error) {
-	m.readJWTCalled = true
-	return m.readJWTFunc(token)
+func (f *mwFakeSessionSvc) ReadJWT(token string) (*auth.Session, error) {
+	f.readJWTCalled = true
+	if f.readJWTFunc != nil {
+		return f.readJWTFunc(token)
+	}
+	return nil, errors.New("no ReadJWT configured")
 }
 
-// newTestRequest builds a request carrying the context values LogRequest
-// requires (RemoteAddrKey/RequestIDKey), since some of SessionMiddleware's
-// error paths call it and it type-asserts those without an ok-check.
-func newTestRequest(authHeader string) *http.Request {
-	return newTestRequestWithCookie(authHeader, "")
-}
-
-// newTestRequestWithCookie is newTestRequest plus an optional session cookie,
-// for exercising SessionMiddleware's cookie fallback.
-func newTestRequestWithCookie(authHeader, cookieValue string) *http.Request {
-	r := httptest.NewRequest(http.MethodGet, "/", nil)
-	if authHeader != "" {
-		r.Header.Set(AuthHeader, authHeader)
-	}
-	if cookieValue != "" {
-		r.AddCookie(&http.Cookie{Name: SessionCookieName, Value: cookieValue})
-	}
-	ctx := context.WithValue(r.Context(), RemoteAddrKey, "127.0.0.1")
-	ctx = context.WithValue(ctx, RequestIDKey, 1)
-	return r.WithContext(ctx)
-}
-
-func runSessionMiddleware(svc auth.SessionService, r *http.Request) (w *httptest.ResponseRecorder, nextCalled bool, gotSession *auth.Session) {
-	w = httptest.NewRecorder()
-	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-		nextCalled = true
-		gotSession, _ = r.Context().Value(SessionKey).(*auth.Session)
-	})
-	SessionMiddleware(svc)(next).ServeHTTP(w, r)
-	return w, nextCalled, gotSession
-}
-
-func TestSessionMiddlewareNoAuthHeaderPassesThrough(t *testing.T) {
-	svc := &mockSessionService{}
-	w, nextCalled, gotSession := runSessionMiddleware(svc, newTestRequest(""))
-
-	if !nextCalled {
-		t.Fatal("expected the request to pass through to the next handler")
-	}
-	if gotSession != nil {
-		t.Error("expected no session in context when no Authorization header is present")
-	}
-	if svc.readJWTCalled {
-		t.Error("ReadJWT should not be called when there's no Authorization header")
-	}
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-}
-
-func TestSessionMiddlewareMalformedHeaderRejected(t *testing.T) {
-	tests := []string{
-		"Basic abc123",        // wrong scheme entirely
-		"Bearer",              // missing token and separator
-		"BearerNoSpace token", // no "Bearer " literal
-	}
-
-	for _, header := range tests {
-		t.Run(header, func(t *testing.T) {
-			svc := &mockSessionService{}
-			w, nextCalled, _ := runSessionMiddleware(svc, newTestRequest(header))
-
-			if nextCalled {
-				t.Error("expected the request to be rejected before reaching the next handler")
-			}
-			if w.Code != http.StatusUnauthorized {
-				t.Errorf("expected status 401, got %d", w.Code)
-			}
-			if svc.readJWTCalled {
-				t.Error("ReadJWT should not be called for a malformed Authorization header")
-			}
-		})
-	}
-}
-
-// "Bearer " (trailing space, empty token) passes the `len(authStrings) != 2`
-// check (it splits into ["", ""]), so unlike the other malformed headers
-// above it reaches ReadJWT with an empty token string rather than being
-// rejected up front.
-func TestSessionMiddlewareBareBearerPrefixReachesReadJWT(t *testing.T) {
-	svc := &mockSessionService{
-		readJWTFunc: func(token string) (*auth.Session, error) {
-			if token != "" {
-				t.Errorf("expected ReadJWT to be called with an empty token, got %q", token)
-			}
-			return nil, errors.New("invalid token")
-		},
-	}
-	w, nextCalled, _ := runSessionMiddleware(svc, newTestRequest("Bearer "))
-
-	if !svc.readJWTCalled {
-		t.Error("expected ReadJWT to be called with the empty token")
-	}
-	if nextCalled {
-		t.Error("expected the request to be rejected before reaching the next handler")
-	}
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401, got %d", w.Code)
-	}
-}
-
-func TestSessionMiddlewareReadJWTErrorRejected(t *testing.T) {
-	svc := &mockSessionService{
-		readJWTFunc: func(string) (*auth.Session, error) {
-			return nil, errors.New("invalid token")
-		},
-	}
-	w, nextCalled, _ := runSessionMiddleware(svc, newTestRequest("Bearer sometoken"))
-
-	if nextCalled {
-		t.Error("expected the request to be rejected before reaching the next handler")
-	}
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401, got %d", w.Code)
-	}
-}
-
-func TestSessionMiddlewareValidSessionSetsContextAndCallsNext(t *testing.T) {
-	session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
-	svc := &mockSessionService{
-		readJWTFunc: func(string) (*auth.Session, error) {
-			return session, nil
-		},
-	}
-	w, nextCalled, gotSession := runSessionMiddleware(svc, newTestRequest("Bearer validtoken"))
-
-	if !nextCalled {
-		t.Fatal("expected the request to reach the next handler")
-	}
-	if gotSession == nil || gotSession.UserID != "u1" {
-		t.Errorf("expected the session to be set in context, got: %+v", gotSession)
-	}
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-	if len(svc.deletedIDs) != 0 {
-		t.Error("a valid session should not be deleted")
-	}
-}
-
-func TestSessionMiddlewareNeverExpiresSessionSetsContextAndCallsNext(t *testing.T) {
-	session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: 0}
-	svc := &mockSessionService{
-		readJWTFunc: func(string) (*auth.Session, error) {
-			return session, nil
-		},
-	}
-	w, nextCalled, gotSession := runSessionMiddleware(svc, newTestRequest("Bearer validtoken"))
-
-	if !nextCalled {
-		t.Fatal("expected the request to reach the next handler")
-	}
-	if gotSession == nil || gotSession.UserID != "u1" {
-		t.Errorf("expected the session to be set in context, got: %+v", gotSession)
-	}
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-	if len(svc.deletedIDs) != 0 {
-		t.Error("a never-expiring session (ExpiresAt == 0) should not be deleted")
-	}
-}
-
-func TestSessionMiddlewareExpiredSessionRejectedAndDeleted(t *testing.T) {
-	session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
-	svc := &mockSessionService{
-		readJWTFunc: func(string) (*auth.Session, error) {
-			return session, nil
-		},
-	}
-	w, nextCalled, _ := runSessionMiddleware(svc, newTestRequest("Bearer expiredtoken"))
-
-	if nextCalled {
-		t.Error("expected an expired session to be rejected before reaching the next handler")
-	}
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401, got %d", w.Code)
-	}
-	if len(svc.deletedIDs) != 1 || svc.deletedIDs[0] != "s1" {
-		t.Errorf("expected the expired session to be deleted, deletedIDs: %v", svc.deletedIDs)
-	}
-}
-
-func TestSessionMiddlewareValidCookieSetsContextAndCallsNext(t *testing.T) {
-	session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
-	svc := &mockSessionService{
-		readJWTFunc: func(token string) (*auth.Session, error) {
-			if token != "cookietoken" {
-				t.Errorf("expected ReadJWT to be called with the cookie's value, got %q", token)
-			}
-			return session, nil
-		},
-	}
-	w, nextCalled, gotSession := runSessionMiddleware(svc, newTestRequestWithCookie("", "cookietoken"))
-
-	if !nextCalled {
-		t.Fatal("expected the request to reach the next handler")
-	}
-	if gotSession == nil || gotSession.UserID != "u1" {
-		t.Errorf("expected the session to be set in context, got: %+v", gotSession)
-	}
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-}
-
-// TestSessionMiddlewareInvalidCookieFailsOpen is the regression test for a
-// real bug: a cookie is ambient (the browser attaches it to every request,
-// not just ones that need auth), so a stale one - e.g. right after logout,
-// before it naturally expires - must not block the request the way an
-// invalid Authorization header does. Routes that actually require a session
-// still reject via Auth, since no session ends up in context either way.
-func TestSessionMiddlewareInvalidCookieFailsOpen(t *testing.T) {
-	svc := &mockSessionService{
-		readJWTFunc: func(string) (*auth.Session, error) {
-			return nil, errors.New("invalid token")
-		},
-	}
-	w, nextCalled, gotSession := runSessionMiddleware(svc, newTestRequestWithCookie("", "badtoken"))
-
-	if !nextCalled {
-		t.Fatal("expected the request to fail open and reach the next handler")
-	}
-	if gotSession != nil {
-		t.Errorf("expected no session in context, got: %+v", gotSession)
-	}
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-}
-
-// TestSessionMiddlewareExpiredCookieFailsOpenAndDeletesSession pins the same
-// fail-open behavior for an expired (rather than malformed) cookie-sourced
-// session, while confirming the server-side cleanup still happens.
-func TestSessionMiddlewareExpiredCookieFailsOpenAndDeletesSession(t *testing.T) {
-	session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
-	svc := &mockSessionService{
-		readJWTFunc: func(string) (*auth.Session, error) {
-			return session, nil
-		},
-	}
-	w, nextCalled, gotSession := runSessionMiddleware(svc, newTestRequestWithCookie("", "expiredtoken"))
-
-	if !nextCalled {
-		t.Fatal("expected the request to fail open and reach the next handler")
-	}
-	if gotSession != nil {
-		t.Errorf("expected no session in context, got: %+v", gotSession)
-	}
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-	if len(svc.deletedIDs) != 1 || svc.deletedIDs[0] != "s1" {
-		t.Errorf("expected the expired session to still be deleted, deletedIDs: %v", svc.deletedIDs)
-	}
-}
-
-// TestSessionMiddlewareStackOrderDoesNotPanicOnStaleCookie pins the real
-// dependency that newTestRequestWithCookie's manual context seeding papers
-// over: LogRequest (called from SessionMiddleware's cookie-error branches)
-// type-asserts RequestIDKey/RemoteAddrKey without an ok-check, so
-// SessionMiddleware must run after both IPMiddleware and RequestIDMiddleware
-// in the stack, exactly as api.go orders it.
-func TestSessionMiddlewareStackOrderDoesNotPanicOnStaleCookie(t *testing.T) {
-	svc := &mockSessionService{
-		readJWTFunc: func(string) (*auth.Session, error) {
-			return nil, errors.New("stale cookie")
-		},
-	}
-	stack := CreateStack(
-		IPMiddleware,
-		RequestIDMiddleware,
-		SessionMiddleware(svc),
-	)
-	handler := stack(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	r := httptest.NewRequest(http.MethodGet, "/", nil)
-	r.AddCookie(&http.Cookie{Name: SessionCookieName, Value: "stale-cookie"})
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected the request to fail open through the real stack, got %d", w.Code)
-	}
-}
-
-func TestSessionMiddlewareNoHeaderNoCookiePassesThrough(t *testing.T) {
-	svc := &mockSessionService{}
-	w, nextCalled, gotSession := runSessionMiddleware(svc, newTestRequestWithCookie("", ""))
-
-	if !nextCalled {
-		t.Fatal("expected the request to pass through to the next handler")
-	}
-	if gotSession != nil {
-		t.Error("expected no session in context when neither a header nor a cookie is present")
-	}
-	if svc.readJWTCalled {
-		t.Error("ReadJWT should not be called when there's no header or cookie")
-	}
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-}
-
-// TestSessionMiddlewareHeaderTakesPriorityOverCookie pins the documented
-// precedence: a bot/integration presenting its own bearer token must not
-// have it silently overridden by an unrelated cookie riding along on the
-// same request.
-func TestSessionMiddlewareHeaderTakesPriorityOverCookie(t *testing.T) {
-	svc := &mockSessionService{
-		readJWTFunc: func(token string) (*auth.Session, error) {
-			if token != "headertoken" {
-				t.Errorf("expected ReadJWT to be called with the header's token, got %q", token)
-			}
-			return &auth.Session{ID: "s1", UserID: "from-header", ExpiresAt: time.Now().Add(time.Hour).Unix()}, nil
-		},
-	}
-	w, nextCalled, gotSession := runSessionMiddleware(svc, newTestRequestWithCookie("Bearer headertoken", "cookietoken"))
-
-	if !nextCalled {
-		t.Fatal("expected the request to reach the next handler")
-	}
-	if gotSession == nil || gotSession.UserID != "from-header" {
-		t.Errorf("expected the header's session to win, got: %+v", gotSession)
-	}
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-}
-
-// mockRateLimitService implements auth.RateLimitService for unit testing
-// RateLimitMiddleware.
-type mockRateLimitService struct {
+// mwFakeRateLimitSvc implements auth.RateLimitService for this file's tests.
+type mwFakeRateLimitSvc struct {
 	incrErr  error
 	getLimit int
 	getErr   error
@@ -385,409 +67,1030 @@ type mockRateLimitService struct {
 	getCalls  []string
 }
 
-var _ auth.RateLimitService = (*mockRateLimitService)(nil)
+var _ auth.RateLimitService = (*mwFakeRateLimitSvc)(nil)
 
-func (m *mockRateLimitService) IncrRateLimit(key string) error {
-	m.incrCalls = append(m.incrCalls, key)
-	return m.incrErr
+func (f *mwFakeRateLimitSvc) IncrRateLimit(key string) error {
+	f.incrCalls = append(f.incrCalls, key)
+	return f.incrErr
 }
 
-func (m *mockRateLimitService) GetRateLimit(key string) (int, error) {
-	m.getCalls = append(m.getCalls, key)
-	if m.getErr != nil {
-		return 0, m.getErr
+func (f *mwFakeRateLimitSvc) GetRateLimit(key string) (int, error) {
+	f.getCalls = append(f.getCalls, key)
+	if f.getErr != nil {
+		return 0, f.getErr
 	}
-	return m.getLimit, nil
+	return f.getLimit, nil
 }
 
-func (m *mockRateLimitService) SetRateLimit(string, int) error { return nil }
+func (f *mwFakeRateLimitSvc) SetRateLimit(string, int) error { return nil }
 
-func runRateLimitMiddleware(svc auth.RateLimitService, prefix string, sessionLimit, ipLimit int, r *http.Request) (w *httptest.ResponseRecorder, nextCalled bool) {
-	w = httptest.NewRecorder()
+// mwBaseCtx returns a context already carrying the values LogRequest
+// type-asserts without an ok-check (RemoteAddrKey/RequestIDKey), so any
+// middleware under test that may call LogRequest doesn't panic for reasons
+// unrelated to the row being tested.
+func mwBaseCtx() context.Context {
+	ctx := context.WithValue(context.Background(), RemoteAddrKey, "127.0.0.1")
+	ctx = context.WithValue(ctx, RequestIDKey, 1)
+	return ctx
+}
+
+// mwCaptureLog redirects the standard logger's output for the duration of a
+// test and returns a function that restores it and yields what was written.
+func mwCaptureLog(t *testing.T) func() string {
+	t.Helper()
+	var buf bytes.Buffer
+	prevOut := log.Writer()
+	prevFlags := log.Flags()
+	log.SetOutput(&buf)
+	t.Cleanup(func() {
+		log.SetOutput(prevOut)
+		log.SetFlags(prevFlags)
+	})
+	return buf.String
+}
+
+// ----------------------------------------------------------------------
+// LogRequest
+// ----------------------------------------------------------------------
+
+func TestLogRequest(t *testing.T) {
+	t.Run("MW-01_SessionInContextLogsUserID", func(t *testing.T) {
+		getLog := mwCaptureLog(t)
+		ctx := mwBaseCtx()
+		ctx = context.WithValue(ctx, SessionKey, &auth.Session{ID: "s1", UserID: "u1"})
+
+		LogRequest(ctx, "hello", "world")
+
+		out := getLog()
+		if !strings.Contains(out, "u1") {
+			t.Errorf("expected log output to contain the session's user ID, got: %q", out)
+		}
+		if !strings.Contains(out, "1 u1 127.0.0.1 hello world") {
+			t.Errorf("expected log output to contain the formatted line, got: %q", out)
+		}
+	})
+
+	t.Run("MW-02_NoSessionLogsNA", func(t *testing.T) {
+		getLog := mwCaptureLog(t)
+		ctx := mwBaseCtx()
+
+		LogRequest(ctx, "msg")
+
+		out := getLog()
+		if !strings.Contains(out, "N/A") {
+			t.Errorf("expected log output to contain N/A for a missing session, got: %q", out)
+		}
+	})
+
+	t.Run("MW-03_NoMessageArgsDoesNotPanic", func(t *testing.T) {
+		getLog := mwCaptureLog(t)
+		ctx := mwBaseCtx()
+
+		LogRequest(ctx)
+
+		out := getLog()
+		if !strings.Contains(out, "1 N/A 127.0.0.1") {
+			t.Errorf("expected log output with an empty joined message, got: %q", out)
+		}
+	})
+
+	t.Run("MW-04_MissingRemoteAddrPanics", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Fatal("expected LogRequest to panic when RemoteAddrKey is missing from the context")
+			}
+		}()
+
+		ctx := context.WithValue(context.Background(), RequestIDKey, 1)
+		LogRequest(ctx, "should not get here")
+	})
+}
+
+// ----------------------------------------------------------------------
+// CreateStack
+// ----------------------------------------------------------------------
+
+func TestCreateStack(t *testing.T) {
+	t.Run("MW-05_ExecutionOrderMatchesDeclarationOrder", func(t *testing.T) {
+		var order []string
+		record := func(name string) Middleware {
+			return func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					order = append(order, name)
+					next.ServeHTTP(w, r)
+				})
+			}
+		}
+
+		stack := CreateStack(record("first"), record("second"), record("third"))
+		final := stack(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			order = append(order, "final")
+		}))
+
+		final.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
+
+		want := []string{"first", "second", "third", "final"}
+		if len(order) != len(want) {
+			t.Fatalf("expected order %v, got %v", want, order)
+		}
+		for i := range want {
+			if order[i] != want[i] {
+				t.Errorf("expected order %v, got %v", want, order)
+				break
+			}
+		}
+	})
+
+	t.Run("MW-06_EmptyStackIsPassthrough", func(t *testing.T) {
+		stack := CreateStack()
+		called := false
+		final := stack(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			called = true
+		}))
+
+		final.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
+
+		if !called {
+			t.Error("expected an empty middleware stack to still call the final handler")
+		}
+	})
+}
+
+// ----------------------------------------------------------------------
+// WrappedWriter.WriteHeader
+// ----------------------------------------------------------------------
+
+func TestWrappedWriterWriteHeader(t *testing.T) {
+	t.Run("MW-07_SetsStatusCodeAndForwards", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		ww := &WrappedWriter{ResponseWriter: rec, statusCode: http.StatusOK}
+
+		ww.WriteHeader(http.StatusTeapot)
+
+		if ww.statusCode != http.StatusTeapot {
+			t.Errorf("expected wrapped statusCode %d, got %d", http.StatusTeapot, ww.statusCode)
+		}
+		if rec.Code != http.StatusTeapot {
+			t.Errorf("expected underlying recorder code %d, got %d", http.StatusTeapot, rec.Code)
+		}
+	})
+}
+
+// ----------------------------------------------------------------------
+// IPMiddleware
+// ----------------------------------------------------------------------
+
+func mwRunIP(r *http.Request) *http.Request {
+	var got *http.Request
+	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		got = r
+	})
+	IPMiddleware(next).ServeHTTP(httptest.NewRecorder(), r)
+	return got
+}
+
+func TestIPMiddleware(t *testing.T) {
+	t.Run("MW-08_CFConnectingIPSetsRemoteAddr", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		r.RemoteAddr = "10.0.0.1:1234"
+		r.Header.Set(CFConnectingIPHeader, "1.2.3.4")
+
+		got := mwRunIP(r)
+
+		if got.RemoteAddr != "1.2.3.4" {
+			t.Errorf("expected RemoteAddr %q, got %q", "1.2.3.4", got.RemoteAddr)
+		}
+		if v, _ := got.Context().Value(RemoteAddrKey).(string); v != "1.2.3.4" {
+			t.Errorf("expected context RemoteAddrKey %q, got %q", "1.2.3.4", v)
+		}
+	})
+
+	t.Run("MW-09_XForwardedForSingleIPSetsRemoteAddr", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		r.RemoteAddr = "10.0.0.1:1234"
+		r.Header.Set(XForwardedForHeader, "5.6.7.8")
+
+		got := mwRunIP(r)
+
+		if got.RemoteAddr != "5.6.7.8" {
+			t.Errorf("expected RemoteAddr %q, got %q", "5.6.7.8", got.RemoteAddr)
+		}
+	})
+
+	t.Run("MW-10_XForwardedForChainUsesLeftmostTrimmedIP", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		r.RemoteAddr = "10.0.0.1:1234"
+		r.Header.Set(XForwardedForHeader, "9.9.9.9, 10.10.10.10")
+
+		got := mwRunIP(r)
+
+		if got.RemoteAddr != "9.9.9.9" {
+			t.Errorf("expected leftmost trimmed IP %q, got %q", "9.9.9.9", got.RemoteAddr)
+		}
+	})
+
+	t.Run("MW-11_CFConnectingIPTakesPrecedenceOverXForwardedFor", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		r.RemoteAddr = "10.0.0.1:1234"
+		r.Header.Set(CFConnectingIPHeader, "1.1.1.1")
+		r.Header.Set(XForwardedForHeader, "2.2.2.2")
+
+		got := mwRunIP(r)
+
+		if got.RemoteAddr != "1.1.1.1" {
+			t.Errorf("expected CF-Connecting-IP to win, got %q", got.RemoteAddr)
+		}
+	})
+
+	t.Run("MW-12_BlankLeftmostXForwardedForLeavesRemoteAddrUnchanged", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		r.RemoteAddr = "10.0.0.1:1234"
+		r.Header.Set(XForwardedForHeader, " ,3.3.3.3")
+
+		got := mwRunIP(r)
+
+		if got.RemoteAddr != "10.0.0.1:1234" {
+			t.Errorf("expected RemoteAddr to be left unchanged, got %q", got.RemoteAddr)
+		}
+	})
+
+	t.Run("MW-13_NoHeadersLeavesRemoteAddrUnchanged", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		r.RemoteAddr = "10.0.0.1:1234"
+
+		got := mwRunIP(r)
+
+		if got.RemoteAddr != "10.0.0.1:1234" {
+			t.Errorf("expected RemoteAddr to be left unchanged, got %q", got.RemoteAddr)
+		}
+		if v, _ := got.Context().Value(RemoteAddrKey).(string); v != "10.0.0.1:1234" {
+			t.Errorf("expected context RemoteAddrKey to match the original RemoteAddr, got %q", v)
+		}
+	})
+}
+
+// ----------------------------------------------------------------------
+// SessionMiddleware
+// ----------------------------------------------------------------------
+
+func mwRunSession(svc auth.SessionService, r *http.Request) (rec *httptest.ResponseRecorder, nextCalled bool, gotSession *auth.Session) {
+	rec = httptest.NewRecorder()
+	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		nextCalled = true
+		gotSession, _ = r.Context().Value(SessionKey).(*auth.Session)
+	})
+	SessionMiddleware(svc)(next).ServeHTTP(rec, r)
+	return rec, nextCalled, gotSession
+}
+
+func mwSessionRequest(authHeader, cookieValue string) *http.Request {
+	r := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(mwBaseCtx())
+	if authHeader != "" {
+		r.Header.Set(AuthHeader, authHeader)
+	}
+	if cookieValue != "" {
+		r.AddCookie(&http.Cookie{Name: SessionCookieName, Value: cookieValue})
+	}
+	return r
+}
+
+func TestSessionMiddleware(t *testing.T) {
+	t.Run("MW-14_NoHeaderNoCookiePassesThrough", func(t *testing.T) {
+		svc := &mwFakeSessionSvc{}
+		rec, nextCalled, gotSession := mwRunSession(svc, mwSessionRequest("", ""))
+
+		if !nextCalled {
+			t.Fatal("expected next to be called")
+		}
+		if gotSession != nil {
+			t.Errorf("expected no session in context, got %+v", gotSession)
+		}
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected status 200, got %d", rec.Code)
+		}
+	})
+
+	t.Run("MW-15_MalformedAuthorizationHeaderRejected", func(t *testing.T) {
+		for _, header := range []string{"Basic abc123", "Bearer"} {
+			t.Run(header, func(t *testing.T) {
+				svc := &mwFakeSessionSvc{}
+				rec, nextCalled, _ := mwRunSession(svc, mwSessionRequest(header, ""))
+
+				if nextCalled {
+					t.Error("expected next NOT to be called")
+				}
+				if rec.Code != http.StatusUnauthorized {
+					t.Errorf("expected status 401, got %d", rec.Code)
+				}
+				if svc.readJWTCalled {
+					t.Error("expected ReadJWT not to be called for a malformed header")
+				}
+			})
+		}
+	})
+
+	t.Run("MW-16_ValidBearerTokenSetsContextAndCallsNext", func(t *testing.T) {
+		session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
+		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*auth.Session, error) { return session, nil }}
+		rec, nextCalled, gotSession := mwRunSession(svc, mwSessionRequest("Bearer validtoken", ""))
+
+		if !nextCalled {
+			t.Fatal("expected next to be called")
+		}
+		if gotSession == nil || gotSession.UserID != "u1" {
+			t.Errorf("expected session in context, got %+v", gotSession)
+		}
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected status 200, got %d", rec.Code)
+		}
+	})
+
+	t.Run("MW-17_ReadJWTErrorRejected", func(t *testing.T) {
+		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*auth.Session, error) { return nil, errors.New("bad token") }}
+		rec, nextCalled, _ := mwRunSession(svc, mwSessionRequest("Bearer sometoken", ""))
+
+		if nextCalled {
+			t.Error("expected next NOT to be called")
+		}
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("expected status 401, got %d", rec.Code)
+		}
+	})
+
+	t.Run("MW-52_BearerPrefixWithTrailingSpaceReachesReadJWTWithEmptyToken", func(t *testing.T) {
+		var gotToken string
+		var tokenSeen bool
+		svc := &mwFakeSessionSvc{readJWTFunc: func(token string) (*auth.Session, error) {
+			tokenSeen = true
+			gotToken = token
+			return nil, errors.New("invalid token")
+		}}
+		rec, nextCalled, _ := mwRunSession(svc, mwSessionRequest("Bearer ", ""))
+
+		if !tokenSeen {
+			t.Fatal("expected ReadJWT to be called for a bare 'Bearer ' prefix")
+		}
+		if gotToken != "" {
+			t.Errorf("expected ReadJWT to be called with an empty token, got %q", gotToken)
+		}
+		if nextCalled {
+			t.Error("expected next NOT to be called")
+		}
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("expected status 401, got %d", rec.Code)
+		}
+	})
+
+	t.Run("MW-18_ExpiredSessionRejectedAndDeleted", func(t *testing.T) {
+		session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
+		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*auth.Session, error) { return session, nil }}
+		rec, nextCalled, _ := mwRunSession(svc, mwSessionRequest("Bearer expiredtoken", ""))
+
+		if nextCalled {
+			t.Error("expected next NOT to be called")
+		}
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("expected status 401, got %d", rec.Code)
+		}
+		if len(svc.deletedIDs) != 1 || svc.deletedIDs[0] != "s1" {
+			t.Errorf("expected DeleteSession(%q), got %v", "s1", svc.deletedIDs)
+		}
+	})
+
+	t.Run("MW-19_ExpiredSessionDeleteErrorStillUnauthorized", func(t *testing.T) {
+		session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
+		svc := &mwFakeSessionSvc{
+			readJWTFunc: func(string) (*auth.Session, error) { return session, nil },
+			deleteFunc:  func(string) error { return errors.New("cache down") },
+		}
+		rec, nextCalled, _ := mwRunSession(svc, mwSessionRequest("Bearer expiredtoken", ""))
+
+		if nextCalled {
+			t.Error("expected next NOT to be called")
+		}
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("expected status 401 regardless of the DeleteSession error, got %d", rec.Code)
+		}
+	})
+
+	t.Run("MW-20_ValidCookieSessionSetsContextAndCallsNext", func(t *testing.T) {
+		session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
+		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*auth.Session, error) { return session, nil }}
+		rec, nextCalled, gotSession := mwRunSession(svc, mwSessionRequest("", "cookietoken"))
+
+		if !nextCalled {
+			t.Fatal("expected next to be called")
+		}
+		if gotSession == nil || gotSession.UserID != "u1" {
+			t.Errorf("expected session in context, got %+v", gotSession)
+		}
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected status 200, got %d", rec.Code)
+		}
+	})
+
+	t.Run("MW-21_CookieReadJWTErrorFailsOpen", func(t *testing.T) {
+		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*auth.Session, error) { return nil, errors.New("bad cookie") }}
+		rec, nextCalled, gotSession := mwRunSession(svc, mwSessionRequest("", "badtoken"))
+
+		if !nextCalled {
+			t.Fatal("expected the request to fail open and reach next")
+		}
+		if gotSession != nil {
+			t.Errorf("expected no session in context, got %+v", gotSession)
+		}
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected status 200 (fail open), got %d", rec.Code)
+		}
+	})
+
+	t.Run("MW-22_CookieExpiredSessionFailsOpenAndDeletes", func(t *testing.T) {
+		session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
+		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*auth.Session, error) { return session, nil }}
+		rec, nextCalled, gotSession := mwRunSession(svc, mwSessionRequest("", "expiredtoken"))
+
+		if !nextCalled {
+			t.Fatal("expected the request to fail open and reach next")
+		}
+		if gotSession != nil {
+			t.Errorf("expected no session in context, got %+v", gotSession)
+		}
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected status 200 (fail open), got %d", rec.Code)
+		}
+		if len(svc.deletedIDs) != 1 || svc.deletedIDs[0] != "s1" {
+			t.Errorf("expected DeleteSession(%q), got %v", "s1", svc.deletedIDs)
+		}
+	})
+
+	t.Run("MW-23_CookieExpiredSessionDeleteErrorStillFailsOpen", func(t *testing.T) {
+		session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
+		svc := &mwFakeSessionSvc{
+			readJWTFunc: func(string) (*auth.Session, error) { return session, nil },
+			deleteFunc:  func(string) error { return errors.New("cache down") },
+		}
+		rec, nextCalled, gotSession := mwRunSession(svc, mwSessionRequest("", "expiredtoken"))
+
+		if !nextCalled {
+			t.Fatal("expected the request to fail open and reach next")
+		}
+		if gotSession != nil {
+			t.Errorf("expected no session in context, got %+v", gotSession)
+		}
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected status 200 (fail open), got %d", rec.Code)
+		}
+	})
+}
+
+// ----------------------------------------------------------------------
+// RateLimitMiddleware
+// ----------------------------------------------------------------------
+
+func mwRunRateLimit(svc auth.RateLimitService, prefix string, sessionLimit, ipLimit int, r *http.Request) (rec *httptest.ResponseRecorder, nextCalled bool) {
+	rec = httptest.NewRecorder()
 	next := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		nextCalled = true
 	})
-	RateLimitMiddleware(svc, prefix, sessionLimit, ipLimit)(next).ServeHTTP(w, r)
-	return w, nextCalled
+	RateLimitMiddleware(svc, prefix, sessionLimit, ipLimit)(next).ServeHTTP(rec, r)
+	return rec, nextCalled
 }
 
-func newRateLimitTestRequest(session *auth.Session, remoteAddr string) *http.Request {
+func mwRateLimitRequest(session *auth.Session, remoteAddr string) *http.Request {
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	r.RemoteAddr = remoteAddr
-	ctx := context.WithValue(r.Context(), RemoteAddrKey, remoteAddr)
-	ctx = context.WithValue(ctx, RequestIDKey, 1)
+	ctx := mwBaseCtx()
 	if session != nil {
 		ctx = context.WithValue(ctx, SessionKey, session)
 	}
 	return r.WithContext(ctx)
 }
 
-func TestRateLimitMiddlewareSessionUnderLimitCallsNext(t *testing.T) {
-	session := &auth.Session{ID: "s1", UserID: "u1"}
-	svc := &mockRateLimitService{getLimit: 3}
-	r := newRateLimitTestRequest(session, "1.2.3.4:5678")
+func TestRateLimitMiddleware(t *testing.T) {
+	t.Run("MW-24_SessionUnderLimitCallsNext", func(t *testing.T) {
+		svc := &mwFakeRateLimitSvc{getLimit: 3}
+		r := mwRateLimitRequest(&auth.Session{ID: "s1", UserID: "u1"}, "1.2.3.4:5678")
 
-	w, nextCalled := runRateLimitMiddleware(svc, "rl", 5, 5, r)
+		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
 
-	if !nextCalled {
-		t.Error("expected next to be called when under the session rate limit")
-	}
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-	if len(svc.incrCalls) != 1 || svc.incrCalls[0] != "rl:u1" {
-		t.Errorf("expected IncrRateLimit to be called with the session-based key, got: %v", svc.incrCalls)
-	}
-}
-
-func TestRateLimitMiddlewareSessionOverLimitRejected(t *testing.T) {
-	session := &auth.Session{ID: "s1", UserID: "u1"}
-	svc := &mockRateLimitService{getLimit: 10}
-	r := newRateLimitTestRequest(session, "1.2.3.4:5678")
-
-	w, nextCalled := runRateLimitMiddleware(svc, "rl", 5, 5, r)
-
-	if nextCalled {
-		t.Error("expected next NOT to be called when over the session rate limit")
-	}
-	if w.Code != http.StatusTooManyRequests {
-		t.Errorf("expected status 429, got %d", w.Code)
-	}
-}
-
-// The session-based branch fails open: an IncrRateLimit or GetRateLimit
-// error is logged but does not block the request, since neither error path
-// returns early - execution falls through to the limit check and next().
-func TestRateLimitMiddlewareSessionIncrErrorFailsOpen(t *testing.T) {
-	session := &auth.Session{ID: "s1", UserID: "u1"}
-	svc := &mockRateLimitService{incrErr: errors.New("redis down"), getLimit: 1}
-	r := newRateLimitTestRequest(session, "1.2.3.4:5678")
-
-	w, nextCalled := runRateLimitMiddleware(svc, "rl", 5, 5, r)
-
-	if !nextCalled {
-		t.Error("expected the session-based branch to fail open (call next) on an IncrRateLimit error")
-	}
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-}
-
-func TestRateLimitMiddlewareSessionGetErrorFailsOpen(t *testing.T) {
-	session := &auth.Session{ID: "s1", UserID: "u1"}
-	svc := &mockRateLimitService{getErr: errors.New("redis down")}
-	r := newRateLimitTestRequest(session, "1.2.3.4:5678")
-
-	w, nextCalled := runRateLimitMiddleware(svc, "rl", 5, 5, r)
-
-	if !nextCalled {
-		t.Error("expected the session-based branch to fail open (call next) on a GetRateLimit error")
-	}
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-}
-
-func TestRateLimitMiddlewareNoSessionFallsBackToIPKey(t *testing.T) {
-	svc := &mockRateLimitService{getLimit: 1}
-	r := newRateLimitTestRequest(nil, "9.8.7.6:1234")
-
-	w, nextCalled := runRateLimitMiddleware(svc, "rl", 5, 5, r)
-
-	if !nextCalled {
-		t.Error("expected next to be called when under the IP rate limit")
-	}
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-	if len(svc.incrCalls) != 1 || svc.incrCalls[0] != "rl:9.8.7.6" {
-		t.Errorf("expected IncrRateLimit to be called with the IP-based key (port stripped), got: %v", svc.incrCalls)
-	}
-}
-
-// Regression guard: an IPv6 RemoteAddr contains colons of its own, so naively
-// splitting on ":" to strip the port truncates it to its first hextet,
-// colliding unrelated clients into the same rate-limit bucket.
-func TestRateLimitMiddlewareIPv6RemoteAddrKeysDontCollide(t *testing.T) {
-	tests := []struct {
-		name       string
-		remoteAddr string
-		wantKey    string
-	}{
-		{"bracketed with port", "[2001:db8::1]:8080", "rl:2001:db8::1"},
-		{"bare, no port", "2001:db8::2", "rl:2001:db8::2"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			svc := &mockRateLimitService{getLimit: 1}
-			r := newRateLimitTestRequest(nil, tt.remoteAddr)
-
-			_, nextCalled := runRateLimitMiddleware(svc, "rl", 5, 5, r)
-
-			if !nextCalled {
-				t.Error("expected next to be called when under the IP rate limit")
-			}
-			if len(svc.incrCalls) != 1 || svc.incrCalls[0] != tt.wantKey {
-				t.Errorf("expected IncrRateLimit key %q, got: %v", tt.wantKey, svc.incrCalls)
-			}
-		})
-	}
-
-	// The two addresses above share a first hextet ("2001") - the old
-	// strings.Split(addr, ":")[0] logic would key them identically.
-	svcA := &mockRateLimitService{getLimit: 1}
-	runRateLimitMiddleware(svcA, "rl", 5, 5, newRateLimitTestRequest(nil, "[2001:db8::1]:8080"))
-	svcB := &mockRateLimitService{getLimit: 1}
-	runRateLimitMiddleware(svcB, "rl", 5, 5, newRateLimitTestRequest(nil, "2001:db8::2"))
-	if svcA.incrCalls[0] == svcB.incrCalls[0] {
-		t.Errorf("expected distinct IPv6 addresses to produce distinct rate-limit keys, both got %q", svcA.incrCalls[0])
-	}
-}
-
-func TestRateLimitMiddlewareIPOverLimitRejected(t *testing.T) {
-	svc := &mockRateLimitService{getLimit: 10}
-	r := newRateLimitTestRequest(nil, "9.8.7.6:1234")
-
-	w, nextCalled := runRateLimitMiddleware(svc, "rl", 5, 5, r)
-
-	if nextCalled {
-		t.Error("expected next NOT to be called when over the IP rate limit")
-	}
-	if w.Code != http.StatusTooManyRequests {
-		t.Errorf("expected status 429, got %d", w.Code)
-	}
-}
-
-// Unlike the session-based branch, the no-session/IP-based branch returns
-// immediately when IncrRateLimit errors, so next is never reached. This is
-// an intentional asymmetry in the current code, not a design this test is
-// endorsing - it just locks in the actual observed behavior.
-func TestRateLimitMiddlewareIPIncrErrorReturnsEarlyWithoutCallingNext(t *testing.T) {
-	svc := &mockRateLimitService{incrErr: errors.New("redis down"), getLimit: 1}
-	r := newRateLimitTestRequest(nil, "9.8.7.6:1234")
-
-	w, nextCalled := runRateLimitMiddleware(svc, "rl", 5, 5, r)
-
-	if nextCalled {
-		t.Error("expected the IP-based branch to return early (not call next) on an IncrRateLimit error")
-	}
-	if w.Code != http.StatusOK {
-		t.Errorf("expected the default 200 status since no response is written on this early return, got %d", w.Code)
-	}
-	if len(svc.getCalls) != 0 {
-		t.Error("expected GetRateLimit not to be called after an IncrRateLimit error on the IP-based branch")
-	}
-}
-
-// Same early-return asymmetry as above, but for the GetRateLimit error.
-func TestRateLimitMiddlewareIPGetErrorReturnsEarlyWithoutCallingNext(t *testing.T) {
-	svc := &mockRateLimitService{getErr: errors.New("redis down")}
-	r := newRateLimitTestRequest(nil, "9.8.7.6:1234")
-
-	w, nextCalled := runRateLimitMiddleware(svc, "rl", 5, 5, r)
-
-	if nextCalled {
-		t.Error("expected the IP-based branch to return early (not call next) on a GetRateLimit error")
-	}
-	if w.Code != http.StatusOK {
-		t.Errorf("expected the default 200 status since no response is written on this early return, got %d", w.Code)
-	}
-}
-
-func runIPMiddleware(r *http.Request) *http.Request {
-	var gotReq *http.Request
-	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-		gotReq = r
+		if !nextCalled {
+			t.Error("expected next to be called when under the session limit")
+		}
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected status 200, got %d", rec.Code)
+		}
+		if len(svc.incrCalls) != 1 || svc.incrCalls[0] != "rl:u1" {
+			t.Errorf("expected IncrRateLimit(%q), got %v", "rl:u1", svc.incrCalls)
+		}
 	})
-	IPMiddleware(next).ServeHTTP(httptest.NewRecorder(), r)
-	return gotReq
+
+	t.Run("MW-25_SessionOverLimitRejected", func(t *testing.T) {
+		svc := &mwFakeRateLimitSvc{getLimit: 10}
+		r := mwRateLimitRequest(&auth.Session{ID: "s1", UserID: "u1"}, "1.2.3.4:5678")
+
+		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
+
+		if nextCalled {
+			t.Error("expected next NOT to be called when over the session limit")
+		}
+		if rec.Code != http.StatusTooManyRequests {
+			t.Errorf("expected status 429, got %d", rec.Code)
+		}
+		if rec.Header().Get("Retry-After") == "" {
+			t.Error("expected a Retry-After header on a 429 response")
+		}
+	})
+
+	t.Run("MW-26_SessionIncrErrorFailsOpen", func(t *testing.T) {
+		svc := &mwFakeRateLimitSvc{incrErr: errors.New("redis down"), getLimit: 1}
+		r := mwRateLimitRequest(&auth.Session{ID: "s1", UserID: "u1"}, "1.2.3.4:5678")
+
+		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
+
+		if !nextCalled {
+			t.Error("expected the session branch to still call next after an IncrRateLimit error")
+		}
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected status 200, got %d", rec.Code)
+		}
+		if len(svc.getCalls) != 1 {
+			t.Errorf("expected GetRateLimit to still be called after the Incr error, got %v", svc.getCalls)
+		}
+	})
+
+	t.Run("MW-27_SessionGetErrorFailsOpen", func(t *testing.T) {
+		svc := &mwFakeRateLimitSvc{getErr: errors.New("redis down")}
+		r := mwRateLimitRequest(&auth.Session{ID: "s1", UserID: "u1"}, "1.2.3.4:5678")
+
+		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
+
+		if !nextCalled {
+			t.Error("expected the session branch to still call next after a GetRateLimit error")
+		}
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected status 200, got %d", rec.Code)
+		}
+	})
+
+	t.Run("MW-28_NoSessionUnderIPLimitCallsNext", func(t *testing.T) {
+		svc := &mwFakeRateLimitSvc{getLimit: 1}
+		r := mwRateLimitRequest(nil, "9.8.7.6:1234")
+
+		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
+
+		if !nextCalled {
+			t.Error("expected next to be called when under the IP limit")
+		}
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected status 200, got %d", rec.Code)
+		}
+		if len(svc.incrCalls) != 1 || svc.incrCalls[0] != "rl:9.8.7.6" {
+			t.Errorf("expected IncrRateLimit(%q), got %v", "rl:9.8.7.6", svc.incrCalls)
+		}
+	})
+
+	t.Run("MW-29_NoSessionOverIPLimitRejected", func(t *testing.T) {
+		svc := &mwFakeRateLimitSvc{getLimit: 10}
+		r := mwRateLimitRequest(nil, "9.8.7.6:1234")
+
+		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
+
+		if nextCalled {
+			t.Error("expected next NOT to be called when over the IP limit")
+		}
+		if rec.Code != http.StatusTooManyRequests {
+			t.Errorf("expected status 429, got %d", rec.Code)
+		}
+	})
+
+	t.Run("MW-30_NoSessionRemoteAddrWithoutPortUsesRawValue", func(t *testing.T) {
+		svc := &mwFakeRateLimitSvc{getLimit: 1}
+		r := mwRateLimitRequest(nil, "9.8.7.6")
+
+		_, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
+
+		if !nextCalled {
+			t.Error("expected next to be called when under the IP limit")
+		}
+		if len(svc.incrCalls) != 1 || svc.incrCalls[0] != "rl:9.8.7.6" {
+			t.Errorf("expected the raw RemoteAddr to be used as the key, got %v", svc.incrCalls)
+		}
+	})
+
+	// The IP-based branch returns immediately on an IncrRateLimit error, so
+	// next is never reached and no response is explicitly written (unlike
+	// the session-based branch, which falls through). See SOURCE BUGS.
+	t.Run("MW-31_NoSessionIncrErrorReturnsEarlyWithoutCallingNext", func(t *testing.T) {
+		svc := &mwFakeRateLimitSvc{incrErr: errors.New("redis down"), getLimit: 1}
+		r := mwRateLimitRequest(nil, "9.8.7.6:1234")
+
+		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
+
+		if nextCalled {
+			t.Error("expected the IP branch to return early (not call next) on an IncrRateLimit error")
+		}
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected the default 200 status since nothing is explicitly written, got %d", rec.Code)
+		}
+		if len(svc.getCalls) != 0 {
+			t.Error("expected GetRateLimit not to be called after the IncrRateLimit error on the IP branch")
+		}
+	})
+
+	t.Run("MW-32_NoSessionGetErrorReturnsEarlyWithoutCallingNext", func(t *testing.T) {
+		svc := &mwFakeRateLimitSvc{getErr: errors.New("redis down")}
+		r := mwRateLimitRequest(nil, "9.8.7.6:1234")
+
+		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
+
+		if nextCalled {
+			t.Error("expected the IP branch to return early (not call next) on a GetRateLimit error")
+		}
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected the default 200 status since nothing is explicitly written, got %d", rec.Code)
+		}
+	})
 }
 
-func TestIPMiddlewareCFConnectingIPTakesPrecedenceOverXForwardedFor(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/", nil)
-	r.RemoteAddr = "10.0.0.1:1234"
-	r.Header.Set(CFConnectingIPHeader, "1.1.1.1")
-	r.Header.Set(XForwardedForHeader, "2.2.2.2")
+// ----------------------------------------------------------------------
+// RequestIDMiddleware
+// ----------------------------------------------------------------------
 
-	gotReq := runIPMiddleware(r)
-
-	if gotReq.RemoteAddr != "1.1.1.1" {
-		t.Errorf("expected CF-Connecting-IP to take precedence, got RemoteAddr %q", gotReq.RemoteAddr)
-	}
+func mwRunRequestID(r *http.Request) *http.Request {
+	var got *http.Request
+	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		got = r
+	})
+	RequestIDMiddleware(next).ServeHTTP(httptest.NewRecorder(), r)
+	return got
 }
 
-func TestIPMiddlewareXForwardedForUsedWhenNoCFHeader(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/", nil)
-	r.RemoteAddr = "10.0.0.1:1234"
-	r.Header.Set(XForwardedForHeader, "2.2.2.2")
+func TestRequestIDMiddleware(t *testing.T) {
+	t.Run("MW-33_NoHeaderGeneratesIDFromTime", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
 
-	gotReq := runIPMiddleware(r)
+		got := mwRunRequestID(r)
 
-	if gotReq.RemoteAddr != "2.2.2.2" {
-		t.Errorf("expected X-Forwarded-For to be used, got RemoteAddr %q", gotReq.RemoteAddr)
-	}
+		id, ok := got.Context().Value(RequestIDKey).(int)
+		if !ok || id == 0 {
+			t.Errorf("expected a non-zero generated request ID in context, got %v (ok=%v)", id, ok)
+		}
+		if got.Header.Get(XRequestIDHeader) == "" {
+			t.Error("expected the generated request ID to be written back onto the request header")
+		}
+	})
+
+	t.Run("MW-34_HeaderPresentWithValidIntegerUsesIt", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		r.Header.Set(XRequestIDHeader, "42")
+
+		got := mwRunRequestID(r)
+
+		id, ok := got.Context().Value(RequestIDKey).(int)
+		if !ok || id != 42 {
+			t.Errorf("expected request ID 42 in context, got %v (ok=%v)", id, ok)
+		}
+	})
+
+	t.Run("MW-35_HeaderPresentButNonNumericDefaultsToZero", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		r.Header.Set(XRequestIDHeader, "not-a-number")
+
+		got := mwRunRequestID(r)
+
+		id, ok := got.Context().Value(RequestIDKey).(int)
+		if !ok || id != 0 {
+			t.Errorf("expected request ID to default to 0 for a non-numeric header, got %v (ok=%v)", id, ok)
+		}
+	})
 }
 
-func TestIPMiddlewareNoHeadersLeavesRemoteAddrUntouched(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/", nil)
-	r.RemoteAddr = "10.0.0.1:1234"
+// ----------------------------------------------------------------------
+// RequestLoggerMiddleware
+// ----------------------------------------------------------------------
 
-	gotReq := runIPMiddleware(r)
-
-	if gotReq.RemoteAddr != "10.0.0.1:1234" {
-		t.Errorf("expected RemoteAddr to be left untouched, got %q", gotReq.RemoteAddr)
-	}
-}
-
-// Regression guard: X-Forwarded-For can be a comma-separated proxy chain
-// ("client, proxy1, proxy2, ..."). IPMiddleware must take just the leftmost
-// (client) entry, trimmed of whitespace, rather than handing the whole raw
-// chain to r.RemoteAddr - otherwise downstream consumers like
-// RateLimitMiddleware's net.SplitHostPort fallback can't parse it as a
-// single address and fall back to keying on the entire multi-IP string,
-// which lets an attacker dodge rate limiting by appending junk after a comma.
-func TestIPMiddlewareXForwardedForChainUsesLeftmostEntry(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/", nil)
-	r.RemoteAddr = "10.0.0.1:1234"
-	r.Header.Set(XForwardedForHeader, "203.0.113.5, 70.41.3.18, 150.172.238.178")
-
-	gotReq := runIPMiddleware(r)
-
-	if gotReq.RemoteAddr != "203.0.113.5" {
-		t.Errorf("expected RemoteAddr to be the leftmost (client) entry of the X-Forwarded-For chain, got %q", gotReq.RemoteAddr)
-	}
-}
-
-// Regression guard: a malformed X-Forwarded-For whose leftmost entry is
-// empty (a leading comma, or a whitespace-only header) must NOT overwrite
-// RemoteAddr with an empty string - that would discard the real socket-level
-// peer address and collapse every such request onto the same "prefix:"
-// rate-limit bucket downstream.
-func TestIPMiddlewareEmptyLeftmostEntryLeavesRemoteAddrUntouched(t *testing.T) {
-	tests := []string{", 70.41.3.18", "   ", "\t"}
-
-	for _, xff := range tests {
-		t.Run(xff, func(t *testing.T) {
-			r := httptest.NewRequest(http.MethodGet, "/", nil)
-			r.RemoteAddr = "10.0.0.1:1234"
-			r.Header.Set(XForwardedForHeader, xff)
-
-			gotReq := runIPMiddleware(r)
-
-			if gotReq.RemoteAddr != "10.0.0.1:1234" {
-				t.Errorf("expected the real RemoteAddr to be preserved when X-Forwarded-For's leftmost entry is empty, got %q", gotReq.RemoteAddr)
-			}
+func TestRequestLoggerMiddleware(t *testing.T) {
+	t.Run("MW-36_LogsStatusMethodAndPath", func(t *testing.T) {
+		getLog := mwCaptureLog(t)
+		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusCreated)
 		})
-	}
+		handler := RequestLoggerMiddleware(next)
+
+		r := httptest.NewRequest(http.MethodPost, "/things", nil).WithContext(mwBaseCtx())
+		handler.ServeHTTP(httptest.NewRecorder(), r)
+
+		out := getLog()
+		wantFragment := fmt.Sprintf("%d %s %s", http.StatusCreated, http.MethodPost, "/things")
+		if !strings.Contains(out, wantFragment) {
+			t.Errorf("expected log output to contain %q, got: %q", wantFragment, out)
+		}
+	})
+
+	t.Run("MW-37_NoExplicitWriteHeaderLogsDefaultOK", func(t *testing.T) {
+		getLog := mwCaptureLog(t)
+		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte("body without an explicit status"))
+		})
+		handler := RequestLoggerMiddleware(next)
+
+		r := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(mwBaseCtx())
+		handler.ServeHTTP(httptest.NewRecorder(), r)
+
+		out := getLog()
+		wantFragment := fmt.Sprintf("%d %s", http.StatusOK, http.MethodGet)
+		if !strings.Contains(out, wantFragment) {
+			t.Errorf("expected log output to reflect the default status 200, got: %q", out)
+		}
+	})
 }
 
-// End-to-end regression guard: running IPMiddleware then RateLimitMiddleware
-// in sequence (as they're chained in production) on a request carrying a
-// multi-hop X-Forwarded-For chain must key the rate limit on just the
-// client's leftmost IP, not the raw comma-separated chain.
-func TestRateLimitMiddlewareAfterIPMiddlewareXForwardedForChainUsesClientIPKey(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/", nil)
-	r.RemoteAddr = "10.0.0.1:1234"
-	r.Header.Set(XForwardedForHeader, "203.0.113.5, 70.41.3.18, 150.172.238.178")
-	ctx := context.WithValue(r.Context(), RequestIDKey, 1)
-	r = r.WithContext(ctx)
+// ----------------------------------------------------------------------
+// Auth
+// ----------------------------------------------------------------------
 
-	svc := &mockRateLimitService{getLimit: 1}
-	w := httptest.NewRecorder()
-	nextCalled := false
+func mwRunAuth(svc auth.SessionService, r *http.Request) (rec *httptest.ResponseRecorder, nextCalled bool) {
+	rec = httptest.NewRecorder()
 	next := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		nextCalled = true
 	})
-
-	stack := IPMiddleware(RateLimitMiddleware(svc, "rl", 5, 5)(next))
-	stack.ServeHTTP(w, r)
-
-	if !nextCalled {
-		t.Error("expected next to be called when under the IP rate limit")
-	}
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-	if len(svc.incrCalls) != 1 || svc.incrCalls[0] != "rl:203.0.113.5" {
-		t.Errorf("expected IncrRateLimit key %q, got: %v", "rl:203.0.113.5", svc.incrCalls)
-	}
+	Auth(svc)(next).ServeHTTP(rec, r)
+	return rec, nextCalled
 }
 
-func TestSessionMiddlewareExpiredSessionDeleteErrorIsLoggedNotFatal(t *testing.T) {
-	session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
-	svc := &mockSessionService{
-		readJWTFunc: func(string) (*auth.Session, error) {
-			return session, nil
-		},
-		deleteSessionFunc: func(string) error {
-			return errors.New("cache down")
-		},
-	}
-	w, nextCalled, _ := runSessionMiddleware(svc, newTestRequest("Bearer expiredtoken"))
+func TestAuth(t *testing.T) {
+	t.Run("MW-38_NoSessionInContextRejected", func(t *testing.T) {
+		svc := &mwFakeSessionSvc{}
+		r := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(mwBaseCtx())
 
-	if nextCalled {
-		t.Error("expected an expired session to be rejected before reaching the next handler")
-	}
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401 regardless of the DeleteSession error, got %d", w.Code)
-	}
+		rec, nextCalled := mwRunAuth(svc, r)
+
+		if nextCalled {
+			t.Error("expected next NOT to be called")
+		}
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("expected status 401, got %d", rec.Code)
+		}
+	})
+
+	t.Run("MW-39_TypedNilSessionInContextRejected", func(t *testing.T) {
+		svc := &mwFakeSessionSvc{}
+		ctx := context.WithValue(mwBaseCtx(), SessionKey, (*auth.Session)(nil))
+		r := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
+
+		rec, nextCalled := mwRunAuth(svc, r)
+
+		if nextCalled {
+			t.Error("expected next NOT to be called")
+		}
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("expected status 401, got %d", rec.Code)
+		}
+	})
+
+	t.Run("MW-40_ExpiredSessionRejectedAndDeleted", func(t *testing.T) {
+		svc := &mwFakeSessionSvc{}
+		session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
+		ctx := context.WithValue(mwBaseCtx(), SessionKey, session)
+		r := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
+
+		rec, nextCalled := mwRunAuth(svc, r)
+
+		if nextCalled {
+			t.Error("expected next NOT to be called")
+		}
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("expected status 401, got %d", rec.Code)
+		}
+		if len(svc.deletedIDs) != 1 || svc.deletedIDs[0] != "s1" {
+			t.Errorf("expected DeleteSession(%q), got %v", "s1", svc.deletedIDs)
+		}
+	})
+
+	t.Run("MW-41_ExpiredSessionDeleteErrorStillUnauthorized", func(t *testing.T) {
+		svc := &mwFakeSessionSvc{deleteFunc: func(string) error { return errors.New("cache down") }}
+		session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
+		ctx := context.WithValue(mwBaseCtx(), SessionKey, session)
+		r := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
+
+		rec, nextCalled := mwRunAuth(svc, r)
+
+		if nextCalled {
+			t.Error("expected next NOT to be called")
+		}
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("expected status 401 regardless of the DeleteSession error, got %d", rec.Code)
+		}
+	})
+
+	t.Run("MW-42_ValidSessionCallsNext", func(t *testing.T) {
+		svc := &mwFakeSessionSvc{}
+		session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
+		ctx := context.WithValue(mwBaseCtx(), SessionKey, session)
+		r := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
+
+		rec, nextCalled := mwRunAuth(svc, r)
+
+		if !nextCalled {
+			t.Error("expected next to be called for a valid session")
+		}
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected status 200, got %d", rec.Code)
+		}
+	})
 }
 
-func runSelfUserID(r *http.Request) (w *httptest.ResponseRecorder, nextCalled bool, gotUserID string) {
-	w = httptest.NewRecorder()
+// ----------------------------------------------------------------------
+// SelfUserID
+// ----------------------------------------------------------------------
+
+func mwRunSelfUserID(r *http.Request) (rec *httptest.ResponseRecorder, nextCalled bool, gotUserID string) {
+	rec = httptest.NewRecorder()
 	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		nextCalled = true
 		gotUserID = r.PathValue("user_id")
 	})
-	SelfUserID(next).ServeHTTP(w, r)
-	return w, nextCalled, gotUserID
+	SelfUserID(next).ServeHTTP(rec, r)
+	return rec, nextCalled, gotUserID
 }
 
-func TestSelfUserIDSetsPathValueFromSessionAndCallsNext(t *testing.T) {
-	session := &auth.Session{ID: "s1", UserID: "u1"}
-	ctx := context.WithValue(context.Background(), SessionKey, session)
-	r := httptest.NewRequest(http.MethodGet, "/users/me", nil).WithContext(ctx)
+func TestSelfUserID(t *testing.T) {
+	t.Run("MW-43_NoSessionInContextRejected", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/users/me", nil)
 
-	w, nextCalled, gotUserID := runSelfUserID(r)
+		rec, nextCalled, gotUserID := mwRunSelfUserID(r)
 
-	if !nextCalled {
-		t.Fatal("expected the request to reach the next handler")
-	}
-	if gotUserID != "u1" {
-		t.Errorf("expected user_id path value to be set to the session's UserID, got %q", gotUserID)
-	}
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
+		if nextCalled {
+			t.Error("expected next NOT to be called")
+		}
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("expected status 401, got %d", rec.Code)
+		}
+		if gotUserID != "" {
+			t.Errorf("expected no path value to be set, got %q", gotUserID)
+		}
+	})
+
+	t.Run("MW-44_TypedNilSessionInContextRejected", func(t *testing.T) {
+		ctx := context.WithValue(context.Background(), SessionKey, (*auth.Session)(nil))
+		r := httptest.NewRequest(http.MethodGet, "/users/me", nil).WithContext(ctx)
+
+		rec, nextCalled, _ := mwRunSelfUserID(r)
+
+		if nextCalled {
+			t.Error("expected next NOT to be called")
+		}
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("expected status 401, got %d", rec.Code)
+		}
+	})
+
+	t.Run("MW-45_ValidSessionSetsPathValueAndCallsNext", func(t *testing.T) {
+		ctx := context.WithValue(context.Background(), SessionKey, &auth.Session{ID: "s1", UserID: "u1"})
+		r := httptest.NewRequest(http.MethodGet, "/users/me", nil).WithContext(ctx)
+
+		rec, nextCalled, gotUserID := mwRunSelfUserID(r)
+
+		if !nextCalled {
+			t.Fatal("expected next to be called")
+		}
+		if gotUserID != "u1" {
+			t.Errorf("expected user_id path value %q, got %q", "u1", gotUserID)
+		}
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected status 200, got %d", rec.Code)
+		}
+	})
 }
 
-// TestSelfUserIDOverridesAnyExistingPathValue guards against a route that
-// mistakenly still has a {user_id} wildcard segment (or any other source
-// setting one) - the session's own ID must always win for a /me route,
-// never something already present on the request.
-func TestSelfUserIDOverridesAnyExistingPathValue(t *testing.T) {
-	session := &auth.Session{ID: "s1", UserID: "u1"}
-	ctx := context.WithValue(context.Background(), SessionKey, session)
-	r := httptest.NewRequest(http.MethodGet, "/users/me", nil).WithContext(ctx)
-	r.SetPathValue("user_id", "someone-else")
+// ----------------------------------------------------------------------
+// VerifyEd25519Middleware
+// ----------------------------------------------------------------------
 
-	_, _, gotUserID := runSelfUserID(r)
+// mwErrReader is an io.Reader/io.Closer that always fails, for exercising
+// VerifyEd25519Middleware's io.ReadAll error path.
+type mwErrReader struct{}
 
-	if gotUserID != "u1" {
-		t.Errorf("expected the session's own UserID to win, got %q", gotUserID)
+func (mwErrReader) Read([]byte) (int, error) { return 0, errors.New("boom") }
+func (mwErrReader) Close() error             { return nil }
+
+func mwEd25519Request(t *testing.T, priv ed25519.PrivateKey, timestamp, body string, corruptSig bool) *http.Request {
+	t.Helper()
+	r := httptest.NewRequest(http.MethodPost, "/interactions", strings.NewReader(body))
+	if priv != nil {
+		sig := ed25519.Sign(priv, []byte(timestamp+body))
+		if corruptSig {
+			sig[0] ^= 0xFF
+		}
+		r.Header.Set(XSignatureEd25519, fmt.Sprintf("%x", sig))
 	}
+	if timestamp != "" {
+		r.Header.Set(XSignatureTimestamp, timestamp)
+	}
+	return r
 }
 
-func TestSelfUserIDNoSessionRejected(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/users/me", nil)
-
-	w, nextCalled, _ := runSelfUserID(r)
-
-	if nextCalled {
-		t.Error("expected the request to be rejected before reaching the next handler")
+func TestVerifyEd25519Middleware(t *testing.T) {
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("failed to generate ed25519 key: %v", err)
 	}
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401 when there's no session in context, got %d", w.Code)
+
+	run := func(r *http.Request) (rec *httptest.ResponseRecorder, nextCalled bool, bodyInNext []byte) {
+		rec = httptest.NewRecorder()
+		next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+			nextCalled = true
+			bodyInNext, _ = io.ReadAll(r.Body)
+		})
+		VerifyEd25519Middleware(pub)(next).ServeHTTP(rec, r)
+		return rec, nextCalled, bodyInNext
 	}
+
+	t.Run("MW-46_MissingSignatureHeaderRejected", func(t *testing.T) {
+		r := mwEd25519Request(t, nil, "1234567890", "{}", false)
+
+		rec, nextCalled, _ := run(r)
+
+		if nextCalled {
+			t.Error("expected next NOT to be called")
+		}
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("expected status 401, got %d", rec.Code)
+		}
+	})
+
+	t.Run("MW-47_MissingTimestampHeaderRejected", func(t *testing.T) {
+		r := mwEd25519Request(t, priv, "", "{}", false)
+
+		rec, nextCalled, _ := run(r)
+
+		if nextCalled {
+			t.Error("expected next NOT to be called")
+		}
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("expected status 401, got %d", rec.Code)
+		}
+	})
+
+	t.Run("MW-48_ValidSignatureCallsNextWithReadableBody", func(t *testing.T) {
+		body := `{"type":1}`
+		r := mwEd25519Request(t, priv, "1700000000", body, false)
+
+		rec, nextCalled, bodyInNext := run(r)
+
+		if !nextCalled {
+			t.Fatal("expected next to be called for a valid signature")
+		}
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected status 200, got %d", rec.Code)
+		}
+		if string(bodyInNext) != body {
+			t.Errorf("expected the body to be readable in next and match the original, got %q", string(bodyInNext))
+		}
+	})
+
+	t.Run("MW-49_TamperedSignatureRejected", func(t *testing.T) {
+		r := mwEd25519Request(t, priv, "1700000000", "{}", true)
+
+		rec, nextCalled, _ := run(r)
+
+		if nextCalled {
+			t.Error("expected next NOT to be called")
+		}
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("expected status 401, got %d", rec.Code)
+		}
+	})
+
+	t.Run("MW-50_NonHexSignatureWithTimestampRejected", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodPost, "/interactions", strings.NewReader("{}"))
+		r.Header.Set(XSignatureEd25519, "not-hex!!")
+		r.Header.Set(XSignatureTimestamp, "1700000000")
+
+		rec, nextCalled, _ := run(r)
+
+		if nextCalled {
+			t.Error("expected next NOT to be called")
+		}
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("expected status 401, got %d", rec.Code)
+		}
+	})
+
+	t.Run("MW-51_BodyReadErrorRejected", func(t *testing.T) {
+		sig := ed25519.Sign(priv, []byte("1700000000"))
+		r := httptest.NewRequest(http.MethodPost, "/interactions", nil).WithContext(mwBaseCtx())
+		r.Body = mwErrReader{}
+		r.Header.Set(XSignatureEd25519, fmt.Sprintf("%x", sig))
+		r.Header.Set(XSignatureTimestamp, "1700000000")
+
+		rec, nextCalled, _ := run(r)
+
+		if nextCalled {
+			t.Error("expected next NOT to be called")
+		}
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("expected status 401, got %d", rec.Code)
+		}
+	})
 }
