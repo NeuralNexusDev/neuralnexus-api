@@ -1,7 +1,11 @@
 package auth
 
 import (
+	"bytes"
 	"errors"
+	"os"
+	"os/exec"
+	"strings"
 	"testing"
 	"time"
 
@@ -504,6 +508,61 @@ func TestSE23to31ReadJWT(t *testing.T) {
 
 		if _, err := svc.ReadJWT(tok); err == nil {
 			t.Fatal("expected an error when the LastUsedAt bump fails")
+		}
+	})
+}
+
+// TestSE32to34InitSessionGo covers session.go's init(). SE-32 asserts the
+// postcondition init() has already established by the time this file's
+// other tests run, rather than re-invoking it. SE-33/SE-34 use the standard
+// re-exec technique (see the os/exec package docs' "TestCrasher" example):
+// package init() runs unconditionally at process start, before any
+// -test.run filtering, so simply re-execing the test binary under a broken
+// env is enough to observe the log.Fatal from outside as a real process
+// exit - no in-process recover() involved.
+func TestSE32to34InitSessionGo(t *testing.T) {
+	t.Run("SE-32_PackageLoadedUnderRequiredEnv", func(t *testing.T) {
+		if len(JWT_SECRET) == 0 {
+			t.Fatal("JWT_SECRET is empty; init() should already have log.Fatal'd if so, so this file's other tests couldn't be running")
+		}
+		if NN_SITE_URL == "" || NN_API_URL == "" {
+			t.Fatal("NN_SITE_URL/NN_API_URL are empty; init() should already have log.Fatal'd if so")
+		}
+		want := []string{NN_SITE_URL, NN_API_URL}
+		if len(validAudiences) != 2 || validAudiences[0] != want[0] || validAudiences[1] != want[1] {
+			t.Errorf("validAudiences = %v, want %v", validAudiences, want)
+		}
+	})
+
+	t.Run("SE-33_MissingJWTSecretFatals", func(t *testing.T) {
+		cmd := exec.Command(os.Args[0], "-test.run=^$")
+		cmd.Env = append(os.Environ(), "JWT_SECRET=")
+		var stderr bytes.Buffer
+		cmd.Stderr = &stderr
+		err := cmd.Run()
+		var exitErr *exec.ExitError
+		if !errors.As(err, &exitErr) || exitErr.Success() {
+			t.Fatalf("re-exec with JWT_SECRET unset: got err=%v, want a non-zero exit from init()'s log.Fatal; stderr:\n%s", err, stderr.String())
+		}
+		if !strings.Contains(stderr.String(), "JWT_SECRET environment variable must be set") {
+			t.Errorf("subprocess stderr = %q, want it to contain init()'s JWT_SECRET message", stderr.String())
+		}
+	})
+
+	t.Run("SE-34_MissingSiteOrAPIURLFatals", func(t *testing.T) {
+		for _, unset := range []string{"NN_SITE_URL", "NN_API_URL"} {
+			cmd := exec.Command(os.Args[0], "-test.run=^$")
+			cmd.Env = append(os.Environ(), unset+"=")
+			var stderr bytes.Buffer
+			cmd.Stderr = &stderr
+			err := cmd.Run()
+			var exitErr *exec.ExitError
+			if !errors.As(err, &exitErr) || exitErr.Success() {
+				t.Fatalf("re-exec with %s unset: got err=%v, want a non-zero exit from init()'s log.Fatal; stderr:\n%s", unset, err, stderr.String())
+			}
+			if !strings.Contains(stderr.String(), "NN_SITE_URL and NN_API_URL environment variables must be set") {
+				t.Errorf("subprocess stderr (%s unset) = %q, want it to contain init()'s site/API URL message", unset, stderr.String())
+			}
 		}
 	})
 }

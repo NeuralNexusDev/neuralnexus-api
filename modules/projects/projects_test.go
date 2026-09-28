@@ -12,8 +12,6 @@ import (
 	"github.com/goccy/go-json"
 )
 
-// -------------- Shared helpers --------------
-
 // fakeRoundTripper is a test-only http.RoundTripper that returns a canned
 // response or a canned error, without making any real network call. It is
 // swapped in for http.DefaultTransport (the getReleases seam: it builds a
@@ -66,8 +64,6 @@ func swapGithubToken(t *testing.T, val string) {
 		githubToken = orig
 	})
 }
-
-// -------------- getReleases --------------
 
 func TestGetReleases(t *testing.T) {
 	t.Run("PJ-01_HappyPath_DecodesReleases", func(t *testing.T) {
@@ -172,8 +168,6 @@ func TestGetReleases(t *testing.T) {
 	})
 }
 
-// -------------- ConvertToFMLFormat --------------
-
 func TestConvertToFMLFormat(t *testing.T) {
 	t.Run("PJ-07_HappyPath_SingleRelease", func(t *testing.T) {
 		releases := []Release{{TagName: "v1.20.1", URL: "https://example/1"}}
@@ -240,8 +234,6 @@ func TestConvertToFMLFormat(t *testing.T) {
 		}
 	})
 }
-
-// -------------- GetReleasesHandler --------------
 
 func TestGetReleasesHandler(t *testing.T) {
 	t.Run("PJ-11_HappyPath_DefaultFormat", func(t *testing.T) {

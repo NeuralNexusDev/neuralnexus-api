@@ -2086,3 +2086,125 @@ func TestOA75ResolveOrCreateAccountForMicrosoftUserConcurrentRace(t *testing.T) 
 		}
 	})
 }
+
+// oaBarrierLinkAccountStore is a mutex-serialized auth.LinkAccountStore
+// double, like oaConcurrentLinkAccountStore above, except its
+// GetLinkedAccountByPlatformID additionally holds every racing caller at a
+// rendezvous barrier until all of them have completed that same call. This
+// makes linkPlatformUserToSession's check-then-act window (read, see
+// ErrNotFound, then write) reproduce deterministically on every run: without
+// it, a fast in-memory fake can let one goroutine run its entire
+// read-miss/write sequence to completion before the next goroutine is even
+// scheduled, so the two callers would only occasionally actually race.
+type oaBarrierLinkAccountStore struct {
+	mu    sync.Mutex
+	byKey map[string]*auth.LinkedAccount
+
+	barrierMu    sync.Mutex
+	barrierWG    sync.WaitGroup
+	barrierN     int
+	barrierCount int
+}
+
+var _ auth.LinkAccountStore = (*oaBarrierLinkAccountStore)(nil)
+
+func newOABarrierLinkAccountStore(barrierN int) *oaBarrierLinkAccountStore {
+	s := &oaBarrierLinkAccountStore{byKey: map[string]*auth.LinkedAccount{}, barrierN: barrierN}
+	s.barrierWG.Add(barrierN)
+	return s
+}
+
+func (m *oaBarrierLinkAccountStore) GetLinkedAccountByPlatformID(platform auth.Platform, platformID string) (*auth.LinkedAccount, error) {
+	m.barrierMu.Lock()
+	participates := m.barrierCount < m.barrierN
+	if participates {
+		m.barrierCount++
+	}
+	m.barrierMu.Unlock()
+	if participates {
+		m.barrierWG.Done()
+		m.barrierWG.Wait() // rendezvous: hold every racer here until all have missed
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	la, ok := m.byKey[oaLinkKey(platform, platformID)]
+	if !ok {
+		return nil, auth.ErrNotFound
+	}
+	cp := *la
+	return &cp, nil
+}
+func (m *oaBarrierLinkAccountStore) AddLinkedAccountToDB(la *auth.LinkedAccount) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := oaLinkKey(la.Platform, la.PlatformID)
+	if _, exists := m.byKey[key]; exists {
+		return auth.ErrAlreadyLinked
+	}
+	cp := *la
+	m.byKey[key] = &cp
+	return nil
+}
+func (m *oaBarrierLinkAccountStore) UpdateLinkedAccount(*auth.LinkedAccount) error { return nil }
+func (m *oaBarrierLinkAccountStore) GetLinkedAccountByPlatformName(auth.Platform, string) (*auth.LinkedAccount, error) {
+	return nil, auth.ErrNotFound
+}
+func (m *oaBarrierLinkAccountStore) GetLinkedAccountByUserID(string, auth.Platform) (*auth.LinkedAccount, error) {
+	return nil, auth.ErrNotFound
+}
+func (m *oaBarrierLinkAccountStore) GetLinkedAccountsByUserID(string) ([]*auth.LinkedAccount, error) {
+	return nil, nil
+}
+func (m *oaBarrierLinkAccountStore) DeleteLinkedAccount(string, auth.Platform) error { return nil }
+func (m *oaBarrierLinkAccountStore) SetLinkedAccountLoginEnabled(string, auth.Platform, bool) error {
+	return nil
+}
+
+// TestOA82LinkPlatformUserToSessionConcurrentRace exercises the
+// check-then-act race the audit flagged: linkPlatformUserToSession reads via
+// GetLinkedAccountByPlatformID expecting auth.ErrNotFound, then calls
+// AddLinkedAccountToDB with no special handling of a concurrent-conflict
+// error - any failure there, including a race-losing auth.ErrAlreadyLinked,
+// is masked as the generic "failed to link account" error. The barrier store
+// forces both goroutines' reads to observe auth.ErrNotFound before either
+// writes, deterministically (not just probabilistically) reproducing the
+// race every run, so a single trial is sufficient here - unlike a
+// scheduler-dependent race, there is no lucky interleaving that avoids it.
+func TestOA82LinkPlatformUserToSessionConcurrentRace(t *testing.T) {
+	t.Run("OA-82_ConcurrentCallersToDifferentSessionsExactlyOneWins", func(t *testing.T) {
+		las := newOABarrierLinkAccountStore(2)
+		user := &oaIdentity{id: "race-82", username: "alice"}
+
+		var wg sync.WaitGroup
+		errs := make([]error, 2)
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			errs[0] = linkPlatformUserToSession(las, "user-A", auth.PlatformDiscord, user)
+		}()
+		go func() {
+			defer wg.Done()
+			errs[1] = linkPlatformUserToSession(las, "user-B", auth.PlatformDiscord, user)
+		}()
+		wg.Wait()
+
+		successes := 0
+		for _, err := range errs {
+			if err == nil {
+				successes++
+			}
+		}
+		if successes != 1 {
+			t.Fatalf("errs = %v, want exactly one nil (one winner) and one non-nil (the observable loser)", errs)
+		}
+
+		la, err := las.GetLinkedAccountByPlatformID(auth.PlatformDiscord, "race-82")
+		if err != nil {
+			t.Fatalf("expected the linked account to exist after the race, got err=%v", err)
+		}
+		if la.UserID != "user-A" && la.UserID != "user-B" {
+			t.Errorf("linked account UserID = %q, want user-A or user-B (the winner), not duplicated or overwritten by a third value", la.UserID)
+		}
+	})
+}

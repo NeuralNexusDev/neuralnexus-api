@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -18,11 +20,9 @@ import (
 	"golang.org/x/crypto/ed25519"
 )
 
-// ----------------------------------------------------------------------
 // Shared test doubles. Named distinctly from anything in
 // middleware_old_test.go (which still compiles alongside this file) to
 // avoid any identifier collision while both exist side by side.
-// ----------------------------------------------------------------------
 
 // mwFakeSessionSvc implements auth.SessionService for this file's tests.
 type mwFakeSessionSvc struct {
@@ -84,6 +84,45 @@ func (f *mwFakeRateLimitSvc) GetRateLimit(key string) (int, error) {
 
 func (f *mwFakeRateLimitSvc) SetRateLimit(string, int) error { return nil }
 
+// mwSyncedRateLimitSvc is a concurrency-safe auth.RateLimitService test
+// double: IncrRateLimit/GetRateLimit share a per-key counter guarded by a
+// mutex, so it behaves the way a correct backing store (e.g. an atomic
+// Redis INCR) would under concurrent callers. mwFakeRateLimitSvc above
+// isn't safe for this — its getLimit is a fixed value, not a live counter
+// — so MW-53 needs this second double instead of reusing it.
+type mwSyncedRateLimitSvc struct {
+	mu     sync.Mutex
+	counts map[string]int
+}
+
+var _ auth.RateLimitService = (*mwSyncedRateLimitSvc)(nil)
+
+func (f *mwSyncedRateLimitSvc) IncrRateLimit(key string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.counts == nil {
+		f.counts = make(map[string]int)
+	}
+	f.counts[key]++
+	return nil
+}
+
+func (f *mwSyncedRateLimitSvc) GetRateLimit(key string) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.counts[key], nil
+}
+
+func (f *mwSyncedRateLimitSvc) SetRateLimit(key string, limit int) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.counts == nil {
+		f.counts = make(map[string]int)
+	}
+	f.counts[key] = limit
+	return nil
+}
+
 // mwBaseCtx returns a context already carrying the values LogRequest
 // type-asserts without an ok-check (RemoteAddrKey/RequestIDKey), so any
 // middleware under test that may call LogRequest doesn't panic for reasons
@@ -108,10 +147,6 @@ func mwCaptureLog(t *testing.T) func() string {
 	})
 	return buf.String
 }
-
-// ----------------------------------------------------------------------
-// LogRequest
-// ----------------------------------------------------------------------
 
 func TestLogRequest(t *testing.T) {
 	t.Run("MW-01_SessionInContextLogsUserID", func(t *testing.T) {
@@ -166,10 +201,6 @@ func TestLogRequest(t *testing.T) {
 	})
 }
 
-// ----------------------------------------------------------------------
-// CreateStack
-// ----------------------------------------------------------------------
-
 func TestCreateStack(t *testing.T) {
 	t.Run("MW-05_ExecutionOrderMatchesDeclarationOrder", func(t *testing.T) {
 		var order []string
@@ -216,10 +247,6 @@ func TestCreateStack(t *testing.T) {
 	})
 }
 
-// ----------------------------------------------------------------------
-// WrappedWriter.WriteHeader
-// ----------------------------------------------------------------------
-
 func TestWrappedWriterWriteHeader(t *testing.T) {
 	t.Run("MW-07_SetsStatusCodeAndForwards", func(t *testing.T) {
 		rec := httptest.NewRecorder()
@@ -235,10 +262,6 @@ func TestWrappedWriterWriteHeader(t *testing.T) {
 		}
 	})
 }
-
-// ----------------------------------------------------------------------
-// IPMiddleware
-// ----------------------------------------------------------------------
 
 func mwRunIP(r *http.Request) *http.Request {
 	var got *http.Request
@@ -328,10 +351,6 @@ func TestIPMiddleware(t *testing.T) {
 		}
 	})
 }
-
-// ----------------------------------------------------------------------
-// SessionMiddleware
-// ----------------------------------------------------------------------
 
 func mwRunSession(svc auth.SessionService, r *http.Request) (rec *httptest.ResponseRecorder, nextCalled bool, gotSession *auth.Session) {
 	rec = httptest.NewRecorder()
@@ -543,10 +562,6 @@ func TestSessionMiddleware(t *testing.T) {
 	})
 }
 
-// ----------------------------------------------------------------------
-// RateLimitMiddleware
-// ----------------------------------------------------------------------
-
 func mwRunRateLimit(svc auth.RateLimitService, prefix string, sessionLimit, ipLimit int, r *http.Request) (rec *httptest.ResponseRecorder, nextCalled bool) {
 	rec = httptest.NewRecorder()
 	next := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
@@ -707,11 +722,48 @@ func TestRateLimitMiddleware(t *testing.T) {
 			t.Errorf("expected the default 200 status since nothing is explicitly written, got %d", rec.Code)
 		}
 	})
-}
 
-// ----------------------------------------------------------------------
-// RequestIDMiddleware
-// ----------------------------------------------------------------------
+	t.Run("MW-53_ConcurrentSessionRequestsNeverExceedLimit", func(t *testing.T) {
+		// IncrRateLimit and GetRateLimit are two separate, non-atomic calls
+		// against the same key, so concurrent requests can interleave
+		// between them. 20 trials of 30 truly concurrent goroutines each
+		// (racing on the same session key, against a mutex-correct counter)
+		// so a broken/removed limit check reliably lets more than `limit`
+		// through on at least one trial — a single trial couldn't rule out
+		// a lucky scheduling order masking that.
+		const (
+			trials      = 20
+			concurrency = 30
+			limit       = 5
+		)
+		for trial := 0; trial < trials; trial++ {
+			svc := &mwSyncedRateLimitSvc{}
+			session := &auth.Session{ID: "s1", UserID: "concurrent-user"}
+
+			var passed int32
+			var wg sync.WaitGroup
+			start := make(chan struct{})
+			wg.Add(concurrency)
+			for i := 0; i < concurrency; i++ {
+				go func() {
+					defer wg.Done()
+					<-start
+					r := mwRateLimitRequest(session, "1.2.3.4:5678")
+					_, nextCalled := mwRunRateLimit(svc, "rl-concurrent", limit, limit, r)
+					if nextCalled {
+						atomic.AddInt32(&passed, 1)
+					}
+				}()
+			}
+			close(start)
+			wg.Wait()
+
+			if int(passed) > limit {
+				t.Fatalf("trial %d: expected at most %d concurrent requests to pass, got %d", trial, limit, passed)
+			}
+		}
+	})
+}
 
 func mwRunRequestID(r *http.Request) *http.Request {
 	var got *http.Request
@@ -762,10 +814,6 @@ func TestRequestIDMiddleware(t *testing.T) {
 	})
 }
 
-// ----------------------------------------------------------------------
-// RequestLoggerMiddleware
-// ----------------------------------------------------------------------
-
 func TestRequestLoggerMiddleware(t *testing.T) {
 	t.Run("MW-36_LogsStatusMethodAndPath", func(t *testing.T) {
 		getLog := mwCaptureLog(t)
@@ -801,10 +849,6 @@ func TestRequestLoggerMiddleware(t *testing.T) {
 		}
 	})
 }
-
-// ----------------------------------------------------------------------
-// Auth
-// ----------------------------------------------------------------------
 
 func mwRunAuth(svc auth.SessionService, r *http.Request) (rec *httptest.ResponseRecorder, nextCalled bool) {
 	rec = httptest.NewRecorder()
@@ -897,10 +941,6 @@ func TestAuth(t *testing.T) {
 	})
 }
 
-// ----------------------------------------------------------------------
-// SelfUserID
-// ----------------------------------------------------------------------
-
 func mwRunSelfUserID(r *http.Request) (rec *httptest.ResponseRecorder, nextCalled bool, gotUserID string) {
 	rec = httptest.NewRecorder()
 	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
@@ -959,10 +999,6 @@ func TestSelfUserID(t *testing.T) {
 		}
 	})
 }
-
-// ----------------------------------------------------------------------
-// VerifyEd25519Middleware
-// ----------------------------------------------------------------------
 
 // mwErrReader is an io.Reader/io.Closer that always fails, for exercising
 // VerifyEd25519Middleware's io.ReadAll error path.

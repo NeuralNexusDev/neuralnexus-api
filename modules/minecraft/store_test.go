@@ -541,6 +541,31 @@ func TestST26to28_UpsertTextureHash(t *testing.T) {
 			t.Errorf("second UpsertTextureHash() error = %v, want nil (ON CONFLICT DO NOTHING)", err)
 		}
 	})
+
+	t.Run("ST-76_Live_ConcurrentUpsertsSameHash", func(t *testing.T) {
+		// Looped across many concurrent goroutines targeting the same hash: a
+		// broken ON CONFLICT guard would surface as a unique-violation error
+		// on at least one goroutine, not reliably on every run with fewer
+		// trials, so this uses 50 concurrent writers.
+		s := mcLiveStoreDB(t)
+		hash := mcUniqueHash("hash")
+		const n = 50
+		var wg sync.WaitGroup
+		errs := make([]error, n)
+		for i := 0; i < n; i++ {
+			wg.Add(1)
+			go func(i int) {
+				defer wg.Done()
+				errs[i] = s.UpsertTextureHash(hash)
+			}(i)
+		}
+		wg.Wait()
+		for i, err := range errs {
+			if err != nil {
+				t.Errorf("goroutine %d: UpsertTextureHash() error = %v, want nil (ON CONFLICT should absorb the race)", i, err)
+			}
+		}
+	})
 }
 
 func TestST29to32_GetPlayerFromCache(t *testing.T) {

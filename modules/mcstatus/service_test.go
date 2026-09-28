@@ -2,6 +2,8 @@ package mcstatus
 
 import (
 	"net"
+	"os"
+	"strconv"
 	"testing"
 )
 
@@ -26,6 +28,47 @@ func svUnusedPort(t *testing.T) int {
 		t.Fatalf("failed to close probe listener: %v", err)
 	}
 	return port
+}
+
+// svLiveJavaServer reads MC_LIVE_JAVA_SERVER ("host:port") and skips the
+// test when it is unset, so this suite still runs green without a real,
+// reachable Minecraft Java server. Same self-skip pattern as
+// modules/minecraft/store_test.go's TEST_POSTGRES_URL.
+func svLiveJavaServer(t *testing.T) (string, int) {
+	t.Helper()
+	addr := os.Getenv("MC_LIVE_JAVA_SERVER")
+	if addr == "" {
+		t.Skip("MC_LIVE_JAVA_SERVER not set; skipping live Java server test")
+	}
+	host, portStr, err := net.SplitHostPort(addr)
+	if err != nil {
+		t.Fatalf("invalid MC_LIVE_JAVA_SERVER %q: %v", addr, err)
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		t.Fatalf("invalid port in MC_LIVE_JAVA_SERVER %q: %v", addr, err)
+	}
+	return host, port
+}
+
+// svLiveBedrockServer reads MC_LIVE_BEDROCK_SERVER ("host:port") and skips
+// the test when it is unset, so this suite still runs green without a real,
+// reachable Minecraft Bedrock server.
+func svLiveBedrockServer(t *testing.T) (string, int) {
+	t.Helper()
+	addr := os.Getenv("MC_LIVE_BEDROCK_SERVER")
+	if addr == "" {
+		t.Skip("MC_LIVE_BEDROCK_SERVER not set; skipping live Bedrock server test")
+	}
+	host, portStr, err := net.SplitHostPort(addr)
+	if err != nil {
+		t.Fatalf("invalid MC_LIVE_BEDROCK_SERVER %q: %v", addr, err)
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		t.Fatalf("invalid port in MC_LIVE_BEDROCK_SERVER %q: %v", addr, err)
+	}
+	return host, port
 }
 
 func TestNewService(t *testing.T) {
@@ -68,6 +111,26 @@ func TestService_GetJavaServerStatus(t *testing.T) {
 			t.Fatalf("expected \"failed to get java server status\", got %v", err)
 		}
 	})
+
+	t.Run("SV-09_LiveServerReturnsStatus", func(t *testing.T) {
+		host, port := svLiveJavaServer(t)
+		s := NewService()
+
+		status, err := s.GetJavaServerStatus(host, port, false, 0)
+
+		if err != nil {
+			t.Fatalf("expected nil error, got %v", err)
+		}
+		if status == nil {
+			t.Fatal("expected non-nil status")
+		}
+		if status.Host != host {
+			t.Errorf("Host: expected %q, got %q", host, status.Host)
+		}
+		if status.Port != int32(port) {
+			t.Errorf("Port: expected %d, got %d", port, status.Port)
+		}
+	})
 }
 
 func TestService_GetBedrockServerStatus(t *testing.T) {
@@ -82,6 +145,20 @@ func TestService_GetBedrockServerStatus(t *testing.T) {
 		}
 		if err == nil || err.Error() != "failed to get bedrock server status" {
 			t.Fatalf("expected \"failed to get bedrock server status\", got %v", err)
+		}
+	})
+
+	t.Run("SV-10_LiveServerReturnsStatus", func(t *testing.T) {
+		host, port := svLiveBedrockServer(t)
+		s := NewService()
+
+		status, err := s.GetBedrockServerStatus(host, port)
+
+		if err != nil {
+			t.Fatalf("expected nil error, got %v", err)
+		}
+		if status == nil {
+			t.Fatal("expected non-nil status")
 		}
 	})
 }

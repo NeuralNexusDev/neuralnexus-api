@@ -157,7 +157,7 @@ func TestST02to04_GetBeeName(t *testing.T) {
 	})
 }
 
-func TestST05to06_UploadBeeName(t *testing.T) {
+func TestST05to06and21_UploadBeeName(t *testing.T) {
 	t.Run("ST-05_Unreachable", func(t *testing.T) {
 		s := bngStoreWithUnreachableDB(t)
 		_, err := s.UploadBeeName(bngUniqueName("up"))
@@ -180,6 +180,40 @@ func TestST05to06_UploadBeeName(t *testing.T) {
 
 		if n := bngCountByName(t, db, "bee_name", name); n != 1 {
 			t.Errorf("bee_name has %d rows for %q, want 1", n, name)
+		}
+	})
+
+	// bee_name's PRIMARY KEY on name (docker/testdb/init.sql) must force
+	// exactly one of two concurrent same-name inserts to fail - looped
+	// across 20 trials since a single trial can't reliably distinguish that
+	// guard from a race that occasionally lets both through.
+	t.Run("ST-21_Live_ConcurrentUpload", func(t *testing.T) {
+		s, db := bngLiveStore(t)
+		const trials = 20
+
+		for trial := 0; trial < trials; trial++ {
+			name := bngUniqueName(fmt.Sprintf("rup%d", trial))
+
+			var wg sync.WaitGroup
+			errs := make([]error, 2)
+			for i := 0; i < 2; i++ {
+				wg.Add(1)
+				go func(idx int) {
+					defer wg.Done()
+					_, errs[idx] = s.UploadBeeName(name)
+				}(i)
+			}
+			wg.Wait()
+
+			if (errs[0] == nil) == (errs[1] == nil) {
+				t.Errorf("trial %d: want exactly one concurrent UploadBeeName call to succeed, got errs = %v, %v", trial, errs[0], errs[1])
+			}
+
+			if n := bngCountByName(t, db, "bee_name", name); n != 1 {
+				t.Errorf("trial %d: bee_name has %d rows for %q after both uploads, want exactly 1", trial, n, name)
+			}
+
+			_, _ = s.DeleteBeeName(name)
 		}
 	})
 }
@@ -225,7 +259,7 @@ func TestST07to09_DeleteBeeName(t *testing.T) {
 	})
 }
 
-func TestST10to11_SubmitBeeName(t *testing.T) {
+func TestST10to11and22_SubmitBeeName(t *testing.T) {
 	t.Run("ST-10_Unreachable", func(t *testing.T) {
 		s := bngStoreWithUnreachableDB(t)
 		_, err := s.SubmitBeeName(bngUniqueName("sub"))
@@ -248,6 +282,40 @@ func TestST10to11_SubmitBeeName(t *testing.T) {
 
 		if n := bngCountByName(t, db, "bee_name_suggestion", name); n != 1 {
 			t.Errorf("bee_name_suggestion has %d rows for %q, want 1", n, name)
+		}
+	})
+
+	// bee_name_suggestion's PRIMARY KEY on name (docker/testdb/init.sql)
+	// must force exactly one of two concurrent same-name inserts to fail -
+	// looped across 20 trials since a single trial can't reliably
+	// distinguish that guard from a race that occasionally lets both through.
+	t.Run("ST-22_Live_ConcurrentSubmit", func(t *testing.T) {
+		s, db := bngLiveStore(t)
+		const trials = 20
+
+		for trial := 0; trial < trials; trial++ {
+			name := bngUniqueName(fmt.Sprintf("rsub%d", trial))
+
+			var wg sync.WaitGroup
+			errs := make([]error, 2)
+			for i := 0; i < 2; i++ {
+				wg.Add(1)
+				go func(idx int) {
+					defer wg.Done()
+					_, errs[idx] = s.SubmitBeeName(name)
+				}(i)
+			}
+			wg.Wait()
+
+			if (errs[0] == nil) == (errs[1] == nil) {
+				t.Errorf("trial %d: want exactly one concurrent SubmitBeeName call to succeed, got errs = %v, %v", trial, errs[0], errs[1])
+			}
+
+			if n := bngCountByName(t, db, "bee_name_suggestion", name); n != 1 {
+				t.Errorf("trial %d: bee_name_suggestion has %d rows for %q after both submits, want exactly 1", trial, n, name)
+			}
+
+			_, _ = s.RejectBeeNameSuggestion(name)
 		}
 	})
 }
@@ -338,13 +406,11 @@ func TestST15to17_AcceptBeeNameSuggestion(t *testing.T) {
 		}
 	})
 
-	// AcceptBeeNameSuggestion's insert and delete are two separate,
-	// non-transactional statements, so nothing in store.go itself stops two
-	// concurrent accepts of the same name from both inserting into bee_name.
-	// It's bee_name's PRIMARY KEY on name (docker/testdb/init.sql) that
-	// forces exactly one of the two concurrent inserts to fail - looped
-	// across 20 trials since a single trial can't reliably distinguish that
-	// from a race that occasionally lets both through.
+	// Nothing in store.go itself stops two concurrent accepts of the same
+	// name from both inserting into bee_name; it's the PRIMARY KEY on name
+	// (docker/testdb/init.sql) that must force exactly one insert to fail -
+	// looped across 20 trials since a single trial can't reliably
+	// distinguish that guard from a race that occasionally lets both through.
 	t.Run("ST-17_Live_ConcurrentAccept", func(t *testing.T) {
 		s, db := bngLiveStore(t)
 		const trials = 20

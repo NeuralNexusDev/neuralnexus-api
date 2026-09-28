@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -462,6 +464,142 @@ func TestAU15OAuthHandlerLinkModeNoSession(t *testing.T) {
 		OAuthHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{})(w, r)
 
 		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, "Unauthorized", "You must be logged in to link an account")
+	})
+}
+
+// auRoundTripperFunc adapts a function to http.RoundTripper.
+type auRoundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f auRoundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+// auJSONResponse builds a canned *http.Response carrying a JSON
+// Content-Type - oauth2's token exchange requires that header to parse the
+// body as a JSON token response rather than as form-urlencoded.
+func auJSONResponse(status int, body string) *http.Response {
+	h := make(http.Header)
+	h.Set("Content-Type", "application/json")
+	return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader(body)), Header: h}
+}
+
+// auTextResponse builds a canned *http.Response with a plain-text body, for
+// Steam's check_authentication response format (newline-separated
+// "key:value" lines, not JSON).
+func auTextResponse(status int, body string) *http.Response {
+	return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}
+}
+
+// swapDefaultTransport replaces the package-level http.DefaultTransport for
+// the duration of a subtest and restores it afterward. ProcessOAuthLogin's
+// Discord token exchange (oauth2.Config.Exchange, called with
+// context.Background() so it falls back to http.DefaultClient) and its
+// discordgo user fetch (discordgo.New builds a *http.Client with no
+// Transport set), and VerifySteamOpenIDCallback/GetSteamUser's
+// steamHTTPClient (also built with no Transport set), all resolve to
+// http.DefaultTransport at call time - the same seam
+// modules/projects/projects_test.go's swapTransport uses, so neither
+// OAuthHandler's nor OpenIDHandler's happy path needs a live network
+// dependency or an env-var skip.
+func swapDefaultTransport(t *testing.T, rt http.RoundTripper) {
+	t.Helper()
+	orig := http.DefaultTransport
+	http.DefaultTransport = rt
+	t.Cleanup(func() { http.DefaultTransport = orig })
+}
+
+// swapSteamAPIKey overrides linking.STEAM_API_KEY for the duration of a
+// subtest and restores it afterward - GetSteamUser refuses to run without
+// one.
+func swapSteamAPIKey(t *testing.T, value string) {
+	t.Helper()
+	original := linking.STEAM_API_KEY
+	linking.STEAM_API_KEY = value
+	t.Cleanup(func() { linking.STEAM_API_KEY = original })
+}
+
+func TestAU50OAuthHandlerLoginHappyPath(t *testing.T) {
+	swapDefaultTransport(t, auRoundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		switch {
+		case req.Method == http.MethodPost && req.URL.Host == "discord.com" && req.URL.Path == "/api/oauth2/token":
+			return auJSONResponse(http.StatusOK, `{"access_token":"disc-at","token_type":"Bearer","expires_in":3600,"scope":"identify"}`), nil
+		case req.Method == http.MethodGet && req.URL.Host == "discord.com" && strings.HasSuffix(req.URL.Path, "/users/@me"):
+			return auJSONResponse(http.StatusOK, `{"id":"d1","username":"alice","email":"a@b.com"}`), nil
+		default:
+			return nil, fmt.Errorf("AU-50: unexpected outbound request %s %s", req.Method, req.URL.String())
+		}
+	}))
+
+	state := linking.OAuthState{Platform: auth.PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	stateB64 := encodeState(t, state)
+	r := httptest.NewRequest(http.MethodGet, "/api/oauth?code=disc-code&state="+stateB64, nil)
+	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
+	w := httptest.NewRecorder()
+	as := &stubAccountService{}
+	las := &stubLinkAccountStore{}
+	ss := &stubSessionService{createJWT: func(*auth.Session) (string, error) { return "test-jwt", nil }}
+
+	t.Run("AU-50_OAuthHandlerLoginHappyPath", func(t *testing.T) {
+		OAuthHandler(as, las, ss)(w, r)
+
+		if w.Code != http.StatusSeeOther {
+			t.Fatalf("expected 303, got %d: %s", w.Code, w.Body.String())
+		}
+		if loc := w.Header().Get("Location"); loc != state.RedirectURI {
+			t.Errorf("expected redirect straight to %q with no problem param, got %q", state.RedirectURI, loc)
+		}
+		cookie := findCookie(w, mw.SessionCookieName)
+		if cookie == nil || cookie.Value != "test-jwt" {
+			t.Errorf("expected session cookie with value %q, got %+v", "test-jwt", cookie)
+		}
+	})
+}
+
+func TestAU51OpenIDHandlerLoginHappyPath(t *testing.T) {
+	swapSteamAPIKey(t, "test-steam-api-key")
+	swapDefaultTransport(t, auRoundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		switch {
+		case req.Method == http.MethodPost && req.URL.Host == "steamcommunity.com" && req.URL.Path == "/openid/login":
+			return auTextResponse(http.StatusOK, "ns:http://specs.openid.net/auth/2.0\nis_valid:true\n"), nil
+		case req.Method == http.MethodGet && req.URL.Host == "api.steampowered.com" && req.URL.Path == "/ISteamUser/GetPlayerSummaries/v2/":
+			return auJSONResponse(http.StatusOK, `{"response":{"players":[{"steamid":"76561198000000000","personaname":"steamplayer","profileurl":"https://steamcommunity.com/id/steamplayer","avatarfull":"https://avatar.example/a.jpg"}]}}`), nil
+		default:
+			return nil, fmt.Errorf("AU-51: unexpected outbound request %s %s", req.Method, req.URL.String())
+		}
+	}))
+
+	state := linking.OAuthState{Platform: auth.PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	stateB64 := encodeState(t, state)
+	q := url.Values{
+		"state":               {stateB64},
+		"openid.mode":         {"id_res"},
+		"openid.claimed_id":   {"https://steamcommunity.com/openid/id/76561198000000000"},
+		"openid.identity":     {"https://steamcommunity.com/openid/id/76561198000000000"},
+		"openid.signed":       {"op_endpoint,claimed_id,identity,return_to,response_nonce,assoc_handle"},
+		"openid.sig":          {"deadbeef=="},
+		"openid.return_to":    {"https://neuralnexus.test/api/openid"},
+		"openid.assoc_handle": {"handle1"},
+	}
+	r := httptest.NewRequest(http.MethodGet, "/api/openid?"+q.Encode(), nil)
+	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
+	w := httptest.NewRecorder()
+	as := &stubAccountService{}
+	las := &stubLinkAccountStore{}
+	ss := &stubSessionService{createJWT: func(*auth.Session) (string, error) { return "test-jwt", nil }}
+
+	t.Run("AU-51_OpenIDHandlerLoginHappyPath", func(t *testing.T) {
+		OpenIDHandler(as, las, ss)(w, r)
+
+		if w.Code != http.StatusSeeOther {
+			t.Fatalf("expected 303, got %d: %s", w.Code, w.Body.String())
+		}
+		if loc := w.Header().Get("Location"); loc != state.RedirectURI {
+			t.Errorf("expected redirect straight to %q with no problem param, got %q", state.RedirectURI, loc)
+		}
+		cookie := findCookie(w, mw.SessionCookieName)
+		if cookie == nil || cookie.Value != "test-jwt" {
+			t.Errorf("expected session cookie with value %q, got %+v", "test-jwt", cookie)
+		}
 	})
 }
 

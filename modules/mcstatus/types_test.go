@@ -109,11 +109,8 @@ func TestNewServerStatus(t *testing.T) {
 
 	t.Run("TY-05_UnknownServerTypeDefaultsProtoEnumToZeroValue", func(t *testing.T) {
 		// mcstatuspb.ServerType_value has no "UNKNOWN" entry, so the map
-		// lookup misses and Go's zero-value-on-miss semantics apply
-		// (yielding 0, i.e. ServerType_JAVA), rather than panicking or
-		// erroring. This documents that fallback, it is not a bug: the
-		// Go wrapper's own ServerType field still carries the unrecognized
-		// string through unchanged.
+		// lookup misses and Go's zero-value-on-miss semantics yield 0
+		// (ServerType_JAVA) rather than a panic or error.
 		status := NewServerStatus("", 0, "", "", "", 0, 0, nil, "", "", ServerType("unknown"), nil, nil)
 
 		if status.ServerType != ServerType("unknown") {

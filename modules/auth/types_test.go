@@ -1,6 +1,11 @@
 package auth
 
 import (
+	"bytes"
+	"errors"
+	"os"
+	"os/exec"
+	"strings"
 	"testing"
 
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
@@ -298,6 +303,32 @@ func TestTY26NewLinkedAccount(t *testing.T) {
 		}
 		if !la.Verified || !la.LoginEnabled {
 			t.Errorf("expected a freshly created link to be Verified and LoginEnabled, got Verified=%v LoginEnabled=%v", la.Verified, la.LoginEnabled)
+		}
+	})
+}
+
+// TestTY27to28InitTypesGo covers types.go's init(). See
+// TestSE32to34InitSessionGo in session_test.go for why SE-33/TY-28 re-exec
+// the test binary rather than recovering from the log.Fatal in-process.
+func TestTY27to28InitTypesGo(t *testing.T) {
+	t.Run("TY-27_PackageLoadedUnderRequiredEnv", func(t *testing.T) {
+		if len(pepper) == 0 {
+			t.Fatal("pepper is empty; init() should already have log.Fatal'd if so, so this file's other tests couldn't be running")
+		}
+	})
+
+	t.Run("TY-28_MissingPepperFatals", func(t *testing.T) {
+		cmd := exec.Command(os.Args[0], "-test.run=^$")
+		cmd.Env = append(os.Environ(), "PEPPER=")
+		var stderr bytes.Buffer
+		cmd.Stderr = &stderr
+		err := cmd.Run()
+		var exitErr *exec.ExitError
+		if !errors.As(err, &exitErr) || exitErr.Success() {
+			t.Fatalf("re-exec with PEPPER unset: got err=%v, want a non-zero exit from init()'s log.Fatal; stderr:\n%s", err, stderr.String())
+		}
+		if !strings.Contains(stderr.String(), "PEPPER environment variable must be set") {
+			t.Errorf("subprocess stderr = %q, want it to contain init()'s PEPPER message", stderr.String())
 		}
 	})
 }

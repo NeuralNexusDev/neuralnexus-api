@@ -5,6 +5,8 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -46,6 +48,27 @@ func swapTransport(t *testing.T, rt http.RoundTripper) {
 	t.Cleanup(func() {
 		http.DefaultTransport = orig
 	})
+}
+
+// mcLiveServer reads MC_LIVE_TEST_SERVER ("host:port"), skipping the test
+// when it is unset so this suite still runs green without a real
+// Minecraft/Bedrock server available. Adapted from the mcLiveDB pattern in
+// modules/minecraft/store_test.go.
+func mcLiveServer(t *testing.T) (string, int) {
+	t.Helper()
+	addr := os.Getenv("MC_LIVE_TEST_SERVER")
+	if addr == "" {
+		t.Skip("MC_LIVE_TEST_SERVER not set; skipping live-Minecraft test")
+	}
+	host, portStr, err := net.SplitHostPort(addr)
+	if err != nil {
+		t.Fatalf("MC_LIVE_TEST_SERVER %q is not host:port: %v", addr, err)
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		t.Fatalf("MC_LIVE_TEST_SERVER port %q is not numeric: %v", portStr, err)
+	}
+	return host, port
 }
 
 // closedTCPPort binds a listener on 127.0.0.1:0, reads back the OS-assigned
@@ -306,11 +329,23 @@ func TestQueryGameServer(t *testing.T) {
 		}
 	})
 
-	// A successful-query (Java or Bedrock) scenario is intentionally not
-	// covered here: QueryGameServer constructs mcstatus.NewService() inline
-	// instead of accepting an mcstatus.MCStatusService as an injected
-	// dependency, so there is no mock seam, and a genuine success response
-	// also needs a live Minecraft server. Not testable as currently written.
+	t.Run("SV-24_HappyPath_MinecraftDispatch", func(t *testing.T) {
+		host, port := mcLiveServer(t)
+		game := "minecraft"
+		if os.Getenv("MC_LIVE_TEST_BEDROCK") != "" {
+			game = "bedrock"
+		}
+		status, err := svc.QueryGameServer(game, host, port, QueryTypeMinecraft)
+		if err != nil {
+			t.Fatalf("QueryGameServer() error = %v, want nil", err)
+		}
+		if status == nil {
+			t.Fatal("QueryGameServer() status = nil, want non-nil")
+		}
+		if status.QueryType != QueryTypeMinecraft {
+			t.Errorf("QueryGameServer() status.QueryType = %q, want %q", status.QueryType, QueryTypeMinecraft)
+		}
+	})
 
 	t.Run("SV-25_HappyPath_GameQDispatch", func(t *testing.T) {
 		swapTransport(t, &fakeRoundTripper{resp: fakeResponse(http.StatusOK, `{"srv":{"gq_hostname":"host1","gq_port_query":1234,"gq_name":"Name1","gq_mapname":"map1","gq_maxplayers":10,"gq_numplayers":2,"gq_online":true,"players":["p1"]}}`)})
