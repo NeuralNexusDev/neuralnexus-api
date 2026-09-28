@@ -23,6 +23,13 @@ update:
 TEST_POSTGRES_URL ?= postgres://neuralnexus:neuralnexus@localhost:55432/neuralnexus_test
 TEST_REDIS_URL ?= redis://localhost:56379
 
+# Base DSN (no database name) matching production's DATABASE_URL contract -
+# modules like pet_pictures append their own "/<dbname>" suffix to it, so
+# this must stay bare rather than pointing at neuralnexus_test directly.
+# Derived from TEST_POSTGRES_URL rather than repeating the host/port/creds,
+# so the two can't drift out of sync.
+TEST_DATABASE_URL ?= $(TEST_POSTGRES_URL:/neuralnexus_test=)
+
 # Not real secrets - fixed fixture values the auth package's init() requires
 # to be non-empty (see modules/auth/types.go and modules/auth/session.go).
 # Overridable, but any non-empty value works since nothing here is deployed.
@@ -52,4 +59,4 @@ _go-test:
 # TEST_POSTGRES_URL. Use test-env-up/test-env-down directly to keep the
 # containers running across multiple runs during development.
 test: test-env-up
-	TEST_POSTGRES_URL=$(TEST_POSTGRES_URL) TEST_REDIS_URL=$(TEST_REDIS_URL) JWT_SECRET=$(TEST_JWT_SECRET) PEPPER=$(TEST_PEPPER) NN_SITE_URL=$(TEST_NN_SITE_URL) NN_API_URL=$(TEST_NN_API_URL) $(MAKE) vet _go-test; status=$$?; $(MAKE) test-env-down; exit $$status
+	TEST_POSTGRES_URL=$(TEST_POSTGRES_URL) TEST_REDIS_URL=$(TEST_REDIS_URL) DATABASE_URL=$(TEST_DATABASE_URL) JWT_SECRET=$(TEST_JWT_SECRET) PEPPER=$(TEST_PEPPER) NN_SITE_URL=$(TEST_NN_SITE_URL) NN_API_URL=$(TEST_NN_API_URL) $(MAKE) vet _go-test; status=$$?; $(MAKE) test-env-down; exit $$status
