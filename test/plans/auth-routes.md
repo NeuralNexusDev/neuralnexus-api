@@ -20,12 +20,10 @@ Mode: LEGACY REPLACEMENT
 | AU-13 | OAuthHandler | Error Path | Missing "code" query param | Request has no code param | 303 redirect to auth.NN_SITE_URL with a Bad Request problem in the "problem" query param | P1 |
 | AU-14 | OAuthHandler | Error Path | Missing "state" query param | code param present, state param absent (delegates to decodeAndValidateState) | 303 redirect to auth.NN_SITE_URL with a Bad Request problem | P2 |
 | AU-15 | OAuthHandler | Error Path | Mode=link with no session in context | code+valid state present, state.Mode=link, no session in request context (delegates to requireValidModeAndSession) | 303 redirect to state.RedirectURI with an Unauthorized problem | P2 |
-| AU-16 | OAuthHandler | Edge Case | linking.ProcessOAuthLogin/ProcessOAuthLink success/internal-error paths | N/A | EXCLUDED: reached only via linking's free functions (linking.ProcessOAuthLogin/ProcessOAuthLink), which make real outbound calls with no seam injectable from this package; that behavior is exercised by modules/auth/linking's own test suite | P3 |
 | AU-17 | OpenIDHandler | Error Path | Missing "state" query param | state param absent (delegates to decodeAndValidateState) | 303 redirect to auth.NN_SITE_URL with a Bad Request problem | P2 |
 | AU-18 | OpenIDHandler | Error Path | Mode=link with no session in context | Valid state present, state.Mode=link, no session in request context | 303 redirect to state.RedirectURI with an Unauthorized problem | P2 |
 | AU-19 | OpenIDHandler | Error Path | VerifySteamOpenIDCallback rejects the assertion locally (bad openid.mode) | Valid state, query has openid.mode != "id_res" (no network call reached) | 303 redirect to state.RedirectURI with a Bad Request problem "Invalid state" | P1 |
 | AU-20 | OpenIDHandler | Error Path | VerifySteamOpenIDCallback rejects the assertion locally (missing/invalid openid.claimed_id) | Valid state, openid.mode="id_res", openid.claimed_id missing/malformed | 303 redirect to state.RedirectURI with a Bad Request problem "Invalid state" | P2 |
-| AU-21 | OpenIDHandler | Edge Case | GetSteamUser / ProcessSteamLogin / ProcessSteamLink paths, and the network-dependent branch of VerifySteamOpenIDCallback (steam rejects, or the check_authentication network call itself fails) | N/A | EXCLUDED: only reachable after a real POST to steamcommunity.com (steamOpenIDLoginURL is an unexported var in the linking package) or a real Steam Web API call; already covered by modules/auth/linking's own test suite (steam_test.go), which can swap those endpoints | P3 |
 | AU-22 | decodeAndValidateState | Happy Path | Valid base64+JSON state, nonce cookie matches | state has Platform/Nonce/RedirectURI/Mode set, RedirectURI allowed, "nonce" cookie value == state.Nonce | Returns (state, true) | P1 |
 | AU-23 | decodeAndValidateState | Error Path | Missing "state" query param | No state param on the request | Returns (zero state, false); redirectBadRequest to auth.NN_SITE_URL | P2 |
 | AU-24 | decodeAndValidateState | Error Path | "state" is not valid base64 | state param is not URL-safe base64 | Returns (zero state, false); redirectBadRequest to auth.NN_SITE_URL, detail "Invalid state" | P2 |
@@ -44,7 +42,6 @@ Mode: LEGACY REPLACEMENT
 | AU-37 | createSessionJWTAndSetCookie | Error Path | ss.CreateJWT fails | ss.CreateJWT returns an error | Returns that error; no Set-Cookie header written | P2 |
 | AU-38 | redirectWithError | Happy Path | Well-formed target URL | target parses successfully with url.Parse | 303 redirect; redirect Location has a "problem" query param that base64url-decodes to the expected RFC 9457 JSON (status/title/detail) | P1 |
 | AU-39 | redirectWithError | Edge Case | Target URL fails url.Parse | target contains an invalid percent-escape (e.g. "%zz") | 303 redirect straight to target, unmodified (no "problem" param appended) | P3 |
-| AU-40 | redirectWithError | Edge Case | responses.NewProblem(...).Problem fails to json.Marshal | N/A | EXCLUDED: Problem is a fixed plain-field struct; json.Marshal of it cannot fail in practice, so this branch is unreachable without fault-injecting the encoder itself | P3 |
 | AU-41 | redirectBadRequest | Accessor | Wraps redirectWithError with 400/"Bad Request" | any target/detail | redirectWithError called with http.StatusBadRequest, "Bad Request", the given detail | P2 |
 | AU-42 | redirectUnauthorized | Accessor | Wraps redirectWithError with 401/"Unauthorized" | any target/detail | redirectWithError called with http.StatusUnauthorized, "Unauthorized", the given detail | P2 |
 | AU-43 | redirectInternalServerError | Accessor | Wraps redirectWithError with 500/"Internal Server Error" | any target/detail | redirectWithError called with http.StatusInternalServerError, "Internal Server Error", the given detail | P2 |
@@ -120,12 +117,12 @@ Mode: LEGACY REPLACEMENT
 ### auth.go
 - [x] LoginHandler — covered by AU-01..AU-09
 - [x] LogoutHandler — covered by AU-10..AU-12
-- [x] OAuthHandler — covered by AU-13..AU-16 (AU-16 is an explicit exclusion for the network-dependent delegate paths)
-- [x] OpenIDHandler — covered by AU-17..AU-21 (AU-21 is an explicit exclusion for the network-dependent delegate paths)
+- [x] OAuthHandler — covered by AU-13..AU-15
+- [x] OpenIDHandler — covered by AU-17..AU-20
 - [x] decodeAndValidateState — covered by AU-22..AU-29
 - [x] requireValidModeAndSession — covered by AU-30..AU-35
 - [x] createSessionJWTAndSetCookie — covered by AU-36..AU-37
-- [x] redirectWithError — covered by AU-38..AU-40 (AU-40 is an explicit exclusion, unreachable branch)
+- [x] redirectWithError — covered by AU-38..AU-39
 - [x] redirectBadRequest — covered by AU-41
 - [x] redirectUnauthorized — covered by AU-42
 - [x] redirectInternalServerError — covered by AU-43
