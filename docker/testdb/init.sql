@@ -79,11 +79,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS geyser_player_textures_unique
 -- only makes sense if the confirmed list has no duplicates to skew that
 -- distribution, and nothing in store.go handles a duplicate-key error
 -- specially, which would be the surprising gap if duplicates were actually
--- allowed. AcceptBeeNameSuggestion's insert-then-delete is still not
--- transactional (a crash between the two leaves a row in both tables
--- simultaneously), but this constraint at least rules out two concurrent
--- accepts of the same suggestion silently producing duplicate bee_name
--- rows - see test/plans/bee_name_generator.md's ST-17.
+-- allowed.
 CREATE TABLE IF NOT EXISTS bee_name (
     name TEXT PRIMARY KEY NOT NULL
 );
