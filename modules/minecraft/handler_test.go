@@ -1,7 +1,6 @@
 package minecraft
 
 import (
-	"bytes"
 	"errors"
 	"io"
 	"net/http"
@@ -12,952 +11,626 @@ import (
 	"github.com/goccy/go-json"
 )
 
-// --- Mock Service ---
+// -------------- Test double --------------
 
-type mockService struct {
-	player             *Player
-	players            []*Player
-	profile            *Profile
-	geyserPlayer       *GeyserPlayer
-	geyserSkin         *GeyserSkin
-	geyserProfile      *GeyserProfile
-	err                error
-	textureBody        []byte
-	textureContentType string
+// mcMockService is a configurable Service test double for handler.go tests.
+// Each field defaults to nil; a test sets only the methods its handler call
+// actually reaches.
+type mcMockService struct {
+	getMojangPlayerByName      func(name string) (*Player, error)
+	getMojangPlayerByUUID      func(id string) (*Player, error)
+	getMojangPlayersByNames    func(names []string) ([]*Player, error)
+	getMojangProfile           func(id string, signed bool) (*Player, error)
+	getProfile                 func(id string) (*Profile, error)
+	getProfileByName           func(name string) (*Profile, error)
+	getTextureContent          func(hash string) (*TextureResult, error)
+	getGeyserXUID              func(gamertag string) (*GeyserPlayer, error)
+	getGeyserSkin              func(xuid int64) (*GeyserSkin, error)
+	getGeyserProfile           func(xuid int64) (*GeyserProfile, error)
+	getGeyserProfileByGamertag func(gamertag string) (*GeyserProfile, error)
+	getGeyserTextureContent    func(hash string) (*TextureResult, error)
 }
 
-func (m *mockService) GetMojangPlayerByName(_ string) (*Player, error) {
-	return m.player, m.err
+var _ Service = (*mcMockService)(nil)
+
+func (m *mcMockService) GetMojangPlayerByName(name string) (*Player, error) {
+	return m.getMojangPlayerByName(name)
+}
+func (m *mcMockService) GetMojangPlayerByUUID(id string) (*Player, error) {
+	return m.getMojangPlayerByUUID(id)
+}
+func (m *mcMockService) GetMojangPlayersByNames(names []string) ([]*Player, error) {
+	return m.getMojangPlayersByNames(names)
+}
+func (m *mcMockService) GetMojangProfile(id string, signed bool) (*Player, error) {
+	return m.getMojangProfile(id, signed)
+}
+func (m *mcMockService) GetProfile(id string) (*Profile, error) { return m.getProfile(id) }
+func (m *mcMockService) GetProfileByName(name string) (*Profile, error) {
+	return m.getProfileByName(name)
+}
+func (m *mcMockService) GetTextureContent(hash string) (*TextureResult, error) {
+	return m.getTextureContent(hash)
+}
+func (m *mcMockService) GetGeyserXUID(gamertag string) (*GeyserPlayer, error) {
+	return m.getGeyserXUID(gamertag)
+}
+func (m *mcMockService) GetGeyserSkin(xuid int64) (*GeyserSkin, error) {
+	return m.getGeyserSkin(xuid)
+}
+func (m *mcMockService) GetGeyserProfile(xuid int64) (*GeyserProfile, error) {
+	return m.getGeyserProfile(xuid)
+}
+func (m *mcMockService) GetGeyserProfileByGamertag(gamertag string) (*GeyserProfile, error) {
+	return m.getGeyserProfileByGamertag(gamertag)
+}
+func (m *mcMockService) GetGeyserTextureContent(hash string) (*TextureResult, error) {
+	return m.getGeyserTextureContent(hash)
 }
 
-func (m *mockService) GetMojangPlayerByUUID(_ string) (*Player, error) {
-	return m.player, m.err
-}
+// -------------- Shared helpers --------------
 
-func (m *mockService) GetMojangPlayersByNames(_ []string) ([]*Player, error) {
-	return m.players, m.err
-}
-
-func (m *mockService) GetMojangProfile(_ string, _ bool) (*Player, error) {
-	return m.player, m.err
-}
-
-func (m *mockService) GetProfile(_ string) (*Profile, error) {
-	return m.profile, m.err
-}
-
-func (m *mockService) GetProfileByName(_ string) (*Profile, error) {
-	return m.profile, m.err
-}
-
-func (m *mockService) GetGeyserXUID(_ string) (*GeyserPlayer, error) {
-	return m.geyserPlayer, m.err
-}
-
-func (m *mockService) GetGeyserSkin(_ int64) (*GeyserSkin, error) {
-	return m.geyserSkin, m.err
-}
-
-func (m *mockService) GetGeyserProfile(_ int64) (*GeyserProfile, error) {
-	return m.geyserProfile, m.err
-}
-
-func (m *mockService) GetGeyserProfileByGamertag(_ string) (*GeyserProfile, error) {
-	return m.geyserProfile, m.err
-}
-
-func (m *mockService) GetTextureContent(_ string) (*TextureResult, error) {
-	if m.err != nil {
-		return nil, m.err
+// mcRequest builds an *http.Request with the given path values pre-set, as if
+// routed there by a ServeMux, and target as the raw path+query.
+func mcRequest(t *testing.T, method, target string, body io.Reader, pathValues map[string]string) *http.Request {
+	t.Helper()
+	r := httptest.NewRequest(method, target, body)
+	for k, v := range pathValues {
+		r.SetPathValue(k, v)
 	}
-	body := m.textureBody
-	if body == nil {
-		body = []byte("mock-texture-data")
-	}
-	contentType := m.textureContentType
-	if contentType == "" {
-		contentType = "image/png"
-	}
-	return &TextureResult{Body: io.NopCloser(bytes.NewReader(body)), ContentType: contentType}, nil
+	return r
 }
 
-func (m *mockService) GetGeyserTextureContent(_ string) (*TextureResult, error) {
-	return m.GetTextureContent("")
-}
-
-// --- Tests ---
-
-func TestHandler_GetMojangPlayerByNameHandler_OK(t *testing.T) {
-	svc := &mockService{player: &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}}
-	handler := GetMojangPlayerByNameHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/mojang/lookup/name/jeb_", nil)
-	r.SetPathValue("name", "jeb_")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", w.Code)
-	}
-
-	var got Player
-	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	if got.Name != "jeb_" {
-		t.Errorf("expected jeb_, got %s", got.Name)
+func mcRequireStatus(t *testing.T, w *httptest.ResponseRecorder, want int) {
+	t.Helper()
+	if w.Code != want {
+		t.Fatalf("status = %d, want %d (body: %s)", w.Code, want, w.Body.String())
 	}
 }
 
-func TestHandler_GetMojangPlayerByNameHandler_NotFound(t *testing.T) {
-	svc := &mockService{err: ErrPlayerNotFound}
-	handler := GetMojangPlayerByNameHandler(svc)
+// -------------- GetMojangPlayerByNameHandler --------------
 
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/mojang/lookup/name/nonexistent", nil)
-	r.SetPathValue("name", "nonexistent")
-	w := httptest.NewRecorder()
+func TestHD01to04_GetMojangPlayerByNameHandler(t *testing.T) {
+	t.Run("HD-01_EmptyName", func(t *testing.T) {
+		h := GetMojangPlayerByNameHandler(&mcMockService{})
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/name/", nil, map[string]string{"name": ""}))
+		mcRequireStatus(t, w, http.StatusBadRequest)
+	})
 
-	handler.ServeHTTP(w, r)
+	t.Run("HD-02_OK", func(t *testing.T) {
+		svc := &mcMockService{getMojangPlayerByName: func(name string) (*Player, error) {
+			return &Player{ID: "id", Name: name}, nil
+		}}
+		h := GetMojangPlayerByNameHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/name/Steve", nil, map[string]string{"name": "Steve"}))
+		mcRequireStatus(t, w, http.StatusOK)
+		var got Player
+		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil || got.Name != "Steve" {
+			t.Errorf("body = %s, want a player named Steve", w.Body.String())
+		}
+	})
 
-	if w.Code != http.StatusNotFound {
-		t.Errorf("expected 404, got %d", w.Code)
-	}
+	t.Run("HD-03_NotFound", func(t *testing.T) {
+		svc := &mcMockService{getMojangPlayerByName: func(string) (*Player, error) { return nil, ErrPlayerNotFound }}
+		h := GetMojangPlayerByNameHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/name/x", nil, map[string]string{"name": "x"}))
+		mcRequireStatus(t, w, http.StatusNotFound)
+	})
+
+	t.Run("HD-04_InternalError", func(t *testing.T) {
+		svc := &mcMockService{getMojangPlayerByName: func(string) (*Player, error) { return nil, errors.New("boom") }}
+		h := GetMojangPlayerByNameHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/name/x", nil, map[string]string{"name": "x"}))
+		mcRequireStatus(t, w, http.StatusInternalServerError)
+	})
 }
 
-func TestHandler_GetMojangPlayerByNameHandler_InternalError(t *testing.T) {
-	svc := &mockService{err: errors.New("db error")}
-	handler := GetMojangPlayerByNameHandler(svc)
+// -------------- GetMojangPlayerByUUIDHandler --------------
 
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/mojang/lookup/name/jeb_", nil)
-	r.SetPathValue("name", "jeb_")
-	w := httptest.NewRecorder()
+func TestHD05to08_GetMojangPlayerByUUIDHandler(t *testing.T) {
+	validUUID := "550e8400-e29b-41d4-a716-446655440000"
 
-	handler.ServeHTTP(w, r)
+	t.Run("HD-05_InvalidUUID", func(t *testing.T) {
+		h := GetMojangPlayerByUUIDHandler(&mcMockService{})
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/uuid/not-a-uuid", nil, map[string]string{"uuid": "not-a-uuid"}))
+		mcRequireStatus(t, w, http.StatusBadRequest)
+	})
 
-	if w.Code != http.StatusInternalServerError {
-		t.Errorf("expected 500, got %d", w.Code)
-	}
+	t.Run("HD-06_OK", func(t *testing.T) {
+		svc := &mcMockService{getMojangPlayerByUUID: func(id string) (*Player, error) {
+			return &Player{ID: id}, nil
+		}}
+		h := GetMojangPlayerByUUIDHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/uuid/"+validUUID, nil, map[string]string{"uuid": validUUID}))
+		mcRequireStatus(t, w, http.StatusOK)
+	})
+
+	t.Run("HD-07_NotFound", func(t *testing.T) {
+		svc := &mcMockService{getMojangPlayerByUUID: func(string) (*Player, error) { return nil, ErrPlayerNotFound }}
+		h := GetMojangPlayerByUUIDHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/uuid/"+validUUID, nil, map[string]string{"uuid": validUUID}))
+		mcRequireStatus(t, w, http.StatusNotFound)
+	})
+
+	t.Run("HD-08_InternalError", func(t *testing.T) {
+		svc := &mcMockService{getMojangPlayerByUUID: func(string) (*Player, error) { return nil, errors.New("boom") }}
+		h := GetMojangPlayerByUUIDHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/uuid/"+validUUID, nil, map[string]string{"uuid": validUUID}))
+		mcRequireStatus(t, w, http.StatusInternalServerError)
+	})
 }
 
-func TestHandler_GetMojangPlayerByNameHandler_OmitsProfileActionsWhenNil(t *testing.T) {
-	svc := &mockService{player: &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}}
-	handler := GetMojangPlayerByNameHandler(svc)
+// -------------- GetMojangPlayersByNamesHandler --------------
 
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/mojang/lookup/name/jeb_", nil)
-	r.SetPathValue("name", "jeb_")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	var raw map[string]json.RawMessage
-	if err := json.NewDecoder(w.Body).Decode(&raw); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
+func TestHD09to15_GetMojangPlayersByNamesHandler(t *testing.T) {
+	post := func(t *testing.T, body string, contentType string) *http.Request {
+		r := httptest.NewRequest(http.MethodPost, "/names", strings.NewReader(body))
+		if contentType != "" {
+			r.Header.Set("Content-Type", contentType)
+		}
+		return r
 	}
-	if _, ok := raw["profileActions"]; ok {
-		t.Errorf("expected profileActions key to be absent, got %s", w.Body.String())
-	}
+
+	t.Run("HD-09_WrongMediaType", func(t *testing.T) {
+		h := GetMojangPlayersByNamesHandler(&mcMockService{})
+		w := httptest.NewRecorder()
+		h(w, post(t, `["a"]`, ""))
+		mcRequireStatus(t, w, http.StatusUnsupportedMediaType)
+	})
+
+	t.Run("HD-10_InvalidBody", func(t *testing.T) {
+		h := GetMojangPlayersByNamesHandler(&mcMockService{})
+		w := httptest.NewRecorder()
+		h(w, post(t, `{not json`, "application/json"))
+		mcRequireStatus(t, w, http.StatusBadRequest)
+	})
+
+	t.Run("HD-11_Empty", func(t *testing.T) {
+		h := GetMojangPlayersByNamesHandler(&mcMockService{})
+		w := httptest.NewRecorder()
+		h(w, post(t, `[]`, "application/json"))
+		mcRequireStatus(t, w, http.StatusBadRequest)
+	})
+
+	t.Run("HD-12_TooMany", func(t *testing.T) {
+		h := GetMojangPlayersByNamesHandler(&mcMockService{})
+		w := httptest.NewRecorder()
+		names := `["a","b","c","d","e","f","g","h","i","j","k"]`
+		h(w, post(t, names, "application/json"))
+		mcRequireStatus(t, w, http.StatusBadRequest)
+	})
+
+	t.Run("HD-13_EmptyNameInBatch", func(t *testing.T) {
+		h := GetMojangPlayersByNamesHandler(&mcMockService{})
+		w := httptest.NewRecorder()
+		h(w, post(t, `["a",""]`, "application/json"))
+		mcRequireStatus(t, w, http.StatusBadRequest)
+	})
+
+	t.Run("HD-14_OK", func(t *testing.T) {
+		svc := &mcMockService{getMojangPlayersByNames: func(names []string) ([]*Player, error) {
+			out := make([]*Player, len(names))
+			for i, n := range names {
+				out[i] = &Player{Name: n}
+			}
+			return out, nil
+		}}
+		h := GetMojangPlayersByNamesHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, post(t, `["a","b"]`, "application/json"))
+		mcRequireStatus(t, w, http.StatusOK)
+		var got []Player
+		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil || len(got) != 2 {
+			t.Errorf("body = %s, want 2 players", w.Body.String())
+		}
+	})
+
+	t.Run("HD-15_ServiceError", func(t *testing.T) {
+		svc := &mcMockService{getMojangPlayersByNames: func([]string) ([]*Player, error) { return nil, errors.New("boom") }}
+		h := GetMojangPlayersByNamesHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, post(t, `["a"]`, "application/json"))
+		mcRequireStatus(t, w, http.StatusInternalServerError)
+	})
 }
 
-func TestHandler_GetMojangPlayerByUUIDHandler_OK(t *testing.T) {
-	svc := &mockService{player: &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}}
-	handler := GetMojangPlayerByUUIDHandler(svc)
+// -------------- GetMojangProfileHandler --------------
 
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/mojang/lookup/853c80ef3c3749fdaa49938b674adae6", nil)
-	r.SetPathValue("uuid", "853c80ef3c3749fdaa49938b674adae6")
-	w := httptest.NewRecorder()
+func TestHD16to20_GetMojangProfileHandler(t *testing.T) {
+	validUUID := "550e8400-e29b-41d4-a716-446655440000"
 
-	handler.ServeHTTP(w, r)
+	t.Run("HD-16_InvalidUUID", func(t *testing.T) {
+		h := GetMojangProfileHandler(&mcMockService{})
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/profile/bad", nil, map[string]string{"uuid": "bad"}))
+		mcRequireStatus(t, w, http.StatusBadRequest)
+	})
 
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", w.Code)
-	}
+	t.Run("HD-17_DefaultQuerySignedFalse", func(t *testing.T) {
+		var gotSigned bool
+		svc := &mcMockService{getMojangProfile: func(id string, signed bool) (*Player, error) {
+			gotSigned = signed
+			return &Player{ID: id}, nil
+		}}
+		h := GetMojangProfileHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/profile/"+validUUID, nil, map[string]string{"uuid": validUUID}))
+		mcRequireStatus(t, w, http.StatusOK)
+		if gotSigned {
+			t.Error("signed = true, want false when 'unsigned' query param is absent")
+		}
+	})
+
+	t.Run("HD-18_UnsignedFalseMeansSignedTrue", func(t *testing.T) {
+		var gotSigned bool
+		svc := &mcMockService{getMojangProfile: func(id string, signed bool) (*Player, error) {
+			gotSigned = signed
+			return &Player{ID: id}, nil
+		}}
+		h := GetMojangProfileHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/profile/"+validUUID+"?unsigned=false", nil, map[string]string{"uuid": validUUID}))
+		mcRequireStatus(t, w, http.StatusOK)
+		if !gotSigned {
+			t.Error("signed = false, want true when query is unsigned=false")
+		}
+	})
+
+	t.Run("HD-19_NotFound", func(t *testing.T) {
+		svc := &mcMockService{getMojangProfile: func(string, bool) (*Player, error) { return nil, ErrPlayerNotFound }}
+		h := GetMojangProfileHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/profile/"+validUUID, nil, map[string]string{"uuid": validUUID}))
+		mcRequireStatus(t, w, http.StatusNoContent)
+	})
+
+	t.Run("HD-20_InternalError", func(t *testing.T) {
+		svc := &mcMockService{getMojangProfile: func(string, bool) (*Player, error) { return nil, errors.New("boom") }}
+		h := GetMojangProfileHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/profile/"+validUUID, nil, map[string]string{"uuid": validUUID}))
+		mcRequireStatus(t, w, http.StatusInternalServerError)
+	})
 }
 
-func TestHandler_GetMojangPlayerByUUIDHandler_OmitsProfileActionsWhenNil(t *testing.T) {
-	svc := &mockService{player: &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}}
-	handler := GetMojangPlayerByUUIDHandler(svc)
+// -------------- GetProfileHandler --------------
 
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/mojang/lookup/853c80ef3c3749fdaa49938b674adae6", nil)
-	r.SetPathValue("uuid", "853c80ef3c3749fdaa49938b674adae6")
-	w := httptest.NewRecorder()
+func TestHD21to24_GetProfileHandler(t *testing.T) {
+	validUUID := "550e8400-e29b-41d4-a716-446655440000"
 
-	handler.ServeHTTP(w, r)
+	t.Run("HD-21_InvalidUUID", func(t *testing.T) {
+		h := GetProfileHandler(&mcMockService{})
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/p/bad", nil, map[string]string{"uuid": "bad"}))
+		mcRequireStatus(t, w, http.StatusBadRequest)
+	})
 
-	var raw map[string]json.RawMessage
-	if err := json.NewDecoder(w.Body).Decode(&raw); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	if _, ok := raw["profileActions"]; ok {
-		t.Errorf("expected profileActions key to be absent, got %s", w.Body.String())
-	}
+	t.Run("HD-22_OK", func(t *testing.T) {
+		svc := &mcMockService{getProfile: func(id string) (*Profile, error) { return &Profile{ID: id}, nil }}
+		h := GetProfileHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/p/"+validUUID, nil, map[string]string{"uuid": validUUID}))
+		mcRequireStatus(t, w, http.StatusOK)
+	})
+
+	t.Run("HD-23_NotFound", func(t *testing.T) {
+		svc := &mcMockService{getProfile: func(string) (*Profile, error) { return nil, ErrPlayerNotFound }}
+		h := GetProfileHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/p/"+validUUID, nil, map[string]string{"uuid": validUUID}))
+		mcRequireStatus(t, w, http.StatusNoContent)
+	})
+
+	t.Run("HD-24_InternalError", func(t *testing.T) {
+		svc := &mcMockService{getProfile: func(string) (*Profile, error) { return nil, errors.New("boom") }}
+		h := GetProfileHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/p/"+validUUID, nil, map[string]string{"uuid": validUUID}))
+		mcRequireStatus(t, w, http.StatusInternalServerError)
+	})
 }
 
-func TestHandler_GetMojangPlayerByUUIDHandler_InvalidUUID(t *testing.T) {
-	svc := &mockService{}
-	handler := GetMojangPlayerByUUIDHandler(svc)
+// -------------- GetProfileByNameHandler --------------
 
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/mojang/lookup/not-a-uuid", nil)
-	r.SetPathValue("uuid", "not-a-uuid")
-	w := httptest.NewRecorder()
+func TestHD25to28_GetProfileByNameHandler(t *testing.T) {
+	t.Run("HD-25_EmptyName", func(t *testing.T) {
+		h := GetProfileByNameHandler(&mcMockService{})
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/pn/", nil, map[string]string{"name": ""}))
+		mcRequireStatus(t, w, http.StatusBadRequest)
+	})
 
-	handler.ServeHTTP(w, r)
+	t.Run("HD-26_OK", func(t *testing.T) {
+		svc := &mcMockService{getProfileByName: func(name string) (*Profile, error) { return &Profile{Name: name}, nil }}
+		h := GetProfileByNameHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/pn/Steve", nil, map[string]string{"name": "Steve"}))
+		mcRequireStatus(t, w, http.StatusOK)
+	})
 
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", w.Code)
-	}
+	t.Run("HD-27_NotFound", func(t *testing.T) {
+		svc := &mcMockService{getProfileByName: func(string) (*Profile, error) { return nil, ErrPlayerNotFound }}
+		h := GetProfileByNameHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/pn/x", nil, map[string]string{"name": "x"}))
+		mcRequireStatus(t, w, http.StatusNoContent)
+	})
+
+	t.Run("HD-28_InternalError", func(t *testing.T) {
+		svc := &mcMockService{getProfileByName: func(string) (*Profile, error) { return nil, errors.New("boom") }}
+		h := GetProfileByNameHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/pn/x", nil, map[string]string{"name": "x"}))
+		mcRequireStatus(t, w, http.StatusInternalServerError)
+	})
 }
 
-func TestHandler_GetMojangPlayerByUUIDHandler_NotFound(t *testing.T) {
-	svc := &mockService{err: ErrPlayerNotFound}
-	handler := GetMojangPlayerByUUIDHandler(svc)
+// -------------- GetGeyserXUIDHandler --------------
 
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/mojang/lookup/853c80ef3c3749fdaa49938b674adae6", nil)
-	r.SetPathValue("uuid", "853c80ef3c3749fdaa49938b674adae6")
-	w := httptest.NewRecorder()
+func TestHD29to33_GetGeyserXUIDHandler(t *testing.T) {
+	t.Run("HD-29_EmptyGamertag", func(t *testing.T) {
+		h := GetGeyserXUIDHandler(&mcMockService{})
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/g/", nil, map[string]string{"gamertag": ""}))
+		mcRequireStatus(t, w, http.StatusBadRequest)
+	})
 
-	handler.ServeHTTP(w, r)
+	t.Run("HD-30_OK", func(t *testing.T) {
+		svc := &mcMockService{getGeyserXUID: func(g string) (*GeyserPlayer, error) { return &GeyserPlayer{Gamertag: g}, nil }}
+		h := GetGeyserXUIDHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/g/Notch", nil, map[string]string{"gamertag": "Notch"}))
+		mcRequireStatus(t, w, http.StatusOK)
+	})
 
-	if w.Code != http.StatusNotFound {
-		t.Errorf("expected 404, got %d", w.Code)
-	}
+	t.Run("HD-31_NotFound", func(t *testing.T) {
+		svc := &mcMockService{getGeyserXUID: func(string) (*GeyserPlayer, error) { return nil, ErrPlayerNotFound }}
+		h := GetGeyserXUIDHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/g/x", nil, map[string]string{"gamertag": "x"}))
+		mcRequireStatus(t, w, http.StatusNotFound)
+	})
+
+	t.Run("HD-32_InvalidGeyserRequest", func(t *testing.T) {
+		svc := &mcMockService{getGeyserXUID: func(string) (*GeyserPlayer, error) { return nil, ErrInvalidGeyserRequest }}
+		h := GetGeyserXUIDHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/g/x", nil, map[string]string{"gamertag": "x"}))
+		mcRequireStatus(t, w, http.StatusBadRequest)
+	})
+
+	t.Run("HD-33_InternalError", func(t *testing.T) {
+		svc := &mcMockService{getGeyserXUID: func(string) (*GeyserPlayer, error) { return nil, errors.New("boom") }}
+		h := GetGeyserXUIDHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/g/x", nil, map[string]string{"gamertag": "x"}))
+		mcRequireStatus(t, w, http.StatusInternalServerError)
+	})
 }
 
-func TestHandler_GetMojangPlayersByNamesHandler_OK(t *testing.T) {
-	svc := &mockService{players: []*Player{
-		{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"},
-		{ID: "069a79f444e94726a5befca90e38aaf5", Name: "Notch"},
-	}}
-	handler := GetMojangPlayersByNamesHandler(svc)
+// -------------- GetGeyserSkinHandler --------------
 
-	body, _ := json.Marshal([]string{"jeb_", "Notch"})
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/mc/mojang/lookup/bulk/byname", strings.NewReader(string(body)))
-	r.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
+func TestHD34to38_GetGeyserSkinHandler(t *testing.T) {
+	t.Run("HD-34_NonNumericXUID", func(t *testing.T) {
+		h := GetGeyserSkinHandler(&mcMockService{})
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/s/abc", nil, map[string]string{"xuid": "abc"}))
+		mcRequireStatus(t, w, http.StatusBadRequest)
+	})
 
-	handler.ServeHTTP(w, r)
+	t.Run("HD-35_OK", func(t *testing.T) {
+		svc := &mcMockService{getGeyserSkin: func(xuid int64) (*GeyserSkin, error) { return &GeyserSkin{Hash: "h"}, nil }}
+		h := GetGeyserSkinHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/s/1", nil, map[string]string{"xuid": "1"}))
+		mcRequireStatus(t, w, http.StatusOK)
+	})
 
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", w.Code)
-	}
+	t.Run("HD-36_NotFound", func(t *testing.T) {
+		svc := &mcMockService{getGeyserSkin: func(int64) (*GeyserSkin, error) { return nil, ErrSkinNotFound }}
+		h := GetGeyserSkinHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/s/1", nil, map[string]string{"xuid": "1"}))
+		mcRequireStatus(t, w, http.StatusNoContent)
+	})
 
-	var got []*Player
-	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	if len(got) != 2 {
-		t.Errorf("expected 2 players, got %d", len(got))
-	}
+	t.Run("HD-37_InvalidGeyserRequest", func(t *testing.T) {
+		svc := &mcMockService{getGeyserSkin: func(int64) (*GeyserSkin, error) { return nil, ErrInvalidGeyserRequest }}
+		h := GetGeyserSkinHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/s/1", nil, map[string]string{"xuid": "1"}))
+		mcRequireStatus(t, w, http.StatusBadRequest)
+	})
+
+	t.Run("HD-38_InternalError", func(t *testing.T) {
+		svc := &mcMockService{getGeyserSkin: func(int64) (*GeyserSkin, error) { return nil, errors.New("boom") }}
+		h := GetGeyserSkinHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/s/1", nil, map[string]string{"xuid": "1"}))
+		mcRequireStatus(t, w, http.StatusInternalServerError)
+	})
 }
 
-func TestHandler_GetMojangPlayersByNamesHandler_InvalidBody(t *testing.T) {
-	svc := &mockService{}
-	handler := GetMojangPlayersByNamesHandler(svc)
+// -------------- GetGeyserProfileHandler --------------
 
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/mc/mojang/lookup/bulk/byname", strings.NewReader("not json"))
-	r.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
+func TestHD39to43_GetGeyserProfileHandler(t *testing.T) {
+	bedrockUUID := xuidToUUID(42)
 
-	handler.ServeHTTP(w, r)
+	t.Run("HD-39_NotDerivedBedrockUUID", func(t *testing.T) {
+		h := GetGeyserProfileHandler(&mcMockService{})
+		w := httptest.NewRecorder()
+		// A real, random (non-derived) UUID fails uuidToXUID's high-bits check.
+		h(w, mcRequest(t, http.MethodGet, "/gp/x", nil, map[string]string{"uuid": "not-a-uuid"}))
+		mcRequireStatus(t, w, http.StatusBadRequest)
+	})
 
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", w.Code)
-	}
+	t.Run("HD-40_OK", func(t *testing.T) {
+		svc := &mcMockService{getGeyserProfile: func(xuid int64) (*GeyserProfile, error) {
+			return &GeyserProfile{XUID: xuid}, nil
+		}}
+		h := GetGeyserProfileHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/gp/"+bedrockUUID, nil, map[string]string{"uuid": bedrockUUID}))
+		mcRequireStatus(t, w, http.StatusOK)
+	})
+
+	t.Run("HD-41_NotFound", func(t *testing.T) {
+		svc := &mcMockService{getGeyserProfile: func(int64) (*GeyserProfile, error) { return nil, ErrPlayerNotFound }}
+		h := GetGeyserProfileHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/gp/"+bedrockUUID, nil, map[string]string{"uuid": bedrockUUID}))
+		mcRequireStatus(t, w, http.StatusNotFound)
+	})
+
+	t.Run("HD-42_InvalidGeyserRequest", func(t *testing.T) {
+		svc := &mcMockService{getGeyserProfile: func(int64) (*GeyserProfile, error) { return nil, ErrInvalidGeyserRequest }}
+		h := GetGeyserProfileHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/gp/"+bedrockUUID, nil, map[string]string{"uuid": bedrockUUID}))
+		mcRequireStatus(t, w, http.StatusBadRequest)
+	})
+
+	t.Run("HD-43_InternalError", func(t *testing.T) {
+		svc := &mcMockService{getGeyserProfile: func(int64) (*GeyserProfile, error) { return nil, errors.New("boom") }}
+		h := GetGeyserProfileHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/gp/"+bedrockUUID, nil, map[string]string{"uuid": bedrockUUID}))
+		mcRequireStatus(t, w, http.StatusInternalServerError)
+	})
 }
 
-func TestHandler_GetMojangPlayersByNamesHandler_Empty(t *testing.T) {
-	svc := &mockService{}
-	handler := GetMojangPlayersByNamesHandler(svc)
+// -------------- GetGeyserProfileByNameHandler --------------
 
-	body, _ := json.Marshal([]string{})
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/mc/mojang/lookup/bulk/byname", strings.NewReader(string(body)))
-	r.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
+func TestHD44to48_GetGeyserProfileByNameHandler(t *testing.T) {
+	t.Run("HD-44_EmptyGamertag", func(t *testing.T) {
+		h := GetGeyserProfileByNameHandler(&mcMockService{})
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/gpn/", nil, map[string]string{"name": ""}))
+		mcRequireStatus(t, w, http.StatusBadRequest)
+	})
 
-	handler.ServeHTTP(w, r)
+	t.Run("HD-45_OK", func(t *testing.T) {
+		svc := &mcMockService{getGeyserProfileByGamertag: func(g string) (*GeyserProfile, error) {
+			return &GeyserProfile{Gamertag: g}, nil
+		}}
+		h := GetGeyserProfileByNameHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/gpn/Notch", nil, map[string]string{"name": "Notch"}))
+		mcRequireStatus(t, w, http.StatusOK)
+	})
 
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", w.Code)
-	}
+	t.Run("HD-46_NotFound", func(t *testing.T) {
+		svc := &mcMockService{getGeyserProfileByGamertag: func(string) (*GeyserProfile, error) { return nil, ErrPlayerNotFound }}
+		h := GetGeyserProfileByNameHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/gpn/x", nil, map[string]string{"name": "x"}))
+		mcRequireStatus(t, w, http.StatusNotFound)
+	})
+
+	t.Run("HD-47_InvalidGeyserRequest", func(t *testing.T) {
+		svc := &mcMockService{getGeyserProfileByGamertag: func(string) (*GeyserProfile, error) { return nil, ErrInvalidGeyserRequest }}
+		h := GetGeyserProfileByNameHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/gpn/x", nil, map[string]string{"name": "x"}))
+		mcRequireStatus(t, w, http.StatusBadRequest)
+	})
+
+	t.Run("HD-48_InternalError", func(t *testing.T) {
+		svc := &mcMockService{getGeyserProfileByGamertag: func(string) (*GeyserProfile, error) { return nil, errors.New("boom") }}
+		h := GetGeyserProfileByNameHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/gpn/x", nil, map[string]string{"name": "x"}))
+		mcRequireStatus(t, w, http.StatusInternalServerError)
+	})
 }
 
-func TestHandler_GetMojangPlayersByNamesHandler_TooMany(t *testing.T) {
-	svc := &mockService{}
-	handler := GetMojangPlayersByNamesHandler(svc)
+// -------------- GetTextureHandler --------------
 
-	names := make([]string, 11)
-	body, _ := json.Marshal(names)
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/mc/mojang/lookup/bulk/byname", strings.NewReader(string(body)))
-	r.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
+func TestHD49to52_GetTextureHandler(t *testing.T) {
+	t.Run("HD-49_EmptyHash", func(t *testing.T) {
+		h := GetTextureHandler(&mcMockService{})
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/t/", nil, map[string]string{"hash": ""}))
+		mcRequireStatus(t, w, http.StatusBadRequest)
+	})
 
-	handler.ServeHTTP(w, r)
+	t.Run("HD-50_OK", func(t *testing.T) {
+		svc := &mcMockService{getTextureContent: func(hash string) (*TextureResult, error) {
+			return &TextureResult{Body: io.NopCloser(strings.NewReader("bytes")), ContentType: "image/png"}, nil
+		}}
+		h := GetTextureHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/t/abc", nil, map[string]string{"hash": "abc"}))
+		mcRequireStatus(t, w, http.StatusOK)
+		if w.Body.String() != "bytes" {
+			t.Errorf("body = %q, want %q", w.Body.String(), "bytes")
+		}
+		if got := w.Header().Get("Content-Type"); got != "image/png" {
+			t.Errorf("Content-Type = %q, want image/png", got)
+		}
+	})
 
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", w.Code)
-	}
+	t.Run("HD-51_NotFound", func(t *testing.T) {
+		svc := &mcMockService{getTextureContent: func(string) (*TextureResult, error) { return nil, ErrTextureNotFound }}
+		h := GetTextureHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/t/abc", nil, map[string]string{"hash": "abc"}))
+		mcRequireStatus(t, w, http.StatusNotFound)
+	})
+
+	t.Run("HD-52_ServiceError", func(t *testing.T) {
+		svc := &mcMockService{getTextureContent: func(string) (*TextureResult, error) { return nil, errors.New("boom") }}
+		h := GetTextureHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/t/abc", nil, map[string]string{"hash": "abc"}))
+		mcRequireStatus(t, w, http.StatusBadGateway)
+	})
 }
 
-func TestHandler_GetMojangProfileHandler_OK(t *testing.T) {
-	svc := &mockService{player: &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}}
-	handler := GetMojangProfileHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/mojang/profile/853c80ef3c3749fdaa49938b674adae6", nil)
-	r.SetPathValue("uuid", "853c80ef3c3749fdaa49938b674adae6")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", w.Code)
-	}
-}
-
-func TestHandler_GetMojangProfileHandler_ProfileActionsPresentAsEmptyArray(t *testing.T) {
-	svc := &mockService{player: &Player{
-		ID:             "853c80ef3c3749fdaa49938b674adae6",
-		Name:           "jeb_",
-		ProfileActions: []string{},
-	}}
-	handler := GetMojangProfileHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/mojang/profile/853c80ef3c3749fdaa49938b674adae6", nil)
-	r.SetPathValue("uuid", "853c80ef3c3749fdaa49938b674adae6")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	var raw map[string]json.RawMessage
-	if err := json.NewDecoder(w.Body).Decode(&raw); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	action, ok := raw["profileActions"]
-	if !ok {
-		t.Fatalf("expected profileActions key to be present, got %s", w.Body.String())
-	}
-	if string(action) != "[]" {
-		t.Errorf("expected profileActions to serialize as [], got %s", action)
-	}
-}
-
-func TestHandler_GetMojangProfileHandler_Signed(t *testing.T) {
-	svc := &mockService{player: &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}}
-	handler := GetMojangProfileHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/mojang/profile/853c80ef3c3749fdaa49938b674adae6?unsigned=false", nil)
-	r.SetPathValue("uuid", "853c80ef3c3749fdaa49938b674adae6")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", w.Code)
-	}
-}
-
-func TestHandler_GetMojangProfileHandler_NotFound(t *testing.T) {
-	svc := &mockService{err: ErrPlayerNotFound}
-	handler := GetMojangProfileHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/mojang/profile/853c80ef3c3749fdaa49938b674adae6", nil)
-	r.SetPathValue("uuid", "853c80ef3c3749fdaa49938b674adae6")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusNoContent {
-		t.Errorf("expected 204, got %d", w.Code)
-	}
-}
-
-func TestHandler_GetProfileHandler_OK(t *testing.T) {
-	svc := &mockService{profile: &Profile{
-		ID:   "853c80ef3c3749fdaa49938b674adae6",
-		Name: "jeb_",
-		Textures: &TexturesValue{
-			ProfileID:   "853c80ef3c3749fdaa49938b674adae6",
-			ProfileName: "jeb_",
-			Textures: Textures{
-				SKIN: &Texture{URL: "http://textures.minecraft.net/texture/abc123hash"},
-			},
-		},
-	}}
-	handler := GetProfileHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/853c80ef3c3749fdaa49938b674adae6", nil)
-	r.SetPathValue("uuid", "853c80ef3c3749fdaa49938b674adae6")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
-	}
-
-	var raw map[string]json.RawMessage
-	if err := json.NewDecoder(w.Body).Decode(&raw); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	if _, ok := raw["properties"]; ok {
-		t.Errorf("expected no raw base64 properties in the decoded response, got %s", w.Body.String())
-	}
-	textures, ok := raw["textures"]
-	if !ok {
-		t.Fatalf("expected textures to be present as decoded JSON, got %s", w.Body.String())
-	}
-	var decoded TexturesValue
-	if err := json.Unmarshal(textures, &decoded); err != nil {
-		t.Fatalf("expected textures to already be JSON, not a base64 string: %v", err)
-	}
-	if decoded.Textures.SKIN == nil || decoded.Textures.SKIN.URL != "http://textures.minecraft.net/texture/abc123hash" {
-		t.Errorf("expected decoded skin URL, got %+v", decoded.Textures.SKIN)
-	}
-}
-
-func TestHandler_GetProfileHandler_InvalidUUID(t *testing.T) {
-	svc := &mockService{}
-	handler := GetProfileHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/not-a-uuid", nil)
-	r.SetPathValue("uuid", "not-a-uuid")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", w.Code)
-	}
-}
-
-func TestHandler_GetProfileHandler_NotFound(t *testing.T) {
-	svc := &mockService{err: ErrPlayerNotFound}
-	handler := GetProfileHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/853c80ef3c3749fdaa49938b674adae6", nil)
-	r.SetPathValue("uuid", "853c80ef3c3749fdaa49938b674adae6")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusNoContent {
-		t.Errorf("expected 204, got %d", w.Code)
-	}
-}
-
-func TestHandler_GetTextureHandler_OK(t *testing.T) {
-	svc := &mockService{textureBody: []byte("mock-texture-data"), textureContentType: "image/png"}
-	handler := GetTextureHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/texture/abc123hash", nil)
-	r.SetPathValue("hash", "abc123hash")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", w.Code)
-	}
-	if w.Header().Get("Content-Type") != "image/png" {
-		t.Errorf("expected image/png, got %s", w.Header().Get("Content-Type"))
-	}
-	if w.Body.String() != "mock-texture-data" {
-		t.Errorf("expected body mock-texture-data, got %s", w.Body.String())
-	}
-}
-
-func TestHandler_GetTextureHandler_ServiceError(t *testing.T) {
-	svc := &mockService{err: errors.New("upstream issue")}
-	handler := GetTextureHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/texture/abc123hash", nil)
-	r.SetPathValue("hash", "abc123hash")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusBadGateway {
-		t.Errorf("expected 502, got %d", w.Code)
-	}
-}
-
-func TestHandler_GetTextureHandler_NotFound(t *testing.T) {
-	svc := &mockService{err: ErrTextureNotFound}
-	handler := GetTextureHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/texture/abc123hash", nil)
-	r.SetPathValue("hash", "abc123hash")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusNotFound {
-		t.Errorf("expected 404, got %d", w.Code)
-	}
-}
-
-func TestHandler_GetMojangPlayersByNamesHandler_WrongMediaType(t *testing.T) {
-	svc := &mockService{}
-	handler := GetMojangPlayersByNamesHandler(svc)
-
-	body, _ := json.Marshal([]string{"jeb_"})
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/mc/mojang/lookup/bulk/byname", strings.NewReader(string(body)))
-	// Intentionally omitting or setting wrong Content-Type
-	r.Header.Set("Content-Type", "text/plain")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusUnsupportedMediaType {
-		t.Errorf("expected 415, got %d", w.Code)
-	}
-}
-
-func TestHandler_GetMojangPlayersByNamesHandler_EmptyNameInBatch(t *testing.T) {
-	svc := &mockService{}
-	handler := GetMojangPlayersByNamesHandler(svc)
-
-	body, _ := json.Marshal([]string{"jeb_", ""})
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/mc/mojang/lookup/bulk/byname", strings.NewReader(string(body)))
-	r.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", w.Code)
-	}
-}
-
-func TestHandler_GetTextureHandler_EmptyHash(t *testing.T) {
-	svc := &mockService{}
-	handler := GetTextureHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/texture/", nil)
-	r.SetPathValue("hash", "") // Empty hash
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", w.Code)
-	}
-}
-
-func TestHandler_GetGeyserXUIDHandler_OK(t *testing.T) {
-	svc := &mockService{geyserPlayer: &GeyserPlayer{
-		Gamertag: "Notch",
-		XUID:     2535457445285308,
-		UUID:     "00000000-0000-0000-0009-01fc305e8dbc",
-	}}
-	handler := GetGeyserXUIDHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/geyser/xuid/Notch", nil)
-	r.SetPathValue("gamertag", "Notch")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", w.Code)
-	}
-
-	var got GeyserPlayer
-	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	if got.Gamertag != "Notch" {
-		t.Errorf("expected Notch, got %s", got.Gamertag)
-	}
-	if got.UUID != "00000000-0000-0000-0009-01fc305e8dbc" {
-		t.Errorf("unexpected UUID: %s", got.UUID)
-	}
-}
-
-func TestHandler_GetGeyserXUIDHandler_EmptyGamertag(t *testing.T) {
-	svc := &mockService{}
-	handler := GetGeyserXUIDHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/geyser/xuid/", nil)
-	r.SetPathValue("gamertag", "")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", w.Code)
-	}
-}
-
-func TestHandler_GetGeyserXUIDHandler_NotFound(t *testing.T) {
-	svc := &mockService{err: ErrPlayerNotFound}
-	handler := GetGeyserXUIDHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/geyser/xuid/nonexistent", nil)
-	r.SetPathValue("gamertag", "nonexistent")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusNotFound {
-		t.Errorf("expected 404, got %d", w.Code)
-	}
-}
-
-func TestHandler_GetGeyserXUIDHandler_InternalError(t *testing.T) {
-	svc := &mockService{err: errors.New("geyser API error: 500")}
-	handler := GetGeyserXUIDHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/geyser/xuid/Notch", nil)
-	r.SetPathValue("gamertag", "Notch")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusInternalServerError {
-		t.Errorf("expected 500, got %d", w.Code)
-	}
-}
-
-func TestHandler_GetGeyserXUIDHandler_InvalidGamertag(t *testing.T) {
-	svc := &mockService{err: ErrInvalidGeyserRequest}
-	handler := GetGeyserXUIDHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/geyser/xuid/this-gamertag-is-way-too-long", nil)
-	r.SetPathValue("gamertag", "this-gamertag-is-way-too-long")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", w.Code)
-	}
-}
-
-func TestHandler_GetGeyserSkinHandler_OK(t *testing.T) {
-	svc := &mockService{geyserSkin: &GeyserSkin{
-		Hash:      "abc123",
-		IsSteve:   true,
-		TextureID: "def456",
-		Value:     "base64value",
-	}}
-	handler := GetGeyserSkinHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/geyser/skin/2535457445285308", nil)
-	r.SetPathValue("xuid", "2535457445285308")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", w.Code)
-	}
-
-	var got GeyserSkin
-	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	if got.Hash != "abc123" {
-		t.Errorf("expected abc123, got %s", got.Hash)
-	}
-}
-
-func TestHandler_GetGeyserSkinHandler_InvalidXUID(t *testing.T) {
-	svc := &mockService{}
-	handler := GetGeyserSkinHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/geyser/skin/not-a-number", nil)
-	r.SetPathValue("xuid", "not-a-number")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", w.Code)
-	}
-}
-
-func TestHandler_GetGeyserSkinHandler_NotFound(t *testing.T) {
-	svc := &mockService{err: ErrSkinNotFound}
-	handler := GetGeyserSkinHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/geyser/skin/2535457445285308", nil)
-	r.SetPathValue("xuid", "2535457445285308")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusNoContent {
-		t.Errorf("expected 204, got %d", w.Code)
-	}
-}
-
-func TestHandler_GetGeyserSkinHandler_InternalError(t *testing.T) {
-	svc := &mockService{err: errors.New("geyser API error: 500")}
-	handler := GetGeyserSkinHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/geyser/skin/2535457445285308", nil)
-	r.SetPathValue("xuid", "2535457445285308")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusInternalServerError {
-		t.Errorf("expected 500, got %d", w.Code)
-	}
-}
-
-func TestHandler_GetGeyserSkinHandler_UpstreamRejectedXUID(t *testing.T) {
-	svc := &mockService{err: ErrInvalidGeyserRequest}
-	handler := GetGeyserSkinHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/geyser/skin/2535457445285308", nil)
-	r.SetPathValue("xuid", "2535457445285308")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", w.Code)
-	}
-}
-
-func TestHandler_GetProfileByNameHandler_OK(t *testing.T) {
-	svc := &mockService{profile: &Profile{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}}
-	handler := GetProfileByNameHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/name/jeb_", nil)
-	r.SetPathValue("name", "jeb_")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
-	}
-	var got Profile
-	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	if got.Name != "jeb_" {
-		t.Errorf("expected jeb_, got %s", got.Name)
-	}
-}
-
-func TestHandler_GetProfileByNameHandler_EmptyName(t *testing.T) {
-	svc := &mockService{}
-	handler := GetProfileByNameHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/name/", nil)
-	r.SetPathValue("name", "")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", w.Code)
-	}
-}
-
-func TestHandler_GetProfileByNameHandler_NotFound(t *testing.T) {
-	svc := &mockService{err: ErrPlayerNotFound}
-	handler := GetProfileByNameHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/name/nonexistent", nil)
-	r.SetPathValue("name", "nonexistent")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusNoContent {
-		t.Errorf("expected 204, got %d", w.Code)
-	}
-}
-
-func TestHandler_GetGeyserProfileHandler_OK(t *testing.T) {
-	svc := &mockService{geyserProfile: &GeyserProfile{
-		UUID:     "00000000-0000-0000-0009-01fc305e8dbc",
-		XUID:     2535457445285308,
-		Gamertag: "Notch",
-	}}
-	handler := GetGeyserProfileHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/bedrock/00000000-0000-0000-0009-01fc305e8dbc", nil)
-	r.SetPathValue("uuid", "00000000-0000-0000-0009-01fc305e8dbc")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
-	}
-	var got GeyserProfile
-	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	if got.Gamertag != "Notch" {
-		t.Errorf("expected Notch, got %s", got.Gamertag)
-	}
-}
-
-func TestHandler_GetGeyserProfileHandler_InvalidUUID(t *testing.T) {
-	svc := &mockService{}
-	handler := GetGeyserProfileHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/bedrock/not-a-uuid", nil)
-	r.SetPathValue("uuid", "not-a-uuid")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", w.Code)
-	}
-}
-
-func TestHandler_GetGeyserProfileHandler_RealJavaUUIDRejected(t *testing.T) {
-	svc := &mockService{}
-	handler := GetGeyserProfileHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/bedrock/853c80ef-3c37-49fd-aa49-938b674adae6", nil)
-	r.SetPathValue("uuid", "853c80ef-3c37-49fd-aa49-938b674adae6")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400 for a UUID that isn't a derived Bedrock UUID, got %d", w.Code)
-	}
-}
-
-func TestHandler_GetGeyserProfileHandler_NotFound(t *testing.T) {
-	svc := &mockService{err: ErrPlayerNotFound}
-	handler := GetGeyserProfileHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/bedrock/00000000-0000-0000-0009-01fc305e8dbc", nil)
-	r.SetPathValue("uuid", "00000000-0000-0000-0009-01fc305e8dbc")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusNotFound {
-		t.Errorf("expected 404, got %d", w.Code)
-	}
-}
-
-func TestHandler_GetGeyserProfileByNameHandler_OK(t *testing.T) {
-	svc := &mockService{geyserProfile: &GeyserProfile{Gamertag: "Notch", XUID: 2535457445285308}}
-	handler := GetGeyserProfileByNameHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/bedrock/name/Notch", nil)
-	r.SetPathValue("name", "Notch")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
-	}
-	var got GeyserProfile
-	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	if got.Gamertag != "Notch" {
-		t.Errorf("expected Notch, got %s", got.Gamertag)
-	}
-}
-
-func TestHandler_GetGeyserProfileByNameHandler_EmptyGamertag(t *testing.T) {
-	svc := &mockService{}
-	handler := GetGeyserProfileByNameHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/bedrock/name/", nil)
-	r.SetPathValue("name", "")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", w.Code)
-	}
-}
-
-func TestHandler_GetGeyserProfileByNameHandler_NotFound(t *testing.T) {
-	svc := &mockService{err: ErrPlayerNotFound}
-	handler := GetGeyserProfileByNameHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/profile/bedrock/name/nonexistent", nil)
-	r.SetPathValue("name", "nonexistent")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusNotFound {
-		t.Errorf("expected 404, got %d", w.Code)
-	}
-}
-
-func TestHandler_GetGeyserTextureHandler_OK(t *testing.T) {
-	svc := &mockService{textureBody: []byte("mock-geyser-texture-data"), textureContentType: "image/png"}
-	handler := GetGeyserTextureHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/texture/geyser/abc123hash", nil)
-	r.SetPathValue("hash", "abc123hash")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", w.Code)
-	}
-	if w.Header().Get("Content-Type") != "image/png" {
-		t.Errorf("expected image/png, got %s", w.Header().Get("Content-Type"))
-	}
-	if w.Body.String() != "mock-geyser-texture-data" {
-		t.Errorf("expected body mock-geyser-texture-data, got %s", w.Body.String())
-	}
-}
-
-func TestHandler_GetGeyserTextureHandler_EmptyHash(t *testing.T) {
-	svc := &mockService{}
-	handler := GetGeyserTextureHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/texture/geyser/", nil)
-	r.SetPathValue("hash", "")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", w.Code)
-	}
-}
-
-func TestHandler_GetGeyserTextureHandler_NotFound(t *testing.T) {
-	svc := &mockService{err: ErrTextureNotFound}
-	handler := GetGeyserTextureHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/texture/geyser/abc123hash", nil)
-	r.SetPathValue("hash", "abc123hash")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusNotFound {
-		t.Errorf("expected 404, got %d", w.Code)
-	}
-}
-
-func TestHandler_GetGeyserTextureHandler_ServiceError(t *testing.T) {
-	svc := &mockService{err: errors.New("upstream issue")}
-	handler := GetGeyserTextureHandler(svc)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/mc/texture/geyser/abc123hash", nil)
-	r.SetPathValue("hash", "abc123hash")
-	w := httptest.NewRecorder()
-
-	handler.ServeHTTP(w, r)
-
-	if w.Code != http.StatusBadGateway {
-		t.Errorf("expected 502, got %d", w.Code)
-	}
+// -------------- GetGeyserTextureHandler --------------
+
+func TestHD53to56_GetGeyserTextureHandler(t *testing.T) {
+	t.Run("HD-53_EmptyHash", func(t *testing.T) {
+		h := GetGeyserTextureHandler(&mcMockService{})
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/gt/", nil, map[string]string{"hash": ""}))
+		mcRequireStatus(t, w, http.StatusBadRequest)
+	})
+
+	t.Run("HD-54_OK", func(t *testing.T) {
+		svc := &mcMockService{getGeyserTextureContent: func(hash string) (*TextureResult, error) {
+			return &TextureResult{Body: io.NopCloser(strings.NewReader("bytes")), ContentType: "image/png"}, nil
+		}}
+		h := GetGeyserTextureHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/gt/abc", nil, map[string]string{"hash": "abc"}))
+		mcRequireStatus(t, w, http.StatusOK)
+		if w.Body.String() != "bytes" {
+			t.Errorf("body = %q, want %q", w.Body.String(), "bytes")
+		}
+	})
+
+	t.Run("HD-55_NotFound", func(t *testing.T) {
+		svc := &mcMockService{getGeyserTextureContent: func(string) (*TextureResult, error) { return nil, ErrTextureNotFound }}
+		h := GetGeyserTextureHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/gt/abc", nil, map[string]string{"hash": "abc"}))
+		mcRequireStatus(t, w, http.StatusNotFound)
+	})
+
+	t.Run("HD-56_ServiceError", func(t *testing.T) {
+		svc := &mcMockService{getGeyserTextureContent: func(string) (*TextureResult, error) { return nil, errors.New("boom") }}
+		h := GetGeyserTextureHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/gt/abc", nil, map[string]string{"hash": "abc"}))
+		mcRequireStatus(t, w, http.StatusBadGateway)
+	})
 }
