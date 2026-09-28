@@ -74,15 +74,20 @@ CREATE TABLE IF NOT EXISTS geyser_player_textures (
 CREATE UNIQUE INDEX IF NOT EXISTS geyser_player_textures_unique
     ON geyser_player_textures (xuid, hash);
 
--- Bee Name Generator module's name/suggestion tables. No uniqueness
--- constraint on name in either table: AcceptBeeNameSuggestion's
--- insert-then-delete is not transactional and relies on no such
--- constraint existing (see test/plans/bee_name_generator.md's SOURCE
--- BUGS note; not fixed here).
+-- Bee Name Generator module's name/suggestion tables. name is the natural
+-- key in both: GetBeeName picks uniformly at random from bee_name, which
+-- only makes sense if the confirmed list has no duplicates to skew that
+-- distribution, and nothing in store.go handles a duplicate-key error
+-- specially, which would be the surprising gap if duplicates were actually
+-- allowed. AcceptBeeNameSuggestion's insert-then-delete is still not
+-- transactional (a crash between the two leaves a row in both tables
+-- simultaneously), but this constraint at least rules out two concurrent
+-- accepts of the same suggestion silently producing duplicate bee_name
+-- rows - see test/plans/bee_name_generator.md's ST-17.
 CREATE TABLE IF NOT EXISTS bee_name (
-    name TEXT NOT NULL
+    name TEXT PRIMARY KEY NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS bee_name_suggestion (
-    name TEXT NOT NULL
+    name TEXT PRIMARY KEY NOT NULL
 );
