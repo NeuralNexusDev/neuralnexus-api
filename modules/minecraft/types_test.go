@@ -10,8 +10,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// -------------- Shared helpers --------------
-
 // mcEncodeTextures base64+JSON-encodes a TexturesValue the way a Mojang
 // TEXTURES property value is expected to look.
 func mcEncodeTextures(t *testing.T, value TexturesValue) string {
@@ -22,8 +20,6 @@ func mcEncodeTextures(t *testing.T, value TexturesValue) string {
 	}
 	return base64.StdEncoding.EncodeToString(data)
 }
-
-// -------------- MarshalJSON (Player) --------------
 
 func TestTY01to03_Player_MarshalJSON(t *testing.T) {
 	t.Run("TY-01_NilProfileActionsOmitted", func(t *testing.T) {
@@ -59,8 +55,6 @@ func TestTY01to03_Player_MarshalJSON(t *testing.T) {
 		}
 	})
 }
-
-// -------------- ParseProperties (Player) --------------
 
 func TestTY04to09_Player_ParseProperties(t *testing.T) {
 	t.Run("TY-04_ValidTexturesProperty", func(t *testing.T) {
@@ -117,8 +111,6 @@ func TestTY04to09_Player_ParseProperties(t *testing.T) {
 		}
 	})
 }
-
-// -------------- IsStale (Player / Profile / GeyserPlayer / GeyserSkin) --------------
 
 func TestTY10to11_Player_IsStale(t *testing.T) {
 	t.Run("TY-10_Fresh", func(t *testing.T) {
@@ -180,8 +172,6 @@ func TestTY28to29_GeyserSkin_IsStale(t *testing.T) {
 	})
 }
 
-// -------------- ToProfile (Player) --------------
-
 func TestTY12to13_Player_ToProfile(t *testing.T) {
 	t.Run("TY-12_WithTextures", func(t *testing.T) {
 		tex := TexturesValue{ProfileID: "abc"}
@@ -211,8 +201,6 @@ func TestTY12to13_Player_ToProfile(t *testing.T) {
 	})
 }
 
-// -------------- String (Property) --------------
-
 func TestTY14to15_Property_String(t *testing.T) {
 	t.Run("TY-14_WithSignature", func(t *testing.T) {
 		p := &Property{Name: TEXTURES, Value: "val", Signature: "sig"}
@@ -230,8 +218,6 @@ func TestTY14to15_Property_String(t *testing.T) {
 		}
 	})
 }
-
-// -------------- ToProperty (TexturesValue) --------------
 
 func TestTY16to17_TexturesValue_ToProperty(t *testing.T) {
 	t.Run("TY-16_Populated", func(t *testing.T) {
@@ -265,8 +251,6 @@ func TestTY16to17_TexturesValue_ToProperty(t *testing.T) {
 	})
 }
 
-// -------------- Hash (Texture) --------------
-
 func TestTY18to21_Texture_Hash(t *testing.T) {
 	cases := []struct {
 		id   string
@@ -286,8 +270,6 @@ func TestTY18to21_Texture_Hash(t *testing.T) {
 		})
 	}
 }
-
-// -------------- ToPlayer (Profile) --------------
 
 func TestTY24to25_Profile_ToPlayer(t *testing.T) {
 	t.Run("TY-24_WithTextures", func(t *testing.T) {
@@ -315,8 +297,6 @@ func TestTY24to25_Profile_ToPlayer(t *testing.T) {
 		}
 	})
 }
-
-// -------------- SkinURL (GeyserSkin) --------------
 
 func TestTY30to33_GeyserSkin_SkinURL(t *testing.T) {
 	t.Run("TY-30_Valid", func(t *testing.T) {
@@ -349,8 +329,6 @@ func TestTY30to33_GeyserSkin_SkinURL(t *testing.T) {
 		}
 	})
 }
-
-// -------------- xuidToUUID / uuidToXUID --------------
 
 func TestTY34to35_XuidToUUID(t *testing.T) {
 	t.Run("TY-34_Nonzero", func(t *testing.T) {
@@ -395,8 +373,6 @@ func TestTY36to38_UuidToXUID(t *testing.T) {
 		}
 	})
 }
-
-// -------------- Value (TexturesRow) --------------
 
 func TestTY39to43_TexturesRow_Value(t *testing.T) {
 	skinHash := "skinhash"

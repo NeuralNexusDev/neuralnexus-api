@@ -23,8 +23,6 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// -------------- Local-only fixtures (no live service) --------------
-
 // mcUnusedTCPPort returns a TCP port on 127.0.0.1 that is very likely free at
 // the moment it's returned, so a subsequent connection attempt to it fails
 // fast with "connection refused" instead of hanging.
@@ -100,8 +98,6 @@ func mcFakeS3(t *testing.T, handler http.HandlerFunc) *s3.Client {
 	})
 }
 
-// -------------- Live-dependency fixtures --------------
-
 // mcLiveDB connects to TEST_POSTGRES_URL, skipping the test when it is
 // unset so this suite still runs green without the docker-compose test-env.
 func mcLiveDB(t *testing.T) *pgxpool.Pool {
@@ -149,8 +145,6 @@ func mcUniqueHash(prefix string) string {
 	return fmt.Sprintf("%s-%s", prefix, strings.ReplaceAll(uuid.New().String(), "-", ""))
 }
 
-// -------------- NewStore --------------
-
 func TestST01_NewStore(t *testing.T) {
 	t.Run("ST-01_WrapsGivenValues", func(t *testing.T) {
 		db := mcUnreachablePool(t)
@@ -167,8 +161,6 @@ func TestST01_NewStore(t *testing.T) {
 		}
 	})
 }
-
-// -------------- GetPlayerByUUID / GetPlayerByName --------------
 
 func TestST02to04_GetPlayerByUUID(t *testing.T) {
 	t.Run("ST-02_Unreachable", func(t *testing.T) {
@@ -236,8 +228,6 @@ func TestST05to07_GetPlayerByName(t *testing.T) {
 		}
 	})
 }
-
-// -------------- GetProfileByUUID / getTextures --------------
 
 func TestST08to11_GetProfileByUUID(t *testing.T) {
 	t.Run("ST-08_Unreachable", func(t *testing.T) {
@@ -338,8 +328,6 @@ func TestST12to14_GetTextures(t *testing.T) {
 	})
 }
 
-// -------------- UpsertPlayer --------------
-
 func TestST15to19_UpsertPlayer(t *testing.T) {
 	t.Run("ST-15_Unreachable", func(t *testing.T) {
 		s := mcStoreWithUnreachableDB(t)
@@ -425,8 +413,6 @@ func TestST15to19_UpsertPlayer(t *testing.T) {
 		}
 	})
 }
-
-// -------------- UpsertTextures --------------
 
 func TestST20to23_UpsertTextures(t *testing.T) {
 	t.Run("ST-20_Unreachable", func(t *testing.T) {
@@ -515,8 +501,6 @@ func TestST20to23_UpsertTextures(t *testing.T) {
 	})
 }
 
-// -------------- textureHash --------------
-
 func TestST24to25_TextureHash(t *testing.T) {
 	t.Run("ST-24_Parsable", func(t *testing.T) {
 		got := textureHash(&Texture{URL: "http://x/abc"})
@@ -531,8 +515,6 @@ func TestST24to25_TextureHash(t *testing.T) {
 		}
 	})
 }
-
-// -------------- UpsertTextureHash --------------
 
 func TestST26to28_UpsertTextureHash(t *testing.T) {
 	t.Run("ST-26_Unreachable", func(t *testing.T) {
@@ -560,8 +542,6 @@ func TestST26to28_UpsertTextureHash(t *testing.T) {
 		}
 	})
 }
-
-// -------------- GetPlayerFromCache / SetPlayerInCache --------------
 
 func TestST29to32_GetPlayerFromCache(t *testing.T) {
 	t.Run("ST-29_Unreachable", func(t *testing.T) {
@@ -633,8 +613,6 @@ func TestST33to34_SetPlayerInCache(t *testing.T) {
 	})
 }
 
-// -------------- GetProfileFromCache / SetProfileInCache --------------
-
 func TestST35to37_GetProfileFromCache(t *testing.T) {
 	t.Run("ST-35_Unreachable", func(t *testing.T) {
 		s := mcStoreWithUnreachableRedis(t)
@@ -685,8 +663,6 @@ func TestST38to39_SetProfileInCache(t *testing.T) {
 		}
 	})
 }
-
-// -------------- GetSignedProfileFromCache / SetSignedProfileInCache --------------
 
 func TestST40to42_GetSignedProfileFromCache(t *testing.T) {
 	t.Run("ST-40_Unreachable", func(t *testing.T) {
@@ -739,8 +715,6 @@ func TestST43to44_SetSignedProfileInCache(t *testing.T) {
 	})
 }
 
-// -------------- IsTextureInS3 --------------
-
 func TestST45to47_IsTextureInS3(t *testing.T) {
 	t.Run("ST-45_Exists", func(t *testing.T) {
 		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
@@ -769,8 +743,6 @@ func TestST45to47_IsTextureInS3(t *testing.T) {
 		}
 	})
 }
-
-// -------------- GetGeyserPlayerByGamertag / GetGeyserPlayerByXUID --------------
 
 func TestST48to50_GetGeyserPlayerByGamertag(t *testing.T) {
 	t.Run("ST-48_Unreachable", func(t *testing.T) {
@@ -836,8 +808,6 @@ func TestST51to53_GetGeyserPlayerByXUID(t *testing.T) {
 	})
 }
 
-// -------------- UpsertGeyserPlayer --------------
-
 func TestST54to57_UpsertGeyserPlayer(t *testing.T) {
 	t.Run("ST-54_Unreachable", func(t *testing.T) {
 		s := mcStoreWithUnreachableDB(t)
@@ -889,8 +859,6 @@ func TestST54to57_UpsertGeyserPlayer(t *testing.T) {
 		}
 	})
 }
-
-// -------------- GetGeyserSkin / GetGeyserSkinByHash --------------
 
 func TestST58to60_GetGeyserSkin(t *testing.T) {
 	t.Run("ST-58_Unreachable", func(t *testing.T) {
@@ -956,8 +924,6 @@ func TestST61to63_GetGeyserSkinByHash(t *testing.T) {
 	})
 }
 
-// -------------- UpsertGeyserSkin --------------
-
 func TestST64to67_UpsertGeyserSkin(t *testing.T) {
 	t.Run("ST-64_Unreachable", func(t *testing.T) {
 		s := mcStoreWithUnreachableDB(t)
@@ -1019,8 +985,6 @@ func TestST64to67_UpsertGeyserSkin(t *testing.T) {
 	})
 }
 
-// -------------- PutTextureInS3 --------------
-
 // mcLenReadCloser adapts a strings.Reader to io.ReadCloser while exposing
 // Len(), mirroring service.go's bytesReadCloser.
 type mcLenReadCloser struct{ *strings.Reader }
@@ -1072,8 +1036,6 @@ func TestST68to70_PutTextureInS3(t *testing.T) {
 	})
 }
 
-// -------------- IsGeyserTextureInS3 --------------
-
 func TestST71to73_IsGeyserTextureInS3(t *testing.T) {
 	t.Run("ST-71_Exists", func(t *testing.T) {
 		var gotPath string
@@ -1109,8 +1071,6 @@ func TestST71to73_IsGeyserTextureInS3(t *testing.T) {
 		}
 	})
 }
-
-// -------------- PutGeyserTextureInS3 --------------
 
 func TestST74to75_PutGeyserTextureInS3(t *testing.T) {
 	t.Run("ST-74_OK", func(t *testing.T) {

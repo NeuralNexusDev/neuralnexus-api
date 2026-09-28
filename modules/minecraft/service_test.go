@@ -14,8 +14,6 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// -------------- Test double --------------
-
 // mcMockStore is a configurable Store test double for service.go tests.
 // Unset function fields fall back to sensible "nothing here" defaults so a
 // test only has to wire up the calls its scenario actually cares about:
@@ -180,8 +178,6 @@ func (m *mcMockStore) PutGeyserTextureInS3(hash string, body io.ReadCloser) erro
 	return nil
 }
 
-// -------------- Shared helpers --------------
-
 // mcNewService builds a *service wired to an httptest.Server for every
 // upstream URL it calls (Mojang lookups, Geyser lookups, our own CDN). The
 // server is torn down automatically when the test ends.
@@ -242,8 +238,6 @@ func mcMustProperty(t *testing.T, tv TexturesValue) Property {
 	return *prop
 }
 
-// -------------- NewService --------------
-
 func TestSV01to02_NewService(t *testing.T) {
 	t.Run("SV-01_NilClientUsesDefault", func(t *testing.T) {
 		svc := NewService(&mcMockStore{}, nil, "http://cdn/")
@@ -268,8 +262,6 @@ func TestSV01to02_NewService(t *testing.T) {
 		}
 	})
 }
-
-// -------------- GetMojangPlayerByName --------------
 
 func TestSV03to13_GetMojangPlayerByName(t *testing.T) {
 	t.Run("SV-03_CacheHit", func(t *testing.T) {
@@ -404,8 +396,6 @@ func TestSV03to13_GetMojangPlayerByName(t *testing.T) {
 	})
 }
 
-// -------------- GetMojangPlayerByUUID --------------
-
 func TestSV14to18_GetMojangPlayerByUUID(t *testing.T) {
 	t.Run("SV-14_CacheHit", func(t *testing.T) {
 		store := &mcMockStore{getPlayerFromCache: func(string) (*Player, error) { return &Player{ID: "cached"}, nil }}
@@ -455,8 +445,6 @@ func TestSV14to18_GetMojangPlayerByUUID(t *testing.T) {
 		}
 	})
 }
-
-// -------------- GetMojangPlayersByNames --------------
 
 func TestSV19to29_GetMojangPlayersByNames(t *testing.T) {
 	t.Run("SV-19_Empty", func(t *testing.T) {
@@ -573,8 +561,6 @@ func TestSV19to29_GetMojangPlayersByNames(t *testing.T) {
 	})
 }
 
-// -------------- GetMojangProfile --------------
-
 func TestSV30to35_GetMojangProfile(t *testing.T) {
 	t.Run("SV-30_SignedCacheHit", func(t *testing.T) {
 		store := &mcMockStore{getSignedProfileFromCache: func(string) (*Player, error) { return &Player{ID: "cached"}, nil }}
@@ -637,8 +623,6 @@ func TestSV30to35_GetMojangProfile(t *testing.T) {
 	})
 }
 
-// -------------- GetProfile --------------
-
 func TestSV36to39_GetProfile(t *testing.T) {
 	t.Run("SV-36_RewritesSkinAndCapeURLs", func(t *testing.T) {
 		store := &mcMockStore{getProfileFromCache: func(string) (*Profile, error) {
@@ -698,8 +682,6 @@ func TestSV36to39_GetProfile(t *testing.T) {
 	})
 }
 
-// -------------- GetProfileByName --------------
-
 func TestSV40to42_GetProfileByName(t *testing.T) {
 	t.Run("SV-40_ResolvesNameThenProfile", func(t *testing.T) {
 		store := &mcMockStore{
@@ -737,8 +719,6 @@ func TestSV40to42_GetProfileByName(t *testing.T) {
 		}
 	})
 }
-
-// -------------- resolveProfile (exercised via GetProfile) --------------
 
 func TestSV43to50_ResolveProfile(t *testing.T) {
 	t.Run("SV-43_CacheHit", func(t *testing.T) {
@@ -826,8 +806,6 @@ func TestSV43to50_ResolveProfile(t *testing.T) {
 		}
 	})
 }
-
-// -------------- fetchProfileFromMojang --------------
 
 func TestSV51to63_FetchProfileFromMojang(t *testing.T) {
 	t.Run("SV-51_UnsignedSuccessStoresTextures", func(t *testing.T) {
@@ -1000,8 +978,6 @@ func TestSV51to63_FetchProfileFromMojang(t *testing.T) {
 	})
 }
 
-// -------------- GetGeyserXUID --------------
-
 func TestSV64to71_GetGeyserXUID(t *testing.T) {
 	t.Run("SV-64_DBFresh", func(t *testing.T) {
 		store := &mcMockStore{getGeyserPlayerByGamertag: func(string) (*GeyserPlayer, error) {
@@ -1095,8 +1071,6 @@ func TestSV64to71_GetGeyserXUID(t *testing.T) {
 	})
 }
 
-// -------------- GetGeyserSkin --------------
-
 func TestSV72to78_GetGeyserSkin(t *testing.T) {
 	t.Run("SV-72_DBFresh", func(t *testing.T) {
 		store := &mcMockStore{getGeyserSkin: func(int64) (*GeyserSkin, error) { return &GeyserSkin{Hash: "db", LastSeen: mcNow()}, nil }}
@@ -1170,8 +1144,6 @@ func TestSV72to78_GetGeyserSkin(t *testing.T) {
 	})
 }
 
-// -------------- resolveGeyserPlayerByXUID (exercised via GetGeyserProfile) --------------
-
 func TestSV79to84_ResolveGeyserPlayerByXUID(t *testing.T) {
 	t.Run("SV-79_DBFresh", func(t *testing.T) {
 		store := &mcMockStore{getGeyserPlayerByXUID: func(int64) (*GeyserPlayer, error) {
@@ -1237,8 +1209,6 @@ func TestSV79to84_ResolveGeyserPlayerByXUID(t *testing.T) {
 	})
 }
 
-// -------------- GetGeyserProfile --------------
-
 func TestSV85to88_GetGeyserProfile(t *testing.T) {
 	t.Run("SV-85_ComposesPlayerAndSkin", func(t *testing.T) {
 		store := &mcMockStore{
@@ -1290,8 +1260,6 @@ func TestSV85to88_GetGeyserProfile(t *testing.T) {
 	})
 }
 
-// -------------- GetGeyserProfileByGamertag --------------
-
 func TestSV89to92_GetGeyserProfileByGamertag(t *testing.T) {
 	t.Run("SV-89_ComposesPlayerAndSkin", func(t *testing.T) {
 		store := &mcMockStore{
@@ -1340,8 +1308,6 @@ func TestSV89to92_GetGeyserProfileByGamertag(t *testing.T) {
 		}
 	})
 }
-
-// -------------- GetTextureContent / serveFromS3 / fetchAndArchive --------------
 
 func TestSV93to95_GetTextureContent(t *testing.T) {
 	t.Run("SV-93_PresentDelegatesToS3", func(t *testing.T) {
@@ -1448,8 +1414,6 @@ func TestSV96to100_ServeFromS3(t *testing.T) {
 	})
 }
 
-// -------------- Close (bytesReadCloser) --------------
-
 func TestSV101_BytesReadCloser_Close(t *testing.T) {
 	t.Run("SV-101_AlwaysNil", func(t *testing.T) {
 		var b bytesReadCloser
@@ -1458,8 +1422,6 @@ func TestSV101_BytesReadCloser_Close(t *testing.T) {
 		}
 	})
 }
-
-// -------------- fetchAndArchive --------------
 
 func TestSV102to109_FetchAndArchive(t *testing.T) {
 	t.Run("SV-102_OK", func(t *testing.T) {
@@ -1584,8 +1546,6 @@ func TestSV102to109_FetchAndArchive(t *testing.T) {
 	})
 }
 
-// -------------- GetGeyserTextureContent / serveGeyserFromS3 --------------
-
 func TestSV110to112_GetGeyserTextureContent(t *testing.T) {
 	t.Run("SV-110_PresentDelegatesToS3", func(t *testing.T) {
 		store := &mcMockStore{isGeyserTextureInS3: func(string) (bool, error) { return true, nil }}
@@ -1694,8 +1654,6 @@ func TestSV113to117_ServeGeyserFromS3(t *testing.T) {
 		}
 	})
 }
-
-// -------------- fetchAndArchiveGeyserTexture --------------
 
 func TestSV118to127_FetchAndArchiveGeyserTexture(t *testing.T) {
 	t.Run("SV-118_OK", func(t *testing.T) {

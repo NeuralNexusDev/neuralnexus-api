@@ -18,8 +18,6 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
 )
 
-// -------------- Test doubles --------------
-
 // stubAccountService implements auth.AccountService for LoginHandler and
 // OAuthHandler tests.
 type stubAccountService struct {
@@ -104,8 +102,6 @@ func (s *stubSessionService) CreateJWT(session *auth.Session) (string, error) {
 }
 func (s *stubSessionService) ReadJWT(string) (*auth.Session, error) { return nil, auth.ErrNotFound }
 
-// -------------- Shared helpers --------------
-
 // encodeState base64url-encodes an OAuthState as OAuthHandler/OpenIDHandler
 // expect it in the "state" query param.
 func encodeState(t *testing.T, state linking.OAuthState) string {
@@ -181,8 +177,6 @@ func findCookie(w *httptest.ResponseRecorder, name string) *http.Cookie {
 	}
 	return nil
 }
-
-// -------------- LoginHandler --------------
 
 func TestAU01LoginHandlerUsernameHappyPath(t *testing.T) {
 	account, err := auth.NewAccount("testuser", "test@example.com", "correct-password")
@@ -369,8 +363,6 @@ func TestAU09LoginHandlerCreateJWTFails(t *testing.T) {
 	})
 }
 
-// -------------- LogoutHandler --------------
-
 func TestAU10LogoutHandlerHappyPath(t *testing.T) {
 	session := &auth.Session{ID: "s1", UserID: "u1"}
 	ctx := context.WithValue(context.Background(), mw.SessionKey, session)
@@ -437,8 +429,6 @@ func TestAU12LogoutHandlerDeleteSessionFails(t *testing.T) {
 	})
 }
 
-// -------------- OAuthHandler --------------
-
 func TestAU13OAuthHandlerMissingCode(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/api/oauth", nil)
 	w := httptest.NewRecorder()
@@ -474,8 +464,6 @@ func TestAU15OAuthHandlerLinkModeNoSession(t *testing.T) {
 		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, "Unauthorized", "You must be logged in to link an account")
 	})
 }
-
-// -------------- OpenIDHandler --------------
 
 func TestAU17OpenIDHandlerMissingState(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/api/openid", nil)
@@ -531,8 +519,6 @@ func TestAU20OpenIDHandlerBadClaimedID(t *testing.T) {
 		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusBadRequest, "Bad Request", "Invalid state")
 	})
 }
-
-// -------------- decodeAndValidateState --------------
 
 func TestAU22DecodeAndValidateStateHappyPath(t *testing.T) {
 	state := linking.OAuthState{Platform: auth.PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
@@ -658,8 +644,6 @@ func TestAU29DecodeAndValidateStateNonceMismatch(t *testing.T) {
 	})
 }
 
-// -------------- requireValidModeAndSession --------------
-
 func TestAU30RequireValidModeAndSessionLoginMode(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/api/oauth", nil)
 	w := httptest.NewRecorder()
@@ -741,8 +725,6 @@ func TestAU35RequireValidModeAndSessionUnrecognizedMode(t *testing.T) {
 	})
 }
 
-// -------------- createSessionJWTAndSetCookie --------------
-
 func TestAU36CreateSessionJWTAndSetCookieHappyPath(t *testing.T) {
 	session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
 	ss := &stubSessionService{createJWT: func(*auth.Session) (string, error) { return "test-jwt", nil }}
@@ -782,8 +764,6 @@ func TestAU37CreateSessionJWTAndSetCookieCreateJWTFails(t *testing.T) {
 		}
 	})
 }
-
-// -------------- redirectWithError / wrappers --------------
 
 func TestAU38RedirectWithErrorHappyPath(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -842,8 +822,6 @@ func TestAU43RedirectInternalServerError(t *testing.T) {
 	})
 }
 
-// -------------- isAllowedRedirect --------------
-
 func TestAU44IsAllowedRedirectSameOrigin(t *testing.T) {
 	t.Run("AU-44_IsAllowedRedirectSameOrigin", func(t *testing.T) {
 		if !isAllowedRedirect(auth.NN_SITE_URL + "/some/path") {
@@ -892,8 +870,6 @@ func TestAU48IsAllowedRedirectUnparseableSiteURL(t *testing.T) {
 		}
 	})
 }
-
-// -------------- sessionCookie --------------
 
 func TestAU49SessionCookie(t *testing.T) {
 	expires := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)

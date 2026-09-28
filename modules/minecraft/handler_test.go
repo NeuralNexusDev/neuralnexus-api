@@ -11,8 +11,6 @@ import (
 	"github.com/goccy/go-json"
 )
 
-// -------------- Test double --------------
-
 // mcMockService is a configurable Service test double for handler.go tests.
 // Each field defaults to nil; a test sets only the methods its handler call
 // actually reaches.
@@ -68,8 +66,6 @@ func (m *mcMockService) GetGeyserTextureContent(hash string) (*TextureResult, er
 	return m.getGeyserTextureContent(hash)
 }
 
-// -------------- Shared helpers --------------
-
 // mcRequest builds an *http.Request with the given path values pre-set, as if
 // routed there by a ServeMux, and target as the raw path+query.
 func mcRequest(t *testing.T, method, target string, body io.Reader, pathValues map[string]string) *http.Request {
@@ -87,8 +83,6 @@ func mcRequireStatus(t *testing.T, w *httptest.ResponseRecorder, want int) {
 		t.Fatalf("status = %d, want %d (body: %s)", w.Code, want, w.Body.String())
 	}
 }
-
-// -------------- GetMojangPlayerByNameHandler --------------
 
 func TestHD01to04_GetMojangPlayerByNameHandler(t *testing.T) {
 	t.Run("HD-01_EmptyName", func(t *testing.T) {
@@ -129,8 +123,6 @@ func TestHD01to04_GetMojangPlayerByNameHandler(t *testing.T) {
 	})
 }
 
-// -------------- GetMojangPlayerByUUIDHandler --------------
-
 func TestHD05to08_GetMojangPlayerByUUIDHandler(t *testing.T) {
 	validUUID := "550e8400-e29b-41d4-a716-446655440000"
 
@@ -167,8 +159,6 @@ func TestHD05to08_GetMojangPlayerByUUIDHandler(t *testing.T) {
 		mcRequireStatus(t, w, http.StatusInternalServerError)
 	})
 }
-
-// -------------- GetMojangPlayersByNamesHandler --------------
 
 func TestHD09to15_GetMojangPlayersByNamesHandler(t *testing.T) {
 	post := func(t *testing.T, body string, contentType string) *http.Request {
@@ -242,8 +232,6 @@ func TestHD09to15_GetMojangPlayersByNamesHandler(t *testing.T) {
 	})
 }
 
-// -------------- GetMojangProfileHandler --------------
-
 func TestHD16to20_GetMojangProfileHandler(t *testing.T) {
 	validUUID := "550e8400-e29b-41d4-a716-446655440000"
 
@@ -301,8 +289,6 @@ func TestHD16to20_GetMojangProfileHandler(t *testing.T) {
 	})
 }
 
-// -------------- GetProfileHandler --------------
-
 func TestHD21to24_GetProfileHandler(t *testing.T) {
 	validUUID := "550e8400-e29b-41d4-a716-446655440000"
 
@@ -338,8 +324,6 @@ func TestHD21to24_GetProfileHandler(t *testing.T) {
 	})
 }
 
-// -------------- GetProfileByNameHandler --------------
-
 func TestHD25to28_GetProfileByNameHandler(t *testing.T) {
 	t.Run("HD-25_EmptyName", func(t *testing.T) {
 		h := GetProfileByNameHandler(&mcMockService{})
@@ -372,8 +356,6 @@ func TestHD25to28_GetProfileByNameHandler(t *testing.T) {
 		mcRequireStatus(t, w, http.StatusInternalServerError)
 	})
 }
-
-// -------------- GetGeyserXUIDHandler --------------
 
 func TestHD29to33_GetGeyserXUIDHandler(t *testing.T) {
 	t.Run("HD-29_EmptyGamertag", func(t *testing.T) {
@@ -416,8 +398,6 @@ func TestHD29to33_GetGeyserXUIDHandler(t *testing.T) {
 	})
 }
 
-// -------------- GetGeyserSkinHandler --------------
-
 func TestHD34to38_GetGeyserSkinHandler(t *testing.T) {
 	t.Run("HD-34_NonNumericXUID", func(t *testing.T) {
 		h := GetGeyserSkinHandler(&mcMockService{})
@@ -458,8 +438,6 @@ func TestHD34to38_GetGeyserSkinHandler(t *testing.T) {
 		mcRequireStatus(t, w, http.StatusInternalServerError)
 	})
 }
-
-// -------------- GetGeyserProfileHandler --------------
 
 func TestHD39to43_GetGeyserProfileHandler(t *testing.T) {
 	bedrockUUID := xuidToUUID(42)
@@ -507,8 +485,6 @@ func TestHD39to43_GetGeyserProfileHandler(t *testing.T) {
 	})
 }
 
-// -------------- GetGeyserProfileByNameHandler --------------
-
 func TestHD44to48_GetGeyserProfileByNameHandler(t *testing.T) {
 	t.Run("HD-44_EmptyGamertag", func(t *testing.T) {
 		h := GetGeyserProfileByNameHandler(&mcMockService{})
@@ -552,8 +528,6 @@ func TestHD44to48_GetGeyserProfileByNameHandler(t *testing.T) {
 	})
 }
 
-// -------------- GetTextureHandler --------------
-
 func TestHD49to52_GetTextureHandler(t *testing.T) {
 	t.Run("HD-49_EmptyHash", func(t *testing.T) {
 		h := GetTextureHandler(&mcMockService{})
@@ -594,8 +568,6 @@ func TestHD49to52_GetTextureHandler(t *testing.T) {
 		mcRequireStatus(t, w, http.StatusBadGateway)
 	})
 }
-
-// -------------- GetGeyserTextureHandler --------------
 
 func TestHD53to56_GetGeyserTextureHandler(t *testing.T) {
 	t.Run("HD-53_EmptyHash", func(t *testing.T) {

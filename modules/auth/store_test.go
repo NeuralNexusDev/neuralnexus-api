@@ -453,7 +453,6 @@ func TestST46DeleteOAuthToken(t *testing.T) {
 	})
 }
 
-// -------------- Live-Postgres rows (ST-47..ST-74) --------------
 //
 // These require TEST_POSTGRES_URL and self-skip otherwise (run via
 // `make test-env-up` then `TEST_POSTGRES_URL=... go test`, matching this

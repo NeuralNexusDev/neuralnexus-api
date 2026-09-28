@@ -266,11 +266,11 @@ Rows marked "(live)" require `TEST_POSTGRES_URL` and/or `TEST_REDIS_URL` and `t.
 | ST-16 | UpsertPlayer | Happy Path (live) | updateProfile=true, new id | live DB | Row inserted with given profile_actions; name history row inserted | P1 |
 | ST-17 | UpsertPlayer | Happy Path (live) | updateProfile=false, new id | live DB | Row inserted with legacy=false, demo=false, profile_actions=[] | P1 |
 | ST-18 | UpsertPlayer | Edge Case (live) | Same id upserted twice | live DB | Second call updates in place; exactly one row for that id | P2 |
-| ST-19 | UpsertPlayer | Concurrency Invariant (live) | N goroutines UpsertPlayer the same id concurrently | live DB | No unique-violation errors; exactly one players row and one player_names row persist (looped trials) | P0 |
+| ST-19 | UpsertPlayer | Concurrency Invariant (live) | N goroutines UpsertPlayer the same id concurrently | live DB | No unique-violation errors from any goroutine; `players.id` being a PRIMARY KEY then guarantees exactly one surviving row (looped trials) | P0 |
 | ST-20 | UpsertTextures | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |
 | ST-21 | UpsertTextures | Happy Path (live) | Skin+cape+SLIM model, hashes pre-registered | live DB | Row inserted with model stored | P1 |
 | ST-22 | UpsertTextures | Edge Case (live) | Same conflict key upserted twice | live DB | Second call updates last_seen; no duplicate row | P2 |
-| ST-23 | UpsertTextures | Concurrency Invariant (live) | N goroutines UpsertTextures the same conflict key concurrently | live DB | No unique-violation errors; single row persists (looped trials) | P0 |
+| ST-23 | UpsertTextures | Concurrency Invariant (live) | N goroutines UpsertTextures the same conflict key concurrently | live DB | No unique-violation errors from any goroutine; `player_textures_unique` then guarantees a single surviving row (looped trials) | P0 |
 | ST-24 | textureHash | Happy Path | Texture with a parsable URL | Texture{URL: ".../abc"} | Returns pointer to "abc" | P2 |
 | ST-25 | textureHash | Edge Case | Texture.Hash() == "" | nil Texture or malformed URL | Returns nil | P2 |
 | ST-26 | UpsertTextureHash | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |
@@ -304,7 +304,7 @@ Rows marked "(live)" require `TEST_POSTGRES_URL` and/or `TEST_REDIS_URL` and `t.
 | ST-54 | UpsertGeyserPlayer | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |
 | ST-55 | UpsertGeyserPlayer | Happy Path (live) | New xuid | live DB | Row inserted | P1 |
 | ST-56 | UpsertGeyserPlayer | Edge Case (live) | Same xuid upserted twice | live DB | Second call updates gamertag/last_seen in place | P2 |
-| ST-57 | UpsertGeyserPlayer | Concurrency Invariant (live) | N goroutines UpsertGeyserPlayer the same xuid concurrently | live DB | No unique-violation errors; single row persists (looped trials) | P0 |
+| ST-57 | UpsertGeyserPlayer | Concurrency Invariant (live) | N goroutines UpsertGeyserPlayer the same xuid concurrently | live DB | No unique-violation errors from any goroutine; `geyser_players`' xuid PRIMARY KEY then guarantees a single surviving row (looped trials) | P0 |
 | ST-58 | GetGeyserSkin | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |
 | ST-59 | GetGeyserSkin | Happy Path (live) | Row seeded via UpsertGeyserSkin | live DB | Returns most-recently-seen skin | P1 |
 | ST-60 | GetGeyserSkin | Error Path (live) | No matching xuid | live DB, unknown xuid | Returns non-nil error | P2 |
@@ -314,7 +314,7 @@ Rows marked "(live)" require `TEST_POSTGRES_URL` and/or `TEST_REDIS_URL` and `t.
 | ST-64 | UpsertGeyserSkin | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |
 | ST-65 | UpsertGeyserSkin | Happy Path (live) | Empty Signature | live DB | Stored as NULL; read back as "" via COALESCE | P1 |
 | ST-66 | UpsertGeyserSkin | Edge Case (live) | Same (xuid,hash) upserted twice | live DB | Second call updates fields in place | P2 |
-| ST-67 | UpsertGeyserSkin | Concurrency Invariant (live) | N goroutines UpsertGeyserSkin the same (xuid,hash) concurrently | live DB | No unique-violation errors; single row persists (looped trials) | P0 |
+| ST-67 | UpsertGeyserSkin | Concurrency Invariant (live) | N goroutines UpsertGeyserSkin the same (xuid,hash) concurrently | live DB | No unique-violation errors from any goroutine; `geyser_player_textures_unique` then guarantees a single surviving row (looped trials) | P0 |
 | ST-68 | PutTextureInS3 | Happy Path (local fake) | Body implements Len(); PUT returns 200 | fake S3 server | Content-Length header equals Len(); nil error | P1 |
 | ST-69 | PutTextureInS3 | Edge Case (local fake) | Body does not implement Len() | fake S3 server | ContentLength left unset; still succeeds | P2 |
 | ST-70 | PutTextureInS3 | Error Path (local fake) | PUT returns 500 | fake S3 server | Returns wrapped "failed to upload to s3" error | P2 |

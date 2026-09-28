@@ -13,8 +13,6 @@ import (
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 )
 
-// -------------- Test doubles --------------
-
 // stubUserService implements auth.UserService for unit testing the
 // self-or-admin auth boundary and error-to-status mapping in users.go.
 type stubUserService struct {
@@ -82,8 +80,6 @@ func (s *stubUserService) SetPasswordAuthEnabled(_ string, enabled bool) error {
 	return s.setPasswordAuthErr
 }
 
-// -------------- Shared helpers --------------
-
 // newSessionRequest builds a request carrying session in context plus
 // user_id/platform path values, mirroring what net/http's routing populates
 // from patterns like "/api/v1/users/{user_id}/link/{platform}".
@@ -119,8 +115,6 @@ func expectStatus(t *testing.T, w *httptest.ResponseRecorder, want int) {
 		t.Fatalf("expected %d, got %d: %s", want, w.Code, w.Body.String())
 	}
 }
-
-// -------------- GetUserHandler --------------
 
 func TestUS01GetUserHandlerSelfHappyPath(t *testing.T) {
 	svc := &stubUserService{user: &auth.Account{UserID: "u1"}}
@@ -166,8 +160,6 @@ func TestUS04GetUserHandlerServiceErrorMapsTo404(t *testing.T) {
 	})
 }
 
-// -------------- GetUserFromPlatformHandler --------------
-
 func TestUS05GetUserFromPlatformHandlerAdminHappyPath(t *testing.T) {
 	svc := &stubUserService{user: &auth.Account{UserID: "u1"}}
 	r := newSessionRequest(http.MethodGet, adminUsersSession("admin1"), "", "discord", "")
@@ -203,8 +195,6 @@ func TestUS07GetUserFromPlatformHandlerServiceErrorMapsTo404(t *testing.T) {
 		expectStatus(t, w, http.StatusNotFound)
 	})
 }
-
-// -------------- GetUserPermissionsHandler --------------
 
 func TestUS08GetUserPermissionsHandlerSelfHappyPath(t *testing.T) {
 	svc := &stubUserService{permissions: []string{"users|*"}}
@@ -249,8 +239,6 @@ func TestUS11GetUserPermissionsHandlerServiceErrorMapsTo404(t *testing.T) {
 		expectStatus(t, w, http.StatusNotFound)
 	})
 }
-
-// -------------- UpdateUserHandler --------------
 
 func TestUS12UpdateUserHandlerHappyPath(t *testing.T) {
 	svc := &stubUserService{}
@@ -298,8 +286,6 @@ func TestUS15UpdateUserHandlerServiceErrorMapsTo400(t *testing.T) {
 		expectStatus(t, w, http.StatusBadRequest)
 	})
 }
-
-// -------------- UpdateUserFromPlatformHandler --------------
 
 func TestUS16to20UpdateUserFromPlatformHandlerPlatformHappyPaths(t *testing.T) {
 	tests := []struct {
@@ -388,8 +374,6 @@ func TestUS24UpdateUserFromPlatformHandlerServiceErrorMapsTo400(t *testing.T) {
 	})
 }
 
-// -------------- DeleteUserHandler --------------
-
 func TestUS25DeleteUserHandlerHappyPath(t *testing.T) {
 	svc := &stubUserService{}
 	r := newSessionRequest(http.MethodDelete, adminUsersSession("admin1"), "u1", "", "")
@@ -422,8 +406,6 @@ func TestUS27DeleteUserHandlerServiceErrorMapsTo400(t *testing.T) {
 		expectStatus(t, w, http.StatusBadRequest)
 	})
 }
-
-// -------------- GetUserLinkedAccountsHandler --------------
 
 func TestUS28GetUserLinkedAccountsHandlerSelfHappyPath(t *testing.T) {
 	svc := &stubUserService{links: []*auth.LinkedAccount{{Platform: auth.PlatformDiscord}}}
@@ -468,8 +450,6 @@ func TestUS31GetUserLinkedAccountsHandlerServiceErrorMapsTo500(t *testing.T) {
 		expectStatus(t, w, http.StatusInternalServerError)
 	})
 }
-
-// -------------- UnlinkPlatformHandler --------------
 
 func TestUS32UnlinkPlatformHandlerHappyPath(t *testing.T) {
 	svc := &stubUserService{}
@@ -531,8 +511,6 @@ func TestUS36UnlinkPlatformHandlerUnclassifiedErrorMapsTo500(t *testing.T) {
 		expectStatus(t, w, http.StatusInternalServerError)
 	})
 }
-
-// -------------- SetPlatformLoginEnabledHandler --------------
 
 func TestUS37SetPlatformLoginEnabledHandlerHappyPath(t *testing.T) {
 	svc := &stubUserService{}
@@ -631,8 +609,6 @@ func TestUS44SetPlatformLoginEnabledHandlerUnclassifiedErrorMapsTo500(t *testing
 	})
 }
 
-// -------------- GetAccountSettingsHandler --------------
-
 func TestUS45GetAccountSettingsHandlerSelfHappyPath(t *testing.T) {
 	svc := &stubUserService{settings: &auth.AccountSettings{UserID: "u1", PasswordAuthEnabled: true}}
 	r := newSessionRequest(http.MethodGet, selfSession("u1"), "u1", "", "")
@@ -676,8 +652,6 @@ func TestUS48GetAccountSettingsHandlerServiceErrorMapsTo500(t *testing.T) {
 		expectStatus(t, w, http.StatusInternalServerError)
 	})
 }
-
-// -------------- UpdateAccountSettingsHandler --------------
 
 func TestUS49UpdateAccountSettingsHandlerHappyPath(t *testing.T) {
 	svc := &stubUserService{}
