@@ -272,6 +272,7 @@ func SelfUserID(next http.Handler) http.Handler {
 }
 
 // VerifyEd25519Middleware verifies the body's signature, generally used by Discord
+// https://discord.com/developers/docs/interactions/receiving-and-responding#security-and-authorization
 func VerifyEd25519Middleware(publicKey ed25519.PublicKey) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

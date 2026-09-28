@@ -1,6 +1,7 @@
 package discord
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -10,9 +11,20 @@ import (
 type WebhookType int
 
 const (
-	WebhookPing  WebhookType = 0 // PING event sent to verify your Webhook Event URL is active
-	WebhookEvent WebhookType = 1 // Webhook event
+	WebhookTypePing  WebhookType = 0 // PING event sent to verify your Webhook Event URL is active
+	WebhookTypeEvent WebhookType = 1 // Webhook event
 )
+
+func (t WebhookType) String() string {
+	switch t {
+	case WebhookTypePing:
+		return "Ping"
+	case WebhookTypeEvent:
+		return "Event"
+	default:
+		return fmt.Sprintf("WebhookType(%d)", t)
+	}
+}
 
 // WebhookPayload payload delivered to the webhook endpoint
 // https://docs.discord.com/developers/events/webhook-events
@@ -24,44 +36,90 @@ type WebhookPayload struct {
 	// Type of webhook, either 0 for PING or 1 for webhook events
 	Type WebhookType `json:"type"`
 	// Event data payload
-	Event *EventBody `json:"event"`
+	Event *WebhookEvent `json:"event"`
 }
 
-// EventType string type for the Discord Webhook event
+// WebhookEventType string type for the Discord Webhook event
 // https://docs.discord.com/developers/events/webhook-events#event-types
-type EventType string
+type WebhookEventType string
 
 const (
-	ApplicationAuthorized   EventType = "APPLICATION_AUTHORIZED"     // Sent when an app was authorized by a user to a server or their account
-	ApplicationDeauthorized EventType = "APPLICATION_DEAUTHORIZED"   // Sent when an app was deauthorized by a user
-	EntitlementCreate       EventType = "ENTITLEMENT_CREATE"         // Entitlement was created
-	EntitlementUpdate       EventType = "ENTITLEMENT_UPDATE"         // Entitlement was updated
-	EntitlementDelete       EventType = "ENTITLEMENT_DELETE"         // Entitlement was deleted
-	QuestUserEnrollment     EventType = "QUEST_USER_ENROLLMENT"      // User was added to a Quest (currently unavailable)
-	LobbyMessageCreate      EventType = "LOBBY_MESSAGE_CREATE"       // Sent when a message is created in a lobby
-	LobbyMessageUpdate      EventType = "LOBBY_MESSAGE_UPDATE"       // Sent when a message is updated in a lobby
-	LobbyMessageDelete      EventType = "LOBBY_MESSAGE_DELETE"       // Sent when a message is deleted from a lobby
-	GameDirectMessageCreate EventType = "GAME_DIRECT_MESSAGE_CREATE" // Sent when a direct message is created during an active Social SDK session
-	GameDirectMessageUpdate EventType = "GAME_DIRECT_MESSAGE_UPDATE" // Sent when a direct message is updated during an active Social SDK session
-	GameDirectMessageDelete EventType = "GAME_DIRECT_MESSAGE_DELETE" // Sent when a direct message is deleted during an active Social SDK session
+	ApplicationAuthorized   WebhookEventType = "APPLICATION_AUTHORIZED"     // Sent when an app was authorized by a user to a server or their account
+	ApplicationDeauthorized WebhookEventType = "APPLICATION_DEAUTHORIZED"   // Sent when an app was deauthorized by a user
+	EntitlementCreate       WebhookEventType = "ENTITLEMENT_CREATE"         // Entitlement was created
+	EntitlementUpdate       WebhookEventType = "ENTITLEMENT_UPDATE"         // Entitlement was updated
+	EntitlementDelete       WebhookEventType = "ENTITLEMENT_DELETE"         // Entitlement was deleted
+	QuestUserEnrollment     WebhookEventType = "QUEST_USER_ENROLLMENT"      // User was added to a Quest (currently unavailable)
+	LobbyMessageCreate      WebhookEventType = "LOBBY_MESSAGE_CREATE"       // Sent when a message is created in a lobby
+	LobbyMessageUpdate      WebhookEventType = "LOBBY_MESSAGE_UPDATE"       // Sent when a message is updated in a lobby
+	LobbyMessageDelete      WebhookEventType = "LOBBY_MESSAGE_DELETE"       // Sent when a message is deleted from a lobby
+	GameDirectMessageCreate WebhookEventType = "GAME_DIRECT_MESSAGE_CREATE" // Sent when a direct message is created during an active Social SDK session
+	GameDirectMessageUpdate WebhookEventType = "GAME_DIRECT_MESSAGE_UPDATE" // Sent when a direct message is updated during an active Social SDK session
+	GameDirectMessageDelete WebhookEventType = "GAME_DIRECT_MESSAGE_DELETE" // Sent when a direct message is deleted during an active Social SDK session
 )
 
-type EventBody struct {
-	Type      EventType        `json:"type"`
+func (t WebhookEventType) String() string {
+	switch t {
+	case ApplicationAuthorized:
+		return "ApplicationAuthorized"
+	case ApplicationDeauthorized:
+		return "ApplicationDeauthorized"
+	case EntitlementCreate:
+		return "EntitlementCreate"
+	case EntitlementUpdate:
+		return "EntitlementUpdate"
+	case EntitlementDelete:
+		return "EntitlementDelete"
+	case QuestUserEnrollment:
+		return "QuestUserEnrollment"
+	case LobbyMessageCreate:
+		return "LobbyMessageCreate"
+	case LobbyMessageUpdate:
+		return "LobbyMessageUpdate"
+	case LobbyMessageDelete:
+		return "LobbyMessageDelete"
+	case GameDirectMessageCreate:
+		return "GameDirectMessageCreate"
+	case GameDirectMessageUpdate:
+		return "GameDirectMessageUpdate"
+	case GameDirectMessageDelete:
+		return "GameDirectMessageDelete"
+	default:
+		return string("WebhookEventType(" + t + ")")
+	}
+}
+
+type WebhookEvent struct {
+	Type      WebhookEventType `json:"type"`
 	Timestamp time.Time        `json:"timestamp"`
-	Data      *json.RawMessage `json:"data"`
+	Data      WebhookEventData `json:"data"`
 }
 
 type InstallationContext int
 
 const (
-	GUILD_INSTALL InstallationContext = 0 // App is installable to guilds/servers
-	USER_INSTALL  InstallationContext = 1 // App is installable to users
+	GuildInstall InstallationContext = 0 // App is installable to guilds/servers
+	UserInstall  InstallationContext = 1 // App is installable to users
 )
 
-// ApplicationAuthorizedEvent Websocket Event for application authorizations
+func (c InstallationContext) String() string {
+	switch c {
+	case GuildInstall:
+		return "GuildInstall"
+	case UserInstall:
+		return "UserInstall"
+	default:
+		return fmt.Sprintf("InstallationContext(%d)", c)
+	}
+}
+
+type WebhookEventData interface {
+	Type() WebhookEventType
+}
+
+// ApplicationAuthorizedWebhookData Websocket Event for application authorizations
 // https://docs.discord.com/developers/events/webhook-events#application-authorized
-type ApplicationAuthorizedEvent struct {
+type ApplicationAuthorizedWebhookData struct {
 	// InstallationContext for the authorization. Either guild (0) if installed to a server or user (1) if installed to a user’s account
 	IntegrationType *InstallationContext `json:"integration_type"`
 	// discordgo.User who authorized the app
@@ -72,9 +130,66 @@ type ApplicationAuthorizedEvent struct {
 	Guild discordgo.Guild `json:"guild"`
 }
 
-// ApplicationDeauthorizedEvent Websocket Event for application Deauthorizations
+func (d ApplicationAuthorizedWebhookData) Type() WebhookEventType {
+	return ApplicationAuthorized
+}
+
+// ApplicationDeauthorizedWebhookData Websocket Event for application Deauthorizations
 // https://docs.discord.com/developers/events/webhook-events#application-deauthorized
-type ApplicationDeauthorizedEvent struct {
+type ApplicationDeauthorizedWebhookData struct {
 	// discordgo.User who deauthorized the app
 	User discordgo.User `json:"user"`
+}
+
+func (d ApplicationDeauthorizedWebhookData) Type() WebhookEventType {
+	return ApplicationDeauthorized
+}
+
+type webhookEvent WebhookEvent
+
+type rawWebhookEvent struct {
+	webhookEvent
+	Data json.RawMessage `json:"data"`
+}
+
+func (e *WebhookEvent) UnmarshalJSON(raw []byte) error {
+	var tmp rawWebhookEvent
+	err := json.Unmarshal(raw, &tmp)
+	if err != nil {
+		return err
+	}
+
+	*e = WebhookEvent(tmp.webhookEvent)
+
+	switch tmp.Type {
+	case ApplicationAuthorized:
+		v := ApplicationAuthorizedWebhookData{}
+		err = json.Unmarshal(tmp.Data, &v)
+		if err != nil {
+			return err
+		}
+		e.Data = v
+	case ApplicationDeauthorized:
+		v := ApplicationDeauthorizedWebhookData{}
+		err = json.Unmarshal(tmp.Data, &v)
+		if err != nil {
+			return err
+		}
+		e.Data = v
+	}
+	return nil
+}
+
+func (e *WebhookEvent) ApplicationAuthorizedData() (data ApplicationAuthorizedWebhookData) {
+	if e.Type != ApplicationAuthorized {
+		panic("ApplicationAuthorizedData called on interaction of type " + e.Type.String())
+	}
+	return e.Data.(ApplicationAuthorizedWebhookData)
+}
+
+func (e *WebhookEvent) ApplicationDeauthorizedData() (data ApplicationDeauthorizedWebhookData) {
+	if e.Type != ApplicationDeauthorized {
+		panic("ApplicationDeauthorizedData called on interaction of type " + e.Type.String())
+	}
+	return e.Data.(ApplicationDeauthorizedWebhookData)
 }
