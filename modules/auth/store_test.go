@@ -1136,3 +1136,25 @@ func TestST74GetLinkedAccountsByUserID(t *testing.T) {
 		}
 	})
 }
+
+func TestST75AddLinkedAccountToDBDuplicatePlatformID(t *testing.T) {
+	as, las, _ := stLiveStore(t)
+	t.Run("ST-75_DuplicatePlatformIDTranslatesToSentinel", func(t *testing.T) {
+		stSeedBareAccount(t, as, "910000000000000027")
+		stSeedBareAccount(t, as, "910000000000000028")
+		stSeedLink(t, las, "910000000000000027", PlatformDiscord, "sttest-dupplatform", true, true)
+
+		err := las.AddLinkedAccountToDB(&LinkedAccount{
+			UserID:           "910000000000000028",
+			Platform:         PlatformDiscord,
+			PlatformUsername: "sttest",
+			PlatformID:       "sttest-dupplatform",
+			Data:             map[string]string{},
+			Verified:         true,
+			LoginEnabled:     true,
+		})
+		if !errors.Is(err, ErrAlreadyLinked) {
+			t.Errorf("expected ErrAlreadyLinked, got %v", err)
+		}
+	})
+}

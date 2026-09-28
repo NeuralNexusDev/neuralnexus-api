@@ -679,38 +679,49 @@ func (w *usConcurrentWrapperStore) OAuthToken() OAuthTokenStore {
 	panic("usConcurrentWrapperStore: OAuthToken not implemented")
 }
 
+// TestUS25UpdateUserFromPlatformConcurrentRace runs many trials, not one:
+// the barrier makes a single trial likely to hit the "lost the race" branch,
+// but not certain to - the Go scheduler can still let a racer finish its
+// whole create+insert sequence before others resume and observe it as
+// "found" rather than colliding. A broken recovery guard only fails a
+// fraction of individual trials, so looping (mirroring the ST-* concurrency
+// rows in store_test.go) is what actually makes this a reliable regression
+// check rather than a coin flip.
 func TestUS25UpdateUserFromPlatformConcurrentRace(t *testing.T) {
 	t.Run("US-25_ConcurrentCallersConvergeOnSameAccount", func(t *testing.T) {
+		const trials = 50
 		const n = 8
-		cs := newUSConcurrentStore(n)
-		svc := NewUserService(&usConcurrentWrapperStore{cs: cs})
+		for trial := 0; trial < trials; trial++ {
+			cs := newUSConcurrentStore(n)
+			svc := NewUserService(&usConcurrentWrapperStore{cs: cs})
 
-		var wg sync.WaitGroup
-		results := make([]*Account, n)
-		errs := make([]error, n)
-		wg.Add(n)
-		for i := 0; i < n; i++ {
-			i := i
-			go func() {
-				defer wg.Done()
-				results[i], errs[i] = svc.UpdateUserFromPlatform(PlatformDiscord, "shared-platform-id", usFakePlatformData{username: "alice"})
-			}()
-		}
-		wg.Wait()
+			var wg sync.WaitGroup
+			results := make([]*Account, n)
+			errs := make([]error, n)
+			wg.Add(n)
+			for i := 0; i < n; i++ {
+				i := i
+				go func() {
+					defer wg.Done()
+					results[i], errs[i] = svc.UpdateUserFromPlatform(PlatformDiscord, "shared-platform-id", usFakePlatformData{username: "alice"})
+				}()
+			}
+			wg.Wait()
 
-		for i, err := range errs {
-			if err != nil {
-				t.Fatalf("goroutine %d: unexpected error: %v", i, err)
+			for i, err := range errs {
+				if err != nil {
+					t.Fatalf("trial %d, goroutine %d: unexpected error: %v", trial, i, err)
+				}
 			}
-		}
-		first := results[0].UserID
-		for i, a := range results {
-			if a.UserID != first {
-				t.Errorf("goroutine %d resolved to account %q, want all goroutines to converge on %q", i, a.UserID, first)
+			first := results[0].UserID
+			for i, a := range results {
+				if a.UserID != first {
+					t.Fatalf("trial %d: goroutine %d resolved to account %q, want all goroutines to converge on %q", trial, i, a.UserID, first)
+				}
 			}
-		}
-		if got := cs.accountCount(); got != 1 {
-			t.Errorf("expected exactly one account to exist after the race, got %d", got)
+			if got := cs.accountCount(); got != 1 {
+				t.Fatalf("trial %d: expected exactly one account to exist after the race, got %d", trial, got)
+			}
 		}
 	})
 }
