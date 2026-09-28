@@ -2,8 +2,6 @@ package beenamegenerator
 
 import "testing"
 
-// -------------- NewBeeName --------------
-
 func TestTY01to02_NewBeeName(t *testing.T) {
 	t.Run("TY-01_NormalName", func(t *testing.T) {
 		got := NewBeeName("Buzzy")
@@ -25,8 +23,6 @@ func TestTY01to02_NewBeeName(t *testing.T) {
 		}
 	})
 }
-
-// -------------- NewBeeNameSuggestions --------------
 
 func TestTY03to04_NewBeeNameSuggestions(t *testing.T) {
 	t.Run("TY-03_PopulatedSlice", func(t *testing.T) {

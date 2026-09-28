@@ -14,8 +14,6 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/proto/bngpb"
 )
 
-// -------------- Test double --------------
-
 // bngMockStore is a configurable BNGStore test double for handler.go tests.
 // Each field defaults to nil; a test sets only the methods its handler call
 // actually reaches. A handler that (per a plan row) must NOT reach the store
@@ -53,8 +51,6 @@ func (m *bngMockStore) RejectBeeNameSuggestion(beeName string) (string, error) {
 	return m.rejectBeeNameSuggestion(beeName)
 }
 
-// -------------- Shared helpers --------------
-
 // bngAuthorizedSession and bngUnauthorizedSession are sessions with and
 // without the admin bee-name-generator scope, respectively.
 var (
@@ -84,8 +80,6 @@ func bngRequireStatus(t *testing.T, w *httptest.ResponseRecorder, want int) {
 	}
 }
 
-// -------------- GetBeeNameHandler --------------
-
 func TestHD01to02_GetBeeNameHandler(t *testing.T) {
 	t.Run("HD-01_OK", func(t *testing.T) {
 		s := &bngMockStore{getBeeName: func() (string, error) { return "Buzzy", nil }}
@@ -107,8 +101,6 @@ func TestHD01to02_GetBeeNameHandler(t *testing.T) {
 		bngRequireStatus(t, w, http.StatusInternalServerError)
 	})
 }
-
-// -------------- UploadBeeNameHandler --------------
 
 func TestHD03to06_UploadBeeNameHandler(t *testing.T) {
 	t.Run("HD-03_Forbidden", func(t *testing.T) {
@@ -146,8 +138,6 @@ func TestHD03to06_UploadBeeNameHandler(t *testing.T) {
 	})
 }
 
-// -------------- DeleteBeeNameHandler --------------
-
 func TestHD07to10_DeleteBeeNameHandler(t *testing.T) {
 	t.Run("HD-07_Forbidden", func(t *testing.T) {
 		h := DeleteBeeNameHandler(&bngMockStore{})
@@ -180,8 +170,6 @@ func TestHD07to10_DeleteBeeNameHandler(t *testing.T) {
 	})
 }
 
-// -------------- SubmitBeeNameHandler --------------
-
 func TestHD11to13_SubmitBeeNameHandler(t *testing.T) {
 	t.Run("HD-11_EmptyName", func(t *testing.T) {
 		h := SubmitBeeNameHandler(&bngMockStore{})
@@ -210,8 +198,6 @@ func TestHD11to13_SubmitBeeNameHandler(t *testing.T) {
 		bngRequireStatus(t, w, http.StatusInternalServerError)
 	})
 }
-
-// -------------- GetBeeNameSuggestionsHandler --------------
 
 func TestHD14to19_GetBeeNameSuggestionsHandler(t *testing.T) {
 	t.Run("HD-14_Forbidden", func(t *testing.T) {
@@ -270,8 +256,6 @@ func TestHD14to19_GetBeeNameSuggestionsHandler(t *testing.T) {
 	})
 }
 
-// -------------- AcceptBeeNameSuggestionHandler --------------
-
 func TestHD20to23_AcceptBeeNameSuggestionHandler(t *testing.T) {
 	t.Run("HD-20_Forbidden", func(t *testing.T) {
 		h := AcceptBeeNameSuggestionHandler(&bngMockStore{})
@@ -307,8 +291,6 @@ func TestHD20to23_AcceptBeeNameSuggestionHandler(t *testing.T) {
 		bngRequireStatus(t, w, http.StatusInternalServerError)
 	})
 }
-
-// -------------- RejectBeeNameSuggestionHandler --------------
 
 func TestHD24to27_RejectBeeNameSuggestionHandler(t *testing.T) {
 	t.Run("HD-24_Forbidden", func(t *testing.T) {

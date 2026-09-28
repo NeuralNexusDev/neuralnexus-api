@@ -15,8 +15,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// -------------- Local-only fixtures (no live service) --------------
-
 // bngUnusedTCPPort returns a TCP port on 127.0.0.1 that is very likely free
 // at the moment it's returned, so a subsequent connection attempt to it
 // fails fast with "connection refused" instead of hanging.
@@ -54,8 +52,6 @@ func bngUnreachablePool(t *testing.T) *pgxpool.Pool {
 func bngStoreWithUnreachableDB(t *testing.T) *store {
 	return &store{db: bngUnreachablePool(t)}
 }
-
-// -------------- Live-dependency fixtures --------------
 
 // bngLiveDB connects to TEST_POSTGRES_URL, skipping the test when it is
 // unset so this suite still runs green without the docker-compose test-env
@@ -108,8 +104,6 @@ func bngCountByName(t *testing.T, db *pgxpool.Pool, table, name string) int {
 	return n
 }
 
-// -------------- NewStore --------------
-
 func TestST01_NewStore(t *testing.T) {
 	t.Run("ST-01_WrapsGivenPool", func(t *testing.T) {
 		db := bngUnreachablePool(t)
@@ -123,8 +117,6 @@ func TestST01_NewStore(t *testing.T) {
 		}
 	})
 }
-
-// -------------- GetBeeName --------------
 
 func TestST02to04_GetBeeName(t *testing.T) {
 	t.Run("ST-02_Unreachable", func(t *testing.T) {
@@ -165,8 +157,6 @@ func TestST02to04_GetBeeName(t *testing.T) {
 	})
 }
 
-// -------------- UploadBeeName --------------
-
 func TestST05to06_UploadBeeName(t *testing.T) {
 	t.Run("ST-05_Unreachable", func(t *testing.T) {
 		s := bngStoreWithUnreachableDB(t)
@@ -193,8 +183,6 @@ func TestST05to06_UploadBeeName(t *testing.T) {
 		}
 	})
 }
-
-// -------------- DeleteBeeName --------------
 
 func TestST07to09_DeleteBeeName(t *testing.T) {
 	t.Run("ST-07_Unreachable", func(t *testing.T) {
@@ -237,8 +225,6 @@ func TestST07to09_DeleteBeeName(t *testing.T) {
 	})
 }
 
-// -------------- SubmitBeeName --------------
-
 func TestST10to11_SubmitBeeName(t *testing.T) {
 	t.Run("ST-10_Unreachable", func(t *testing.T) {
 		s := bngStoreWithUnreachableDB(t)
@@ -265,8 +251,6 @@ func TestST10to11_SubmitBeeName(t *testing.T) {
 		}
 	})
 }
-
-// -------------- GetBeeNameSuggestions --------------
 
 func TestST12to14_GetBeeNameSuggestions(t *testing.T) {
 	t.Run("ST-12_Unreachable", func(t *testing.T) {
@@ -321,8 +305,6 @@ func TestST12to14_GetBeeNameSuggestions(t *testing.T) {
 	})
 }
 
-// -------------- AcceptBeeNameSuggestion --------------
-
 func TestST15to17_AcceptBeeNameSuggestion(t *testing.T) {
 	t.Run("ST-15_Unreachable", func(t *testing.T) {
 		s := bngStoreWithUnreachableDB(t)
@@ -356,14 +338,13 @@ func TestST15to17_AcceptBeeNameSuggestion(t *testing.T) {
 		}
 	})
 
-	// ST-17: AcceptBeeNameSuggestion does its insert-into-bee_name and
-	// delete-from-bee_name_suggestion as two separate, non-transactional
-	// statements. This invariant proves that racing that two-step sequence
-	// from concurrent callers never leaves the suggestion "stuck" (still
-	// present in bee_name_suggestion after both calls finish) and never
-	// deadlocks/panics - looped across 20 trials with 2 concurrent callers
-	// each, since a single trial can't reliably distinguish a working
-	// sequence from one that occasionally loses an update under a race.
+	// AcceptBeeNameSuggestion's insert and delete are two separate,
+	// non-transactional statements, so nothing in store.go itself stops two
+	// concurrent accepts of the same name from both inserting into bee_name.
+	// It's bee_name's PRIMARY KEY on name (docker/testdb/init.sql) that
+	// forces exactly one of the two concurrent inserts to fail - looped
+	// across 20 trials since a single trial can't reliably distinguish that
+	// from a race that occasionally lets both through.
 	t.Run("ST-17_Live_ConcurrentAccept", func(t *testing.T) {
 		s, db := bngLiveStore(t)
 		const trials = 20
@@ -385,23 +366,21 @@ func TestST15to17_AcceptBeeNameSuggestion(t *testing.T) {
 			}
 			wg.Wait()
 
-			if errs[0] != nil && errs[1] != nil {
-				t.Errorf("trial %d: both concurrent AcceptBeeNameSuggestion calls failed: %v, %v", trial, errs[0], errs[1])
+			if (errs[0] == nil) == (errs[1] == nil) {
+				t.Errorf("trial %d: want exactly one concurrent AcceptBeeNameSuggestion call to succeed, got errs = %v, %v", trial, errs[0], errs[1])
 			}
 
 			if n := bngCountByName(t, db, "bee_name_suggestion", name); n != 0 {
 				t.Errorf("trial %d: bee_name_suggestion has %d rows for %q after both accepts, want 0", trial, n, name)
 			}
-			if n := bngCountByName(t, db, "bee_name", name); n < 1 {
-				t.Errorf("trial %d: bee_name has %d rows for %q after both accepts, want >= 1", trial, n, name)
+			if n := bngCountByName(t, db, "bee_name", name); n != 1 {
+				t.Errorf("trial %d: bee_name has %d rows for %q after both accepts, want exactly 1", trial, n, name)
 			}
 
 			_, _ = s.DeleteBeeName(name)
 		}
 	})
 }
-
-// -------------- RejectBeeNameSuggestion --------------
 
 func TestST18to20_RejectBeeNameSuggestion(t *testing.T) {
 	t.Run("ST-18_Unreachable", func(t *testing.T) {
