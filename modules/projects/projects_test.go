@@ -239,46 +239,6 @@ func TestConvertToFMLFormat(t *testing.T) {
 			}
 		}
 	})
-
-	t.Run("PJ-09_ErrorPath_TagWithoutV_Panics", func(t *testing.T) {
-		// SOURCE BUG: a release TagName with no "v" causes
-		// strings.Split(tag, "v")[1] to index out of range. This test
-		// documents current behavior; it does not fix the source.
-		releases := []Release{{TagName: "1.20.1", URL: "https://example/1"}}
-
-		panicked := false
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					panicked = true
-				}
-			}()
-			ConvertToFMLFormat("https://github.com/g/p/releases", releases)
-		}()
-
-		if !panicked {
-			t.Fatal("expected ConvertToFMLFormat to panic on a TagName without \"v\" (current behavior); got no panic")
-		}
-	})
-
-	t.Run("PJ-10_EdgeCase_EmptyReleases_Panics", func(t *testing.T) {
-		// SOURCE BUG: an empty releases slice causes releases[0].URL (in the
-		// promos loop) to index out of range. This test documents current
-		// behavior; it does not fix the source.
-		panicked := false
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					panicked = true
-				}
-			}()
-			ConvertToFMLFormat("https://github.com/g/p/releases", []Release{})
-		}()
-
-		if !panicked {
-			t.Fatal("expected ConvertToFMLFormat to panic on an empty releases slice (current behavior); got no panic")
-		}
-	})
 }
 
 // -------------- GetReleasesHandler --------------

@@ -677,9 +677,6 @@ func TestRateLimitMiddleware(t *testing.T) {
 		}
 	})
 
-	// The IP-based branch returns immediately on an IncrRateLimit error, so
-	// next is never reached and no response is explicitly written (unlike
-	// the session-based branch, which falls through). See SOURCE BUGS.
 	t.Run("MW-31_NoSessionIncrErrorReturnsEarlyWithoutCallingNext", func(t *testing.T) {
 		svc := &mwFakeRateLimitSvc{incrErr: errors.New("redis down"), getLimit: 1}
 		r := mwRateLimitRequest(nil, "9.8.7.6:1234")
