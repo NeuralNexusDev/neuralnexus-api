@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -245,10 +246,9 @@ func TestST10to12_UpdatePet(t *testing.T) {
 	t.Run("ST-11_NoMatchingRow", func(t *testing.T) {
 		ppLiveDatabase(t)
 		s := &store{}
-		in := &Pet{ID: -1, Name: ppUniqueID("ghost")}
-		got, err := s.UpdatePet(in)
-		if err != nil || got != in {
-			t.Errorf("UpdatePet(no row) = (%v, %v), want the same pet and nil error", got, err)
+		got, err := s.UpdatePet(&Pet{ID: -1, Name: ppUniqueID("ghost")})
+		if got != nil || !errors.Is(err, pgx.ErrNoRows) {
+			t.Errorf("UpdatePet(no row) = (%v, %v), want (nil, pgx.ErrNoRows)", got, err)
 		}
 	})
 }
@@ -359,8 +359,11 @@ func TestST19to20_GetPetPicture(t *testing.T) {
 		ppCreatePicture(t, pool, s, id, 7, []int{8}, []string{"x"})
 		got, err := s.GetPetPicture(id)
 		if err != nil || got.ID != id || got.FileExt != "jpg" || got.PrimarySubject != 7 ||
-			!reflect.DeepEqual(got.OthersSubjects, []int{8}) || !reflect.DeepEqual(got.Aliases, []string{"x"}) || got.Created == "" {
-			t.Errorf("GetPetPicture() = (%+v, %v), want the created row with a nonempty Created", got, err)
+			!reflect.DeepEqual(got.OthersSubjects, []int{8}) || !reflect.DeepEqual(got.Aliases, []string{"x"}) {
+			t.Fatalf("GetPetPicture() = (%+v, %v), want the created row", got, err)
+		}
+		if created, err := time.Parse(time.RFC3339Nano, got.Created); err != nil || !strings.HasSuffix(got.Created, "Z") || time.Since(created) > time.Hour {
+			t.Errorf("GetPetPicture() Created = %q, want a recent RFC3339 UTC timestamp ending in Z (parse error: %v)", got.Created, err)
 		}
 	})
 
@@ -386,6 +389,15 @@ func TestST21_UpdatePetPicture(t *testing.T) {
 		}
 	})
 
+	t.Run("ST-30_NoMatchingRow", func(t *testing.T) {
+		ppLiveDatabase(t)
+		s := &store{}
+		got, err := s.UpdatePetPicture(PetPicture{ID: ppUniqueID("missing"), FileExt: "png", Created: "caller-supplied"})
+		if got != nil || !errors.Is(err, pgx.ErrNoRows) {
+			t.Errorf("UpdatePetPicture(no row) = (%v, %v), want (nil, pgx.ErrNoRows)", got, err)
+		}
+	})
+
 	t.Run("ST-22_HappyPath", func(t *testing.T) {
 		pool := ppLiveDatabase(t)
 		s := &store{}
@@ -393,8 +405,12 @@ func TestST21_UpdatePetPicture(t *testing.T) {
 		ppCreatePicture(t, pool, s, id, 1, nil, nil)
 		in := PetPicture{ID: id, FileExt: "webp", PrimarySubject: 2, OthersSubjects: []int{3}, Aliases: []string{"z"}}
 		got, err := s.UpdatePetPicture(in)
-		if err != nil || !reflect.DeepEqual(got, &in) {
-			t.Fatalf("UpdatePetPicture() = (%+v, %v), want (%+v, nil)", got, err, in)
+		if err != nil || got.ID != id || got.FileExt != "webp" || got.PrimarySubject != 2 ||
+			!reflect.DeepEqual(got.OthersSubjects, []int{3}) || !reflect.DeepEqual(got.Aliases, []string{"z"}) {
+			t.Fatalf("UpdatePetPicture() = (%+v, %v), want the updated fields and nil error", got, err)
+		}
+		if _, err := time.Parse(time.RFC3339Nano, got.Created); err != nil {
+			t.Errorf("UpdatePetPicture() Created = %q, want the database's RFC3339 value: %v", got.Created, err)
 		}
 		after, err := s.GetPetPicture(id)
 		if err != nil || after.FileExt != "webp" || after.PrimarySubject != 2 ||

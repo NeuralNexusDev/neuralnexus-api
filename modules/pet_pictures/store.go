@@ -30,6 +30,9 @@ import (
 //     CONSTRAINT pets_name_not_empty CHECK ( name <> '' )
 // );
 
+// createdColumn renders created_at as RFC3339 in UTC regardless of the session time zone.
+const createdColumn = `COALESCE(to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'), '')`
+
 var ErrPetNameEmpty = errors.New("pet name must not be empty")
 
 func translatePetConstraintErr(err error) error {
@@ -109,9 +112,12 @@ func (s *store) UpdatePet(pet *Pet) (*Pet, error) {
 	db := database.GetDB(os.Getenv("DATABASE_URL") + "/pet_pictures")
 	defer db.Close()
 
-	_, err := db.Exec(context.Background(), "UPDATE pets SET name = $1, profile_picture = $2 WHERE id = $3", pet.Name, pet.ProfilePicture, pet.ID)
+	tag, err := db.Exec(context.Background(), "UPDATE pets SET name = $1, profile_picture = $2 WHERE id = $3", pet.Name, pet.ProfilePicture, pet.ID)
 	if err != nil {
 		return nil, translatePetConstraintErr(err)
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, pgx.ErrNoRows
 	}
 	return pet, nil
 }
@@ -148,7 +154,7 @@ func (s *store) GetRandPetPictureByName(name string) (*PetPicture, error) {
 	defer db.Close()
 
 	rows, err := db.Query(context.Background(),
-		"SELECT id, file_ext, prime_subj, othr_subj, aliases, created_at::text AS created FROM pictures WHERE prime_subj = $1 OR $2 = ANY(othr_subj) ORDER BY random() LIMIT 1", pet.ID, pet.ID)
+		"SELECT id, file_ext, prime_subj, othr_subj, aliases, "+createdColumn+" AS created FROM pictures WHERE prime_subj = $1 OR $2 = ANY(othr_subj) ORDER BY random() LIMIT 1", pet.ID, pet.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +172,7 @@ func (s *store) GetPetPicture(id string) (*PetPicture, error) {
 	db := database.GetDB(os.Getenv("DATABASE_URL") + "/pet_pictures")
 	defer db.Close()
 
-	rows, err := db.Query(context.Background(), "SELECT id, file_ext, prime_subj, othr_subj, aliases, created_at::text AS created FROM pictures WHERE id = $1", id)
+	rows, err := db.Query(context.Background(), "SELECT id, file_ext, prime_subj, othr_subj, aliases, "+createdColumn+" AS created FROM pictures WHERE id = $1", id)
 	if err != nil {
 		return nil, err
 	}
@@ -184,10 +190,10 @@ func (s *store) UpdatePetPicture(picture PetPicture) (*PetPicture, error) {
 	db := database.GetDB(os.Getenv("DATABASE_URL") + "/pet_pictures")
 	defer db.Close()
 
-	_, err := db.Exec(context.Background(),
-		"UPDATE pictures SET file_ext = $1, prime_subj = $2, othr_subj = $3, aliases = $4 WHERE id = $5",
+	err := db.QueryRow(context.Background(),
+		"UPDATE pictures SET file_ext = $1, prime_subj = $2, othr_subj = $3, aliases = $4 WHERE id = $5 RETURNING "+createdColumn,
 		picture.FileExt, picture.PrimarySubject, picture.OthersSubjects, picture.Aliases, picture.ID,
-	)
+	).Scan(&picture.Created)
 	if err != nil {
 		return nil, err
 	}

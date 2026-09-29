@@ -22,7 +22,7 @@
 | ST-27 | GetPet | Happy Path | id has a matching row | live DB, pet created via `CreatePet` | Returns a `*Pet` equal to the created one, nil error | P1 | |
 | ST-09 | GetPetByName | Error Path | database unreachable | closed-port `DATABASE_URL` | Returns `nil`, non-nil connection error | P2 | |
 | ST-10 | UpdatePet | Happy Path | update an existing pet's name/profile_picture | live DB, pet created via `CreatePet` | Returns the same `*Pet` passed in, nil error; a follow-up `GetPetByName` on the new name confirms the row was updated | P1 | |
-| ST-11 | UpdatePet | Edge Case | update targets an id with no matching row | live DB, nonexistent id | Returns the same `*Pet` passed in, nil error (an `UPDATE` matching zero rows is not itself an error) | P2 | |
+| ST-11 | UpdatePet | Error Path | update targets an id with no matching row | live DB, nonexistent id | Returns `nil`, `pgx.ErrNoRows` (an `UPDATE` matching zero rows means the pet no longer exists) | P2 | |
 | ST-12 | UpdatePet | Error Path | database unreachable | closed-port `DATABASE_URL` | Returns `nil`, non-nil connection error | P2 | |
 | ST-13 | CreatePetPicture | Happy Path | insert a picture with a unique id | live DB, unique id | Returns `*PetPicture` with the given `ID`/`FileExt`/`PrimarySubject`/`OthersSubjects`/`Aliases` and zero-value `Created`, nil error | P1 | |
 | ST-14 | CreatePetPicture | Error Path | insert a picture whose id already exists | live DB, id already created | Returns `nil`, non-nil error (unique constraint violation) | P2 | |
@@ -31,11 +31,12 @@
 | ST-17 | GetRandPetPictureByName | Error Path | pet name has no matching pet | live DB, name never created | Returns `nil`, the upstream `GetPetByName` error (`pgx.ErrNoRows`) | P2 | |
 | ST-18 | GetRandPetPictureByName | Error Path | pet exists but has no matching pictures | live DB, pet created, no pictures reference it | Returns `nil`, `pgx.ErrNoRows` | P2 | |
 | ST-19 | GetPetPicture | Error Path | id has no matching row | live DB, id not present in `pictures` | Returns `nil`, `pgx.ErrNoRows` | P2 | |
-| ST-28 | GetPetPicture | Happy Path | id has a matching row | live DB, picture created via `CreatePetPicture` | Returns the row's `ID`/`FileExt`/`PrimarySubject`/`OthersSubjects`/`Aliases` and a nonempty `Created`, nil error | P1 | |
+| ST-28 | GetPetPicture | Happy Path | id has a matching row | live DB, picture created via `CreatePetPicture` | Returns the row's `ID`/`FileExt`/`PrimarySubject`/`OthersSubjects`/`Aliases`, and `Created` as an RFC3339 UTC timestamp ending in `Z`, nil error | P1 | |
 | ST-29 | GetRandPetPictureByName | Happy Path | pet has a picture | live DB, pet created and one picture with `prime_subj` = its id | Returns that picture, nil error | P1 | |
 | ST-20 | GetPetPicture | Error Path | database unreachable | closed-port `DATABASE_URL` | Returns `nil`, non-nil connection error | P2 | |
 | ST-21 | UpdatePetPicture | Error Path | database unreachable | closed-port `DATABASE_URL` | Returns `nil`, non-nil connection error | P2 | |
-| ST-22 | UpdatePetPicture | Happy Path | update an existing picture's fields | live DB, picture created via `CreatePetPicture` | Returns `*PetPicture` reflecting the updated fields, nil error | P1 | |
+| ST-22 | UpdatePetPicture | Happy Path | update an existing picture's fields | live DB, picture created via `CreatePetPicture` | Returns `*PetPicture` reflecting the updated fields, with `Created` read back from the database as RFC3339 UTC, nil error | P1 | |
+| ST-30 | UpdatePetPicture | Error Path | update targets an id with no matching row | live DB, nonexistent id | Returns `nil`, `pgx.ErrNoRows` | P2 | |
 | ST-23 | DeletePetPicture | Happy Path | delete an existing picture | live DB, picture created via `CreatePetPicture` | Returns `&PetPicture{ID: id}`, nil error; a follow-up `GetPetPicture(id)` confirms the row is gone (`pgx.ErrNoRows`) | P1 | |
 | ST-25 | DeletePetPicture | Edge Case | delete an id with no matching row | live DB, nonexistent id | Returns `&PetPicture{ID: id}`, nil error (a `DELETE` matching zero rows is not itself an error) | P2 | |
 | ST-24 | DeletePetPicture | Error Path | database unreachable | closed-port `DATABASE_URL` | Returns `nil`, non-nil connection error | P2 | |
