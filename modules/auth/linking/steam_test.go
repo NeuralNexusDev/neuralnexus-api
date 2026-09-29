@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"github.com/goccy/go-json"
@@ -475,7 +476,7 @@ func TestST23to25ProcessSteamLogin(t *testing.T) {
 
 	t.Run("ST-24_AccountResolutionFails", func(t *testing.T) {
 		as := newSTMockAccountService()
-		as.addAccountErr = errDBDown
+		as.addAccountErr = testerrors.ErrDBDown
 		las := newSTMockLinkAccountStore()
 		ss := &stMockSessionService{}
 

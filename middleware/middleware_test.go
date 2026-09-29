@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"golang.org/x/crypto/ed25519"
 )
@@ -464,7 +465,7 @@ func TestSessionMiddleware(t *testing.T) {
 		session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
 		svc := &mwFakeSessionSvc{
 			readJWTFunc: func(string) (*auth.Session, error) { return session, nil },
-			deleteFunc:  func(string) error { return errCacheDown },
+			deleteFunc:  func(string) error { return testerrors.ErrCacheDown },
 		}
 		rec, nextCalled, _ := mwRunSession(svc, mwSessionRequest("Bearer expiredtoken", ""))
 
@@ -530,7 +531,7 @@ func TestSessionMiddleware(t *testing.T) {
 		session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
 		svc := &mwFakeSessionSvc{
 			readJWTFunc: func(string) (*auth.Session, error) { return session, nil },
-			deleteFunc:  func(string) error { return errCacheDown },
+			deleteFunc:  func(string) error { return testerrors.ErrCacheDown },
 		}
 		rec, nextCalled, gotSession := mwRunSession(svc, mwSessionRequest("", "expiredtoken"))
 
@@ -601,7 +602,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 	})
 
 	t.Run("MW-26_SessionIncrErrorFailsOpen", func(t *testing.T) {
-		svc := &mwFakeRateLimitSvc{incrErr: errRedisDown, getLimit: 1}
+		svc := &mwFakeRateLimitSvc{incrErr: testerrors.ErrRedisDown, getLimit: 1}
 		r := mwRateLimitRequest(&auth.Session{ID: "s1", UserID: "u1"}, "1.2.3.4:5678")
 
 		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
@@ -618,7 +619,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 	})
 
 	t.Run("MW-27_SessionGetErrorFailsOpen", func(t *testing.T) {
-		svc := &mwFakeRateLimitSvc{getErr: errRedisDown}
+		svc := &mwFakeRateLimitSvc{getErr: testerrors.ErrRedisDown}
 		r := mwRateLimitRequest(&auth.Session{ID: "s1", UserID: "u1"}, "1.2.3.4:5678")
 
 		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
@@ -677,7 +678,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 	})
 
 	t.Run("MW-31_NoSessionIncrErrorStillChecksLimitAndCallsNext", func(t *testing.T) {
-		svc := &mwFakeRateLimitSvc{incrErr: errRedisDown, getLimit: 1}
+		svc := &mwFakeRateLimitSvc{incrErr: testerrors.ErrRedisDown, getLimit: 1}
 		r := mwRateLimitRequest(nil, "9.8.7.6:1234")
 
 		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
@@ -694,7 +695,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 	})
 
 	t.Run("MW-54_NoSessionIncrErrorStillEnforcesLimit", func(t *testing.T) {
-		svc := &mwFakeRateLimitSvc{incrErr: errRedisDown, getLimit: 10}
+		svc := &mwFakeRateLimitSvc{incrErr: testerrors.ErrRedisDown, getLimit: 10}
 		r := mwRateLimitRequest(nil, "9.8.7.6:1234")
 
 		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
@@ -708,7 +709,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 	})
 
 	t.Run("MW-32_NoSessionGetErrorFailsOpenAndCallsNext", func(t *testing.T) {
-		svc := &mwFakeRateLimitSvc{getErr: errRedisDown}
+		svc := &mwFakeRateLimitSvc{getErr: testerrors.ErrRedisDown}
 		r := mwRateLimitRequest(nil, "9.8.7.6:1234")
 
 		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
@@ -900,7 +901,7 @@ func TestAuth(t *testing.T) {
 	})
 
 	t.Run("MW-41_ExpiredSessionDeleteErrorStillUnauthorized", func(t *testing.T) {
-		svc := &mwFakeSessionSvc{deleteFunc: func(string) error { return errCacheDown }}
+		svc := &mwFakeSessionSvc{deleteFunc: func(string) error { return testerrors.ErrCacheDown }}
 		session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
 		ctx := context.WithValue(mwBaseCtx(), SessionKey, session)
 		r := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
@@ -993,7 +994,7 @@ func TestSelfUserID(t *testing.T) {
 
 type mwErrReader struct{}
 
-func (mwErrReader) Read([]byte) (int, error) { return 0, errors.New("boom") }
+func (mwErrReader) Read([]byte) (int, error) { return 0, testerrors.ErrBoom }
 func (mwErrReader) Close() error             { return nil }
 
 func mwEd25519Request(t *testing.T, priv ed25519.PrivateKey, timestamp, body string, corruptSig bool) *http.Request {

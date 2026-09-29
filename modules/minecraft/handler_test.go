@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/goccy/go-json"
+
+	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 )
 
 type mcMockService struct {
@@ -109,7 +111,7 @@ func TestHD01to04_GetMojangPlayerByNameHandler(t *testing.T) {
 	})
 
 	t.Run("HD-04_InternalError", func(t *testing.T) {
-		svc := &mcMockService{getMojangPlayerByName: func(string) (*Player, error) { return nil, errBoom }}
+		svc := &mcMockService{getMojangPlayerByName: func(string) (*Player, error) { return nil, testerrors.ErrBoom }}
 		h := GetMojangPlayerByNameHandler(svc)
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/name/x", nil, map[string]string{"name": "x"}))
@@ -146,7 +148,7 @@ func TestHD05to08_GetMojangPlayerByUUIDHandler(t *testing.T) {
 	})
 
 	t.Run("HD-08_InternalError", func(t *testing.T) {
-		svc := &mcMockService{getMojangPlayerByUUID: func(string) (*Player, error) { return nil, errBoom }}
+		svc := &mcMockService{getMojangPlayerByUUID: func(string) (*Player, error) { return nil, testerrors.ErrBoom }}
 		h := GetMojangPlayerByUUIDHandler(svc)
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/uuid/"+validUUID, nil, map[string]string{"uuid": validUUID}))
@@ -218,7 +220,7 @@ func TestHD09to15_GetMojangPlayersByNamesHandler(t *testing.T) {
 	})
 
 	t.Run("HD-15_ServiceError", func(t *testing.T) {
-		svc := &mcMockService{getMojangPlayersByNames: func([]string) ([]*Player, error) { return nil, errBoom }}
+		svc := &mcMockService{getMojangPlayersByNames: func([]string) ([]*Player, error) { return nil, testerrors.ErrBoom }}
 		h := GetMojangPlayersByNamesHandler(svc)
 		w := httptest.NewRecorder()
 		h(w, post(t, `["a"]`, "application/json"))
@@ -275,7 +277,7 @@ func TestHD16to20_GetMojangProfileHandler(t *testing.T) {
 	})
 
 	t.Run("HD-20_InternalError", func(t *testing.T) {
-		svc := &mcMockService{getMojangProfile: func(string, bool) (*Player, error) { return nil, errBoom }}
+		svc := &mcMockService{getMojangProfile: func(string, bool) (*Player, error) { return nil, testerrors.ErrBoom }}
 		h := GetMojangProfileHandler(svc)
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/profile/"+validUUID, nil, map[string]string{"uuid": validUUID}))
@@ -310,7 +312,7 @@ func TestHD21to24_GetProfileHandler(t *testing.T) {
 	})
 
 	t.Run("HD-24_InternalError", func(t *testing.T) {
-		svc := &mcMockService{getProfile: func(string) (*Profile, error) { return nil, errBoom }}
+		svc := &mcMockService{getProfile: func(string) (*Profile, error) { return nil, testerrors.ErrBoom }}
 		h := GetProfileHandler(svc)
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/p/"+validUUID, nil, map[string]string{"uuid": validUUID}))
@@ -343,7 +345,7 @@ func TestHD25to28_GetProfileByNameHandler(t *testing.T) {
 	})
 
 	t.Run("HD-28_InternalError", func(t *testing.T) {
-		svc := &mcMockService{getProfileByName: func(string) (*Profile, error) { return nil, errBoom }}
+		svc := &mcMockService{getProfileByName: func(string) (*Profile, error) { return nil, testerrors.ErrBoom }}
 		h := GetProfileByNameHandler(svc)
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/pn/x", nil, map[string]string{"name": "x"}))
@@ -384,7 +386,7 @@ func TestHD29to33_GetGeyserXUIDHandler(t *testing.T) {
 	})
 
 	t.Run("HD-33_InternalError", func(t *testing.T) {
-		svc := &mcMockService{getGeyserXUID: func(string) (*GeyserPlayer, error) { return nil, errBoom }}
+		svc := &mcMockService{getGeyserXUID: func(string) (*GeyserPlayer, error) { return nil, testerrors.ErrBoom }}
 		h := GetGeyserXUIDHandler(svc)
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/g/x", nil, map[string]string{"gamertag": "x"}))
@@ -425,7 +427,7 @@ func TestHD34to38_GetGeyserSkinHandler(t *testing.T) {
 	})
 
 	t.Run("HD-38_InternalError", func(t *testing.T) {
-		svc := &mcMockService{getGeyserSkin: func(int64) (*GeyserSkin, error) { return nil, errBoom }}
+		svc := &mcMockService{getGeyserSkin: func(int64) (*GeyserSkin, error) { return nil, testerrors.ErrBoom }}
 		h := GetGeyserSkinHandler(svc)
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/s/1", nil, map[string]string{"xuid": "1"}))
@@ -470,7 +472,7 @@ func TestHD39to43_GetGeyserProfileHandler(t *testing.T) {
 	})
 
 	t.Run("HD-43_InternalError", func(t *testing.T) {
-		svc := &mcMockService{getGeyserProfile: func(int64) (*GeyserProfile, error) { return nil, errBoom }}
+		svc := &mcMockService{getGeyserProfile: func(int64) (*GeyserProfile, error) { return nil, testerrors.ErrBoom }}
 		h := GetGeyserProfileHandler(svc)
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/gp/"+bedrockUUID, nil, map[string]string{"uuid": bedrockUUID}))
@@ -513,7 +515,7 @@ func TestHD44to48_GetGeyserProfileByNameHandler(t *testing.T) {
 	})
 
 	t.Run("HD-48_InternalError", func(t *testing.T) {
-		svc := &mcMockService{getGeyserProfileByGamertag: func(string) (*GeyserProfile, error) { return nil, errBoom }}
+		svc := &mcMockService{getGeyserProfileByGamertag: func(string) (*GeyserProfile, error) { return nil, testerrors.ErrBoom }}
 		h := GetGeyserProfileByNameHandler(svc)
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/gpn/x", nil, map[string]string{"name": "x"}))
@@ -554,7 +556,7 @@ func TestHD49to52_GetTextureHandler(t *testing.T) {
 	})
 
 	t.Run("HD-52_ServiceError", func(t *testing.T) {
-		svc := &mcMockService{getTextureContent: func(string) (*TextureResult, error) { return nil, errBoom }}
+		svc := &mcMockService{getTextureContent: func(string) (*TextureResult, error) { return nil, testerrors.ErrBoom }}
 		h := GetTextureHandler(svc)
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/t/abc", nil, map[string]string{"hash": "abc"}))
@@ -592,7 +594,7 @@ func TestHD53to56_GetGeyserTextureHandler(t *testing.T) {
 	})
 
 	t.Run("HD-56_ServiceError", func(t *testing.T) {
-		svc := &mcMockService{getGeyserTextureContent: func(string) (*TextureResult, error) { return nil, errBoom }}
+		svc := &mcMockService{getGeyserTextureContent: func(string) (*TextureResult, error) { return nil, testerrors.ErrBoom }}
 		h := GetGeyserTextureHandler(svc)
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/gt/abc", nil, map[string]string{"hash": "abc"}))

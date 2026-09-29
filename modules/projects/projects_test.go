@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/goccy/go-json"
+
+	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 )
 
 // fakeRoundTripper is swapped in for http.DefaultTransport: getReleases
@@ -115,7 +117,7 @@ func TestGetReleases(t *testing.T) {
 
 	t.Run("PJ-04_ErrorPath_TransportError", func(t *testing.T) {
 		swapGithubToken(t, "test-token")
-		wantErr := errors.New("simulated transport failure")
+		wantErr := testerrors.ErrTransportFailed
 		swapTransport(t, &fakeRoundTripper{err: wantErr})
 
 		releases, err := getReleases("group", "project")

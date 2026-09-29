@@ -15,6 +15,7 @@ import (
 
 	"github.com/goccy/go-json"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
@@ -262,7 +263,7 @@ func TestAU06LoginHandlerPasswordAuthCheckErrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to build account: %v", err)
 	}
-	as := &stubAccountService{account: account, passwordAuthErr: errDBExploded}
+	as := &stubAccountService{account: account, passwordAuthErr: testerrors.ErrDBDown}
 	ss := &stubSessionService{}
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
 	w := httptest.NewRecorder()
@@ -304,7 +305,7 @@ func TestAU08LoginHandlerAddSessionFails(t *testing.T) {
 		t.Fatalf("failed to build account: %v", err)
 	}
 	as := &stubAccountService{account: account}
-	ss := &stubSessionService{addSessionErr: errDBExploded}
+	ss := &stubSessionService{addSessionErr: testerrors.ErrDBDown}
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
 	w := httptest.NewRecorder()
 
@@ -394,7 +395,7 @@ func TestAU12LogoutHandlerDeleteSessionFails(t *testing.T) {
 	ctx := context.WithValue(context.Background(), mw.SessionKey, session)
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
-	ss := &stubSessionService{deleteSessionErr: errDBExploded}
+	ss := &stubSessionService{deleteSessionErr: testerrors.ErrDBDown}
 
 	t.Run("AU-12_LogoutDeleteSessionFails", func(t *testing.T) {
 		LogoutHandler(ss)(w, r)

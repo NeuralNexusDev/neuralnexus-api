@@ -13,6 +13,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 )
 
 // stUnusedTCPPort returns a port unlikely to be reused, so a later connection
@@ -118,7 +120,7 @@ func TestST02to07Accessors(t *testing.T) {
 
 func TestST08to12TranslateAccountConstraintErr(t *testing.T) {
 	t.Run("ST-08_NonPgError", func(t *testing.T) {
-		orig := errBoom
+		orig := testerrors.ErrBoom
 		if got := translateAccountConstraintErr(orig); !errors.Is(got, orig) {
 			t.Errorf("translateAccountConstraintErr() = %v, want unchanged %v", got, orig)
 		}

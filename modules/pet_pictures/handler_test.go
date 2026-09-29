@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
@@ -188,7 +189,7 @@ func TestHD01to05_CreatePetHandler(t *testing.T) {
 	})
 
 	t.Run("HD-05_StoreErrorInternalServerError", func(t *testing.T) {
-		mock := &hdMockStore{createPetErr: errDBDown}
+		mock := &hdMockStore{createPetErr: testerrors.ErrDBDown}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPost, "/pets/Rex", nil)
 		req.SetPathValue("name", "Rex")
@@ -337,7 +338,7 @@ func TestHD11to14and35_UpdatePetHandler(t *testing.T) {
 	})
 
 	t.Run("HD-14_StoreErrorInternalServerError", func(t *testing.T) {
-		mock := &hdMockStore{updatePetErr: errDBDown}
+		mock := &hdMockStore{updatePetErr: testerrors.ErrDBDown}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPut, "/pets", strings.NewReader(`{"id":1,"name":"Rex"}`))
 		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions(perms.ScopePetPictures("Rex"))))
@@ -562,7 +563,7 @@ func TestHD23to27and36_UpdatePetPictureHandler(t *testing.T) {
 	t.Run("HD-27_StoreErrorInternalServerError", func(t *testing.T) {
 		mock := &hdMockStore{
 			getPetResult:        &Pet{ID: 1, Name: "Rex"},
-			updatePetPictureErr: errDBDown,
+			updatePetPictureErr: testerrors.ErrDBDown,
 		}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPut, "/pictures", strings.NewReader(`{"id":"abc123","prime_subj":1}`))
@@ -711,7 +712,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 		mock := &hdMockStore{
 			getPetPictureResult: &PetPicture{ID: "abc123", PrimarySubject: 1},
 			getPetResult:        &Pet{ID: 1, Name: "Rex"},
-			deletePetPictureErr: errDBDown,
+			deletePetPictureErr: testerrors.ErrDBDown,
 		}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodDelete, "/pictures/abc123", nil)

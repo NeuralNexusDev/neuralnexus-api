@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"testing/iotest"
+
+	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 )
 
 // fakeRoundTripper is swapped in for http.DefaultTransport: QueryGameQ and
@@ -111,7 +113,7 @@ func TestQueryGameQ(t *testing.T) {
 	})
 
 	t.Run("SV-03_ErrorPath_TransportError", func(t *testing.T) {
-		swapTransport(t, &fakeRoundTripper{err: errSimulatedTransport})
+		swapTransport(t, &fakeRoundTripper{err: testerrors.ErrTransportFailed})
 
 		resp, err := svc.QueryGameQ("cs16", "1.2.3.4", 27015)
 		if err == nil {
@@ -206,7 +208,7 @@ func TestQueryGameDig(t *testing.T) {
 	})
 
 	t.Run("SV-08_ErrorPath_TransportError", func(t *testing.T) {
-		swapTransport(t, &fakeRoundTripper{err: errSimulatedTransport})
+		swapTransport(t, &fakeRoundTripper{err: testerrors.ErrTransportFailed})
 
 		resp, err := svc.QueryGameDig("factorio", "1.2.3.4", 25566)
 		if err == nil {
@@ -389,7 +391,7 @@ func TestQueryGameServer(t *testing.T) {
 	})
 
 	t.Run("SV-27_ErrorPath_GameQDispatchTransportError", func(t *testing.T) {
-		swapTransport(t, &fakeRoundTripper{err: errSimulatedTransport})
+		swapTransport(t, &fakeRoundTripper{err: testerrors.ErrTransportFailed})
 
 		status, err := svc.QueryGameServer("aa3", "1.2.3.4", 27015, QueryTypeGameQ)
 		if err == nil {
@@ -426,7 +428,7 @@ func TestQueryGameServer(t *testing.T) {
 	})
 
 	t.Run("SV-29_ErrorPath_GameDigDispatchTransportError", func(t *testing.T) {
-		swapTransport(t, &fakeRoundTripper{err: errSimulatedTransport})
+		swapTransport(t, &fakeRoundTripper{err: testerrors.ErrTransportFailed})
 
 		status, err := svc.QueryGameServer("aoc", "1.2.3.4", 25566, QueryTypeGameDig)
 		if err == nil {
