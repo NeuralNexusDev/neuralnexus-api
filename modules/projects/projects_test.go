@@ -219,6 +219,46 @@ func TestConvertToFMLFormat(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("PJ-09_EdgeCase_EmptyReleases", func(t *testing.T) {
+		result := ConvertToFMLFormat("https://github.com/g/p/releases", []Release{})
+
+		if got := result["homepage"]; got != "https://github.com/g/p/releases" {
+			t.Errorf("homepage = %v, want %v", got, "https://github.com/g/p/releases")
+		}
+		promos, ok := result["promos"].(map[string]string)
+		if !ok {
+			t.Fatalf("promos has type %T, want map[string]string", result["promos"])
+		}
+		if len(promos) != 0 {
+			t.Errorf("promos = %+v, want empty", promos)
+		}
+		for _, version := range forgeModVersions {
+			versionMap, ok := result[version].(map[string]string)
+			if !ok {
+				t.Fatalf("result[%q] has type %T, want map[string]string", version, result[version])
+			}
+			if len(versionMap) != 0 {
+				t.Errorf("result[%q] = %+v, want empty", version, versionMap)
+			}
+		}
+	})
+
+	t.Run("PJ-10_ErrorPath_TagMissingVPrefix", func(t *testing.T) {
+		releases := []Release{{TagName: "1.20.1", URL: "https://example/1"}}
+		result := ConvertToFMLFormat("https://github.com/g/p/releases", releases)
+
+		wantReleaseMap := map[string]string{"1.20.1": "https://example/1"}
+		for _, version := range forgeModVersions {
+			versionMap, ok := result[version].(map[string]string)
+			if !ok {
+				t.Fatalf("result[%q] has type %T, want map[string]string", version, result[version])
+			}
+			if !reflect.DeepEqual(versionMap, wantReleaseMap) {
+				t.Errorf("result[%q] = %+v, want %+v", version, versionMap, wantReleaseMap)
+			}
+		}
+	})
 }
 
 func TestGetReleasesHandler(t *testing.T) {

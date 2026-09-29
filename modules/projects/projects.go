@@ -94,14 +94,16 @@ func ConvertToFMLFormat(gitHubReleasesURL string, releases []Release) map[string
 
 	releaseMap := make(map[string]string)
 	for _, release := range releases {
-		versionTagName := strings.Split(release.TagName, "v")[1]
+		versionTagName := strings.TrimPrefix(release.TagName, "v")
 		releaseMap[versionTagName] = release.URL
 	}
 
 	promosMap := make(map[string]string)
-	for _, version := range forgeModVersions {
-		promosMap[version+"-latest"] = releases[0].URL
-		promosMap[version+"-recommended"] = releases[0].URL
+	if len(releases) > 0 {
+		for _, version := range forgeModVersions {
+			promosMap[version+"-latest"] = releases[0].URL
+			promosMap[version+"-recommended"] = releases[0].URL
+		}
 	}
 
 	fmlFormat["homepage"] = gitHubReleasesURL
