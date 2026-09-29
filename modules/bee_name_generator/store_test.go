@@ -221,7 +221,7 @@ func TestST02to04_GetBeeName(t *testing.T) {
 	})
 }
 
-func TestST05to06and21_UploadBeeName(t *testing.T) {
+func TestST05to06and21and24_UploadBeeName(t *testing.T) {
 	t.Run("ST-05_Unreachable", func(t *testing.T) {
 		s := bngStoreWithUnreachableDB(t)
 		_, err := s.UploadBeeName(bngUniqueName("up"))
@@ -276,6 +276,25 @@ func TestST05to06and21_UploadBeeName(t *testing.T) {
 			_, _ = s.DeleteBeeName(name)
 		}
 	})
+
+	t.Run("ST-24_Live_WhitespaceOnlyNameRejected", func(t *testing.T) {
+		s, db := bngLiveStore(t)
+		blank := "  \t "
+		t.Cleanup(func() {
+			_, _ = db.Exec(context.Background(), "DELETE FROM bee_name WHERE name = $1", blank)
+		})
+
+		got, err := s.UploadBeeName(blank)
+		if err == nil {
+			t.Error("UploadBeeName() error = nil, want the CHECK constraint violation")
+		}
+		if got != "" {
+			t.Errorf("UploadBeeName() = %q, want an empty string on error", got)
+		}
+		if n := bngCountByName(t, db, "bee_name", blank); n != 0 {
+			t.Errorf("bee_name holds %d rows named %q, want 0", n, blank)
+		}
+	})
 }
 
 func TestST07to09_DeleteBeeName(t *testing.T) {
@@ -319,7 +338,7 @@ func TestST07to09_DeleteBeeName(t *testing.T) {
 	})
 }
 
-func TestST10to11and22_SubmitBeeName(t *testing.T) {
+func TestST10to11and22and25_SubmitBeeName(t *testing.T) {
 	t.Run("ST-10_Unreachable", func(t *testing.T) {
 		s := bngStoreWithUnreachableDB(t)
 		_, err := s.SubmitBeeName(bngUniqueName("sub"))
@@ -374,9 +393,28 @@ func TestST10to11and22_SubmitBeeName(t *testing.T) {
 			_, _ = s.RejectBeeNameSuggestion(name)
 		}
 	})
+
+	t.Run("ST-25_Live_WhitespaceOnlyNameRejected", func(t *testing.T) {
+		s, db := bngLiveStore(t)
+		blank := "  \t "
+		t.Cleanup(func() {
+			_, _ = db.Exec(context.Background(), "DELETE FROM bee_name_suggestion WHERE name = $1", blank)
+		})
+
+		got, err := s.SubmitBeeName(blank)
+		if err == nil {
+			t.Error("SubmitBeeName() error = nil, want the CHECK constraint violation")
+		}
+		if got != "" {
+			t.Errorf("SubmitBeeName() = %q, want an empty string on error", got)
+		}
+		if n := bngCountByName(t, db, "bee_name_suggestion", blank); n != 0 {
+			t.Errorf("bee_name_suggestion holds %d rows named %q, want 0", n, blank)
+		}
+	})
 }
 
-func TestST12to14_GetBeeNameSuggestions(t *testing.T) {
+func TestST12to14and23_GetBeeNameSuggestions(t *testing.T) {
 	t.Run("ST-12_Unreachable", func(t *testing.T) {
 		s := bngStoreWithUnreachableDB(t)
 		got, err := s.GetBeeNameSuggestions(5)
@@ -456,7 +494,7 @@ func TestST12to14_GetBeeNameSuggestions(t *testing.T) {
 	})
 }
 
-func TestST15to17_AcceptBeeNameSuggestion(t *testing.T) {
+func TestST15to17and26_AcceptBeeNameSuggestion(t *testing.T) {
 	t.Run("ST-15_Unreachable", func(t *testing.T) {
 		s := bngStoreWithUnreachableDB(t)
 		_, err := s.AcceptBeeNameSuggestion(bngUniqueName("acc"))
@@ -522,6 +560,25 @@ func TestST15to17_AcceptBeeNameSuggestion(t *testing.T) {
 			}
 
 			_, _ = s.DeleteBeeName(name)
+		}
+	})
+
+	t.Run("ST-26_Live_WhitespaceOnlyNameRejected", func(t *testing.T) {
+		s, db := bngLiveStore(t)
+		blank := "  \t "
+		t.Cleanup(func() {
+			_, _ = db.Exec(context.Background(), "DELETE FROM bee_name WHERE name = $1", blank)
+		})
+
+		got, err := s.AcceptBeeNameSuggestion(blank)
+		if err == nil {
+			t.Error("AcceptBeeNameSuggestion() error = nil, want the CHECK constraint violation")
+		}
+		if got != "" {
+			t.Errorf("AcceptBeeNameSuggestion() = %q, want an empty string on error", got)
+		}
+		if n := bngCountByName(t, db, "bee_name", blank); n != 0 {
+			t.Errorf("bee_name holds %d rows named %q, want 0", n, blank)
 		}
 	})
 }
