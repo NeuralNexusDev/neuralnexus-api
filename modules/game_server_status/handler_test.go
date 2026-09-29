@@ -112,8 +112,8 @@ func TestGameServerStatusHandler(t *testing.T) {
 		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 			t.Fatalf("failed to decode response body: %v", err)
 		}
-		if got := body["detail"]; got != "Invalid host" {
-			t.Errorf(`body["detail"] = %v, want "Invalid host"`, got)
+		if got := body["detail"]; got != msgInvalidHost {
+			t.Errorf(`body["detail"] = %v, want %q`, got, msgInvalidHost)
 		}
 		if fake.called {
 			t.Error("QueryGameServer should not have been called")
@@ -135,8 +135,8 @@ func TestGameServerStatusHandler(t *testing.T) {
 		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 			t.Fatalf("failed to decode response body: %v", err)
 		}
-		if got := body["detail"]; got != "Invalid port" {
-			t.Errorf(`body["detail"] = %v, want "Invalid port"`, got)
+		if got := body["detail"]; got != msgInvalidPort {
+			t.Errorf(`body["detail"] = %v, want %q`, got, msgInvalidPort)
 		}
 		if fake.called {
 			t.Error("QueryGameServer should not have been called")
@@ -144,7 +144,7 @@ func TestGameServerStatusHandler(t *testing.T) {
 	})
 
 	t.Run("HD-05_ErrorPath_ServiceError", func(t *testing.T) {
-		fake := &fakeGSSService{err: errors.New("server unreachable")}
+		fake := &fakeGSSService{err: errServerUnreachable}
 		req := httptest.NewRequest("GET", "/gss/minecraft/status?host=1.2.3.4&port=25565", nil)
 		req.SetPathValue("game", "minecraft")
 		rec := httptest.NewRecorder()
@@ -158,8 +158,8 @@ func TestGameServerStatusHandler(t *testing.T) {
 		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 			t.Fatalf("failed to decode response body: %v", err)
 		}
-		if got := body["detail"]; got != "server unreachable" {
-			t.Errorf(`body["detail"] = %v, want "server unreachable"`, got)
+		if got := body["detail"]; got != errServerUnreachable.Error() {
+			t.Errorf(`body["detail"] = %v, want %q`, got, errServerUnreachable.Error())
 		}
 	})
 
@@ -236,7 +236,7 @@ func TestSimpleGameServerStatus(t *testing.T) {
 	})
 
 	t.Run("HD-10_ErrorPath_Offline", func(t *testing.T) {
-		fake := &fakeGSSService{err: errors.New("server unreachable")}
+		fake := &fakeGSSService{err: errServerUnreachable}
 		req := httptest.NewRequest("GET", "/gss/minecraft/simple?host=1.2.3.4&port=25565", nil)
 		req.SetPathValue("game", "minecraft")
 		rec := httptest.NewRecorder()

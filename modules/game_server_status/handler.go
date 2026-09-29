@@ -7,18 +7,23 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
+const (
+	msgInvalidHost = "Invalid host"
+	msgInvalidPort = "Invalid port"
+)
+
 // GameServerStatusHandler - Get the game server status
 func GameServerStatusHandler(s GSSService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		game := r.PathValue("game")
 		host := r.URL.Query().Get("host")
 		if host == "" {
-			responses.BadRequest(w, r, "Invalid host")
+			responses.BadRequest(w, r, msgInvalidHost)
 			return
 		}
 		port, err := strconv.Atoi(r.URL.Query().Get("port"))
 		if err != nil {
-			responses.BadRequest(w, r, "Invalid port")
+			responses.BadRequest(w, r, msgInvalidPort)
 			return
 		}
 
@@ -42,12 +47,12 @@ func SimpleGameServerStatus(s GSSService) http.HandlerFunc {
 		game := r.PathValue("game")
 		host := r.URL.Query().Get("host")
 		if host == "" {
-			responses.BadRequest(w, r, "Invalid host")
+			responses.BadRequest(w, r, msgInvalidHost)
 			return
 		}
 		port, err := strconv.Atoi(r.URL.Query().Get("port"))
 		if err != nil {
-			responses.BadRequest(w, r, "Invalid port")
+			responses.BadRequest(w, r, msgInvalidPort)
 			return
 		}
 
