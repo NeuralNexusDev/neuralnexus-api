@@ -359,8 +359,8 @@ func TestST16to22GetSteamUser(t *testing.T) {
 		defer restoreKey()
 
 		_, err := GetSteamUser("76500000000000001")
-		if err == nil || err.Error() != "STEAM_API_KEY is not set" {
-			t.Fatalf("GetSteamUser() error = %v, want \"STEAM_API_KEY is not set\"", err)
+		if !errors.Is(err, errSteamAPIKeyUnset) {
+			t.Fatalf("GetSteamUser() error = %v, want %v", err, errSteamAPIKeyUnset)
 		}
 	})
 
@@ -419,8 +419,8 @@ func TestST16to22GetSteamUser(t *testing.T) {
 		defer restoreKey()
 
 		_, err := GetSteamUser("76500000000000001")
-		if err == nil || err.Error() != "steam player summary response contained no players" {
-			t.Fatalf("GetSteamUser() error = %v, want \"steam player summary response contained no players\"", err)
+		if !errors.Is(err, errSteamNoPlayers) {
+			t.Fatalf("GetSteamUser() error = %v, want %v", err, errSteamNoPlayers)
 		}
 	})
 
@@ -475,7 +475,7 @@ func TestST23to25ProcessSteamLogin(t *testing.T) {
 
 	t.Run("ST-24_AccountResolutionFails", func(t *testing.T) {
 		as := newSTMockAccountService()
-		as.addAccountErr = errors.New("db down")
+		as.addAccountErr = errDBDown
 		las := newSTMockLinkAccountStore()
 		ss := &stMockSessionService{}
 
@@ -488,7 +488,7 @@ func TestST23to25ProcessSteamLogin(t *testing.T) {
 	t.Run("ST-25_AddSessionFails", func(t *testing.T) {
 		as := newSTMockAccountService()
 		las := newSTMockLinkAccountStore()
-		ss := &stMockSessionService{addSessionErr: errors.New("session store down")}
+		ss := &stMockSessionService{addSessionErr: errSessionStoreDown}
 
 		_, err := ProcessSteamLogin(as, las, ss, user)
 		if err == nil {
@@ -522,8 +522,8 @@ func TestST26to29ProcessSteamLink(t *testing.T) {
 		req := stRequestWithSession(nil)
 
 		_, err := ProcessSteamLink(req, las, user)
-		if err == nil || err.Error() != "session not found" {
-			t.Fatalf("ProcessSteamLink() error = %v, want \"session not found\"", err)
+		if !errors.Is(err, errSessionNotFound) {
+			t.Fatalf("ProcessSteamLink() error = %v, want %v", err, errSessionNotFound)
 		}
 	})
 
@@ -533,8 +533,8 @@ func TestST26to29ProcessSteamLink(t *testing.T) {
 		req := stRequestWithSession(session)
 
 		_, err := ProcessSteamLink(req, las, user)
-		if err == nil || err.Error() != "session expired" {
-			t.Fatalf("ProcessSteamLink() error = %v, want \"session expired\"", err)
+		if !errors.Is(err, errSessionExpired) {
+			t.Fatalf("ProcessSteamLink() error = %v, want %v", err, errSessionExpired)
 		}
 	})
 

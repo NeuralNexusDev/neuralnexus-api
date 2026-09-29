@@ -40,7 +40,11 @@ var steamClaimedIDPattern = regexp.MustCompile(`^https://steamcommunity\.com/ope
 // assertion (malformed, unsigned, or rejected by Steam) as distinct from a
 // network/service failure reaching Steam, so callers can map the two to
 // different response codes.
-var ErrInvalidAssertion = errors.New("invalid openid assertion")
+var (
+	ErrInvalidAssertion = errors.New("invalid openid assertion")
+	errSteamAPIKeyUnset = errors.New("STEAM_API_KEY is not set")
+	errSteamNoPlayers   = errors.New("steam player summary response contained no players")
+)
 
 // -------------- Structs --------------
 
@@ -150,7 +154,7 @@ func responseIsValid(body []byte) bool {
 // for a persona name/avatar beyond the bare SteamID64 OpenID provides.
 func GetSteamUser(steamID64 string) (*SteamData, error) {
 	if STEAM_API_KEY == "" {
-		return nil, errors.New("STEAM_API_KEY is not set")
+		return nil, errSteamAPIKeyUnset
 	}
 
 	reqURL := steamPlayerSummaryURL + "?key=" + url.QueryEscape(STEAM_API_KEY) + "&steamids=" + url.QueryEscape(steamID64)
@@ -178,7 +182,7 @@ func GetSteamUser(steamID64 string) (*SteamData, error) {
 		return nil, err
 	}
 	if len(parsed.Response.Players) == 0 {
-		return nil, errors.New("steam player summary response contained no players")
+		return nil, errSteamNoPlayers
 	}
 	player := &parsed.Response.Players[0]
 	if player.SteamID64 != steamID64 {
@@ -209,10 +213,10 @@ func ProcessSteamLogin(as auth.AccountService, las auth.LinkAccountStore, ss aut
 func ProcessSteamLink(r *http.Request, las auth.LinkAccountStore, user *SteamData) (*auth.Session, error) {
 	session, ok := r.Context().Value(mw.SessionKey).(*auth.Session)
 	if !ok || session == nil {
-		return nil, errors.New("session not found")
+		return nil, errSessionNotFound
 	}
 	if !session.IsValid() {
-		return nil, errors.New("session expired")
+		return nil, errSessionExpired
 	}
 	if err := linkPlatformUserToSession(las, session.UserID, auth.PlatformSteam, user); err != nil {
 		return nil, err

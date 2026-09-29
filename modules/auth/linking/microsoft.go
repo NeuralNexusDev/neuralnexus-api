@@ -81,6 +81,15 @@ var (
 	ErrAccountIsChild            = errors.New("this account belongs to a minor and must be added to a family by an adult")
 )
 
+var (
+	errUserinfoMissingSub       = errors.New("microsoft userinfo response missing sub")
+	errXboxLiveMissingToken     = errors.New("xbox live authentication response missing Token")
+	errXSTSMissingTokenOrClaims = errors.New("xsts authorization response missing Token or DisplayClaims")
+	errXSTSMissingUHS           = errors.New("xsts authorization response missing uhs in DisplayClaims")
+	errLoginMissingAccessToken  = errors.New("minecraft login-with-xbox response missing access_token")
+	errXSTSMissingXIDOrGTG      = errors.New("xsts authorization response missing xid or gtg in DisplayClaims")
+)
+
 func xstsErrForCode(code int64) error {
 	switch code {
 	case 2148916233:
@@ -193,7 +202,7 @@ func GetMicrosoftUser(token *auth.OAuthToken) (*MicrosoftUserData, error) {
 		return nil, err
 	}
 	if user.Sub == "" {
-		return nil, errors.New("microsoft userinfo response missing sub")
+		return nil, errUserinfoMissingSub
 	}
 	return &user, nil
 }
@@ -267,7 +276,7 @@ func xblAuthenticate(msAccessToken string) (string, error) {
 		return "", err
 	}
 	if xblResp.Token == "" {
-		return "", errors.New("xbox live authentication response missing Token")
+		return "", errXboxLiveMissingToken
 	}
 	return xblResp.Token, nil
 }
@@ -337,12 +346,12 @@ func xstsAuthorize(xblToken, relyingParty string) (xstsToken, userHash, xuid, ga
 		return "", "", "", "", decodeErr
 	}
 	if xstsResp.Token == "" || len(xstsResp.DisplayClaims.Xui) == 0 {
-		return "", "", "", "", errors.New("xsts authorization response missing Token or DisplayClaims")
+		return "", "", "", "", errXSTSMissingTokenOrClaims
 	}
 
 	claims := xstsResp.DisplayClaims.Xui[0]
 	if claims.Uhs == "" {
-		return "", "", "", "", errors.New("xsts authorization response missing uhs in DisplayClaims")
+		return "", "", "", "", errXSTSMissingUHS
 	}
 	return xstsResp.Token, claims.Uhs, claims.Xid, claims.Gtg, nil
 }
@@ -389,7 +398,7 @@ func minecraftLoginWithXbox(userHash, xstsToken string) (string, error) {
 		return "", err
 	}
 	if loginResp.AccessToken == "" {
-		return "", errors.New("minecraft login-with-xbox response missing access_token")
+		return "", errLoginMissingAccessToken
 	}
 	return loginResp.AccessToken, nil
 }
@@ -456,7 +465,7 @@ func authenticateXboxLiveIdentity(xblToken string) (*XboxLiveData, error) {
 		return nil, err
 	}
 	if xuid == "" || gamertag == "" {
-		return nil, errors.New("xsts authorization response missing xid or gtg in DisplayClaims")
+		return nil, errXSTSMissingXIDOrGTG
 	}
 	return &XboxLiveData{XUID: xuid, Gamertag: gamertag}, nil
 }

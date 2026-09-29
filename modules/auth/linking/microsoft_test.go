@@ -2,6 +2,7 @@ package linking
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -192,8 +193,8 @@ func TestMS17to21GetMicrosoftUser(t *testing.T) {
 		msSetURL(t, &microsoftUserInfoURL, ts.URL)
 
 		_, err := GetMicrosoftUser(&auth.OAuthToken{AccessToken: "tok"})
-		if err == nil || err.Error() != "microsoft userinfo response missing sub" {
-			t.Fatalf("GetMicrosoftUser() error = %v, want \"microsoft userinfo response missing sub\"", err)
+		if !errors.Is(err, errUserinfoMissingSub) {
+			t.Fatalf("GetMicrosoftUser() error = %v, want %v", err, errUserinfoMissingSub)
 		}
 	})
 }
@@ -257,8 +258,8 @@ func TestMS22to26XblAuthenticate(t *testing.T) {
 		msSetURL(t, &xboxLiveAuthenticateURL, ts.URL)
 
 		_, err := xblAuthenticate("ms-token")
-		if err == nil || err.Error() != "xbox live authentication response missing Token" {
-			t.Fatalf("xblAuthenticate() error = %v, want \"xbox live authentication response missing Token\"", err)
+		if !errors.Is(err, errXboxLiveMissingToken) {
+			t.Fatalf("xblAuthenticate() error = %v, want %v", err, errXboxLiveMissingToken)
 		}
 	})
 }
@@ -343,8 +344,8 @@ func TestMS27to34XstsAuthorize(t *testing.T) {
 		msSetURL(t, &xstsAuthorizeURL, ts.URL)
 
 		_, _, _, _, err := xstsAuthorize("xbl-token", xstsXboxLiveRelyingParty)
-		if err == nil || err.Error() != "xsts authorization response missing Token or DisplayClaims" {
-			t.Fatalf("xstsAuthorize() error = %v, want \"xsts authorization response missing Token or DisplayClaims\"", err)
+		if !errors.Is(err, errXSTSMissingTokenOrClaims) {
+			t.Fatalf("xstsAuthorize() error = %v, want %v", err, errXSTSMissingTokenOrClaims)
 		}
 	})
 
@@ -356,8 +357,8 @@ func TestMS27to34XstsAuthorize(t *testing.T) {
 		msSetURL(t, &xstsAuthorizeURL, ts.URL)
 
 		_, _, _, _, err := xstsAuthorize("xbl-token", xstsXboxLiveRelyingParty)
-		if err == nil || err.Error() != "xsts authorization response missing uhs in DisplayClaims" {
-			t.Fatalf("xstsAuthorize() error = %v, want \"xsts authorization response missing uhs in DisplayClaims\"", err)
+		if !errors.Is(err, errXSTSMissingUHS) {
+			t.Fatalf("xstsAuthorize() error = %v, want %v", err, errXSTSMissingUHS)
 		}
 	})
 
@@ -430,8 +431,8 @@ func TestMS35to39MinecraftLoginWithXbox(t *testing.T) {
 		msSetURL(t, &minecraftLoginURL, ts.URL)
 
 		_, err := minecraftLoginWithXbox("hash1", "xsts-t")
-		if err == nil || err.Error() != "minecraft login-with-xbox response missing access_token" {
-			t.Fatalf("minecraftLoginWithXbox() error = %v, want \"minecraft login-with-xbox response missing access_token\"", err)
+		if !errors.Is(err, errLoginMissingAccessToken) {
+			t.Fatalf("minecraftLoginWithXbox() error = %v, want %v", err, errLoginMissingAccessToken)
 		}
 	})
 }
@@ -573,8 +574,8 @@ func TestMS47to49AuthenticateXboxLiveIdentity(t *testing.T) {
 		msSetURL(t, &xstsAuthorizeURL, ts.URL)
 
 		_, err := authenticateXboxLiveIdentity("xbl-token")
-		if err == nil || err.Error() != "xsts authorization response missing xid or gtg in DisplayClaims" {
-			t.Fatalf("authenticateXboxLiveIdentity() error = %v, want \"xsts authorization response missing xid or gtg in DisplayClaims\"", err)
+		if !errors.Is(err, errXSTSMissingXIDOrGTG) {
+			t.Fatalf("authenticateXboxLiveIdentity() error = %v, want %v", err, errXSTSMissingXIDOrGTG)
 		}
 	})
 }

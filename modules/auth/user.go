@@ -8,6 +8,8 @@ import (
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 )
 
+const LinkCleanupFailedFmt = "failed to link account (%w) and failed to clean up the orphaned placeholder account: %w"
+
 // UserService - The userService interface
 // TODO: Convert to a user struct that cannot modify sensitive data
 type UserService interface {
@@ -114,7 +116,7 @@ func (s *userService) UpdateUserFromPlatform(platform Platform, platformID strin
 			// Whatever went wrong, the placeholder account created above is
 			// now orphaned - clean it up before deciding how to handle err.
 			if delErr := s.as.DeleteAccountFromDB(a.UserID); delErr != nil {
-				return nil, fmt.Errorf("failed to link account (%w) and failed to clean up the orphaned placeholder account: %w", err, delErr)
+				return nil, fmt.Errorf(LinkCleanupFailedFmt, err, delErr)
 			}
 			if !errors.Is(err, ErrAlreadyLinked) {
 				return nil, err

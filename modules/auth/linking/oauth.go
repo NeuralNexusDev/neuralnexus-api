@@ -53,7 +53,7 @@ func ExtCodeForToken(config *oauth2.Config, code string) (*auth.OAuthToken, erro
 	} else if rawScopes, ok := token.Extra("scope").(string); ok {
 		scopes = []string{rawScopes}
 	} else {
-		return nil, errors.New("failed to get scope from token")
+		return nil, errNoScopeInToken
 	}
 
 	var scopedToken = &auth.OAuthToken{
@@ -88,7 +88,7 @@ func RefreshToken(config *oauth2.Config, token *oauth2.Token) (*auth.OAuthToken,
 	} else if rawScopes, ok := newToken.Extra("scope").(string); ok {
 		scopes = []string{rawScopes}
 	} else {
-		return nil, errors.New("failed to get scope from token")
+		return nil, errNoScopeInToken
 	}
 
 	var scopedToken = &auth.OAuthToken{
@@ -117,7 +117,7 @@ func ProcessOAuthLogin(as auth.AccountService, las auth.LinkAccountStore, ss aut
 	case auth.PlatformMicrosoft:
 		config = MicrosoftLoginConfig
 	default:
-		return nil, errors.New("invalid platform")
+		return nil, errInvalidPlatform
 	}
 	var token *auth.OAuthToken
 	token, err = ExtCodeForToken(config, code)
@@ -152,7 +152,7 @@ func ProcessOAuthLogin(as auth.AccountService, las auth.LinkAccountStore, ss aut
 		case auth.PlatformMicrosoft:
 			user, err = GetMicrosoftUser(token)
 		default:
-			return nil, errors.New("invalid platform")
+			return nil, errInvalidPlatform
 		}
 		if err != nil {
 			return nil, err
@@ -173,6 +173,14 @@ func ProcessOAuthLogin(as auth.AccountService, las auth.LinkAccountStore, ss aut
 	}
 	return session, nil
 }
+
+var (
+	errNoScopeInToken    = errors.New("failed to get scope from token")
+	errInvalidPlatform   = errors.New("invalid platform")
+	errSessionNotFound   = errors.New("session not found")
+	errSessionExpired    = errors.New("session expired")
+	errLinkAccountFailed = errors.New("failed to link account")
+)
 
 // errPlatformLoginDisabled means the platform identity is linked but not
 // usable for login (unverified, or disabled) - never treated as unlinked.
@@ -212,7 +220,7 @@ func resolveOrCreateAccountForPlatformUser(as auth.AccountService, las auth.Link
 		// Whatever went wrong, the account created above is now orphaned -
 		// clean it up before deciding how to handle err.
 		if delErr := as.DeleteAccount(a.UserID); delErr != nil {
-			return nil, fmt.Errorf("failed to link account (%w) and failed to clean up the orphaned placeholder account: %w", err, delErr)
+			return nil, fmt.Errorf(auth.LinkCleanupFailedFmt, err, delErr)
 		}
 		if !errors.Is(err, auth.ErrAlreadyLinked) {
 			return nil, err
@@ -237,10 +245,10 @@ func ProcessOAuthLink(r *http.Request, las auth.LinkAccountStore, code string, s
 	// that's missing or already expired.
 	session, ok := r.Context().Value(mw.SessionKey).(*auth.Session)
 	if !ok || session == nil {
-		return nil, errors.New("session not found")
+		return nil, errSessionNotFound
 	}
 	if !session.IsValid() {
-		return nil, errors.New("session expired")
+		return nil, errSessionExpired
 	}
 
 	var err error
@@ -255,7 +263,7 @@ func ProcessOAuthLink(r *http.Request, las auth.LinkAccountStore, code string, s
 	case auth.PlatformMicrosoft:
 		config = MicrosoftLoginConfig
 	default:
-		return nil, errors.New("invalid platform")
+		return nil, errInvalidPlatform
 	}
 	var token *auth.OAuthToken
 	token, err = ExtCodeForToken(config, code)
@@ -316,7 +324,7 @@ func ProcessOAuthLink(r *http.Request, las auth.LinkAccountStore, code string, s
 	case auth.PlatformMicrosoft:
 		user, err = GetMicrosoftUser(token)
 	default:
-		return nil, errors.New("invalid platform")
+		return nil, errInvalidPlatform
 	}
 	if err != nil {
 		return nil, err
@@ -433,7 +441,7 @@ func ensureMicrosoftIdentityLinked(as auth.AccountService, las auth.LinkAccountS
 	if !errors.Is(err, auth.ErrAlreadyLinked) {
 		if isNewAccount {
 			if delErr := as.DeleteAccount(a.UserID); delErr != nil {
-				return nil, false, fmt.Errorf("failed to link account (%w) and failed to clean up the orphaned placeholder account: %w", err, delErr)
+				return nil, false, fmt.Errorf(auth.LinkCleanupFailedFmt, err, delErr)
 			}
 		}
 		return nil, false, err
@@ -445,7 +453,7 @@ func ensureMicrosoftIdentityLinked(as auth.AccountService, las auth.LinkAccountS
 	if lookupErr != nil && !errors.Is(lookupErr, auth.ErrNotFound) {
 		if isNewAccount {
 			if delErr := as.DeleteAccount(a.UserID); delErr != nil {
-				return nil, false, fmt.Errorf("failed to link account (%w) and failed to clean up the orphaned placeholder account: %w", lookupErr, delErr)
+				return nil, false, fmt.Errorf(auth.LinkCleanupFailedFmt, lookupErr, delErr)
 			}
 		}
 		return nil, false, lookupErr
@@ -462,7 +470,7 @@ func ensureMicrosoftIdentityLinked(as auth.AccountService, las auth.LinkAccountS
 	}
 
 	if delErr := as.DeleteAccount(a.UserID); delErr != nil {
-		return nil, false, fmt.Errorf("failed to link account (%w) and failed to clean up the orphaned placeholder account: %w", err, delErr)
+		return nil, false, fmt.Errorf(auth.LinkCleanupFailedFmt, err, delErr)
 	}
 	winner, getErr := as.GetAccountByID(actualOwnerID)
 	if getErr != nil {
@@ -493,7 +501,7 @@ func linkPlatformUserToSession(las auth.LinkAccountStore, userID string, platfor
 	// Link account
 	la = auth.NewLinkedAccount(userID, platform, user.GetUsername(), user.GetID(), user)
 	if err := las.AddLinkedAccountToDB(la); err != nil {
-		return errors.New("failed to link account")
+		return errLinkAccountFailed
 	}
 
 	return nil
