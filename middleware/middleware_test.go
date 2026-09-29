@@ -464,7 +464,7 @@ func TestSessionMiddleware(t *testing.T) {
 		session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
 		svc := &mwFakeSessionSvc{
 			readJWTFunc: func(string) (*auth.Session, error) { return session, nil },
-			deleteFunc:  func(string) error { return errors.New("cache down") },
+			deleteFunc:  func(string) error { return errCacheDown },
 		}
 		rec, nextCalled, _ := mwRunSession(svc, mwSessionRequest("Bearer expiredtoken", ""))
 
@@ -530,7 +530,7 @@ func TestSessionMiddleware(t *testing.T) {
 		session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
 		svc := &mwFakeSessionSvc{
 			readJWTFunc: func(string) (*auth.Session, error) { return session, nil },
-			deleteFunc:  func(string) error { return errors.New("cache down") },
+			deleteFunc:  func(string) error { return errCacheDown },
 		}
 		rec, nextCalled, gotSession := mwRunSession(svc, mwSessionRequest("", "expiredtoken"))
 
@@ -601,7 +601,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 	})
 
 	t.Run("MW-26_SessionIncrErrorFailsOpen", func(t *testing.T) {
-		svc := &mwFakeRateLimitSvc{incrErr: errors.New("redis down"), getLimit: 1}
+		svc := &mwFakeRateLimitSvc{incrErr: errRedisDown, getLimit: 1}
 		r := mwRateLimitRequest(&auth.Session{ID: "s1", UserID: "u1"}, "1.2.3.4:5678")
 
 		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
@@ -618,7 +618,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 	})
 
 	t.Run("MW-27_SessionGetErrorFailsOpen", func(t *testing.T) {
-		svc := &mwFakeRateLimitSvc{getErr: errors.New("redis down")}
+		svc := &mwFakeRateLimitSvc{getErr: errRedisDown}
 		r := mwRateLimitRequest(&auth.Session{ID: "s1", UserID: "u1"}, "1.2.3.4:5678")
 
 		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
@@ -677,7 +677,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 	})
 
 	t.Run("MW-31_NoSessionIncrErrorStillChecksLimitAndCallsNext", func(t *testing.T) {
-		svc := &mwFakeRateLimitSvc{incrErr: errors.New("redis down"), getLimit: 1}
+		svc := &mwFakeRateLimitSvc{incrErr: errRedisDown, getLimit: 1}
 		r := mwRateLimitRequest(nil, "9.8.7.6:1234")
 
 		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
@@ -694,7 +694,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 	})
 
 	t.Run("MW-54_NoSessionIncrErrorStillEnforcesLimit", func(t *testing.T) {
-		svc := &mwFakeRateLimitSvc{incrErr: errors.New("redis down"), getLimit: 10}
+		svc := &mwFakeRateLimitSvc{incrErr: errRedisDown, getLimit: 10}
 		r := mwRateLimitRequest(nil, "9.8.7.6:1234")
 
 		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
@@ -708,7 +708,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 	})
 
 	t.Run("MW-32_NoSessionGetErrorFailsOpenAndCallsNext", func(t *testing.T) {
-		svc := &mwFakeRateLimitSvc{getErr: errors.New("redis down")}
+		svc := &mwFakeRateLimitSvc{getErr: errRedisDown}
 		r := mwRateLimitRequest(nil, "9.8.7.6:1234")
 
 		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
@@ -900,7 +900,7 @@ func TestAuth(t *testing.T) {
 	})
 
 	t.Run("MW-41_ExpiredSessionDeleteErrorStillUnauthorized", func(t *testing.T) {
-		svc := &mwFakeSessionSvc{deleteFunc: func(string) error { return errors.New("cache down") }}
+		svc := &mwFakeSessionSvc{deleteFunc: func(string) error { return errCacheDown }}
 		session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
 		ctx := context.WithValue(mwBaseCtx(), SessionKey, session)
 		r := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
