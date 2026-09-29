@@ -71,6 +71,7 @@
 | HD-12 | UpdatePetHandler | Error Path | session lacks permission for the decoded pet's name | session scoped to a different pet name | 403 Forbidden; `store.UpdatePet` never called | P1 | |
 | HD-13 | UpdatePetHandler | Happy Path | valid body, session has permission | mock `UpdatePet` succeeds | 200 OK with the decoded pet JSON; `UpdatePet` called with the decoded pet | P1 | |
 | HD-14 | UpdatePetHandler | Error Path | `store.UpdatePet` returns an error | mock returns `nil, err` | 500 Internal Server Error | P2 | |
+| HD-35 | UpdatePetHandler | Error Path | `store.UpdatePet` returns `pgx.ErrNoRows` | mock returns `nil, pgx.ErrNoRows` | 404 Not Found | P2 | |
 | HD-15 | GetRandPetPictureByNameHandler | Happy Path | path value `name` present | mock returns `*PetPicture` | 200 OK with picture JSON; `GetRandPetPictureByName` called with the path name | P1 | |
 | HD-16 | GetRandPetPictureByNameHandler | Edge Case | path value absent, body supplies name | JSON body `{"name":"Rex"}` | `GetRandPetPictureByName` called with `"Rex"`; 200 OK | P2 | |
 | HD-17 | GetRandPetPictureByNameHandler | Error Path | both path value and body name absent/empty | empty body | 400 Bad Request | P2 | |
@@ -84,6 +85,7 @@
 | HD-25 | UpdatePetPictureHandler | Error Path | session lacks permission for the pet's name | mock `GetPet` succeeds, session scoped to a different name | 403 Forbidden; `store.UpdatePetPicture` never called | P1 | |
 | HD-26 | UpdatePetPictureHandler | Happy Path | valid body, pet found, session has permission | mock `UpdatePetPicture` succeeds | 200 OK with picture JSON | P1 | |
 | HD-27 | UpdatePetPictureHandler | Error Path | `store.UpdatePetPicture` returns an error | mock returns `nil, err` | 500 Internal Server Error | P2 | |
+| HD-36 | UpdatePetPictureHandler | Error Path | `store.UpdatePetPicture` returns `pgx.ErrNoRows` | mock returns `nil, pgx.ErrNoRows` | 404 Not Found | P2 | |
 | HD-28 | DeletePetPictureHandler | Happy Path | path value `id` present, all checks pass | mocks succeed, session has permission | 204 No Content; `DeletePetPicture` called with the id | P1 | |
 | HD-29 | DeletePetPictureHandler | Edge Case | path value absent, body supplies id | JSON body `{"id":"abc123"}` | `GetPetPicture` called with `"abc123"`; 204 No Content | P2 | |
 | HD-30 | DeletePetPictureHandler | Error Path | both path value and body id absent/empty | empty body | 400 Bad Request | P2 | |

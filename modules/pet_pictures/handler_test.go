@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
+
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
@@ -284,7 +286,7 @@ func TestHD06to10_GetPetHandler(t *testing.T) {
 	})
 }
 
-func TestHD11to14_UpdatePetHandler(t *testing.T) {
+func TestHD11to14and35_UpdatePetHandler(t *testing.T) {
 	t.Run("HD-11_InvalidBodyBadRequest", func(t *testing.T) {
 		mock := &hdMockStore{}
 		svc := NewService(mock)
@@ -346,6 +348,20 @@ func TestHD11to14_UpdatePetHandler(t *testing.T) {
 
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
+		}
+	})
+
+	t.Run("HD-35_StoreNoRowsNotFound", func(t *testing.T) {
+		mock := &hdMockStore{updatePetErr: pgx.ErrNoRows}
+		svc := NewService(mock)
+		req := httptest.NewRequest(http.MethodPut, "/pets", strings.NewReader(`{"id":1,"name":"Rex"}`))
+		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions(perms.ScopePetPictures("Rex"))))
+		w := httptest.NewRecorder()
+
+		UpdatePetHandler(svc)(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
 		}
 	})
 }
@@ -474,7 +490,7 @@ func TestHD19to22_GetPetPictureHandler(t *testing.T) {
 	})
 }
 
-func TestHD23to27_UpdatePetPictureHandler(t *testing.T) {
+func TestHD23to27and36_UpdatePetPictureHandler(t *testing.T) {
 	t.Run("HD-23_InvalidBodyBadRequest", func(t *testing.T) {
 		mock := &hdMockStore{}
 		svc := NewService(mock)
@@ -558,6 +574,23 @@ func TestHD23to27_UpdatePetPictureHandler(t *testing.T) {
 
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
+		}
+	})
+
+	t.Run("HD-36_StoreNoRowsNotFound", func(t *testing.T) {
+		mock := &hdMockStore{
+			getPetResult:        &Pet{ID: 1, Name: "Rex"},
+			updatePetPictureErr: pgx.ErrNoRows,
+		}
+		svc := NewService(mock)
+		req := httptest.NewRequest(http.MethodPut, "/pictures", strings.NewReader(`{"id":"abc123","prime_subj":1}`))
+		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions(perms.ScopePetPictures("Rex"))))
+		w := httptest.NewRecorder()
+
+		UpdatePetPictureHandler(svc)(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
 		}
 	})
 }
