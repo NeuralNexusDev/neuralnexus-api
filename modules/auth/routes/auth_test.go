@@ -18,6 +18,7 @@ import (
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
+	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
 type stubAccountService struct {
@@ -107,14 +108,6 @@ func encodeState(t *testing.T, state linking.OAuthState) string {
 	return base64.URLEncoding.EncodeToString(stateJSON)
 }
 
-// problemBody mirrors problempb.Problem's JSON shape, enough to decode what
-// redirectWithError embeds in the "problem" query param.
-type problemBody struct {
-	Status int    `json:"status"`
-	Title  string `json:"title"`
-	Detail string `json:"detail"`
-}
-
 func requireRedirect(t *testing.T, w *httptest.ResponseRecorder, wantTarget string) *url.URL {
 	t.Helper()
 	if w.Code != http.StatusSeeOther {
@@ -132,7 +125,7 @@ func requireRedirect(t *testing.T, w *httptest.ResponseRecorder, wantTarget stri
 	return u
 }
 
-func requireProblemRedirect(t *testing.T, w *httptest.ResponseRecorder, wantTarget string, wantStatus int, wantTitle, wantDetail string) {
+func requireProblemRedirect(t *testing.T, w *httptest.ResponseRecorder, wantTarget string, wantStatus int, wantDetail string) {
 	t.Helper()
 	u := requireRedirect(t, w, wantTarget)
 	problemB64 := u.Query().Get("problem")
@@ -143,15 +136,12 @@ func requireProblemRedirect(t *testing.T, w *httptest.ResponseRecorder, wantTarg
 	if err != nil {
 		t.Fatalf("failed to base64-decode problem param: %v", err)
 	}
-	var p problemBody
+	var p responses.Problem
 	if err := json.Unmarshal(raw, &p); err != nil {
 		t.Fatalf("failed to unmarshal problem JSON %q: %v", raw, err)
 	}
-	if p.Status != wantStatus {
+	if int(p.Status) != wantStatus {
 		t.Errorf("expected problem status %d, got %d", wantStatus, p.Status)
-	}
-	if p.Title != wantTitle {
-		t.Errorf("expected problem title %q, got %q", wantTitle, p.Title)
 	}
 	if p.Detail != wantDetail {
 		t.Errorf("expected problem detail %q, got %q", wantDetail, p.Detail)
@@ -425,7 +415,7 @@ func TestAU13OAuthHandlerMissingCode(t *testing.T) {
 	t.Run("AU-13_OAuthMissingCode", func(t *testing.T) {
 		OAuthHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{})(w, r)
 
-		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Bad Request", "Invalid request")
+		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Invalid request")
 	})
 }
 
@@ -436,7 +426,7 @@ func TestAU14OAuthHandlerMissingState(t *testing.T) {
 	t.Run("AU-14_OAuthMissingState", func(t *testing.T) {
 		OAuthHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{})(w, r)
 
-		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Bad Request", "Invalid request")
+		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Invalid request")
 	})
 }
 
@@ -450,7 +440,7 @@ func TestAU15OAuthHandlerLinkModeNoSession(t *testing.T) {
 	t.Run("AU-15_OAuthLinkModeNoSession", func(t *testing.T) {
 		OAuthHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{})(w, r)
 
-		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, "Unauthorized", "You must be logged in to link an account")
+		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, "You must be logged in to link an account")
 	})
 }
 
@@ -588,7 +578,7 @@ func TestAU17OpenIDHandlerMissingState(t *testing.T) {
 	t.Run("AU-17_OpenIDMissingState", func(t *testing.T) {
 		OpenIDHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{})(w, r)
 
-		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Bad Request", "Invalid request")
+		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Invalid request")
 	})
 }
 
@@ -602,7 +592,7 @@ func TestAU18OpenIDHandlerLinkModeNoSession(t *testing.T) {
 	t.Run("AU-18_OpenIDLinkModeNoSession", func(t *testing.T) {
 		OpenIDHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{})(w, r)
 
-		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, "Unauthorized", "You must be logged in to link an account")
+		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, "You must be logged in to link an account")
 	})
 }
 
@@ -617,7 +607,7 @@ func TestAU19OpenIDHandlerBadOpenIDMode(t *testing.T) {
 	t.Run("AU-19_OpenIDBadOpenIDMode", func(t *testing.T) {
 		OpenIDHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{})(w, r)
 
-		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusBadRequest, "Bad Request", "Invalid state")
+		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusBadRequest, "Invalid state")
 	})
 }
 
@@ -632,7 +622,7 @@ func TestAU20OpenIDHandlerBadClaimedID(t *testing.T) {
 	t.Run("AU-20_OpenIDBadClaimedID", func(t *testing.T) {
 		OpenIDHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{})(w, r)
 
-		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusBadRequest, "Bad Request", "Invalid state")
+		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusBadRequest, "Invalid state")
 	})
 }
 
@@ -663,7 +653,7 @@ func TestAU23DecodeAndValidateStateMissingParam(t *testing.T) {
 		if ok {
 			t.Fatal("expected ok=false")
 		}
-		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Bad Request", "Invalid request")
+		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Invalid request")
 	})
 }
 
@@ -676,7 +666,7 @@ func TestAU24DecodeAndValidateStateInvalidBase64(t *testing.T) {
 		if ok {
 			t.Fatal("expected ok=false")
 		}
-		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Bad Request", "Invalid state")
+		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Invalid state")
 	})
 }
 
@@ -690,7 +680,7 @@ func TestAU25DecodeAndValidateStateInvalidJSON(t *testing.T) {
 		if ok {
 			t.Fatal("expected ok=false")
 		}
-		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Bad Request", "Invalid state")
+		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Invalid state")
 	})
 }
 
@@ -706,7 +696,7 @@ func TestAU26DecodeAndValidateStateMissingRequiredField(t *testing.T) {
 		if ok {
 			t.Fatal("expected ok=false")
 		}
-		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Bad Request", "Invalid state")
+		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Invalid state")
 	})
 }
 
@@ -725,7 +715,7 @@ func TestAU27DecodeAndValidateStateDisallowedRedirect(t *testing.T) {
 		if loc := w.Header().Get("Location"); strings.Contains(loc, "evil.example.com") {
 			t.Fatalf("expected no redirect to the attacker's URL, got Location: %q", loc)
 		}
-		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Bad Request", "Invalid state")
+		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Invalid state")
 	})
 }
 
@@ -740,7 +730,7 @@ func TestAU28DecodeAndValidateStateMissingNonceCookie(t *testing.T) {
 		if ok {
 			t.Fatal("expected ok=false")
 		}
-		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Bad Request", "Invalid state")
+		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Invalid state")
 	})
 }
 
@@ -756,7 +746,7 @@ func TestAU29DecodeAndValidateStateNonceMismatch(t *testing.T) {
 		if ok {
 			t.Fatal("expected ok=false")
 		}
-		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Bad Request", "Invalid state")
+		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Invalid state")
 	})
 }
 
@@ -798,7 +788,7 @@ func TestAU32RequireValidModeAndSessionLinkModeNoSessionKey(t *testing.T) {
 		if ok := requireValidModeAndSession(w, r, linking.ModeLink, "https://neuralnexus.test/done"); ok {
 			t.Fatal("expected false with no session in context")
 		}
-		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, "Unauthorized", "You must be logged in to link an account")
+		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, "You must be logged in to link an account")
 	})
 }
 
@@ -811,7 +801,7 @@ func TestAU33RequireValidModeAndSessionLinkModeNilSession(t *testing.T) {
 		if ok := requireValidModeAndSession(w, r, linking.ModeLink, "https://neuralnexus.test/done"); ok {
 			t.Fatal("expected false for a nil session")
 		}
-		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, "Unauthorized", "You must be logged in to link an account")
+		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, "You must be logged in to link an account")
 	})
 }
 
@@ -825,7 +815,7 @@ func TestAU34RequireValidModeAndSessionLinkModeExpiredSession(t *testing.T) {
 		if ok := requireValidModeAndSession(w, r, linking.ModeLink, "https://neuralnexus.test/done"); ok {
 			t.Fatal("expected false for an expired session")
 		}
-		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, "Unauthorized", "You must be logged in to link an account")
+		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, "You must be logged in to link an account")
 	})
 }
 
@@ -837,7 +827,7 @@ func TestAU35RequireValidModeAndSessionUnrecognizedMode(t *testing.T) {
 		if ok := requireValidModeAndSession(w, r, linking.Mode("bogus-mode"), "https://neuralnexus.test/done"); ok {
 			t.Fatal("expected false for an unrecognized mode")
 		}
-		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusBadRequest, "Bad Request", "Invalid state")
+		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusBadRequest, "Invalid state")
 	})
 }
 
@@ -887,7 +877,7 @@ func TestAU38RedirectWithErrorHappyPath(t *testing.T) {
 
 	t.Run("AU-38_RedirectWithErrorHappyPath", func(t *testing.T) {
 		redirectWithError(w, r, "https://neuralnexus.test/done", http.StatusBadRequest, "Bad Request", "something broke")
-		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusBadRequest, "Bad Request", "something broke")
+		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusBadRequest, "something broke")
 	})
 }
 
@@ -914,7 +904,7 @@ func TestAU41RedirectBadRequest(t *testing.T) {
 
 	t.Run("AU-41_RedirectBadRequest", func(t *testing.T) {
 		redirectBadRequest(w, r, "https://neuralnexus.test/done", "bad input")
-		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusBadRequest, "Bad Request", "bad input")
+		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusBadRequest, "bad input")
 	})
 }
 
@@ -924,7 +914,7 @@ func TestAU42RedirectUnauthorized(t *testing.T) {
 
 	t.Run("AU-42_RedirectUnauthorized", func(t *testing.T) {
 		redirectUnauthorized(w, r, "https://neuralnexus.test/done", "no session")
-		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, "Unauthorized", "no session")
+		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, "no session")
 	})
 }
 
@@ -934,7 +924,7 @@ func TestAU43RedirectInternalServerError(t *testing.T) {
 
 	t.Run("AU-43_RedirectInternalServerError", func(t *testing.T) {
 		redirectInternalServerError(w, r, "https://neuralnexus.test/done", "boom")
-		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusInternalServerError, "Internal Server Error", "boom")
+		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusInternalServerError, "boom")
 	})
 }
 

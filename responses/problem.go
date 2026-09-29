@@ -11,14 +11,14 @@ import (
 
 // -------------- Structs --------------
 
-// problem -- Defined by https://www.rfc-editor.org/rfc/rfc9457.html#section-3
-type problem struct {
+// Problem -- Defined by https://www.rfc-editor.org/rfc/rfc9457.html#section-3
+type Problem struct {
 	*problempb.Problem
 }
 
 // NewProblem -- Create a new Problem
-func NewProblem(Type string, Status int, Title string, Detail string, Instance string) *problem {
-	return &problem{
+func NewProblem(Type string, Status int, Title string, Detail string, Instance string) *Problem {
+	return &Problem{
 		&problempb.Problem{
 			Type:     Type,
 			Status:   int32(Status),
@@ -30,7 +30,7 @@ func NewProblem(Type string, Status int, Title string, Detail string, Instance s
 }
 
 // SendProblem -- Send a Problem as JSON, XML or Protobuf
-func (problem *problem) SendProblem(w http.ResponseWriter, r *http.Request) {
+func (problem *Problem) SendProblem(w http.ResponseWriter, r *http.Request) {
 	var content string = "application/problem+"
 	var structBytes []byte
 	switch accept := r.Header.Get("Accept"); accept {

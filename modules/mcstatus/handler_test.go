@@ -10,17 +10,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-)
 
-// hdProblem mirrors the JSON shape responses.NewProblem/.SendProblem emits,
-// used to decode error response bodies in these tests.
-type hdProblem struct {
-	Type     string `json:"type"`
-	Status   int    `json:"status"`
-	Title    string `json:"title"`
-	Detail   string `json:"detail"`
-	Instance string `json:"instance"`
-}
+	"github.com/NeuralNexusDev/neuralnexus-api/responses"
+)
 
 type hdJavaCallArgs struct {
 	host         string
@@ -84,9 +76,9 @@ func hdDecodeJSON(t *testing.T, body []byte) map[string]interface{} {
 	return m
 }
 
-func hdDecodeProblem(t *testing.T, body []byte) hdProblem {
+func hdDecodeProblem(t *testing.T, body []byte) responses.Problem {
 	t.Helper()
-	var p hdProblem
+	var p responses.Problem
 	if err := json.Unmarshal(body, &p); err != nil {
 		t.Fatalf("failed to decode problem body %q: %v", body, err)
 	}
