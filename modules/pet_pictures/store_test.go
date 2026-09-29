@@ -18,8 +18,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// ppUnusedTCPPort returns a port likely free right now, so a later connect
-// to it fails fast with "connection refused" instead of hanging.
 func ppUnusedTCPPort(t *testing.T) int {
 	t.Helper()
 	l, err := net.Listen("tcp", "127.0.0.1:0")
@@ -44,9 +42,6 @@ func ppSetUnreachableDatabaseURL(t *testing.T) {
 	t.Setenv("DATABASE_URL", fmt.Sprintf("postgres://user:pass@127.0.0.1:%d", port))
 }
 
-// ppLiveDatabase points DATABASE_URL at the live test server (store.go
-// appends "/pet_pictures" itself) and returns a pool on the pet_pictures
-// database for cleanup.
 func ppLiveDatabase(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	dsn := os.Getenv("TEST_POSTGRES_URL")
@@ -98,7 +93,7 @@ func TestST01_NewStore(t *testing.T) {
 	})
 }
 
-func TestST02to05_CreatePet(t *testing.T) {
+func TestST02to05and26_CreatePet(t *testing.T) {
 	t.Run("ST-04_ConnectionFailure", func(t *testing.T) {
 		ppSetUnreachableDatabaseURL(t)
 		s := &store{}
@@ -159,7 +154,8 @@ func TestST02to05_CreatePet(t *testing.T) {
 	})
 
 	t.Run("ST-26_EmptyName", func(t *testing.T) {
-		ppLiveDatabase(t)
+		pool := ppLiveDatabase(t)
+		t.Cleanup(func() { pool.Exec(context.Background(), "DELETE FROM pets WHERE name = ''") })
 		s := &store{}
 		pet, err := s.CreatePet("")
 		if pet != nil || !errors.Is(err, ErrPetNameEmpty) {
@@ -168,7 +164,7 @@ func TestST02to05_CreatePet(t *testing.T) {
 	})
 }
 
-func TestST07to09_GetPetByName(t *testing.T) {
+func TestST06to09and27_GetPetAndGetPetByName(t *testing.T) {
 	t.Run("ST-09_ConnectionFailure", func(t *testing.T) {
 		ppSetUnreachableDatabaseURL(t)
 		s := &store{}
@@ -315,7 +311,7 @@ func TestST13to16_CreatePetPicture(t *testing.T) {
 	})
 }
 
-func TestST19to20_GetPetPicture(t *testing.T) {
+func TestST17to20and28to29_GetPetPictureAndGetRandPetPictureByName(t *testing.T) {
 	t.Run("ST-20_ConnectionFailure", func(t *testing.T) {
 		ppSetUnreachableDatabaseURL(t)
 		s := &store{}
@@ -380,7 +376,7 @@ func TestST19to20_GetPetPicture(t *testing.T) {
 	})
 }
 
-func TestST21_UpdatePetPicture(t *testing.T) {
+func TestST21to22and30_UpdatePetPicture(t *testing.T) {
 	t.Run("ST-21_ConnectionFailure", func(t *testing.T) {
 		ppSetUnreachableDatabaseURL(t)
 		s := &store{}
@@ -420,7 +416,7 @@ func TestST21_UpdatePetPicture(t *testing.T) {
 	})
 }
 
-func TestST22to24_DeletePetPicture(t *testing.T) {
+func TestST23to25_DeletePetPicture(t *testing.T) {
 	t.Run("ST-24_ConnectionFailure", func(t *testing.T) {
 		ppSetUnreachableDatabaseURL(t)
 		s := &store{}
