@@ -81,11 +81,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS geyser_player_textures_unique
 -- specially, which would be the surprising gap if duplicates were actually
 -- allowed.
 CREATE TABLE IF NOT EXISTS bee_name (
-    name TEXT PRIMARY KEY NOT NULL
+    name TEXT PRIMARY KEY NOT NULL CHECK (name !~ '^\s*$')
 );
 
 CREATE TABLE IF NOT EXISTS bee_name_suggestion (
-    name TEXT PRIMARY KEY NOT NULL
+    name TEXT PRIMARY KEY NOT NULL CHECK (name !~ '^\s*$')
 );
 
 -- pet_pictures is its own database on the Postgres server in production
