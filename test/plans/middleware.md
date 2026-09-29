@@ -57,16 +57,3 @@
 | MW-49 | VerifyEd25519Middleware | Error Path | Headers present but signature verification fails | Signature bytes don't match `timestamp+body` under the public key | `responses.Unauthorized` (401, `"Invalid signature"`); `next` not called | P1 |  |
 | MW-50 | VerifyEd25519Middleware | Edge Case | Signature header present but not valid hex; timestamp present | `X-Signature-Ed25519: not-hex!!` | `hex.DecodeString` fails silently (only logged when a header is also empty, which it isn't here); `ed25519.Verify` is called with an empty signature and returns false; `responses.Unauthorized` (401) sent | P2 |  |
 | MW-51 | VerifyEd25519Middleware | Error Path | `io.ReadAll(r.Body)` fails | Request body is a reader that always returns an error | `responses.Unauthorized` (401, `"Invalid signature"`); `next` not called | P2 |  |
-
-## Function inventory self-check
-- [x] LogRequest — covered by MW-01, MW-02, MW-03, MW-04
-- [x] CreateStack — covered by MW-05, MW-06
-- [x] WrappedWriter.WriteHeader — covered by MW-07
-- [x] IPMiddleware — covered by MW-08, MW-09, MW-10, MW-11, MW-12, MW-13
-- [x] SessionMiddleware — covered by MW-14, MW-15, MW-16, MW-17, MW-18, MW-19, MW-20, MW-21, MW-22, MW-23, MW-52
-- [x] RateLimitMiddleware — covered by MW-24, MW-25, MW-26, MW-27, MW-28, MW-29, MW-30, MW-31, MW-32, MW-53
-- [x] RequestIDMiddleware — covered by MW-33, MW-34, MW-35
-- [x] RequestLoggerMiddleware — covered by MW-36, MW-37
-- [x] Auth — covered by MW-38, MW-39, MW-40, MW-41, MW-42
-- [x] SelfUserID — covered by MW-43, MW-44, MW-45
-- [x] VerifyEd25519Middleware — covered by MW-46, MW-47, MW-48, MW-49, MW-50, MW-51

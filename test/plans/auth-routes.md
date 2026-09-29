@@ -112,35 +112,3 @@
 | US-53 | UpdateAccountSettingsHandler | Error Path | Would lock the account | service.SetPasswordAuthEnabled returns auth.ErrWouldLockAccount | 400 Bad Request "Link and enable another login method before disabling your password" | P2 |  |
 | US-54 | UpdateAccountSettingsHandler | Error Path | No password set | service.SetPasswordAuthEnabled returns auth.ErrNoPasswordSet | 400 Bad Request "Set a password before enabling password login" | P2 |  |
 | US-55 | UpdateAccountSettingsHandler | Error Path | Unclassified service error | service.SetPasswordAuthEnabled returns some other error | 500 Internal Server Error "Failed to update user settings" | P2 |  |
-
-## Function inventory self-check
-
-### auth.go
-- [x] LoginHandler — covered by AU-01..AU-09
-- [x] LogoutHandler — covered by AU-10..AU-12
-- [x] OAuthHandler — covered by AU-13..AU-15, AU-50
-- [x] OpenIDHandler — covered by AU-17..AU-20, AU-51
-- [x] decodeAndValidateState — covered by AU-22..AU-29
-- [x] requireValidModeAndSession — covered by AU-30..AU-35
-- [x] createSessionJWTAndSetCookie — covered by AU-36..AU-37
-- [x] redirectWithError — covered by AU-38..AU-39
-- [x] redirectBadRequest — covered by AU-41
-- [x] redirectUnauthorized — covered by AU-42
-- [x] redirectInternalServerError — covered by AU-43
-- [x] isAllowedRedirect — covered by AU-44..AU-48
-- [x] sessionCookie — covered by AU-49
-
-### users.go
-- [x] GetUserHandler — covered by US-01..US-04
-- [x] GetUserFromPlatformHandler — covered by US-05..US-07
-- [x] GetUserPermissionsHandler — covered by US-08..US-11
-- [x] UpdateUserHandler — covered by US-12..US-15
-- [x] UpdateUserFromPlatformHandler — covered by US-16..US-24
-- [x] DeleteUserHandler — covered by US-25..US-27
-- [x] GetUserLinkedAccountsHandler — covered by US-28..US-31
-- [x] UnlinkPlatformHandler — covered by US-32..US-36
-- [x] SetPlatformLoginEnabledHandler — covered by US-37..US-44
-- [x] GetAccountSettingsHandler — covered by US-45..US-48
-- [x] UpdateAccountSettingsHandler — covered by US-49..US-55
-
-No `Concurrency Invariant` rows: this module is a thin HTTP handler layer with no shared mutable state or locks of its own, and no branch here discriminates a "lost the race" outcome — the sentinel errors it switches on (auth.ErrNotFound, auth.ErrWouldLockAccount, auth.ErrLinkedAccountUnverified, auth.ErrNoPasswordSet) are ordinary error-path mappings to HTTP status codes; the actual race-recovery logic that produces those sentinels lives in modules/auth (user.go/store.go) and is covered by that package's own test suite.

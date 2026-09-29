@@ -11,6 +11,3 @@
 | TP-05 | HandleTeapot | Edge Case | `Accept` header matches a special-cased value except for letter case (`"APPLICATION/XML"`) | Request has `Accept: "APPLICATION/XML"` | The switch match is an exact, case-sensitive string compare, so this does **not** hit the XML branch: falls back to `Content-Type: application/problem+json`, same body as TP-01 | P2 |  |
 | TP-06 | HandleTeapot | Edge Case | `Accept` header holds a compound/quality-weighted value (e.g. `"application/xml, application/json;q=0.9"`) instead of a single bare media type | Request has that compound `Accept` header | No case matches the full string exactly, so it falls back to `Content-Type: application/problem+json`, same body as TP-01 | P3 |  |
 | TP-07 | HandleTeapot | Edge Case | `Accept` header explicitly set to the empty string | Request has `Accept` header present with value `""` | Falls back to `Content-Type: application/problem+json`, same body as TP-01 | P3 |  |
-
-## Function inventory self-check
-- [x] HandleTeapot — covered by TP-01, TP-02, TP-03, TP-04, TP-05, TP-06, TP-07

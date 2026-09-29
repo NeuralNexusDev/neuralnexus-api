@@ -62,22 +62,3 @@
 | TY-23 | GetBedrockStatus | Happy Path | `Extra` has a MOTD second line and a map name (len 3) | `Extra = [_, line1, mapName]` | `Motd` includes `ServerName + "\n" + Extra[1]` (escaped), `Map = Extra[2]`, other fields mapped; `ServerType`/proto enum and `Name` not asserted | P1 |  |
 | TY-24 | GetBedrockStatus | Edge Case | `Extra` is empty/nil | — | `Motd == Name == ServerName`, `Map == ""` | P2 |  |
 | TY-25 | GetBedrockStatus | Edge Case | `Extra` has exactly 2 elements (boundary) | `len(Extra) == 2` | Second MOTD line appended (`len(Extra) > 1`), but `Map` stays `""` (`len(Extra) > 2` is false); `Name` not asserted | P2 |  |
-
-## Function inventory self-check
-- [x] ServerStatusHandler — covered by HD-01..HD-07
-- [x] IconHandler — covered by HD-08..HD-11
-- [x] SimpleStatusHandler — covered by HD-12..HD-15
-- [x] NewService — covered by SV-01
-- [x] GetJavaServerStatus — covered by SV-02, SV-03, SV-09
-- [x] GetBedrockServerStatus — covered by SV-05, SV-10
-- [x] GetServerStatus — covered by SV-07, SV-08
-- [x] NewServerStatus — covered by TY-01..TY-05
-- [x] MOTDToName — covered by TY-06..TY-10
-- [x] ImgToBase64 — covered by TY-11, TY-12
-- [x] LoadImgFromFile — covered by TY-13..TY-15
-- [x] GetPing17Status — covered by TY-16, TY-17
-- [x] GetPing16Status — covered by TY-18
-- [x] GetPing14Status — covered by TY-19
-- [x] GetBeta18Status — covered by TY-20
-- [x] GetQueryStatus — covered by TY-21, TY-22
-- [x] GetBedrockStatus — covered by TY-23..TY-25

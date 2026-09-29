@@ -65,17 +65,3 @@
 | TY-10 | GameQResponse.Normalize | Edge Case | No players | GameQResponse with a nil Players slice | Returned Players is a non-nil, zero-length slice; no panic | P3 |  |
 | TY-11 | GameDigResponse.Normalize | Happy Path | Populated response with players | GameDigResponse with Connect/QueryPort/Name/Map/MaxPlayers/NumPlayers and 2 GameDigPlayer entries | Returned *GameServerStatus has matching fields, Players mapped to gsspb.Player{Name} with empty Id, QueryType==QueryTypeGameDig, Raw==the GameDigResponse value | P1 |  |
 | TY-12 | GameDigResponse.Normalize | Edge Case | No players | GameDigResponse with a nil Players slice | Returned Players is a non-nil, zero-length slice; no panic | P3 |  |
-
-## Function inventory self-check
-- [x] GameServerStatusHandler — covered by HD-01, HD-02, HD-03, HD-04, HD-05, HD-06
-- [x] SimpleGameServerStatus — covered by HD-07, HD-08, HD-09, HD-10
-- [x] NewService — covered by SV-01
-- [x] QueryGameQ — covered by SV-02, SV-03, SV-04, SV-05, SV-06
-- [x] QueryGameDig — covered by SV-07, SV-08, SV-09, SV-10
-- [x] DetermineOrVerifyQueryType — covered by SV-11, SV-12, SV-13, SV-14, SV-15, SV-16, SV-17, SV-18, SV-19, SV-20
-- [x] QueryGameServer — covered by SV-21, SV-22, SV-23, SV-24, SV-25, SV-26, SV-27, SV-28, SV-29
-- [x] NewGameServerStatus — covered by TY-01, TY-02
-- [x] ParseQueryType — covered by TY-03, TY-04, TY-05, TY-06
-- [x] mcServerStatus.Normalize — covered by TY-07, TY-08
-- [x] GameQResponse.Normalize — covered by TY-09, TY-10
-- [x] GameDigResponse.Normalize — covered by TY-11, TY-12

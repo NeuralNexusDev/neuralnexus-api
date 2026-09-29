@@ -67,22 +67,3 @@
 | ST-20 | RejectBeeNameSuggestion | Edge Case | Name does not exist in suggestions | live store, unused name (requires live DB) | Returns (name, nil) - DELETE matching zero rows is not an error | P3 |  |
 | ST-21 | UploadBeeName | Concurrency Invariant | Two goroutines concurrently upload the same name | store shared across goroutines; bee_name.name is a PRIMARY KEY (requires live DB) | Exactly one of the two calls succeeds (the other fails on the PRIMARY KEY conflict); after both complete, the name is present exactly once in bee_name (looped across trials - see test file comment) | P0 |  |
 | ST-22 | SubmitBeeName | Concurrency Invariant | Two goroutines concurrently submit the same name | store shared across goroutines; bee_name_suggestion.name is a PRIMARY KEY (requires live DB) | Exactly one of the two calls succeeds (the other fails on the PRIMARY KEY conflict); after both complete, the name is present exactly once in bee_name_suggestion (looped across trials - see test file comment) | P0 |  |
-
-## Function inventory self-check
-- [x] NewBeeName — covered by TY-01, TY-02
-- [x] NewBeeNameSuggestions — covered by TY-03, TY-04
-- [x] GetBeeNameHandler — covered by HD-01, HD-02
-- [x] UploadBeeNameHandler — covered by HD-03, HD-04, HD-05, HD-06
-- [x] DeleteBeeNameHandler — covered by HD-07, HD-08, HD-09, HD-10
-- [x] SubmitBeeNameHandler — covered by HD-11, HD-12, HD-13
-- [x] GetBeeNameSuggestionsHandler — covered by HD-14, HD-15, HD-16, HD-17, HD-18, HD-19
-- [x] AcceptBeeNameSuggestionHandler — covered by HD-20, HD-21, HD-22, HD-23
-- [x] RejectBeeNameSuggestionHandler — covered by HD-24, HD-25, HD-26, HD-27
-- [x] NewStore — covered by ST-01
-- [x] (*store) GetBeeName — covered by ST-02, ST-03, ST-04
-- [x] (*store) UploadBeeName — covered by ST-05, ST-06, ST-21
-- [x] (*store) DeleteBeeName — covered by ST-07, ST-08, ST-09
-- [x] (*store) SubmitBeeName — covered by ST-10, ST-11, ST-22
-- [x] (*store) GetBeeNameSuggestions — covered by ST-12, ST-13, ST-14
-- [x] (*store) AcceptBeeNameSuggestion — covered by ST-15, ST-16, ST-17
-- [x] (*store) RejectBeeNameSuggestion — covered by ST-18, ST-19, ST-20

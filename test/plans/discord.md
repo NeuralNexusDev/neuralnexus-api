@@ -45,15 +45,3 @@
 | WAD-02 | WebhookEvent.ApplicationAuthorizedData | Error Path | Called when `Event.Type != ApplicationAuthorized` | `Type = ApplicationDeauthorized` | Panics with message `"ApplicationAuthorizedData called on interaction of type ApplicationDeauthorized"` | P2 |  |
 | WDD-01 | WebhookEvent.ApplicationDeauthorizedData | Happy Path | Called when `Event.Type == ApplicationDeauthorized` | `Data` holds an `ApplicationDeauthorizedWebhookData` | Returns that exact value | P1 |  |
 | WDD-02 | WebhookEvent.ApplicationDeauthorizedData | Error Path | Called when `Event.Type != ApplicationDeauthorized` | `Type = ApplicationAuthorized` | Panics with message `"ApplicationDeauthorizedData called on interaction of type ApplicationAuthorized"` | P2 |  |
-
-## Function inventory self-check
-- [x] HandleDiscordWebhook — covered by HW-01..HW-13
-- [x] HandleDiscordInteraction — covered by HI-01..HI-05
-- [x] WebhookType.String — covered by WT-01, WT-02, WT-03
-- [x] WebhookEventType.String — covered by WET-01, WET-02
-- [x] InstallationContext.String — covered by IC-01, IC-02
-- [x] ApplicationAuthorizedWebhookData.Type — covered by AAD-01
-- [x] ApplicationDeauthorizedWebhookData.Type — covered by ADD-01
-- [x] WebhookEvent.UnmarshalJSON — covered by WEU-01..WEU-05
-- [x] WebhookEvent.ApplicationAuthorizedData — covered by WAD-01, WAD-02
-- [x] WebhookEvent.ApplicationDeauthorizedData — covered by WDD-01, WDD-02

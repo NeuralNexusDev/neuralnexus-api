@@ -17,10 +17,3 @@
 | RB-11 | GetRoleByName | Error Path | Name matches no known role | `name = "unknown-role"` | Returns `(Role{}, error)` with message `"role not found"` | P1 |  |
 | RB-12 | GetRoleByName | Edge Case | Empty string name | `name = ""` | Returns `(Role{}, error)` with message `"role not found"` (falls to the default switch case, same as any unrecognized name) | P3 |  |
 | RB-13 | GetRoleByName | Edge Case | Name differs from a known role only in case | `name = "System"` | Returns `(Role{}, error)` with message `"role not found"` (switch match is exact/case-sensitive) | P3 |  |
-
-## Function inventory self-check
-- [x] ScopePetPictures — covered by RB-01, RB-02
-- [x] ScopeDataStore — covered by RB-03, RB-04
-- [x] ScopeNumberStore — covered by RB-05, RB-06
-- [x] ScopeUsers — covered by RB-07, RB-08
-- [x] GetRoleByName — covered by RB-09, RB-10, RB-11, RB-12, RB-13
