@@ -191,7 +191,7 @@ func TestUS02to03GetUser(t *testing.T) {
 	})
 
 	t.Run("US-03_StoreError", func(t *testing.T) {
-		wantErr := errors.New("boom")
+		wantErr := errBoom
 		svc := usNewService(&usFakeAccountStore{getByIDErr: wantErr}, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})
 
 		_, err := svc.GetUser("u1")
@@ -229,7 +229,7 @@ func TestUS04to06GetUserFromPlatform(t *testing.T) {
 	})
 
 	t.Run("US-06_ResolvedAccountLookupFails", func(t *testing.T) {
-		wantErr := errors.New("boom")
+		wantErr := errBoom
 		as := &usFakeAccountStore{getByIDErr: wantErr}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{&LinkedAccount{UserID: "u1"}, nil}}}
 		svc := usNewService(as, als, &usFakeAccountSettingsStore{})
@@ -265,7 +265,7 @@ func TestUS07to10GetUserPermissions(t *testing.T) {
 	})
 
 	t.Run("US-08_AccountLookupFails", func(t *testing.T) {
-		wantErr := errors.New("boom")
+		wantErr := errBoom
 		svc := usNewService(&usFakeAccountStore{getByIDErr: wantErr}, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})
 
 		got, err := svc.GetUserPermissions("u1")
@@ -334,7 +334,7 @@ func TestUS11to14UpdateUser(t *testing.T) {
 	})
 
 	t.Run("US-13_GetAccountFails", func(t *testing.T) {
-		wantErr := errors.New("boom")
+		wantErr := errBoom
 		as := &usFakeAccountStore{getByIDErr: wantErr}
 		svc := usNewService(as, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})
 
@@ -348,7 +348,7 @@ func TestUS11to14UpdateUser(t *testing.T) {
 	})
 
 	t.Run("US-14_UpdateFails", func(t *testing.T) {
-		wantErr := errors.New("boom")
+		wantErr := errBoom
 		as := &usFakeAccountStore{getByIDAccount: &Account{UserID: "u1"}, updateErr: wantErr}
 		svc := usNewService(as, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})
 
@@ -402,7 +402,7 @@ func TestUS15to24UpdateUserFromPlatform(t *testing.T) {
 	})
 
 	t.Run("US-17_InitialLookupUnexpectedError", func(t *testing.T) {
-		wantErr := errors.New("boom")
+		wantErr := errBoom
 		as := &usFakeAccountStore{}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, wantErr}}}
 		svc := usNewService(as, als, &usFakeAccountSettingsStore{})
@@ -417,7 +417,7 @@ func TestUS15to24UpdateUserFromPlatform(t *testing.T) {
 	})
 
 	t.Run("US-18_AddAccountFails", func(t *testing.T) {
-		wantErr := errors.New("boom")
+		wantErr := errBoom
 		as := &usFakeAccountStore{addErr: wantErr}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, ErrNotFound}}}
 		svc := usNewService(as, als, &usFakeAccountSettingsStore{})
@@ -432,7 +432,7 @@ func TestUS15to24UpdateUserFromPlatform(t *testing.T) {
 	})
 
 	t.Run("US-19_AddLinkFailsCleansUpPlaceholder", func(t *testing.T) {
-		wantErr := errors.New("insert failed")
+		wantErr := errInsertFailed
 		as := &usFakeAccountStore{}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, ErrNotFound}}, addErr: wantErr}
 		svc := usNewService(as, als, &usFakeAccountSettingsStore{})
@@ -447,7 +447,7 @@ func TestUS15to24UpdateUserFromPlatform(t *testing.T) {
 	})
 
 	t.Run("US-20_AddLinkFailsAndCleanupFailsWrapsBoth", func(t *testing.T) {
-		linkErr := errors.New("insert failed")
+		linkErr := errInsertFailed
 		deleteErr := errors.New("delete failed")
 		as := &usFakeAccountStore{deleteErr: deleteErr}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, ErrNotFound}}, addErr: linkErr}
@@ -706,7 +706,7 @@ func TestUS26to27DeleteUser(t *testing.T) {
 	})
 
 	t.Run("US-27_StoreError", func(t *testing.T) {
-		wantErr := errors.New("boom")
+		wantErr := errBoom
 		as := &usFakeAccountStore{deleteErr: wantErr}
 		svc := usNewService(as, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})
 
@@ -730,7 +730,7 @@ func TestUS28to29GetUserLinkedAccounts(t *testing.T) {
 	})
 
 	t.Run("US-29_StoreError", func(t *testing.T) {
-		wantErr := errors.New("boom")
+		wantErr := errBoom
 		als := &usFakeLinkAccountStore{getsByUserIDErr: wantErr}
 		svc := usNewService(&usFakeAccountStore{}, als, &usFakeAccountSettingsStore{})
 
@@ -779,7 +779,7 @@ func TestUS32to33SetPlatformLoginEnabled(t *testing.T) {
 	})
 
 	t.Run("US-33_StoreError", func(t *testing.T) {
-		wantErr := errors.New("boom")
+		wantErr := errBoom
 		als := &usFakeLinkAccountStore{setLoginEnabledErr: wantErr}
 		svc := usNewService(&usFakeAccountStore{}, als, &usFakeAccountSettingsStore{})
 
@@ -803,7 +803,7 @@ func TestUS34to35GetAccountSettings(t *testing.T) {
 	})
 
 	t.Run("US-35_StoreError", func(t *testing.T) {
-		wantErr := errors.New("boom")
+		wantErr := errBoom
 		ass := &usFakeAccountSettingsStore{getErr: wantErr}
 		svc := usNewService(&usFakeAccountStore{}, &usFakeLinkAccountStore{}, ass)
 
@@ -828,7 +828,7 @@ func TestUS36to37SetPasswordAuthEnabled(t *testing.T) {
 	})
 
 	t.Run("US-37_StoreError", func(t *testing.T) {
-		wantErr := errors.New("boom")
+		wantErr := errBoom
 		ass := &usFakeAccountSettingsStore{setErr: wantErr}
 		svc := usNewService(&usFakeAccountStore{}, &usFakeLinkAccountStore{}, ass)
 

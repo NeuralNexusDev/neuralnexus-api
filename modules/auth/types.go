@@ -17,9 +17,11 @@ import (
 
 var pepper = []byte(os.Getenv("PEPPER"))
 
+const msgPepperUnset = "PEPPER environment variable must be set"
+
 func init() {
 	if len(pepper) == 0 {
-		log.Fatal("PEPPER environment variable must be set")
+		log.Fatal(msgPepperUnset)
 	}
 }
 

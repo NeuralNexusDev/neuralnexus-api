@@ -21,15 +21,20 @@ var (
 	validAudiences = []string{NN_SITE_URL, NN_API_URL}
 )
 
+const (
+	msgJWTSecretUnset  = "JWT_SECRET environment variable must be set"
+	msgSiteAPIURLUnset = "NN_SITE_URL and NN_API_URL environment variables must be set"
+)
+
 func init() {
 	if len(JWT_SECRET) == 0 {
-		log.Fatal("JWT_SECRET environment variable must be set")
+		log.Fatal(msgJWTSecretUnset)
 	}
 	// If left unset, validAudiences would contain empty strings, which would
 	// make ReadJWT's audience check accept a token with an empty-string aud
 	// entry - defeating the check silently rather than failing loudly here.
 	if NN_SITE_URL == "" || NN_API_URL == "" {
-		log.Fatal("NN_SITE_URL and NN_API_URL environment variables must be set")
+		log.Fatal(msgSiteAPIURLUnset)
 	}
 }
 

@@ -118,7 +118,7 @@ func TestST02to07Accessors(t *testing.T) {
 
 func TestST08to12TranslateAccountConstraintErr(t *testing.T) {
 	t.Run("ST-08_NonPgError", func(t *testing.T) {
-		orig := errors.New("boom")
+		orig := errBoom
 		if got := translateAccountConstraintErr(orig); !errors.Is(got, orig) {
 			t.Errorf("translateAccountConstraintErr() = %v, want unchanged %v", got, orig)
 		}

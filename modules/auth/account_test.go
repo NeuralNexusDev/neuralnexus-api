@@ -131,7 +131,7 @@ func TestAC04to05GetAccountByUsername(t *testing.T) {
 	})
 
 	t.Run("AC-05_StoreError", func(t *testing.T) {
-		wantErr := errors.New("boom")
+		wantErr := errBoom
 		as := &acFakeAccountStore{getByUserErr: wantErr}
 		svc := NewAccountService(&acFakeStore{as: as, ass: &acFakeAccountSettingsStore{}})
 
@@ -155,7 +155,7 @@ func TestAC06to07GetAccountByEmail(t *testing.T) {
 	})
 
 	t.Run("AC-07_StoreError", func(t *testing.T) {
-		wantErr := errors.New("boom")
+		wantErr := errBoom
 		as := &acFakeAccountStore{getByEmailErr: wantErr}
 		svc := NewAccountService(&acFakeStore{as: as, ass: &acFakeAccountSettingsStore{}})
 
@@ -204,7 +204,7 @@ func TestAC10to11UpdateAccount(t *testing.T) {
 	})
 
 	t.Run("AC-11_StoreError", func(t *testing.T) {
-		wantErr := errors.New("boom")
+		wantErr := errBoom
 		as := &acFakeAccountStore{updateErr: wantErr}
 		svc := NewAccountService(&acFakeStore{as: as, ass: &acFakeAccountSettingsStore{}})
 
@@ -229,7 +229,7 @@ func TestAC12to13DeleteAccount(t *testing.T) {
 	})
 
 	t.Run("AC-13_StoreError", func(t *testing.T) {
-		wantErr := errors.New("boom")
+		wantErr := errBoom
 		as := &acFakeAccountStore{deleteErr: wantErr}
 		svc := NewAccountService(&acFakeStore{as: as, ass: &acFakeAccountSettingsStore{}})
 
@@ -262,7 +262,7 @@ func TestAC14to16IsPasswordAuthEnabled(t *testing.T) {
 	})
 
 	t.Run("AC-16_SettingsLookupError", func(t *testing.T) {
-		wantErr := errors.New("boom")
+		wantErr := errBoom
 		ass := &acFakeAccountSettingsStore{err: wantErr}
 		svc := NewAccountService(&acFakeStore{as: &acFakeAccountStore{}, ass: ass})
 
