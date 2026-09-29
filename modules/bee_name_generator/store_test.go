@@ -15,9 +15,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// bngUnusedTCPPort returns a TCP port on 127.0.0.1 that is very likely free
-// at the moment it's returned, so a subsequent connection attempt to it
-// fails fast with "connection refused" instead of hanging.
+// bngUnusedTCPPort returns a port that's very likely free when returned, so
+// a connection attempt against it fails fast ("connection refused") rather
+// than hanging.
 func bngUnusedTCPPort(t *testing.T) int {
 	t.Helper()
 	l, err := net.Listen("tcp", "127.0.0.1:0")
@@ -73,12 +73,6 @@ func bngUniqueName(prefix string) string {
 	return fmt.Sprintf("%s_%s", prefix, strings.ReplaceAll(uuid.New().String(), "-", ""))
 }
 
-// bngClearTable deletes every row from the given table. bee_name and
-// bee_name_suggestion are owned exclusively by this module (no other
-// package touches them), so clearing them before an "empty table" assertion
-// is a safe, targeted reset rather than a destructive action against
-// unrelated data - it just removes the ordering-fragility of relying on
-// this being the very first test to touch the table.
 func bngClearTable(t *testing.T, db *pgxpool.Pool, table string) {
 	t.Helper()
 	if _, err := db.Exec(context.Background(), "DELETE FROM "+table); err != nil {
@@ -174,10 +168,6 @@ func TestST05to06and21_UploadBeeName(t *testing.T) {
 		}
 	})
 
-	// bee_name's PRIMARY KEY on name (docker/testdb/init.sql) must force
-	// exactly one of two concurrent same-name inserts to fail - looped
-	// across 20 trials since a single trial can't reliably distinguish that
-	// guard from a race that occasionally lets both through.
 	t.Run("ST-21_Live_ConcurrentUpload", func(t *testing.T) {
 		s, db := bngLiveStore(t)
 		const trials = 20
@@ -276,10 +266,6 @@ func TestST10to11and22_SubmitBeeName(t *testing.T) {
 		}
 	})
 
-	// bee_name_suggestion's PRIMARY KEY on name (docker/testdb/init.sql)
-	// must force exactly one of two concurrent same-name inserts to fail -
-	// looped across 20 trials since a single trial can't reliably
-	// distinguish that guard from a race that occasionally lets both through.
 	t.Run("ST-22_Live_ConcurrentSubmit", func(t *testing.T) {
 		s, db := bngLiveStore(t)
 		const trials = 20
@@ -397,11 +383,6 @@ func TestST15to17_AcceptBeeNameSuggestion(t *testing.T) {
 		}
 	})
 
-	// Nothing in store.go itself stops two concurrent accepts of the same
-	// name from both inserting into bee_name; it's the PRIMARY KEY on name
-	// (docker/testdb/init.sql) that must force exactly one insert to fail -
-	// looped across 20 trials since a single trial can't reliably
-	// distinguish that guard from a race that occasionally lets both through.
 	t.Run("ST-17_Live_ConcurrentAccept", func(t *testing.T) {
 		s, db := bngLiveStore(t)
 		const trials = 20

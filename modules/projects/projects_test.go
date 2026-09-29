@@ -12,11 +12,9 @@ import (
 	"github.com/goccy/go-json"
 )
 
-// fakeRoundTripper is a test-only http.RoundTripper that returns a canned
-// response or a canned error, without making any real network call. It is
-// swapped in for http.DefaultTransport (the getReleases seam: it builds a
-// plain &http.Client{} with no Transport set, which falls back to
-// http.DefaultTransport at call time).
+// fakeRoundTripper is swapped in for http.DefaultTransport: getReleases
+// builds a plain &http.Client{} with no Transport set, which falls back to
+// http.DefaultTransport at call time.
 type fakeRoundTripper struct {
 	resp    *http.Response
 	err     error
@@ -48,10 +46,8 @@ func swapTransport(t *testing.T, rt http.RoundTripper) {
 	})
 }
 
-// swapGithubToken temporarily reassigns the package-level githubToken
-// variable for the duration of a subtest and restores it afterward. This is
-// used instead of t.Setenv because githubToken is read once at package-init
-// time from the environment, not per-call.
+// swapGithubToken is used instead of t.Setenv because githubToken is read
+// once at package-init time from the environment, not per-call.
 func swapGithubToken(t *testing.T, val string) {
 	t.Helper()
 	orig := githubToken
@@ -107,9 +103,6 @@ func TestGetReleases(t *testing.T) {
 
 	t.Run("PJ-03_ErrorPath_InvalidRequestURL", func(t *testing.T) {
 		swapGithubToken(t, "test-token")
-		// A newline in the path component is an invalid URL control
-		// character, so http.NewRequest fails before any network call is
-		// attempted (no transport swap needed).
 
 		releases, err := getReleases("a\nb", "project")
 		if err == nil {
@@ -211,8 +204,6 @@ func TestConvertToFMLFormat(t *testing.T) {
 			if !ok {
 				t.Fatalf("result[%q] has type %T, want map[string]string", version, result[version])
 			}
-			// The function does not filter releaseMap per Forge version: the
-			// full combined map is assigned identically under every key.
 			if !reflect.DeepEqual(versionMap, wantCombined) {
 				t.Errorf("result[%q] = %+v, want combined %+v", version, versionMap, wantCombined)
 			}
@@ -222,7 +213,6 @@ func TestConvertToFMLFormat(t *testing.T) {
 		if !ok {
 			t.Fatalf("promos has type %T, want map[string]string", result["promos"])
 		}
-		// promos always point at releases[0], the first element of the slice.
 		for _, version := range forgeModVersions {
 			if got := promos[version+"-latest"]; got != releases[0].URL {
 				t.Errorf("promos[%q] = %q, want %q", version+"-latest", got, releases[0].URL)

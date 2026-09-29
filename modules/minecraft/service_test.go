@@ -1041,9 +1041,8 @@ func TestSV64to71_GetGeyserXUID(t *testing.T) {
 	})
 
 	t.Run("SV-71_GamertagEscaped", func(t *testing.T) {
-		// r.URL.Path is the decoded path (net/http unescapes it for the
-		// handler); the escaped form actually sent on the wire is what
-		// PathEscape is responsible for, so that's what this must check.
+		// r.URL.Path is already unescaped by net/http; only
+		// r.URL.EscapedPath() shows the form PathEscape produced.
 		var gotEscapedPath string
 		s := mcNewService(t, &mcMockStore{}, func(w http.ResponseWriter, r *http.Request) {
 			gotEscapedPath = r.URL.EscapedPath()
@@ -1230,10 +1229,6 @@ func TestSV85to88_GetGeyserProfile(t *testing.T) {
 	})
 
 	t.Run("SV-88_SkinFailsWithOtherError", func(t *testing.T) {
-		// GetGeyserSkin discards the store's own lookup error (it's a
-		// cache-miss signal, not a fatal one) and falls through to a live
-		// fetch; a non-2xx response there is what produces the "other
-		// error" GetGeyserProfile must propagate.
 		store := &mcMockStore{
 			getGeyserPlayerByXUID: func(int64) (*GeyserPlayer, error) { return &GeyserPlayer{Gamertag: "Notch", LastSeen: mcNow()}, nil },
 			getGeyserSkin:         func(int64) (*GeyserSkin, error) { return nil, errors.New("boom") },
@@ -1384,8 +1379,7 @@ func TestSV96to100_ServeFromS3(t *testing.T) {
 
 	t.Run("SV-100_MissingContentTypeDefaults", func(t *testing.T) {
 		s := mcNewService(t, &mcMockStore{}, func(w http.ResponseWriter, r *http.Request) {
-			// Suppress Go's automatic Content-Type sniffing so the response
-			// genuinely carries no Content-Type header, matching the row's premise.
+			// Nil the header so net/http's automatic sniffing doesn't set one.
 			w.Header()["Content-Type"] = nil
 			io.WriteString(w, "bytes")
 		})
@@ -1460,8 +1454,6 @@ func TestSV102to109_FetchAndArchive(t *testing.T) {
 	})
 
 	t.Run("SV-106_BodyReadFails", func(t *testing.T) {
-		// A handler that hijacks isn't practical over httptest; instead
-		// simulate the read failure by truncating via a Content-Length lie.
 		s := mcNewService(t, &mcMockStore{}, func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Length", "1000")
 			w.WriteHeader(http.StatusOK)
@@ -1517,8 +1509,7 @@ func TestSV102to109_FetchAndArchive(t *testing.T) {
 
 	t.Run("SV-109_MissingContentTypeDefaults", func(t *testing.T) {
 		s := mcNewService(t, &mcMockStore{}, func(w http.ResponseWriter, r *http.Request) {
-			// Suppress Go's automatic Content-Type sniffing so the response
-			// genuinely carries no Content-Type header, matching the row's premise.
+			// Nil the header so net/http's automatic sniffing doesn't set one.
 			w.Header()["Content-Type"] = nil
 			io.WriteString(w, "bytes")
 		})
@@ -1626,8 +1617,7 @@ func TestSV113to117_ServeGeyserFromS3(t *testing.T) {
 
 	t.Run("SV-117_MissingContentTypeDefaults", func(t *testing.T) {
 		s := mcNewService(t, &mcMockStore{}, func(w http.ResponseWriter, r *http.Request) {
-			// Suppress Go's automatic Content-Type sniffing so the response
-			// genuinely carries no Content-Type header, matching the row's premise.
+			// Nil the header so net/http's automatic sniffing doesn't set one.
 			w.Header()["Content-Type"] = nil
 			io.WriteString(w, "bytes")
 		})
@@ -1775,8 +1765,7 @@ func TestSV118to127_FetchAndArchiveGeyserTexture(t *testing.T) {
 
 	t.Run("SV-127_MissingContentTypeDefaults", func(t *testing.T) {
 		skinSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Suppress Go's automatic Content-Type sniffing so the response
-			// genuinely carries no Content-Type header, matching the row's premise.
+			// Nil the header so net/http's automatic sniffing doesn't set one.
 			w.Header()["Content-Type"] = nil
 			io.WriteString(w, "bytes")
 		}))

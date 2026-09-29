@@ -98,8 +98,6 @@ func (s *stubSessionService) CreateJWT(session *auth.Session) (string, error) {
 }
 func (s *stubSessionService) ReadJWT(string) (*auth.Session, error) { return nil, auth.ErrNotFound }
 
-// encodeState base64url-encodes an OAuthState as OAuthHandler/OpenIDHandler
-// expect it in the "state" query param.
 func encodeState(t *testing.T, state linking.OAuthState) string {
 	t.Helper()
 	stateJSON, err := json.Marshal(state)
@@ -478,17 +476,12 @@ func auTextResponse(status int, body string) *http.Response {
 	return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}
 }
 
-// swapDefaultTransport replaces the package-level http.DefaultTransport for
-// the duration of a subtest and restores it afterward. ProcessOAuthLogin's
-// Discord token exchange (oauth2.Config.Exchange, called with
-// context.Background() so it falls back to http.DefaultClient) and its
-// discordgo user fetch (discordgo.New builds a *http.Client with no
-// Transport set), and VerifySteamOpenIDCallback/GetSteamUser's
-// steamHTTPClient (also built with no Transport set), all resolve to
-// http.DefaultTransport at call time - the same seam
-// modules/projects/projects_test.go's swapTransport uses, so neither
-// OAuthHandler's nor OpenIDHandler's happy path needs a live network
-// dependency or an env-var skip.
+// swapDefaultTransport swaps the package-level http.DefaultTransport for the
+// duration of a subtest, restoring it after. Discord's token exchange (falls
+// back to http.DefaultClient via context.Background()) and user fetch, and
+// Steam's check_authentication/GetPlayerSummaries client, all build clients
+// with no Transport set, so they resolve to http.DefaultTransport at call
+// time - the same seam modules/projects/projects_test.go's swapTransport uses.
 func swapDefaultTransport(t *testing.T, rt http.RoundTripper) {
 	t.Helper()
 	orig := http.DefaultTransport
@@ -496,9 +489,6 @@ func swapDefaultTransport(t *testing.T, rt http.RoundTripper) {
 	t.Cleanup(func() { http.DefaultTransport = orig })
 }
 
-// swapSteamAPIKey overrides linking.STEAM_API_KEY for the duration of a
-// subtest and restores it afterward - GetSteamUser refuses to run without
-// one.
 func swapSteamAPIKey(t *testing.T, value string) {
 	t.Helper()
 	original := linking.STEAM_API_KEY

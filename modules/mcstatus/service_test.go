@@ -7,14 +7,10 @@ import (
 	"testing"
 )
 
-// svUnusedPort binds an ephemeral TCP port on 127.0.0.1 and immediately
-// releases it, giving a port that is guaranteed to refuse new connection
-// attempts at the moment this returns (nothing else can have bound it in
-// between within a single test).
-//
-// service.go's three methods make real calls over raw TCP/UDP to third-party
-// libraries with no injectable transport seam, so this is the only
-// deterministic, networkless way to exercise their error paths.
+// svUnusedPort binds and immediately releases a TCP port, which then refuses
+// connections fast and deterministically - the only reliable, networkless
+// way to exercise service.go's error paths, since its three methods call raw
+// TCP/UDP libraries with no injectable transport seam.
 func svUnusedPort(t *testing.T) int {
 	t.Helper()
 	l, err := net.Listen("tcp", "127.0.0.1:0")

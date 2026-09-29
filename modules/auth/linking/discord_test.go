@@ -72,11 +72,9 @@ func TestDC05CreateLinkedAccount(t *testing.T) {
 }
 
 // setDiscordUsersEndpoint points discordgo's EndpointUsers at ts for the
-// duration of the calling test, restoring the original value on cleanup.
-// discordgo.EndpointUser("@me") reads discordgo.EndpointUsers at call time
-// (it's a closure over the package var, not a snapshot), so reassigning it
-// here redirects GetDiscordUser's HTTP call without touching any source
-// file.
+// duration of the calling test, restoring it on cleanup. discordgo reads the
+// var live rather than caching it, so reassigning it here redirects
+// GetDiscordUser's request with no source change.
 func setDiscordUsersEndpoint(t *testing.T, ts *httptest.Server) {
 	t.Helper()
 	original := discordgo.EndpointUsers

@@ -14,7 +14,7 @@
 | HD-08 | IconHandler | Happy Path | valid host, `bedrock` absent, `GetJavaServerStatus` succeeds with a non-nil icon | mock returns a status with `Icon` set | Response `Content-Type: image/png`, 200, body is a valid PNG decoding to the same bounds | P1 |  |
 | HD-09 | IconHandler | Error Path | `GetJavaServerStatus` returns an error | mock returns `nil, err` | Response is 404 via `responses.NotFound`, body `detail` == `err.Error()`; handler returns without writing a PNG | P1 |  |
 | HD-10 | IconHandler | Edge Case | host has no `:port` suffix | host = `"example.com"` | Port parse fails, defaults to 25565 (regardless of `bedrock`), forwarded to `GetJavaServerStatus` | P2 |  |
-| HD-11 | IconHandler | Error Path | `bedrock=true` | any host | `responses.BadRequest` writes a 400 response; only the first-write invariants (status code 400, BadRequest message present) are asserted | P1 |  |
+| HD-11 | IconHandler | Error Path | `bedrock=true` | any host | `responses.BadRequest` writes a 400 response; only the first-write invariants (status code 400, BadRequest message present) are asserted | P1 | httptest's ResponseRecorder ignores WriteHeader calls after the first, so w.Code reflects the first write; the body may include bytes from a later write if the handler writes twice. |
 | HD-12 | SimpleStatusHandler | Happy Path | `GetServerStatus` succeeds | mock success | Response 200, `Content-Type: text/plain`, body `"Online"` | P1 |  |
 | HD-13 | SimpleStatusHandler | Error Path | `GetServerStatus` fails | mock returns `nil, err` | Response 404, body `"Offline"` | P1 |  |
 | HD-14 | SimpleStatusHandler | Edge Case | host has no `:port` suffix, `bedrock=true` | host = `"example.com"` | Port defaults to 19132, forwarded to `GetServerStatus` | P2 |  |

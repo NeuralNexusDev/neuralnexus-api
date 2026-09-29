@@ -531,24 +531,11 @@ func TestUS15to24UpdateUserFromPlatform(t *testing.T) {
 	})
 }
 
-// usConcurrentStore is a real, mutex-serialized in-memory AccountStore +
-// LinkAccountStore double that enforces the actual (platform, platformID)
-// uniqueness constraint AddLinkedAccountToDB depends on in production
-// (Postgres's linked_accounts_platform_unique index), so two concurrent
-// UpdateUserFromPlatform calls for the same identity exercise the same
-// real race that a live database would produce.
 type usConcurrentStore struct {
 	mu       sync.Mutex
 	accounts map[string]*Account
 	links    map[string]*LinkedAccount
 
-	// barrier forces the first barrierN calls to GetLinkedAccountByPlatformID
-	// (one per racing goroutine, for its very first, pre-insert lookup) to
-	// all complete before any of them returns. Without this, a fast
-	// in-memory fake can let one goroutine run its entire
-	// lookup-miss/create/insert sequence to completion before the next
-	// goroutine is even scheduled, so the "lost the race" branch this test
-	// exists to exercise would rarely, if ever, actually trigger.
 	barrierMu    sync.Mutex
 	barrierWG    sync.WaitGroup
 	barrierN     int
@@ -666,14 +653,6 @@ func (w *usConcurrentWrapperStore) OAuthToken() OAuthTokenStore {
 	panic("usConcurrentWrapperStore: OAuthToken not implemented")
 }
 
-// TestUS25UpdateUserFromPlatformConcurrentRace runs many trials, not one:
-// the barrier makes a single trial likely to hit the "lost the race" branch,
-// but not certain to - the Go scheduler can still let a racer finish its
-// whole create+insert sequence before others resume and observe it as
-// "found" rather than colliding. A broken recovery guard only fails a
-// fraction of individual trials, so looping (mirroring the ST-* concurrency
-// rows in store_test.go) is what actually makes this a reliable regression
-// check rather than a coin flip.
 func TestUS25UpdateUserFromPlatformConcurrentRace(t *testing.T) {
 	t.Run("US-25_ConcurrentCallersConvergeOnSameAccount", func(t *testing.T) {
 		const trials = 50

@@ -14,10 +14,6 @@ import (
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 )
 
-// hdMockStore is a self-contained fake PetPicStore for handler-layer tests:
-// handler.go's handlers all go through PetPicService.GetStore(), so no
-// network access is needed to exercise them. Each method returns its
-// configured result/error and records the arguments it was called with.
 type hdMockStore struct {
 	createPetResult *Pet
 	createPetErr    error

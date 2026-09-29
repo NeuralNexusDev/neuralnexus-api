@@ -506,14 +506,6 @@ func TestSE23to31ReadJWT(t *testing.T) {
 	})
 }
 
-// TestSE32to34InitSessionGo covers session.go's init(). SE-32 asserts the
-// postcondition init() has already established by the time this file's
-// other tests run, rather than re-invoking it. SE-33/SE-34 use the standard
-// re-exec technique (see the os/exec package docs' "TestCrasher" example):
-// package init() runs unconditionally at process start, before any
-// -test.run filtering, so simply re-execing the test binary under a broken
-// env is enough to observe the log.Fatal from outside as a real process
-// exit - no in-process recover() involved.
 func TestSE32to34InitSessionGo(t *testing.T) {
 	t.Run("SE-32_PackageLoadedUnderRequiredEnv", func(t *testing.T) {
 		if len(JWT_SECRET) == 0 {

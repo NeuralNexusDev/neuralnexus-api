@@ -11,11 +11,9 @@ import (
 	"testing"
 )
 
-// fakeRoundTripper is a test-only http.RoundTripper that returns a canned
-// response or a canned error, without making any real network call. It is
-// swapped in for http.DefaultTransport (the seam QueryGameQ/QueryGameDig go
-// through: both call http.Get directly, which uses http.DefaultClient and
-// therefore http.DefaultTransport when none is set).
+// fakeRoundTripper is swapped in for http.DefaultTransport: QueryGameQ and
+// QueryGameDig call http.Get directly, which falls back to
+// http.DefaultTransport when no client is configured.
 type fakeRoundTripper struct {
 	resp *http.Response
 	err  error
@@ -62,10 +60,9 @@ func mcLiveServer(t *testing.T) (string, int) {
 	return host, port
 }
 
-// closedTCPPort binds a listener on 127.0.0.1:0, reads back the OS-assigned
-// port, then closes it immediately so nothing is listening there any more.
-// Any connection attempt against it fails fast and deterministically
-// (connection refused), without needing a real game server.
+// closedTCPPort binds then immediately closes a listener, so a subsequent
+// connection attempt fails fast and deterministically (connection refused)
+// without needing a real game server.
 func closedTCPPort(t *testing.T) int {
 	t.Helper()
 	l, err := net.Listen("tcp", "127.0.0.1:0")
@@ -248,23 +245,15 @@ func TestDetermineOrVerifyQueryType(t *testing.T) {
 		wantType  QueryType
 		wantValid bool
 	}{
-		// "bedrock" is exclusive to MinecraftList (not present in GameQList or GameDigList).
 		{"SV-11_HappyPath_MinecraftExclusiveExplicitMatch", "bedrock", QueryTypeMinecraft, QueryTypeMinecraft, true},
 		{"SV-12_HappyPath_MinecraftExclusiveUnknownResolves", "bedrock", QueryTypeUnknown, QueryTypeMinecraft, true},
 		{"SV-13_EdgeCase_MinecraftExclusiveWrongListType", "bedrock", QueryTypeGameQ, QueryTypeUnknown, false},
-		// "aa3" is exclusive to GameQList (not present in MinecraftList or GameDigList).
 		{"SV-14_HappyPath_GameQExclusiveExplicitMatch", "aa3", QueryTypeGameQ, QueryTypeGameQ, true},
 		{"SV-15_HappyPath_GameQExclusiveUnknownResolves", "aa3", QueryTypeUnknown, QueryTypeGameQ, true},
 		{"SV-16_EdgeCase_GameQExclusiveWrongListType", "aa3", QueryTypeGameDig, QueryTypeUnknown, false},
-		// "aoc" is exclusive to GameDigList (not present in MinecraftList or GameQList).
 		{"SV-17_HappyPath_GameDigExclusiveExplicitMatch", "aoc", QueryTypeGameDig, QueryTypeGameDig, true},
 		{"SV-18_HappyPath_GameDigExclusiveUnknownResolves", "aoc", QueryTypeUnknown, QueryTypeGameDig, true},
-		// Not present in any list at all.
 		{"SV-19_EdgeCase_GameNotInAnyList", "not-a-real-game-xyz", QueryTypeUnknown, QueryTypeUnknown, false},
-		// "minecraft" is present in all three lists. QueryTypeGameQ doesn't match
-		// MinecraftList's switch, so that loop iteration breaks out without
-		// returning; the GameQList loop then finds "minecraft" too and its
-		// switch does match, resolving via fallthrough to the second list.
 		{"SV-20_EdgeCase_MultiListGameFallsThroughToMatchingList", "minecraft", QueryTypeGameQ, QueryTypeGameQ, true},
 	}
 

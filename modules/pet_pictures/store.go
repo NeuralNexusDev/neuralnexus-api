@@ -30,14 +30,8 @@ import (
 //     CONSTRAINT pets_name_not_empty CHECK ( name <> '' )
 // );
 
-// ErrPetNameEmpty is returned by CreatePet/UpdatePet when name is empty,
-// translated from the pets_name_not_empty CHECK constraint rather than
-// leaking a raw Postgres constraint-violation error.
 var ErrPetNameEmpty = errors.New("pet name must not be empty")
 
-// translatePetConstraintErr maps a Postgres check-violation on pets.name to
-// ErrPetNameEmpty, so callers never see a raw, driver-specific error for a
-// condition they're expected to recover from.
 func translatePetConstraintErr(err error) error {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == "23514" && pgErr.ConstraintName == "pets_name_not_empty" {

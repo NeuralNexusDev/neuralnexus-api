@@ -118,14 +118,10 @@ func mcLiveRedis(t *testing.T) *redis.Client {
 func mcLiveStoreDB(t *testing.T) *store    { return &store{db: mcLiveDB(t)} }
 func mcLiveStoreRedis(t *testing.T) *store { return &store{rdb: mcLiveRedis(t)} }
 
-// mcUniqueXUID hands out xuid values that won't collide across subtests or
-// concurrent test binaries sharing the same live database.
 var mcXUIDCounter = time.Now().UnixNano()
 
 func mcUniqueXUID() int64 { return atomic.AddInt64(&mcXUIDCounter, 1) }
 
-// mcUniqueHash hands out texture hash strings unique enough not to collide
-// with fixtures from other tests/runs against a shared live database.
 func mcUniqueHash(prefix string) string {
 	return fmt.Sprintf("%s-%s", prefix, strings.ReplaceAll(uuid.New().String(), "-", ""))
 }
@@ -371,10 +367,6 @@ func TestST15to19_UpsertPlayer(t *testing.T) {
 	})
 
 	t.Run("ST-19_Live_ConcurrentUpsertsSameID", func(t *testing.T) {
-		// Looped across many concurrent goroutines targeting the same row: a
-		// broken ON CONFLICT guard would surface as a unique-violation error
-		// on at least one goroutine, not reliably on every run with fewer
-		// trials, so this uses 50 concurrent writers.
 		s := mcLiveStoreDB(t)
 		id := uuid.New().String()
 		const n = 50
@@ -528,10 +520,6 @@ func TestST26to28_UpsertTextureHash(t *testing.T) {
 	})
 
 	t.Run("ST-76_Live_ConcurrentUpsertsSameHash", func(t *testing.T) {
-		// Looped across many concurrent goroutines targeting the same hash: a
-		// broken ON CONFLICT guard would surface as a unique-violation error
-		// on at least one goroutine, not reliably on every run with fewer
-		// trials, so this uses 50 concurrent writers.
 		s := mcLiveStoreDB(t)
 		hash := mcUniqueHash("hash")
 		const n = 50
@@ -995,18 +983,14 @@ func TestST64to67_UpsertGeyserSkin(t *testing.T) {
 	})
 }
 
-// mcLenReadCloser adapts a strings.Reader to io.ReadCloser while exposing
-// Len(), mirroring service.go's bytesReadCloser.
 type mcLenReadCloser struct{ *strings.Reader }
 
 func (mcLenReadCloser) Close() error { return nil }
 
-// mcSeekableReadCloser adapts an io.ReadSeeker to io.ReadCloser without
-// exposing Len() (embedding the interface, not the concrete *strings.Reader,
-// promotes only Read/Seek). This simulates a body with no explicit
-// Content-Length while remaining seekable, which the S3 SDK needs to
-// compute the payload hash in that case; io.NopCloser would strip Seek()
-// too and make PutObject fail before ever reaching the fake server.
+// mcSeekableReadCloser wraps io.ReadSeeker (not the concrete *strings.Reader)
+// so Len() isn't promoted, simulating a body with no Content-Length. The S3
+// SDK still needs Seek() to hash the payload; io.NopCloser would strip it
+// and fail PutObject before it ever reaches the fake server.
 type mcSeekableReadCloser struct{ io.ReadSeeker }
 
 func (mcSeekableReadCloser) Close() error { return nil }

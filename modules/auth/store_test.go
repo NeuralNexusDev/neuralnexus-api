@@ -15,11 +15,8 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// stUnusedTCPPort returns a TCP port on 127.0.0.1 that is very likely free
-// at the moment it's returned: it briefly binds a listener to let the OS
-// pick a free port, then releases it immediately. Nothing in this test
-// binary re-uses it, so a subsequent connection attempt reliably gets an
-// instant "connection refused" instead of hanging.
+// stUnusedTCPPort returns a port unlikely to be reused, so a later connection
+// to it fails fast with "connection refused" instead of hanging.
 func stUnusedTCPPort(t *testing.T) int {
 	t.Helper()
 	l, err := net.Listen("tcp", "127.0.0.1:0")
@@ -444,11 +441,9 @@ func TestST46DeleteOAuthToken(t *testing.T) {
 	})
 }
 
-// stLiveStore returns all three store facades backed by a real Postgres
-// connection, having created the tables they need if they don't already
-// exist. It registers a t.Cleanup that deletes every row this file's tests
-// create (userID range 910000000000000000..910000000000009999, disjoint
-// from any other test file's range) and closes the pool.
+// stLiveStore's cleanup deletes rows in userID range
+// 910000000000000000..910000000000009999, kept disjoint from other test
+// files' ranges so it can't delete their data.
 func stLiveStore(t *testing.T) (AccountStore, LinkAccountStore, AccountSettingsStore) {
 	t.Helper()
 

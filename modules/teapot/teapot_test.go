@@ -70,7 +70,7 @@ const (
 func TestHandleTeapot(t *testing.T) {
 	tests := []struct {
 		name            string
-		acceptHeader    *string // nil = header not set on the request at all
+		acceptHeader    *string
 		wantFormat      wantFormat
 		wantContentType string
 	}{

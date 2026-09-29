@@ -86,12 +86,6 @@ func svOKResponse() *http.Response {
 	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(nil)), Header: make(http.Header)}
 }
 
-// svTempFile creates a temp file directly in the current working directory
-// (the package directory under `go test`) so file.Name() is a bare relative
-// name with no path separators or extra dots — UploadPetPicture computes its
-// file extension from the whole of file.Name(), not just its base name, so a
-// temp directory containing dots or separators would corrupt that
-// computation for the tests below. The file is cleaned up automatically.
 func svTempFile(t *testing.T, pattern string, content []byte) *os.File {
 	t.Helper()
 	f, err := os.CreateTemp(".", pattern)
@@ -206,9 +200,6 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 		mock := &svMockStore{createPetPictureResult: &PetPicture{ID: "sv05-mock-id", FileExt: "jpg"}}
 		svc := NewService(mock)
 		file := svTempFile(t, "sv05-upload-*.jpg", []byte("bytes"))
-		// Removing the path after opening it: the fd stays valid for reads
-		// via the inode (so hashing still succeeds), but file.Name() now
-		// names a path that no longer exists, so os.Rename must fail.
 		if err := os.Remove(file.Name()); err != nil {
 			t.Fatalf("failed to remove temp file: %v", err)
 		}

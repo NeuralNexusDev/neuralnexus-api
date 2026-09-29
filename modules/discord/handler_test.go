@@ -12,13 +12,11 @@ import (
 	"github.com/goccy/go-json"
 )
 
-// dcRequest builds a POST request carrying body as its raw payload and, when
-// contentType is non-empty, sets the Content-Type header to it. Both
-// handlers under test call mw.LogRequest on most branches, and LogRequest
-// does an unchecked type assertion on ctx.Value(mw.RemoteAddrKey).(string)
-// and ctx.Value(mw.RequestIDKey).(int) — a request missing either would
-// panic inside that logging call rather than in the code path under test,
-// so every request here carries both.
+// dcRequest builds a POST request with the given body and Content-Type.
+// mw.LogRequest, called on most branches under test, does an unchecked type
+// assertion on ctx.Value(mw.RemoteAddrKey).(string) and
+// ctx.Value(mw.RequestIDKey).(int); a request missing either would panic
+// there instead of in the code path under test, so every request carries both.
 func dcRequest(t *testing.T, body string, contentType string) *http.Request {
 	t.Helper()
 	r := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString(body))

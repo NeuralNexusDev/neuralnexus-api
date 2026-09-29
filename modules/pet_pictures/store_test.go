@@ -9,9 +9,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// ppUnusedTCPPort returns a TCP port on 127.0.0.1 that is very likely free
-// at the moment it's returned, so a subsequent connection attempt to it
-// fails fast with "connection refused" instead of hanging.
+// ppUnusedTCPPort returns a port likely free right now, so a later connect
+// to it fails fast with "connection refused" instead of hanging.
 func ppUnusedTCPPort(t *testing.T) int {
 	t.Helper()
 	l, err := net.Listen("tcp", "127.0.0.1:0")
@@ -25,12 +24,11 @@ func ppUnusedTCPPort(t *testing.T) int {
 	return port
 }
 
-// ppSetUnreachableDatabaseURL points DATABASE_URL at a closed local port for
-// the duration of the test. store.go appends "/pet_pictures" to this value
-// itself, so it must stay a bare "scheme://user:pass@host:port" DSN with no
-// path or query string, matching the real contract. pgxpool.New only parses
-// this eagerly (it dials lazily), so it never trips database.GetDB's
-// log.Fatal; the later query fails with a genuine connection-refused error.
+// ppSetUnreachableDatabaseURL points DATABASE_URL at a closed local port. It
+// must stay a bare "scheme://user:pass@host:port" DSN — store.go appends
+// "/pet_pictures" itself. pgxpool.New parses eagerly but dials lazily, so
+// this never trips database.GetDB's log.Fatal; the query fails later with a
+// genuine connection-refused error.
 func ppSetUnreachableDatabaseURL(t *testing.T) {
 	t.Helper()
 	port := ppUnusedTCPPort(t)

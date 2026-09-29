@@ -108,9 +108,6 @@ func TestNewServerStatus(t *testing.T) {
 	})
 
 	t.Run("TY-05_UnknownServerTypeDefaultsProtoEnumToZeroValue", func(t *testing.T) {
-		// mcstatuspb.ServerType_value has no "UNKNOWN" entry, so the map
-		// lookup misses and Go's zero-value-on-miss semantics yield 0
-		// (ServerType_JAVA) rather than a panic or error.
 		status := NewServerStatus("", 0, "", "", "", 0, 0, nil, "", "", ServerType("unknown"), nil, nil)
 
 		if status.ServerType != ServerType("unknown") {
@@ -528,10 +525,6 @@ func TestGetBedrockStatus(t *testing.T) {
 	})
 
 	t.Run("TY-25_ExtraLengthTwoOmitsMap", func(t *testing.T) {
-		// len(Extra) == 2: Extra[1] exists (index 1, len>1) so the second
-		// motd line is appended, but Extra[2] does not exist (len>2 is
-		// false) so Map stays empty. Boundary check on the two `len(s.Extra)
-		// > N` conditions.
 		s := bedrockping.Response{
 			ServerName:  "BedrockSrv",
 			Extra:       []string{"unused0", "motdLine1"},

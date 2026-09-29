@@ -10,8 +10,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// mcEncodeTextures base64+JSON-encodes a TexturesValue the way a Mojang
-// TEXTURES property value is expected to look.
 func mcEncodeTextures(t *testing.T, value TexturesValue) string {
 	t.Helper()
 	data, err := json.Marshal(value)

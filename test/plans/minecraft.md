@@ -200,7 +200,7 @@
 | SV-85 | GetGeyserProfile | Happy Path | Player and skin both resolve | both succeed | Returns combined GeyserProfile with Skin set | P1 |  |
 | SV-86 | GetGeyserProfile | Edge Case | GetGeyserSkin returns ErrSkinNotFound | no skin | Returns GeyserProfile with Skin nil, no error | P2 |  |
 | SV-87 | GetGeyserProfile | Error Path | resolveGeyserPlayerByXUID fails | error | Returns that error | P2 |  |
-| SV-88 | GetGeyserProfile | Error Path | GetGeyserSkin fails with a non-ErrSkinNotFound error | store/transport error | Returns that error | P2 |  |
+| SV-88 | GetGeyserProfile | Error Path | GetGeyserSkin fails with a non-ErrSkinNotFound error | store/transport error | Returns that error | P2 | GetGeyserSkin discards the store's own lookup error as a cache-miss signal and falls through to a live fetch; the mocked non-2xx response there is what actually produces the propagated error |
 | SV-89 | GetGeyserProfileByGamertag | Happy Path | XUID and skin both resolve | both succeed | Returns combined GeyserProfile with Skin set | P1 |  |
 | SV-90 | GetGeyserProfileByGamertag | Edge Case | GetGeyserSkin returns ErrSkinNotFound | no skin | Returns GeyserProfile with Skin nil | P2 |  |
 | SV-91 | GetGeyserProfileByGamertag | Error Path | GetGeyserXUID fails | error | Returns that error | P2 |  |
@@ -218,7 +218,7 @@
 | SV-103 | fetchAndArchive | Error Path | Mojang returns 404 | status 404 | Returns ErrTextureNotFound | P1 |  |
 | SV-104 | fetchAndArchive | Error Path | Mojang returns other non-200 | status 500 | Returns wrapped status error | P2 |  |
 | SV-105 | fetchAndArchive | Error Path | http.Client.Get fails | transport error | Returns that error | P2 |  |
-| SV-106 | fetchAndArchive | Error Path | Response body read fails | erroring body | Returns that error | P2 |  |
+| SV-106 | fetchAndArchive | Error Path | Response body read fails | erroring body | Returns that error | P2 | The fake server lies about Content-Length then hijacks the connection, since httptest can't otherwise induce a body-read error |
 | SV-107 | fetchAndArchive | Edge Case | PutTextureInS3 fails | store error | Logged only; response still succeeds; UpsertTextureHash not called | P2 |  |
 | SV-108 | fetchAndArchive | Edge Case | PutTextureInS3 succeeds, UpsertTextureHash fails | store error | Logged only; response still succeeds | P2 |  |
 | SV-109 | fetchAndArchive | Edge Case | Missing Content-Type header | no header | Defaults to "image/png" | P3 |  |
@@ -265,7 +265,7 @@ Rows marked "(live)" require `TEST_POSTGRES_URL` and/or `TEST_REDIS_URL` and `t.
 | ST-16 | UpsertPlayer | Happy Path (live) | updateProfile=true, new id | live DB | Row inserted with given profile_actions; name history row inserted | P1 |  |
 | ST-17 | UpsertPlayer | Happy Path (live) | updateProfile=false, new id | live DB | Row inserted with legacy=false, demo=false, profile_actions=[] | P1 |  |
 | ST-18 | UpsertPlayer | Edge Case (live) | Same id upserted twice | live DB | Second call updates in place; exactly one row for that id | P2 |  |
-| ST-19 | UpsertPlayer | Concurrency Invariant (live) | N goroutines UpsertPlayer the same id concurrently | live DB | No unique-violation errors from any goroutine; `players.id` being a PRIMARY KEY then guarantees exactly one surviving row (looped trials) | P0 |  |
+| ST-19 | UpsertPlayer | Concurrency Invariant (live) | N goroutines UpsertPlayer the same id concurrently | live DB | No unique-violation errors from any goroutine; `players.id` being a PRIMARY KEY then guarantees exactly one surviving row (looped trials) | P0 | 50 concurrent writers — fewer wouldn't reliably reproduce a broken ON CONFLICT guard's race on every run |
 | ST-20 | UpsertTextures | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |  |
 | ST-21 | UpsertTextures | Happy Path (live) | Skin+cape+SLIM model, hashes pre-registered | live DB | Row inserted with model stored | P1 |  |
 | ST-22 | UpsertTextures | Edge Case (live) | Same conflict key upserted twice | live DB | Second call updates last_seen; no duplicate row | P2 |  |
@@ -275,7 +275,7 @@ Rows marked "(live)" require `TEST_POSTGRES_URL` and/or `TEST_REDIS_URL` and `t.
 | ST-26 | UpsertTextureHash | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |  |
 | ST-27 | UpsertTextureHash | Happy Path (live) | New hash | live DB | Row inserted | P1 |  |
 | ST-28 | UpsertTextureHash | Edge Case (live) | Duplicate hash | live DB | ON CONFLICT DO NOTHING; no error | P2 |  |
-| ST-76 | UpsertTextureHash | Concurrency Invariant (live) | N goroutines UpsertTextureHash the same hash concurrently | live DB | No unique-violation errors from any goroutine; `textures.hash` being a PRIMARY KEY then guarantees exactly one surviving row (looped trials) | P0 |  |
+| ST-76 | UpsertTextureHash | Concurrency Invariant (live) | N goroutines UpsertTextureHash the same hash concurrently | live DB | No unique-violation errors from any goroutine; `textures.hash` being a PRIMARY KEY then guarantees exactly one surviving row (looped trials) | P0 | 50 concurrent writers — fewer wouldn't reliably reproduce a broken ON CONFLICT guard's race on every run |
 | ST-29 | GetPlayerFromCache | Error Path | Redis unreachable | closed-port client | Raw connection error passed through unchanged | P2 |  |
 | ST-30 | GetPlayerFromCache | Happy Path (live) | Key set via SetPlayerInCache | live Redis | Returns decoded *Player | P1 |  |
 | ST-31 | GetPlayerFromCache | Error Path (live) | Missing key | live Redis, unknown key | Returns redis.Nil | P1 |  |

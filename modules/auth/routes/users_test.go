@@ -78,9 +78,6 @@ func (s *stubUserService) SetPasswordAuthEnabled(_ string, enabled bool) error {
 	return s.setPasswordAuthErr
 }
 
-// newSessionRequest builds a request carrying session in context plus
-// user_id/platform path values, mirroring what net/http's routing populates
-// from patterns like "/api/v1/users/{user_id}/link/{platform}".
 func newSessionRequest(method string, session *auth.Session, userID, platform, body string) *http.Request {
 	ctx := context.WithValue(context.Background(), mw.SessionKey, session)
 	var r *http.Request

@@ -78,12 +78,6 @@ func (f *mwFakeRateLimitSvc) GetRateLimit(key string) (int, error) {
 
 func (f *mwFakeRateLimitSvc) SetRateLimit(string, int) error { return nil }
 
-// mwSyncedRateLimitSvc is a concurrency-safe auth.RateLimitService test
-// double: IncrRateLimit/GetRateLimit share a per-key counter guarded by a
-// mutex, so it behaves the way a correct backing store (e.g. an atomic
-// Redis INCR) would under concurrent callers. mwFakeRateLimitSvc above
-// isn't safe for this — its getLimit is a fixed value, not a live counter
-// — so MW-53 needs this second double instead of reusing it.
 type mwSyncedRateLimitSvc struct {
 	mu     sync.Mutex
 	counts map[string]int
@@ -117,10 +111,8 @@ func (f *mwSyncedRateLimitSvc) SetRateLimit(key string, limit int) error {
 	return nil
 }
 
-// mwBaseCtx returns a context already carrying the values LogRequest
-// type-asserts without an ok-check (RemoteAddrKey/RequestIDKey), so any
-// middleware under test that may call LogRequest doesn't panic for reasons
-// unrelated to the row being tested.
+// mwBaseCtx pre-populates RemoteAddrKey/RequestIDKey, which LogRequest
+// type-asserts without an ok-check and would otherwise panic on.
 func mwBaseCtx() context.Context {
 	ctx := context.WithValue(context.Background(), RemoteAddrKey, "127.0.0.1")
 	ctx = context.WithValue(ctx, RequestIDKey, 1)
@@ -716,13 +708,6 @@ func TestRateLimitMiddleware(t *testing.T) {
 	})
 
 	t.Run("MW-53_ConcurrentSessionRequestsNeverExceedLimit", func(t *testing.T) {
-		// IncrRateLimit and GetRateLimit are two separate, non-atomic calls
-		// against the same key, so concurrent requests can interleave
-		// between them. 20 trials of 30 truly concurrent goroutines each
-		// (racing on the same session key, against a mutex-correct counter)
-		// so a broken/removed limit check reliably lets more than `limit`
-		// through on at least one trial — a single trial couldn't rule out
-		// a lucky scheduling order masking that.
 		const (
 			trials      = 20
 			concurrency = 30

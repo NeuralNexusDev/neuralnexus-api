@@ -214,9 +214,8 @@ func oaSetupTwitchPlatform(t *testing.T) {
 	twitch.APIBaseURL = usersTS.URL
 	t.Cleanup(func() { twitch.APIBaseURL = originalAPIBaseURL })
 
-	// helix.NewClient refuses to construct a client without a ClientID,
-	// regardless of APIBaseURL, so fill one in if the test environment
-	// doesn't set TWITCH_CLIENT_ID.
+	// helix.NewClient requires a ClientID to construct at all, regardless of
+	// APIBaseURL, so fill one in if TWITCH_CLIENT_ID isn't set.
 	if twitch.CLIENT_ID == "" {
 		twitch.CLIENT_ID = "test-client-id"
 		t.Cleanup(func() { twitch.CLIENT_ID = "" })
@@ -1107,8 +1106,6 @@ func TestOA27to42ProcessOAuthLink(t *testing.T) {
 		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return errors.New("write failed") }}
 		req := oaRequestWithSession(activeSession("user-1"))
 
-		// linkPlatformUserToSession normalizes any AddLinkedAccountToDB
-		// failure to this fixed message (see OA-71).
 		_, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: auth.PlatformMinecraft, Mode: ModeLink})
 		if err == nil || err.Error() != "failed to link account" {
 			t.Fatalf("error = %v, want \"failed to link account\"", err)
@@ -1723,18 +1720,12 @@ func TestOA67to71LinkPlatformUserToSession(t *testing.T) {
 	})
 }
 
-//
-// resolveOrCreateAccountForPlatformUser, resolveOrCreateAccountForMicrosoftUser
-// and ensureMicrosoftIdentityLinked never spawn goroutines or hold locks
-// themselves, but their doc comments ("Lost the race: use the winner's
-// account instead", "the only state where it's safe to delete on a lost
-// race") describe a genuine concurrency invariant: two separate HTTP
-// requests (callers) racing to link the same platform identity, arbitrated
-// by the store's (platform, platform_id) uniqueness constraint. The doubles
-// below simulate that constraint faithfully - atomically, under a mutex -
-// so launching real goroutines against them exercises the actual race
-// instead of merely asserting behavior for a canned auth.ErrAlreadyLinked
-// return.
+// The functions under test hold no locks themselves; the race is between
+// separate callers, arbitrated by the store's (platform, platform_id)
+// uniqueness constraint. The doubles below enforce that constraint
+// atomically under a mutex, so launching real goroutines against them
+// exercises the actual race instead of just asserting behavior for a canned
+// auth.ErrAlreadyLinked return.
 
 type oaConcurrentAccountService struct {
 	mu       sync.Mutex
@@ -1923,11 +1914,6 @@ func TestOA73And74EnsureMicrosoftIdentityLinkedConcurrentRace(t *testing.T) {
 		_ = as.AddAccount(existingAccount)
 		_ = as.AddAccount(freshPlaceholder)
 
-		// Neither identity is linked yet when the race starts - unlike
-		// OA-73, the two callers are NOT symmetric: A already resolved to
-		// an existing, non-placeholder account (isNewAccount=false, as if
-		// its Java identity was already linked earlier), while B is a
-		// fully fresh login (isNewAccount=true).
 		var wg sync.WaitGroup
 		var resultA, resultB *auth.Account
 		var errA, errB error
@@ -1942,18 +1928,12 @@ func TestOA73And74EnsureMicrosoftIdentityLinkedConcurrentRace(t *testing.T) {
 		}()
 		wg.Wait()
 
-		// Regardless of who won the race, the existing (non-placeholder)
-		// account must never be deleted - that's the cleanup-vs-conflict
-		// distinction isNewAccount exists to enforce.
 		if _, err := as.GetAccountByID(existingAccount.UserID); err != nil {
 			t.Fatalf("existing-account was deleted (or is missing) after the race: %v", err)
 		}
 
 		switch {
 		case errA == nil && errB == nil:
-			// A (the existing account) won outright; B lost but was a
-			// fresh placeholder, so it converges on A's account and
-			// cleans itself up.
 			if resultA.UserID != existingAccount.UserID {
 				t.Errorf("A resolved to %s, want its own account %s", resultA.UserID, existingAccount.UserID)
 			}
@@ -1967,10 +1947,6 @@ func TestOA73And74EnsureMicrosoftIdentityLinkedConcurrentRace(t *testing.T) {
 				t.Errorf("account store has %d accounts, want exactly 1", got)
 			}
 		case errA != nil && errB == nil:
-			// B (the fresh placeholder) won outright; A lost, and since A
-			// was NOT a placeholder (isNewAccount=false), it must report a
-			// real conflict rather than silently disappearing or
-			// converging.
 			if !errors.Is(errA, errConflictingMicrosoftIdentities) {
 				t.Errorf("A's error = %v, want errConflictingMicrosoftIdentities", errA)
 			}
@@ -2033,15 +2009,11 @@ func TestOA75ResolveOrCreateAccountForMicrosoftUserConcurrentRace(t *testing.T) 
 	})
 }
 
-// oaBarrierLinkAccountStore is a mutex-serialized auth.LinkAccountStore
-// double, like oaConcurrentLinkAccountStore above, except its
-// GetLinkedAccountByPlatformID additionally holds every racing caller at a
-// rendezvous barrier until all of them have completed that same call. This
-// makes linkPlatformUserToSession's check-then-act window (read, see
-// ErrNotFound, then write) reproduce deterministically on every run: without
-// it, a fast in-memory fake can let one goroutine run its entire
-// read-miss/write sequence to completion before the next goroutine is even
-// scheduled, so the two callers would only occasionally actually race.
+// oaBarrierLinkAccountStore extends oaConcurrentLinkAccountStore: its
+// GetLinkedAccountByPlatformID also holds every caller at a barrier until
+// each has read, forcing linkPlatformUserToSession's check-then-act window to
+// overlap deterministically - without it a fast in-memory store could let one
+// goroutine finish before another starts, only occasionally racing.
 type oaBarrierLinkAccountStore struct {
 	mu    sync.Mutex
 	byKey map[string]*auth.LinkedAccount
@@ -2069,7 +2041,7 @@ func (m *oaBarrierLinkAccountStore) GetLinkedAccountByPlatformID(platform auth.P
 	m.barrierMu.Unlock()
 	if participates {
 		m.barrierWG.Done()
-		m.barrierWG.Wait() // rendezvous: hold every racer here until all have missed
+		m.barrierWG.Wait()
 	}
 
 	m.mu.Lock()
@@ -2107,16 +2079,6 @@ func (m *oaBarrierLinkAccountStore) SetLinkedAccountLoginEnabled(string, auth.Pl
 	return nil
 }
 
-// TestOA82LinkPlatformUserToSessionConcurrentRace exercises the
-// check-then-act race the audit flagged: linkPlatformUserToSession reads via
-// GetLinkedAccountByPlatformID expecting auth.ErrNotFound, then calls
-// AddLinkedAccountToDB with no special handling of a concurrent-conflict
-// error - any failure there, including a race-losing auth.ErrAlreadyLinked,
-// is masked as the generic "failed to link account" error. The barrier store
-// forces both goroutines' reads to observe auth.ErrNotFound before either
-// writes, deterministically (not just probabilistically) reproducing the
-// race every run, so a single trial is sufficient here - unlike a
-// scheduler-dependent race, there is no lucky interleaving that avoids it.
 func TestOA82LinkPlatformUserToSessionConcurrentRace(t *testing.T) {
 	t.Run("OA-82_ConcurrentCallersToDifferentSessionsExactlyOneWins", func(t *testing.T) {
 		las := newOABarrierLinkAccountStore(2)

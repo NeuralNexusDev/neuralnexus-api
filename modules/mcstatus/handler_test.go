@@ -291,11 +291,6 @@ func TestIconHandler(t *testing.T) {
 		}
 	})
 
-	// httptest's ResponseRecorder ignores WriteHeader calls after the first,
-	// so w.Code reliably reflects the first write; the recorded body may
-	// contain bytes from a second write if the handler writes more than
-	// once, so this only asserts the first-write invariants, not full body
-	// equality.
 	t.Run("HD-11_BedrockFallsThroughAfterBadRequest", func(t *testing.T) {
 		mock := &hdMockService{javaErr: errors.New("java offline")}
 		req := hdRequest(t, "example.com:19132", "bedrock=true")

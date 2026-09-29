@@ -306,9 +306,6 @@ func TestTY26NewLinkedAccount(t *testing.T) {
 	})
 }
 
-// TestTY27to28InitTypesGo covers types.go's init(). See
-// TestSE32to34InitSessionGo in session_test.go for why SE-33/TY-28 re-exec
-// the test binary rather than recovering from the log.Fatal in-process.
 func TestTY27to28InitTypesGo(t *testing.T) {
 	t.Run("TY-27_PackageLoadedUnderRequiredEnv", func(t *testing.T) {
 		if len(pepper) == 0 {
