@@ -693,6 +693,20 @@ func TestRateLimitMiddleware(t *testing.T) {
 		}
 	})
 
+	t.Run("MW-54_NoSessionIncrErrorStillEnforcesLimit", func(t *testing.T) {
+		svc := &mwFakeRateLimitSvc{incrErr: errors.New("redis down"), getLimit: 10}
+		r := mwRateLimitRequest(nil, "9.8.7.6:1234")
+
+		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
+
+		if nextCalled {
+			t.Error("expected next NOT to be called when GetRateLimit reports over the limit after an IncrRateLimit error")
+		}
+		if rec.Code != http.StatusTooManyRequests {
+			t.Errorf("expected status 429, got %d", rec.Code)
+		}
+	})
+
 	t.Run("MW-32_NoSessionGetErrorFailsOpenAndCallsNext", func(t *testing.T) {
 		svc := &mwFakeRateLimitSvc{getErr: errors.New("redis down")}
 		r := mwRateLimitRequest(nil, "9.8.7.6:1234")
