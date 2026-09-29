@@ -16,6 +16,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -118,8 +119,6 @@ func (c *bngTruncatingConn) Read(b []byte) (int, error) {
 	return c.Read(b)
 }
 
-// bngCommandCompleteOffset returns where the CommandComplete message starts
-// in a simple-protocol response, found by walking the message boundaries.
 func bngCommandCompleteOffset(resp []byte) int {
 	for off := 0; off+5 <= len(resp); {
 		if resp[off] == 'C' {
@@ -297,8 +296,9 @@ func TestST05to06and21and24_UploadBeeName(t *testing.T) {
 		})
 
 		got, err := s.UploadBeeName(blank)
-		if err == nil {
-			t.Error("UploadBeeName() error = nil, want the CHECK constraint violation")
+		var pgErr *pgconn.PgError
+		if !errors.As(err, &pgErr) || pgErr.Code != "23514" {
+			t.Errorf("UploadBeeName() error = %v, want a CHECK violation (SQLSTATE 23514)", err)
 		}
 		if got != "" {
 			t.Errorf("UploadBeeName() = %q, want an empty string on error", got)
@@ -414,8 +414,9 @@ func TestST10to11and22and25_SubmitBeeName(t *testing.T) {
 		})
 
 		got, err := s.SubmitBeeName(blank)
-		if err == nil {
-			t.Error("SubmitBeeName() error = nil, want the CHECK constraint violation")
+		var pgErr *pgconn.PgError
+		if !errors.As(err, &pgErr) || pgErr.Code != "23514" {
+			t.Errorf("SubmitBeeName() error = %v, want a CHECK violation (SQLSTATE 23514)", err)
 		}
 		if got != "" {
 			t.Errorf("SubmitBeeName() = %q, want an empty string on error", got)
@@ -583,8 +584,9 @@ func TestST15to17and26_AcceptBeeNameSuggestion(t *testing.T) {
 		})
 
 		got, err := s.AcceptBeeNameSuggestion(blank)
-		if err == nil {
-			t.Error("AcceptBeeNameSuggestion() error = nil, want the CHECK constraint violation")
+		var pgErr *pgconn.PgError
+		if !errors.As(err, &pgErr) || pgErr.Code != "23514" {
+			t.Errorf("AcceptBeeNameSuggestion() error = %v, want a CHECK violation (SQLSTATE 23514)", err)
 		}
 		if got != "" {
 			t.Errorf("AcceptBeeNameSuggestion() = %q, want an empty string on error", got)
