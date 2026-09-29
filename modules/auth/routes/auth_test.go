@@ -262,7 +262,7 @@ func TestAU06LoginHandlerPasswordAuthCheckErrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to build account: %v", err)
 	}
-	as := &stubAccountService{account: account, passwordAuthErr: errors.New("db exploded")}
+	as := &stubAccountService{account: account, passwordAuthErr: errDBExploded}
 	ss := &stubSessionService{}
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
 	w := httptest.NewRecorder()
@@ -304,7 +304,7 @@ func TestAU08LoginHandlerAddSessionFails(t *testing.T) {
 		t.Fatalf("failed to build account: %v", err)
 	}
 	as := &stubAccountService{account: account}
-	ss := &stubSessionService{addSessionErr: errors.New("db exploded")}
+	ss := &stubSessionService{addSessionErr: errDBExploded}
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
 	w := httptest.NewRecorder()
 
@@ -326,7 +326,7 @@ func TestAU09LoginHandlerCreateJWTFails(t *testing.T) {
 		t.Fatalf("failed to build account: %v", err)
 	}
 	as := &stubAccountService{account: account}
-	ss := &stubSessionService{createJWT: func(*auth.Session) (string, error) { return "", errors.New("signing failed") }}
+	ss := &stubSessionService{createJWT: func(*auth.Session) (string, error) { return "", errSigningFailed }}
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
 	w := httptest.NewRecorder()
 
@@ -394,7 +394,7 @@ func TestAU12LogoutHandlerDeleteSessionFails(t *testing.T) {
 	ctx := context.WithValue(context.Background(), mw.SessionKey, session)
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
-	ss := &stubSessionService{deleteSessionErr: errors.New("db exploded")}
+	ss := &stubSessionService{deleteSessionErr: errDBExploded}
 
 	t.Run("AU-12_LogoutDeleteSessionFails", func(t *testing.T) {
 		LogoutHandler(ss)(w, r)
@@ -415,7 +415,7 @@ func TestAU13OAuthHandlerMissingCode(t *testing.T) {
 	t.Run("AU-13_OAuthMissingCode", func(t *testing.T) {
 		OAuthHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{})(w, r)
 
-		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Invalid request")
+		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, msgInvalidRequest)
 	})
 }
 
@@ -426,7 +426,7 @@ func TestAU14OAuthHandlerMissingState(t *testing.T) {
 	t.Run("AU-14_OAuthMissingState", func(t *testing.T) {
 		OAuthHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{})(w, r)
 
-		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Invalid request")
+		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, msgInvalidRequest)
 	})
 }
 
@@ -578,7 +578,7 @@ func TestAU17OpenIDHandlerMissingState(t *testing.T) {
 	t.Run("AU-17_OpenIDMissingState", func(t *testing.T) {
 		OpenIDHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{})(w, r)
 
-		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Invalid request")
+		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, msgInvalidRequest)
 	})
 }
 
@@ -607,7 +607,7 @@ func TestAU19OpenIDHandlerBadOpenIDMode(t *testing.T) {
 	t.Run("AU-19_OpenIDBadOpenIDMode", func(t *testing.T) {
 		OpenIDHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{})(w, r)
 
-		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusBadRequest, "Invalid state")
+		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusBadRequest, msgInvalidState)
 	})
 }
 
@@ -622,7 +622,7 @@ func TestAU20OpenIDHandlerBadClaimedID(t *testing.T) {
 	t.Run("AU-20_OpenIDBadClaimedID", func(t *testing.T) {
 		OpenIDHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{})(w, r)
 
-		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusBadRequest, "Invalid state")
+		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusBadRequest, msgInvalidState)
 	})
 }
 
@@ -653,7 +653,7 @@ func TestAU23DecodeAndValidateStateMissingParam(t *testing.T) {
 		if ok {
 			t.Fatal("expected ok=false")
 		}
-		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Invalid request")
+		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, msgInvalidRequest)
 	})
 }
 
@@ -666,7 +666,7 @@ func TestAU24DecodeAndValidateStateInvalidBase64(t *testing.T) {
 		if ok {
 			t.Fatal("expected ok=false")
 		}
-		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Invalid state")
+		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, msgInvalidState)
 	})
 }
 
@@ -680,7 +680,7 @@ func TestAU25DecodeAndValidateStateInvalidJSON(t *testing.T) {
 		if ok {
 			t.Fatal("expected ok=false")
 		}
-		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Invalid state")
+		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, msgInvalidState)
 	})
 }
 
@@ -696,7 +696,7 @@ func TestAU26DecodeAndValidateStateMissingRequiredField(t *testing.T) {
 		if ok {
 			t.Fatal("expected ok=false")
 		}
-		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Invalid state")
+		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, msgInvalidState)
 	})
 }
 
@@ -715,7 +715,7 @@ func TestAU27DecodeAndValidateStateDisallowedRedirect(t *testing.T) {
 		if loc := w.Header().Get("Location"); strings.Contains(loc, "evil.example.com") {
 			t.Fatalf("expected no redirect to the attacker's URL, got Location: %q", loc)
 		}
-		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Invalid state")
+		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, msgInvalidState)
 	})
 }
 
@@ -730,7 +730,7 @@ func TestAU28DecodeAndValidateStateMissingNonceCookie(t *testing.T) {
 		if ok {
 			t.Fatal("expected ok=false")
 		}
-		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Invalid state")
+		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, msgInvalidState)
 	})
 }
 
@@ -746,7 +746,7 @@ func TestAU29DecodeAndValidateStateNonceMismatch(t *testing.T) {
 		if ok {
 			t.Fatal("expected ok=false")
 		}
-		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Invalid state")
+		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, msgInvalidState)
 	})
 }
 
@@ -827,7 +827,7 @@ func TestAU35RequireValidModeAndSessionUnrecognizedMode(t *testing.T) {
 		if ok := requireValidModeAndSession(w, r, linking.Mode("bogus-mode"), "https://neuralnexus.test/done"); ok {
 			t.Fatal("expected false for an unrecognized mode")
 		}
-		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusBadRequest, "Invalid state")
+		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusBadRequest, msgInvalidState)
 	})
 }
 
@@ -856,7 +856,7 @@ func TestAU36CreateSessionJWTAndSetCookieHappyPath(t *testing.T) {
 
 func TestAU37CreateSessionJWTAndSetCookieCreateJWTFails(t *testing.T) {
 	session := &auth.Session{ID: "s1", UserID: "u1"}
-	wantErr := errors.New("signing failed")
+	wantErr := errSigningFailed
 	ss := &stubSessionService{createJWT: func(*auth.Session) (string, error) { return "", wantErr }}
 	w := httptest.NewRecorder()
 

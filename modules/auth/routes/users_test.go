@@ -2,7 +2,6 @@ package authroutes
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -145,7 +144,7 @@ func TestUS03GetUserHandlerForbidden(t *testing.T) {
 }
 
 func TestUS04GetUserHandlerServiceErrorMapsTo404(t *testing.T) {
-	svc := &stubUserService{userErr: errors.New("db exploded")}
+	svc := &stubUserService{userErr: errDBExploded}
 	r := newSessionRequest(http.MethodGet, selfSession("u1"), "u1", "", "")
 	w := httptest.NewRecorder()
 
@@ -225,7 +224,7 @@ func TestUS10GetUserPermissionsHandlerForbidden(t *testing.T) {
 }
 
 func TestUS11GetUserPermissionsHandlerServiceErrorMapsTo404(t *testing.T) {
-	svc := &stubUserService{permissionsErr: errors.New("db exploded")}
+	svc := &stubUserService{permissionsErr: errDBExploded}
 	r := newSessionRequest(http.MethodGet, selfSession("u1"), "u1", "", "")
 	w := httptest.NewRecorder()
 
@@ -272,7 +271,7 @@ func TestUS14UpdateUserHandlerMalformedBody(t *testing.T) {
 }
 
 func TestUS15UpdateUserHandlerServiceErrorMapsTo400(t *testing.T) {
-	svc := &stubUserService{updateUserErr: errors.New("db exploded")}
+	svc := &stubUserService{updateUserErr: errDBExploded}
 	r := newSessionRequest(http.MethodPatch, adminUsersSession("admin1"), "u1", "", `{"username":"newname"}`)
 	w := httptest.NewRecorder()
 
@@ -358,7 +357,7 @@ func TestUS23UpdateUserFromPlatformHandlerMalformedBody(t *testing.T) {
 }
 
 func TestUS24UpdateUserFromPlatformHandlerServiceErrorMapsTo400(t *testing.T) {
-	svc := &stubUserService{updateFromPlatformErr: errors.New("db exploded")}
+	svc := &stubUserService{updateFromPlatformErr: errDBExploded}
 	r := newSessionRequest(http.MethodPatch, adminUsersSession("admin1"), "", "discord", `{"id":"123"}`)
 	r.SetPathValue("platform_id", "123")
 	w := httptest.NewRecorder()
@@ -392,7 +391,7 @@ func TestUS26DeleteUserHandlerForbidden(t *testing.T) {
 }
 
 func TestUS27DeleteUserHandlerServiceErrorMapsTo400(t *testing.T) {
-	svc := &stubUserService{deleteUserErr: errors.New("db exploded")}
+	svc := &stubUserService{deleteUserErr: errDBExploded}
 	r := newSessionRequest(http.MethodDelete, adminUsersSession("admin1"), "u1", "", "")
 	w := httptest.NewRecorder()
 
@@ -436,7 +435,7 @@ func TestUS30GetUserLinkedAccountsHandlerForbidden(t *testing.T) {
 }
 
 func TestUS31GetUserLinkedAccountsHandlerServiceErrorMapsTo500(t *testing.T) {
-	svc := &stubUserService{linksErr: errors.New("db exploded")}
+	svc := &stubUserService{linksErr: errDBExploded}
 	r := newSessionRequest(http.MethodGet, selfSession("u1"), "u1", "", "")
 	w := httptest.NewRecorder()
 
@@ -497,7 +496,7 @@ func TestUS35UnlinkPlatformHandlerWouldLockAccountMapsTo400(t *testing.T) {
 }
 
 func TestUS36UnlinkPlatformHandlerUnclassifiedErrorMapsTo500(t *testing.T) {
-	svc := &stubUserService{unlinkErr: errors.New("db exploded")}
+	svc := &stubUserService{unlinkErr: errDBExploded}
 	r := newSessionRequest(http.MethodDelete, selfSession("u1"), "u1", "discord", "")
 	w := httptest.NewRecorder()
 
@@ -594,7 +593,7 @@ func TestUS43SetPlatformLoginEnabledHandlerUnverifiedMapsTo400(t *testing.T) {
 }
 
 func TestUS44SetPlatformLoginEnabledHandlerUnclassifiedErrorMapsTo500(t *testing.T) {
-	svc := &stubUserService{setEnableErr: errors.New("db exploded")}
+	svc := &stubUserService{setEnableErr: errDBExploded}
 	r := newSessionRequest(http.MethodPatch, selfSession("u1"), "u1", "discord", `{"login_enabled":true}`)
 	w := httptest.NewRecorder()
 
@@ -638,7 +637,7 @@ func TestUS47GetAccountSettingsHandlerForbidden(t *testing.T) {
 }
 
 func TestUS48GetAccountSettingsHandlerServiceErrorMapsTo500(t *testing.T) {
-	svc := &stubUserService{getSettingsErr: errors.New("db exploded")}
+	svc := &stubUserService{getSettingsErr: errDBExploded}
 	r := newSessionRequest(http.MethodGet, selfSession("u1"), "u1", "", "")
 	w := httptest.NewRecorder()
 
@@ -724,7 +723,7 @@ func TestUS54UpdateAccountSettingsHandlerNoPasswordSetMapsTo400(t *testing.T) {
 }
 
 func TestUS55UpdateAccountSettingsHandlerUnclassifiedErrorMapsTo500(t *testing.T) {
-	svc := &stubUserService{setPasswordAuthErr: errors.New("db exploded")}
+	svc := &stubUserService{setPasswordAuthErr: errDBExploded}
 	r := newSessionRequest(http.MethodPatch, selfSession("u1"), "u1", "", `{"password_auth":true}`)
 	w := httptest.NewRecorder()
 

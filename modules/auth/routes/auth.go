@@ -16,6 +16,11 @@ import (
 )
 
 // Login struct for login request
+const (
+	msgInvalidRequest = "Invalid request"
+	msgInvalidState   = "Invalid state"
+)
+
 type Login struct {
 	Username string `json:"username" xml:"username" validate:"required_without=GetEmail"`
 	Email    string `json:"email" xml:"email" validate:"required_without=GetUsername"`
@@ -107,7 +112,7 @@ func OAuthHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Ses
 		code := r.URL.Query().Get("code")
 		if code == "" {
 			log.Println("No code provided")
-			redirectBadRequest(w, r, auth.NN_SITE_URL, "Invalid request")
+			redirectBadRequest(w, r, auth.NN_SITE_URL, msgInvalidRequest)
 			return
 		}
 
@@ -157,7 +162,7 @@ func OpenIDHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Se
 		if err != nil {
 			log.Println("Failed to verify Steam OpenID callback:\n\t", err)
 			if errors.Is(err, linking.ErrInvalidAssertion) {
-				redirectBadRequest(w, r, state.RedirectURI, "Invalid state")
+				redirectBadRequest(w, r, state.RedirectURI, msgInvalidState)
 			} else {
 				redirectInternalServerError(w, r, state.RedirectURI, "Authentication failed")
 			}
@@ -201,40 +206,40 @@ func decodeAndValidateState(w http.ResponseWriter, r *http.Request) (linking.OAu
 	stateB64 := r.URL.Query().Get("state")
 	if stateB64 == "" {
 		log.Println("No state provided")
-		redirectBadRequest(w, r, auth.NN_SITE_URL, "Invalid request")
+		redirectBadRequest(w, r, auth.NN_SITE_URL, msgInvalidRequest)
 		return state, false
 	}
 	stateBytes, err := base64.URLEncoding.DecodeString(stateB64)
 	if err != nil {
 		log.Println("Failed to decode state:\n\t", err)
-		redirectBadRequest(w, r, auth.NN_SITE_URL, "Invalid state")
+		redirectBadRequest(w, r, auth.NN_SITE_URL, msgInvalidState)
 		return state, false
 	}
 	if err := json.Unmarshal(stateBytes, &state); err != nil {
 		log.Println("Failed to unmarshal state:\n\t", err)
-		redirectBadRequest(w, r, auth.NN_SITE_URL, "Invalid state")
+		redirectBadRequest(w, r, auth.NN_SITE_URL, msgInvalidState)
 		return state, false
 	}
 	if state.Platform == "" || state.Nonce == "" || state.RedirectURI == "" || state.Mode == "" {
 		log.Println("Invalid state")
-		redirectBadRequest(w, r, auth.NN_SITE_URL, "Invalid state")
+		redirectBadRequest(w, r, auth.NN_SITE_URL, msgInvalidState)
 		return state, false
 	}
 	if !isAllowedRedirect(state.RedirectURI) {
 		log.Println("Redirect URI is not allowed:\n\t", state.RedirectURI)
-		redirectBadRequest(w, r, auth.NN_SITE_URL, "Invalid state")
+		redirectBadRequest(w, r, auth.NN_SITE_URL, msgInvalidState)
 		return state, false
 	}
 
 	cookie, err := r.Cookie("nonce")
 	if err != nil {
 		log.Println("Failed to get nonce cookie:\n\t", err)
-		redirectBadRequest(w, r, auth.NN_SITE_URL, "Invalid state")
+		redirectBadRequest(w, r, auth.NN_SITE_URL, msgInvalidState)
 		return state, false
 	}
 	if cookie.Value != state.Nonce {
 		log.Println("Nonce does not match")
-		redirectBadRequest(w, r, auth.NN_SITE_URL, "Invalid state")
+		redirectBadRequest(w, r, auth.NN_SITE_URL, msgInvalidState)
 		return state, false
 	}
 
@@ -255,7 +260,7 @@ func requireValidModeAndSession(w http.ResponseWriter, r *http.Request, mode lin
 		return false
 	default:
 		log.Println("Invalid mode")
-		redirectBadRequest(w, r, redirectURI, "Invalid state")
+		redirectBadRequest(w, r, redirectURI, msgInvalidState)
 		return false
 	}
 }
