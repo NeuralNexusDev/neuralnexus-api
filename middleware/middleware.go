@@ -180,12 +180,10 @@ func RateLimitMiddleware(service auth.RateLimitService, prefix string, sessionLi
 				err = service.IncrRateLimit(prefix + ":" + ip)
 				if err != nil {
 					LogRequest(r.Context(), "Error incrementing rate limit:\n\t", err.Error())
-					return
 				}
 				limit, err := service.GetRateLimit(prefix + ":" + ip)
 				if err != nil {
 					LogRequest(r.Context(), "Error getting rate limit:\n\t", err.Error())
-					return
 				}
 				if limit > ipLimit {
 					responses.TooManyRequests(w, r, RetryAfter, "You have been rate limited. Please try again later.")

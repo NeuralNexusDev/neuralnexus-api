@@ -676,34 +676,34 @@ func TestRateLimitMiddleware(t *testing.T) {
 		}
 	})
 
-	t.Run("MW-31_NoSessionIncrErrorReturnsEarlyWithoutCallingNext", func(t *testing.T) {
+	t.Run("MW-31_NoSessionIncrErrorStillChecksLimitAndCallsNext", func(t *testing.T) {
 		svc := &mwFakeRateLimitSvc{incrErr: errors.New("redis down"), getLimit: 1}
 		r := mwRateLimitRequest(nil, "9.8.7.6:1234")
 
 		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
 
-		if nextCalled {
-			t.Error("expected the IP branch to return early (not call next) on an IncrRateLimit error")
+		if !nextCalled {
+			t.Error("expected next to be called on an IncrRateLimit error on the IP branch")
 		}
 		if rec.Code != http.StatusOK {
-			t.Errorf("expected the default 200 status since nothing is explicitly written, got %d", rec.Code)
+			t.Errorf("expected 200, got %d", rec.Code)
 		}
-		if len(svc.getCalls) != 0 {
-			t.Error("expected GetRateLimit not to be called after the IncrRateLimit error on the IP branch")
+		if len(svc.getCalls) != 1 {
+			t.Errorf("expected GetRateLimit to still be called after the IncrRateLimit error, got %d calls", len(svc.getCalls))
 		}
 	})
 
-	t.Run("MW-32_NoSessionGetErrorReturnsEarlyWithoutCallingNext", func(t *testing.T) {
+	t.Run("MW-32_NoSessionGetErrorFailsOpenAndCallsNext", func(t *testing.T) {
 		svc := &mwFakeRateLimitSvc{getErr: errors.New("redis down")}
 		r := mwRateLimitRequest(nil, "9.8.7.6:1234")
 
 		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
 
-		if nextCalled {
-			t.Error("expected the IP branch to return early (not call next) on a GetRateLimit error")
+		if !nextCalled {
+			t.Error("expected next to be called on a GetRateLimit error on the IP branch")
 		}
 		if rec.Code != http.StatusOK {
-			t.Errorf("expected the default 200 status since nothing is explicitly written, got %d", rec.Code)
+			t.Errorf("expected 200, got %d", rec.Code)
 		}
 	})
 
