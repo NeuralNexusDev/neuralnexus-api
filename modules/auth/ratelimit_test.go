@@ -5,7 +5,6 @@ import (
 	"testing"
 )
 
-// rlFakeRateLimitStore is a controllable RateLimitStore double.
 type rlFakeRateLimitStore struct {
 	getVal    int
 	getErr    error
@@ -29,9 +28,6 @@ func (f *rlFakeRateLimitStore) IncrementRateLimit(_ string) error {
 	return f.incrErr
 }
 
-// rlFakeStore is a minimal Store double that only wires RateLimit(); any
-// other accessor panics if reached, since NewRateLimitService never calls
-// them.
 type rlFakeStore struct {
 	rl RateLimitStore
 }

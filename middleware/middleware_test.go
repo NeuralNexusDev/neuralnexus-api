@@ -20,11 +20,6 @@ import (
 	"golang.org/x/crypto/ed25519"
 )
 
-// Shared test doubles. Named distinctly from anything in
-// middleware_old_test.go (which still compiles alongside this file) to
-// avoid any identifier collision while both exist side by side.
-
-// mwFakeSessionSvc implements auth.SessionService for this file's tests.
 type mwFakeSessionSvc struct {
 	readJWTFunc   func(token string) (*auth.Session, error)
 	deleteFunc    func(id string) error
@@ -57,7 +52,6 @@ func (f *mwFakeSessionSvc) ReadJWT(token string) (*auth.Session, error) {
 	return nil, errors.New("no ReadJWT configured")
 }
 
-// mwFakeRateLimitSvc implements auth.RateLimitService for this file's tests.
 type mwFakeRateLimitSvc struct {
 	incrErr  error
 	getLimit int
@@ -133,8 +127,6 @@ func mwBaseCtx() context.Context {
 	return ctx
 }
 
-// mwCaptureLog redirects the standard logger's output for the duration of a
-// test and returns a function that restores it and yields what was written.
 func mwCaptureLog(t *testing.T) func() string {
 	t.Helper()
 	var buf bytes.Buffer
@@ -1000,8 +992,6 @@ func TestSelfUserID(t *testing.T) {
 	})
 }
 
-// mwErrReader is an io.Reader/io.Closer that always fails, for exercising
-// VerifyEd25519Middleware's io.ReadAll error path.
 type mwErrReader struct{}
 
 func (mwErrReader) Read([]byte) (int, error) { return 0, errors.New("boom") }

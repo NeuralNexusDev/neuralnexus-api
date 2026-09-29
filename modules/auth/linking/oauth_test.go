@@ -18,14 +18,10 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// mustUUID parses s as a UUID, panicking on failure - only ever used with
-// fixed, known-valid literals in this file.
 func mustUUID(s string) uuid.UUID {
 	return uuid.MustParse(s)
 }
 
-// oaIdentity is a minimal, configurable auth.PlatformData implementation
-// used by the platform-neutral helper tests in this file.
 type oaIdentity struct {
 	id       string
 	email    string
@@ -40,8 +36,6 @@ func (f *oaIdentity) CreateLinkedAccount(userID string) *auth.LinkedAccount {
 	return auth.NewLinkedAccount(userID, auth.PlatformDiscord, f.username, f.id, f)
 }
 
-// oaMockAccountService is a minimal, self-contained auth.AccountService
-// double for oauth_test.go only.
 type oaMockAccountService struct {
 	AddAccountFunc     func(*auth.Account) error
 	GetAccountByIDFunc func(string) (*auth.Account, error)
@@ -84,8 +78,6 @@ func (m *oaMockAccountService) DeleteAccount(userID string) error {
 }
 func (m *oaMockAccountService) IsPasswordAuthEnabled(string) (bool, error) { return false, nil }
 
-// oaMockLinkAccountStore is a minimal, self-contained auth.LinkAccountStore
-// double for oauth_test.go only.
 type oaMockLinkAccountStore struct {
 	GetLinkedAccountByPlatformIDFunc func(auth.Platform, string) (*auth.LinkedAccount, error)
 	AddLinkedAccountToDBFunc         func(*auth.LinkedAccount) error
@@ -129,8 +121,6 @@ func (m *oaMockLinkAccountStore) SetLinkedAccountLoginEnabled(string, auth.Platf
 	return nil
 }
 
-// oaMockSessionService is a minimal, self-contained auth.SessionService
-// double for oauth_test.go only.
 type oaMockSessionService struct {
 	AddSessionFunc  func(*auth.Session) error
 	AddSessionCalls int
@@ -153,8 +143,6 @@ func (m *oaMockSessionService) DeleteSession(string) error              { return
 func (m *oaMockSessionService) CreateJWT(*auth.Session) (string, error) { return "", nil }
 func (m *oaMockSessionService) ReadJWT(string) (*auth.Session, error)   { return nil, auth.ErrNotFound }
 
-// oaRequestWithSession builds a request carrying session in its context, or
-// a plain request if session is nil.
 func oaRequestWithSession(session *auth.Session) *http.Request {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	if session == nil {
@@ -163,7 +151,6 @@ func oaRequestWithSession(session *auth.Session) *http.Request {
 	return req.WithContext(context.WithValue(req.Context(), mw.SessionKey, session))
 }
 
-// oaSetVar overwrites *target for the duration of the calling test.
 func oaSetVar(t *testing.T, target *string, value string) {
 	t.Helper()
 	original := *target
@@ -171,8 +158,6 @@ func oaSetVar(t *testing.T, target *string, value string) {
 	t.Cleanup(func() { *target = original })
 }
 
-// oaJSONServer starts an httptest.Server that always answers with the given
-// status and JSON body.
 func oaJSONServer(status int, body string) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -190,9 +175,6 @@ func oaSetDiscordUsersEndpoint(t *testing.T, ts *httptest.Server) {
 	t.Cleanup(func() { discordgo.EndpointUsers = original })
 }
 
-// oaSetupDiscordPlatform points discordConfig's token endpoint and
-// discordgo's user endpoint at local test servers returning a single fixed
-// Discord identity (id "d1", username "alice", email "a@b.com").
 func oaSetupDiscordPlatform(t *testing.T) {
 	t.Helper()
 	tokenTS := oaJSONServer(http.StatusOK, `{"access_token":"disc-at","token_type":"Bearer","expires_in":3600,"scope":"identify"}`)
@@ -209,8 +191,6 @@ func oaSetupDiscordPlatform(t *testing.T) {
 	t.Cleanup(func() { discordConfig.Endpoint.TokenURL = originalTokenURL })
 }
 
-// oaSetupDiscordExchangeFailure makes discordConfig's token exchange fail,
-// without touching the Discord user endpoint.
 func oaSetupDiscordExchangeFailure(t *testing.T) {
 	t.Helper()
 	tokenTS := oaJSONServer(http.StatusBadRequest, `{"error":"invalid_grant"}`)
@@ -220,10 +200,6 @@ func oaSetupDiscordExchangeFailure(t *testing.T) {
 	t.Cleanup(func() { discordConfig.Endpoint.TokenURL = originalTokenURL })
 }
 
-// oaSetupTwitchPlatform points twitch.Config's token endpoint and helix's
-// API base URL at local test servers returning a single fixed Twitch
-// identity (id "tw1", login "alice", email "a@b.com") - the
-// auth.PlatformTwitch dispatch branch, distinct from Discord's.
 func oaSetupTwitchPlatform(t *testing.T) {
 	t.Helper()
 	tokenTS := oaJSONServer(http.StatusOK, `{"access_token":"twitch-at","token_type":"bearer","expires_in":14400,"scope":["user:read:email"]}`)
@@ -247,11 +223,6 @@ func oaSetupTwitchPlatform(t *testing.T) {
 	}
 }
 
-// oaSetupMicrosoftLoginPlatform points MicrosoftLoginConfig's token endpoint
-// and microsoftUserInfoURL at local test servers returning a single fixed
-// plain-Microsoft-account identity (sub "ms1", name "Alice", email
-// "a@b.com") - the auth.PlatformMicrosoft dispatch branch, distinct from
-// both Discord and the Minecraft/XboxLive MicrosoftConfig chain.
 func oaSetupMicrosoftLoginPlatform(t *testing.T) {
 	t.Helper()
 	tokenTS := oaJSONServer(http.StatusOK, `{"access_token":"ms-login-at","token_type":"Bearer","expires_in":3600,"scope":"openid profile email"}`)
@@ -265,19 +236,15 @@ func oaSetupMicrosoftLoginPlatform(t *testing.T) {
 	oaSetVar(t, &microsoftUserInfoURL, userInfoTS.URL)
 }
 
-// oaMicrosoftChainOpts configures oaSetupMicrosoftChain's behavior.
 type oaMicrosoftChainOpts struct {
-	javaUUID          string // empty means the account doesn't own Java
-	xuid, gamertag    string // defaults to "xid1"/"Tag" if empty
-	xstsFails         bool   // XSTS authorize fails outright (both relying parties)
-	mcLoginFails      bool   // minecraftLoginWithXbox fails
-	mcProfileFails    bool   // getMinecraftProfile fails with a server error (not "not found")
-	xstsXboxLiveFails bool   // only the Xbox-Live-relying-party XSTS leg fails
+	javaUUID          string
+	xuid, gamertag    string
+	xstsFails         bool
+	mcLoginFails      bool
+	mcProfileFails    bool
+	xstsXboxLiveFails bool
 }
 
-// oaSetupMicrosoftChain points MicrosoftConfig and the XBL/XSTS/Minecraft
-// endpoint vars at local test servers implementing the chain
-// GetXboxUser/GetXboxAndMinecraftUser drive, and returns the xuid used.
 func oaSetupMicrosoftChain(t *testing.T, opts oaMicrosoftChainOpts) string {
 	t.Helper()
 	xuid := opts.xuid
@@ -673,13 +640,6 @@ func TestOA76to78ProcessOAuthLoginAdditionalPlatformDispatch(t *testing.T) {
 		}
 	})
 
-	// OA-78 is the core regression test for keeping Xbox Live and Java
-	// Edition linking distinct: the account in this test DOES own Java
-	// (oaSetupMicrosoftChain with javaUUID set), but a caller that
-	// explicitly asked for auth.PlatformXboxLive must still end up with
-	// only the Xbox Live identity linked, and must never even call the
-	// Minecraft Services endpoints - proving Java is skipped by request,
-	// not just by accident of ownership.
 	t.Run("OA-78_XboxLiveOnlyNeverTouchesJavaEvenIfOwned", func(t *testing.T) {
 		javaUUID := "88888888-8888-8888-8888-888888888888"
 		oaSetupMicrosoftChain(t, oaMicrosoftChainOpts{javaUUID: javaUUID})
@@ -901,8 +861,6 @@ func TestOA17to26ResolveOrCreateAccountForPlatformUser(t *testing.T) {
 	})
 }
 
-// oaSetupDiscordUserFailure makes the code exchange succeed but the Discord
-// user-info call fail.
 func oaSetupDiscordUserFailure(t *testing.T) {
 	t.Helper()
 	tokenTS := oaJSONServer(http.StatusOK, `{"access_token":"disc-at","token_type":"Bearer","expires_in":3600,"scope":"identify"}`)
@@ -1232,9 +1190,6 @@ func TestOA79to81ProcessOAuthLinkAdditionalPlatformDispatch(t *testing.T) {
 		}
 	})
 
-	// OA-81 is ProcessOAuthLink's counterpart to OA-78: linking explicitly
-	// via auth.PlatformXboxLive must never touch the Minecraft Services
-	// endpoints or link a Java identity, even though the account owns Java.
 	t.Run("OA-81_XboxLiveOnlyNeverTouchesJavaEvenIfOwned", func(t *testing.T) {
 		javaUUID := "99999999-9999-9999-9999-999999999999"
 		oaSetupMicrosoftChain(t, oaMicrosoftChainOpts{javaUUID: javaUUID})
@@ -1781,8 +1736,6 @@ func TestOA67to71LinkPlatformUserToSession(t *testing.T) {
 // instead of merely asserting behavior for a canned auth.ErrAlreadyLinked
 // return.
 
-// oaConcurrentAccountService is a mutex-serialized auth.AccountService
-// double that behaves like a real account table under concurrent access.
 type oaConcurrentAccountService struct {
 	mu       sync.Mutex
 	accounts map[string]*auth.Account
@@ -1835,17 +1788,10 @@ func (m *oaConcurrentAccountService) count() int {
 	return len(m.accounts)
 }
 
-// oaLinkKey identifies a linked_accounts row the way its real (platform,
-// platform_id) unique constraint does.
 func oaLinkKey(platform auth.Platform, platformID string) string {
 	return string(platform) + "|" + platformID
 }
 
-// oaConcurrentLinkAccountStore is a mutex-serialized auth.LinkAccountStore
-// double whose AddLinkedAccountToDB enforces the (platform, platform_id)
-// uniqueness constraint atomically, the way the real Postgres constraint
-// does - the first concurrent caller to reach the critical section wins,
-// every other caller for the same key gets auth.ErrAlreadyLinked.
 type oaConcurrentLinkAccountStore struct {
 	mu    sync.Mutex
 	byKey map[string]*auth.LinkedAccount

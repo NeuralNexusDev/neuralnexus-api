@@ -31,8 +31,6 @@ func (f *fakeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 	return f.resp, nil
 }
 
-// fakeResponse builds a minimal *http.Response suitable for a RoundTripper
-// to return.
 func fakeResponse(status int, body string) *http.Response {
 	return &http.Response{
 		StatusCode: status,
@@ -41,8 +39,6 @@ func fakeResponse(status int, body string) *http.Response {
 	}
 }
 
-// swapTransport replaces the package-level http.DefaultTransport for the
-// duration of a subtest and restores the original afterward.
 func swapTransport(t *testing.T, rt http.RoundTripper) {
 	t.Helper()
 	orig := http.DefaultTransport

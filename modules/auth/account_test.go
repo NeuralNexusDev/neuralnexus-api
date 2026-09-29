@@ -5,9 +5,6 @@ import (
 	"testing"
 )
 
-// acFakeAccountStore is a controllable AccountStore double for accountService
-// tests. Each method increments its call counter so tests can assert which
-// underlying store calls did/didn't happen.
 type acFakeAccountStore struct {
 	getByIDAccount    *Account
 	getByIDErr        error
@@ -51,7 +48,6 @@ func (f *acFakeAccountStore) DeleteAccountFromDB(_ string) error {
 	return f.deleteErr
 }
 
-// acFakeAccountSettingsStore is a controllable AccountSettingsStore double.
 type acFakeAccountSettingsStore struct {
 	settings *AccountSettings
 	err      error
@@ -66,9 +62,6 @@ func (f *acFakeAccountSettingsStore) SetPasswordAuthEnabled(_ string, _ bool) er
 	return errors.New("acFakeAccountSettingsStore: SetPasswordAuthEnabled not implemented")
 }
 
-// acFakeStore is a minimal Store double that only wires Account()/
-// AccountSettings(); any other accessor panics if reached, since
-// NewAccountService never calls them.
 type acFakeStore struct {
 	as  AccountStore
 	ass AccountSettingsStore

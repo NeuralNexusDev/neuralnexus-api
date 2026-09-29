@@ -13,8 +13,6 @@ import (
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 )
 
-// stubUserService implements auth.UserService for unit testing the
-// self-or-admin auth boundary and error-to-status mapping in users.go.
 type stubUserService struct {
 	user    *auth.Account
 	userErr error

@@ -11,15 +11,11 @@ import (
 	"github.com/google/uuid"
 )
 
-// readJSONBody decodes r's JSON body into v, for test handlers that need to
-// branch on the request payload (e.g. distinguishing XSTS relying parties).
 func readJSONBody(r *http.Request, v interface{}) error {
 	defer r.Body.Close()
 	return json.NewDecoder(r.Body).Decode(v)
 }
 
-// msSetURL points one of microsoft.go's package-level endpoint vars at a
-// value for the duration of a test, restoring the original on cleanup.
 func msSetURL(t *testing.T, target *string, value string) {
 	t.Helper()
 	original := *target
@@ -625,9 +621,6 @@ func TestMS50to51GetXboxUser(t *testing.T) {
 	})
 }
 
-// msFullChainServers wires up httptest servers for xblAuthenticate,
-// xstsAuthorize (both relying parties via a single mux), minecraftLoginWithXbox
-// and getMinecraftProfile, with each leg's behavior independently overridable.
 type msFullChainServers struct {
 	xbl, xsts, mcLogin, mcProfile *httptest.Server
 }

@@ -23,9 +23,6 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// mcUnusedTCPPort returns a TCP port on 127.0.0.1 that is very likely free at
-// the moment it's returned, so a subsequent connection attempt to it fails
-// fast with "connection refused" instead of hanging.
 func mcUnusedTCPPort(t *testing.T) int {
 	t.Helper()
 	l, err := net.Listen("tcp", "127.0.0.1:0")
@@ -39,9 +36,6 @@ func mcUnusedTCPPort(t *testing.T) int {
 	return port
 }
 
-// mcUnreachablePool builds a real *pgxpool.Pool pointed at a closed local
-// port, so any Exec/Query against it fails fast with a genuine connection
-// error - without requiring a live Postgres instance.
 func mcUnreachablePool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	port := mcUnusedTCPPort(t)
@@ -57,9 +51,6 @@ func mcUnreachablePool(t *testing.T) *pgxpool.Pool {
 	return pool
 }
 
-// mcUnreachableRedis builds a real *redis.Client pointed at a closed local
-// port, so any command against it fails fast with a genuine connection error
-// - without requiring a live Redis instance.
 func mcUnreachableRedis(t *testing.T) *redis.Client {
 	t.Helper()
 	port := mcUnusedTCPPort(t)
@@ -80,9 +71,6 @@ func mcStoreWithUnreachableRedis(t *testing.T) *store {
 	return &store{rdb: mcUnreachableRedis(t)}
 }
 
-// mcFakeS3 builds a real *s3.Client pointed at a local httptest.Server, so
-// IsTextureInS3/PutTextureInS3 and their Geyser counterparts can be tested
-// against controlled HTTP responses without any live AWS/MinIO instance.
 func mcFakeS3(t *testing.T, handler http.HandlerFunc) *s3.Client {
 	t.Helper()
 	srv := httptest.NewServer(handler)
@@ -98,8 +86,6 @@ func mcFakeS3(t *testing.T, handler http.HandlerFunc) *s3.Client {
 	})
 }
 
-// mcLiveDB connects to TEST_POSTGRES_URL, skipping the test when it is
-// unset so this suite still runs green without the docker-compose test-env.
 func mcLiveDB(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	dsn := os.Getenv("TEST_POSTGRES_URL")
@@ -114,7 +100,6 @@ func mcLiveDB(t *testing.T) *pgxpool.Pool {
 	return pool
 }
 
-// mcLiveRedis connects to TEST_REDIS_URL, skipping the test when it is unset.
 func mcLiveRedis(t *testing.T) *redis.Client {
 	t.Helper()
 	url := os.Getenv("TEST_REDIS_URL")

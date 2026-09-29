@@ -10,8 +10,6 @@ import (
 	"github.com/goccy/go-json"
 )
 
-// dcRequirePanic runs fn and fails the test unless it panics with a string
-// value containing wantSubstr.
 func dcRequirePanic(t *testing.T, wantSubstr string, fn func()) {
 	t.Helper()
 	defer func() {
@@ -197,9 +195,6 @@ func TestWebhookEvent_ApplicationAuthorizedData(t *testing.T) {
 		}
 	})
 
-	// WAD-02 exercises the function's deliberate misuse guard: calling it
-	// against the wrong Event.Type is documented to panic, so asserting
-	// that panic is correct coverage, not a bug pinned as spec.
 	t.Run("WAD-02_WrongTypePanics", func(t *testing.T) {
 		event := &WebhookEvent{Type: ApplicationDeauthorized}
 		dcRequirePanic(t, "ApplicationAuthorizedData called on interaction of type ApplicationDeauthorized", func() {
@@ -217,7 +212,6 @@ func TestWebhookEvent_ApplicationDeauthorizedData(t *testing.T) {
 		}
 	})
 
-	// WDD-02 exercises the same kind of deliberate misuse guard as WAD-02.
 	t.Run("WDD-02_WrongTypePanics", func(t *testing.T) {
 		event := &WebhookEvent{Type: ApplicationAuthorized}
 		dcRequirePanic(t, "ApplicationDeauthorizedData called on interaction of type ApplicationAuthorized", func() {

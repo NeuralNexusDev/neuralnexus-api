@@ -13,7 +13,6 @@ import (
 	"testing"
 )
 
-// svCreatePetPictureArgs records one CreatePetPicture call's arguments.
 type svCreatePetPictureArgs struct {
 	id             string
 	fileExt        string
@@ -22,10 +21,6 @@ type svCreatePetPictureArgs struct {
 	aliases        []string
 }
 
-// svMockStore is a self-contained fake PetPicStore for service-layer tests:
-// UploadPetPicture only ever calls CreatePetPicture, so every other method
-// panics if reached, keeping an accidental extra call visible instead of
-// silently returning a zero value.
 type svMockStore struct {
 	createPetPictureResult *PetPicture
 	createPetPictureErr    error
@@ -61,8 +56,6 @@ func (m *svMockStore) DeletePetPicture(id string) (*PetPicture, error) {
 	panic("DeletePetPicture not used by UploadPetPicture")
 }
 
-// svFakeRoundTripper is a controllable http.RoundTripper for exercising
-// UploadPetPicture's CDN request without a real network call.
 type svFakeRoundTripper struct {
 	resp    *http.Response
 	err     error
@@ -89,7 +82,6 @@ func swapTransport(t *testing.T, rt http.RoundTripper) {
 	})
 }
 
-// svOKResponse builds a minimal 200 OK response for the fake transport.
 func svOKResponse() *http.Response {
 	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(nil)), Header: make(http.Header)}
 }
@@ -187,10 +179,6 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 		if len(form.File["file"]) != 1 || form.File["file"][0].Filename != "sv03-mock-id.jpg" {
 			t.Errorf("form file = %+v, want filename %q", form.File["file"], "sv03-mock-id.jpg")
 		}
-		// Deliberately not asserted: the uploaded body's byte content.
-		// UploadPetPicture's sha256 io.Copy already advances file's read
-		// cursor to EOF, so the later io.Copy into the form file always
-		// writes zero bytes (a real bug — see the run's report).
 	})
 
 	t.Run("SV-04_StoreErrorPropagates", func(t *testing.T) {
@@ -269,9 +257,4 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 			t.Errorf("CreatePetPicture fileExt = %q, want %q", mock.createPetPictureCalls[0].fileExt, "gz")
 		}
 	})
-
-	// SV-08 (no-dot filename) is deliberately not tested here: it's a known,
-	// deferred source bug (see test/plans/pet_pictures.md's self-check),
-	// not fixed in this pass, so no test asserts either the buggy behavior
-	// or a fix that doesn't exist yet.
 }

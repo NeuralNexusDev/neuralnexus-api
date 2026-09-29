@@ -11,9 +11,6 @@ import (
 	"github.com/goccy/go-json"
 )
 
-// mcMockService is a configurable Service test double for handler.go tests.
-// Each field defaults to nil; a test sets only the methods its handler call
-// actually reaches.
 type mcMockService struct {
 	getMojangPlayerByName      func(name string) (*Player, error)
 	getMojangPlayerByUUID      func(id string) (*Player, error)
@@ -66,8 +63,6 @@ func (m *mcMockService) GetGeyserTextureContent(hash string) (*TextureResult, er
 	return m.getGeyserTextureContent(hash)
 }
 
-// mcRequest builds an *http.Request with the given path values pre-set, as if
-// routed there by a ServeMux, and target as the raw path+query.
 func mcRequest(t *testing.T, method, target string, body io.Reader, pathValues map[string]string) *http.Request {
 	t.Helper()
 	r := httptest.NewRequest(method, target, body)
@@ -445,7 +440,6 @@ func TestHD39to43_GetGeyserProfileHandler(t *testing.T) {
 	t.Run("HD-39_NotDerivedBedrockUUID", func(t *testing.T) {
 		h := GetGeyserProfileHandler(&mcMockService{})
 		w := httptest.NewRecorder()
-		// A real, random (non-derived) UUID fails uuidToXUID's high-bits check.
 		h(w, mcRequest(t, http.MethodGet, "/gp/x", nil, map[string]string{"uuid": "not-a-uuid"}))
 		mcRequireStatus(t, w, http.StatusBadRequest)
 	})

@@ -11,7 +11,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Expected field values baked into HandleTeapot's call to responses.NewProblem.
 const (
 	wantType     = "about:blank"
 	wantStatus   = http.StatusTeapot
@@ -41,9 +40,6 @@ type problemXML struct {
 
 func strPtr(s string) *string { return &s }
 
-// assertProblemFields checks the decoded body against the fixed values
-// HandleTeapot always passes to responses.NewProblem, regardless of which
-// wire format carried them.
 func assertProblemFields(t *testing.T, gotType string, gotStatus int32, gotTitle, gotDetail, gotInstance string) {
 	t.Helper()
 	if gotType != wantType {
@@ -71,12 +67,9 @@ const (
 	formatProtobuf
 )
 
-// TestHandleTeapot exercises the real content-negotiation branching that
-// HandleTeapot inherits by delegating to responses.NewProblem(...).SendProblem,
-// per test/plans/teapot.md (TP-01..TP-07).
 func TestHandleTeapot(t *testing.T) {
 	tests := []struct {
-		name            string  // embeds the literal plan row ID, e.g. "TP-01_..."
+		name            string
 		acceptHeader    *string // nil = header not set on the request at all
 		wantFormat      wantFormat
 		wantContentType string

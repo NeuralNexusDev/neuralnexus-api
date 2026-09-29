@@ -8,7 +8,6 @@ import (
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 )
 
-// usFakePlatformData is a minimal PlatformData double.
 type usFakePlatformData struct {
 	username string
 }
@@ -21,8 +20,6 @@ func (f usFakePlatformData) CreateLinkedAccount(_ string) *LinkedAccount {
 	return nil
 }
 
-// usFakeAccountStore is a controllable AccountStore double for userService
-// tests.
 type usFakeAccountStore struct {
 	addErr         error
 	addCalls       int
@@ -69,15 +66,11 @@ func (f *usFakeAccountStore) DeleteAccountFromDB(userID string) error {
 	return f.deleteErr
 }
 
-// usLinkResult is one queued result for usFakeLinkAccountStore's
-// GetLinkedAccountByPlatformID, so a test can script different answers
-// across successive calls (e.g. "not found" then "found the race winner").
 type usLinkResult struct {
 	la  *LinkedAccount
 	err error
 }
 
-// usFakeLinkAccountStore is a controllable LinkAccountStore double.
 type usFakeLinkAccountStore struct {
 	getByPlatformIDResults []usLinkResult
 	getByPlatformIDCalls   int
@@ -138,7 +131,6 @@ func (f *usFakeLinkAccountStore) SetLinkedAccountLoginEnabled(_ string, _ Platfo
 	return f.setLoginEnabledErr
 }
 
-// usFakeAccountSettingsStore is a controllable AccountSettingsStore double.
 type usFakeAccountSettingsStore struct {
 	settings *AccountSettings
 	getErr   error
@@ -154,9 +146,6 @@ func (f *usFakeAccountSettingsStore) SetPasswordAuthEnabled(_ string, _ bool) er
 	return f.setErr
 }
 
-// usFakeStore is a minimal Store double wiring Account()/LinkAccount()/
-// AccountSettings(); Session/RateLimit/OAuthToken panic if reached, since
-// NewUserService never calls them.
 type usFakeStore struct {
 	as  AccountStore
 	als LinkAccountStore
@@ -627,7 +616,7 @@ func (s *usConcurrentStore) GetLinkedAccountByPlatformID(platform Platform, plat
 	s.barrierMu.Unlock()
 	if participates {
 		s.barrierWG.Done()
-		s.barrierWG.Wait() // rendezvous: hold every racer here until all have missed
+		s.barrierWG.Wait()
 	}
 
 	s.mu.Lock()
@@ -658,8 +647,6 @@ func (s *usConcurrentStore) accountCount() int {
 	return len(s.accounts)
 }
 
-// usConcurrentWrapperStore adapts usConcurrentStore to the Store interface
-// NewUserService requires.
 type usConcurrentWrapperStore struct {
 	cs *usConcurrentStore
 }

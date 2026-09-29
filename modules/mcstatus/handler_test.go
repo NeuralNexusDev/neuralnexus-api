@@ -22,9 +22,6 @@ type hdProblem struct {
 	Instance string `json:"instance"`
 }
 
-// hdCallArgs* record the arguments each mock method was invoked with, so
-// tests can assert on what the handler forwarded without needing a real
-// MCStatusService implementation.
 type hdJavaCallArgs struct {
 	host         string
 	port         int
@@ -40,9 +37,6 @@ type hdServerCallArgs struct {
 	queryPort    int
 }
 
-// hdMockService is a self-contained fake MCStatusService for handler-layer
-// tests: handler.go's three handlers take MCStatusService as a parameter,
-// so no network access is needed to exercise them.
 type hdMockService struct {
 	javaStatus *MCServerStatus
 	javaErr    error
@@ -70,9 +64,6 @@ func (m *hdMockService) GetServerStatus(host string, port int, isBedrock bool, q
 	return m.serverStatus, m.serverErr
 }
 
-// hdRequest builds a request with the given raw query string and "host"
-// path value set directly (bypassing routing, since these tests call the
-// handler funcs directly rather than through a mux).
 func hdRequest(t *testing.T, host string, rawQuery string) *http.Request {
 	t.Helper()
 	target := "/mcstatus/" + host

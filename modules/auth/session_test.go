@@ -13,8 +13,6 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// seFakeSessionStore is a controllable SessionStore double for
-// sessionService tests.
 type seFakeSessionStore struct {
 	addToDBErr   error
 	addToDBCalls int
@@ -69,8 +67,6 @@ func (f *seFakeSessionStore) DeleteSessionFromCache(_ string) error {
 	return f.deleteFromCacheErr
 }
 
-// seFakeStore is a minimal Store double that only wires Session(); any other
-// accessor panics if reached, since NewSessionService never calls them.
 type seFakeStore struct {
 	ss SessionStore
 }
@@ -471,7 +467,6 @@ func TestSE23to31ReadJWT(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to build fixture token: %v", err)
 		}
-		// Simulate the session having been deleted/revoked after the token was issued.
 		fs.getFromDBSession = nil
 		fs.getFromDBErr = ErrNotFound
 
@@ -488,7 +483,6 @@ func TestSE23to31ReadJWT(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to build fixture token: %v", err)
 		}
-		// The stored session for this ID now belongs to a different user.
 		fs.getFromDBSession = &Session{ID: "s1", UserID: "user-B", ExpiresAt: signedFor.ExpiresAt}
 
 		if _, err := svc.ReadJWT(tok); err == nil {

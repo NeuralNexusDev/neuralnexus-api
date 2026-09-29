@@ -14,10 +14,6 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// mcMockStore is a configurable Store test double for service.go tests.
-// Unset function fields fall back to sensible "nothing here" defaults so a
-// test only has to wire up the calls its scenario actually cares about:
-// DB/cache getters report a miss, and mutations succeed silently.
 type mcMockStore struct {
 	getPlayerByUUID           func(id string) (*Player, error)
 	getPlayerByName           func(name string) (*Player, error)
@@ -178,9 +174,6 @@ func (m *mcMockStore) PutGeyserTextureInS3(hash string, body io.ReadCloser) erro
 	return nil
 }
 
-// mcNewService builds a *service wired to an httptest.Server for every
-// upstream URL it calls (Mojang lookups, Geyser lookups, our own CDN). The
-// server is torn down automatically when the test ends.
 func mcNewService(t *testing.T, store Store, handler http.HandlerFunc) *service {
 	t.Helper()
 	srv := httptest.NewServer(handler)
@@ -188,9 +181,6 @@ func mcNewService(t *testing.T, store Store, handler http.HandlerFunc) *service 
 	return mcServiceForServer(store, srv)
 }
 
-// mcNewUnreachableService builds a *service whose upstream URLs all point at
-// a server that has already been closed, so every request fails fast with a
-// genuine connection-refused error - without needing any live network.
 func mcNewUnreachableService(store Store) *service {
 	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	srv.Close()
@@ -227,8 +217,6 @@ func mcMustJSON(t *testing.T, v any) string {
 // how *IsStale fields are stored.
 func mcNow() int64 { return time.Now().UnixMilli() }
 
-// mcMustProperty converts a TexturesValue fixture into the Property it would
-// serialize to inside a Player.Properties list.
 func mcMustProperty(t *testing.T, tv TexturesValue) Property {
 	t.Helper()
 	prop, err := tv.ToProperty()
@@ -1293,8 +1281,6 @@ func TestSV89to92_GetGeyserProfileByGamertag(t *testing.T) {
 	})
 
 	t.Run("SV-92_SkinFailsWithOtherError", func(t *testing.T) {
-		// Same discard-then-fetch behavior as SV-88, reached via the
-		// gamertag entry point instead of the XUID one.
 		store := &mcMockStore{
 			getGeyserPlayerByGamertag: func(string) (*GeyserPlayer, error) { return &GeyserPlayer{XUID: 1, LastSeen: mcNow()}, nil },
 			getGeyserSkin:             func(int64) (*GeyserSkin, error) { return nil, errors.New("boom") },

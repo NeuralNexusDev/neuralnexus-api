@@ -14,11 +14,6 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/proto/bngpb"
 )
 
-// bngMockStore is a configurable BNGStore test double for handler.go tests.
-// Each field defaults to nil; a test sets only the methods its handler call
-// actually reaches. A handler that (per a plan row) must NOT reach the store
-// is exercised against a zero-value &bngMockStore{}, so an unexpected call
-// panics on the nil func field instead of silently succeeding.
 type bngMockStore struct {
 	getBeeName              func() (string, error)
 	uploadBeeName           func(beeName string) (string, error)
@@ -51,16 +46,11 @@ func (m *bngMockStore) RejectBeeNameSuggestion(beeName string) (string, error) {
 	return m.rejectBeeNameSuggestion(beeName)
 }
 
-// bngAuthorizedSession and bngUnauthorizedSession are sessions with and
-// without the admin bee-name-generator scope, respectively.
 var (
 	bngAuthorizedSession   = &auth.Session{ID: "s1", UserID: "u1", Permissions: []string{"beenamegenerator|*"}}
 	bngUnauthorizedSession = &auth.Session{ID: "s2", UserID: "u2", Permissions: []string{}}
 )
 
-// bngRequest builds an *http.Request with the given path values pre-set, as
-// if routed there by a ServeMux, and session (if non-nil) attached under
-// mw.SessionKey.
 func bngRequest(t *testing.T, method, target string, pathValues map[string]string, session *auth.Session) *http.Request {
 	t.Helper()
 	r := httptest.NewRequest(method, target, nil)

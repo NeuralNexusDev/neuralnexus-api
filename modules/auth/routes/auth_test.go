@@ -20,8 +20,6 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
 )
 
-// stubAccountService implements auth.AccountService for LoginHandler and
-// OAuthHandler tests.
 type stubAccountService struct {
 	account              *auth.Account
 	lookupErr            error
@@ -53,9 +51,6 @@ func (s *stubAccountService) IsPasswordAuthEnabled(string) (bool, error) {
 	return !s.passwordAuthDisabled, s.passwordAuthErr
 }
 
-// stubLinkAccountStore implements auth.LinkAccountStore. It is only ever
-// wired into handlers whose guard clauses in these tests reject the request
-// before any of these methods would be called.
 type stubLinkAccountStore struct{}
 
 var _ auth.LinkAccountStore = (*stubLinkAccountStore)(nil)
@@ -79,7 +74,6 @@ func (s *stubLinkAccountStore) SetLinkedAccountLoginEnabled(string, auth.Platfor
 	return nil
 }
 
-// stubSessionService implements auth.SessionService.
 type stubSessionService struct {
 	createJWT        func(*auth.Session) (string, error)
 	addSessionErr    error
@@ -123,9 +117,6 @@ type problemBody struct {
 	Detail string `json:"detail"`
 }
 
-// requireRedirect asserts w is a 303 redirect whose Location's
-// scheme+host+path (ignoring query) equals wantTarget, and returns the
-// parsed Location for further inspection.
 func requireRedirect(t *testing.T, w *httptest.ResponseRecorder, wantTarget string) *url.URL {
 	t.Helper()
 	if w.Code != http.StatusSeeOther {
@@ -143,8 +134,6 @@ func requireRedirect(t *testing.T, w *httptest.ResponseRecorder, wantTarget stri
 	return u
 }
 
-// requireProblemRedirect asserts w is a 303 redirect to wantTarget carrying a
-// "problem" query param that decodes to the given status/title/detail.
 func requireProblemRedirect(t *testing.T, w *httptest.ResponseRecorder, wantTarget string, wantStatus int, wantTitle, wantDetail string) {
 	t.Helper()
 	u := requireRedirect(t, w, wantTarget)
@@ -467,7 +456,6 @@ func TestAU15OAuthHandlerLinkModeNoSession(t *testing.T) {
 	})
 }
 
-// auRoundTripperFunc adapts a function to http.RoundTripper.
 type auRoundTripperFunc func(*http.Request) (*http.Response, error)
 
 func (f auRoundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {

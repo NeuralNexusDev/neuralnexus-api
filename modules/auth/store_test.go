@@ -33,9 +33,6 @@ func stUnusedTCPPort(t *testing.T) int {
 	return port
 }
 
-// stUnreachablePool builds a real *pgxpool.Pool pointed at a closed local
-// port, so any Exec/Query/Begin against it fails fast with a genuine
-// connection error - without requiring a live Postgres instance.
 func stUnreachablePool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	port := stUnusedTCPPort(t)
@@ -51,9 +48,6 @@ func stUnreachablePool(t *testing.T) *pgxpool.Pool {
 	return pool
 }
 
-// stUnreachableRedis builds a real *redis.Client pointed at a closed local
-// port, so any command against it fails fast with a genuine connection
-// error - without requiring a live Redis instance.
 func stUnreachableRedis(t *testing.T) *redis.Client {
 	t.Helper()
 	port := stUnusedTCPPort(t)
@@ -74,9 +68,6 @@ func stStoreWithUnreachableRedis(t *testing.T) *store {
 	return &store{rdb: stUnreachableRedis(t)}
 }
 
-// stAssertRawConnectionError fails the test unless err is a non-nil error
-// that is neither of the account-constraint sentinels nor ErrNotFound -
-// i.e. a plain, untranslated connection failure passed straight through.
 func stAssertRawConnectionError(t *testing.T, err error) {
 	t.Helper()
 	if err == nil {
@@ -258,13 +249,13 @@ func TestST22UpdateSessionInDB(t *testing.T) {
 func TestST23ClearExpiredSessions(t *testing.T) {
 	s := stStoreWithUnreachableDB(t)
 	t.Run("ST-23_SwallowsErrorWithoutPanicking", func(t *testing.T) {
-		s.ClearExpiredSessions() // must log and return normally, not panic
+		s.ClearExpiredSessions()
 	})
 }
 
 func TestST24to25AddSessionToCache(t *testing.T) {
 	t.Run("ST-24_PastExpirySkipsRedisEntirely", func(t *testing.T) {
-		s := &store{} // rdb is nil; a real Set call here would panic
+		s := &store{}
 		err := s.AddSessionToCache(&Session{ID: "s1", ExpiresAt: time.Now().Add(-time.Hour).Unix()})
 		if err != nil {
 			t.Errorf("AddSessionToCache() = %v, want nil", err)
@@ -453,15 +444,6 @@ func TestST46DeleteOAuthToken(t *testing.T) {
 	})
 }
 
-//
-// These require TEST_POSTGRES_URL and self-skip otherwise (run via
-// `make test-env-up` then `TEST_POSTGRES_URL=... go test`, matching this
-// repo's `make test` target). They cover behavior a closed-port connection
-// error can't reach: real ErrNotFound/DefaultAccountSettings translation,
-// the empty-username/nil-email NULLIF collision-avoidance fix, and the
-// account-lockout guards in DeleteLinkedAccount/SetLinkedAccountLoginEnabled/
-// SetPasswordAuthEnabled plus their concurrency invariants.
-
 // stLiveStore returns all three store facades backed by a real Postgres
 // connection, having created the tables they need if they don't already
 // exist. It registers a t.Cleanup that deletes every row this file's tests
@@ -526,8 +508,6 @@ func stLiveStore(t *testing.T) (AccountStore, LinkAccountStore, AccountSettingsS
 	return s.Account(), s.LinkAccount(), s.AccountSettings()
 }
 
-// stSeedBareAccount inserts a passwordless account for the guard tests to
-// link platforms onto.
 func stSeedBareAccount(t *testing.T, as AccountStore, userID string) {
 	t.Helper()
 	if err := as.AddAccountToDB(&Account{UserID: userID, Username: "sttest-" + userID}); err != nil {
@@ -535,7 +515,6 @@ func stSeedBareAccount(t *testing.T, as AccountStore, userID string) {
 	}
 }
 
-// stSeedPasswordAccount inserts an account with a real hashed password.
 func stSeedPasswordAccount(t *testing.T, as AccountStore, userID string) *Account {
 	t.Helper()
 	a := &Account{UserID: userID, Username: "sttest-" + userID}
@@ -548,8 +527,6 @@ func stSeedPasswordAccount(t *testing.T, as AccountStore, userID string) *Accoun
 	return a
 }
 
-// stSeedLink inserts a linked_accounts row directly (not through
-// NewLinkedAccount) so tests can control Verified/LoginEnabled explicitly.
 func stSeedLink(t *testing.T, las LinkAccountStore, userID string, platform Platform, platformID string, verified, loginEnabled bool) {
 	t.Helper()
 	if err := las.AddLinkedAccountToDB(&LinkedAccount{

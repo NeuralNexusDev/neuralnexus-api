@@ -9,11 +9,6 @@ import (
 	"github.com/goccy/go-json"
 )
 
-// fakeGSSService is a test-only GSSService implementation that records the
-// arguments QueryGameServer was called with and returns a canned
-// status/error, without making any real network call. It is the mocking
-// seam handler.go's handlers are built around: both handlers take a
-// GSSService parameter rather than constructing one themselves.
 type fakeGSSService struct {
 	status *GameServerStatus
 	err    error

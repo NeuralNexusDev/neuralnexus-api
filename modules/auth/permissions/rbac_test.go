@@ -5,10 +5,6 @@ import (
 	"testing"
 )
 
-// TestScopeConstructors covers RB-01..RB-08: the four Scope constructor
-// functions (ScopePetPictures, ScopeDataStore, ScopeNumberStore, ScopeUsers)
-// all share the same shape - fixed Name/Description, pass-through Value -
-// so they're exercised together as one table.
 func TestScopeConstructors(t *testing.T) {
 	tests := []struct {
 		id       string
@@ -39,7 +35,6 @@ func TestScopeConstructors(t *testing.T) {
 	}
 }
 
-// TestGetRoleByName covers RB-09..RB-13.
 func TestGetRoleByName(t *testing.T) {
 	t.Run("RB-09_SystemRole", func(t *testing.T) {
 		got, err := GetRoleByName("system")

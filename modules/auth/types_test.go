@@ -11,7 +11,6 @@ import (
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 )
 
-// tyFakePlatformData is a minimal PlatformData double for NewLinkedAccount.
 type tyFakePlatformData struct {
 	id, email, username, data string
 }

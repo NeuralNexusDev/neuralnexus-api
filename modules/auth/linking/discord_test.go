@@ -86,8 +86,6 @@ func setDiscordUsersEndpoint(t *testing.T, ts *httptest.Server) {
 	})
 }
 
-// TestDC06to08GetDiscordUser covers DC-06..DC-08: the network call to
-// Discord's "/users/@me" endpoint and its happy/error/malformed outcomes.
 func TestDC06to08GetDiscordUser(t *testing.T) {
 	t.Run("DC-06_Success", func(t *testing.T) {
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

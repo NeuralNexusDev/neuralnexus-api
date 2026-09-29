@@ -15,8 +15,7 @@ import (
 // response or a canned error, without making any real network call. It is
 // swapped in for http.DefaultTransport (the seam QueryGameQ/QueryGameDig go
 // through: both call http.Get directly, which uses http.DefaultClient and
-// therefore http.DefaultTransport when none is set). Adapted from the
-// pattern in modules/projects/projects_test.go.
+// therefore http.DefaultTransport when none is set).
 type fakeRoundTripper struct {
 	resp *http.Response
 	err  error
@@ -29,8 +28,6 @@ func (f *fakeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 	return f.resp, nil
 }
 
-// fakeResponse builds a minimal *http.Response suitable for a RoundTripper
-// to return.
 func fakeResponse(status int, body string) *http.Response {
 	return &http.Response{
 		StatusCode: status,
@@ -39,8 +36,6 @@ func fakeResponse(status int, body string) *http.Response {
 	}
 }
 
-// swapTransport replaces the package-level http.DefaultTransport for the
-// duration of a subtest and restores the original afterward.
 func swapTransport(t *testing.T, rt http.RoundTripper) {
 	t.Helper()
 	orig := http.DefaultTransport
@@ -50,10 +45,6 @@ func swapTransport(t *testing.T, rt http.RoundTripper) {
 	})
 }
 
-// mcLiveServer reads MC_LIVE_TEST_SERVER ("host:port"), skipping the test
-// when it is unset so this suite still runs green without a real
-// Minecraft/Bedrock server available. Adapted from the mcLiveDB pattern in
-// modules/minecraft/store_test.go.
 func mcLiveServer(t *testing.T) (string, int) {
 	t.Helper()
 	addr := os.Getenv("MC_LIVE_TEST_SERVER")
@@ -304,9 +295,6 @@ func TestQueryGameServer(t *testing.T) {
 		}
 	})
 
-	// SV-22/SV-23 point at a closed local TCP port so any connection attempt
-	// fails fast (connection refused) and deterministically, without a real
-	// Minecraft server.
 	t.Run("SV-22_ErrorPath_JavaDispatchPropagatesError", func(t *testing.T) {
 		port := closedTCPPort(t)
 		status, err := svc.QueryGameServer("minecraft", "127.0.0.1", port, QueryTypeMinecraft)

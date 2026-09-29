@@ -14,8 +14,6 @@ import (
 	"github.com/goccy/go-json"
 )
 
-// stMockAccountService is a minimal, self-contained auth.AccountService
-// double for steam_test.go only.
 type stMockAccountService struct {
 	accounts        map[string]*auth.Account
 	addAccountErr   error
@@ -69,8 +67,6 @@ func (m *stMockAccountService) DeleteAccount(userID string) error {
 }
 func (m *stMockAccountService) IsPasswordAuthEnabled(string) (bool, error) { return false, nil }
 
-// stMockLinkAccountStore is a minimal, self-contained auth.LinkAccountStore
-// double for steam_test.go only.
 type stMockLinkAccountStore struct {
 	byPlatformID map[auth.Platform]map[string]*auth.LinkedAccount
 	getErr       error
@@ -120,8 +116,6 @@ func (m *stMockLinkAccountStore) SetLinkedAccountLoginEnabled(string, auth.Platf
 	return nil
 }
 
-// stMockSessionService is a minimal, self-contained auth.SessionService
-// double for steam_test.go only.
 type stMockSessionService struct {
 	addSessionErr error
 	added         []*auth.Session
@@ -144,8 +138,6 @@ func (m *stMockSessionService) DeleteSession(string) error              { return
 func (m *stMockSessionService) CreateJWT(*auth.Session) (string, error) { return "", nil }
 func (m *stMockSessionService) ReadJWT(string) (*auth.Session, error)   { return nil, auth.ErrNotFound }
 
-// stRequestWithSession builds a request carrying session in its context,
-// the way middleware would have placed it there.
 func stRequestWithSession(session *auth.Session) *http.Request {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	if session == nil {
@@ -309,8 +301,6 @@ func TestST06to12VerifySteamOpenIDCallback(t *testing.T) {
 	})
 }
 
-// setSteamURLs points the package's Steam endpoint vars at test values,
-// returning a func that restores the originals.
 func setSteamURLs(openIDLoginURL, playerSummaryURL string) func() {
 	origLogin, origSummary := steamOpenIDLoginURL, steamPlayerSummaryURL
 	if openIDLoginURL != "" {
@@ -451,8 +441,6 @@ func TestST16to22GetSteamUser(t *testing.T) {
 	})
 }
 
-// setSteamAPIKeyForTest overrides the package-level STEAM_API_KEY for the
-// duration of a test, restoring the original value on cleanup.
 func setSteamAPIKeyForTest(t *testing.T, value string) func() {
 	t.Helper()
 	original := STEAM_API_KEY

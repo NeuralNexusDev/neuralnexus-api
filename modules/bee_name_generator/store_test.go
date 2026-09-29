@@ -31,9 +31,6 @@ func bngUnusedTCPPort(t *testing.T) int {
 	return port
 }
 
-// bngUnreachablePool builds a real *pgxpool.Pool pointed at a closed local
-// port, so any Exec/Query against it fails fast with a genuine connection
-// error - without requiring a live Postgres instance.
 func bngUnreachablePool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	port := bngUnusedTCPPort(t)
@@ -53,10 +50,6 @@ func bngStoreWithUnreachableDB(t *testing.T) *store {
 	return &store{db: bngUnreachablePool(t)}
 }
 
-// bngLiveDB connects to TEST_POSTGRES_URL, skipping the test when it is
-// unset so this suite still runs green without the docker-compose test-env
-// (see `make test-env-up`/`make test-env-down`, backed by
-// docker-compose.test.yml).
 func bngLiveDB(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	dsn := os.Getenv("TEST_POSTGRES_URL")
@@ -76,8 +69,6 @@ func bngLiveStore(t *testing.T) (*store, *pgxpool.Pool) {
 	return &store{db: db}, db
 }
 
-// bngUniqueName hands out bee-name strings unique enough not to collide
-// with fixtures from other tests/runs against a shared live database.
 func bngUniqueName(prefix string) string {
 	return fmt.Sprintf("%s_%s", prefix, strings.ReplaceAll(uuid.New().String(), "-", ""))
 }

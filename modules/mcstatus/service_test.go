@@ -10,9 +10,7 @@ import (
 // svUnusedPort binds an ephemeral TCP port on 127.0.0.1 and immediately
 // releases it, giving a port that is guaranteed to refuse new connection
 // attempts at the moment this returns (nothing else can have bound it in
-// between within a single test). Same "guaranteed connection-refused"
-// technique used elsewhere in this repo's test suite for unreachable-store
-// tests (see e.g. modules/minecraft/store_test.go's mcUnusedTCPPort).
+// between within a single test).
 //
 // service.go's three methods make real calls over raw TCP/UDP to third-party
 // libraries with no injectable transport seam, so this is the only
@@ -30,10 +28,6 @@ func svUnusedPort(t *testing.T) int {
 	return port
 }
 
-// svLiveJavaServer reads MC_LIVE_JAVA_SERVER ("host:port") and skips the
-// test when it is unset, so this suite still runs green without a real,
-// reachable Minecraft Java server. Same self-skip pattern as
-// modules/minecraft/store_test.go's TEST_POSTGRES_URL.
 func svLiveJavaServer(t *testing.T) (string, int) {
 	t.Helper()
 	addr := os.Getenv("MC_LIVE_JAVA_SERVER")
@@ -51,9 +45,6 @@ func svLiveJavaServer(t *testing.T) (string, int) {
 	return host, port
 }
 
-// svLiveBedrockServer reads MC_LIVE_BEDROCK_SERVER ("host:port") and skips
-// the test when it is unset, so this suite still runs green without a real,
-// reachable Minecraft Bedrock server.
 func svLiveBedrockServer(t *testing.T) (string, int) {
 	t.Helper()
 	addr := os.Getenv("MC_LIVE_BEDROCK_SERVER")
