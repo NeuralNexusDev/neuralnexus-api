@@ -50,7 +50,7 @@
 | SV-05 | UploadPetPicture | Error Path | `os.Rename` fails because the source file is gone | temp file whose path is removed after opening (fd stays valid for the hash read via the inode) | Returns `nil`, a non-nil rename error | P2 | |
 | SV-06 | UploadPetPicture | Error Path | the CDN HTTP request fails | transport swapped for a `RoundTripper` returning an error | Returns `nil`, that transport error | P2 | |
 | SV-07 | UploadPetPicture | Edge Case | source file name has multiple dots | file named like `photo-*.tar.gz` | `fileExt` computed as `"gz"` (last dot-separated segment); forwarded to `CreatePetPicture` | P3 | |
-|  | UploadPetPicture | Edge Case | source file name has no dot | file named like `photo123456` (no `.`) | `fileExt` computed as the entire `file.Name()` (no dot found, so `strings.Split` returns one element); forwarded to `CreatePetPicture` | P3 | BLOCKED: `file.Name()` is a path, not a bare basename, so a filename with no dot of its own still hits the dot in a leading `./`, splitting off a bogus fileExt containing a `/`; the follow-on `os.Rename(id+"."+fileExt)` then fails trying to create a subdirectory that doesn't exist |
+| SV-08 | UploadPetPicture | Edge Case | source file name has no dot | file named like `photo123456` (no `.`), opened via a relative path so `file.Name()` starts with `./` | `fileExt` computed as the entire basename (no dot found, so `strings.Split` returns one element); forwarded to `CreatePetPicture` | P3 | |
 
 ## handler.go
 

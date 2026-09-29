@@ -8,6 +8,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -246,6 +247,25 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 		}
 		if len(mock.createPetPictureCalls) != 1 || mock.createPetPictureCalls[0].fileExt != "gz" {
 			t.Errorf("CreatePetPicture fileExt = %q, want %q", mock.createPetPictureCalls[0].fileExt, "gz")
+		}
+	})
+
+	t.Run("SV-08_NoDotFilenameUsesWholeBasename", func(t *testing.T) {
+		mockPic := &PetPicture{ID: "sv08-mock-id"}
+		mock := &svMockStore{createPetPictureResult: mockPic}
+		svc := NewService(mock)
+		file := svTempFile(t, "sv08photo", []byte("bytes"))
+		base := filepath.Base(file.Name())
+		renamed := "sv08-mock-id." + base
+		t.Cleanup(func() { os.Remove(renamed) })
+
+		swapTransport(t, &svFakeRoundTripper{resp: svOKResponse()})
+
+		if _, err := svc.UploadPetPicture(file, 1, nil, nil); err != nil {
+			t.Fatalf("UploadPetPicture() error = %v, want nil", err)
+		}
+		if len(mock.createPetPictureCalls) != 1 || mock.createPetPictureCalls[0].fileExt != base {
+			t.Errorf("CreatePetPicture calls = %+v, want one call with fileExt %q", mock.createPetPictureCalls, base)
 		}
 	})
 }
