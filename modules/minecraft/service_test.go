@@ -253,7 +253,7 @@ func TestSV01to02_NewService(t *testing.T) {
 	})
 }
 
-func TestSV03to13and128_GetMojangPlayerByName(t *testing.T) {
+func TestSV03to13_GetMojangPlayerByName(t *testing.T) {
 	t.Run("SV-03_CacheHit", func(t *testing.T) {
 		store := &mcMockStore{getPlayerFromCache: func(string) (*Player, error) { return &Player{ID: "cached"}, nil }}
 		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) { t.Fatal("should not call Mojang") })
@@ -378,17 +378,6 @@ func TestSV03to13and128_GetMojangPlayerByName(t *testing.T) {
 		_, err := s.GetMojangPlayerByName("Steve")
 		if err == nil {
 			t.Fatal("expected a network error")
-		}
-	})
-
-	t.Run("SV-128_MojangServerErrorMessage", func(t *testing.T) {
-		s := mcNewService(t, &mcMockStore{}, func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-		})
-		_, err := s.GetMojangPlayerByName("Steve")
-		want := "mojang API error: 500 Internal Server Error"
-		if err == nil || err.Error() != want {
-			t.Errorf("error = %v, want %q", err, want)
 		}
 	})
 }

@@ -531,15 +531,14 @@ func TestUS15to24and38UpdateUserFromPlatform(t *testing.T) {
 		}
 	})
 
-	t.Run("US-38_AddLinkAndCleanupFailMessage", func(t *testing.T) {
+	t.Run("US-38_AddLinkAndCleanupFailWrapsBoth", func(t *testing.T) {
 		as := &usFakeAccountStore{deleteErr: testerrors.ErrBoom}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, ErrNotFound}}, addErr: testerrors.ErrInsertFailed}
 		svc := usNewService(as, als, &usFakeAccountSettingsStore{})
 
 		_, err := svc.UpdateUserFromPlatform(PlatformDiscord, "p1", usFakePlatformData{})
-		want := "failed to link account (insert failed) and failed to clean up the orphaned placeholder account: boom"
-		if err == nil || err.Error() != want {
-			t.Errorf("UpdateUserFromPlatform() err = %v, want %q", err, want)
+		if !errors.Is(err, testerrors.ErrInsertFailed) || !errors.Is(err, testerrors.ErrBoom) {
+			t.Errorf("UpdateUserFromPlatform() err = %v, want it to wrap both %v and %v", err, testerrors.ErrInsertFailed, testerrors.ErrBoom)
 		}
 	})
 }

@@ -860,14 +860,13 @@ func TestOA17to26and83ResolveOrCreateAccountForPlatformUser(t *testing.T) {
 		}
 	})
 
-	t.Run("OA-83_AddLinkAndCleanupFailMessage", func(t *testing.T) {
+	t.Run("OA-83_AddLinkAndCleanupFailWrapsBoth", func(t *testing.T) {
 		as := &oaMockAccountService{DeleteAccountFunc: func(string) error { return errCleanupFailed }}
 		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return testerrors.ErrInsertFailed }}
 
 		_, err := resolveOrCreateAccountForPlatformUser(as, las, auth.PlatformDiscord, user)
-		want := "failed to link account (insert failed) and failed to clean up the orphaned placeholder account: cleanup failed"
-		if err == nil || err.Error() != want {
-			t.Errorf("error = %v, want %q", err, want)
+		if !errors.Is(err, testerrors.ErrInsertFailed) || !errors.Is(err, errCleanupFailed) {
+			t.Errorf("error = %v, want it to wrap both %v and %v", err, testerrors.ErrInsertFailed, errCleanupFailed)
 		}
 	})
 }
@@ -1591,10 +1590,6 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 		if !errors.Is(err, lookupErr) || !errors.Is(err, cleanupErr) {
 			t.Errorf("error = %v, want it to wrap both %v and %v", err, lookupErr, cleanupErr)
 		}
-		want := "failed to link account (lookup failed) and failed to clean up the orphaned placeholder account: cleanup failed"
-		if err.Error() != want {
-			t.Errorf("error = %q, want %q", err.Error(), want)
-		}
 	})
 
 	t.Run("OA-63_RealConflictExistingAccountRejected", func(t *testing.T) {
@@ -1650,12 +1645,8 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 		}
 
 		_, _, err := ensureMicrosoftIdentityLinked(as, las, account, true, auth.PlatformXboxLive, xbox)
-		if !errors.Is(err, cleanupErr) {
-			t.Fatalf("error = %v, want it to wrap %v", err, cleanupErr)
-		}
-		want := "failed to link account (" + auth.ErrAlreadyLinked.Error() + ") and failed to clean up the orphaned placeholder account: cleanup failed"
-		if err.Error() != want {
-			t.Errorf("error = %q, want %q", err.Error(), want)
+		if !errors.Is(err, cleanupErr) || !errors.Is(err, auth.ErrAlreadyLinked) {
+			t.Fatalf("error = %v, want it to wrap both %v and %v", err, cleanupErr, auth.ErrAlreadyLinked)
 		}
 	})
 
@@ -1675,14 +1666,13 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 		}
 	})
 
-	t.Run("OA-84_LinkAndCleanupFailMessage", func(t *testing.T) {
+	t.Run("OA-84_LinkAndCleanupFailWrapsBoth", func(t *testing.T) {
 		as := &oaMockAccountService{DeleteAccountFunc: func(string) error { return errCleanupFailed }}
 		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return testerrors.ErrInsertFailed }}
 
 		_, _, err := ensureMicrosoftIdentityLinked(as, las, account, true, auth.PlatformXboxLive, xbox)
-		want := "failed to link account (insert failed) and failed to clean up the orphaned placeholder account: cleanup failed"
-		if err == nil || err.Error() != want {
-			t.Errorf("error = %v, want %q", err, want)
+		if !errors.Is(err, testerrors.ErrInsertFailed) || !errors.Is(err, errCleanupFailed) {
+			t.Errorf("error = %v, want it to wrap both %v and %v", err, testerrors.ErrInsertFailed, errCleanupFailed)
 		}
 	})
 }

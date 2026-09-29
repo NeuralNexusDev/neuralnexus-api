@@ -56,7 +56,7 @@
 | SE-17 | UpdateSession | Edge Case | `UpdateSessionInDB` succeeds, `AddSessionToCache` fails | | Returns nil anyway (fail-open) | P1 |  |
 | SE-18 | DeleteSession | Happy Path | `DeleteSessionInDB` and `DeleteSessionFromCache` both succeed | | Returns nil | P1 |  |
 | SE-19 | DeleteSession | Error Path | `DeleteSessionInDB` fails | | Returns that error; cache eviction never attempted | P1 |  |
-| SE-20 | DeleteSession | Error Path | `DeleteSessionInDB` succeeds, `DeleteSessionFromCache` fails | | Returns a wrapped "deleted from db but failed to evict from cache" error (fail-closed, unlike Add/Update) | P0 |  |
+| SE-20 | DeleteSession | Error Path | `DeleteSessionInDB` succeeds, `DeleteSessionFromCache` fails | | Returns an error wrapping the cache eviction failure (fail-closed, unlike Add/Update) | P0 |  |
 | SE-21 | CreateJWT | Happy Path | Session with nonzero `ExpiresAt` | | Returns a signed JWT string, err nil; decodes back to matching claims | P1 |  |
 | SE-22 | CreateJWT | Edge Case | `Session.ExpiresAt == 0` | | Returned JWT omits the `exp` claim entirely | P0 |  |
 | SE-23 | ReadJWT | Happy Path | Valid JWT for an existing session whose `UserID` matches the token subject | `store.GetSession` finds it | Returns the session, nil error; `LastUsedAt` bumped via `UpdateSession` | P1 |  |
@@ -65,12 +65,12 @@
 | SE-26 | ReadJWT | Error Path | Token's audience is empty | | Returns nil, "missing audience" error | P1 |  |
 | SE-27 | ReadJWT | Error Path | Token's audience contains an empty-string entry | | Returns nil, "empty audience entry" error | P2 |  |
 | SE-28 | ReadJWT | Error Path | Token's audience doesn't match `NN_SITE_URL`/`NN_API_URL` | | Returns nil, "invalid audience: ..." error | P1 |  |
-| SE-29 | ReadJWT | Error Path | Session lookup fails (e.g. session was deleted/revoked) even though the JWT is validly signed and unexpired | `store.GetSession` returns an error | Returns nil, wrapped "session not found" error | P0 |  |
+| SE-29 | ReadJWT | Error Path | Session lookup fails (e.g. session was deleted/revoked) even though the JWT is validly signed and unexpired | `store.GetSession` returns an error | Returns nil, an error wrapping `ErrNotFound` | P0 |  |
 | SE-30 | ReadJWT | Error Path | Session found but its `UserID` doesn't match the token's `Subject` claim | | Returns nil, "session does not match token subject" error | P0 |  |
 | SE-31 | ReadJWT | Error Path | `UpdateSession` (LastUsedAt bump) fails after a valid lookup | | Returns nil, that error | P2 |  |
 | SE-32 | init | Happy Path | Package loads under the required `JWT_SECRET`/`NN_SITE_URL`/`NN_API_URL` env (the precondition every other test in this file already runs under) | | `JWT_SECRET` and `validAudiences` are populated from env without `log.Fatal` firing; `validAudiences == []string{NN_SITE_URL, NN_API_URL}` | P2 | Asserts init's already-established postcondition rather than re-invoking it |
-| SE-33 | init | Error Path | `JWT_SECRET` unset | Test binary re-exec'd as a subprocess with `JWT_SECRET=""`, other required env vars inherited unchanged | Subprocess exits non-zero via `log.Fatal("JWT_SECRET environment variable must be set")` | P1 | Re-exec/TestCrasher pattern (see `os/exec` docs) — init() runs unconditionally at process start, before any `-test.run` filtering |
-| SE-34 | init | Error Path | `NN_SITE_URL` or `NN_API_URL` unset (`JWT_SECRET` set) | Test binary re-exec'd as a subprocess with each cleared in turn | Subprocess exits non-zero via `log.Fatal("NN_SITE_URL and NN_API_URL environment variables must be set")` | P1 | Same re-exec pattern; exercises both var slots of the OR condition |
+| SE-33 | init | Error Path | `JWT_SECRET` unset | Test binary re-exec'd as a subprocess with `JWT_SECRET=""`, other required env vars inherited unchanged | Subprocess exits non-zero via `log.Fatal(msgJWTSecretUnset)` | P1 | Re-exec/TestCrasher pattern (see `os/exec` docs) — init() runs unconditionally at process start, before any `-test.run` filtering |
+| SE-34 | init | Error Path | `NN_SITE_URL` or `NN_API_URL` unset (`JWT_SECRET` set) | Test binary re-exec'd as a subprocess with each cleared in turn | Subprocess exits non-zero via `log.Fatal(msgSiteAPIURLUnset)` | P1 | Same re-exec pattern; exercises both var slots of the OR condition |
 
 ## store.go
 
@@ -83,7 +83,7 @@
 | ST-05 | LinkAccount | Accessor | | | Same pointer-identity check | P3 |  |
 | ST-06 | RateLimit | Accessor | | | Same pointer-identity check | P3 |  |
 | ST-07 | OAuthToken | Accessor | | | Same pointer-identity check | P3 |  |
-| ST-08 | translateAccountConstraintErr | Edge Case | `err` is not a `*pgconn.PgError` | a plain error that is not a `*pgconn.PgError` (`errBoom`) | Returned unchanged | P1 |  |
+| ST-08 | translateAccountConstraintErr | Edge Case | `err` is not a `*pgconn.PgError` | a plain error that is not a `*pgconn.PgError` (`testerrors.ErrBoom`) | Returned unchanged | P1 |  |
 | ST-09 | translateAccountConstraintErr | Edge Case | `*pgconn.PgError` with `Code != "23505"` | | Returned unchanged | P2 |  |
 | ST-10 | translateAccountConstraintErr | Edge Case | `Code == "23505"`, unrecognized `ConstraintName` | | Returned unchanged (falls through the switch) | P1 |  |
 | ST-11 | translateAccountConstraintErr | Happy Path | `Code == "23505"`, `ConstraintName == "accounts_email_key"` | | Returns `ErrEmailAlreadyExists` | P0 |  |
@@ -180,7 +180,7 @@
 | TY-25 | NewSession (Account) | Edge Case | `Account.Roles` empty | | `Session.Permissions` empty, nil error | P2 |  |
 | TY-26 | NewLinkedAccount | Happy Path | userID, platform, username, platformID, data given | | Returns `*LinkedAccount` with all fields copied, `Verified == true`, `LoginEnabled == true` | P2 |  |
 | TY-27 | init | Happy Path | Package loads under the required `PEPPER` env (the precondition every other test in this file already runs under) | | `pepper` is populated from env without `log.Fatal` firing | P2 | Asserts init's already-established postcondition rather than re-invoking it |
-| TY-28 | init | Error Path | `PEPPER` unset | Test binary re-exec'd as a subprocess with `PEPPER=""` | Subprocess exits non-zero via `log.Fatal("PEPPER environment variable must be set")` | P1 | Re-exec/TestCrasher pattern (see `os/exec` docs) |
+| TY-28 | init | Error Path | `PEPPER` unset | Test binary re-exec'd as a subprocess with `PEPPER=""` | Subprocess exits non-zero via `log.Fatal(msgPepperUnset)` | P1 | Re-exec/TestCrasher pattern (see `os/exec` docs) |
 
 ## user.go
 
@@ -223,4 +223,4 @@
 | US-35 | GetAccountSettings | Error Path | `ass.GetAccountSettings` fails | | Error propagated unchanged | P2 |  |
 | US-36 | SetPasswordAuthEnabled | Happy Path | `ass.SetPasswordAuthEnabled` succeeds | | Returns nil | P1 |  |
 | US-37 | SetPasswordAuthEnabled | Error Path | `ass.SetPasswordAuthEnabled` fails | | Error propagated unchanged | P2 |  |
-| US-38 | UpdateUserFromPlatform | Error Path | Same as US-20, pinning the message | `AddLinkedAccountToDB` fails with "insert failed"; `DeleteAccountFromDB` fails with "boom" | The error text is exactly `failed to link account (insert failed) and failed to clean up the orphaned placeholder account: boom` | P2 | |
+| US-38 | UpdateUserFromPlatform | Error Path | Same as US-20, asserting both causes | `AddLinkedAccountToDB` fails with `testerrors.ErrInsertFailed`; `DeleteAccountFromDB` fails with `testerrors.ErrBoom` | Returns an error wrapping both `testerrors.ErrInsertFailed` and `testerrors.ErrBoom` | P2 | |

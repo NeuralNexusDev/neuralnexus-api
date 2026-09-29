@@ -223,15 +223,15 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 		svc := NewService(mock)
 		file := svTempFile(t, "sv06-upload-*.jpg", []byte("bytes"))
 
-		wantErr := testerrors.ErrDBDown
+		wantErr := testerrors.ErrTransportFailed
 		swapTransport(t, &svFakeRoundTripper{err: wantErr})
 
 		got, err := svc.UploadPetPicture(file, 1, nil, nil)
 		if got != nil {
 			t.Errorf("UploadPetPicture() picture = %+v, want nil", got)
 		}
-		if err == nil || !strings.Contains(err.Error(), wantErr.Error()) {
-			t.Errorf("UploadPetPicture() error = %v, want it to contain %q", err, wantErr.Error())
+		if !errors.Is(err, wantErr) {
+			t.Errorf("UploadPetPicture() error = %v, want it to wrap %v", err, wantErr)
 		}
 	})
 

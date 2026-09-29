@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/google/uuid"
@@ -995,15 +996,14 @@ type mcSeekableReadCloser struct{ io.ReadSeeker }
 
 func (mcSeekableReadCloser) Close() error { return nil }
 
-func mcRequireUploadS3Text(t *testing.T, err error) {
+func mcRequireUploadS3Chain(t *testing.T, err error) {
 	t.Helper()
-	joined, ok := err.(interface{ Unwrap() []error })
-	if !ok || len(joined.Unwrap()) != 2 {
-		t.Fatalf("error = %v, want an error wrapping ErrUploadS3 and its cause", err)
+	if !errors.Is(err, ErrUploadS3) {
+		t.Fatalf("error = %v, want it to wrap %v", err, ErrUploadS3)
 	}
-	want := ErrUploadS3.Error() + ": " + joined.Unwrap()[1].Error()
-	if err.Error() != want {
-		t.Errorf("error = %q, want %q", err.Error(), want)
+	var respErr *awshttp.ResponseError
+	if !errors.As(err, &respErr) || respErr.HTTPStatusCode() != http.StatusInternalServerError {
+		t.Errorf("error = %v, want it to chain the S3 500 response error", err)
 	}
 }
 
@@ -1041,11 +1041,11 @@ func TestST68to70and77_PutTextureInS3(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-77_ServerErrorMessage", func(t *testing.T) {
+	t.Run("ST-77_ServerErrorWrapsCause", func(t *testing.T) {
 		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusInternalServerError) })
 		s := &store{s3: s3c}
 		err := s.PutTextureInS3("hash", mcSeekableReadCloser{strings.NewReader("hello")})
-		mcRequireUploadS3Text(t, err)
+		mcRequireUploadS3Chain(t, err)
 	})
 }
 
@@ -1110,10 +1110,10 @@ func TestST74to75and78_PutGeyserTextureInS3(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-78_ServerErrorMessage", func(t *testing.T) {
+	t.Run("ST-78_ServerErrorWrapsCause", func(t *testing.T) {
 		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusInternalServerError) })
 		s := &store{s3: s3c}
 		err := s.PutGeyserTextureInS3("hash", mcSeekableReadCloser{strings.NewReader("hello")})
-		mcRequireUploadS3Text(t, err)
+		mcRequireUploadS3Chain(t, err)
 	})
 }

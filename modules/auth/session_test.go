@@ -325,8 +325,8 @@ func TestSE18to20DeleteSession(t *testing.T) {
 		svc := NewSessionService(&seFakeStore{ss: fs})
 
 		err := svc.DeleteSession("s1")
-		if err == nil {
-			t.Fatal("DeleteSession() expected a wrapped error when cache eviction fails, got nil (this must be fail-closed, unlike Add/Update)")
+		if !errors.Is(err, testerrors.ErrCacheDown) {
+			t.Fatalf("DeleteSession() error = %v, want it to wrap %v (this must be fail-closed, unlike Add/Update)", err, testerrors.ErrCacheDown)
 		}
 	})
 }
@@ -472,8 +472,8 @@ func TestSE23to31ReadJWT(t *testing.T) {
 		fs.getFromDBSession = nil
 		fs.getFromDBErr = ErrNotFound
 
-		if _, err := svc.ReadJWT(tok); err == nil {
-			t.Fatal("expected an error for a validly signed, unexpired token whose session no longer exists")
+		if _, err := svc.ReadJWT(tok); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("ReadJWT() error = %v, want %v for a validly signed, unexpired token whose session no longer exists", err, ErrNotFound)
 		}
 	})
 
