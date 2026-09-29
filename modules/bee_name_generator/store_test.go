@@ -73,8 +73,9 @@ func bngLiveStore(t *testing.T) (*store, *pgxpool.Pool) {
 }
 
 // bngTruncatingConn relays the server's response to the first query written
-// after armed is set with its trailing CommandComplete/ReadyForQuery cut
-// off, then fails the next read, so the client hits an error mid-result.
+// after armed is set with its last 25 bytes cut off (the trailing
+// CommandComplete/ReadyForQuery and part of the last DataRow), then fails the
+// next read, so the client hits an error mid-result.
 type bngTruncatingConn struct {
 	net.Conn
 	armed   *atomic.Bool
