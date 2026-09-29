@@ -1,5 +1,4 @@
 # Test plan: modules/auth/linking
-Mode: LEGACY REPLACEMENT
 
 ## oauth.go
 

@@ -1,5 +1,4 @@
 # Test plan: discord
-Mode: FRESH
 
 ## handler.go
 

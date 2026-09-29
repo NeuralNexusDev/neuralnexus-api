@@ -1,5 +1,4 @@
 # Test plan: teapot
-Mode: FRESH
 
 ## teapot.go
 

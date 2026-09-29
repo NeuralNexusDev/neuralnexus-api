@@ -1,5 +1,4 @@
 # Test plan: modules/auth/permissions
-Mode: FRESH
 
 ## rbac.go
 

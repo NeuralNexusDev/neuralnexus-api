@@ -1,5 +1,4 @@
 # Test plan: pet_pictures
-Mode: FRESH
 
 ## types.go
 

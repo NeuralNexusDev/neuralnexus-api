@@ -1,5 +1,4 @@
 # Test plan: game_server_status
-Mode: FRESH
 
 ## handler.go
 

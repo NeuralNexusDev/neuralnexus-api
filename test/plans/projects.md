@@ -1,5 +1,4 @@
 # Test plan: projects
-Mode: FRESH
 
 ## projects.go
 

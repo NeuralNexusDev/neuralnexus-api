@@ -1,5 +1,4 @@
 # Test plan: minecraft
-Mode: LEGACY REPLACEMENT
 
 ## types.go
 

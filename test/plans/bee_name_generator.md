@@ -1,5 +1,4 @@
 # Test plan: bee_name_generator
-Mode: FRESH
 
 ## types.go
 

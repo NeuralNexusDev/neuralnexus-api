@@ -1,5 +1,4 @@
 # Test plan: middleware
-Mode: LEGACY REPLACEMENT
 
 ## middleware.go
 

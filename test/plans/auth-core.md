@@ -1,5 +1,4 @@
 # Test plan: modules/auth (core package)
-Mode: LEGACY REPLACEMENT
 
 ## account.go
 

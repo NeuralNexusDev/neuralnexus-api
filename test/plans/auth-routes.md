@@ -1,5 +1,4 @@
 # Test plan: modules/auth/routes
-Mode: LEGACY REPLACEMENT
 
 ## auth.go
 

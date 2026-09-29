@@ -1,5 +1,4 @@
 # Test plan: mcstatus
-Mode: FRESH
 
 ## handler.go
 
