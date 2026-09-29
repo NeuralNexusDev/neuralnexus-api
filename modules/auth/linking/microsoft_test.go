@@ -2,624 +2,793 @@ package linking
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
+	"github.com/google/uuid"
 )
 
-// withServer points the given endpoint URL var at a test server for the
-// duration of the test, restoring the original value afterward so other
-// tests in this package aren't affected by leftover overrides.
-func withServer(t *testing.T, urlVar *string, handler http.HandlerFunc) *httptest.Server {
-	t.Helper()
-	server := httptest.NewServer(handler)
-	t.Cleanup(server.Close)
-	original := *urlVar
-	*urlVar = server.URL
-	t.Cleanup(func() { *urlVar = original })
-	return server
+func readJSONBody(r *http.Request, v interface{}) error {
+	defer r.Body.Close()
+	return json.NewDecoder(r.Body).Decode(v)
 }
 
-// -------------- xstsErrForCode --------------
+func msSetURL(t *testing.T, target *string, value string) {
+	t.Helper()
+	original := *target
+	*target = value
+	t.Cleanup(func() {
+		*target = original
+	})
+}
 
-func TestXstsErrForCode(t *testing.T) {
+func TestMS01to04XboxLiveDataAccessors(t *testing.T) {
+	x := &XboxLiveData{XUID: "x1", Gamertag: "Tag"}
+
+	t.Run("MS-01_GetID", func(t *testing.T) {
+		if got := x.GetID(); got != "x1" {
+			t.Errorf("GetID() = %q, want %q", got, "x1")
+		}
+	})
+	t.Run("MS-02_GetEmail", func(t *testing.T) {
+		if got := x.GetEmail(); got != "" {
+			t.Errorf("GetEmail() = %q, want empty string", got)
+		}
+	})
+	t.Run("MS-03_GetUsername", func(t *testing.T) {
+		if got := x.GetUsername(); got != "Tag" {
+			t.Errorf("GetUsername() = %q, want %q", got, "Tag")
+		}
+	})
+	t.Run("MS-04_GetData", func(t *testing.T) {
+		data := x.GetData()
+		if data == "" {
+			t.Fatal("GetData() returned empty string")
+		}
+		want := `{"xuid":"x1","gamertag":"Tag"}`
+		if data != want {
+			t.Errorf("GetData() = %q, want %q", data, want)
+		}
+	})
+}
+
+func TestMS05XboxLiveDataCreateLinkedAccount(t *testing.T) {
+	t.Run("MS-05_CreateLinkedAccount", func(t *testing.T) {
+		x := &XboxLiveData{XUID: "x1", Gamertag: "Tag"}
+		la := x.CreateLinkedAccount("user-1")
+		if la.UserID != "user-1" || la.Platform != auth.PlatformXboxLive || la.PlatformID != "x1" || la.PlatformUsername != "Tag" {
+			t.Errorf("CreateLinkedAccount() = %+v, want UserID=user-1 Platform=xboxlive PlatformID=x1 PlatformUsername=Tag", la)
+		}
+	})
+}
+
+func TestMS06to09MicrosoftUserDataAccessors(t *testing.T) {
+	m := &MicrosoftUserData{Sub: "sub1", Name: "Alice", Email: "a@b.com"}
+
+	t.Run("MS-06_GetID", func(t *testing.T) {
+		if got := m.GetID(); got != "sub1" {
+			t.Errorf("GetID() = %q, want %q", got, "sub1")
+		}
+	})
+	t.Run("MS-07_GetEmail", func(t *testing.T) {
+		if got := m.GetEmail(); got != "a@b.com" {
+			t.Errorf("GetEmail() = %q, want %q", got, "a@b.com")
+		}
+	})
+	t.Run("MS-08_GetUsername", func(t *testing.T) {
+		if got := m.GetUsername(); got != "Alice" {
+			t.Errorf("GetUsername() = %q, want %q", got, "Alice")
+		}
+	})
+	t.Run("MS-09_GetData", func(t *testing.T) {
+		want := `{"sub":"sub1","name":"Alice","email":"a@b.com"}`
+		if got := m.GetData(); got != want {
+			t.Errorf("GetData() = %q, want %q", got, want)
+		}
+	})
+}
+
+func TestMS10MicrosoftUserDataCreateLinkedAccount(t *testing.T) {
+	t.Run("MS-10_CreateLinkedAccount", func(t *testing.T) {
+		m := &MicrosoftUserData{Sub: "sub1", Name: "Alice"}
+		la := m.CreateLinkedAccount("user-1")
+		if la.UserID != "user-1" || la.Platform != auth.PlatformMicrosoft || la.PlatformID != "sub1" || la.PlatformUsername != "Alice" {
+			t.Errorf("CreateLinkedAccount() = %+v, want UserID=user-1 Platform=microsoft PlatformID=sub1 PlatformUsername=Alice", la)
+		}
+	})
+}
+
+func TestMS11to16XstsErrForCode(t *testing.T) {
 	tests := []struct {
+		name string
 		code int64
 		want error
 	}{
-		{2148916233, ErrNoXboxAccount},
-		{2148916235, ErrXboxLiveUnavailable},
-		{2148916236, ErrAdultVerificationRequired},
-		{2148916237, ErrAgeVerificationRequired},
-		{2148916238, ErrAccountIsChild},
+		{"MS-11_NoXboxAccount", 2148916233, ErrNoXboxAccount},
+		{"MS-12_XboxLiveUnavailable", 2148916235, ErrXboxLiveUnavailable},
+		{"MS-13_AdultVerificationRequired", 2148916236, ErrAdultVerificationRequired},
+		{"MS-14_AgeVerificationRequired", 2148916237, ErrAgeVerificationRequired},
+		{"MS-15_AccountIsChild", 2148916238, ErrAccountIsChild},
 	}
-	for _, tt := range tests {
-		if got := xstsErrForCode(tt.code); got != tt.want {
-			t.Errorf("xstsErrForCode(%d) = %v, want %v", tt.code, got, tt.want)
-		}
-	}
-
-	if err := xstsErrForCode(999999); err == nil {
-		t.Error("expected a non-nil fallback error for an unrecognized XErr code")
-	}
-}
-
-// -------------- MicrosoftConfig / MicrosoftLoginConfig scope separation --------------
-
-// TestMicrosoftConfigsHaveDisjointScopes pins the security property
-// MicrosoftLoginConfig exists for: its OIDC scopes must never end up on
-// MicrosoftConfig (whose access token authenticates against Xbox Live), and
-// vice versa - XboxLive.signin has no business being requested for a plain
-// "sign in with Microsoft" login.
-func TestMicrosoftConfigsHaveDisjointScopes(t *testing.T) {
-	contains := func(scopes []string, want string) bool {
-		for _, s := range scopes {
-			if s == want {
-				return true
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := xstsErrForCode(tc.code); got != tc.want {
+				t.Errorf("xstsErrForCode(%d) = %v, want %v", tc.code, got, tc.want)
 			}
+		})
+	}
+
+	t.Run("MS-16_UnrecognizedCode", func(t *testing.T) {
+		got := xstsErrForCode(999)
+		want := "xbox XSTS authentication error, code: 999"
+		if got == nil || got.Error() != want {
+			t.Errorf("xstsErrForCode(999) = %v, want %q", got, want)
 		}
-		return false
-	}
+	})
+}
 
-	if !contains(MicrosoftConfig.Scopes, "XboxLive.signin") {
-		t.Error("expected MicrosoftConfig to request XboxLive.signin")
-	}
-	for _, oidcScope := range []string{"openid", "profile", "email"} {
-		if contains(MicrosoftConfig.Scopes, oidcScope) {
-			t.Errorf("MicrosoftConfig must not request the OIDC scope %q - that belongs to MicrosoftLoginConfig only", oidcScope)
+func TestMS17to21GetMicrosoftUser(t *testing.T) {
+	t.Run("MS-17_Success", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if got := r.Header.Get("Authorization"); got != "Bearer tok" {
+				t.Errorf("Authorization header = %q, want %q", got, "Bearer tok")
+			}
+			_, _ = w.Write([]byte(`{"sub":"s1","name":"n","email":"e"}`))
+		}))
+		defer ts.Close()
+		msSetURL(t, &microsoftUserInfoURL, ts.URL)
+
+		got, err := GetMicrosoftUser(&auth.OAuthToken{AccessToken: "tok"})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
-	}
-
-	for _, oidcScope := range []string{"openid", "profile", "email"} {
-		if !contains(MicrosoftLoginConfig.Scopes, oidcScope) {
-			t.Errorf("expected MicrosoftLoginConfig to request the OIDC scope %q", oidcScope)
+		if got.Sub != "s1" || got.Name != "n" || got.Email != "e" {
+			t.Errorf("GetMicrosoftUser() = %+v, want sub=s1 name=n email=e", got)
 		}
-	}
-	if contains(MicrosoftLoginConfig.Scopes, "XboxLive.signin") {
-		t.Error("MicrosoftLoginConfig must not request XboxLive.signin - that belongs to MicrosoftConfig only")
-	}
-}
+	})
 
-// -------------- xblAuthenticate --------------
-
-func TestXblAuthenticateSuccess(t *testing.T) {
-	var gotBody xblAuthRequest
-	withServer(t, &xboxLiveAuthenticateURL, func(w http.ResponseWriter, r *http.Request) {
-		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
-			t.Fatalf("failed to decode request body: %v", err)
+	t.Run("MS-18_NetworkError", func(t *testing.T) {
+		msSetURL(t, &microsoftUserInfoURL, "http://127.0.0.1:1")
+		_, err := GetMicrosoftUser(&auth.OAuthToken{AccessToken: "tok"})
+		if err == nil {
+			t.Fatal("expected an error")
 		}
-		_ = json.NewEncoder(w).Encode(xblAuthResponse{Token: "xbl-token-123"})
 	})
 
-	token, err := xblAuthenticate("ms-access-token")
-	if err != nil {
-		t.Fatalf("xblAuthenticate returned error: %v", err)
-	}
-	if token != "xbl-token-123" {
-		t.Errorf("expected xbl-token-123, got %q", token)
-	}
-	if gotBody.Properties.RpsTicket != "d=ms-access-token" {
-		t.Errorf("expected RpsTicket to be \"d=ms-access-token\", got %q", gotBody.Properties.RpsTicket)
-	}
-	if gotBody.RelyingParty != "http://auth.xboxlive.com" {
-		t.Errorf("expected the http (not https) relying party, got %q", gotBody.RelyingParty)
-	}
-}
+	t.Run("MS-19_NonOKStatus", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusUnauthorized)
+		}))
+		defer ts.Close()
+		msSetURL(t, &microsoftUserInfoURL, ts.URL)
 
-func TestXblAuthenticateNonOKStatus(t *testing.T) {
-	withServer(t, &xboxLiveAuthenticateURL, func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusUnauthorized)
-	})
-
-	if _, err := xblAuthenticate("bad-token"); err == nil {
-		t.Fatal("expected an error for a non-2xx response")
-	}
-}
-
-func TestXblAuthenticateMissingToken(t *testing.T) {
-	withServer(t, &xboxLiveAuthenticateURL, func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(xblAuthResponse{})
-	})
-
-	if _, err := xblAuthenticate("some-token"); err == nil {
-		t.Fatal("expected an error when the response is missing Token")
-	}
-}
-
-// -------------- xstsAuthorize --------------
-
-func TestXstsAuthorizeSuccess(t *testing.T) {
-	withServer(t, &xstsAuthorizeURL, func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"Token": "xsts-token-abc",
-			"DisplayClaims": map[string]interface{}{
-				"xui": []map[string]string{
-					{"uhs": "user-hash-1", "xid": "1234567890", "gtg": "CoolGamertag"},
-				},
-			},
-		})
-	})
-
-	xstsToken, uhs, xuid, gamertag, err := xstsAuthorize("xbl-token", xstsXboxLiveRelyingParty)
-	if err != nil {
-		t.Fatalf("xstsAuthorize returned error: %v", err)
-	}
-	if xstsToken != "xsts-token-abc" || uhs != "user-hash-1" || xuid != "1234567890" || gamertag != "CoolGamertag" {
-		t.Errorf("unexpected result: token=%q uhs=%q xuid=%q gamertag=%q", xstsToken, uhs, xuid, gamertag)
-	}
-}
-
-func TestXstsAuthorizeXErrTranslated(t *testing.T) {
-	withServer(t, &xstsAuthorizeURL, func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusUnauthorized)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"XErr":    2148916233,
-			"Message": "",
-		})
-	})
-
-	_, _, _, _, err := xstsAuthorize("xbl-token", xstsXboxLiveRelyingParty)
-	if err != ErrNoXboxAccount {
-		t.Errorf("expected ErrNoXboxAccount, got: %v", err)
-	}
-}
-
-func TestXstsAuthorizeMissingClaims(t *testing.T) {
-	withServer(t, &xstsAuthorizeURL, func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"Token": "xsts-token"})
-	})
-
-	_, _, _, _, err := xstsAuthorize("xbl-token", xstsXboxLiveRelyingParty)
-	if err == nil {
-		t.Fatal("expected an error when DisplayClaims/uhs is missing from an otherwise-200 response")
-	}
-}
-
-// TestXstsAuthorizeMinecraftRelyingPartyUhsOnlySucceeds is the regression
-// test for the prod outage this fixes: Xbox Live's real XSTS response for
-// the Minecraft relying party only ever includes uhs in DisplayClaims, never
-// xid/gtg - a prior fix wrongly required all three from every XSTS call,
-// so every real Xbox/Minecraft login started failing with "xsts
-// authorization response missing uhs, xid, or gtg in DisplayClaims".
-// xstsAuthorize itself must accept a uhs-only response; requiring xid/gtg
-// is authenticateXboxLiveIdentity's job, and only for the Xbox Live relying
-// party.
-func TestXstsAuthorizeMinecraftRelyingPartyUhsOnlySucceeds(t *testing.T) {
-	withServer(t, &xstsAuthorizeURL, func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"Token": "xsts-token",
-			"DisplayClaims": map[string]interface{}{
-				"xui": []map[string]string{{"uhs": "user-hash-1"}},
-			},
-		})
-	})
-
-	xstsToken, uhs, xuid, gamertag, err := xstsAuthorize("xbl-token", xstsMinecraftRelyingParty)
-	if err != nil {
-		t.Fatalf("expected a uhs-only response to succeed, got: %v", err)
-	}
-	if xstsToken != "xsts-token" || uhs != "user-hash-1" || xuid != "" || gamertag != "" {
-		t.Errorf("unexpected result: token=%q uhs=%q xuid=%q gamertag=%q", xstsToken, uhs, xuid, gamertag)
-	}
-}
-
-// TestAuthenticateXboxLiveIdentityMissingXidOrGtgRejected pins the other
-// half of the split: xid/gtg missing from the Xbox Live relying party's
-// response is still a real error - it means an XboxLiveData{XUID: "",
-// Gamertag: ""} would otherwise resolve to whatever other account already
-// holds that (platform, platform_id) under the UNIQUE constraint.
-func TestAuthenticateXboxLiveIdentityMissingXidOrGtgRejected(t *testing.T) {
-	withServer(t, &xstsAuthorizeURL, func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"Token": "xsts-token",
-			"DisplayClaims": map[string]interface{}{
-				"xui": []map[string]string{{"uhs": "user-hash-1"}},
-			},
-		})
-	})
-
-	_, err := authenticateXboxLiveIdentity("xbl-token")
-	if err == nil {
-		t.Fatal("expected an error when the Xbox Live relying party's response is missing xid/gtg")
-	}
-}
-
-// -------------- minecraftLoginWithXbox --------------
-
-func TestMinecraftLoginWithXboxSuccess(t *testing.T) {
-	var gotBody mcLoginWithXboxRequest
-	withServer(t, &minecraftLoginURL, func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewDecoder(r.Body).Decode(&gotBody)
-		_ = json.NewEncoder(w).Encode(mcLoginWithXboxResponse{AccessToken: "mc-access-token"})
-	})
-
-	token, err := minecraftLoginWithXbox("user-hash", "xsts-token")
-	if err != nil {
-		t.Fatalf("minecraftLoginWithXbox returned error: %v", err)
-	}
-	if token != "mc-access-token" {
-		t.Errorf("expected mc-access-token, got %q", token)
-	}
-	if gotBody.IdentityToken != "XBL3.0 x=user-hash;xsts-token" {
-		t.Errorf("unexpected identityToken: %q", gotBody.IdentityToken)
-	}
-}
-
-func TestMinecraftLoginWithXboxFailure(t *testing.T) {
-	withServer(t, &minecraftLoginURL, func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusServiceUnavailable)
-	})
-
-	if _, err := minecraftLoginWithXbox("uhs", "xsts"); err == nil {
-		t.Fatal("expected an error for a non-2xx response")
-	}
-}
-
-// -------------- getMinecraftProfile --------------
-
-func TestGetMinecraftProfileOwned(t *testing.T) {
-	withServer(t, &minecraftProfileURL, func(w http.ResponseWriter, r *http.Request) {
-		if got := r.Header.Get("Authorization"); got != "Bearer mc-token" {
-			t.Errorf("expected Authorization: Bearer mc-token, got %q", got)
+		_, err := GetMicrosoftUser(&auth.OAuthToken{AccessToken: "tok"})
+		if err == nil {
+			t.Fatal("expected an error")
 		}
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"id":   "069a79f444e94726a5befca90e38aaf6",
-			"name": "Notch",
-			"skins": []map[string]string{
-				{"id": "6a1b2c3d-4e5f-4a1b-8c2d-3e4f5a6b7c8d", "state": "ACTIVE", "url": "http://textures.minecraft.net/texture/abc", "variant": "CLASSIC", "alias": "DEFAULT"},
-			},
-			"capes": []map[string]string{},
-		})
 	})
 
-	profile, err := getMinecraftProfile("mc-token")
-	if err != nil {
-		t.Fatalf("getMinecraftProfile returned error: %v", err)
-	}
-	if profile == nil {
-		t.Fatal("expected a non-nil profile for an account that owns Java")
-	}
-	if profile.ID.String() != "069a79f4-44e9-4726-a5be-fca90e38aaf6" {
-		t.Errorf("expected the raw undashed Mojang ID to be dash-inserted, got %q", profile.ID.String())
-	}
-	if profile.Username != "Notch" {
-		t.Errorf("expected Username \"Notch\" (from the response's \"name\" field), got %q", profile.Username)
-	}
-	if len(profile.Skins) != 1 || profile.Skins[0].ID.String() != "6a1b2c3d-4e5f-4a1b-8c2d-3e4f5a6b7c8d" {
-		t.Errorf("expected skins to round-trip, got %+v", profile.Skins)
-	}
-}
+	t.Run("MS-20_MalformedJSON", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{not-json`))
+		}))
+		defer ts.Close()
+		msSetURL(t, &microsoftUserInfoURL, ts.URL)
 
-func TestGetMinecraftProfileNotFound(t *testing.T) {
-	withServer(t, &minecraftProfileURL, func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-		_ = json.NewEncoder(w).Encode(map[string]string{
-			"path":         "/minecraft/profile",
-			"errorType":    "NOT_FOUND",
-			"error":        "NOT_FOUND",
-			"errorMessage": "The server has not found anything matching the request URI",
-		})
-	})
-
-	profile, err := getMinecraftProfile("mc-token")
-	if err != nil {
-		t.Fatalf("expected no error for a Bedrock-only account (no Java profile), got: %v", err)
-	}
-	if profile != nil {
-		t.Errorf("expected a nil profile when the account doesn't own Java, got: %+v", profile)
-	}
-}
-
-func TestGetMinecraftProfileServerError(t *testing.T) {
-	withServer(t, &minecraftProfileURL, func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		_ = json.NewEncoder(w).Encode(map[string]string{})
-	})
-
-	if _, err := getMinecraftProfile("mc-token"); err == nil {
-		t.Fatal("expected an error to propagate for a genuine server failure, not be treated as \"no profile\"")
-	}
-}
-
-func TestGetMinecraftProfileInvalidUUID(t *testing.T) {
-	withServer(t, &minecraftProfileURL, func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]string{"id": "not-a-uuid", "name": "Someone"})
-	})
-
-	if _, err := getMinecraftProfile("mc-token"); err == nil {
-		t.Fatal("expected an error for a malformed profile ID")
-	}
-}
-
-// -------------- GetXboxAndMinecraftUser (full chain) --------------
-
-// newFullChainServer wires up all four Xbox Live/Minecraft endpoints behind
-// one test server, with the Minecraft profile response controlled by
-// hasJavaProfile so both the Java-owner and Bedrock-only paths can be
-// exercised end to end through GetXboxAndMinecraftUser, and also serves a
-// fake Microsoft OAuth2 token endpoint so ExtCodeForToken/ProcessOAuthLogin/
-// ProcessOAuthLink can be driven all the way from an authorization code,
-// without hitting the real Microsoft identity platform.
-func newFullChainServer(t *testing.T, hasJavaProfile bool) {
-	t.Helper()
-	mux := http.NewServeMux()
-	mux.HandleFunc("/ms-token", func(w http.ResponseWriter, r *http.Request) {
-		// golang.org/x/oauth2 decides how to parse the token response by
-		// its Content-Type header - without this set explicitly, Go's
-		// content sniffing doesn't recognize plain JSON bytes as
-		// "application/json" and the client fails with a misleading
-		// "server response missing access_token".
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"access_token": "ms-access-token",
-			"token_type":   "Bearer",
-			"expires_in":   3600,
-			"scope":        "XboxLive.signin offline_access",
-		})
-	})
-	mux.HandleFunc("/xbl-authenticate", func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(xblAuthResponse{Token: "xbl-token"})
-	})
-	mux.HandleFunc("/xsts-authorize", func(w http.ResponseWriter, r *http.Request) {
-		// Mirrors the real split: only the Xbox Live relying party gets
-		// xid/gtg in DisplayClaims, the Minecraft one gets uhs alone.
-		var reqBody xstsAuthRequest
-		_ = json.NewDecoder(r.Body).Decode(&reqBody)
-		xui := map[string]string{"uhs": "uhs-1"}
-		if reqBody.RelyingParty == xstsXboxLiveRelyingParty {
-			xui["xid"] = "9999"
-			xui["gtg"] = "TestGamer"
+		_, err := GetMicrosoftUser(&auth.OAuthToken{AccessToken: "tok"})
+		if err == nil {
+			t.Fatal("expected a decode error")
 		}
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"Token": "xsts-token",
-			"DisplayClaims": map[string]interface{}{
-				"xui": []map[string]string{xui},
-			},
-		})
 	})
-	mux.HandleFunc("/mc-login", func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(mcLoginWithXboxResponse{AccessToken: "mc-token"})
+
+	t.Run("MS-21_MissingSub", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"name":"n"}`))
+		}))
+		defer ts.Close()
+		msSetURL(t, &microsoftUserInfoURL, ts.URL)
+
+		_, err := GetMicrosoftUser(&auth.OAuthToken{AccessToken: "tok"})
+		if err == nil || err.Error() != "microsoft userinfo response missing sub" {
+			t.Fatalf("GetMicrosoftUser() error = %v, want \"microsoft userinfo response missing sub\"", err)
+		}
 	})
-	mux.HandleFunc("/mc-profile", func(w http.ResponseWriter, r *http.Request) {
-		if !hasJavaProfile {
+}
+
+func TestMS22to26XblAuthenticate(t *testing.T) {
+	t.Run("MS-22_Success", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"Token":"t"}`))
+		}))
+		defer ts.Close()
+		msSetURL(t, &xboxLiveAuthenticateURL, ts.URL)
+
+		got, err := xblAuthenticate("ms-token")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "t" {
+			t.Errorf("xblAuthenticate() = %q, want %q", got, "t")
+		}
+	})
+
+	t.Run("MS-23_NetworkError", func(t *testing.T) {
+		msSetURL(t, &xboxLiveAuthenticateURL, "http://127.0.0.1:1")
+		_, err := xblAuthenticate("ms-token")
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+	})
+
+	t.Run("MS-24_NonOKStatus", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusUnauthorized)
+		}))
+		defer ts.Close()
+		msSetURL(t, &xboxLiveAuthenticateURL, ts.URL)
+
+		_, err := xblAuthenticate("ms-token")
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+	})
+
+	t.Run("MS-25_MalformedJSON", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{not-json`))
+		}))
+		defer ts.Close()
+		msSetURL(t, &xboxLiveAuthenticateURL, ts.URL)
+
+		_, err := xblAuthenticate("ms-token")
+		if err == nil {
+			t.Fatal("expected a decode error")
+		}
+	})
+
+	t.Run("MS-26_MissingToken", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{}`))
+		}))
+		defer ts.Close()
+		msSetURL(t, &xboxLiveAuthenticateURL, ts.URL)
+
+		_, err := xblAuthenticate("ms-token")
+		if err == nil || err.Error() != "xbox live authentication response missing Token" {
+			t.Fatalf("xblAuthenticate() error = %v, want \"xbox live authentication response missing Token\"", err)
+		}
+	})
+}
+
+func TestMS27to34XstsAuthorize(t *testing.T) {
+	t.Run("MS-27_SuccessXboxLiveRP", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"Token":"xsts-t","DisplayClaims":{"xui":[{"uhs":"hash1","xid":"xid1","gtg":"Tag"}]}}`))
+		}))
+		defer ts.Close()
+		msSetURL(t, &xstsAuthorizeURL, ts.URL)
+
+		token, uhs, xuid, gamertag, err := xstsAuthorize("xbl-token", xstsXboxLiveRelyingParty)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if token != "xsts-t" || uhs != "hash1" || xuid != "xid1" || gamertag != "Tag" {
+			t.Errorf("xstsAuthorize() = (%q,%q,%q,%q), want (xsts-t,hash1,xid1,Tag)", token, uhs, xuid, gamertag)
+		}
+	})
+
+	t.Run("MS-28_SuccessMinecraftRPUhsOnly", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"Token":"xsts-t","DisplayClaims":{"xui":[{"uhs":"hash1"}]}}`))
+		}))
+		defer ts.Close()
+		msSetURL(t, &xstsAuthorizeURL, ts.URL)
+
+		token, uhs, xuid, gamertag, err := xstsAuthorize("xbl-token", xstsMinecraftRelyingParty)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if token != "xsts-t" || uhs != "hash1" || xuid != "" || gamertag != "" {
+			t.Errorf("xstsAuthorize() = (%q,%q,%q,%q), want (xsts-t,hash1,\"\",\"\")", token, uhs, xuid, gamertag)
+		}
+	})
+
+	t.Run("MS-29_XErrTranslated", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"XErr":2148916233}`))
+		}))
+		defer ts.Close()
+		msSetURL(t, &xstsAuthorizeURL, ts.URL)
+
+		_, _, _, _, err := xstsAuthorize("xbl-token", xstsXboxLiveRelyingParty)
+		if err != ErrNoXboxAccount {
+			t.Fatalf("xstsAuthorize() error = %v, want ErrNoXboxAccount", err)
+		}
+	})
+
+	t.Run("MS-30_NonOKStatus", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer ts.Close()
+		msSetURL(t, &xstsAuthorizeURL, ts.URL)
+
+		_, _, _, _, err := xstsAuthorize("xbl-token", xstsXboxLiveRelyingParty)
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+	})
+
+	t.Run("MS-31_MalformedJSON", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{not-json`))
+		}))
+		defer ts.Close()
+		msSetURL(t, &xstsAuthorizeURL, ts.URL)
+
+		_, _, _, _, err := xstsAuthorize("xbl-token", xstsXboxLiveRelyingParty)
+		if err == nil {
+			t.Fatal("expected a decode error")
+		}
+	})
+
+	t.Run("MS-32_MissingTokenOrClaims", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"Token":""}`))
+		}))
+		defer ts.Close()
+		msSetURL(t, &xstsAuthorizeURL, ts.URL)
+
+		_, _, _, _, err := xstsAuthorize("xbl-token", xstsXboxLiveRelyingParty)
+		if err == nil || err.Error() != "xsts authorization response missing Token or DisplayClaims" {
+			t.Fatalf("xstsAuthorize() error = %v, want \"xsts authorization response missing Token or DisplayClaims\"", err)
+		}
+	})
+
+	t.Run("MS-33_MissingUhs", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"Token":"xsts-t","DisplayClaims":{"xui":[{"xid":"xid1","gtg":"Tag"}]}}`))
+		}))
+		defer ts.Close()
+		msSetURL(t, &xstsAuthorizeURL, ts.URL)
+
+		_, _, _, _, err := xstsAuthorize("xbl-token", xstsXboxLiveRelyingParty)
+		if err == nil || err.Error() != "xsts authorization response missing uhs in DisplayClaims" {
+			t.Fatalf("xstsAuthorize() error = %v, want \"xsts authorization response missing uhs in DisplayClaims\"", err)
+		}
+	})
+
+	t.Run("MS-34_NetworkError", func(t *testing.T) {
+		msSetURL(t, &xstsAuthorizeURL, "http://127.0.0.1:1")
+		_, _, _, _, err := xstsAuthorize("xbl-token", xstsXboxLiveRelyingParty)
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+	})
+}
+
+func TestMS35to39MinecraftLoginWithXbox(t *testing.T) {
+	t.Run("MS-35_Success", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"access_token":"m"}`))
+		}))
+		defer ts.Close()
+		msSetURL(t, &minecraftLoginURL, ts.URL)
+
+		got, err := minecraftLoginWithXbox("hash1", "xsts-t")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "m" {
+			t.Errorf("minecraftLoginWithXbox() = %q, want %q", got, "m")
+		}
+	})
+
+	t.Run("MS-36_NetworkError", func(t *testing.T) {
+		msSetURL(t, &minecraftLoginURL, "http://127.0.0.1:1")
+		_, err := minecraftLoginWithXbox("hash1", "xsts-t")
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+	})
+
+	t.Run("MS-37_NonOKStatus", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`forbidden`))
+		}))
+		defer ts.Close()
+		msSetURL(t, &minecraftLoginURL, ts.URL)
+
+		_, err := minecraftLoginWithXbox("hash1", "xsts-t")
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+	})
+
+	t.Run("MS-38_MalformedJSON", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{not-json`))
+		}))
+		defer ts.Close()
+		msSetURL(t, &minecraftLoginURL, ts.URL)
+
+		_, err := minecraftLoginWithXbox("hash1", "xsts-t")
+		if err == nil {
+			t.Fatal("expected a decode error")
+		}
+	})
+
+	t.Run("MS-39_MissingAccessToken", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{}`))
+		}))
+		defer ts.Close()
+		msSetURL(t, &minecraftLoginURL, ts.URL)
+
+		_, err := minecraftLoginWithXbox("hash1", "xsts-t")
+		if err == nil || err.Error() != "minecraft login-with-xbox response missing access_token" {
+			t.Fatalf("minecraftLoginWithXbox() error = %v, want \"minecraft login-with-xbox response missing access_token\"", err)
+		}
+	})
+}
+
+func TestMS40to46GetMinecraftProfile(t *testing.T) {
+	validID := uuid.New()
+
+	t.Run("MS-40_Success", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(fmt.Sprintf(`{"id":%q,"name":"Steve","skins":[],"capes":[]}`, validID.String())))
+		}))
+		defer ts.Close()
+		msSetURL(t, &minecraftProfileURL, ts.URL)
+
+		got, err := getMinecraftProfile("mc-token")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got == nil || got.ID != validID || got.Username != "Steve" {
+			t.Errorf("getMinecraftProfile() = %+v, want id=%s username=Steve", got, validID)
+		}
+	})
+
+	t.Run("MS-41_NotFoundStatus", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
-			_ = json.NewEncoder(w).Encode(map[string]string{"error": "NOT_FOUND"})
+		}))
+		defer ts.Close()
+		msSetURL(t, &minecraftProfileURL, ts.URL)
+
+		got, err := getMinecraftProfile("mc-token")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != nil {
+			t.Errorf("getMinecraftProfile() = %+v, want nil (no Java ownership)", got)
+		}
+	})
+
+	t.Run("MS-42_NotFoundErrorBody", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"error":"NOT_FOUND"}`))
+		}))
+		defer ts.Close()
+		msSetURL(t, &minecraftProfileURL, ts.URL)
+
+		got, err := getMinecraftProfile("mc-token")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != nil {
+			t.Errorf("getMinecraftProfile() = %+v, want nil (no Java ownership)", got)
+		}
+	})
+
+	t.Run("MS-43_NetworkError", func(t *testing.T) {
+		msSetURL(t, &minecraftProfileURL, "http://127.0.0.1:1")
+		_, err := getMinecraftProfile("mc-token")
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+	})
+
+	t.Run("MS-44_ServerError", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer ts.Close()
+		msSetURL(t, &minecraftProfileURL, ts.URL)
+
+		_, err := getMinecraftProfile("mc-token")
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+	})
+
+	t.Run("MS-45_MalformedJSON", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{not-json`))
+		}))
+		defer ts.Close()
+		msSetURL(t, &minecraftProfileURL, ts.URL)
+
+		_, err := getMinecraftProfile("mc-token")
+		if err == nil {
+			t.Fatal("expected a decode error")
+		}
+	})
+
+	t.Run("MS-46_InvalidUUID", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"id":"not-a-uuid","name":"Steve"}`))
+		}))
+		defer ts.Close()
+		msSetURL(t, &minecraftProfileURL, ts.URL)
+
+		_, err := getMinecraftProfile("mc-token")
+		if err == nil {
+			t.Fatal("expected a UUID-parse error")
+		}
+	})
+}
+
+func TestMS47to49AuthenticateXboxLiveIdentity(t *testing.T) {
+	t.Run("MS-47_Success", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"Token":"xsts-t","DisplayClaims":{"xui":[{"uhs":"hash1","xid":"xid1","gtg":"Tag"}]}}`))
+		}))
+		defer ts.Close()
+		msSetURL(t, &xstsAuthorizeURL, ts.URL)
+
+		got, err := authenticateXboxLiveIdentity("xbl-token")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.XUID != "xid1" || got.Gamertag != "Tag" {
+			t.Errorf("authenticateXboxLiveIdentity() = %+v, want XUID=xid1 Gamertag=Tag", got)
+		}
+	})
+
+	t.Run("MS-48_XstsAuthorizeFails", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer ts.Close()
+		msSetURL(t, &xstsAuthorizeURL, ts.URL)
+
+		_, err := authenticateXboxLiveIdentity("xbl-token")
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+	})
+
+	t.Run("MS-49_MissingXidOrGtg", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"Token":"xsts-t","DisplayClaims":{"xui":[{"uhs":"hash1"}]}}`))
+		}))
+		defer ts.Close()
+		msSetURL(t, &xstsAuthorizeURL, ts.URL)
+
+		_, err := authenticateXboxLiveIdentity("xbl-token")
+		if err == nil || err.Error() != "xsts authorization response missing xid or gtg in DisplayClaims" {
+			t.Fatalf("authenticateXboxLiveIdentity() error = %v, want \"xsts authorization response missing xid or gtg in DisplayClaims\"", err)
+		}
+	})
+}
+
+func TestMS50to51GetXboxUser(t *testing.T) {
+	t.Run("MS-50_Success", func(t *testing.T) {
+		xblTS := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"Token":"xbl-t"}`))
+		}))
+		defer xblTS.Close()
+		xstsTS := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"Token":"xsts-t","DisplayClaims":{"xui":[{"uhs":"hash1","xid":"xid1","gtg":"Tag"}]}}`))
+		}))
+		defer xstsTS.Close()
+		msSetURL(t, &xboxLiveAuthenticateURL, xblTS.URL)
+		msSetURL(t, &xstsAuthorizeURL, xstsTS.URL)
+
+		got, err := GetXboxUser(&auth.OAuthToken{AccessToken: "ms-tok"})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.XUID != "xid1" || got.Gamertag != "Tag" {
+			t.Errorf("GetXboxUser() = %+v, want XUID=xid1 Gamertag=Tag", got)
+		}
+	})
+
+	t.Run("MS-51_XblAuthenticateFails", func(t *testing.T) {
+		xstsCalled := false
+		xstsTS := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			xstsCalled = true
+			_, _ = w.Write([]byte(`{}`))
+		}))
+		defer xstsTS.Close()
+		msSetURL(t, &xboxLiveAuthenticateURL, "http://127.0.0.1:1")
+		msSetURL(t, &xstsAuthorizeURL, xstsTS.URL)
+
+		_, err := GetXboxUser(&auth.OAuthToken{AccessToken: "ms-tok"})
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+		if xstsCalled {
+			t.Error("xsts authorize endpoint should never be called once xblAuthenticate fails")
+		}
+	})
+}
+
+type msFullChainServers struct {
+	xbl, xsts, mcLogin, mcProfile *httptest.Server
+}
+
+func (s *msFullChainServers) close() {
+	s.xbl.Close()
+	s.xsts.Close()
+	s.mcLogin.Close()
+	s.mcProfile.Close()
+}
+
+func newMSFullChain(t *testing.T, javaOwned bool, mcLoginFails, mcProfileFails, xstsXboxLiveFails bool) *msFullChainServers {
+	t.Helper()
+	xbl := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"Token":"xbl-t"}`))
+	}))
+	xsts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			RelyingParty string `json:"RelyingParty"`
+		}
+		_ = readJSONBody(r, &body)
+		if body.RelyingParty == xstsXboxLiveRelyingParty {
+			if xstsXboxLiveFails {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			_, _ = w.Write([]byte(`{"Token":"xsts-xbl-t","DisplayClaims":{"xui":[{"uhs":"hash1","xid":"xid1","gtg":"Tag"}]}}`))
 			return
 		}
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"id":    "069a79f444e94726a5befca90e38aaf6",
-			"name":  "Notch",
-			"skins": []map[string]string{},
-			"capes": []map[string]string{},
-		})
-	})
-
-	server := httptest.NewServer(mux)
-	t.Cleanup(server.Close)
-
-	for _, override := range []*string{&xboxLiveAuthenticateURL, &xstsAuthorizeURL, &minecraftLoginURL, &minecraftProfileURL} {
-		original := *override
-		t.Cleanup(func() { *override = original })
-	}
-	xboxLiveAuthenticateURL = server.URL + "/xbl-authenticate"
-	xstsAuthorizeURL = server.URL + "/xsts-authorize"
-	minecraftLoginURL = server.URL + "/mc-login"
-	minecraftProfileURL = server.URL + "/mc-profile"
-
-	// MicrosoftConfig is a *oauth2.Config, so its Endpoint fields are
-	// directly mutable - no extra var indirection needed, unlike the
-	// XBL/XSTS/MC endpoints above which started life as inline literals.
-	originalTokenURL := MicrosoftConfig.Endpoint.TokenURL
-	t.Cleanup(func() { MicrosoftConfig.Endpoint.TokenURL = originalTokenURL })
-	MicrosoftConfig.Endpoint.TokenURL = server.URL + "/ms-token"
-}
-
-func TestGetXboxAndMinecraftUserOwnsJava(t *testing.T) {
-	newFullChainServer(t, true)
-
-	xbox, java, err := GetXboxAndMinecraftUser(&auth.OAuthToken{AccessToken: "ms-token"})
-	if err != nil {
-		t.Fatalf("GetXboxAndMinecraftUser returned error: %v", err)
-	}
-	if xbox == nil || xbox.XUID != "9999" || xbox.Gamertag != "TestGamer" {
-		t.Errorf("unexpected xbox identity: %+v", xbox)
-	}
-	if java == nil || java.Username != "Notch" {
-		t.Errorf("expected a Java profile for an account that owns it, got: %+v", java)
-	}
-}
-
-func TestGetXboxAndMinecraftUserBedrockOnly(t *testing.T) {
-	newFullChainServer(t, false)
-
-	xbox, java, err := GetXboxAndMinecraftUser(&auth.OAuthToken{AccessToken: "ms-token"})
-	if err != nil {
-		t.Fatalf("expected no error for a Bedrock-only account, got: %v", err)
-	}
-	if xbox == nil || xbox.XUID != "9999" {
-		t.Errorf("expected the Xbox identity to still be populated, got: %+v", xbox)
-	}
-	if java != nil {
-		t.Errorf("expected a nil Java profile for an account that doesn't own Java, got: %+v", java)
-	}
-}
-
-// TestGetXboxAndMinecraftUserCompletesMinecraftChainBeforeXboxLiveIdentity
-// pins the fix for a second prod incident: requesting the Xbox Live-scoped
-// XSTS token before minecraftLoginWithXbox consumed the Minecraft-scoped one
-// started causing login_with_xbox to fail with 403s. The Minecraft chain
-// (XSTS -> login -> profile) must fully complete before the Xbox Live
-// identity is ever requested.
-func TestGetXboxAndMinecraftUserCompletesMinecraftChainBeforeXboxLiveIdentity(t *testing.T) {
-	var events []string
-	withServer(t, &xboxLiveAuthenticateURL, func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(xblAuthResponse{Token: "xbl-token"})
-	})
-	withServer(t, &xstsAuthorizeURL, func(w http.ResponseWriter, r *http.Request) {
-		var reqBody xstsAuthRequest
-		_ = json.NewDecoder(r.Body).Decode(&reqBody)
-		xui := map[string]string{"uhs": "uhs-1"}
-		if reqBody.RelyingParty == xstsXboxLiveRelyingParty {
-			events = append(events, "xsts:xboxlive")
-			xui["xid"] = "9999"
-			xui["gtg"] = "TestGamer"
-		} else {
-			events = append(events, "xsts:minecraft")
+		_, _ = w.Write([]byte(`{"Token":"xsts-mc-t","DisplayClaims":{"xui":[{"uhs":"hash1"}]}}`))
+	}))
+	mcLogin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if mcLoginFails {
+			w.WriteHeader(http.StatusForbidden)
+			return
 		}
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"Token": "xsts-token",
-			"DisplayClaims": map[string]interface{}{
-				"xui": []map[string]string{xui},
-			},
-		})
-	})
-	withServer(t, &minecraftLoginURL, func(w http.ResponseWriter, r *http.Request) {
-		events = append(events, "login_with_xbox")
-		_ = json.NewEncoder(w).Encode(mcLoginWithXboxResponse{AccessToken: "mc-token"})
-	})
-	withServer(t, &minecraftProfileURL, func(w http.ResponseWriter, r *http.Request) {
-		events = append(events, "profile")
-		w.WriteHeader(http.StatusNotFound)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": "NOT_FOUND"})
-	})
-
-	if _, _, err := GetXboxAndMinecraftUser(&auth.OAuthToken{AccessToken: "ms-token"}); err != nil {
-		t.Fatalf("GetXboxAndMinecraftUser returned error: %v", err)
-	}
-
-	want := []string{"xsts:minecraft", "login_with_xbox", "profile", "xsts:xboxlive"}
-	if len(events) != len(want) {
-		t.Fatalf("unexpected event sequence: got %v, want %v", events, want)
-	}
-	for i := range want {
-		if events[i] != want[i] {
-			t.Errorf("unexpected event sequence: got %v, want %v", events, want)
-			break
+		_, _ = w.Write([]byte(`{"access_token":"mc-t"}`))
+	}))
+	mcProfile := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if mcProfileFails {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
 		}
-	}
-}
-
-// -------------- GetXboxUser (Xbox-only, no Minecraft Services calls) --------------
-
-// TestGetXboxUserNeverTouchesMinecraftServices is the core regression test
-// for the Xbox/Java split: a caller that only wants the Xbox Live identity
-// must not trigger the Minecraft login-with-Xbox/profile calls at all, even
-// though the account in this test does own Java - proving the split is a
-// real skip, not just a discarded result.
-func TestGetXboxUserNeverTouchesMinecraftServices(t *testing.T) {
-	withServer(t, &xboxLiveAuthenticateURL, func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(xblAuthResponse{Token: "xbl-token"})
-	})
-	var gotRelyingParties []string
-	withServer(t, &xstsAuthorizeURL, func(w http.ResponseWriter, r *http.Request) {
-		var reqBody xstsAuthRequest
-		_ = json.NewDecoder(r.Body).Decode(&reqBody)
-		gotRelyingParties = append(gotRelyingParties, reqBody.RelyingParty)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"Token": "xsts-token",
-			"DisplayClaims": map[string]interface{}{
-				"xui": []map[string]string{{"uhs": "uhs-1", "xid": "9999", "gtg": "TestGamer"}},
-			},
-		})
-	})
-	var minecraftServicesCalled bool
-	withServer(t, &minecraftLoginURL, func(w http.ResponseWriter, r *http.Request) {
-		minecraftServicesCalled = true
-		_ = json.NewEncoder(w).Encode(mcLoginWithXboxResponse{AccessToken: "mc-token"})
-	})
-	withServer(t, &minecraftProfileURL, func(w http.ResponseWriter, r *http.Request) {
-		minecraftServicesCalled = true
-		w.WriteHeader(http.StatusNotFound)
-	})
-
-	xbox, err := GetXboxUser(&auth.OAuthToken{AccessToken: "ms-token"})
-	if err != nil {
-		t.Fatalf("GetXboxUser returned error: %v", err)
-	}
-	if xbox == nil || xbox.XUID != "9999" || xbox.Gamertag != "TestGamer" {
-		t.Errorf("unexpected xbox identity: %+v", xbox)
-	}
-	if minecraftServicesCalled {
-		t.Error("GetXboxUser must never call Minecraft Services")
-	}
-	if len(gotRelyingParties) != 1 || gotRelyingParties[0] != xstsXboxLiveRelyingParty {
-		t.Errorf("expected GetXboxUser to request only the Xbox Live relying party, got: %v", gotRelyingParties)
-	}
-}
-
-func TestGetXboxUserXstsErrorPropagates(t *testing.T) {
-	withServer(t, &xboxLiveAuthenticateURL, func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(xblAuthResponse{Token: "xbl-token"})
-	})
-	withServer(t, &xstsAuthorizeURL, func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusUnauthorized)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"XErr": 2148916233})
-	})
-
-	if _, err := GetXboxUser(&auth.OAuthToken{AccessToken: "ms-token"}); err != ErrNoXboxAccount {
-		t.Errorf("expected ErrNoXboxAccount, got: %v", err)
-	}
-}
-
-// -------------- GetMicrosoftUser --------------
-
-func TestGetMicrosoftUserSuccess(t *testing.T) {
-	withServer(t, &microsoftUserInfoURL, func(w http.ResponseWriter, r *http.Request) {
-		if got := r.Header.Get("Authorization"); got != "Bearer ms-access-token" {
-			t.Errorf("expected Authorization: Bearer ms-access-token, got %q", got)
+		if !javaOwned {
+			w.WriteHeader(http.StatusNotFound)
+			return
 		}
-		_ = json.NewEncoder(w).Encode(map[string]string{
-			"sub":   "microsoft-oid-123",
-			"name":  "Jane Doe",
-			"email": "jane@example.com",
-		})
-	})
+		_, _ = w.Write([]byte(fmt.Sprintf(`{"id":%q,"name":"Steve","skins":[],"capes":[]}`, uuid.New().String())))
+	}))
 
-	user, err := GetMicrosoftUser(&auth.OAuthToken{AccessToken: "ms-access-token"})
-	if err != nil {
-		t.Fatalf("GetMicrosoftUser returned error: %v", err)
-	}
-	if user.GetID() != "microsoft-oid-123" || user.GetUsername() != "Jane Doe" || user.GetEmail() != "jane@example.com" {
-		t.Errorf("unexpected user: %+v", user)
-	}
+	msSetURL(t, &xboxLiveAuthenticateURL, xbl.URL)
+	msSetURL(t, &xstsAuthorizeURL, xsts.URL)
+	msSetURL(t, &minecraftLoginURL, mcLogin.URL)
+	msSetURL(t, &minecraftProfileURL, mcProfile.URL)
+
+	return &msFullChainServers{xbl: xbl, xsts: xsts, mcLogin: mcLogin, mcProfile: mcProfile}
 }
 
-func TestGetMicrosoftUserMissingSub(t *testing.T) {
-	withServer(t, &microsoftUserInfoURL, func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]string{"name": "Jane Doe"})
+func TestMS52to58GetXboxAndMinecraftUser(t *testing.T) {
+	t.Run("MS-52_FullSuccessJavaOwned", func(t *testing.T) {
+		s := newMSFullChain(t, true, false, false, false)
+		defer s.close()
+
+		xbox, java, err := GetXboxAndMinecraftUser(&auth.OAuthToken{AccessToken: "tok"})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if xbox == nil || xbox.XUID != "xid1" {
+			t.Errorf("xbox = %+v, want XUID=xid1", xbox)
+		}
+		if java == nil || java.Username != "Steve" {
+			t.Errorf("java = %+v, want Username=Steve", java)
+		}
 	})
 
-	if _, err := GetMicrosoftUser(&auth.OAuthToken{AccessToken: "tok"}); err == nil {
-		t.Fatal("expected an error when the userinfo response is missing sub")
-	}
-}
+	t.Run("MS-53_FullSuccessJavaNotOwned", func(t *testing.T) {
+		s := newMSFullChain(t, false, false, false, false)
+		defer s.close()
 
-func TestGetMicrosoftUserNonOKStatus(t *testing.T) {
-	withServer(t, &microsoftUserInfoURL, func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusUnauthorized)
+		xbox, java, err := GetXboxAndMinecraftUser(&auth.OAuthToken{AccessToken: "tok"})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if xbox == nil {
+			t.Error("expected a non-nil xbox identity")
+		}
+		if java != nil {
+			t.Errorf("java = %+v, want nil (not owned)", java)
+		}
 	})
 
-	if _, err := GetMicrosoftUser(&auth.OAuthToken{AccessToken: "tok"}); err == nil {
-		t.Fatal("expected an error for a non-2xx response")
-	}
-}
+	t.Run("MS-54_XblAuthenticateFails", func(t *testing.T) {
+		s := newMSFullChain(t, true, false, false, false)
+		defer s.close()
+		msSetURL(t, &xboxLiveAuthenticateURL, "http://127.0.0.1:1")
 
-func TestGetXboxAndMinecraftUserXstsErrorPropagatesWithoutXboxIdentity(t *testing.T) {
-	withServer(t, &xboxLiveAuthenticateURL, func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(xblAuthResponse{Token: "xbl-token"})
-	})
-	withServer(t, &xstsAuthorizeURL, func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusUnauthorized)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"XErr": 2148916233})
+		xbox, java, err := GetXboxAndMinecraftUser(&auth.OAuthToken{AccessToken: "tok"})
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+		if xbox != nil || java != nil {
+			t.Errorf("xbox=%+v java=%+v, want both nil on early failure", xbox, java)
+		}
 	})
 
-	xbox, java, err := GetXboxAndMinecraftUser(&auth.OAuthToken{AccessToken: "ms-token"})
-	if err != ErrNoXboxAccount {
-		t.Errorf("expected ErrNoXboxAccount, got: %v", err)
-	}
-	if xbox != nil || java != nil {
-		t.Errorf("expected no identities when XSTS authorization itself fails, got xbox=%+v java=%+v", xbox, java)
-	}
+	t.Run("MS-55_MinecraftXstsAuthorizeFails", func(t *testing.T) {
+		xbl := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"Token":"xbl-t"}`))
+		}))
+		defer xbl.Close()
+		xsts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer xsts.Close()
+		msSetURL(t, &xboxLiveAuthenticateURL, xbl.URL)
+		msSetURL(t, &xstsAuthorizeURL, xsts.URL)
+
+		xbox, java, err := GetXboxAndMinecraftUser(&auth.OAuthToken{AccessToken: "tok"})
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+		if xbox != nil || java != nil {
+			t.Errorf("xbox=%+v java=%+v, want both nil", xbox, java)
+		}
+	})
+
+	t.Run("MS-56_MinecraftLoginFailsXboxStillResolves", func(t *testing.T) {
+		s := newMSFullChain(t, true, true, false, false)
+		defer s.close()
+
+		xbox, java, err := GetXboxAndMinecraftUser(&auth.OAuthToken{AccessToken: "tok"})
+		if err == nil {
+			t.Fatal("expected a minecraft-login error")
+		}
+		if xbox == nil || xbox.XUID != "xid1" {
+			t.Errorf("xbox = %+v, want a resolved identity despite the minecraft failure", xbox)
+		}
+		if java != nil {
+			t.Errorf("java = %+v, want nil", java)
+		}
+	})
+
+	t.Run("MS-57_MinecraftLoginFailsAndXboxLiveAlsoFails", func(t *testing.T) {
+		s := newMSFullChain(t, true, true, false, true)
+		defer s.close()
+
+		xbox, java, err := GetXboxAndMinecraftUser(&auth.OAuthToken{AccessToken: "tok"})
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+		if xbox != nil || java != nil {
+			t.Errorf("xbox=%+v java=%+v, want both nil when the Xbox Live identity fetch also fails", xbox, java)
+		}
+	})
+
+	t.Run("MS-58_MinecraftProfileFailsXboxStillResolves", func(t *testing.T) {
+		s := newMSFullChain(t, true, false, true, false)
+		defer s.close()
+
+		xbox, java, err := GetXboxAndMinecraftUser(&auth.OAuthToken{AccessToken: "tok"})
+		if err == nil {
+			t.Fatal("expected a minecraft-profile error")
+		}
+		if xbox == nil || xbox.XUID != "xid1" {
+			t.Errorf("xbox = %+v, want a resolved identity despite the profile failure", xbox)
+		}
+		if java != nil {
+			t.Errorf("java = %+v, want nil", java)
+		}
+	})
 }

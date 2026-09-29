@@ -17,7 +17,7 @@ func (p *PetPicture) GetPetPictureURL() string {
 
 // Pet - Pet struct
 type Pet struct {
-	ID             int    `json:"id" xml:"id" db:"id"`
-	Name           string `json:"name" xml:"name" db:"name"`
-	ProfilePicture string `json:"profile_picture" xml:"profile_picture" db:"profile_picture"`
+	ID             int     `json:"id" xml:"id" db:"id"`
+	Name           string  `json:"name" xml:"name" db:"name"`
+	ProfilePicture *string `json:"profile_picture" xml:"profile_picture" db:"profile_picture"`
 }

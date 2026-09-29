@@ -2,350 +2,425 @@ package minecraft
 
 import (
 	"encoding/base64"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/goccy/go-json"
+	"github.com/google/uuid"
 )
 
-func encodedTextures(t *testing.T, value TexturesValue) string {
+func mcEncodeTextures(t *testing.T, value TexturesValue) string {
 	t.Helper()
 	data, err := json.Marshal(value)
 	if err != nil {
-		t.Fatalf("failed to marshal textures: %v", err)
+		t.Fatalf("failed to marshal TexturesValue fixture: %v", err)
 	}
 	return base64.StdEncoding.EncodeToString(data)
 }
 
-func TestTypes_ParseProperties_ValidTextures(t *testing.T) {
-	value := TexturesValue{
-		Timestamp:   1234567890,
-		ProfileID:   "853c80ef3c3749fdaa49938b674adae6",
-		ProfileName: "jeb_",
-		Textures: Textures{
-			SKIN: &Texture{URL: "http://textures.minecraft.net/texture/abc123"},
-		},
-	}
+func TestTY01to03_Player_MarshalJSON(t *testing.T) {
+	t.Run("TY-01_NilProfileActionsOmitted", func(t *testing.T) {
+		p := &Player{ID: "id", Name: "name", ProfileActions: nil}
+		data, err := json.Marshal(p)
+		if err != nil {
+			t.Fatalf("Marshal() error = %v", err)
+		}
+		if strings.Contains(string(data), "profileActions") {
+			t.Errorf("expected no profileActions key, got %s", data)
+		}
+	})
 
-	player := &Player{
-		Properties: []Property{
-			{Name: TEXTURES, Value: encodedTextures(t, value)},
-		},
-	}
+	t.Run("TY-02_EmptyNonNilProfileActionsPresent", func(t *testing.T) {
+		p := &Player{ID: "id", Name: "name", ProfileActions: []string{}}
+		data, err := json.Marshal(p)
+		if err != nil {
+			t.Fatalf("Marshal() error = %v", err)
+		}
+		if !strings.Contains(string(data), `"profileActions":[]`) {
+			t.Errorf(`expected "profileActions":[], got %s`, data)
+		}
+	})
 
-	got := player.ParseProperties()
-	if got == nil {
-		t.Fatal("expected non-nil TexturesValue")
+	t.Run("TY-03_PopulatedProfileActions", func(t *testing.T) {
+		p := &Player{ID: "id", Name: "name", ProfileActions: []string{"a"}}
+		data, err := json.Marshal(p)
+		if err != nil {
+			t.Fatalf("Marshal() error = %v", err)
+		}
+		if !strings.Contains(string(data), `"profileActions":["a"]`) {
+			t.Errorf(`expected "profileActions":["a"], got %s`, data)
+		}
+	})
+}
+
+func TestTY04to09_Player_ParseProperties(t *testing.T) {
+	t.Run("TY-04_ValidTexturesProperty", func(t *testing.T) {
+		want := TexturesValue{ProfileID: "abc", ProfileName: "Steve", Textures: Textures{SKIN: &Texture{URL: "http://x/y"}}}
+		p := &Player{Properties: []Property{{Name: TEXTURES, Value: mcEncodeTextures(t, want)}}}
+
+		got := p.ParseProperties()
+		if got == nil {
+			t.Fatal("ParseProperties() = nil, want decoded value")
+		}
+		if got.ProfileID != want.ProfileID || got.ProfileName != want.ProfileName {
+			t.Errorf("ParseProperties() = %+v, want %+v", got, want)
+		}
+	})
+
+	t.Run("TY-05_NoProperties", func(t *testing.T) {
+		p := &Player{Properties: nil}
+		if got := p.ParseProperties(); got != nil {
+			t.Errorf("ParseProperties() = %+v, want nil", got)
+		}
+	})
+
+	t.Run("TY-06_UnknownPropertyName", func(t *testing.T) {
+		p := &Player{Properties: []Property{{Name: "other", Value: "irrelevant"}}}
+		if got := p.ParseProperties(); got != nil {
+			t.Errorf("ParseProperties() = %+v, want nil", got)
+		}
+	})
+
+	t.Run("TY-07_InvalidBase64", func(t *testing.T) {
+		p := &Player{Properties: []Property{{Name: TEXTURES, Value: "not-base64!!"}}}
+		if got := p.ParseProperties(); got != nil {
+			t.Errorf("ParseProperties() = %+v, want nil", got)
+		}
+	})
+
+	t.Run("TY-08_ValidBase64InvalidJSON", func(t *testing.T) {
+		bad := base64.StdEncoding.EncodeToString([]byte("not json"))
+		p := &Player{Properties: []Property{{Name: TEXTURES, Value: bad}}}
+		if got := p.ParseProperties(); got != nil {
+			t.Errorf("ParseProperties() = %+v, want nil", got)
+		}
+	})
+
+	t.Run("TY-09_FirstInvalidSecondValid", func(t *testing.T) {
+		want := TexturesValue{ProfileID: "second"}
+		p := &Player{Properties: []Property{
+			{Name: TEXTURES, Value: "not-base64!!"},
+			{Name: TEXTURES, Value: mcEncodeTextures(t, want)},
+		}}
+		got := p.ParseProperties()
+		if got == nil || got.ProfileID != "second" {
+			t.Errorf("ParseProperties() = %+v, want ProfileID=second", got)
+		}
+	})
+}
+
+func TestTY10to11_Player_IsStale(t *testing.T) {
+	t.Run("TY-10_Fresh", func(t *testing.T) {
+		p := &Player{LastSeen: time.Now().UnixMilli()}
+		if p.IsStale() {
+			t.Error("IsStale() = true, want false for a fresh entry")
+		}
+	})
+	t.Run("TY-11_Stale", func(t *testing.T) {
+		p := &Player{LastSeen: time.Now().Add(-25 * time.Hour).UnixMilli()}
+		if !p.IsStale() {
+			t.Error("IsStale() = false, want true for an entry older than the staleness threshold")
+		}
+	})
+}
+
+func TestTY22to23_Profile_IsStale(t *testing.T) {
+	t.Run("TY-22_Fresh", func(t *testing.T) {
+		p := &Profile{LastSeen: time.Now().UnixMilli()}
+		if p.IsStale() {
+			t.Error("IsStale() = true, want false for a fresh entry")
+		}
+	})
+	t.Run("TY-23_Stale", func(t *testing.T) {
+		p := &Profile{LastSeen: time.Now().Add(-25 * time.Hour).UnixMilli()}
+		if !p.IsStale() {
+			t.Error("IsStale() = false, want true for an entry older than the staleness threshold")
+		}
+	})
+}
+
+func TestTY26to27_GeyserPlayer_IsStale(t *testing.T) {
+	t.Run("TY-26_Fresh", func(t *testing.T) {
+		p := &GeyserPlayer{LastSeen: time.Now().UnixMilli()}
+		if p.IsStale() {
+			t.Error("IsStale() = true, want false for a fresh entry")
+		}
+	})
+	t.Run("TY-27_Stale", func(t *testing.T) {
+		p := &GeyserPlayer{LastSeen: time.Now().Add(-25 * time.Hour).UnixMilli()}
+		if !p.IsStale() {
+			t.Error("IsStale() = false, want true for an entry older than the staleness threshold")
+		}
+	})
+}
+
+func TestTY28to29_GeyserSkin_IsStale(t *testing.T) {
+	t.Run("TY-28_Fresh", func(t *testing.T) {
+		s := &GeyserSkin{LastSeen: time.Now().UnixMilli()}
+		if s.IsStale() {
+			t.Error("IsStale() = true, want false for a fresh entry")
+		}
+	})
+	t.Run("TY-29_Stale", func(t *testing.T) {
+		s := &GeyserSkin{LastSeen: time.Now().Add(-25 * time.Hour).UnixMilli()}
+		if !s.IsStale() {
+			t.Error("IsStale() = false, want true for an entry older than the staleness threshold")
+		}
+	})
+}
+
+func TestTY12to13_Player_ToProfile(t *testing.T) {
+	t.Run("TY-12_WithTextures", func(t *testing.T) {
+		tex := TexturesValue{ProfileID: "abc"}
+		p := &Player{
+			ID: "id", Name: "name", Legacy: true, Demo: true,
+			ProfileActions: []string{"a"},
+			Properties:     []Property{{Name: TEXTURES, Value: mcEncodeTextures(t, tex)}},
+		}
+		got := p.ToProfile()
+		if got.ID != p.ID || got.Name != p.Name || got.Legacy != p.Legacy || got.Demo != p.Demo {
+			t.Errorf("ToProfile() = %+v, fields do not mirror Player", got)
+		}
+		if len(got.ProfileActions) != 1 || got.ProfileActions[0] != "a" {
+			t.Errorf("ToProfile().ProfileActions = %+v, want [a]", got.ProfileActions)
+		}
+		if got.Textures == nil || got.Textures.ProfileID != "abc" {
+			t.Errorf("ToProfile().Textures = %+v, want decoded from Properties", got.Textures)
+		}
+	})
+
+	t.Run("TY-13_NoProperties", func(t *testing.T) {
+		p := &Player{ID: "id", Name: "name"}
+		got := p.ToProfile()
+		if got.Textures != nil {
+			t.Errorf("ToProfile().Textures = %+v, want nil", got.Textures)
+		}
+	})
+}
+
+func TestTY14to15_Property_String(t *testing.T) {
+	t.Run("TY-14_WithSignature", func(t *testing.T) {
+		p := &Property{Name: TEXTURES, Value: "val", Signature: "sig"}
+		got := p.String()
+		if !strings.Contains(got, "sig") {
+			t.Errorf("String() = %q, want it to include the signature", got)
+		}
+	})
+
+	t.Run("TY-15_WithoutSignature", func(t *testing.T) {
+		p := &Property{Name: TEXTURES, Value: "val", Signature: ""}
+		got := p.String()
+		if strings.Contains(got, ", }") || strings.Contains(got, "sig") {
+			t.Errorf("String() = %q, want no signature segment", got)
+		}
+	})
+}
+
+func TestTY16to17_TexturesValue_ToProperty(t *testing.T) {
+	t.Run("TY-16_Populated", func(t *testing.T) {
+		tv := &TexturesValue{ProfileID: "abc", ProfileName: "Steve"}
+		prop, err := tv.ToProperty()
+		if err != nil {
+			t.Fatalf("ToProperty() error = %v", err)
+		}
+		if prop == nil || prop.Name != TEXTURES {
+			t.Fatalf("ToProperty() = %+v, want a TEXTURES property", prop)
+		}
+		decoded, err := base64.StdEncoding.DecodeString(prop.Value)
+		if err != nil {
+			t.Fatalf("property value is not valid base64: %v", err)
+		}
+		var got TexturesValue
+		if err := json.Unmarshal(decoded, &got); err != nil {
+			t.Fatalf("property value did not decode to JSON: %v", err)
+		}
+		if got.ProfileID != tv.ProfileID {
+			t.Errorf("decoded ProfileID = %q, want %q", got.ProfileID, tv.ProfileID)
+		}
+	})
+
+	t.Run("TY-17_NilReceiver", func(t *testing.T) {
+		var tv *TexturesValue
+		prop, err := tv.ToProperty()
+		if prop != nil || err != nil {
+			t.Errorf("ToProperty() = (%+v, %v), want (nil, nil)", prop, err)
+		}
+	})
+}
+
+func TestTY18to21_Texture_Hash(t *testing.T) {
+	cases := []struct {
+		id   string
+		tex  *Texture
+		want string
+	}{
+		{"TY-18_ValidURL", &Texture{URL: "http://textures.minecraft.net/texture/abc123"}, "abc123"},
+		{"TY-19_NilReceiver", nil, ""},
+		{"TY-20_NoSlash", &Texture{URL: "abc123"}, ""},
+		{"TY-21_TrailingSlash", &Texture{URL: "http://x/"}, ""},
 	}
-	if got.ProfileName != "jeb_" {
-		t.Errorf("expected jeb_, got %s", got.ProfileName)
-	}
-	if got.Textures.SKIN == nil {
-		t.Fatal("expected non-nil SKIN")
-	}
-	if got.Textures.SKIN.Hash() != "abc123" {
-		t.Errorf("expected abc123, got %s", got.Textures.SKIN.Hash())
+	for _, c := range cases {
+		t.Run(c.id, func(t *testing.T) {
+			if got := c.tex.Hash(); got != c.want {
+				t.Errorf("Hash() = %q, want %q", got, c.want)
+			}
+		})
 	}
 }
 
-func TestTypes_ParseProperties_NoProperties(t *testing.T) {
-	player := &Player{}
-	if got := player.ParseProperties(); got != nil {
-		t.Error("expected nil for player with no properties")
-	}
+func TestTY24to25_Profile_ToPlayer(t *testing.T) {
+	t.Run("TY-24_WithTextures", func(t *testing.T) {
+		p := &Profile{
+			ID: "id", Name: "name",
+			Textures: &TexturesValue{Textures: Textures{SKIN: &Texture{URL: "http://x/hash"}}},
+		}
+		player, err := p.ToPlayer()
+		if err != nil {
+			t.Fatalf("ToPlayer() error = %v", err)
+		}
+		if len(player.Properties) != 1 || player.Properties[0].Name != TEXTURES {
+			t.Errorf("ToPlayer().Properties = %+v, want exactly one TEXTURES entry", player.Properties)
+		}
+	})
+
+	t.Run("TY-25_NoTextures", func(t *testing.T) {
+		p := &Profile{ID: "id", Name: "name", Textures: nil}
+		player, err := p.ToPlayer()
+		if err != nil {
+			t.Fatalf("ToPlayer() error = %v", err)
+		}
+		if len(player.Properties) != 0 {
+			t.Errorf("ToPlayer().Properties = %+v, want empty", player.Properties)
+		}
+	})
 }
 
-func TestTypes_ParseProperties_UnknownProperty(t *testing.T) {
-	player := &Player{
-		Properties: []Property{
-			{Name: "unknown", Value: "somevalue"},
-		},
-	}
-	if got := player.ParseProperties(); got != nil {
-		t.Error("expected nil for unknown property")
-	}
+func TestTY30to33_GeyserSkin_SkinURL(t *testing.T) {
+	t.Run("TY-30_Valid", func(t *testing.T) {
+		tv := TexturesValue{Textures: Textures{SKIN: &Texture{URL: "http://x/hash"}}}
+		s := &GeyserSkin{Value: mcEncodeTextures(t, tv)}
+		if got := s.SkinURL(); got != "http://x/hash" {
+			t.Errorf("SkinURL() = %q, want %q", got, "http://x/hash")
+		}
+	})
+
+	t.Run("TY-31_NotBase64", func(t *testing.T) {
+		s := &GeyserSkin{Value: "not-base64!!"}
+		if got := s.SkinURL(); got != "" {
+			t.Errorf("SkinURL() = %q, want empty", got)
+		}
+	})
+
+	t.Run("TY-32_ValidBase64InvalidJSON", func(t *testing.T) {
+		s := &GeyserSkin{Value: base64.StdEncoding.EncodeToString([]byte("not json"))}
+		if got := s.SkinURL(); got != "" {
+			t.Errorf("SkinURL() = %q, want empty", got)
+		}
+	})
+
+	t.Run("TY-33_NoSkinTexture", func(t *testing.T) {
+		tv := TexturesValue{Textures: Textures{}}
+		s := &GeyserSkin{Value: mcEncodeTextures(t, tv)}
+		if got := s.SkinURL(); got != "" {
+			t.Errorf("SkinURL() = %q, want empty", got)
+		}
+	})
 }
 
-func TestTypes_ParseProperties_WithCape(t *testing.T) {
-	value := TexturesValue{
-		Textures: Textures{
-			SKIN: &Texture{URL: "http://textures.minecraft.net/texture/skin123"},
-			CAPE: &Texture{URL: "http://textures.minecraft.net/texture/cape456"},
-		},
-	}
+func TestTY34to35_XuidToUUID(t *testing.T) {
+	t.Run("TY-34_Nonzero", func(t *testing.T) {
+		got := xuidToUUID(123456789)
+		if _, err := uuid.Parse(got); err != nil {
+			t.Fatalf("xuidToUUID() = %q is not a valid UUID: %v", got, err)
+		}
+		back, err := uuidToXUID(got)
+		if err != nil || back != 123456789 {
+			t.Errorf("round trip failed: uuidToXUID(%q) = (%d, %v), want (123456789, nil)", got, back, err)
+		}
+	})
 
-	player := &Player{
-		Properties: []Property{
-			{Name: TEXTURES, Value: encodedTextures(t, value)},
-		},
-	}
-
-	got := player.ParseProperties()
-	if got == nil {
-		t.Fatal("expected non-nil TexturesValue")
-	}
-	if got.Textures.CAPE == nil {
-		t.Fatal("expected non-nil CAPE")
-	}
-	if got.Textures.CAPE.Hash() != "cape456" {
-		t.Errorf("expected cape456, got %s", got.Textures.CAPE.Hash())
-	}
+	t.Run("TY-35_Zero", func(t *testing.T) {
+		want := "00000000-0000-0000-0000-000000000000"
+		if got := xuidToUUID(0); got != want {
+			t.Errorf("xuidToUUID(0) = %q, want %q", got, want)
+		}
+	})
 }
 
-func TestTypes_ParseProperties_SlimModel(t *testing.T) {
-	value := TexturesValue{
-		Textures: Textures{
-			SKIN: &Texture{
-				URL:      "http://textures.minecraft.net/texture/skin123",
-				Metadata: &Metadata{Model: SLIM},
-			},
-		},
-	}
+func TestTY36to38_UuidToXUID(t *testing.T) {
+	t.Run("TY-36_RoundTrip", func(t *testing.T) {
+		id := xuidToUUID(42)
+		got, err := uuidToXUID(id)
+		if err != nil || got != 42 {
+			t.Errorf("uuidToXUID(%q) = (%d, %v), want (42, nil)", id, got, err)
+		}
+	})
 
-	player := &Player{
-		Properties: []Property{
-			{Name: TEXTURES, Value: encodedTextures(t, value)},
-		},
-	}
+	t.Run("TY-37_MalformedUUID", func(t *testing.T) {
+		_, err := uuidToXUID("not-a-uuid")
+		if err == nil {
+			t.Error("uuidToXUID() error = nil, want a parse error")
+		}
+	})
 
-	got := player.ParseProperties()
-	if got == nil {
-		t.Fatal("expected non-nil TexturesValue")
-	}
-	if got.Textures.SKIN.Metadata == nil {
-		t.Fatal("expected non-nil Metadata")
-	}
-	if got.Textures.SKIN.Metadata.Model != SLIM {
-		t.Errorf("expected slim, got %s", got.Textures.SKIN.Metadata.Model)
-	}
+	t.Run("TY-38_NonDerivedUUID", func(t *testing.T) {
+		_, err := uuidToXUID(uuid.New().String())
+		if err == nil {
+			t.Error("uuidToXUID() error = nil, want 'not a derived Bedrock UUID' error")
+		}
+	})
 }
 
-func TestTypes_TextureHash(t *testing.T) {
-	tex := &Texture{URL: "http://textures.minecraft.net/texture/abc123"}
-	if tex.Hash() != "abc123" {
-		t.Errorf("expected abc123, got %s", tex.Hash())
-	}
-}
+func TestTY39to43_TexturesRow_Value(t *testing.T) {
+	skinHash := "skinhash"
+	capeHash := "capehash"
 
-func TestTypes_TextureHash_EmptyURL(t *testing.T) {
-	tex := &Texture{URL: ""}
-	if tex.Hash() != "" {
-		t.Errorf("expected empty hash, got %s", tex.Hash())
-	}
-}
+	t.Run("TY-39_SkinAndCapeNoModel", func(t *testing.T) {
+		row := &TexturesRow{PlayerId: "id", Skin: &skinHash, Cape: &capeHash, LastSeen: 100}
+		got := row.Value("Steve", "http://cdn/")
+		if got == nil {
+			t.Fatal("Value() = nil, want a decoded TexturesValue")
+		}
+		if got.Textures.SKIN == nil || got.Textures.SKIN.URL != "http://cdn/skinhash" {
+			t.Errorf("SKIN = %+v, want URL http://cdn/skinhash", got.Textures.SKIN)
+		}
+		if got.Textures.CAPE == nil || got.Textures.CAPE.URL != "http://cdn/capehash" {
+			t.Errorf("CAPE = %+v, want URL http://cdn/capehash", got.Textures.CAPE)
+		}
+		if got.Textures.SKIN.Metadata != nil {
+			t.Errorf("SKIN.Metadata = %+v, want nil (no model)", got.Textures.SKIN.Metadata)
+		}
+	})
 
-func TestTypes_TextureHash_TrailingSlash(t *testing.T) {
-	tex := &Texture{URL: "http://textures.minecraft.net/texture/"}
-	if tex.Hash() != "" {
-		t.Errorf("expected empty hash for trailing slash, got %s", tex.Hash())
-	}
-}
+	t.Run("TY-40_SlimModel", func(t *testing.T) {
+		slim := SLIM
+		row := &TexturesRow{PlayerId: "id", Skin: &skinHash, Model: &slim, LastSeen: 100}
+		got := row.Value("Steve", "http://cdn/")
+		if got.Textures.SKIN.Metadata == nil || got.Textures.SKIN.Metadata.Model != SLIM {
+			t.Errorf("SKIN.Metadata = %+v, want Model=SLIM", got.Textures.SKIN.Metadata)
+		}
+	})
 
-func TestTypes_ParseProperties_MultipleProperties(t *testing.T) {
-	value := TexturesValue{
-		Textures: Textures{
-			SKIN: &Texture{URL: "http://textures.minecraft.net/texture/abc123"},
-		},
-	}
+	t.Run("TY-41_NilReceiver", func(t *testing.T) {
+		var row *TexturesRow
+		if got := row.Value("Steve", "http://cdn/"); got != nil {
+			t.Errorf("Value() = %+v, want nil", got)
+		}
+	})
 
-	player := &Player{
-		Properties: []Property{
-			{Name: "some_other_prop", Value: "ignored"},
-			{Name: TEXTURES, Value: encodedTextures(t, value)},
-		},
-	}
+	t.Run("TY-42_NoSkinOrCape", func(t *testing.T) {
+		row := &TexturesRow{PlayerId: "id", LastSeen: 100}
+		if got := row.Value("Steve", "http://cdn/"); got != nil {
+			t.Errorf("Value() = %+v, want nil", got)
+		}
+	})
 
-	got := player.ParseProperties()
-	if got == nil {
-		t.Fatal("expected non-nil TexturesValue when textures is not the first property")
-	}
-	if got.Textures.SKIN.Hash() != "abc123" {
-		t.Errorf("expected abc123, got %s", got.Textures.SKIN.Hash())
-	}
-}
-
-func TestTypes_ParseProperties_InvalidBase64(t *testing.T) {
-	player := &Player{
-		Properties: []Property{
-			{Name: TEXTURES, Value: "not-valid-base64!@#$"},
-		},
-	}
-
-	got := player.ParseProperties()
-	if got != nil {
-		t.Error("expected nil when property value contains invalid base64")
-	}
-}
-
-func TestTypes_MarshalJSON_ProfileActionsNil_KeyOmitted(t *testing.T) {
-	player := &Player{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}
-
-	data, err := json.Marshal(player)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	var raw map[string]json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		t.Fatalf("failed to unmarshal: %v", err)
-	}
-	if _, ok := raw["profileActions"]; ok {
-		t.Errorf("expected profileActions key to be omitted, got %s", data)
-	}
-}
-
-func TestTypes_MarshalJSON_ProfileActionsEmptyNotNil_KeyPresentAsEmptyArray(t *testing.T) {
-	player := &Player{
-		ID:             "853c80ef3c3749fdaa49938b674adae6",
-		Name:           "jeb_",
-		ProfileActions: []string{},
-	}
-
-	data, err := json.Marshal(player)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	var raw map[string]json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		t.Fatalf("failed to unmarshal: %v", err)
-	}
-	action, ok := raw["profileActions"]
-	if !ok {
-		t.Fatalf("expected profileActions key to be present, got %s", data)
-	}
-	if string(action) != "[]" {
-		t.Errorf("expected profileActions to serialize as [], got %s", action)
-	}
-}
-
-func TestTypes_MarshalJSON_ProfileActionsPopulated(t *testing.T) {
-	player := &Player{
-		ID:             "853c80ef3c3749fdaa49938b674adae6",
-		Name:           "jeb_",
-		ProfileActions: []string{"FORCED_NAME_CHANGE"},
-	}
-
-	data, err := json.Marshal(player)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	var got Player
-	if err := json.Unmarshal(data, &got); err != nil {
-		t.Fatalf("failed to unmarshal: %v", err)
-	}
-	if len(got.ProfileActions) != 1 || got.ProfileActions[0] != "FORCED_NAME_CHANGE" {
-		t.Errorf("expected [FORCED_NAME_CHANGE], got %v", got.ProfileActions)
-	}
-}
-
-func TestTypes_Profile_MarshalJSON_ProfileActionsOmittedWhenEmpty(t *testing.T) {
-	profile := &Profile{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}
-
-	data, err := json.Marshal(profile)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	var raw map[string]json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		t.Fatalf("failed to unmarshal: %v", err)
-	}
-	if _, ok := raw["profileActions"]; ok {
-		t.Errorf("expected profileActions to be omitted when empty, got %s", data)
-	}
-	if _, ok := raw["firstSeen"]; ok {
-		t.Errorf("expected firstSeen to never be exposed in JSON, got %s", data)
-	}
-	if _, ok := raw["lastSeen"]; ok {
-		t.Errorf("expected lastSeen to never be exposed in JSON, got %s", data)
-	}
-}
-
-func TestTypes_Profile_MarshalJSON_ProfileActionsPresentWhenPopulated(t *testing.T) {
-	profile := &Profile{
-		ID:             "853c80ef3c3749fdaa49938b674adae6",
-		Name:           "jeb_",
-		ProfileActions: []string{"FORCED_NAME_CHANGE"},
-	}
-
-	data, err := json.Marshal(profile)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	var got Profile
-	if err := json.Unmarshal(data, &got); err != nil {
-		t.Fatalf("failed to unmarshal: %v", err)
-	}
-	if len(got.ProfileActions) != 1 || got.ProfileActions[0] != "FORCED_NAME_CHANGE" {
-		t.Errorf("expected [FORCED_NAME_CHANGE], got %v", got.ProfileActions)
-	}
-}
-
-func TestTypes_Profile_ToPlayer_EncodesTexturesAsUnsignedProperty(t *testing.T) {
-	profile := &Profile{
-		ID:   "853c80ef3c3749fdaa49938b674adae6",
-		Name: "jeb_",
-		Textures: &TexturesValue{
-			ProfileID:   "853c80ef3c3749fdaa49938b674adae6",
-			ProfileName: "jeb_",
-			Textures:    Textures{SKIN: &Texture{URL: "http://textures.minecraft.net/texture/abc123"}},
-		},
-	}
-
-	player, err := profile.ToPlayer()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(player.Properties) != 1 || player.Properties[0].Name != TEXTURES {
-		t.Fatalf("expected a single textures property, got %v", player.Properties)
-	}
-	if player.Properties[0].Signature != "" {
-		t.Error("expected no signature on a locally-encoded property")
-	}
-
-	decoded := player.ParseProperties()
-	if decoded == nil || decoded.Textures.SKIN == nil || decoded.Textures.SKIN.Hash() != "abc123" {
-		t.Errorf("expected the encoded property to decode back to the original textures, got %+v", decoded)
-	}
-}
-
-func TestTypes_Profile_ToPlayer_NoTextures(t *testing.T) {
-	profile := &Profile{ID: "853c80ef3c3749fdaa49938b674adae6", Name: "jeb_"}
-
-	player, err := profile.ToPlayer()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(player.Properties) != 0 {
-		t.Errorf("expected no properties when the profile has no textures, got %v", player.Properties)
-	}
-}
-
-func TestTypes_GeyserSkin_SkinURL_Valid(t *testing.T) {
-	value := TexturesValue{
-		Textures: Textures{SKIN: &Texture{URL: "https://example.com/skins/abc123"}},
-	}
-	skin := &GeyserSkin{Value: encodedTextures(t, value)}
-
-	if got := skin.SkinURL(); got != "https://example.com/skins/abc123" {
-		t.Errorf("expected decoded skin URL, got %q", got)
-	}
-}
-
-func TestTypes_GeyserSkin_SkinURL_NotBase64(t *testing.T) {
-	skin := &GeyserSkin{Value: "not-base64!!!"}
-	if got := skin.SkinURL(); got != "" {
-		t.Errorf("expected empty string for undecodable value, got %q", got)
-	}
-}
-
-func TestTypes_GeyserSkin_SkinURL_NoSkinTexture(t *testing.T) {
-	value := TexturesValue{ProfileID: "abc"}
-	skin := &GeyserSkin{Value: encodedTextures(t, value)}
-
-	if got := skin.SkinURL(); got != "" {
-		t.Errorf("expected empty string when no SKIN texture is present, got %q", got)
-	}
+	t.Run("TY-43_OnlySkin", func(t *testing.T) {
+		row := &TexturesRow{PlayerId: "id", Skin: &skinHash, LastSeen: 100}
+		got := row.Value("Steve", "http://cdn/")
+		if got.Textures.CAPE != nil {
+			t.Errorf("CAPE = %+v, want nil", got.Textures.CAPE)
+		}
+	})
 }

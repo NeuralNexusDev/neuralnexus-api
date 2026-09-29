@@ -15,10 +15,7 @@ generate:
 	sed -i 's/json:"\(.*\),omitempty"/json:"\1" xml:"\1" db:"\1"/g' ./modules/proto/sessionpb/session.pb.go
 
 update:
-	#go get -tool google.golang.org/protobuf/cmd/protoc-gen-go@latest
 	go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-
-# --- Test environment (Postgres + Redis containers for integration tests) ---
 
 TEST_POSTGRES_URL ?= postgres://neuralnexus:neuralnexus@localhost:55432/neuralnexus_test
 TEST_REDIS_URL ?= redis://localhost:56379
@@ -46,10 +43,5 @@ vet:
 _go-test:
 	go test ./...
 
-# Brings up the test containers, vets and tests against them, then tears
-# them down regardless of outcome - the full suite, including the
-# Postgres-backed auth store tests that otherwise skip themselves without
-# TEST_POSTGRES_URL. Use test-env-up/test-env-down directly to keep the
-# containers running across multiple runs during development.
 test: test-env-up
 	TEST_POSTGRES_URL=$(TEST_POSTGRES_URL) TEST_REDIS_URL=$(TEST_REDIS_URL) JWT_SECRET=$(TEST_JWT_SECRET) PEPPER=$(TEST_PEPPER) NN_SITE_URL=$(TEST_NN_SITE_URL) NN_API_URL=$(TEST_NN_API_URL) $(MAKE) vet _go-test; status=$$?; $(MAKE) test-env-down; exit $$status

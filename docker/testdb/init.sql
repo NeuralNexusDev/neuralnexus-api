@@ -73,3 +73,44 @@ CREATE TABLE IF NOT EXISTS geyser_player_textures (
 
 CREATE UNIQUE INDEX IF NOT EXISTS geyser_player_textures_unique
     ON geyser_player_textures (xuid, hash);
+
+-- Bee Name Generator module's name/suggestion tables. name is the natural
+-- key in both: GetBeeName picks uniformly at random from bee_name, which
+-- only makes sense if the confirmed list has no duplicates to skew that
+-- distribution, and nothing in store.go handles a duplicate-key error
+-- specially, which would be the surprising gap if duplicates were actually
+-- allowed.
+CREATE TABLE IF NOT EXISTS bee_name (
+    name TEXT PRIMARY KEY NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS bee_name_suggestion (
+    name TEXT PRIMARY KEY NOT NULL
+);
+
+-- pet_pictures is its own database on the Postgres server in production
+-- (see api.go's database.GetDB(dbUrl + "/pet_pictures")), not a schema
+-- inside neuralnexus_test like every other module above, so it needs its
+-- own CREATE DATABASE here rather than just more tables.
+CREATE DATABASE pet_pictures;
+
+\connect pet_pictures
+
+CREATE TABLE IF NOT EXISTS pictures (
+    id text not null primary key,
+    file_ext text not null,
+    prime_subj integer not null,
+    othr_subj integer[],
+    aliases text[],
+    created_at timestamp with time zone default current_timestamp,
+    CONSTRAINT id_check UNIQUE ( id )
+);
+
+CREATE TABLE IF NOT EXISTS pets (
+    id serial not null primary key,
+    name text not null,
+    profile_picture text default null,
+    created_at timestamp with time zone default current_timestamp,
+    CONSTRAINT name_check UNIQUE ( name ),
+    CONSTRAINT pets_name_not_empty CHECK ( name <> '' )
+);

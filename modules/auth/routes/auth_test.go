@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -18,755 +20,1002 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
 )
 
-// mockAccountService implements auth.AccountService for unit testing
-// OAuthHandler and LoginHandler. None of its methods should ever be called
-// for an invalid state.Mode, since that's rejected before any account/
-// session work happens. account, when set, is returned by both
-// GetAccountByUsername and GetAccountByEmail instead of auth.ErrNotFound.
-type mockAccountService struct {
+type stubAccountService struct {
 	account              *auth.Account
+	lookupErr            error
 	passwordAuthDisabled bool
 	passwordAuthErr      error
 }
 
-var _ auth.AccountService = (*mockAccountService)(nil)
+var _ auth.AccountService = (*stubAccountService)(nil)
 
-func (m *mockAccountService) AddAccount(*auth.Account) error { return nil }
-func (m *mockAccountService) GetAccountByID(string) (*auth.Account, error) {
+func (s *stubAccountService) AddAccount(*auth.Account) error { return nil }
+func (s *stubAccountService) GetAccountByID(string) (*auth.Account, error) {
 	return nil, auth.ErrNotFound
 }
-func (m *mockAccountService) GetAccountByUsername(string) (*auth.Account, error) {
-	if m.account != nil {
-		return m.account, nil
+func (s *stubAccountService) GetAccountByUsername(string) (*auth.Account, error) {
+	if s.account != nil {
+		return s.account, s.lookupErr
 	}
 	return nil, auth.ErrNotFound
 }
-func (m *mockAccountService) GetAccountByEmail(string) (*auth.Account, error) {
-	if m.account != nil {
-		return m.account, nil
+func (s *stubAccountService) GetAccountByEmail(string) (*auth.Account, error) {
+	if s.account != nil {
+		return s.account, s.lookupErr
 	}
 	return nil, auth.ErrNotFound
 }
-func (m *mockAccountService) UpdateAccount(*auth.Account) error { return nil }
-func (m *mockAccountService) DeleteAccount(string) error        { return nil }
-func (m *mockAccountService) IsPasswordAuthEnabled(string) (bool, error) {
-	return !m.passwordAuthDisabled, m.passwordAuthErr
+func (s *stubAccountService) UpdateAccount(*auth.Account) error { return nil }
+func (s *stubAccountService) DeleteAccount(string) error        { return nil }
+func (s *stubAccountService) IsPasswordAuthEnabled(string) (bool, error) {
+	return !s.passwordAuthDisabled, s.passwordAuthErr
 }
 
-// mockLinkAccountStore implements auth.LinkAccountStore for unit testing
-// OAuthHandler, for the same reason as mockAccountService above.
-type mockLinkAccountStore struct{}
+type stubLinkAccountStore struct{}
 
-var _ auth.LinkAccountStore = (*mockLinkAccountStore)(nil)
+var _ auth.LinkAccountStore = (*stubLinkAccountStore)(nil)
 
-func (m *mockLinkAccountStore) AddLinkedAccountToDB(*auth.LinkedAccount) error { return nil }
-func (m *mockLinkAccountStore) UpdateLinkedAccount(*auth.LinkedAccount) error  { return nil }
-func (m *mockLinkAccountStore) GetLinkedAccountByPlatformID(auth.Platform, string) (*auth.LinkedAccount, error) {
+func (s *stubLinkAccountStore) AddLinkedAccountToDB(*auth.LinkedAccount) error { return nil }
+func (s *stubLinkAccountStore) UpdateLinkedAccount(*auth.LinkedAccount) error  { return nil }
+func (s *stubLinkAccountStore) GetLinkedAccountByPlatformID(auth.Platform, string) (*auth.LinkedAccount, error) {
 	return nil, auth.ErrNotFound
 }
-func (m *mockLinkAccountStore) GetLinkedAccountByPlatformName(auth.Platform, string) (*auth.LinkedAccount, error) {
+func (s *stubLinkAccountStore) GetLinkedAccountByPlatformName(auth.Platform, string) (*auth.LinkedAccount, error) {
 	return nil, auth.ErrNotFound
 }
-func (m *mockLinkAccountStore) GetLinkedAccountByUserID(string, auth.Platform) (*auth.LinkedAccount, error) {
+func (s *stubLinkAccountStore) GetLinkedAccountByUserID(string, auth.Platform) (*auth.LinkedAccount, error) {
 	return nil, auth.ErrNotFound
 }
-func (m *mockLinkAccountStore) GetLinkedAccountsByUserID(string) ([]*auth.LinkedAccount, error) {
+func (s *stubLinkAccountStore) GetLinkedAccountsByUserID(string) ([]*auth.LinkedAccount, error) {
 	return nil, nil
 }
-func (m *mockLinkAccountStore) DeleteLinkedAccount(string, auth.Platform) error { return nil }
-func (m *mockLinkAccountStore) SetLinkedAccountLoginEnabled(string, auth.Platform, bool) error {
+func (s *stubLinkAccountStore) DeleteLinkedAccount(string, auth.Platform) error { return nil }
+func (s *stubLinkAccountStore) SetLinkedAccountLoginEnabled(string, auth.Platform, bool) error {
 	return nil
 }
 
-// mockSessionService implements auth.SessionService for unit testing
-// OAuthHandler's ModeLink cookie handling and LogoutHandler.
-type mockSessionService struct {
-	readJWTFunc      func(token string) (*auth.Session, error)
-	createJWTFunc    func(session *auth.Session) (string, error)
+type stubSessionService struct {
+	createJWT        func(*auth.Session) (string, error)
 	addSessionErr    error
 	deleteSessionErr error
 	deletedIDs       []string
 }
 
-var _ auth.SessionService = (*mockSessionService)(nil)
+var _ auth.SessionService = (*stubSessionService)(nil)
 
-func (m *mockSessionService) AddSession(*auth.Session) error           { return m.addSessionErr }
-func (m *mockSessionService) GetSession(string) (*auth.Session, error) { return nil, auth.ErrNotFound }
-func (m *mockSessionService) UpdateSession(*auth.Session) error        { return nil }
-func (m *mockSessionService) DeleteSession(id string) error {
-	m.deletedIDs = append(m.deletedIDs, id)
-	return m.deleteSessionErr
+func (s *stubSessionService) AddSession(*auth.Session) error           { return s.addSessionErr }
+func (s *stubSessionService) GetSession(string) (*auth.Session, error) { return nil, auth.ErrNotFound }
+func (s *stubSessionService) UpdateSession(*auth.Session) error        { return nil }
+func (s *stubSessionService) DeleteSession(id string) error {
+	s.deletedIDs = append(s.deletedIDs, id)
+	return s.deleteSessionErr
 }
-func (m *mockSessionService) CreateJWT(session *auth.Session) (string, error) {
-	if m.createJWTFunc != nil {
-		return m.createJWTFunc(session)
+func (s *stubSessionService) CreateJWT(session *auth.Session) (string, error) {
+	if s.createJWT != nil {
+		return s.createJWT(session)
 	}
 	return "", nil
 }
-func (m *mockSessionService) ReadJWT(token string) (*auth.Session, error) {
-	return m.readJWTFunc(token)
-}
+func (s *stubSessionService) ReadJWT(string) (*auth.Session, error) { return nil, auth.ErrNotFound }
 
-// newModeLinkRequest builds a request that passes OAuthHandler's state/nonce
-// checks and reaches the ModeLink branch, so tests can focus on its session
-// cookie handling.
-func newModeLinkRequest(t *testing.T) *http.Request {
+func encodeState(t *testing.T, state linking.OAuthState) string {
 	t.Helper()
-	state := linking.OAuthState{
-		Platform:    auth.PlatformDiscord,
-		Nonce:       "test-nonce",
-		RedirectURI: "https://neuralnexus.test/done",
-		Mode:        linking.ModeLink,
-	}
 	stateJSON, err := json.Marshal(state)
 	if err != nil {
 		t.Fatalf("failed to marshal state: %v", err)
 	}
-	stateB64 := base64.URLEncoding.EncodeToString(stateJSON)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/oauth?code=somecode&state="+stateB64, nil)
-	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
-	return r
+	return base64.URLEncoding.EncodeToString(stateJSON)
 }
 
-// redirectProblem mirrors the JSON shape of problempb.Problem, just enough
-// to decode what redirectWithError embeds in the "problem" query param.
-type redirectProblem struct {
-	Type     string `json:"type"`
-	Status   int    `json:"status"`
-	Title    string `json:"title"`
-	Detail   string `json:"detail"`
-	Instance string `json:"instance"`
+// problemBody mirrors problempb.Problem's JSON shape, enough to decode what
+// redirectWithError embeds in the "problem" query param.
+type problemBody struct {
+	Status int    `json:"status"`
+	Title  string `json:"title"`
+	Detail string `json:"detail"`
 }
 
-// assertRedirectWithError checks the handler issued a 303 redirect whose
-// target (scheme+host+path, ignoring query) matches expectedTarget and whose
-// base64-encoded "problem" query param decodes to the given status/title/
-// detail, with no session cookie set alongside it.
-func assertRedirectWithError(t *testing.T, w *httptest.ResponseRecorder, expectedTarget string, expectedStatus int, expectedTitle, expectedDetail string) {
+func requireRedirect(t *testing.T, w *httptest.ResponseRecorder, wantTarget string) *url.URL {
 	t.Helper()
 	if w.Code != http.StatusSeeOther {
-		t.Fatalf("expected 303 redirect, got %d: %s", w.Code, w.Body.String())
+		t.Fatalf("expected 303, got %d: %s", w.Code, w.Body.String())
 	}
 	location := w.Header().Get("Location")
 	u, err := url.Parse(location)
 	if err != nil {
-		t.Fatalf("failed to parse Location header %q: %v", location, err)
+		t.Fatalf("failed to parse Location %q: %v", location, err)
 	}
 	target := (&url.URL{Scheme: u.Scheme, Host: u.Host, Path: u.Path}).String()
-	if target != expectedTarget {
-		t.Errorf("expected redirect target %q, got %q (full Location: %q)", expectedTarget, target, location)
+	if target != wantTarget {
+		t.Errorf("expected redirect target %q, got %q (full Location %q)", wantTarget, target, location)
 	}
+	return u
+}
 
+func requireProblemRedirect(t *testing.T, w *httptest.ResponseRecorder, wantTarget string, wantStatus int, wantTitle, wantDetail string) {
+	t.Helper()
+	u := requireRedirect(t, w, wantTarget)
 	problemB64 := u.Query().Get("problem")
 	if problemB64 == "" {
-		t.Fatalf("expected a problem query param, got none (full Location: %q)", location)
+		t.Fatalf("expected a problem query param, got none")
 	}
-	problemJSON, err := base64.URLEncoding.DecodeString(problemB64)
+	raw, err := base64.URLEncoding.DecodeString(problemB64)
 	if err != nil {
-		t.Fatalf("failed to base64-decode problem param %q: %v", problemB64, err)
+		t.Fatalf("failed to base64-decode problem param: %v", err)
 	}
-	var p redirectProblem
-	if err := json.Unmarshal(problemJSON, &p); err != nil {
-		t.Fatalf("failed to unmarshal problem JSON %q: %v", problemJSON, err)
+	var p problemBody
+	if err := json.Unmarshal(raw, &p); err != nil {
+		t.Fatalf("failed to unmarshal problem JSON %q: %v", raw, err)
 	}
-	if p.Status != expectedStatus {
-		t.Errorf("expected problem status %d, got %d", expectedStatus, p.Status)
+	if p.Status != wantStatus {
+		t.Errorf("expected problem status %d, got %d", wantStatus, p.Status)
 	}
-	if p.Title != expectedTitle {
-		t.Errorf("expected problem title %q, got %q", expectedTitle, p.Title)
+	if p.Title != wantTitle {
+		t.Errorf("expected problem title %q, got %q", wantTitle, p.Title)
 	}
-	if p.Detail != expectedDetail {
-		t.Errorf("expected problem detail %q, got %q", expectedDetail, p.Detail)
+	if p.Detail != wantDetail {
+		t.Errorf("expected problem detail %q, got %q", wantDetail, p.Detail)
 	}
+}
 
+func findCookie(w *httptest.ResponseRecorder, name string) *http.Cookie {
 	for _, c := range w.Result().Cookies() {
-		if c.Name == mw.SessionCookieName {
-			t.Error("expected no session cookie to be set on an error redirect")
+		if c.Name == name {
+			return c
 		}
 	}
+	return nil
 }
 
-// TestOAuthHandlerLinkModeNoSessionRejected covers OAuthHandler's own,
-// remaining responsibility for ModeLink: reject with a specific message when
-// there's no session in the request context at all. Reading the session
-// cookie and validating the JWT is now SessionMiddleware's job - see
-// middleware_test.go's TestSessionMiddlewareInvalidCookieFailsOpen and
-// TestSessionMiddlewareExpiredCookieFailsOpenAndDeletesSession - since a
-// session this handler receives via context is already known-valid, or
-// absent (an invalid/expired cookie fails open rather than being rejected,
-// so it looks the same as "absent" from here).
-func TestOAuthHandlerLinkModeNoSessionRejected(t *testing.T) {
-	r := newModeLinkRequest(t)
-	w := httptest.NewRecorder()
-
-	OAuthHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
-
-	assertRedirectWithError(t, w, "https://neuralnexus.test/done", 401, "Unauthorized", "You must be logged in to link an account")
-}
-
-// TestOAuthHandlerLinkModeWithSessionProceedsToProcessOAuthLink confirms a
-// session already in context (as SessionMiddleware would have put it there)
-// clears OAuthHandler's own gate and reaches linking.ProcessOAuthLink,
-// instead of being rejected at the handler level. An unsupported platform
-// makes ProcessOAuthLink fail immediately on its own platform switch,
-// without a real network call to any OAuth provider - the point here is
-// only to observe that we got past the session check (a 401 would mean we
-// didn't), not to exercise the OAuth exchange itself.
-func TestOAuthHandlerLinkModeWithSessionProceedsToProcessOAuthLink(t *testing.T) {
-	state := linking.OAuthState{
-		Platform:    auth.Platform("unsupported-platform"),
-		Nonce:       "test-nonce",
-		RedirectURI: "https://neuralnexus.test/done",
-		Mode:        linking.ModeLink,
-	}
-	stateJSON, err := json.Marshal(state)
+func TestAU01LoginHandlerUsernameHappyPath(t *testing.T) {
+	account, err := auth.NewAccount("testuser", "test@example.com", "correct-password")
 	if err != nil {
-		t.Fatalf("failed to marshal state: %v", err)
+		t.Fatalf("failed to build account: %v", err)
 	}
-	stateB64 := base64.URLEncoding.EncodeToString(stateJSON)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/oauth?code=somecode&state="+stateB64, nil)
-	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
-	session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
-	ctx := context.WithValue(r.Context(), mw.SessionKey, session)
-	r = r.WithContext(ctx)
+	as := &stubAccountService{account: account}
+	ss := &stubSessionService{createJWT: func(*auth.Session) (string, error) { return "test-jwt", nil }}
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
 	w := httptest.NewRecorder()
 
-	OAuthHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
+	t.Run("AU-01_LoginUsernameHappyPath", func(t *testing.T) {
+		LoginHandler(as, ss)(w, r)
 
-	assertRedirectWithError(t, w, "https://neuralnexus.test/done", 500, "Internal Server Error", "Authentication failed")
-}
-
-// Regression test: an invalid/unrecognized state.Mode used to fall through
-// the mode switch's default case (which wrote a 400 response but never
-// returned) straight into ss.CreateJWT(session) and session.ExpiresAt with
-// session still nil - a guaranteed nil pointer dereference reachable by any
-// client that sends a state blob with a Mode other than "login"/"link"
-// (state.Mode is entirely client-controlled JSON, so this was a one-request
-// crash, not a hypothetical). The fix adds the missing return.
-func TestOAuthHandlerInvalidModeRejectedWithoutPanic(t *testing.T) {
-	state := linking.OAuthState{
-		Platform:    auth.PlatformDiscord,
-		Nonce:       "test-nonce",
-		RedirectURI: "https://neuralnexus.test/done",
-		Mode:        linking.Mode("bogus-mode"),
-	}
-	stateJSON, err := json.Marshal(state)
-	if err != nil {
-		t.Fatalf("failed to marshal state: %v", err)
-	}
-	stateB64 := base64.URLEncoding.EncodeToString(stateJSON)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/oauth?code=somecode&state="+stateB64, nil)
-	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
-	w := httptest.NewRecorder()
-
-	handler := OAuthHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})
-
-	defer func() {
-		if p := recover(); p != nil {
-			t.Fatalf("OAuthHandler panicked on an invalid mode instead of returning an error response: %v", p)
+		if w.Code != http.StatusNoContent {
+			t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
 		}
-	}()
-	handler(w, r)
-
-	assertRedirectWithError(t, w, "https://neuralnexus.test/done", 400, "Bad Request", "Invalid state")
+		cookie := findCookie(w, mw.SessionCookieName)
+		if cookie == nil || cookie.Value != "test-jwt" {
+			t.Errorf("expected session cookie with value %q, got %+v", "test-jwt", cookie)
+		}
+	})
 }
 
-// TestOAuthHandlerRejectsRedirectOutsideSiteOrigin is the regression test for
-// an open redirect: state.RedirectURI is attacker-controlled (client-supplied,
-// base64-encoded JSON) and used to be passed straight to http.Redirect with no
-// allow-list check, sending the browser - and the fresh session cookie set
-// right before the redirect - to any URL an attacker chose. An error is now
-// redirected too, so the assertion here is specifically that the redirect
-// target is the safe NN_SITE_URL fallback, never the attacker's own URL.
-func TestOAuthHandlerRejectsRedirectOutsideSiteOrigin(t *testing.T) {
-	state := linking.OAuthState{
-		Platform:    auth.PlatformDiscord,
-		Nonce:       "test-nonce",
-		RedirectURI: "https://evil.example.com/phish",
-		Mode:        linking.ModeLogin,
-	}
-	stateJSON, err := json.Marshal(state)
+func TestAU02LoginHandlerEmailHappyPath(t *testing.T) {
+	account, err := auth.NewAccount("testuser", "test@example.com", "correct-password")
 	if err != nil {
-		t.Fatalf("failed to marshal state: %v", err)
+		t.Fatalf("failed to build account: %v", err)
 	}
-	stateB64 := base64.URLEncoding.EncodeToString(stateJSON)
+	as := &stubAccountService{account: account}
+	ss := &stubSessionService{createJWT: func(*auth.Session) (string, error) { return "test-jwt", nil }}
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"email":"test@example.com","password":"correct-password"}`))
+	w := httptest.NewRecorder()
 
+	t.Run("AU-02_LoginEmailHappyPath", func(t *testing.T) {
+		LoginHandler(as, ss)(w, r)
+
+		if w.Code != http.StatusNoContent {
+			t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
+		}
+		if findCookie(w, mw.SessionCookieName) == nil {
+			t.Error("expected a session cookie to be set")
+		}
+	})
+}
+
+func TestAU03LoginHandlerMalformedBody(t *testing.T) {
+	as := &stubAccountService{}
+	ss := &stubSessionService{}
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`not json`))
+	w := httptest.NewRecorder()
+
+	t.Run("AU-03_LoginMalformedBody", func(t *testing.T) {
+		LoginHandler(as, ss)(w, r)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+}
+
+func TestAU04LoginHandlerAccountLookupFails(t *testing.T) {
+	as := &stubAccountService{}
+	ss := &stubSessionService{}
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"no-such-user","password":"whatever"}`))
+	w := httptest.NewRecorder()
+
+	t.Run("AU-04_LoginAccountLookupFails", func(t *testing.T) {
+		LoginHandler(as, ss)(w, r)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+		}
+		if findCookie(w, mw.SessionCookieName) != nil {
+			t.Error("expected no session cookie on a failed lookup")
+		}
+	})
+}
+
+func TestAU05LoginHandlerWrongPassword(t *testing.T) {
+	account, err := auth.NewAccount("testuser", "test@example.com", "correct-password")
+	if err != nil {
+		t.Fatalf("failed to build account: %v", err)
+	}
+	as := &stubAccountService{account: account}
+	ss := &stubSessionService{}
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"wrong-password"}`))
+	w := httptest.NewRecorder()
+
+	t.Run("AU-05_LoginWrongPassword", func(t *testing.T) {
+		LoginHandler(as, ss)(w, r)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+		}
+		if findCookie(w, mw.SessionCookieName) != nil {
+			t.Error("expected no session cookie on a wrong password")
+		}
+	})
+}
+
+func TestAU06LoginHandlerPasswordAuthCheckErrors(t *testing.T) {
+	account, err := auth.NewAccount("testuser", "test@example.com", "correct-password")
+	if err != nil {
+		t.Fatalf("failed to build account: %v", err)
+	}
+	as := &stubAccountService{account: account, passwordAuthErr: errors.New("db exploded")}
+	ss := &stubSessionService{}
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
+	w := httptest.NewRecorder()
+
+	t.Run("AU-06_LoginPasswordAuthCheckErrors", func(t *testing.T) {
+		LoginHandler(as, ss)(w, r)
+
+		if w.Code != http.StatusInternalServerError {
+			t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
+		}
+	})
+}
+
+func TestAU07LoginHandlerPasswordAuthDisabled(t *testing.T) {
+	account, err := auth.NewAccount("testuser", "test@example.com", "correct-password")
+	if err != nil {
+		t.Fatalf("failed to build account: %v", err)
+	}
+	as := &stubAccountService{account: account, passwordAuthDisabled: true}
+	ss := &stubSessionService{}
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
+	w := httptest.NewRecorder()
+
+	t.Run("AU-07_LoginPasswordAuthDisabled", func(t *testing.T) {
+		LoginHandler(as, ss)(w, r)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+		}
+		if findCookie(w, mw.SessionCookieName) != nil {
+			t.Error("expected no session cookie when password auth is disabled")
+		}
+	})
+}
+
+func TestAU08LoginHandlerAddSessionFails(t *testing.T) {
+	account, err := auth.NewAccount("testuser", "test@example.com", "correct-password")
+	if err != nil {
+		t.Fatalf("failed to build account: %v", err)
+	}
+	as := &stubAccountService{account: account}
+	ss := &stubSessionService{addSessionErr: errors.New("db exploded")}
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
+	w := httptest.NewRecorder()
+
+	t.Run("AU-08_LoginAddSessionFails", func(t *testing.T) {
+		LoginHandler(as, ss)(w, r)
+
+		if w.Code != http.StatusInternalServerError {
+			t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
+		}
+		if findCookie(w, mw.SessionCookieName) != nil {
+			t.Error("expected no session cookie when AddSession fails")
+		}
+	})
+}
+
+func TestAU09LoginHandlerCreateJWTFails(t *testing.T) {
+	account, err := auth.NewAccount("testuser", "test@example.com", "correct-password")
+	if err != nil {
+		t.Fatalf("failed to build account: %v", err)
+	}
+	as := &stubAccountService{account: account}
+	ss := &stubSessionService{createJWT: func(*auth.Session) (string, error) { return "", errors.New("signing failed") }}
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
+	w := httptest.NewRecorder()
+
+	t.Run("AU-09_LoginCreateJWTFails", func(t *testing.T) {
+		LoginHandler(as, ss)(w, r)
+
+		if w.Code != http.StatusInternalServerError {
+			t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
+		}
+		if findCookie(w, mw.SessionCookieName) != nil {
+			t.Error("expected no session cookie when CreateJWT fails")
+		}
+	})
+}
+
+func TestAU10LogoutHandlerHappyPath(t *testing.T) {
+	session := &auth.Session{ID: "s1", UserID: "u1"}
+	ctx := context.WithValue(context.Background(), mw.SessionKey, session)
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil).WithContext(ctx)
+	w := httptest.NewRecorder()
+	ss := &stubSessionService{}
+
+	t.Run("AU-10_LogoutHappyPath", func(t *testing.T) {
+		LogoutHandler(ss)(w, r)
+
+		if w.Code != http.StatusNoContent {
+			t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
+		}
+		if len(ss.deletedIDs) != 1 || ss.deletedIDs[0] != "s1" {
+			t.Errorf("expected DeleteSession(\"s1\"), got %v", ss.deletedIDs)
+		}
+		cookie := findCookie(w, mw.SessionCookieName)
+		if cookie == nil {
+			t.Fatal("expected the session cookie to be cleared")
+		}
+		if cookie.Value != "" {
+			t.Errorf("expected an empty cleared cookie value, got %q", cookie.Value)
+		}
+		if !cookie.Expires.Before(time.Now()) {
+			t.Errorf("expected the cleared cookie's Expires to be in the past, got %v", cookie.Expires)
+		}
+	})
+}
+
+func TestAU11LogoutHandlerNilSessionInContext(t *testing.T) {
+	ctx := context.WithValue(context.Background(), mw.SessionKey, (*auth.Session)(nil))
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil).WithContext(ctx)
+	w := httptest.NewRecorder()
+	ss := &stubSessionService{}
+
+	t.Run("AU-11_LogoutNilSessionInContext", func(t *testing.T) {
+		LogoutHandler(ss)(w, r)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+		}
+		if len(ss.deletedIDs) != 0 {
+			t.Error("expected DeleteSession to never be called for a nil session")
+		}
+	})
+}
+
+func TestAU12LogoutHandlerDeleteSessionFails(t *testing.T) {
+	session := &auth.Session{ID: "s1", UserID: "u1"}
+	ctx := context.WithValue(context.Background(), mw.SessionKey, session)
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil).WithContext(ctx)
+	w := httptest.NewRecorder()
+	ss := &stubSessionService{deleteSessionErr: errors.New("db exploded")}
+
+	t.Run("AU-12_LogoutDeleteSessionFails", func(t *testing.T) {
+		LogoutHandler(ss)(w, r)
+
+		if w.Code != http.StatusInternalServerError {
+			t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
+		}
+		if findCookie(w, mw.SessionCookieName) != nil {
+			t.Error("expected no cleared cookie when DeleteSession fails")
+		}
+	})
+}
+
+func TestAU13OAuthHandlerMissingCode(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/api/oauth", nil)
+	w := httptest.NewRecorder()
+
+	t.Run("AU-13_OAuthMissingCode", func(t *testing.T) {
+		OAuthHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{})(w, r)
+
+		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Bad Request", "Invalid request")
+	})
+}
+
+func TestAU14OAuthHandlerMissingState(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/api/oauth?code=somecode", nil)
+	w := httptest.NewRecorder()
+
+	t.Run("AU-14_OAuthMissingState", func(t *testing.T) {
+		OAuthHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{})(w, r)
+
+		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Bad Request", "Invalid request")
+	})
+}
+
+func TestAU15OAuthHandlerLinkModeNoSession(t *testing.T) {
+	state := linking.OAuthState{Platform: auth.PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLink}
+	stateB64 := encodeState(t, state)
 	r := httptest.NewRequest(http.MethodGet, "/api/oauth?code=somecode&state="+stateB64, nil)
 	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
 	w := httptest.NewRecorder()
 
-	OAuthHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
+	t.Run("AU-15_OAuthLinkModeNoSession", func(t *testing.T) {
+		OAuthHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{})(w, r)
 
-	if location := w.Header().Get("Location"); strings.Contains(location, "evil.example.com") {
-		t.Fatalf("expected no redirect to the attacker's URL, got Location: %q", location)
-	}
-	assertRedirectWithError(t, w, auth.NN_SITE_URL, 400, "Bad Request", "Invalid state")
+		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, "Unauthorized", "You must be logged in to link an account")
+	})
 }
 
-// TestOAuthHandlerAllowsRedirectMatchingSiteOrigin confirms a same-origin
-// RedirectURI still clears the allow-list check (an unsupported platform then
-// fails ProcessOAuthLogin's own switch, redirecting back to that RedirectURI
-// with an error - the point is only to confirm we got past the redirect
-// check, not that we landed at the site root fallback).
-func TestOAuthHandlerAllowsRedirectMatchingSiteOrigin(t *testing.T) {
-	state := linking.OAuthState{
-		Platform:    auth.Platform("unsupported-platform"),
-		Nonce:       "test-nonce",
-		RedirectURI: "https://neuralnexus.test/done",
-		Mode:        linking.ModeLogin,
-	}
-	stateJSON, err := json.Marshal(state)
-	if err != nil {
-		t.Fatalf("failed to marshal state: %v", err)
-	}
-	stateB64 := base64.URLEncoding.EncodeToString(stateJSON)
+type auRoundTripperFunc func(*http.Request) (*http.Response, error)
 
-	r := httptest.NewRequest(http.MethodGet, "/api/oauth?code=somecode&state="+stateB64, nil)
-	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
-	w := httptest.NewRecorder()
-
-	OAuthHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
-
-	assertRedirectWithError(t, w, "https://neuralnexus.test/done", 500, "Internal Server Error", "Authentication failed")
+func (f auRoundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
 }
 
-// -------------- OpenIDHandler --------------
+// auJSONResponse builds a canned *http.Response carrying a JSON
+// Content-Type - oauth2's token exchange requires that header to parse the
+// body as a JSON token response rather than as form-urlencoded.
+func auJSONResponse(status int, body string) *http.Response {
+	h := make(http.Header)
+	h.Set("Content-Type", "application/json")
+	return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader(body)), Header: h}
+}
 
-// newOpenIDRequest builds a Steam OpenID callback request carrying a valid,
-// base64-encoded state param and a matching nonce cookie (unless nonce is
-// empty, in which case no cookie is set at all), plus any extra openid.*
-// query params a test wants to layer on.
-func newOpenIDRequest(t *testing.T, mode linking.Mode, redirectURI, nonce string, extra url.Values) *http.Request {
+// auTextResponse builds a canned *http.Response with a plain-text body, for
+// Steam's check_authentication response format (newline-separated
+// "key:value" lines, not JSON).
+func auTextResponse(status int, body string) *http.Response {
+	return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}
+}
+
+// swapDefaultTransport swaps the package-level http.DefaultTransport for the
+// duration of a subtest, restoring it after. Discord's token exchange (falls
+// back to http.DefaultClient via context.Background()) and user fetch, and
+// Steam's check_authentication/GetPlayerSummaries client, all build clients
+// with no Transport set, so they resolve to http.DefaultTransport at call
+// time - the same seam modules/projects/projects_test.go's swapTransport uses.
+func swapDefaultTransport(t *testing.T, rt http.RoundTripper) {
 	t.Helper()
-	state := linking.OAuthState{
-		Platform:    auth.PlatformSteam,
-		Nonce:       "test-nonce",
-		RedirectURI: redirectURI,
-		Mode:        mode,
-	}
-	stateJSON, err := json.Marshal(state)
-	if err != nil {
-		t.Fatalf("failed to marshal state: %v", err)
-	}
-	stateB64 := base64.URLEncoding.EncodeToString(stateJSON)
-
-	q := url.Values{}
-	for k, v := range extra {
-		q[k] = v
-	}
-	q.Set("state", stateB64)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/openid?"+q.Encode(), nil)
-	if nonce != "" {
-		r.AddCookie(&http.Cookie{Name: "nonce", Value: nonce})
-	}
-	return r
+	orig := http.DefaultTransport
+	http.DefaultTransport = rt
+	t.Cleanup(func() { http.DefaultTransport = orig })
 }
 
-func TestOpenIDHandlerNoStateRejected(t *testing.T) {
+func swapSteamAPIKey(t *testing.T, value string) {
+	t.Helper()
+	original := linking.STEAM_API_KEY
+	linking.STEAM_API_KEY = value
+	t.Cleanup(func() { linking.STEAM_API_KEY = original })
+}
+
+func TestAU50OAuthHandlerLoginHappyPath(t *testing.T) {
+	swapDefaultTransport(t, auRoundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		switch {
+		case req.Method == http.MethodPost && req.URL.Host == "discord.com" && req.URL.Path == "/api/oauth2/token":
+			return auJSONResponse(http.StatusOK, `{"access_token":"disc-at","token_type":"Bearer","expires_in":3600,"scope":"identify"}`), nil
+		case req.Method == http.MethodGet && req.URL.Host == "discord.com" && strings.HasSuffix(req.URL.Path, "/users/@me"):
+			return auJSONResponse(http.StatusOK, `{"id":"d1","username":"alice","email":"a@b.com"}`), nil
+		default:
+			return nil, fmt.Errorf("AU-50: unexpected outbound request %s %s", req.Method, req.URL.String())
+		}
+	}))
+
+	state := linking.OAuthState{Platform: auth.PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	stateB64 := encodeState(t, state)
+	r := httptest.NewRequest(http.MethodGet, "/api/oauth?code=disc-code&state="+stateB64, nil)
+	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
+	w := httptest.NewRecorder()
+	as := &stubAccountService{}
+	las := &stubLinkAccountStore{}
+	ss := &stubSessionService{createJWT: func(*auth.Session) (string, error) { return "test-jwt", nil }}
+
+	t.Run("AU-50_OAuthHandlerLoginHappyPath", func(t *testing.T) {
+		OAuthHandler(as, las, ss)(w, r)
+
+		if w.Code != http.StatusSeeOther {
+			t.Fatalf("expected 303, got %d: %s", w.Code, w.Body.String())
+		}
+		if loc := w.Header().Get("Location"); loc != state.RedirectURI {
+			t.Errorf("expected redirect straight to %q with no problem param, got %q", state.RedirectURI, loc)
+		}
+		cookie := findCookie(w, mw.SessionCookieName)
+		if cookie == nil || cookie.Value != "test-jwt" {
+			t.Errorf("expected session cookie with value %q, got %+v", "test-jwt", cookie)
+		}
+	})
+}
+
+func TestAU51OpenIDHandlerLoginHappyPath(t *testing.T) {
+	swapSteamAPIKey(t, "test-steam-api-key")
+	swapDefaultTransport(t, auRoundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		switch {
+		case req.Method == http.MethodPost && req.URL.Host == "steamcommunity.com" && req.URL.Path == "/openid/login":
+			return auTextResponse(http.StatusOK, "ns:http://specs.openid.net/auth/2.0\nis_valid:true\n"), nil
+		case req.Method == http.MethodGet && req.URL.Host == "api.steampowered.com" && req.URL.Path == "/ISteamUser/GetPlayerSummaries/v2/":
+			return auJSONResponse(http.StatusOK, `{"response":{"players":[{"steamid":"76561198000000000","personaname":"steamplayer","profileurl":"https://steamcommunity.com/id/steamplayer","avatarfull":"https://avatar.example/a.jpg"}]}}`), nil
+		default:
+			return nil, fmt.Errorf("AU-51: unexpected outbound request %s %s", req.Method, req.URL.String())
+		}
+	}))
+
+	state := linking.OAuthState{Platform: auth.PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	stateB64 := encodeState(t, state)
+	q := url.Values{
+		"state":               {stateB64},
+		"openid.mode":         {"id_res"},
+		"openid.claimed_id":   {"https://steamcommunity.com/openid/id/76561198000000000"},
+		"openid.identity":     {"https://steamcommunity.com/openid/id/76561198000000000"},
+		"openid.signed":       {"op_endpoint,claimed_id,identity,return_to,response_nonce,assoc_handle"},
+		"openid.sig":          {"deadbeef=="},
+		"openid.return_to":    {"https://neuralnexus.test/api/openid"},
+		"openid.assoc_handle": {"handle1"},
+	}
+	r := httptest.NewRequest(http.MethodGet, "/api/openid?"+q.Encode(), nil)
+	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
+	w := httptest.NewRecorder()
+	as := &stubAccountService{}
+	las := &stubLinkAccountStore{}
+	ss := &stubSessionService{createJWT: func(*auth.Session) (string, error) { return "test-jwt", nil }}
+
+	t.Run("AU-51_OpenIDHandlerLoginHappyPath", func(t *testing.T) {
+		OpenIDHandler(as, las, ss)(w, r)
+
+		if w.Code != http.StatusSeeOther {
+			t.Fatalf("expected 303, got %d: %s", w.Code, w.Body.String())
+		}
+		if loc := w.Header().Get("Location"); loc != state.RedirectURI {
+			t.Errorf("expected redirect straight to %q with no problem param, got %q", state.RedirectURI, loc)
+		}
+		cookie := findCookie(w, mw.SessionCookieName)
+		if cookie == nil || cookie.Value != "test-jwt" {
+			t.Errorf("expected session cookie with value %q, got %+v", "test-jwt", cookie)
+		}
+	})
+}
+
+func TestAU17OpenIDHandlerMissingState(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/api/openid", nil)
 	w := httptest.NewRecorder()
 
-	OpenIDHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
+	t.Run("AU-17_OpenIDMissingState", func(t *testing.T) {
+		OpenIDHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{})(w, r)
 
-	assertRedirectWithError(t, w, auth.NN_SITE_URL, 400, "Bad Request", "Invalid request")
-}
-
-// TestOpenIDHandlerRejectsRedirectOutsideSiteOrigin mirrors the OAuth version
-// above: the redirect target for this error must be the safe NN_SITE_URL
-// fallback, never the attacker's own URL.
-func TestOpenIDHandlerRejectsRedirectOutsideSiteOrigin(t *testing.T) {
-	r := newOpenIDRequest(t, linking.ModeLogin, "https://evil.example.com/phish", "", nil)
-	w := httptest.NewRecorder()
-
-	OpenIDHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
-
-	if location := w.Header().Get("Location"); strings.Contains(location, "evil.example.com") {
-		t.Fatalf("expected no redirect to the attacker's URL, got Location: %q", location)
-	}
-	assertRedirectWithError(t, w, auth.NN_SITE_URL, 400, "Bad Request", "Invalid state")
-}
-
-func TestOpenIDHandlerMissingNonceCookieRejected(t *testing.T) {
-	r := newOpenIDRequest(t, linking.ModeLogin, "https://neuralnexus.test/done", "", nil)
-	w := httptest.NewRecorder()
-
-	OpenIDHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
-
-	assertRedirectWithError(t, w, auth.NN_SITE_URL, 400, "Bad Request", "Invalid state")
-}
-
-func TestOpenIDHandlerNonceMismatchRejected(t *testing.T) {
-	r := newOpenIDRequest(t, linking.ModeLogin, "https://neuralnexus.test/done", "wrong-nonce", nil)
-	w := httptest.NewRecorder()
-
-	OpenIDHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
-
-	assertRedirectWithError(t, w, auth.NN_SITE_URL, 400, "Bad Request", "Invalid state")
-}
-
-func TestOpenIDHandlerInvalidModeRejectedWithoutPanic(t *testing.T) {
-	r := newOpenIDRequest(t, linking.Mode("bogus-mode"), "https://neuralnexus.test/done", "test-nonce", nil)
-	w := httptest.NewRecorder()
-
-	handler := OpenIDHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})
-	defer func() {
-		if p := recover(); p != nil {
-			t.Fatalf("OpenIDHandler panicked on an invalid mode instead of returning an error response: %v", p)
-		}
-	}()
-	handler(w, r)
-
-	assertRedirectWithError(t, w, "https://neuralnexus.test/done", 400, "Bad Request", "Invalid state")
-}
-
-// TestOpenIDHandlerLinkModeNoSessionRejected is the regression test for
-// checking the mode/session before doing any of the expensive Steam
-// verification work: a ModeLink request with no session in context must be
-// rejected without ever reaching linking.VerifySteamOpenIDCallback (which
-// would otherwise burn a real network round-trip to Steam for a request
-// that's going to be rejected anyway).
-func TestOpenIDHandlerLinkModeNoSessionRejected(t *testing.T) {
-	r := newOpenIDRequest(t, linking.ModeLink, "https://neuralnexus.test/done", "test-nonce", nil)
-	w := httptest.NewRecorder()
-
-	OpenIDHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
-
-	assertRedirectWithError(t, w, "https://neuralnexus.test/done", 401, "Unauthorized", "You must be logged in to link an account")
-}
-
-// TestOpenIDHandlerLinkModeExpiredSessionRejected is the regression test for
-// a session present but expired: requireValidModeAndSession must reject it
-// at the gate (before any Steam network call), the same as no session at
-// all - previously only presence was checked here, and an expired session
-// fell through to ProcessSteamLink's own IsValid() check, by which point
-// VerifySteamOpenIDCallback and GetSteamUser had already run.
-func TestOpenIDHandlerLinkModeExpiredSessionRejected(t *testing.T) {
-	r := newOpenIDRequest(t, linking.ModeLink, "https://neuralnexus.test/done", "test-nonce", nil)
-	session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
-	ctx := context.WithValue(r.Context(), mw.SessionKey, session)
-	r = r.WithContext(ctx)
-	w := httptest.NewRecorder()
-
-	OpenIDHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
-
-	assertRedirectWithError(t, w, "https://neuralnexus.test/done", 401, "Unauthorized", "You must be logged in to link an account")
-}
-
-// TestOpenIDHandlerLinkModeWithSessionProceedsPastSessionCheck confirms a
-// session already in context clears OpenIDHandler's own gate and reaches
-// linking.VerifySteamOpenIDCallback - an openid.mode other than "id_res"
-// makes that fail immediately on its own, without a real call to Steam, so
-// this only observes that we got past the session check (the "must be
-// logged in" error would mean we didn't), not that the OpenID exchange
-// itself succeeds.
-func TestOpenIDHandlerLinkModeWithSessionProceedsPastSessionCheck(t *testing.T) {
-	r := newOpenIDRequest(t, linking.ModeLink, "https://neuralnexus.test/done", "test-nonce", url.Values{
-		"openid.mode": {"cancel"},
+		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Bad Request", "Invalid request")
 	})
+}
+
+func TestAU18OpenIDHandlerLinkModeNoSession(t *testing.T) {
+	state := linking.OAuthState{Platform: auth.PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLink}
+	stateB64 := encodeState(t, state)
+	r := httptest.NewRequest(http.MethodGet, "/api/openid?state="+stateB64, nil)
+	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
+	w := httptest.NewRecorder()
+
+	t.Run("AU-18_OpenIDLinkModeNoSession", func(t *testing.T) {
+		OpenIDHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{})(w, r)
+
+		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, "Unauthorized", "You must be logged in to link an account")
+	})
+}
+
+func TestAU19OpenIDHandlerBadOpenIDMode(t *testing.T) {
+	state := linking.OAuthState{Platform: auth.PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	stateB64 := encodeState(t, state)
+	q := url.Values{"state": {stateB64}, "openid.mode": {"cancel"}}
+	r := httptest.NewRequest(http.MethodGet, "/api/openid?"+q.Encode(), nil)
+	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
+	w := httptest.NewRecorder()
+
+	t.Run("AU-19_OpenIDBadOpenIDMode", func(t *testing.T) {
+		OpenIDHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{})(w, r)
+
+		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusBadRequest, "Bad Request", "Invalid state")
+	})
+}
+
+func TestAU20OpenIDHandlerBadClaimedID(t *testing.T) {
+	state := linking.OAuthState{Platform: auth.PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	stateB64 := encodeState(t, state)
+	q := url.Values{"state": {stateB64}, "openid.mode": {"id_res"}, "openid.claimed_id": {"not-a-steam-id-url"}}
+	r := httptest.NewRequest(http.MethodGet, "/api/openid?"+q.Encode(), nil)
+	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
+	w := httptest.NewRecorder()
+
+	t.Run("AU-20_OpenIDBadClaimedID", func(t *testing.T) {
+		OpenIDHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{})(w, r)
+
+		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusBadRequest, "Bad Request", "Invalid state")
+	})
+}
+
+func TestAU22DecodeAndValidateStateHappyPath(t *testing.T) {
+	state := linking.OAuthState{Platform: auth.PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	stateB64 := encodeState(t, state)
+	r := httptest.NewRequest(http.MethodGet, "/api/oauth?state="+stateB64, nil)
+	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
+	w := httptest.NewRecorder()
+
+	t.Run("AU-22_DecodeAndValidateStateHappyPath", func(t *testing.T) {
+		got, ok := decodeAndValidateState(w, r)
+		if !ok {
+			t.Fatalf("expected ok=true, got false (body: %s)", w.Body.String())
+		}
+		if got != state {
+			t.Errorf("expected state %+v, got %+v", state, got)
+		}
+	})
+}
+
+func TestAU23DecodeAndValidateStateMissingParam(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/api/oauth", nil)
+	w := httptest.NewRecorder()
+
+	t.Run("AU-23_DecodeAndValidateStateMissingParam", func(t *testing.T) {
+		_, ok := decodeAndValidateState(w, r)
+		if ok {
+			t.Fatal("expected ok=false")
+		}
+		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Bad Request", "Invalid request")
+	})
+}
+
+func TestAU24DecodeAndValidateStateInvalidBase64(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/api/oauth?state=not-valid-base64!!!", nil)
+	w := httptest.NewRecorder()
+
+	t.Run("AU-24_DecodeAndValidateStateInvalidBase64", func(t *testing.T) {
+		_, ok := decodeAndValidateState(w, r)
+		if ok {
+			t.Fatal("expected ok=false")
+		}
+		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Bad Request", "Invalid state")
+	})
+}
+
+func TestAU25DecodeAndValidateStateInvalidJSON(t *testing.T) {
+	stateB64 := base64.URLEncoding.EncodeToString([]byte("not json"))
+	r := httptest.NewRequest(http.MethodGet, "/api/oauth?state="+stateB64, nil)
+	w := httptest.NewRecorder()
+
+	t.Run("AU-25_DecodeAndValidateStateInvalidJSON", func(t *testing.T) {
+		_, ok := decodeAndValidateState(w, r)
+		if ok {
+			t.Fatal("expected ok=false")
+		}
+		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Bad Request", "Invalid state")
+	})
+}
+
+func TestAU26DecodeAndValidateStateMissingRequiredField(t *testing.T) {
+	state := linking.OAuthState{Platform: "", Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	stateB64 := encodeState(t, state)
+	r := httptest.NewRequest(http.MethodGet, "/api/oauth?state="+stateB64, nil)
+	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
+	w := httptest.NewRecorder()
+
+	t.Run("AU-26_DecodeAndValidateStateMissingRequiredField", func(t *testing.T) {
+		_, ok := decodeAndValidateState(w, r)
+		if ok {
+			t.Fatal("expected ok=false")
+		}
+		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Bad Request", "Invalid state")
+	})
+}
+
+func TestAU27DecodeAndValidateStateDisallowedRedirect(t *testing.T) {
+	state := linking.OAuthState{Platform: auth.PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://evil.example.com/phish", Mode: linking.ModeLogin}
+	stateB64 := encodeState(t, state)
+	r := httptest.NewRequest(http.MethodGet, "/api/oauth?state="+stateB64, nil)
+	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
+	w := httptest.NewRecorder()
+
+	t.Run("AU-27_DecodeAndValidateStateDisallowedRedirect", func(t *testing.T) {
+		_, ok := decodeAndValidateState(w, r)
+		if ok {
+			t.Fatal("expected ok=false")
+		}
+		if loc := w.Header().Get("Location"); strings.Contains(loc, "evil.example.com") {
+			t.Fatalf("expected no redirect to the attacker's URL, got Location: %q", loc)
+		}
+		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Bad Request", "Invalid state")
+	})
+}
+
+func TestAU28DecodeAndValidateStateMissingNonceCookie(t *testing.T) {
+	state := linking.OAuthState{Platform: auth.PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	stateB64 := encodeState(t, state)
+	r := httptest.NewRequest(http.MethodGet, "/api/oauth?state="+stateB64, nil)
+	w := httptest.NewRecorder()
+
+	t.Run("AU-28_DecodeAndValidateStateMissingNonceCookie", func(t *testing.T) {
+		_, ok := decodeAndValidateState(w, r)
+		if ok {
+			t.Fatal("expected ok=false")
+		}
+		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Bad Request", "Invalid state")
+	})
+}
+
+func TestAU29DecodeAndValidateStateNonceMismatch(t *testing.T) {
+	state := linking.OAuthState{Platform: auth.PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	stateB64 := encodeState(t, state)
+	r := httptest.NewRequest(http.MethodGet, "/api/oauth?state="+stateB64, nil)
+	r.AddCookie(&http.Cookie{Name: "nonce", Value: "wrong-nonce"})
+	w := httptest.NewRecorder()
+
+	t.Run("AU-29_DecodeAndValidateStateNonceMismatch", func(t *testing.T) {
+		_, ok := decodeAndValidateState(w, r)
+		if ok {
+			t.Fatal("expected ok=false")
+		}
+		requireProblemRedirect(t, w, auth.NN_SITE_URL, http.StatusBadRequest, "Bad Request", "Invalid state")
+	})
+}
+
+func TestAU30RequireValidModeAndSessionLoginMode(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/api/oauth", nil)
+	w := httptest.NewRecorder()
+
+	t.Run("AU-30_RequireValidModeAndSessionLoginMode", func(t *testing.T) {
+		if ok := requireValidModeAndSession(w, r, linking.ModeLogin, "https://neuralnexus.test/done"); !ok {
+			t.Fatal("expected true for mode=login")
+		}
+		if loc := w.Header().Get("Location"); loc != "" {
+			t.Errorf("expected no response written, got a redirect to %q", loc)
+		}
+	})
+}
+
+func TestAU31RequireValidModeAndSessionLinkModeValidSession(t *testing.T) {
+	session := &auth.Session{UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
+	ctx := context.WithValue(context.Background(), mw.SessionKey, session)
+	r := httptest.NewRequest(http.MethodGet, "/api/oauth", nil).WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	t.Run("AU-31_RequireValidModeAndSessionLinkModeValidSession", func(t *testing.T) {
+		if ok := requireValidModeAndSession(w, r, linking.ModeLink, "https://neuralnexus.test/done"); !ok {
+			t.Fatal("expected true for a valid session")
+		}
+		if loc := w.Header().Get("Location"); loc != "" {
+			t.Errorf("expected no response written, got a redirect to %q", loc)
+		}
+	})
+}
+
+func TestAU32RequireValidModeAndSessionLinkModeNoSessionKey(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/api/oauth", nil)
+	w := httptest.NewRecorder()
+
+	t.Run("AU-32_RequireValidModeAndSessionLinkModeNoSessionKey", func(t *testing.T) {
+		if ok := requireValidModeAndSession(w, r, linking.ModeLink, "https://neuralnexus.test/done"); ok {
+			t.Fatal("expected false with no session in context")
+		}
+		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, "Unauthorized", "You must be logged in to link an account")
+	})
+}
+
+func TestAU33RequireValidModeAndSessionLinkModeNilSession(t *testing.T) {
+	ctx := context.WithValue(context.Background(), mw.SessionKey, (*auth.Session)(nil))
+	r := httptest.NewRequest(http.MethodGet, "/api/oauth", nil).WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	t.Run("AU-33_RequireValidModeAndSessionLinkModeNilSession", func(t *testing.T) {
+		if ok := requireValidModeAndSession(w, r, linking.ModeLink, "https://neuralnexus.test/done"); ok {
+			t.Fatal("expected false for a nil session")
+		}
+		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, "Unauthorized", "You must be logged in to link an account")
+	})
+}
+
+func TestAU34RequireValidModeAndSessionLinkModeExpiredSession(t *testing.T) {
+	session := &auth.Session{UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
+	ctx := context.WithValue(context.Background(), mw.SessionKey, session)
+	r := httptest.NewRequest(http.MethodGet, "/api/oauth", nil).WithContext(ctx)
+	w := httptest.NewRecorder()
+
+	t.Run("AU-34_RequireValidModeAndSessionLinkModeExpiredSession", func(t *testing.T) {
+		if ok := requireValidModeAndSession(w, r, linking.ModeLink, "https://neuralnexus.test/done"); ok {
+			t.Fatal("expected false for an expired session")
+		}
+		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, "Unauthorized", "You must be logged in to link an account")
+	})
+}
+
+func TestAU35RequireValidModeAndSessionUnrecognizedMode(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/api/oauth", nil)
+	w := httptest.NewRecorder()
+
+	t.Run("AU-35_RequireValidModeAndSessionUnrecognizedMode", func(t *testing.T) {
+		if ok := requireValidModeAndSession(w, r, linking.Mode("bogus-mode"), "https://neuralnexus.test/done"); ok {
+			t.Fatal("expected false for an unrecognized mode")
+		}
+		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusBadRequest, "Bad Request", "Invalid state")
+	})
+}
+
+func TestAU36CreateSessionJWTAndSetCookieHappyPath(t *testing.T) {
 	session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
-	ctx := context.WithValue(r.Context(), mw.SessionKey, session)
-	r = r.WithContext(ctx)
+	ss := &stubSessionService{createJWT: func(*auth.Session) (string, error) { return "test-jwt", nil }}
 	w := httptest.NewRecorder()
 
-	OpenIDHandler(&mockAccountService{}, &mockLinkAccountStore{}, &mockSessionService{})(w, r)
-
-	assertRedirectWithError(t, w, "https://neuralnexus.test/done", 400, "Bad Request", "Invalid state")
+	t.Run("AU-36_CreateSessionJWTAndSetCookieHappyPath", func(t *testing.T) {
+		if err := createSessionJWTAndSetCookie(ss, w, session); err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		cookie := findCookie(w, mw.SessionCookieName)
+		if cookie == nil {
+			t.Fatal("expected a session cookie to be set")
+		}
+		if cookie.Value != "test-jwt" {
+			t.Errorf("expected cookie value %q, got %q", "test-jwt", cookie.Value)
+		}
+		wantExpires := time.Unix(session.ExpiresAt, 0)
+		if !cookie.Expires.Equal(wantExpires) {
+			t.Errorf("expected cookie Expires %v, got %v", wantExpires, cookie.Expires)
+		}
+	})
 }
 
-// -------------- LogoutHandler --------------
-
-// TestLogoutHandlerClearsSessionCookie is the regression test for a real
-// bug: LogoutHandler deleted the server-side session but never cleared the
-// browser's session cookie, which kept sending it (SessionMiddleware now
-// reads that cookie) until its own ~24h expiry - see auth.go's sessionCookie
-// helper, now shared between setting and clearing it.
-func TestLogoutHandlerClearsSessionCookie(t *testing.T) {
+func TestAU37CreateSessionJWTAndSetCookieCreateJWTFails(t *testing.T) {
 	session := &auth.Session{ID: "s1", UserID: "u1"}
-	ctx := context.WithValue(context.Background(), mw.SessionKey, session)
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil).WithContext(ctx)
+	wantErr := errors.New("signing failed")
+	ss := &stubSessionService{createJWT: func(*auth.Session) (string, error) { return "", wantErr }}
 	w := httptest.NewRecorder()
-	ss := &mockSessionService{}
 
-	LogoutHandler(ss)(w, r)
-
-	if w.Code != http.StatusNoContent {
-		t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
-	}
-	if len(ss.deletedIDs) != 1 || ss.deletedIDs[0] != "s1" {
-		t.Errorf("expected DeleteSession to be called with the session ID, got: %v", ss.deletedIDs)
-	}
-
-	var sessionCookie *http.Cookie
-	for _, c := range w.Result().Cookies() {
-		if c.Name == mw.SessionCookieName {
-			sessionCookie = c
+	t.Run("AU-37_CreateSessionJWTAndSetCookieCreateJWTFails", func(t *testing.T) {
+		err := createSessionJWTAndSetCookie(ss, w, session)
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("expected %v, got %v", wantErr, err)
 		}
-	}
-	if sessionCookie == nil {
-		t.Fatal("expected LogoutHandler to set a Set-Cookie clearing the session cookie, got none")
-	}
-	if sessionCookie.Value != "" {
-		t.Errorf("expected the cleared cookie's value to be empty, got %q", sessionCookie.Value)
-	}
-	if !sessionCookie.Expires.Before(time.Now()) {
-		t.Errorf("expected the cleared cookie's Expires to be in the past, got %v", sessionCookie.Expires)
-	}
+		if findCookie(w, mw.SessionCookieName) != nil {
+			t.Error("expected no cookie to be set when CreateJWT fails")
+		}
+	})
 }
 
-func TestLogoutHandlerDoesNotClearCookieOnDeleteSessionError(t *testing.T) {
-	session := &auth.Session{ID: "s1", UserID: "u1"}
-	ctx := context.WithValue(context.Background(), mw.SessionKey, session)
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil).WithContext(ctx)
+func TestAU38RedirectWithErrorHappyPath(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	w := httptest.NewRecorder()
-	ss := &mockSessionService{deleteSessionErr: errors.New("db exploded")}
 
-	LogoutHandler(ss)(w, r)
-
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
-	}
-	for _, c := range w.Result().Cookies() {
-		if c.Name == mw.SessionCookieName {
-			t.Error("expected no session cookie to be set when DeleteSession fails")
-		}
-	}
+	t.Run("AU-38_RedirectWithErrorHappyPath", func(t *testing.T) {
+		redirectWithError(w, r, "https://neuralnexus.test/done", http.StatusBadRequest, "Bad Request", "something broke")
+		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusBadRequest, "Bad Request", "something broke")
+	})
 }
 
-// -------------- LoginHandler --------------
+func TestAU39RedirectWithErrorUnparseableTarget(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	w := httptest.NewRecorder()
+	target := "http://example.com/%zz"
 
-// TestLoginHandlerSetsSessionCookie confirms LoginHandler sets the session
-// cookie on a successful login - the JWT is only ever handed to the client
-// via that HttpOnly cookie, never echoed back in the response body, which
-// would otherwise let page JS (or an XSS) read it straight out of the
-// response and defeat the point of HttpOnly.
-func TestLoginHandlerSetsSessionCookie(t *testing.T) {
-	account, err := auth.NewAccount("testuser", "test@example.com", "correct-password")
+	t.Run("AU-39_RedirectWithErrorUnparseableTarget", func(t *testing.T) {
+		redirectWithError(w, r, target, http.StatusBadRequest, "Bad Request", "something broke")
+
+		if w.Code != http.StatusSeeOther {
+			t.Fatalf("expected 303, got %d: %s", w.Code, w.Body.String())
+		}
+		if loc := w.Header().Get("Location"); loc != target {
+			t.Errorf("expected redirect straight to %q with no problem param, got %q", target, loc)
+		}
+	})
+}
+
+func TestAU41RedirectBadRequest(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	w := httptest.NewRecorder()
+
+	t.Run("AU-41_RedirectBadRequest", func(t *testing.T) {
+		redirectBadRequest(w, r, "https://neuralnexus.test/done", "bad input")
+		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusBadRequest, "Bad Request", "bad input")
+	})
+}
+
+func TestAU42RedirectUnauthorized(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	w := httptest.NewRecorder()
+
+	t.Run("AU-42_RedirectUnauthorized", func(t *testing.T) {
+		redirectUnauthorized(w, r, "https://neuralnexus.test/done", "no session")
+		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, "Unauthorized", "no session")
+	})
+}
+
+func TestAU43RedirectInternalServerError(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	w := httptest.NewRecorder()
+
+	t.Run("AU-43_RedirectInternalServerError", func(t *testing.T) {
+		redirectInternalServerError(w, r, "https://neuralnexus.test/done", "boom")
+		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusInternalServerError, "Internal Server Error", "boom")
+	})
+}
+
+func TestAU44IsAllowedRedirectSameOrigin(t *testing.T) {
+	t.Run("AU-44_IsAllowedRedirectSameOrigin", func(t *testing.T) {
+		if !isAllowedRedirect(auth.NN_SITE_URL + "/some/path") {
+			t.Error("expected true for a same-origin redirect URI")
+		}
+	})
+}
+
+func TestAU45IsAllowedRedirectDifferentHost(t *testing.T) {
+	t.Run("AU-45_IsAllowedRedirectDifferentHost", func(t *testing.T) {
+		if isAllowedRedirect("https://evil.example.com/phish") {
+			t.Error("expected false for a different host")
+		}
+	})
+}
+
+func TestAU46IsAllowedRedirectDifferentScheme(t *testing.T) {
+	siteURL, err := url.Parse(auth.NN_SITE_URL)
 	if err != nil {
-		t.Fatalf("failed to build test account: %v", err)
-	}
-	as := &mockAccountService{account: account}
-	ss := &mockSessionService{
-		createJWTFunc: func(*auth.Session) (string, error) { return "test-jwt", nil },
-	}
-	body := `{"username":"testuser","password":"correct-password"}`
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(body))
-	w := httptest.NewRecorder()
-
-	LoginHandler(as, ss)(w, r)
-
-	if w.Code != http.StatusNoContent {
-		t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
-	}
-	if w.Body.Len() != 0 {
-		t.Errorf("expected an empty response body, got %q", w.Body.String())
+		t.Fatalf("failed to parse NN_SITE_URL: %v", err)
 	}
 
-	var sessionCookie *http.Cookie
-	for _, c := range w.Result().Cookies() {
-		if c.Name == mw.SessionCookieName {
-			sessionCookie = c
+	t.Run("AU-46_IsAllowedRedirectDifferentScheme", func(t *testing.T) {
+		if isAllowedRedirect("http://" + siteURL.Host + "/done") {
+			t.Error("expected false for a different scheme")
 		}
-	}
-	if sessionCookie == nil {
-		t.Fatal("expected LoginHandler to set a session cookie, got none")
-	}
-	if sessionCookie.Value != "test-jwt" {
-		t.Errorf("expected the session cookie's value to be the JWT, got %q", sessionCookie.Value)
-	}
-	if !sessionCookie.Expires.After(time.Now()) {
-		t.Errorf("expected the cookie's Expires to be in the future, got %v", sessionCookie.Expires)
-	}
+	})
 }
 
-func TestLoginHandlerRejectsBadPasswordWithoutCookie(t *testing.T) {
-	account, err := auth.NewAccount("testuser", "test@example.com", "correct-password")
-	if err != nil {
-		t.Fatalf("failed to build test account: %v", err)
-	}
-	as := &mockAccountService{account: account}
-	ss := &mockSessionService{}
-	body := `{"username":"testuser","password":"wrong-password"}`
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(body))
-	w := httptest.NewRecorder()
-
-	LoginHandler(as, ss)(w, r)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
-	}
-	for _, c := range w.Result().Cookies() {
-		if c.Name == mw.SessionCookieName {
-			t.Error("expected no session cookie to be set on a failed login")
+func TestAU47IsAllowedRedirectUnparseableRedirectURI(t *testing.T) {
+	t.Run("AU-47_IsAllowedRedirectUnparseableRedirectURI", func(t *testing.T) {
+		if isAllowedRedirect("http://example.com/%zz") {
+			t.Error("expected false for an unparseable redirect URI")
 		}
-	}
+	})
 }
 
-func TestLoginHandlerNoCookieOnCreateJWTError(t *testing.T) {
-	account, err := auth.NewAccount("testuser", "test@example.com", "correct-password")
-	if err != nil {
-		t.Fatalf("failed to build test account: %v", err)
-	}
-	as := &mockAccountService{account: account}
-	ss := &mockSessionService{
-		createJWTFunc: func(*auth.Session) (string, error) { return "", errors.New("jwt signing failed") },
-	}
-	body := `{"username":"testuser","password":"correct-password"}`
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(body))
-	w := httptest.NewRecorder()
+func TestAU48IsAllowedRedirectUnparseableSiteURL(t *testing.T) {
+	original := auth.NN_SITE_URL
+	auth.NN_SITE_URL = "http://example.com/%zz"
+	defer func() { auth.NN_SITE_URL = original }()
 
-	LoginHandler(as, ss)(w, r)
-
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
-	}
-	for _, c := range w.Result().Cookies() {
-		if c.Name == mw.SessionCookieName {
-			t.Error("expected no session cookie to be set when CreateJWT fails")
+	t.Run("AU-48_IsAllowedRedirectUnparseableSiteURL", func(t *testing.T) {
+		if isAllowedRedirect("https://neuralnexus.test/done") {
+			t.Error("expected false when NN_SITE_URL itself fails to parse")
 		}
-	}
+	})
 }
 
-func TestLoginHandlerNoCookieOnAddSessionError(t *testing.T) {
-	account, err := auth.NewAccount("testuser", "test@example.com", "correct-password")
-	if err != nil {
-		t.Fatalf("failed to build test account: %v", err)
-	}
-	as := &mockAccountService{account: account}
-	ss := &mockSessionService{
-		createJWTFunc: func(*auth.Session) (string, error) { return "test-jwt", nil },
-		addSessionErr: errors.New("db exploded"),
-	}
-	body := `{"username":"testuser","password":"correct-password"}`
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(body))
-	w := httptest.NewRecorder()
+func TestAU49SessionCookie(t *testing.T) {
+	expires := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
 
-	LoginHandler(as, ss)(w, r)
+	t.Run("AU-49_SessionCookie", func(t *testing.T) {
+		c := sessionCookie("abc", expires)
 
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
-	}
-	for _, c := range w.Result().Cookies() {
-		if c.Name == mw.SessionCookieName {
-			t.Error("expected no session cookie to be set when AddSession fails")
+		if c.Name != mw.SessionCookieName {
+			t.Errorf("expected Name %q, got %q", mw.SessionCookieName, c.Name)
 		}
-	}
-}
-
-// TestLoginHandlerPersistsSessionBeforeCreatingJWT is the regression test for
-// matching OAuthHandler/OpenIDHandler's order: those persist the session
-// (inside Process*Login) before ever minting a JWT via
-// issueSessionAndRedirect, whereas LoginHandler used to create the JWT
-// first and persist the session after - harmless today since CreateJWT has
-// no store dependency, but inconsistent, and would silently paper over a
-// future CreateJWT that assumes the session already exists in the store.
-// TestLoginHandlerNoCookieOnAddSessionError can't tell the two orders apart
-// (both produce a 500 with no cookie either way), so this asserts directly
-// that CreateJWT is never reached once AddSession has already failed.
-func TestLoginHandlerPersistsSessionBeforeCreatingJWT(t *testing.T) {
-	account, err := auth.NewAccount("testuser", "test@example.com", "correct-password")
-	if err != nil {
-		t.Fatalf("failed to build test account: %v", err)
-	}
-	as := &mockAccountService{account: account}
-	createJWTCalled := false
-	ss := &mockSessionService{
-		createJWTFunc: func(*auth.Session) (string, error) {
-			createJWTCalled = true
-			return "test-jwt", nil
-		},
-		addSessionErr: errors.New("db exploded"),
-	}
-	body := `{"username":"testuser","password":"correct-password"}`
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(body))
-	w := httptest.NewRecorder()
-
-	LoginHandler(as, ss)(w, r)
-
-	if createJWTCalled {
-		t.Error("expected CreateJWT to never be called once AddSession has already failed")
-	}
-}
-
-// TestLoginHandlerPaysHashCostOnUnknownAccount is the regression test for a
-// username/email enumeration timing side channel: a nonexistent account used
-// to fail instantly, while an existing account with a wrong password paid the
-// full Argon2id cost - letting an attacker infer account existence from
-// response time. LoginHandler now burns the same cost via
-// auth.DummyValidateUser on a lookup miss. 20ms is a wide margin below the
-// real cost (~140ms measured for these Argon2id params) while comfortably
-// above what an instant ErrNotFound return would take.
-// TestLoginHandlerRejectsCorrectPasswordWhenPasswordAuthDisabled is the
-// regression test for the account_settings guard: a correct password must
-// still be rejected, with the same generic message and no session cookie,
-// once password auth has been disabled for that account.
-func TestLoginHandlerRejectsCorrectPasswordWhenPasswordAuthDisabled(t *testing.T) {
-	account, err := auth.NewAccount("testuser", "test@example.com", "correct-password")
-	if err != nil {
-		t.Fatalf("failed to build test account: %v", err)
-	}
-	as := &mockAccountService{account: account, passwordAuthDisabled: true}
-	ss := &mockSessionService{}
-	body := `{"username":"testuser","password":"correct-password"}`
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(body))
-	w := httptest.NewRecorder()
-
-	LoginHandler(as, ss)(w, r)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
-	}
-	for _, c := range w.Result().Cookies() {
-		if c.Name == mw.SessionCookieName {
-			t.Error("expected no session cookie to be set when password auth is disabled")
+		if c.Value != "abc" {
+			t.Errorf("expected Value %q, got %q", "abc", c.Value)
 		}
-	}
-}
-
-// TestLoginHandlerPasswordAuthCheckErrorMapsTo500 verifies a failure to
-// check the password-auth setting fails closed (500, no cookie) rather than
-// silently letting the login through.
-func TestLoginHandlerPasswordAuthCheckErrorMapsTo500(t *testing.T) {
-	account, err := auth.NewAccount("testuser", "test@example.com", "correct-password")
-	if err != nil {
-		t.Fatalf("failed to build test account: %v", err)
-	}
-	as := &mockAccountService{account: account, passwordAuthErr: errors.New("db exploded")}
-	ss := &mockSessionService{}
-	body := `{"username":"testuser","password":"correct-password"}`
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(body))
-	w := httptest.NewRecorder()
-
-	LoginHandler(as, ss)(w, r)
-
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
-	}
-	for _, c := range w.Result().Cookies() {
-		if c.Name == mw.SessionCookieName {
-			t.Error("expected no session cookie to be set when the password-auth check fails")
+		if c.Domain != ".neuralnexus.dev" {
+			t.Errorf("expected Domain %q, got %q", ".neuralnexus.dev", c.Domain)
 		}
-	}
-}
-
-func TestLoginHandlerPaysHashCostOnUnknownAccount(t *testing.T) {
-	as := &mockAccountService{}
-	ss := &mockSessionService{}
-	body := `{"username":"no-such-user","password":"whatever"}`
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(body))
-	w := httptest.NewRecorder()
-
-	start := time.Now()
-	LoginHandler(as, ss)(w, r)
-	elapsed := time.Since(start)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
-	}
-	if elapsed < 20*time.Millisecond {
-		t.Errorf("expected the lookup-miss path to pay the dummy hash cost (~140ms), took %v", elapsed)
-	}
+		if c.Path != "/" {
+			t.Errorf("expected Path %q, got %q", "/", c.Path)
+		}
+		if !c.Expires.Equal(expires) {
+			t.Errorf("expected Expires %v, got %v", expires, c.Expires)
+		}
+		if !c.Secure {
+			t.Error("expected Secure=true")
+		}
+		if !c.HttpOnly {
+			t.Error("expected HttpOnly=true")
+		}
+		if c.SameSite != http.SameSiteLaxMode {
+			t.Errorf("expected SameSite=Lax, got %v", c.SameSite)
+		}
+	})
 }

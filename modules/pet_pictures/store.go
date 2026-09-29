@@ -2,10 +2,12 @@ package petpictures
 
 import (
 	"context"
+	"errors"
 	"os"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -24,8 +26,19 @@ import (
 //     name text not null,
 //     profile_picture text default null,
 //     created_at timestamp with time zone default current_timestamp,
-//     CONSTRAINT name_check UNIQUE ( name )
+//     CONSTRAINT name_check UNIQUE ( name ),
+//     CONSTRAINT pets_name_not_empty CHECK ( name <> '' )
 // );
+
+var ErrPetNameEmpty = errors.New("pet name must not be empty")
+
+func translatePetConstraintErr(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23514" && pgErr.ConstraintName == "pets_name_not_empty" {
+		return ErrPetNameEmpty
+	}
+	return err
+}
 
 // PetPicStore - Pet Picture Store
 type PetPicStore interface {
@@ -60,7 +73,7 @@ func (s *store) CreatePet(name string) (*Pet, error) {
 		"INSERT INTO pets (name) VALUES ($1) RETURNING id, name, profile_picture", name,
 	).Scan(&pet.ID, &pet.Name, &pet.ProfilePicture)
 	if err != nil {
-		return nil, err
+		return nil, translatePetConstraintErr(err)
 	}
 	return &pet, nil
 }
@@ -98,7 +111,7 @@ func (s *store) UpdatePet(pet *Pet) (*Pet, error) {
 
 	_, err := db.Query(context.Background(), "UPDATE pets SET name = $1, profile_picture = $2 WHERE id = $3", pet.Name, pet.ProfilePicture, pet.ID)
 	if err != nil {
-		return nil, err
+		return nil, translatePetConstraintErr(err)
 	}
 	return pet, nil
 }

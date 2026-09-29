@@ -13,374 +13,723 @@ import (
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 )
 
-// mockUserService implements auth.UserService for unit testing the
-// self-or-admin auth boundary and error-to-status mapping on the new
-// linked-account endpoints, without needing a real store.
-type mockUserService struct {
-	links              []*auth.LinkedAccount
-	unlinkErr          error
-	setEnableErr       error
-	settings           *auth.AccountSettings
-	getSettingsErr     error
-	setPasswordAuthErr error
+type stubUserService struct {
+	user    *auth.Account
+	userErr error
 
-	unlinkCalls          []auth.Platform
-	setEnableCalls       []bool
+	permissions    []string
+	permissionsErr error
+
+	updateUserErr error
+
+	updatedUser              *auth.Account
+	updateFromPlatformErr    error
+	updateFromPlatformCalled bool
+
+	deleteUserErr error
+
+	links    []*auth.LinkedAccount
+	linksErr error
+
+	unlinkErr   error
+	unlinkCalls []auth.Platform
+
+	setEnableErr   error
+	setEnableCalls []bool
+
+	settings       *auth.AccountSettings
+	getSettingsErr error
+
+	setPasswordAuthErr   error
 	setPasswordAuthCalls []bool
 }
 
-var _ auth.UserService = (*mockUserService)(nil)
+var _ auth.UserService = (*stubUserService)(nil)
 
-func (m *mockUserService) GetUser(string) (*auth.Account, error) { return nil, auth.ErrNotFound }
-func (m *mockUserService) GetUserFromPlatform(auth.Platform, string) (*auth.Account, error) {
-	return nil, auth.ErrNotFound
+func (s *stubUserService) GetUser(string) (*auth.Account, error) { return s.user, s.userErr }
+func (s *stubUserService) GetUserFromPlatform(auth.Platform, string) (*auth.Account, error) {
+	return s.user, s.userErr
 }
-func (m *mockUserService) GetUserPermissions(string) ([]string, error) { return nil, nil }
-func (m *mockUserService) UpdateUser(*auth.Account) error              { return nil }
-func (m *mockUserService) UpdateUserFromPlatform(auth.Platform, string, auth.PlatformData) (*auth.Account, error) {
-	return nil, nil
+func (s *stubUserService) GetUserPermissions(string) ([]string, error) {
+	return s.permissions, s.permissionsErr
 }
-func (m *mockUserService) DeleteUser(string) error { return nil }
+func (s *stubUserService) UpdateUser(user *auth.Account) error { return s.updateUserErr }
+func (s *stubUserService) UpdateUserFromPlatform(auth.Platform, string, auth.PlatformData) (*auth.Account, error) {
+	s.updateFromPlatformCalled = true
+	return s.updatedUser, s.updateFromPlatformErr
+}
+func (s *stubUserService) DeleteUser(string) error { return s.deleteUserErr }
+func (s *stubUserService) GetUserLinkedAccounts(string) ([]*auth.LinkedAccount, error) {
+	return s.links, s.linksErr
+}
+func (s *stubUserService) UnlinkPlatform(_ string, platform auth.Platform) error {
+	s.unlinkCalls = append(s.unlinkCalls, platform)
+	return s.unlinkErr
+}
+func (s *stubUserService) SetPlatformLoginEnabled(_ string, _ auth.Platform, enabled bool) error {
+	s.setEnableCalls = append(s.setEnableCalls, enabled)
+	return s.setEnableErr
+}
+func (s *stubUserService) GetAccountSettings(string) (*auth.AccountSettings, error) {
+	return s.settings, s.getSettingsErr
+}
+func (s *stubUserService) SetPasswordAuthEnabled(_ string, enabled bool) error {
+	s.setPasswordAuthCalls = append(s.setPasswordAuthCalls, enabled)
+	return s.setPasswordAuthErr
+}
 
-func (m *mockUserService) GetUserLinkedAccounts(string) ([]*auth.LinkedAccount, error) {
-	return m.links, nil
-}
-func (m *mockUserService) UnlinkPlatform(_ string, platform auth.Platform) error {
-	m.unlinkCalls = append(m.unlinkCalls, platform)
-	return m.unlinkErr
-}
-func (m *mockUserService) SetPlatformLoginEnabled(_ string, _ auth.Platform, enabled bool) error {
-	m.setEnableCalls = append(m.setEnableCalls, enabled)
-	return m.setEnableErr
-}
-func (m *mockUserService) GetAccountSettings(string) (*auth.AccountSettings, error) {
-	return m.settings, m.getSettingsErr
-}
-func (m *mockUserService) SetPasswordAuthEnabled(_ string, enabled bool) error {
-	m.setPasswordAuthCalls = append(m.setPasswordAuthCalls, enabled)
-	return m.setPasswordAuthErr
-}
-
-// requestAsSession builds a request with the given session in context and
-// user_id/platform path values set, mirroring what net/http's real routing
-// would populate from "/api/v1/users/{user_id}/link/{platform}".
-func requestAsSession(method string, session *auth.Session, userID, platform string) *http.Request {
+func newSessionRequest(method string, session *auth.Session, userID, platform, body string) *http.Request {
 	ctx := context.WithValue(context.Background(), mw.SessionKey, session)
-	r := httptest.NewRequest(method, "/", nil).WithContext(ctx)
-	r.SetPathValue("user_id", userID)
+	var r *http.Request
+	if body != "" {
+		r = httptest.NewRequest(method, "/", strings.NewReader(body)).WithContext(ctx)
+		r.Header.Set("Content-Type", "application/json")
+	} else {
+		r = httptest.NewRequest(method, "/", nil).WithContext(ctx)
+	}
+	if userID != "" {
+		r.SetPathValue("user_id", userID)
+	}
 	if platform != "" {
 		r.SetPathValue("platform", platform)
 	}
 	return r
 }
 
-func adminSession(userID string) *auth.Session {
+func selfSession(userID string) *auth.Session {
+	return &auth.Session{UserID: userID}
+}
+
+func adminUsersSession(userID string) *auth.Session {
 	return &auth.Session{UserID: userID, Permissions: []string{perms.ScopeAdminUsers.Name + "|" + perms.ScopeAdminUsers.Value}}
 }
 
-// -------------- GetUserLinkedAccountsHandler --------------
-
-func TestGetUserLinkedAccountsHandlerSelfAllowed(t *testing.T) {
-	svc := &mockUserService{links: []*auth.LinkedAccount{{Platform: auth.PlatformDiscord}}}
-	req := requestAsSession(http.MethodGet, &auth.Session{UserID: "u1"}, "u1", "")
-	w := httptest.NewRecorder()
-
-	GetUserLinkedAccountsHandler(svc)(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+func expectStatus(t *testing.T, w *httptest.ResponseRecorder, want int) {
+	t.Helper()
+	if w.Code != want {
+		t.Fatalf("expected %d, got %d: %s", want, w.Code, w.Body.String())
 	}
 }
 
-func TestGetUserLinkedAccountsHandlerCrossUserForbidden(t *testing.T) {
-	svc := &mockUserService{}
-	req := requestAsSession(http.MethodGet, &auth.Session{UserID: "u1"}, "someone-else", "")
+func TestUS01GetUserHandlerSelfHappyPath(t *testing.T) {
+	svc := &stubUserService{user: &auth.Account{UserID: "u1"}}
+	r := newSessionRequest(http.MethodGet, selfSession("u1"), "u1", "", "")
 	w := httptest.NewRecorder()
 
-	GetUserLinkedAccountsHandler(svc)(w, req)
+	t.Run("US-01_GetUserSelfHappyPath", func(t *testing.T) {
+		GetUserHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusOK)
+	})
+}
 
-	if w.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 for a cross-user request, got %d: %s", w.Code, w.Body.String())
+func TestUS02GetUserHandlerAdminHappyPath(t *testing.T) {
+	svc := &stubUserService{user: &auth.Account{UserID: "someone-else"}}
+	r := newSessionRequest(http.MethodGet, adminUsersSession("admin1"), "someone-else", "", "")
+	w := httptest.NewRecorder()
+
+	t.Run("US-02_GetUserAdminHappyPath", func(t *testing.T) {
+		GetUserHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusOK)
+	})
+}
+
+func TestUS03GetUserHandlerForbidden(t *testing.T) {
+	svc := &stubUserService{}
+	r := newSessionRequest(http.MethodGet, selfSession("u1"), "someone-else", "", "")
+	w := httptest.NewRecorder()
+
+	t.Run("US-03_GetUserForbidden", func(t *testing.T) {
+		GetUserHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusForbidden)
+	})
+}
+
+func TestUS04GetUserHandlerServiceErrorMapsTo404(t *testing.T) {
+	svc := &stubUserService{userErr: errors.New("db exploded")}
+	r := newSessionRequest(http.MethodGet, selfSession("u1"), "u1", "", "")
+	w := httptest.NewRecorder()
+
+	t.Run("US-04_GetUserServiceErrorMapsTo404", func(t *testing.T) {
+		GetUserHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusNotFound)
+	})
+}
+
+func TestUS05GetUserFromPlatformHandlerAdminHappyPath(t *testing.T) {
+	svc := &stubUserService{user: &auth.Account{UserID: "u1"}}
+	r := newSessionRequest(http.MethodGet, adminUsersSession("admin1"), "", "discord", "")
+	r.SetPathValue("platform_id", "12345")
+	w := httptest.NewRecorder()
+
+	t.Run("US-05_GetUserFromPlatformAdminHappyPath", func(t *testing.T) {
+		GetUserFromPlatformHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusOK)
+	})
+}
+
+func TestUS06GetUserFromPlatformHandlerForbidden(t *testing.T) {
+	svc := &stubUserService{}
+	r := newSessionRequest(http.MethodGet, selfSession("u1"), "", "discord", "")
+	r.SetPathValue("platform_id", "12345")
+	w := httptest.NewRecorder()
+
+	t.Run("US-06_GetUserFromPlatformForbidden", func(t *testing.T) {
+		GetUserFromPlatformHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusForbidden)
+	})
+}
+
+func TestUS07GetUserFromPlatformHandlerServiceErrorMapsTo404(t *testing.T) {
+	svc := &stubUserService{userErr: auth.ErrNotFound}
+	r := newSessionRequest(http.MethodGet, adminUsersSession("admin1"), "", "discord", "")
+	r.SetPathValue("platform_id", "12345")
+	w := httptest.NewRecorder()
+
+	t.Run("US-07_GetUserFromPlatformServiceErrorMapsTo404", func(t *testing.T) {
+		GetUserFromPlatformHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusNotFound)
+	})
+}
+
+func TestUS08GetUserPermissionsHandlerSelfHappyPath(t *testing.T) {
+	svc := &stubUserService{permissions: []string{"users|*"}}
+	r := newSessionRequest(http.MethodGet, selfSession("u1"), "u1", "", "")
+	w := httptest.NewRecorder()
+
+	t.Run("US-08_GetUserPermissionsSelfHappyPath", func(t *testing.T) {
+		GetUserPermissionsHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusOK)
+	})
+}
+
+func TestUS09GetUserPermissionsHandlerAdminHappyPath(t *testing.T) {
+	svc := &stubUserService{permissions: []string{"users|*"}}
+	r := newSessionRequest(http.MethodGet, adminUsersSession("admin1"), "someone-else", "", "")
+	w := httptest.NewRecorder()
+
+	t.Run("US-09_GetUserPermissionsAdminHappyPath", func(t *testing.T) {
+		GetUserPermissionsHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusOK)
+	})
+}
+
+func TestUS10GetUserPermissionsHandlerForbidden(t *testing.T) {
+	svc := &stubUserService{}
+	r := newSessionRequest(http.MethodGet, selfSession("u1"), "someone-else", "", "")
+	w := httptest.NewRecorder()
+
+	t.Run("US-10_GetUserPermissionsForbidden", func(t *testing.T) {
+		GetUserPermissionsHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusForbidden)
+	})
+}
+
+func TestUS11GetUserPermissionsHandlerServiceErrorMapsTo404(t *testing.T) {
+	svc := &stubUserService{permissionsErr: errors.New("db exploded")}
+	r := newSessionRequest(http.MethodGet, selfSession("u1"), "u1", "", "")
+	w := httptest.NewRecorder()
+
+	t.Run("US-11_GetUserPermissionsServiceErrorMapsTo404", func(t *testing.T) {
+		GetUserPermissionsHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusNotFound)
+	})
+}
+
+func TestUS12UpdateUserHandlerHappyPath(t *testing.T) {
+	svc := &stubUserService{}
+	r := newSessionRequest(http.MethodPatch, adminUsersSession("admin1"), "u1", "", `{"user_id":"someone-else","username":"newname"}`)
+	w := httptest.NewRecorder()
+
+	t.Run("US-12_UpdateUserHappyPath", func(t *testing.T) {
+		UpdateUserHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusOK)
+		if !strings.Contains(w.Body.String(), `"user_id":"u1"`) {
+			t.Errorf("expected the response user_id to be overridden with the path value, got %s", w.Body.String())
+		}
+	})
+}
+
+func TestUS13UpdateUserHandlerForbidden(t *testing.T) {
+	svc := &stubUserService{}
+	r := newSessionRequest(http.MethodPatch, selfSession("u1"), "u1", "", `{"username":"newname"}`)
+	w := httptest.NewRecorder()
+
+	t.Run("US-13_UpdateUserForbidden", func(t *testing.T) {
+		UpdateUserHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusForbidden)
+	})
+}
+
+func TestUS14UpdateUserHandlerMalformedBody(t *testing.T) {
+	svc := &stubUserService{}
+	r := newSessionRequest(http.MethodPatch, adminUsersSession("admin1"), "u1", "", `not json`)
+	w := httptest.NewRecorder()
+
+	t.Run("US-14_UpdateUserMalformedBody", func(t *testing.T) {
+		UpdateUserHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusBadRequest)
+	})
+}
+
+func TestUS15UpdateUserHandlerServiceErrorMapsTo400(t *testing.T) {
+	svc := &stubUserService{updateUserErr: errors.New("db exploded")}
+	r := newSessionRequest(http.MethodPatch, adminUsersSession("admin1"), "u1", "", `{"username":"newname"}`)
+	w := httptest.NewRecorder()
+
+	t.Run("US-15_UpdateUserServiceErrorMapsTo400", func(t *testing.T) {
+		UpdateUserHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusBadRequest)
+	})
+}
+
+func TestUS16to20UpdateUserFromPlatformHandlerPlatformHappyPaths(t *testing.T) {
+	tests := []struct {
+		id       string
+		name     string
+		platform string
+		body     string
+	}{
+		{"US-16", "Discord", "discord", `{"id":"123","username":"discorduser"}`},
+		{"US-17", "Minecraft", "minecraft", `{"id":"00000000-0000-0000-0000-000000000000","username":"mcuser","skins":[],"capes":[]}`},
+		{"US-18", "Twitch", "twitch", `{"id":"123","login":"twitchuser"}`},
+		{"US-19", "XboxLive", "xboxlive", `{"xuid":"123","gamertag":"xboxuser"}`},
+		{"US-20", "Microsoft", "microsoft", `{"sub":"123","name":"msuser"}`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.id+"_UpdateUserFromPlatform"+tc.name+"HappyPath", func(t *testing.T) {
+			svc := &stubUserService{updatedUser: &auth.Account{UserID: "u1"}}
+			r := newSessionRequest(http.MethodPatch, adminUsersSession("admin1"), "", tc.platform, tc.body)
+			r.SetPathValue("platform_id", "123")
+			w := httptest.NewRecorder()
+
+			UpdateUserFromPlatformHandler(svc)(w, r)
+
+			expectStatus(t, w, http.StatusOK)
+			if !svc.updateFromPlatformCalled {
+				t.Error("expected UpdateUserFromPlatform to be called")
+			}
+		})
 	}
 }
 
-func TestGetUserLinkedAccountsHandlerAdminAllowedCrossUser(t *testing.T) {
-	svc := &mockUserService{links: []*auth.LinkedAccount{{Platform: auth.PlatformDiscord}}}
-	req := requestAsSession(http.MethodGet, adminSession("admin1"), "someone-else", "")
+func TestUS21UpdateUserFromPlatformHandlerUnsupportedPlatform(t *testing.T) {
+	svc := &stubUserService{}
+	r := newSessionRequest(http.MethodPatch, adminUsersSession("admin1"), "", "bogus-platform", `{}`)
+	r.SetPathValue("platform_id", "123")
 	w := httptest.NewRecorder()
 
-	GetUserLinkedAccountsHandler(svc)(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200 for an admin request, got %d: %s", w.Code, w.Body.String())
-	}
+	t.Run("US-21_UpdateUserFromPlatformUnsupportedPlatform", func(t *testing.T) {
+		UpdateUserFromPlatformHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusBadRequest)
+		if svc.updateFromPlatformCalled {
+			t.Error("expected UpdateUserFromPlatform to never be called for an unsupported platform")
+		}
+	})
 }
 
-// -------------- GetAccountSettingsHandler --------------
-
-func TestGetAccountSettingsHandlerSelfAllowed(t *testing.T) {
-	svc := &mockUserService{settings: &auth.AccountSettings{UserID: "u1", PasswordAuthEnabled: true}}
-	req := requestAsSession(http.MethodGet, &auth.Session{UserID: "u1"}, "u1", "")
+func TestUS22UpdateUserFromPlatformHandlerForbidden(t *testing.T) {
+	svc := &stubUserService{}
+	r := newSessionRequest(http.MethodPatch, selfSession("u1"), "", "discord", `{"id":"123"}`)
+	r.SetPathValue("platform_id", "123")
 	w := httptest.NewRecorder()
 
-	GetAccountSettingsHandler(svc)(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
-	}
+	t.Run("US-22_UpdateUserFromPlatformForbidden", func(t *testing.T) {
+		UpdateUserFromPlatformHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusForbidden)
+		if svc.updateFromPlatformCalled {
+			t.Error("expected UpdateUserFromPlatform to never be called for a forbidden request")
+		}
+	})
 }
 
-func TestGetAccountSettingsHandlerCrossUserForbidden(t *testing.T) {
-	svc := &mockUserService{}
-	req := requestAsSession(http.MethodGet, &auth.Session{UserID: "u1"}, "someone-else", "")
+func TestUS23UpdateUserFromPlatformHandlerMalformedBody(t *testing.T) {
+	svc := &stubUserService{}
+	r := newSessionRequest(http.MethodPatch, adminUsersSession("admin1"), "", "discord", `not json`)
+	r.SetPathValue("platform_id", "123")
 	w := httptest.NewRecorder()
 
-	GetAccountSettingsHandler(svc)(w, req)
-
-	if w.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 for a cross-user request, got %d: %s", w.Code, w.Body.String())
-	}
+	t.Run("US-23_UpdateUserFromPlatformMalformedBody", func(t *testing.T) {
+		UpdateUserFromPlatformHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusBadRequest)
+		if svc.updateFromPlatformCalled {
+			t.Error("expected UpdateUserFromPlatform to never be called for a malformed body")
+		}
+	})
 }
 
-func TestGetAccountSettingsHandlerAdminAllowedCrossUser(t *testing.T) {
-	svc := &mockUserService{settings: &auth.AccountSettings{UserID: "someone-else", PasswordAuthEnabled: true}}
-	req := requestAsSession(http.MethodGet, adminSession("admin1"), "someone-else", "")
+func TestUS24UpdateUserFromPlatformHandlerServiceErrorMapsTo400(t *testing.T) {
+	svc := &stubUserService{updateFromPlatformErr: errors.New("db exploded")}
+	r := newSessionRequest(http.MethodPatch, adminUsersSession("admin1"), "", "discord", `{"id":"123"}`)
+	r.SetPathValue("platform_id", "123")
 	w := httptest.NewRecorder()
 
-	GetAccountSettingsHandler(svc)(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200 for an admin request, got %d: %s", w.Code, w.Body.String())
-	}
+	t.Run("US-24_UpdateUserFromPlatformServiceErrorMapsTo400", func(t *testing.T) {
+		UpdateUserFromPlatformHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusBadRequest)
+	})
 }
 
-func TestGetAccountSettingsHandlerErrorMapsTo500(t *testing.T) {
-	svc := &mockUserService{getSettingsErr: errors.New("db exploded")}
-	req := requestAsSession(http.MethodGet, &auth.Session{UserID: "u1"}, "u1", "")
+func TestUS25DeleteUserHandlerHappyPath(t *testing.T) {
+	svc := &stubUserService{}
+	r := newSessionRequest(http.MethodDelete, adminUsersSession("admin1"), "u1", "", "")
 	w := httptest.NewRecorder()
 
-	GetAccountSettingsHandler(svc)(w, req)
-
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
-	}
+	t.Run("US-25_DeleteUserHappyPath", func(t *testing.T) {
+		DeleteUserHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusNoContent)
+	})
 }
 
-// -------------- UnlinkPlatformHandler --------------
-
-func TestUnlinkPlatformHandlerCrossUserForbidden(t *testing.T) {
-	svc := &mockUserService{}
-	req := requestAsSession(http.MethodDelete, &auth.Session{UserID: "u1"}, "someone-else", "discord")
+func TestUS26DeleteUserHandlerForbidden(t *testing.T) {
+	svc := &stubUserService{}
+	r := newSessionRequest(http.MethodDelete, selfSession("u1"), "u1", "", "")
 	w := httptest.NewRecorder()
 
-	UnlinkPlatformHandler(svc)(w, req)
-
-	if w.Code != http.StatusForbidden {
-		t.Fatalf("expected 403, got %d: %s", w.Code, w.Body.String())
-	}
-	if len(svc.unlinkCalls) != 0 {
-		t.Error("expected UnlinkPlatform to never be called for a forbidden request")
-	}
+	t.Run("US-26_DeleteUserForbidden", func(t *testing.T) {
+		DeleteUserHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusForbidden)
+	})
 }
 
-func TestUnlinkPlatformHandlerSuccess(t *testing.T) {
-	svc := &mockUserService{}
-	req := requestAsSession(http.MethodDelete, &auth.Session{UserID: "u1"}, "u1", "discord")
+func TestUS27DeleteUserHandlerServiceErrorMapsTo400(t *testing.T) {
+	svc := &stubUserService{deleteUserErr: errors.New("db exploded")}
+	r := newSessionRequest(http.MethodDelete, adminUsersSession("admin1"), "u1", "", "")
 	w := httptest.NewRecorder()
 
-	UnlinkPlatformHandler(svc)(w, req)
-
-	if w.Code != http.StatusNoContent {
-		t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
-	}
-	if len(svc.unlinkCalls) != 1 || svc.unlinkCalls[0] != auth.PlatformDiscord {
-		t.Errorf("expected UnlinkPlatform to be called with discord, got: %v", svc.unlinkCalls)
-	}
+	t.Run("US-27_DeleteUserServiceErrorMapsTo400", func(t *testing.T) {
+		DeleteUserHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusBadRequest)
+	})
 }
 
-func TestUnlinkPlatformHandlerNotFoundMapsTo404(t *testing.T) {
-	svc := &mockUserService{unlinkErr: auth.ErrNotFound}
-	req := requestAsSession(http.MethodDelete, &auth.Session{UserID: "u1"}, "u1", "discord")
+func TestUS28GetUserLinkedAccountsHandlerSelfHappyPath(t *testing.T) {
+	svc := &stubUserService{links: []*auth.LinkedAccount{{Platform: auth.PlatformDiscord}}}
+	r := newSessionRequest(http.MethodGet, selfSession("u1"), "u1", "", "")
 	w := httptest.NewRecorder()
 
-	UnlinkPlatformHandler(svc)(w, req)
-
-	if w.Code != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
-	}
+	t.Run("US-28_GetUserLinkedAccountsSelfHappyPath", func(t *testing.T) {
+		GetUserLinkedAccountsHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusOK)
+	})
 }
 
-func TestUnlinkPlatformHandlerWouldLockAccountMapsTo400(t *testing.T) {
-	svc := &mockUserService{unlinkErr: auth.ErrWouldLockAccount}
-	req := requestAsSession(http.MethodDelete, &auth.Session{UserID: "u1"}, "u1", "discord")
+func TestUS29GetUserLinkedAccountsHandlerAdminHappyPath(t *testing.T) {
+	svc := &stubUserService{links: []*auth.LinkedAccount{{Platform: auth.PlatformDiscord}}}
+	r := newSessionRequest(http.MethodGet, adminUsersSession("admin1"), "someone-else", "", "")
 	w := httptest.NewRecorder()
 
-	UnlinkPlatformHandler(svc)(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for ErrWouldLockAccount, got %d: %s", w.Code, w.Body.String())
-	}
+	t.Run("US-29_GetUserLinkedAccountsAdminHappyPath", func(t *testing.T) {
+		GetUserLinkedAccountsHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusOK)
+	})
 }
 
-// -------------- SetPlatformLoginEnabledHandler --------------
-
-func requestWithJSONBody(method string, session *auth.Session, userID, platform, body string) *http.Request {
-	ctx := context.WithValue(context.Background(), mw.SessionKey, session)
-	r := httptest.NewRequest(method, "/", strings.NewReader(body)).WithContext(ctx)
-	r.Header.Set("Content-Type", "application/json")
-	r.SetPathValue("user_id", userID)
-	r.SetPathValue("platform", platform)
-	return r
-}
-
-func TestSetPlatformLoginEnabledHandlerCrossUserForbidden(t *testing.T) {
-	svc := &mockUserService{}
-	req := requestWithJSONBody(http.MethodPatch, &auth.Session{UserID: "u1"}, "someone-else", "discord", `{"login_enabled":false}`)
+func TestUS30GetUserLinkedAccountsHandlerForbidden(t *testing.T) {
+	svc := &stubUserService{}
+	r := newSessionRequest(http.MethodGet, selfSession("u1"), "someone-else", "", "")
 	w := httptest.NewRecorder()
 
-	SetPlatformLoginEnabledHandler(svc)(w, req)
-
-	if w.Code != http.StatusForbidden {
-		t.Fatalf("expected 403, got %d: %s", w.Code, w.Body.String())
-	}
+	t.Run("US-30_GetUserLinkedAccountsForbidden", func(t *testing.T) {
+		GetUserLinkedAccountsHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusForbidden)
+	})
 }
 
-func TestSetPlatformLoginEnabledHandlerSuccess(t *testing.T) {
-	svc := &mockUserService{}
-	req := requestWithJSONBody(http.MethodPatch, &auth.Session{UserID: "u1"}, "u1", "discord", `{"login_enabled":false}`)
+func TestUS31GetUserLinkedAccountsHandlerServiceErrorMapsTo500(t *testing.T) {
+	svc := &stubUserService{linksErr: errors.New("db exploded")}
+	r := newSessionRequest(http.MethodGet, selfSession("u1"), "u1", "", "")
 	w := httptest.NewRecorder()
 
-	SetPlatformLoginEnabledHandler(svc)(w, req)
-
-	if w.Code != http.StatusNoContent {
-		t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
-	}
-	if len(svc.setEnableCalls) != 1 || svc.setEnableCalls[0] != false {
-		t.Errorf("expected SetPlatformLoginEnabled(false) to be called, got: %v", svc.setEnableCalls)
-	}
+	t.Run("US-31_GetUserLinkedAccountsServiceErrorMapsTo500", func(t *testing.T) {
+		GetUserLinkedAccountsHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusInternalServerError)
+	})
 }
 
-func TestSetPlatformLoginEnabledHandlerWouldLockAccountMapsTo400(t *testing.T) {
-	svc := &mockUserService{setEnableErr: auth.ErrWouldLockAccount}
-	req := requestWithJSONBody(http.MethodPatch, &auth.Session{UserID: "u1"}, "u1", "discord", `{"login_enabled":false}`)
+func TestUS32UnlinkPlatformHandlerHappyPath(t *testing.T) {
+	svc := &stubUserService{}
+	r := newSessionRequest(http.MethodDelete, selfSession("u1"), "u1", "discord", "")
 	w := httptest.NewRecorder()
 
-	SetPlatformLoginEnabledHandler(svc)(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for ErrWouldLockAccount, got %d: %s", w.Code, w.Body.String())
-	}
+	t.Run("US-32_UnlinkPlatformHappyPath", func(t *testing.T) {
+		UnlinkPlatformHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusNoContent)
+		if len(svc.unlinkCalls) != 1 || svc.unlinkCalls[0] != auth.PlatformDiscord {
+			t.Errorf("expected UnlinkPlatform(discord) to be called, got %v", svc.unlinkCalls)
+		}
+	})
 }
 
-func TestSetPlatformLoginEnabledHandlerUnverifiedMapsTo400(t *testing.T) {
-	svc := &mockUserService{setEnableErr: auth.ErrLinkedAccountUnverified}
-	req := requestWithJSONBody(http.MethodPatch, &auth.Session{UserID: "u1"}, "u1", "discord", `{"login_enabled":true}`)
+func TestUS33UnlinkPlatformHandlerForbidden(t *testing.T) {
+	svc := &stubUserService{}
+	r := newSessionRequest(http.MethodDelete, selfSession("u1"), "someone-else", "discord", "")
 	w := httptest.NewRecorder()
 
-	SetPlatformLoginEnabledHandler(svc)(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for ErrLinkedAccountUnverified, got %d: %s", w.Code, w.Body.String())
-	}
+	t.Run("US-33_UnlinkPlatformForbidden", func(t *testing.T) {
+		UnlinkPlatformHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusForbidden)
+		if len(svc.unlinkCalls) != 0 {
+			t.Error("expected UnlinkPlatform to never be called for a forbidden request")
+		}
+	})
 }
 
-func TestSetPlatformLoginEnabledHandlerInvalidBodyRejected(t *testing.T) {
-	svc := &mockUserService{}
-	req := requestWithJSONBody(http.MethodPatch, &auth.Session{UserID: "u1"}, "u1", "discord", `not json`)
+func TestUS34UnlinkPlatformHandlerNotFoundMapsTo404(t *testing.T) {
+	svc := &stubUserService{unlinkErr: auth.ErrNotFound}
+	r := newSessionRequest(http.MethodDelete, selfSession("u1"), "u1", "discord", "")
 	w := httptest.NewRecorder()
 
-	SetPlatformLoginEnabledHandler(svc)(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for an invalid body, got %d: %s", w.Code, w.Body.String())
-	}
-	if len(svc.setEnableCalls) != 0 {
-		t.Error("expected SetPlatformLoginEnabled to never be called for an invalid body")
-	}
+	t.Run("US-34_UnlinkPlatformNotFoundMapsTo404", func(t *testing.T) {
+		UnlinkPlatformHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusNotFound)
+	})
 }
 
-func TestSetPlatformLoginEnabledHandlerMissingFieldRejected(t *testing.T) {
-	svc := &mockUserService{}
-	req := requestWithJSONBody(http.MethodPatch, &auth.Session{UserID: "u1"}, "u1", "discord", `{}`)
+func TestUS35UnlinkPlatformHandlerWouldLockAccountMapsTo400(t *testing.T) {
+	svc := &stubUserService{unlinkErr: auth.ErrWouldLockAccount}
+	r := newSessionRequest(http.MethodDelete, selfSession("u1"), "u1", "discord", "")
 	w := httptest.NewRecorder()
 
-	SetPlatformLoginEnabledHandler(svc)(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 when login_enabled is omitted, got %d: %s", w.Code, w.Body.String())
-	}
-	if len(svc.setEnableCalls) != 0 {
-		t.Error("expected SetPlatformLoginEnabled to never be called when login_enabled is omitted")
-	}
+	t.Run("US-35_UnlinkPlatformWouldLockAccountMapsTo400", func(t *testing.T) {
+		UnlinkPlatformHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusBadRequest)
+	})
 }
 
-// -------------- UpdateAccountSettingsHandler --------------
-
-func TestUpdateAccountSettingsHandlerCrossUserForbidden(t *testing.T) {
-	svc := &mockUserService{}
-	req := requestWithJSONBody(http.MethodPatch, &auth.Session{UserID: "u1"}, "someone-else", "", `{"password_auth":false}`)
+func TestUS36UnlinkPlatformHandlerUnclassifiedErrorMapsTo500(t *testing.T) {
+	svc := &stubUserService{unlinkErr: errors.New("db exploded")}
+	r := newSessionRequest(http.MethodDelete, selfSession("u1"), "u1", "discord", "")
 	w := httptest.NewRecorder()
 
-	UpdateAccountSettingsHandler(svc)(w, req)
-
-	if w.Code != http.StatusForbidden {
-		t.Fatalf("expected 403, got %d: %s", w.Code, w.Body.String())
-	}
-	if len(svc.setPasswordAuthCalls) != 0 {
-		t.Error("expected SetPasswordAuthEnabled to never be called for a forbidden request")
-	}
+	t.Run("US-36_UnlinkPlatformUnclassifiedErrorMapsTo500", func(t *testing.T) {
+		UnlinkPlatformHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusInternalServerError)
+	})
 }
 
-func TestUpdateAccountSettingsHandlerSuccess(t *testing.T) {
-	svc := &mockUserService{}
-	req := requestWithJSONBody(http.MethodPatch, &auth.Session{UserID: "u1"}, "u1", "", `{"password_auth":false}`)
+func TestUS37SetPlatformLoginEnabledHandlerHappyPath(t *testing.T) {
+	svc := &stubUserService{}
+	r := newSessionRequest(http.MethodPatch, selfSession("u1"), "u1", "discord", `{"login_enabled":true}`)
 	w := httptest.NewRecorder()
 
-	UpdateAccountSettingsHandler(svc)(w, req)
-
-	if w.Code != http.StatusNoContent {
-		t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
-	}
-	if len(svc.setPasswordAuthCalls) != 1 || svc.setPasswordAuthCalls[0] != false {
-		t.Errorf("expected SetPasswordAuthEnabled(false) to be called, got: %v", svc.setPasswordAuthCalls)
-	}
+	t.Run("US-37_SetPlatformLoginEnabledHappyPath", func(t *testing.T) {
+		SetPlatformLoginEnabledHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusNoContent)
+		if len(svc.setEnableCalls) != 1 || svc.setEnableCalls[0] != true {
+			t.Errorf("expected SetPlatformLoginEnabled(true), got %v", svc.setEnableCalls)
+		}
+	})
 }
 
-func TestUpdateAccountSettingsHandlerWouldLockAccountMapsTo400(t *testing.T) {
-	svc := &mockUserService{setPasswordAuthErr: auth.ErrWouldLockAccount}
-	req := requestWithJSONBody(http.MethodPatch, &auth.Session{UserID: "u1"}, "u1", "", `{"password_auth":false}`)
+func TestUS38SetPlatformLoginEnabledHandlerForbidden(t *testing.T) {
+	svc := &stubUserService{}
+	r := newSessionRequest(http.MethodPatch, selfSession("u1"), "someone-else", "discord", `{"login_enabled":true}`)
 	w := httptest.NewRecorder()
 
-	UpdateAccountSettingsHandler(svc)(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for ErrWouldLockAccount, got %d: %s", w.Code, w.Body.String())
-	}
+	t.Run("US-38_SetPlatformLoginEnabledForbidden", func(t *testing.T) {
+		SetPlatformLoginEnabledHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusForbidden)
+	})
 }
 
-func TestUpdateAccountSettingsHandlerNoPasswordSetMapsTo400(t *testing.T) {
-	svc := &mockUserService{setPasswordAuthErr: auth.ErrNoPasswordSet}
-	req := requestWithJSONBody(http.MethodPatch, &auth.Session{UserID: "u1"}, "u1", "", `{"password_auth":true}`)
+func TestUS39SetPlatformLoginEnabledHandlerMalformedBody(t *testing.T) {
+	svc := &stubUserService{}
+	r := newSessionRequest(http.MethodPatch, selfSession("u1"), "u1", "discord", `not json`)
 	w := httptest.NewRecorder()
 
-	UpdateAccountSettingsHandler(svc)(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for ErrNoPasswordSet, got %d: %s", w.Code, w.Body.String())
-	}
+	t.Run("US-39_SetPlatformLoginEnabledMalformedBody", func(t *testing.T) {
+		SetPlatformLoginEnabledHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusBadRequest)
+		if len(svc.setEnableCalls) != 0 {
+			t.Error("expected SetPlatformLoginEnabled to never be called for a malformed body")
+		}
+	})
 }
 
-func TestUpdateAccountSettingsHandlerMissingFieldRejected(t *testing.T) {
-	svc := &mockUserService{}
-	req := requestWithJSONBody(http.MethodPatch, &auth.Session{UserID: "u1"}, "u1", "", `{}`)
+func TestUS40SetPlatformLoginEnabledHandlerMissingField(t *testing.T) {
+	svc := &stubUserService{}
+	r := newSessionRequest(http.MethodPatch, selfSession("u1"), "u1", "discord", `{}`)
 	w := httptest.NewRecorder()
 
-	UpdateAccountSettingsHandler(svc)(w, req)
+	t.Run("US-40_SetPlatformLoginEnabledMissingField", func(t *testing.T) {
+		SetPlatformLoginEnabledHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusBadRequest)
+		if len(svc.setEnableCalls) != 0 {
+			t.Error("expected SetPlatformLoginEnabled to never be called when login_enabled is omitted")
+		}
+	})
+}
 
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 when password_auth is omitted, got %d: %s", w.Code, w.Body.String())
-	}
-	if len(svc.setPasswordAuthCalls) != 0 {
-		t.Error("expected SetPasswordAuthEnabled to never be called when password_auth is omitted")
-	}
+func TestUS41SetPlatformLoginEnabledHandlerNotFoundMapsTo404(t *testing.T) {
+	svc := &stubUserService{setEnableErr: auth.ErrNotFound}
+	r := newSessionRequest(http.MethodPatch, selfSession("u1"), "u1", "discord", `{"login_enabled":true}`)
+	w := httptest.NewRecorder()
+
+	t.Run("US-41_SetPlatformLoginEnabledNotFoundMapsTo404", func(t *testing.T) {
+		SetPlatformLoginEnabledHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusNotFound)
+	})
+}
+
+func TestUS42SetPlatformLoginEnabledHandlerWouldLockAccountMapsTo400(t *testing.T) {
+	svc := &stubUserService{setEnableErr: auth.ErrWouldLockAccount}
+	r := newSessionRequest(http.MethodPatch, selfSession("u1"), "u1", "discord", `{"login_enabled":false}`)
+	w := httptest.NewRecorder()
+
+	t.Run("US-42_SetPlatformLoginEnabledWouldLockAccountMapsTo400", func(t *testing.T) {
+		SetPlatformLoginEnabledHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusBadRequest)
+	})
+}
+
+func TestUS43SetPlatformLoginEnabledHandlerUnverifiedMapsTo400(t *testing.T) {
+	svc := &stubUserService{setEnableErr: auth.ErrLinkedAccountUnverified}
+	r := newSessionRequest(http.MethodPatch, selfSession("u1"), "u1", "discord", `{"login_enabled":true}`)
+	w := httptest.NewRecorder()
+
+	t.Run("US-43_SetPlatformLoginEnabledUnverifiedMapsTo400", func(t *testing.T) {
+		SetPlatformLoginEnabledHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusBadRequest)
+	})
+}
+
+func TestUS44SetPlatformLoginEnabledHandlerUnclassifiedErrorMapsTo500(t *testing.T) {
+	svc := &stubUserService{setEnableErr: errors.New("db exploded")}
+	r := newSessionRequest(http.MethodPatch, selfSession("u1"), "u1", "discord", `{"login_enabled":true}`)
+	w := httptest.NewRecorder()
+
+	t.Run("US-44_SetPlatformLoginEnabledUnclassifiedErrorMapsTo500", func(t *testing.T) {
+		SetPlatformLoginEnabledHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusInternalServerError)
+	})
+}
+
+func TestUS45GetAccountSettingsHandlerSelfHappyPath(t *testing.T) {
+	svc := &stubUserService{settings: &auth.AccountSettings{UserID: "u1", PasswordAuthEnabled: true}}
+	r := newSessionRequest(http.MethodGet, selfSession("u1"), "u1", "", "")
+	w := httptest.NewRecorder()
+
+	t.Run("US-45_GetAccountSettingsSelfHappyPath", func(t *testing.T) {
+		GetAccountSettingsHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusOK)
+	})
+}
+
+func TestUS46GetAccountSettingsHandlerAdminHappyPath(t *testing.T) {
+	svc := &stubUserService{settings: &auth.AccountSettings{UserID: "someone-else", PasswordAuthEnabled: true}}
+	r := newSessionRequest(http.MethodGet, adminUsersSession("admin1"), "someone-else", "", "")
+	w := httptest.NewRecorder()
+
+	t.Run("US-46_GetAccountSettingsAdminHappyPath", func(t *testing.T) {
+		GetAccountSettingsHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusOK)
+	})
+}
+
+func TestUS47GetAccountSettingsHandlerForbidden(t *testing.T) {
+	svc := &stubUserService{}
+	r := newSessionRequest(http.MethodGet, selfSession("u1"), "someone-else", "", "")
+	w := httptest.NewRecorder()
+
+	t.Run("US-47_GetAccountSettingsForbidden", func(t *testing.T) {
+		GetAccountSettingsHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusForbidden)
+	})
+}
+
+func TestUS48GetAccountSettingsHandlerServiceErrorMapsTo500(t *testing.T) {
+	svc := &stubUserService{getSettingsErr: errors.New("db exploded")}
+	r := newSessionRequest(http.MethodGet, selfSession("u1"), "u1", "", "")
+	w := httptest.NewRecorder()
+
+	t.Run("US-48_GetAccountSettingsServiceErrorMapsTo500", func(t *testing.T) {
+		GetAccountSettingsHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusInternalServerError)
+	})
+}
+
+func TestUS49UpdateAccountSettingsHandlerHappyPath(t *testing.T) {
+	svc := &stubUserService{}
+	r := newSessionRequest(http.MethodPatch, selfSession("u1"), "u1", "", `{"password_auth":true}`)
+	w := httptest.NewRecorder()
+
+	t.Run("US-49_UpdateAccountSettingsHappyPath", func(t *testing.T) {
+		UpdateAccountSettingsHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusNoContent)
+		if len(svc.setPasswordAuthCalls) != 1 || svc.setPasswordAuthCalls[0] != true {
+			t.Errorf("expected SetPasswordAuthEnabled(true), got %v", svc.setPasswordAuthCalls)
+		}
+	})
+}
+
+func TestUS50UpdateAccountSettingsHandlerForbidden(t *testing.T) {
+	svc := &stubUserService{}
+	r := newSessionRequest(http.MethodPatch, selfSession("u1"), "someone-else", "", `{"password_auth":true}`)
+	w := httptest.NewRecorder()
+
+	t.Run("US-50_UpdateAccountSettingsForbidden", func(t *testing.T) {
+		UpdateAccountSettingsHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusForbidden)
+		if len(svc.setPasswordAuthCalls) != 0 {
+			t.Error("expected SetPasswordAuthEnabled to never be called for a forbidden request")
+		}
+	})
+}
+
+func TestUS51UpdateAccountSettingsHandlerMalformedBody(t *testing.T) {
+	svc := &stubUserService{}
+	r := newSessionRequest(http.MethodPatch, selfSession("u1"), "u1", "", `not json`)
+	w := httptest.NewRecorder()
+
+	t.Run("US-51_UpdateAccountSettingsMalformedBody", func(t *testing.T) {
+		UpdateAccountSettingsHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusBadRequest)
+	})
+}
+
+func TestUS52UpdateAccountSettingsHandlerMissingField(t *testing.T) {
+	svc := &stubUserService{}
+	r := newSessionRequest(http.MethodPatch, selfSession("u1"), "u1", "", `{}`)
+	w := httptest.NewRecorder()
+
+	t.Run("US-52_UpdateAccountSettingsMissingField", func(t *testing.T) {
+		UpdateAccountSettingsHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusBadRequest)
+		if len(svc.setPasswordAuthCalls) != 0 {
+			t.Error("expected SetPasswordAuthEnabled to never be called when password_auth is omitted")
+		}
+	})
+}
+
+func TestUS53UpdateAccountSettingsHandlerWouldLockAccountMapsTo400(t *testing.T) {
+	svc := &stubUserService{setPasswordAuthErr: auth.ErrWouldLockAccount}
+	r := newSessionRequest(http.MethodPatch, selfSession("u1"), "u1", "", `{"password_auth":false}`)
+	w := httptest.NewRecorder()
+
+	t.Run("US-53_UpdateAccountSettingsWouldLockAccountMapsTo400", func(t *testing.T) {
+		UpdateAccountSettingsHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusBadRequest)
+	})
+}
+
+func TestUS54UpdateAccountSettingsHandlerNoPasswordSetMapsTo400(t *testing.T) {
+	svc := &stubUserService{setPasswordAuthErr: auth.ErrNoPasswordSet}
+	r := newSessionRequest(http.MethodPatch, selfSession("u1"), "u1", "", `{"password_auth":true}`)
+	w := httptest.NewRecorder()
+
+	t.Run("US-54_UpdateAccountSettingsNoPasswordSetMapsTo400", func(t *testing.T) {
+		UpdateAccountSettingsHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusBadRequest)
+	})
+}
+
+func TestUS55UpdateAccountSettingsHandlerUnclassifiedErrorMapsTo500(t *testing.T) {
+	svc := &stubUserService{setPasswordAuthErr: errors.New("db exploded")}
+	r := newSessionRequest(http.MethodPatch, selfSession("u1"), "u1", "", `{"password_auth":true}`)
+	w := httptest.NewRecorder()
+
+	t.Run("US-55_UpdateAccountSettingsUnclassifiedErrorMapsTo500", func(t *testing.T) {
+		UpdateAccountSettingsHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusInternalServerError)
+	})
 }
