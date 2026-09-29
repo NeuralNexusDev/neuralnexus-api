@@ -83,7 +83,7 @@
 | ST-05 | LinkAccount | Accessor | | | Same pointer-identity check | P3 |  |
 | ST-06 | RateLimit | Accessor | | | Same pointer-identity check | P3 |  |
 | ST-07 | OAuthToken | Accessor | | | Same pointer-identity check | P3 |  |
-| ST-08 | translateAccountConstraintErr | Edge Case | `err` is not a `*pgconn.PgError` | plain `errors.New("boom")` | Returned unchanged | P1 |  |
+| ST-08 | translateAccountConstraintErr | Edge Case | `err` is not a `*pgconn.PgError` | a plain error that is not a `*pgconn.PgError` (`errBoom`) | Returned unchanged | P1 |  |
 | ST-09 | translateAccountConstraintErr | Edge Case | `*pgconn.PgError` with `Code != "23505"` | | Returned unchanged | P2 |  |
 | ST-10 | translateAccountConstraintErr | Edge Case | `Code == "23505"`, unrecognized `ConstraintName` | | Returned unchanged (falls through the switch) | P1 |  |
 | ST-11 | translateAccountConstraintErr | Happy Path | `Code == "23505"`, `ConstraintName == "accounts_email_key"` | | Returns `ErrEmailAlreadyExists` | P0 |  |
