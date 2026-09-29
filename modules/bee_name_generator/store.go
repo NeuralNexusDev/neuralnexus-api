@@ -82,8 +82,12 @@ func (s *store) GetBeeNameSuggestions(amount int64) ([]string, error) {
 		beeNames = append(beeNames, beeName)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
 	if len(beeNames) == 0 {
-		return []string{}, err
+		return []string{}, nil
 	}
 	return beeNames, nil
 }

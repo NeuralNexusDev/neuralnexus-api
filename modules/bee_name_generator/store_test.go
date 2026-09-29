@@ -1,13 +1,16 @@
 package beenamegenerator
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/google/uuid"
@@ -67,6 +70,81 @@ func bngLiveDB(t *testing.T) *pgxpool.Pool {
 func bngLiveStore(t *testing.T) (*store, *pgxpool.Pool) {
 	db := bngLiveDB(t)
 	return &store{db: db}, db
+}
+
+// bngTruncatingConn relays the server's response to the first query written
+// after armed is set with its trailing CommandComplete/ReadyForQuery cut
+// off, then fails the next read, so the client hits an error mid-result.
+type bngTruncatingConn struct {
+	net.Conn
+	armed   *atomic.Bool
+	queried bool
+	pending []byte
+	failed  bool
+}
+
+func (c *bngTruncatingConn) Write(b []byte) (int, error) {
+	if c.armed.Load() {
+		c.queried = true
+	}
+	return c.Conn.Write(b)
+}
+
+func (c *bngTruncatingConn) Read(b []byte) (int, error) {
+	if len(c.pending) > 0 {
+		n := copy(b, c.pending)
+		c.pending = c.pending[n:]
+		return n, nil
+	}
+	if c.failed {
+		return 0, io.ErrUnexpectedEOF
+	}
+	if !c.queried {
+		return c.Conn.Read(b)
+	}
+	readyForQuery := []byte{'Z', 0, 0, 0, 5, 'I'}
+	var resp []byte
+	buf := make([]byte, 4096)
+	for !bytes.HasSuffix(resp, readyForQuery) {
+		n, err := c.Conn.Read(buf)
+		resp = append(resp, buf[:n]...)
+		if err != nil {
+			return 0, err
+		}
+	}
+	const tail = 25
+	c.pending, c.failed, c.queried = resp[:len(resp)-tail], true, false
+	return c.Read(b)
+}
+
+func bngPoolCuttingFirstResult(t *testing.T) (*pgxpool.Pool, *atomic.Bool) {
+	t.Helper()
+	dsn := os.Getenv("TEST_POSTGRES_URL")
+	if dsn == "" {
+		t.Skip("TEST_POSTGRES_URL not set; skipping live-Postgres test")
+	}
+	cfg, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		t.Fatalf("failed to parse TEST_POSTGRES_URL: %v", err)
+	}
+	var armed atomic.Bool
+	cfg.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
+	cfg.ConnConfig.DialFunc = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		conn, err := (&net.Dialer{}).DialContext(ctx, network, addr)
+		if err != nil {
+			return nil, err
+		}
+		return &bngTruncatingConn{Conn: conn, armed: &armed}, nil
+	}
+	pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("failed to create pool: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	if err := pool.Ping(context.Background()); err != nil {
+		t.Fatalf("failed to warm the pool: %v", err)
+	}
+	return pool, &armed
 }
 
 func bngUniqueName(prefix string) string {
@@ -346,6 +424,33 @@ func TestST12to14_GetBeeNameSuggestions(t *testing.T) {
 		}
 		if len(got) != n {
 			t.Errorf("got %d suggestions, want %d", len(got), n)
+		}
+	})
+
+	t.Run("ST-23_Live_IterationError", func(t *testing.T) {
+		seed, db := bngLiveStore(t)
+		bngClearTable(t, db, "bee_name_suggestion")
+		names := make([]string, 5)
+		for i := range names {
+			names[i] = bngUniqueName("sugg")
+			if _, err := seed.SubmitBeeName(names[i]); err != nil {
+				t.Fatalf("seed SubmitBeeName() error = %v", err)
+			}
+		}
+		t.Cleanup(func() {
+			for _, name := range names {
+				_, _ = seed.RejectBeeNameSuggestion(name)
+			}
+		})
+
+		pool, armed := bngPoolCuttingFirstResult(t)
+		armed.Store(true)
+		got, err := (&store{db: pool}).GetBeeNameSuggestions(int64(len(names)))
+		if err == nil {
+			t.Error("GetBeeNameSuggestions() error = nil, want the iteration error")
+		}
+		if got != nil {
+			t.Errorf("got %v, want nil alongside an iteration error", got)
 		}
 	})
 }
