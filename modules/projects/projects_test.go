@@ -93,8 +93,8 @@ func TestGetReleases(t *testing.T) {
 		if err == nil {
 			t.Fatal("getReleases() error = nil, want non-nil")
 		}
-		if err.Error() != "GITHUB_TOKEN is not set" {
-			t.Errorf("getReleases() error = %q, want %q", err.Error(), "GITHUB_TOKEN is not set")
+		if !errors.Is(err, ErrGitHubTokenUnset) {
+			t.Errorf("getReleases() error = %v, want %v", err, ErrGitHubTokenUnset)
 		}
 		if releases != nil {
 			t.Errorf("getReleases() releases = %+v, want nil", releases)
@@ -362,7 +362,7 @@ func TestGetReleasesHandler(t *testing.T) {
 		if rec.Code != http.StatusInternalServerError {
 			t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
 		}
-		wantBody := "GITHUB_TOKEN is not set\n"
+		wantBody := ErrGitHubTokenUnset.Error() + "\n"
 		if got := rec.Body.String(); got != wantBody {
 			t.Errorf("body = %q, want %q", got, wantBody)
 		}

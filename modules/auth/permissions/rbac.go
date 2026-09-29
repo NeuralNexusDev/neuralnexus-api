@@ -102,6 +102,8 @@ var (
 
 // -------------- Functions --------------
 
+var ErrRoleNotFound = errors.New("role not found")
+
 // GetRoleByName gets a role by name
 func GetRoleByName(name string) (Role, error) {
 	switch name {
@@ -110,6 +112,6 @@ func GetRoleByName(name string) (Role, error) {
 	case RoleOwner.Name:
 		return RoleOwner, nil
 	default:
-		return Role{}, errors.New("role not found")
+		return Role{}, ErrRoleNotFound
 	}
 }

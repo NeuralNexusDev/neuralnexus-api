@@ -56,10 +56,12 @@ type Release struct {
 	URL     string `json:"html_url"`
 }
 
+var ErrGitHubTokenUnset = errors.New("GITHUB_TOKEN is not set")
+
 // -------------- Functions --------------
 func getReleases(group string, project string) ([]Release, error) {
 	if githubToken == "" {
-		return nil, errors.New("GITHUB_TOKEN is not set")
+		return nil, ErrGitHubTokenUnset
 	}
 
 	githubURL := "https://api.github.com/repos/" + group + "/" + project + "/releases"

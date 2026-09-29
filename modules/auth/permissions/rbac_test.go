@@ -1,6 +1,7 @@
 package perms
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 )
@@ -61,8 +62,8 @@ func TestGetRoleByName(t *testing.T) {
 		if err == nil {
 			t.Fatalf("GetRoleByName(\"unknown-role\") returned nil error, want an error")
 		}
-		if err.Error() != "role not found" {
-			t.Errorf("GetRoleByName(\"unknown-role\") error = %q, want %q", err.Error(), "role not found")
+		if !errors.Is(err, ErrRoleNotFound) {
+			t.Errorf("GetRoleByName(\"unknown-role\") error = %v, want %v", err, ErrRoleNotFound)
 		}
 		if !reflect.DeepEqual(got, Role{}) {
 			t.Errorf("GetRoleByName(\"unknown-role\") role = %+v, want zero value", got)
@@ -74,8 +75,8 @@ func TestGetRoleByName(t *testing.T) {
 		if err == nil {
 			t.Fatalf("GetRoleByName(\"\") returned nil error, want an error")
 		}
-		if err.Error() != "role not found" {
-			t.Errorf("GetRoleByName(\"\") error = %q, want %q", err.Error(), "role not found")
+		if !errors.Is(err, ErrRoleNotFound) {
+			t.Errorf("GetRoleByName(\"\") error = %v, want %v", err, ErrRoleNotFound)
 		}
 		if !reflect.DeepEqual(got, Role{}) {
 			t.Errorf("GetRoleByName(\"\") role = %+v, want zero value", got)
@@ -87,8 +88,8 @@ func TestGetRoleByName(t *testing.T) {
 		if err == nil {
 			t.Fatalf("GetRoleByName(\"System\") returned nil error, want an error")
 		}
-		if err.Error() != "role not found" {
-			t.Errorf("GetRoleByName(\"System\") error = %q, want %q", err.Error(), "role not found")
+		if !errors.Is(err, ErrRoleNotFound) {
+			t.Errorf("GetRoleByName(\"System\") error = %v, want %v", err, ErrRoleNotFound)
 		}
 		if !reflect.DeepEqual(got, Role{}) {
 			t.Errorf("GetRoleByName(\"System\") role = %+v, want zero value", got)
