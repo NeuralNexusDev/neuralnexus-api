@@ -40,8 +40,9 @@ var steamClaimedIDPattern = regexp.MustCompile(`^https://steamcommunity\.com/ope
 // assertion (malformed, unsigned, or rejected by Steam) as distinct from a
 // network/service failure reaching Steam, so callers can map the two to
 // different response codes.
+var ErrInvalidAssertion = errors.New("invalid openid assertion")
+
 var (
-	ErrInvalidAssertion = errors.New("invalid openid assertion")
 	errSteamAPIKeyUnset = errors.New("STEAM_API_KEY is not set")
 	errSteamNoPlayers   = errors.New("steam player summary response contained no players")
 )

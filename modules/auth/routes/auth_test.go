@@ -440,7 +440,7 @@ func TestAU15OAuthHandlerLinkModeNoSession(t *testing.T) {
 	t.Run("AU-15_OAuthLinkModeNoSession", func(t *testing.T) {
 		OAuthHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{})(w, r)
 
-		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, "You must be logged in to link an account")
+		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, msgLoginRequiredToLink)
 	})
 }
 
@@ -592,7 +592,7 @@ func TestAU18OpenIDHandlerLinkModeNoSession(t *testing.T) {
 	t.Run("AU-18_OpenIDLinkModeNoSession", func(t *testing.T) {
 		OpenIDHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{})(w, r)
 
-		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, "You must be logged in to link an account")
+		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, msgLoginRequiredToLink)
 	})
 }
 
@@ -788,7 +788,7 @@ func TestAU32RequireValidModeAndSessionLinkModeNoSessionKey(t *testing.T) {
 		if ok := requireValidModeAndSession(w, r, linking.ModeLink, "https://neuralnexus.test/done"); ok {
 			t.Fatal("expected false with no session in context")
 		}
-		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, "You must be logged in to link an account")
+		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, msgLoginRequiredToLink)
 	})
 }
 
@@ -801,7 +801,7 @@ func TestAU33RequireValidModeAndSessionLinkModeNilSession(t *testing.T) {
 		if ok := requireValidModeAndSession(w, r, linking.ModeLink, "https://neuralnexus.test/done"); ok {
 			t.Fatal("expected false for a nil session")
 		}
-		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, "You must be logged in to link an account")
+		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, msgLoginRequiredToLink)
 	})
 }
 
@@ -815,7 +815,7 @@ func TestAU34RequireValidModeAndSessionLinkModeExpiredSession(t *testing.T) {
 		if ok := requireValidModeAndSession(w, r, linking.ModeLink, "https://neuralnexus.test/done"); ok {
 			t.Fatal("expected false for an expired session")
 		}
-		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, "You must be logged in to link an account")
+		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, msgLoginRequiredToLink)
 	})
 }
 

@@ -15,12 +15,13 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
-// Login struct for login request
 const (
-	msgInvalidRequest = "Invalid request"
-	msgInvalidState   = "Invalid state"
+	msgInvalidRequest      = "Invalid request"
+	msgInvalidState        = "Invalid state"
+	msgLoginRequiredToLink = "You must be logged in to link an account"
 )
 
+// Login struct for login request
 type Login struct {
 	Username string `json:"username" xml:"username" validate:"required_without=GetEmail"`
 	Email    string `json:"email" xml:"email" validate:"required_without=GetUsername"`
@@ -256,7 +257,7 @@ func requireValidModeAndSession(w http.ResponseWriter, r *http.Request, mode lin
 		if session, ok := r.Context().Value(mw.SessionKey).(*auth.Session); ok && session != nil && session.IsValid() {
 			return true
 		}
-		redirectUnauthorized(w, r, redirectURI, "You must be logged in to link an account")
+		redirectUnauthorized(w, r, redirectURI, msgLoginRequiredToLink)
 		return false
 	default:
 		log.Println("Invalid mode")

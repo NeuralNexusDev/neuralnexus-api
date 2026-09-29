@@ -262,12 +262,11 @@ func TestSV03to13_GetMojangPlayerByName(t *testing.T) {
 	})
 
 	t.Run("SV-04_CacheErrorNotNil", func(t *testing.T) {
-		boom := errBoom
-		store := &mcMockStore{getPlayerFromCache: func(string) (*Player, error) { return nil, boom }}
+		store := &mcMockStore{getPlayerFromCache: func(string) (*Player, error) { return nil, errBoom }}
 		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) { t.Fatal("should not call Mojang") })
 		_, err := s.GetMojangPlayerByName("Steve")
-		if !errors.Is(err, boom) {
-			t.Errorf("err = %v, want %v", err, boom)
+		if !errors.Is(err, errBoom) {
+			t.Errorf("err = %v, want %v", err, errBoom)
 		}
 	})
 
@@ -291,15 +290,14 @@ func TestSV03to13_GetMojangPlayerByName(t *testing.T) {
 	})
 
 	t.Run("SV-06_DBFreshSetCacheFails", func(t *testing.T) {
-		boom := errBoom
 		store := &mcMockStore{
 			getPlayerByName:  func(string) (*Player, error) { return &Player{ID: "db", LastSeen: mcNow()}, nil },
-			setPlayerInCache: func(*Player) error { return boom },
+			setPlayerInCache: func(*Player) error { return errBoom },
 		}
 		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) { t.Fatal("should not call Mojang") })
 		_, err := s.GetMojangPlayerByName("Steve")
-		if !errors.Is(err, boom) {
-			t.Errorf("err = %v, want %v", err, boom)
+		if !errors.Is(err, errBoom) {
+			t.Errorf("err = %v, want %v", err, errBoom)
 		}
 	})
 
@@ -352,26 +350,24 @@ func TestSV03to13_GetMojangPlayerByName(t *testing.T) {
 	})
 
 	t.Run("SV-11_UpsertPlayerFails", func(t *testing.T) {
-		boom := errBoom
-		store := &mcMockStore{upsertPlayer: func(*Player, bool) error { return boom }}
+		store := &mcMockStore{upsertPlayer: func(*Player, bool) error { return errBoom }}
 		s := mcNewService(t, store, func(w http.ResponseWriter, r *http.Request) {
 			io.WriteString(w, mcMustJSON(t, Player{ID: "fetched"}))
 		})
 		_, err := s.GetMojangPlayerByName("Steve")
-		if !errors.Is(err, boom) {
-			t.Errorf("err = %v, want %v", err, boom)
+		if !errors.Is(err, errBoom) {
+			t.Errorf("err = %v, want %v", err, errBoom)
 		}
 	})
 
 	t.Run("SV-12_SetPlayerInCacheFails", func(t *testing.T) {
-		boom := errBoom
-		store := &mcMockStore{setPlayerInCache: func(*Player) error { return boom }}
+		store := &mcMockStore{setPlayerInCache: func(*Player) error { return errBoom }}
 		s := mcNewService(t, store, func(w http.ResponseWriter, r *http.Request) {
 			io.WriteString(w, mcMustJSON(t, Player{ID: "fetched"}))
 		})
 		_, err := s.GetMojangPlayerByName("Steve")
-		if !errors.Is(err, boom) {
-			t.Errorf("err = %v, want %v", err, boom)
+		if !errors.Is(err, errBoom) {
+			t.Errorf("err = %v, want %v", err, errBoom)
 		}
 	})
 
@@ -395,12 +391,11 @@ func TestSV14to18_GetMojangPlayerByUUID(t *testing.T) {
 	})
 
 	t.Run("SV-15_CacheErrorNotNil", func(t *testing.T) {
-		boom := errBoom
-		store := &mcMockStore{getPlayerFromCache: func(string) (*Player, error) { return nil, boom }}
+		store := &mcMockStore{getPlayerFromCache: func(string) (*Player, error) { return nil, errBoom }}
 		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) { t.Fatal("should not call Mojang") })
 		_, err := s.GetMojangPlayerByUUID("id")
-		if !errors.Is(err, boom) {
-			t.Errorf("err = %v, want %v", err, boom)
+		if !errors.Is(err, errBoom) {
+			t.Errorf("err = %v, want %v", err, errBoom)
 		}
 	})
 
@@ -474,15 +469,14 @@ func TestSV19to29_GetMojangPlayersByNames(t *testing.T) {
 	})
 
 	t.Run("SV-23_DBFreshSetCacheFails", func(t *testing.T) {
-		boom := errBoom
 		store := &mcMockStore{
 			getPlayerByName:  func(name string) (*Player, error) { return &Player{ID: name, LastSeen: mcNow()}, nil },
-			setPlayerInCache: func(*Player) error { return boom },
+			setPlayerInCache: func(*Player) error { return errBoom },
 		}
 		s := mcNewService(t, store, nil)
 		_, err := s.GetMojangPlayersByNames([]string{"a"})
-		if !errors.Is(err, boom) {
-			t.Errorf("err = %v, want %v", err, boom)
+		if !errors.Is(err, errBoom) {
+			t.Errorf("err = %v, want %v", err, errBoom)
 		}
 	})
 
@@ -525,26 +519,24 @@ func TestSV19to29_GetMojangPlayersByNames(t *testing.T) {
 	})
 
 	t.Run("SV-28_UpsertFailsOnFetched", func(t *testing.T) {
-		boom := errBoom
-		store := &mcMockStore{upsertPlayer: func(*Player, bool) error { return boom }}
+		store := &mcMockStore{upsertPlayer: func(*Player, bool) error { return errBoom }}
 		s := mcNewService(t, store, func(w http.ResponseWriter, r *http.Request) {
 			io.WriteString(w, mcMustJSON(t, []Player{{ID: "fetched"}}))
 		})
 		_, err := s.GetMojangPlayersByNames([]string{"a"})
-		if !errors.Is(err, boom) {
-			t.Errorf("err = %v, want %v", err, boom)
+		if !errors.Is(err, errBoom) {
+			t.Errorf("err = %v, want %v", err, errBoom)
 		}
 	})
 
 	t.Run("SV-29_SetCacheFailsOnFetched", func(t *testing.T) {
-		boom := errBoom
-		store := &mcMockStore{setPlayerInCache: func(*Player) error { return boom }}
+		store := &mcMockStore{setPlayerInCache: func(*Player) error { return errBoom }}
 		s := mcNewService(t, store, func(w http.ResponseWriter, r *http.Request) {
 			io.WriteString(w, mcMustJSON(t, []Player{{ID: "fetched"}}))
 		})
 		_, err := s.GetMojangPlayersByNames([]string{"a"})
-		if !errors.Is(err, boom) {
-			t.Errorf("err = %v, want %v", err, boom)
+		if !errors.Is(err, errBoom) {
+			t.Errorf("err = %v, want %v", err, errBoom)
 		}
 	})
 }
@@ -560,12 +552,11 @@ func TestSV30to35_GetMojangProfile(t *testing.T) {
 	})
 
 	t.Run("SV-31_SignedCacheErrorNotNil", func(t *testing.T) {
-		boom := errBoom
-		store := &mcMockStore{getSignedProfileFromCache: func(string) (*Player, error) { return nil, boom }}
+		store := &mcMockStore{getSignedProfileFromCache: func(string) (*Player, error) { return nil, errBoom }}
 		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) { t.Fatal("should not call Mojang") })
 		_, err := s.GetMojangProfile("id", true)
-		if !errors.Is(err, boom) {
-			t.Errorf("err = %v, want %v", err, boom)
+		if !errors.Is(err, errBoom) {
+			t.Errorf("err = %v, want %v", err, errBoom)
 		}
 	})
 
@@ -601,12 +592,11 @@ func TestSV30to35_GetMojangProfile(t *testing.T) {
 	})
 
 	t.Run("SV-35_UnsignedResolveFails", func(t *testing.T) {
-		boom := errBoom
-		store := &mcMockStore{getProfileFromCache: func(string) (*Profile, error) { return nil, boom }}
+		store := &mcMockStore{getProfileFromCache: func(string) (*Profile, error) { return nil, errBoom }}
 		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) { t.Fatal("should not call Mojang") })
 		_, err := s.GetMojangProfile("id", false)
-		if !errors.Is(err, boom) {
-			t.Errorf("err = %v, want %v", err, boom)
+		if !errors.Is(err, errBoom) {
+			t.Errorf("err = %v, want %v", err, errBoom)
 		}
 	})
 }
@@ -644,12 +634,11 @@ func TestSV36to39_GetProfile(t *testing.T) {
 	})
 
 	t.Run("SV-38_ResolveProfileFails", func(t *testing.T) {
-		boom := errBoom
-		store := &mcMockStore{getProfileFromCache: func(string) (*Profile, error) { return nil, boom }}
+		store := &mcMockStore{getProfileFromCache: func(string) (*Profile, error) { return nil, errBoom }}
 		s := mcNewService(t, store, nil)
 		_, err := s.GetProfile("id")
-		if !errors.Is(err, boom) {
-			t.Errorf("err = %v, want %v", err, boom)
+		if !errors.Is(err, errBoom) {
+			t.Errorf("err = %v, want %v", err, errBoom)
 		}
 	})
 
@@ -695,15 +684,14 @@ func TestSV40to42_GetProfileByName(t *testing.T) {
 	})
 
 	t.Run("SV-42_ProfileLookupFailsAfterName", func(t *testing.T) {
-		boom := errBoom
 		store := &mcMockStore{
 			getPlayerFromCache:  func(string) (*Player, error) { return &Player{ID: "id"}, nil },
-			getProfileFromCache: func(string) (*Profile, error) { return nil, boom },
+			getProfileFromCache: func(string) (*Profile, error) { return nil, errBoom },
 		}
 		s := mcNewService(t, store, nil)
 		_, err := s.GetProfileByName("Steve")
-		if !errors.Is(err, boom) {
-			t.Errorf("err = %v, want %v", err, boom)
+		if !errors.Is(err, errBoom) {
+			t.Errorf("err = %v, want %v", err, errBoom)
 		}
 	})
 }
@@ -719,12 +707,11 @@ func TestSV43to50_ResolveProfile(t *testing.T) {
 	})
 
 	t.Run("SV-44_CacheErrorNotNil", func(t *testing.T) {
-		boom := errBoom
-		store := &mcMockStore{getProfileFromCache: func(string) (*Profile, error) { return nil, boom }}
+		store := &mcMockStore{getProfileFromCache: func(string) (*Profile, error) { return nil, errBoom }}
 		s := mcNewService(t, store, nil)
 		_, err := s.resolveProfile("id")
-		if !errors.Is(err, boom) {
-			t.Errorf("err = %v, want %v", err, boom)
+		if !errors.Is(err, errBoom) {
+			t.Errorf("err = %v, want %v", err, errBoom)
 		}
 	})
 
@@ -751,15 +738,14 @@ func TestSV43to50_ResolveProfile(t *testing.T) {
 	})
 
 	t.Run("SV-47_SetCacheFails", func(t *testing.T) {
-		boom := errBoom
 		store := &mcMockStore{
 			getProfileByUUID:  func(string) (*Profile, error) { return &Profile{ID: "db", LastSeen: mcNow()}, nil },
-			setProfileInCache: func(*Profile) error { return boom },
+			setProfileInCache: func(*Profile) error { return errBoom },
 		}
 		s := mcNewService(t, store, nil)
 		_, err := s.resolveProfile("id")
-		if !errors.Is(err, boom) {
-			t.Errorf("err = %v, want %v", err, boom)
+		if !errors.Is(err, errBoom) {
+			t.Errorf("err = %v, want %v", err, errBoom)
 		}
 	})
 
@@ -894,14 +880,13 @@ func TestSV51to63_FetchProfileFromMojang(t *testing.T) {
 	})
 
 	t.Run("SV-58_UpsertPlayerFails", func(t *testing.T) {
-		boom := errBoom
-		store := &mcMockStore{upsertPlayer: func(*Player, bool) error { return boom }}
+		store := &mcMockStore{upsertPlayer: func(*Player, bool) error { return errBoom }}
 		s := mcNewService(t, store, func(w http.ResponseWriter, r *http.Request) {
 			io.WriteString(w, mcMustJSON(t, Player{ID: "id"}))
 		})
 		_, _, err := s.fetchProfileFromMojang("id", false)
-		if !errors.Is(err, boom) {
-			t.Errorf("err = %v, want %v", err, boom)
+		if !errors.Is(err, errBoom) {
+			t.Errorf("err = %v, want %v", err, errBoom)
 		}
 	})
 
@@ -942,26 +927,24 @@ func TestSV51to63_FetchProfileFromMojang(t *testing.T) {
 	})
 
 	t.Run("SV-62_SignedSetCacheFails", func(t *testing.T) {
-		boom := errBoom
-		store := &mcMockStore{setSignedProfileInCache: func(*Player) error { return boom }}
+		store := &mcMockStore{setSignedProfileInCache: func(*Player) error { return errBoom }}
 		s := mcNewService(t, store, func(w http.ResponseWriter, r *http.Request) {
 			io.WriteString(w, mcMustJSON(t, Player{ID: "id"}))
 		})
 		_, _, err := s.fetchProfileFromMojang("id", true)
-		if !errors.Is(err, boom) {
-			t.Errorf("err = %v, want %v", err, boom)
+		if !errors.Is(err, errBoom) {
+			t.Errorf("err = %v, want %v", err, errBoom)
 		}
 	})
 
 	t.Run("SV-63_UnsignedSetCacheFails", func(t *testing.T) {
-		boom := errBoom
-		store := &mcMockStore{setProfileInCache: func(*Profile) error { return boom }}
+		store := &mcMockStore{setProfileInCache: func(*Profile) error { return errBoom }}
 		s := mcNewService(t, store, func(w http.ResponseWriter, r *http.Request) {
 			io.WriteString(w, mcMustJSON(t, Player{ID: "id"}))
 		})
 		_, _, err := s.fetchProfileFromMojang("id", false)
-		if !errors.Is(err, boom) {
-			t.Errorf("err = %v, want %v", err, boom)
+		if !errors.Is(err, errBoom) {
+			t.Errorf("err = %v, want %v", err, errBoom)
 		}
 	})
 }
@@ -1029,14 +1012,13 @@ func TestSV64to71_GetGeyserXUID(t *testing.T) {
 	})
 
 	t.Run("SV-70_UpsertFails", func(t *testing.T) {
-		boom := errBoom
-		store := &mcMockStore{upsertGeyserPlayer: func(*GeyserPlayer) error { return boom }}
+		store := &mcMockStore{upsertGeyserPlayer: func(*GeyserPlayer) error { return errBoom }}
 		s := mcNewService(t, store, func(w http.ResponseWriter, r *http.Request) {
 			io.WriteString(w, `{"xuid": 42}`)
 		})
 		_, err := s.GetGeyserXUID("Notch")
-		if !errors.Is(err, boom) {
-			t.Errorf("err = %v, want %v", err, boom)
+		if !errors.Is(err, errBoom) {
+			t.Errorf("err = %v, want %v", err, errBoom)
 		}
 	})
 
@@ -1119,14 +1101,13 @@ func TestSV72to78_GetGeyserSkin(t *testing.T) {
 	})
 
 	t.Run("SV-78_UpsertFails", func(t *testing.T) {
-		boom := errBoom
-		store := &mcMockStore{upsertGeyserSkin: func(int64, *GeyserSkin) error { return boom }}
+		store := &mcMockStore{upsertGeyserSkin: func(int64, *GeyserSkin) error { return errBoom }}
 		s := mcNewService(t, store, func(w http.ResponseWriter, r *http.Request) {
 			io.WriteString(w, mcMustJSON(t, GeyserSkin{Hash: "fetched"}))
 		})
 		_, err := s.GetGeyserSkin(1)
-		if !errors.Is(err, boom) {
-			t.Errorf("err = %v, want %v", err, boom)
+		if !errors.Is(err, errBoom) {
+			t.Errorf("err = %v, want %v", err, errBoom)
 		}
 	})
 }
@@ -1184,14 +1165,13 @@ func TestSV79to84_ResolveGeyserPlayerByXUID(t *testing.T) {
 	})
 
 	t.Run("SV-84_UpsertFails", func(t *testing.T) {
-		boom := errBoom
-		store := &mcMockStore{upsertGeyserPlayer: func(*GeyserPlayer) error { return boom }}
+		store := &mcMockStore{upsertGeyserPlayer: func(*GeyserPlayer) error { return errBoom }}
 		s := mcNewService(t, store, func(w http.ResponseWriter, r *http.Request) {
 			io.WriteString(w, `{"gamertag": "Notch"}`)
 		})
 		_, err := s.resolveGeyserPlayerByXUID(1)
-		if !errors.Is(err, boom) {
-			t.Errorf("err = %v, want %v", err, boom)
+		if !errors.Is(err, errBoom) {
+			t.Errorf("err = %v, want %v", err, errBoom)
 		}
 	})
 }
@@ -1323,12 +1303,11 @@ func TestSV93to95_GetTextureContent(t *testing.T) {
 	})
 
 	t.Run("SV-95_IsTextureInS3Fails", func(t *testing.T) {
-		boom := errBoom
-		store := &mcMockStore{isTextureInS3: func(string) (bool, error) { return false, boom }}
+		store := &mcMockStore{isTextureInS3: func(string) (bool, error) { return false, errBoom }}
 		s := mcNewService(t, store, nil)
 		_, err := s.GetTextureContent("hash")
-		if !errors.Is(err, boom) {
-			t.Errorf("err = %v, want %v", err, boom)
+		if !errors.Is(err, errBoom) {
+			t.Errorf("err = %v, want %v", err, errBoom)
 		}
 	})
 }
@@ -1562,12 +1541,11 @@ func TestSV110to112_GetGeyserTextureContent(t *testing.T) {
 	})
 
 	t.Run("SV-112_IsGeyserTextureInS3Fails", func(t *testing.T) {
-		boom := errBoom
-		store := &mcMockStore{isGeyserTextureInS3: func(string) (bool, error) { return false, boom }}
+		store := &mcMockStore{isGeyserTextureInS3: func(string) (bool, error) { return false, errBoom }}
 		s := mcNewService(t, store, nil)
 		_, err := s.GetGeyserTextureContent("hash")
-		if !errors.Is(err, boom) {
-			t.Errorf("err = %v, want %v", err, boom)
+		if !errors.Is(err, errBoom) {
+			t.Errorf("err = %v, want %v", err, errBoom)
 		}
 	})
 }
@@ -1655,12 +1633,11 @@ func TestSV118to127_FetchAndArchiveGeyserTexture(t *testing.T) {
 	})
 
 	t.Run("SV-119_StoreLookupFails", func(t *testing.T) {
-		boom := errBoom
-		store := &mcMockStore{getGeyserSkinByHash: func(string) (*GeyserSkin, error) { return nil, boom }}
+		store := &mcMockStore{getGeyserSkinByHash: func(string) (*GeyserSkin, error) { return nil, errBoom }}
 		s := mcNewService(t, store, nil)
 		_, err := s.fetchAndArchiveGeyserTexture("hash")
-		if !errors.Is(err, boom) {
-			t.Errorf("err = %v, want %v", err, boom)
+		if !errors.Is(err, errBoom) {
+			t.Errorf("err = %v, want %v", err, errBoom)
 		}
 	})
 

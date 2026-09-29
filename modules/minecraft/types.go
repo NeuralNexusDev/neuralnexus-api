@@ -15,6 +15,10 @@ import (
 )
 
 var (
+	ErrPlayerNotFound = errors.New("player not found")
+	// ErrTextureNotFound - the requested texture does not exist upstream
+	ErrTextureNotFound = errors.New("texture not found")
+
 	ErrMojangAPI             = errors.New("mojang API error")
 	ErrGeyserAPI             = errors.New("geyser API error")
 	ErrNoNamesProvided       = errors.New("no names provided")
@@ -24,11 +28,6 @@ var (
 	ErrUploadS3              = errors.New("failed to upload to s3")
 	ErrNotDerivedBedrockUUID = errors.New("not a derived Bedrock UUID")
 )
-
-var ErrPlayerNotFound = errors.New("player not found")
-
-// ErrTextureNotFound - the requested texture does not exist upstream
-var ErrTextureNotFound = errors.New("texture not found")
 
 // TextureResult - the bytes and content type of fetched texture, ready to stream to a client
 type TextureResult struct {

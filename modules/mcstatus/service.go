@@ -9,12 +9,12 @@ import (
 	"github.com/dreamscached/minequery/v2"
 )
 
-// MCStatusService - Minecraft Status service
 var (
 	ErrJavaStatus    = errors.New("failed to get java server status")
 	ErrBedrockStatus = errors.New("failed to get bedrock server status")
 )
 
+// MCStatusService - Minecraft Status service
 type MCStatusService interface {
 	GetJavaServerStatus(host string, port int, queryEnabled bool, queryPort int) (*MCServerStatus, error)
 	GetBedrockServerStatus(host string, port int) (*MCServerStatus, error)
