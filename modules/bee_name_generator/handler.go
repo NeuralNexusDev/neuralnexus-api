@@ -11,6 +11,10 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
+const (
+	msgInvalidName = "Invalid name"
+)
+
 // GetBeeNameHandler Get a bee name
 func GetBeeNameHandler(s BNGStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -35,7 +39,7 @@ func UploadBeeNameHandler(s BNGStore) http.HandlerFunc {
 
 		beeName := r.PathValue("name")
 		if beeName == "" {
-			responses.BadRequest(w, r, "Invalid name")
+			responses.BadRequest(w, r, msgInvalidName)
 			return
 		}
 
@@ -60,7 +64,7 @@ func DeleteBeeNameHandler(s BNGStore) http.HandlerFunc {
 
 		beeName := r.PathValue("name")
 		if beeName == "" {
-			responses.BadRequest(w, r, "Invalid name")
+			responses.BadRequest(w, r, msgInvalidName)
 			return
 		}
 
@@ -79,7 +83,7 @@ func SubmitBeeNameHandler(s BNGStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		beeName := r.PathValue("name")
 		if beeName == "" {
-			responses.BadRequest(w, r, "Invalid name")
+			responses.BadRequest(w, r, msgInvalidName)
 			return
 		}
 
@@ -133,7 +137,7 @@ func AcceptBeeNameSuggestionHandler(s BNGStore) http.HandlerFunc {
 
 		beeName := r.PathValue("name")
 		if beeName == "" {
-			responses.BadRequest(w, r, "Invalid name")
+			responses.BadRequest(w, r, msgInvalidName)
 			return
 		}
 
@@ -158,7 +162,7 @@ func RejectBeeNameSuggestionHandler(s BNGStore) http.HandlerFunc {
 
 		beeName := r.PathValue("name")
 		if beeName == "" {
-			responses.BadRequest(w, r, "Invalid name")
+			responses.BadRequest(w, r, msgInvalidName)
 			return
 		}
 

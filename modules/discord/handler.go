@@ -10,10 +10,16 @@ import (
 	"github.com/goccy/go-json"
 )
 
+const (
+	msgRequestMustBeJSON  = "Request must be of type application/json"
+	msgInvalidRequestBody = "Invalid request body"
+	msgInvalidEventData   = "Invalid event data"
+)
+
 func HandleDiscordWebhook() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get(ContentType) != ApplicationJSON {
-			responses.UnsupportedMediaType(w, r, "Request must be of type application/json")
+			responses.UnsupportedMediaType(w, r, msgRequestMustBeJSON)
 			return
 		}
 		defer r.Body.Close()
@@ -22,7 +28,7 @@ func HandleDiscordWebhook() http.HandlerFunc {
 		var event WebhookPayload
 		if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
 			mw.LogRequest(ctx, "Invalid Discord webhook request body:\n\t", err.Error())
-			responses.BadRequest(w, r, "Invalid request body")
+			responses.BadRequest(w, r, msgInvalidRequestBody)
 			return
 		}
 		if event.Version != 1 {
@@ -41,7 +47,7 @@ func HandleDiscordWebhook() http.HandlerFunc {
 				data := event.Event.ApplicationAuthorizedData()
 				if data.IntegrationType == nil {
 					mw.LogRequest(ctx, "Failed to deserialize Application Authorized event data")
-					responses.BadRequest(w, r, "Invalid event data")
+					responses.BadRequest(w, r, msgInvalidEventData)
 					return
 				}
 				switch *data.IntegrationType {
@@ -51,7 +57,7 @@ func HandleDiscordWebhook() http.HandlerFunc {
 					mw.LogRequest(ctx, fmt.Sprintf("Received authorized event for Discord User: %s", data.User.ID))
 				default:
 					mw.LogRequest(ctx, "Invalid integration type")
-					responses.BadRequest(w, r, "Invalid event data")
+					responses.BadRequest(w, r, msgInvalidEventData)
 					return
 				}
 			case ApplicationDeauthorized:
@@ -73,7 +79,7 @@ func HandleDiscordWebhook() http.HandlerFunc {
 func HandleDiscordInteraction() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get(ContentType) != ApplicationJSON {
-			responses.UnsupportedMediaType(w, r, "Request must be of type application/json")
+			responses.UnsupportedMediaType(w, r, msgRequestMustBeJSON)
 			return
 		}
 		defer r.Body.Close()
@@ -81,7 +87,7 @@ func HandleDiscordInteraction() http.HandlerFunc {
 		ctx := r.Context()
 		var interaction discordgo.Interaction
 		if err := json.NewDecoder(r.Body).Decode(&interaction); err != nil {
-			responses.BadRequest(w, r, "Invalid request body")
+			responses.BadRequest(w, r, msgInvalidRequestBody)
 			return
 		}
 

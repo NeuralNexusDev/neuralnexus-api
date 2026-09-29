@@ -18,6 +18,11 @@ import (
 	"golang.org/x/crypto/ed25519"
 )
 
+const (
+	msgRateLimited      = "You have been rate limited. Please try again later."
+	msgInvalidSignature = "Invalid signature"
+)
+
 // Middleware - Middleware type
 type Middleware func(http.Handler) http.Handler
 
@@ -169,7 +174,7 @@ func RateLimitMiddleware(service auth.RateLimitService, prefix string, sessionLi
 					LogRequest(r.Context(), "Error getting rate limit:\n\t", err.Error())
 				}
 				if limit > sessionLimit {
-					responses.TooManyRequests(w, r, RetryAfter, "You have been rate limited. Please try again later.")
+					responses.TooManyRequests(w, r, RetryAfter, msgRateLimited)
 					return
 				}
 			} else {
@@ -186,7 +191,7 @@ func RateLimitMiddleware(service auth.RateLimitService, prefix string, sessionLi
 					LogRequest(r.Context(), "Error getting rate limit:\n\t", err.Error())
 				}
 				if limit > ipLimit {
-					responses.TooManyRequests(w, r, RetryAfter, "You have been rate limited. Please try again later.")
+					responses.TooManyRequests(w, r, RetryAfter, msgRateLimited)
 					return
 				}
 			}
@@ -281,14 +286,14 @@ func VerifyEd25519Middleware(publicKey ed25519.PublicKey) Middleware {
 				if err != nil {
 					LogRequest(r.Context(), "Error decoding signature:\n\t", err.Error())
 				}
-				responses.Unauthorized(w, r, "Invalid signature")
+				responses.Unauthorized(w, r, msgInvalidSignature)
 				return
 			}
 
 			bodyBytes, err := io.ReadAll(r.Body)
 			if err != nil {
 				LogRequest(r.Context(), "Error reading body:\n\t", err.Error())
-				responses.Unauthorized(w, r, "Invalid signature")
+				responses.Unauthorized(w, r, msgInvalidSignature)
 				return
 			}
 
@@ -296,7 +301,7 @@ func VerifyEd25519Middleware(publicKey ed25519.PublicKey) Middleware {
 			buffer.WriteString(timestamp)
 			buffer.Write(bodyBytes)
 			if !ed25519.Verify(publicKey, buffer.Bytes(), signature) {
-				responses.Unauthorized(w, r, "Invalid signature")
+				responses.Unauthorized(w, r, msgInvalidSignature)
 				return
 			}
 

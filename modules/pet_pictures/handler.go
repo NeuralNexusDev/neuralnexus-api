@@ -14,6 +14,16 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
+const (
+	msgPetNameIsRequired       = "Pet name is required"
+	msgPetNotFound             = "Pet not found"
+	msgUnableToParseBody       = "Invalid input, unable to parse body"
+	msgNoPermissionToUpdatePet = "You do not have permission to update this pet"
+	msgPetPictureIDIsRequired  = "Pet picture ID is required"
+	msgUnableToGetPetPicture   = "Unable to get pet picture"
+	msgUnableToGetPet          = "Unable to get pet"
+)
+
 // CreatePetHandler - Create a new pet
 func CreatePetHandler(s PetPicService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -32,7 +42,7 @@ func CreatePetHandler(s PetPicService) http.HandlerFunc {
 			}
 		}
 		if petName == "" {
-			responses.BadRequest(w, r, "Pet name is required")
+			responses.BadRequest(w, r, msgPetNameIsRequired)
 			return
 		}
 
@@ -73,7 +83,7 @@ func GetPetHandler(s PetPicService) http.HandlerFunc {
 		pet, err := s.GetStore().GetPet(petID)
 		if err != nil {
 			log.Println("[Error]: Unable to get pet:\n\t", err)
-			responses.NotFound(w, r, "Pet not found")
+			responses.NotFound(w, r, msgPetNotFound)
 			return
 		}
 		responses.StructOK(w, r, pet)
@@ -86,13 +96,13 @@ func UpdatePetHandler(s PetPicService) http.HandlerFunc {
 		var pet *Pet
 		err := responses.DecodeStruct(r, &pet)
 		if err != nil {
-			responses.BadRequest(w, r, "Invalid input, unable to parse body")
+			responses.BadRequest(w, r, msgUnableToParseBody)
 			return
 		}
 
 		session := r.Context().Value(mw.SessionKey).(auth.Session)
 		if !session.HasPermission(perms.ScopePetPictures(pet.Name)) {
-			responses.Forbidden(w, r, "You do not have permission to update this pet")
+			responses.Forbidden(w, r, msgNoPermissionToUpdatePet)
 			return
 		}
 
@@ -100,7 +110,7 @@ func UpdatePetHandler(s PetPicService) http.HandlerFunc {
 		if err != nil {
 			log.Println("[Error]: Unable to update pet:\n\t", err)
 			if errors.Is(err, pgx.ErrNoRows) {
-				responses.NotFound(w, r, "Pet not found")
+				responses.NotFound(w, r, msgPetNotFound)
 				return
 			}
 			responses.InternalServerError(w, r, "Unable to update pet")
@@ -122,7 +132,7 @@ func GetRandPetPictureByNameHandler(s PetPicService) http.HandlerFunc {
 			}
 		}
 		if petName == "" {
-			responses.BadRequest(w, r, "Pet name is required")
+			responses.BadRequest(w, r, msgPetNameIsRequired)
 			return
 		}
 
@@ -148,14 +158,14 @@ func GetPetPictureHandler(s PetPicService) http.HandlerFunc {
 			}
 		}
 		if petPictureID == "" {
-			responses.BadRequest(w, r, "Pet picture ID is required")
+			responses.BadRequest(w, r, msgPetPictureIDIsRequired)
 			return
 		}
 
 		petPicture, err := s.GetStore().GetPetPicture(petPictureID)
 		if err != nil {
 			log.Println("[Error]: Unable to get pet picture:\n\t", err)
-			responses.NotFound(w, r, "Unable to get pet picture")
+			responses.NotFound(w, r, msgUnableToGetPetPicture)
 			return
 		}
 		responses.StructOK(w, r, petPicture)
@@ -168,20 +178,20 @@ func UpdatePetPictureHandler(s PetPicService) http.HandlerFunc {
 		var petPicture PetPicture
 		err := responses.DecodeStruct(r, &petPicture)
 		if err != nil {
-			responses.BadRequest(w, r, "Invalid input, unable to parse body")
+			responses.BadRequest(w, r, msgUnableToParseBody)
 			return
 		}
 
 		pet, err := s.GetStore().GetPet(petPicture.PrimarySubject)
 		if err != nil {
 			log.Println("[Error]: Unable to get pet:\n\t", err)
-			responses.NotFound(w, r, "Unable to get pet")
+			responses.NotFound(w, r, msgUnableToGetPet)
 			return
 		}
 
 		session := r.Context().Value(mw.SessionKey).(auth.Session)
 		if !session.HasPermission(perms.ScopePetPictures(pet.Name)) {
-			responses.Forbidden(w, r, "You do not have permission to update this pet")
+			responses.Forbidden(w, r, msgNoPermissionToUpdatePet)
 			return
 		}
 
@@ -211,27 +221,27 @@ func DeletePetPictureHandler(s PetPicService) http.HandlerFunc {
 			}
 		}
 		if petPictureID == "" {
-			responses.BadRequest(w, r, "Pet picture ID is required")
+			responses.BadRequest(w, r, msgPetPictureIDIsRequired)
 			return
 		}
 
 		petPicture, err := s.GetStore().GetPetPicture(petPictureID)
 		if err != nil {
 			log.Println("[Error]: Unable to get pet picture:\n\t", err)
-			responses.NotFound(w, r, "Unable to get pet picture")
+			responses.NotFound(w, r, msgUnableToGetPetPicture)
 			return
 		}
 
 		pet, err := s.GetStore().GetPet(petPicture.PrimarySubject)
 		if err != nil {
 			log.Println("[Error]: Unable to get pet:\n\t", err)
-			responses.NotFound(w, r, "Unable to get pet")
+			responses.NotFound(w, r, msgUnableToGetPet)
 			return
 		}
 
 		session := r.Context().Value(mw.SessionKey).(auth.Session)
 		if !session.HasPermission(perms.ScopePetPictures(pet.Name)) {
-			responses.Forbidden(w, r, "You do not have permission to update this pet")
+			responses.Forbidden(w, r, msgNoPermissionToUpdatePet)
 			return
 		}
 

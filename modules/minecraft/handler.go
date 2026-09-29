@@ -12,12 +12,25 @@ import (
 	"github.com/google/uuid"
 )
 
+const (
+	msgInvalidName              = "Invalid name"
+	msgFailedToGetPlayer        = "Failed to get player"
+	msgNotAValidUUID            = "Not a valid UUID: "
+	msgFailedToGetPlayerProfile = "Failed to get player profile"
+	msgInvalidGamertag          = "Invalid gamertag"
+	msgInvalidXuid              = "Invalid xuid"
+	msgFailedToGetGeyserProfile = "Failed to get Geyser profile"
+	msgInvalidHash              = "Invalid hash"
+	msgTextureNotFound          = "Texture not found"
+	msgFailedToGetTexture       = "Failed to get texture"
+)
+
 // GetMojangPlayerByNameHandler - Get a player by name
 func GetMojangPlayerByNameHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		name := r.PathValue("name")
 		if name == "" {
-			responses.BadRequest(w, r, "Invalid name")
+			responses.BadRequest(w, r, msgInvalidName)
 			return
 		}
 
@@ -28,7 +41,7 @@ func GetMojangPlayerByNameHandler(s Service) http.HandlerFunc {
 				return
 			}
 			log.Println("Failed to get player by name:\n\t", err)
-			responses.InternalServerError(w, r, "Failed to get player")
+			responses.InternalServerError(w, r, msgFailedToGetPlayer)
 			return
 		}
 		responses.StructOK(w, r, player)
@@ -40,7 +53,7 @@ func GetMojangPlayerByUUIDHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("uuid")
 		if _, err := uuid.Parse(id); err != nil {
-			responses.BadRequest(w, r, "Not a valid UUID: "+id)
+			responses.BadRequest(w, r, msgNotAValidUUID+id)
 			return
 		}
 
@@ -51,7 +64,7 @@ func GetMojangPlayerByUUIDHandler(s Service) http.HandlerFunc {
 				return
 			}
 			log.Println("Failed to get player by UUID:\n\t", err)
-			responses.InternalServerError(w, r, "Failed to get player")
+			responses.InternalServerError(w, r, msgFailedToGetPlayer)
 			return
 		}
 		responses.StructOK(w, r, player)
@@ -99,7 +112,7 @@ func GetMojangProfileHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("uuid")
 		if _, err := uuid.Parse(id); err != nil {
-			responses.BadRequest(w, r, "Not a valid UUID: "+id)
+			responses.BadRequest(w, r, msgNotAValidUUID+id)
 			return
 		}
 
@@ -112,7 +125,7 @@ func GetMojangProfileHandler(s Service) http.HandlerFunc {
 				return
 			}
 			log.Println("Failed to get player profile:\n\t", err)
-			responses.InternalServerError(w, r, "Failed to get player profile")
+			responses.InternalServerError(w, r, msgFailedToGetPlayerProfile)
 			return
 		}
 		responses.StructOK(w, r, player)
@@ -124,7 +137,7 @@ func GetProfileHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("uuid")
 		if _, err := uuid.Parse(id); err != nil {
-			responses.BadRequest(w, r, "Not a valid UUID: "+id)
+			responses.BadRequest(w, r, msgNotAValidUUID+id)
 			return
 		}
 
@@ -135,7 +148,7 @@ func GetProfileHandler(s Service) http.HandlerFunc {
 				return
 			}
 			log.Println("Failed to get player profile:\n\t", err)
-			responses.InternalServerError(w, r, "Failed to get player profile")
+			responses.InternalServerError(w, r, msgFailedToGetPlayerProfile)
 			return
 		}
 		responses.StructOK(w, r, profile)
@@ -147,7 +160,7 @@ func GetProfileByNameHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		name := r.PathValue("name")
 		if name == "" {
-			responses.BadRequest(w, r, "Invalid name")
+			responses.BadRequest(w, r, msgInvalidName)
 			return
 		}
 
@@ -158,7 +171,7 @@ func GetProfileByNameHandler(s Service) http.HandlerFunc {
 				return
 			}
 			log.Println("Failed to get player profile by name:\n\t", err)
-			responses.InternalServerError(w, r, "Failed to get player profile")
+			responses.InternalServerError(w, r, msgFailedToGetPlayerProfile)
 			return
 		}
 		responses.StructOK(w, r, profile)
@@ -170,7 +183,7 @@ func GetGeyserXUIDHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		gamertag := r.PathValue("gamertag")
 		if gamertag == "" {
-			responses.BadRequest(w, r, "Invalid gamertag")
+			responses.BadRequest(w, r, msgInvalidGamertag)
 			return
 		}
 
@@ -181,7 +194,7 @@ func GetGeyserXUIDHandler(s Service) http.HandlerFunc {
 				return
 			}
 			if errors.Is(err, ErrInvalidGeyserRequest) {
-				responses.BadRequest(w, r, "Invalid gamertag")
+				responses.BadRequest(w, r, msgInvalidGamertag)
 				return
 			}
 			log.Println("Failed to get Geyser XUID:\n\t", err)
@@ -197,7 +210,7 @@ func GetGeyserSkinHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		xuid, err := strconv.ParseInt(r.PathValue("xuid"), 10, 64)
 		if err != nil {
-			responses.BadRequest(w, r, "Invalid xuid")
+			responses.BadRequest(w, r, msgInvalidXuid)
 			return
 		}
 
@@ -208,7 +221,7 @@ func GetGeyserSkinHandler(s Service) http.HandlerFunc {
 				return
 			}
 			if errors.Is(err, ErrInvalidGeyserRequest) {
-				responses.BadRequest(w, r, "Invalid xuid")
+				responses.BadRequest(w, r, msgInvalidXuid)
 				return
 			}
 			log.Println("Failed to get Geyser skin:\n\t", err)
@@ -236,11 +249,11 @@ func GetGeyserProfileHandler(s Service) http.HandlerFunc {
 				return
 			}
 			if errors.Is(err, ErrInvalidGeyserRequest) {
-				responses.BadRequest(w, r, "Invalid xuid")
+				responses.BadRequest(w, r, msgInvalidXuid)
 				return
 			}
 			log.Println("Failed to get Geyser profile:\n\t", err)
-			responses.InternalServerError(w, r, "Failed to get Geyser profile")
+			responses.InternalServerError(w, r, msgFailedToGetGeyserProfile)
 			return
 		}
 		responses.StructOK(w, r, profile)
@@ -252,7 +265,7 @@ func GetGeyserProfileByNameHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		gamertag := r.PathValue("name")
 		if gamertag == "" {
-			responses.BadRequest(w, r, "Invalid gamertag")
+			responses.BadRequest(w, r, msgInvalidGamertag)
 			return
 		}
 
@@ -263,11 +276,11 @@ func GetGeyserProfileByNameHandler(s Service) http.HandlerFunc {
 				return
 			}
 			if errors.Is(err, ErrInvalidGeyserRequest) {
-				responses.BadRequest(w, r, "Invalid gamertag")
+				responses.BadRequest(w, r, msgInvalidGamertag)
 				return
 			}
 			log.Println("Failed to get Geyser profile by name:\n\t", err)
-			responses.InternalServerError(w, r, "Failed to get Geyser profile")
+			responses.InternalServerError(w, r, msgFailedToGetGeyserProfile)
 			return
 		}
 		responses.StructOK(w, r, profile)
@@ -279,17 +292,17 @@ func GetTextureHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		hash := r.PathValue("hash")
 		if hash == "" {
-			responses.BadRequest(w, r, "Invalid hash")
+			responses.BadRequest(w, r, msgInvalidHash)
 			return
 		}
 
 		result, err := s.GetTextureContent(hash)
 		if err != nil {
 			if errors.Is(err, ErrTextureNotFound) {
-				responses.NotFound(w, r, "Texture not found")
+				responses.NotFound(w, r, msgTextureNotFound)
 				return
 			}
-			responses.BadGateway(w, r, "Failed to get texture")
+			responses.BadGateway(w, r, msgFailedToGetTexture)
 			log.Println("Failed to get texture:\n\t", err)
 			return
 		}
@@ -305,17 +318,17 @@ func GetGeyserTextureHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		hash := r.PathValue("hash")
 		if hash == "" {
-			responses.BadRequest(w, r, "Invalid hash")
+			responses.BadRequest(w, r, msgInvalidHash)
 			return
 		}
 
 		result, err := s.GetGeyserTextureContent(hash)
 		if err != nil {
 			if errors.Is(err, ErrTextureNotFound) {
-				responses.NotFound(w, r, "Texture not found")
+				responses.NotFound(w, r, msgTextureNotFound)
 				return
 			}
-			responses.BadGateway(w, r, "Failed to get texture")
+			responses.BadGateway(w, r, msgFailedToGetTexture)
 			log.Println("Failed to get Geyser texture:\n\t", err)
 			return
 		}

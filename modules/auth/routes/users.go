@@ -13,6 +13,14 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
+const (
+	msgUserNotFound              = "User not found"
+	msgNoPermissionToUpdateUsers = "You do not have permission to update users"
+	msgInvalidRequestBody        = "Invalid request body"
+	msgFailedToUpdateUser        = "Failed to update user"
+	msgPlatformNotLinked         = "This platform isn't linked to this user"
+)
+
 // GetUserHandler - Get a user
 func GetUserHandler(service auth.UserService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -28,7 +36,7 @@ func GetUserHandler(service auth.UserService) http.HandlerFunc {
 		}
 		user, err := service.GetUser(userID)
 		if err != nil {
-			responses.NotFound(w, r, "User not found")
+			responses.NotFound(w, r, msgUserNotFound)
 			return
 		}
 		responses.StructOK(w, r, user)
@@ -47,7 +55,7 @@ func GetUserFromPlatformHandler(service auth.UserService) http.HandlerFunc {
 		platformID := r.PathValue("platform_id")
 		user, err := service.GetUserFromPlatform(platform, platformID)
 		if err != nil {
-			responses.NotFound(w, r, "User not found")
+			responses.NotFound(w, r, msgUserNotFound)
 			return
 		}
 		responses.StructOK(w, r, user)
@@ -65,7 +73,7 @@ func GetUserPermissionsHandler(service auth.UserService) http.HandlerFunc {
 		}
 		permissions, err := service.GetUserPermissions(userID)
 		if err != nil {
-			responses.NotFound(w, r, "User not found")
+			responses.NotFound(w, r, msgUserNotFound)
 			return
 		}
 		responses.StructOK(w, r, permissions)
@@ -77,20 +85,20 @@ func UpdateUserHandler(service auth.UserService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if !session.HasPermission(perms.ScopeAdminUsers) {
-			responses.Forbidden(w, r, "You do not have permission to update users")
+			responses.Forbidden(w, r, msgNoPermissionToUpdateUsers)
 			return
 		}
 		userID := r.PathValue("user_id")
 		var user auth.Account
 		err := responses.DecodeStruct(r, &user)
 		if err != nil {
-			responses.BadRequest(w, r, "Invalid request body")
+			responses.BadRequest(w, r, msgInvalidRequestBody)
 			return
 		}
 		user.UserID = userID
 		err = service.UpdateUser(&user)
 		if err != nil {
-			responses.BadRequest(w, r, "Failed to update user")
+			responses.BadRequest(w, r, msgFailedToUpdateUser)
 			return
 		}
 		responses.StructOK(w, r, user)
@@ -102,7 +110,7 @@ func UpdateUserFromPlatformHandler(service auth.UserService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if !session.HasPermission(perms.ScopeAdminUsers) {
-			responses.Forbidden(w, r, "You do not have permission to update users")
+			responses.Forbidden(w, r, msgNoPermissionToUpdateUsers)
 			return
 		}
 		platform := auth.Platform(r.PathValue("platform"))
@@ -113,35 +121,35 @@ func UpdateUserFromPlatformHandler(service auth.UserService) http.HandlerFunc {
 		case auth.PlatformDiscord:
 			var d linking.DiscordData
 			if err := responses.DecodeStruct(r, &d); err != nil {
-				responses.BadRequest(w, r, "Invalid request body")
+				responses.BadRequest(w, r, msgInvalidRequestBody)
 				return
 			}
 			data = &d
 		case auth.PlatformMinecraft:
 			var d linking.MinecraftData
 			if err := responses.DecodeStruct(r, &d); err != nil {
-				responses.BadRequest(w, r, "Invalid request body")
+				responses.BadRequest(w, r, msgInvalidRequestBody)
 				return
 			}
 			data = &d
 		case auth.PlatformTwitch:
 			var d twitch.Data
 			if err := responses.DecodeStruct(r, &d); err != nil {
-				responses.BadRequest(w, r, "Invalid request body")
+				responses.BadRequest(w, r, msgInvalidRequestBody)
 				return
 			}
 			data = &d
 		case auth.PlatformXboxLive:
 			var d linking.XboxLiveData
 			if err := responses.DecodeStruct(r, &d); err != nil {
-				responses.BadRequest(w, r, "Invalid request body")
+				responses.BadRequest(w, r, msgInvalidRequestBody)
 				return
 			}
 			data = &d
 		case auth.PlatformMicrosoft:
 			var d linking.MicrosoftUserData
 			if err := responses.DecodeStruct(r, &d); err != nil {
-				responses.BadRequest(w, r, "Invalid request body")
+				responses.BadRequest(w, r, msgInvalidRequestBody)
 				return
 			}
 			data = &d
@@ -152,7 +160,7 @@ func UpdateUserFromPlatformHandler(service auth.UserService) http.HandlerFunc {
 
 		user, err := service.UpdateUserFromPlatform(platform, platformID, data)
 		if err != nil {
-			responses.BadRequest(w, r, "Failed to update user")
+			responses.BadRequest(w, r, msgFailedToUpdateUser)
 			return
 		}
 		responses.StructOK(w, r, user)
@@ -210,7 +218,7 @@ func UnlinkPlatformHandler(service auth.UserService) http.HandlerFunc {
 		case err == nil:
 			responses.NoContent(w, r)
 		case errors.Is(err, auth.ErrNotFound):
-			responses.NotFound(w, r, "This platform isn't linked to this user")
+			responses.NotFound(w, r, msgPlatformNotLinked)
 		case errors.Is(err, auth.ErrWouldLockAccount):
 			responses.BadRequest(w, r, "Set a password or link another platform before unlinking your last one")
 		default:
@@ -238,7 +246,7 @@ func SetPlatformLoginEnabledHandler(service auth.UserService) http.HandlerFunc {
 		platform := auth.Platform(r.PathValue("platform"))
 		var body SetPlatformLoginEnabledRequest
 		if err := responses.DecodeStruct(r, &body); err != nil || body.LoginEnabled == nil {
-			responses.BadRequest(w, r, "Invalid request body")
+			responses.BadRequest(w, r, msgInvalidRequestBody)
 			return
 		}
 
@@ -247,7 +255,7 @@ func SetPlatformLoginEnabledHandler(service auth.UserService) http.HandlerFunc {
 		case err == nil:
 			responses.NoContent(w, r)
 		case errors.Is(err, auth.ErrNotFound):
-			responses.NotFound(w, r, "This platform isn't linked to this user")
+			responses.NotFound(w, r, msgPlatformNotLinked)
 		case errors.Is(err, auth.ErrWouldLockAccount):
 			responses.BadRequest(w, r, "Set a password or link another platform before disabling your last login method")
 		case errors.Is(err, auth.ErrLinkedAccountUnverified):
@@ -295,7 +303,7 @@ func UpdateAccountSettingsHandler(service auth.UserService) http.HandlerFunc {
 		}
 		var body UpdateAccountSettingsRequest
 		if err := responses.DecodeStruct(r, &body); err != nil || body.PasswordAuthEnabled == nil {
-			responses.BadRequest(w, r, "Invalid request body")
+			responses.BadRequest(w, r, msgInvalidRequestBody)
 			return
 		}
 

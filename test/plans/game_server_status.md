@@ -6,13 +6,13 @@
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
 | HD-01 | GameServerStatusHandler | Happy Path | Valid host/port, raw not requested | host+port query params valid, fake GSSService.QueryGameServer returns a populated *GameServerStatus with a non-nil Raw | 200 OK, JSON body with the status fields, "raw" key absent from the body | P1 |  |
 | HD-02 | GameServerStatusHandler | Happy Path | Valid host/port, raw=true requested | Same as HD-01 plus `raw=true` query param | 200 OK, JSON body includes the "raw" field with the service's raw value | P2 |  |
-| HD-03 | GameServerStatusHandler | Error Path | Missing host | `host` query param absent or empty | 400 Bad Request, problem detail "Invalid host" | P2 |  |
-| HD-04 | GameServerStatusHandler | Error Path | Non-numeric port | `host` set, `port` query param is not an integer (e.g. "abc") | 400 Bad Request, problem detail "Invalid port" | P2 |  |
+| HD-03 | GameServerStatusHandler | Error Path | Missing host | `host` query param absent or empty | 400 Bad Request, problem detail `msgInvalidHost` | P2 |  |
+| HD-04 | GameServerStatusHandler | Error Path | Non-numeric port | `host` set, `port` query param is not an integer (e.g. "abc") | 400 Bad Request, problem detail `msgInvalidPort` | P2 |  |
 | HD-05 | GameServerStatusHandler | Error Path | Underlying service returns an error | host/port valid, fake GSSService.QueryGameServer returns (nil, someErr) | 404 Not Found, problem detail equals someErr.Error() | P1 |  |
 | HD-06 | GameServerStatusHandler | Edge Case | Unrecognized `query_type` query param | `query_type=totallybogus`, host/port valid | ParseQueryType falls back to QueryTypeUnknown; fake service's QueryGameServer is invoked with queryType==QueryTypeUnknown; 200 OK on service success | P3 |  |
 | HD-07 | SimpleGameServerStatus | Happy Path | Underlying service succeeds | host/port valid, fake GSSService.QueryGameServer returns (status, nil) | 200 OK, Content-Type text/plain, body "Online" | P1 |  |
-| HD-08 | SimpleGameServerStatus | Error Path | Missing host | `host` query param absent or empty | 400 Bad Request, problem detail "Invalid host" | P2 |  |
-| HD-09 | SimpleGameServerStatus | Error Path | Non-numeric port | `host` set, `port` is not an integer | 400 Bad Request, problem detail "Invalid port" | P2 |  |
+| HD-08 | SimpleGameServerStatus | Error Path | Missing host | `host` query param absent or empty | 400 Bad Request, problem detail `msgInvalidHost` | P2 |  |
+| HD-09 | SimpleGameServerStatus | Error Path | Non-numeric port | `host` set, `port` is not an integer | 400 Bad Request, problem detail `msgInvalidPort` | P2 |  |
 | HD-10 | SimpleGameServerStatus | Error Path | Underlying service returns an error | host/port valid, fake GSSService.QueryGameServer returns (nil, someErr) | 404 Not Found, body "Offline" | P1 |  |
 
 ## service.go
