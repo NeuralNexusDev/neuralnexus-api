@@ -30,8 +30,7 @@ import (
 //     CONSTRAINT pets_name_not_empty CHECK ( name <> '' )
 // );
 
-// createdColumn renders created_at as RFC3339 in UTC regardless of the session time zone.
-const createdColumn = `COALESCE(to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'), '')`
+const createdColumn = `COALESCE(to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'), '')`
 
 var ErrPetNameEmpty = errors.New("pet name must not be empty")
 
