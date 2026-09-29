@@ -363,7 +363,7 @@ func TestST17to20and28to29_GetPetPictureAndGetRandPetPictureByName(t *testing.T)
 	})
 
 	for _, tz := range ppSessionTimeZones {
-		t.Run("ST-28_GetPetPictureHappyPath_"+tz, func(t *testing.T) {
+		t.Run("ST-28_GetPetPictureHappyPath_"+strings.ReplaceAll(tz, "/", "_"), func(t *testing.T) {
 			t.Setenv("PGTZ", tz)
 			pool := ppLiveDatabase(t)
 			s := &store{}
@@ -410,7 +410,7 @@ func TestST21to22and30_UpdatePetPicture(t *testing.T) {
 	})
 
 	for _, tz := range ppSessionTimeZones {
-		t.Run("ST-22_HappyPath_"+tz, func(t *testing.T) {
+		t.Run("ST-22_HappyPath_"+strings.ReplaceAll(tz, "/", "_"), func(t *testing.T) {
 			t.Setenv("PGTZ", tz)
 			pool := ppLiveDatabase(t)
 			s := &store{}
