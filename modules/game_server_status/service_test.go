@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"testing/iotest"
 )
 
 // fakeRoundTripper is swapped in for http.DefaultTransport: QueryGameQ and
@@ -168,6 +169,19 @@ func TestQueryGameQ(t *testing.T) {
 			t.Errorf("QueryGameQ() response = %+v, want nil", resp)
 		}
 	})
+
+	t.Run("SV-30_ErrorPath_NonOKStatusBodyUnreadable", func(t *testing.T) {
+		resp := &http.Response{StatusCode: http.StatusInternalServerError, Body: io.NopCloser(iotest.ErrReader(errBodyRead)), Header: make(http.Header)}
+		swapTransport(t, &fakeRoundTripper{resp: resp})
+
+		got, err := svc.QueryGameQ("cs16", "1.2.3.4", 27015)
+		if !errors.Is(err, ErrReadBody) {
+			t.Errorf("QueryGameQ() error = %v, want %v", err, ErrReadBody)
+		}
+		if got != nil {
+			t.Errorf("QueryGameQ() response = %+v, want nil", got)
+		}
+	})
 }
 
 func TestQueryGameDig(t *testing.T) {
@@ -233,6 +247,19 @@ func TestQueryGameDig(t *testing.T) {
 		}
 		if resp != nil {
 			t.Errorf("QueryGameDig() response = %+v, want nil", resp)
+		}
+	})
+
+	t.Run("SV-31_ErrorPath_NonOKStatusBodyUnreadable", func(t *testing.T) {
+		resp := &http.Response{StatusCode: http.StatusInternalServerError, Body: io.NopCloser(iotest.ErrReader(errBodyRead)), Header: make(http.Header)}
+		swapTransport(t, &fakeRoundTripper{resp: resp})
+
+		got, err := svc.QueryGameDig("valheim", "1.2.3.4", 27015)
+		if !errors.Is(err, ErrReadBody) {
+			t.Errorf("QueryGameDig() error = %v, want %v", err, ErrReadBody)
+		}
+		if got != nil {
+			t.Errorf("QueryGameDig() response = %+v, want nil", got)
 		}
 	})
 }

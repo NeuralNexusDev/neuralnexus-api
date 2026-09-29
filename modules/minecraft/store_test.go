@@ -995,7 +995,7 @@ type mcSeekableReadCloser struct{ io.ReadSeeker }
 
 func (mcSeekableReadCloser) Close() error { return nil }
 
-func TestST68to70_PutTextureInS3(t *testing.T) {
+func TestST68to70and77_PutTextureInS3(t *testing.T) {
 	t.Run("ST-68_WithLen", func(t *testing.T) {
 		var gotLen int64 = -1
 		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) {
@@ -1026,6 +1026,15 @@ func TestST68to70_PutTextureInS3(t *testing.T) {
 		err := s.PutTextureInS3("hash", mcSeekableReadCloser{strings.NewReader("hello")})
 		if !errors.Is(err, ErrUploadS3) {
 			t.Errorf("err = %v, want it to wrap %v", err, ErrUploadS3)
+		}
+	})
+
+	t.Run("ST-77_ServerErrorMessage", func(t *testing.T) {
+		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusInternalServerError) })
+		s := &store{s3: s3c}
+		err := s.PutTextureInS3("hash", mcSeekableReadCloser{strings.NewReader("hello")})
+		if err == nil || !strings.HasPrefix(err.Error(), "failed to upload to s3: ") {
+			t.Errorf("error = %v, want it to start with %q", err, "failed to upload to s3: ")
 		}
 	})
 }

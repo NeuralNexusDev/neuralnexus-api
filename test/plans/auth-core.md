@@ -223,3 +223,4 @@
 | US-35 | GetAccountSettings | Error Path | `ass.GetAccountSettings` fails | | Error propagated unchanged | P2 |  |
 | US-36 | SetPasswordAuthEnabled | Happy Path | `ass.SetPasswordAuthEnabled` succeeds | | Returns nil | P1 |  |
 | US-37 | SetPasswordAuthEnabled | Error Path | `ass.SetPasswordAuthEnabled` fails | | Error propagated unchanged | P2 |  |
+| US-38 | UpdateUserFromPlatform | Error Path | Same as US-20, pinning the message | `AddLinkedAccountToDB` fails with "insert failed"; `DeleteAccountFromDB` fails with "boom" | The error text is exactly `failed to link account (insert failed) and failed to clean up the orphaned placeholder account: boom` | P2 | |

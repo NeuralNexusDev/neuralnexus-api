@@ -48,6 +48,8 @@
 | SV-27 | QueryGameServer | Error Path | GameQ dispatch, underlying transport error | game="aa3", queryType=QueryTypeGameQ, fake transport's RoundTrip returns an error | Returns nil, error propagated from QueryGameQ | P2 |  |
 | SV-28 | QueryGameServer | Happy Path | GameDig dispatch success | game="aoc", queryType=QueryTypeGameDig, fake transport returns a valid 200 body | Returns *GameServerStatus with QueryType==QueryTypeGameDig and fields matching the normalized GameDigResponse, nil error | P1 |  |
 | SV-29 | QueryGameServer | Error Path | GameDig dispatch, underlying transport error | game="aoc", queryType=QueryTypeGameDig, fake transport's RoundTrip returns an error | Returns nil, error propagated from QueryGameDig | P2 |  |
+| SV-30 | QueryGameQ | Error Path | Upstream returns non-200 status and reading its body fails | Fake transport returns 500 with a body whose `Read` errors | Returns nil, `ErrReadBody` (message "failed to read response body") | P2 | |
+| SV-31 | QueryGameDig | Error Path | Upstream returns non-200 status and reading its body fails | Fake transport returns 500 with a body whose `Read` errors | Returns nil, `ErrReadBody` (message "failed to read response body") | P2 | |
 
 ## types.go
 

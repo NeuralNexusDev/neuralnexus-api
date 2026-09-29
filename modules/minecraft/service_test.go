@@ -251,7 +251,7 @@ func TestSV01to02_NewService(t *testing.T) {
 	})
 }
 
-func TestSV03to13_GetMojangPlayerByName(t *testing.T) {
+func TestSV03to13and128_GetMojangPlayerByName(t *testing.T) {
 	t.Run("SV-03_CacheHit", func(t *testing.T) {
 		store := &mcMockStore{getPlayerFromCache: func(string) (*Player, error) { return &Player{ID: "cached"}, nil }}
 		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) { t.Fatal("should not call Mojang") })
@@ -376,6 +376,17 @@ func TestSV03to13_GetMojangPlayerByName(t *testing.T) {
 		_, err := s.GetMojangPlayerByName("Steve")
 		if err == nil {
 			t.Fatal("expected a network error")
+		}
+	})
+
+	t.Run("SV-128_MojangServerErrorMessage", func(t *testing.T) {
+		s := mcNewService(t, &mcMockStore{}, func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		})
+		_, err := s.GetMojangPlayerByName("Steve")
+		want := "mojang API error: 500 Internal Server Error"
+		if err == nil || err.Error() != want {
+			t.Errorf("error = %v, want %q", err, want)
 		}
 	})
 }
@@ -1203,8 +1214,8 @@ func TestSV85to88_GetGeyserProfile(t *testing.T) {
 			w.WriteHeader(http.StatusInternalServerError)
 		})
 		_, err := s.GetGeyserProfile(1)
-		if err == nil {
-			t.Fatal("expected an error")
+		if !errors.Is(err, ErrGeyserAPI) {
+			t.Fatalf("error = %v, want %v", err, ErrGeyserAPI)
 		}
 	})
 
@@ -1250,8 +1261,8 @@ func TestSV89to92_GetGeyserProfileByGamertag(t *testing.T) {
 			w.WriteHeader(http.StatusInternalServerError)
 		})
 		_, err := s.GetGeyserProfileByGamertag("Notch")
-		if err == nil {
-			t.Fatal("expected an error")
+		if !errors.Is(err, ErrGeyserAPI) {
+			t.Fatalf("error = %v, want %v", err, ErrGeyserAPI)
 		}
 	})
 
@@ -1343,8 +1354,8 @@ func TestSV96to100_ServeFromS3(t *testing.T) {
 			w.WriteHeader(http.StatusInternalServerError)
 		})
 		_, err := s.serveFromS3("hash")
-		if err == nil {
-			t.Fatal("expected a wrapped status error")
+		if !errors.Is(err, ErrBadStatusS3) {
+			t.Fatalf("error = %v, want %v", err, ErrBadStatusS3)
 		}
 	})
 
@@ -1419,8 +1430,8 @@ func TestSV102to109_FetchAndArchive(t *testing.T) {
 			w.WriteHeader(http.StatusInternalServerError)
 		})
 		_, err := s.fetchAndArchive("hash")
-		if err == nil {
-			t.Fatal("expected a wrapped status error")
+		if !errors.Is(err, ErrBadStatusRemote) {
+			t.Fatalf("error = %v, want %v", err, ErrBadStatusRemote)
 		}
 	})
 
@@ -1580,8 +1591,8 @@ func TestSV113to117_ServeGeyserFromS3(t *testing.T) {
 			w.WriteHeader(http.StatusInternalServerError)
 		})
 		_, err := s.serveGeyserFromS3("hash")
-		if err == nil {
-			t.Fatal("expected a wrapped status error")
+		if !errors.Is(err, ErrBadStatusS3) {
+			t.Fatalf("error = %v, want %v", err, ErrBadStatusS3)
 		}
 	})
 
@@ -1693,8 +1704,8 @@ func TestSV118to127_FetchAndArchiveGeyserTexture(t *testing.T) {
 		store := &mcMockStore{getGeyserSkinByHash: func(string) (*GeyserSkin, error) { return &GeyserSkin{Value: mcEncodeTextures(t, tex)}, nil }}
 		s := mcNewService(t, store, nil)
 		_, err := s.fetchAndArchiveGeyserTexture("hash")
-		if err == nil {
-			t.Fatal("expected a wrapped status error")
+		if !errors.Is(err, ErrBadStatusRemote) {
+			t.Fatalf("error = %v, want %v", err, ErrBadStatusRemote)
 		}
 	})
 

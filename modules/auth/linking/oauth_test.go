@@ -680,7 +680,7 @@ func TestOA76to78ProcessOAuthLoginAdditionalPlatformDispatch(t *testing.T) {
 	})
 }
 
-func TestOA17to26ResolveOrCreateAccountForPlatformUser(t *testing.T) {
+func TestOA17to26and83ResolveOrCreateAccountForPlatformUser(t *testing.T) {
 	user := &oaIdentity{id: "p1", username: "alice", email: "a@b.com"}
 
 	t.Run("OA-17_NoExistingLink", func(t *testing.T) {
@@ -856,6 +856,17 @@ func TestOA17to26ResolveOrCreateAccountForPlatformUser(t *testing.T) {
 		_, err := resolveOrCreateAccountForPlatformUser(as, las, auth.PlatformDiscord, user)
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("error = %v, want %v", err, wantErr)
+		}
+	})
+
+	t.Run("OA-83_AddLinkAndCleanupFailMessage", func(t *testing.T) {
+		as := &oaMockAccountService{DeleteAccountFunc: func(string) error { return errCleanupFailed }}
+		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return errLinkInsertFailed }}
+
+		_, err := resolveOrCreateAccountForPlatformUser(as, las, auth.PlatformDiscord, user)
+		want := "failed to link account (link insert failed) and failed to clean up the orphaned placeholder account: cleanup failed"
+		if err == nil || err.Error() != want {
+			t.Errorf("error = %v, want %q", err, want)
 		}
 	})
 }
@@ -1471,7 +1482,7 @@ func TestOA43to55ResolveOrCreateAccountForMicrosoftUser(t *testing.T) {
 	})
 }
 
-func TestOA56to66EnsureMicrosoftIdentityLinked(t *testing.T) {
+func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 	xbox := &XboxLiveData{XUID: "xid1", Gamertag: "Tag"}
 	account := &auth.Account{UserID: "user-1"}
 
@@ -1652,6 +1663,17 @@ func TestOA56to66EnsureMicrosoftIdentityLinked(t *testing.T) {
 		_, _, err := ensureMicrosoftIdentityLinked(as, las, account, true, auth.PlatformXboxLive, xbox)
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("error = %v, want %v", err, wantErr)
+		}
+	})
+
+	t.Run("OA-84_LinkAndCleanupFailMessage", func(t *testing.T) {
+		as := &oaMockAccountService{DeleteAccountFunc: func(string) error { return errCleanupFailed }}
+		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return errLinkFailed }}
+
+		_, _, err := ensureMicrosoftIdentityLinked(as, las, account, true, auth.PlatformXboxLive, xbox)
+		want := "failed to link account (link failed) and failed to clean up the orphaned placeholder account: cleanup failed"
+		if err == nil || err.Error() != want {
+			t.Errorf("error = %v, want %q", err, want)
 		}
 	})
 }

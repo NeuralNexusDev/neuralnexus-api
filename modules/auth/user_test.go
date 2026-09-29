@@ -359,7 +359,7 @@ func TestUS11to14UpdateUser(t *testing.T) {
 	})
 }
 
-func TestUS15to24UpdateUserFromPlatform(t *testing.T) {
+func TestUS15to24and38UpdateUserFromPlatform(t *testing.T) {
 	t.Run("US-15_NewIdentityCreatesAccount", func(t *testing.T) {
 		as := &usFakeAccountStore{getByIDAccount: &Account{UserID: "resolved"}}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, ErrNotFound}}}
@@ -527,6 +527,18 @@ func TestUS15to24UpdateUserFromPlatform(t *testing.T) {
 		_, err := svc.UpdateUserFromPlatform(PlatformDiscord, "p1", usFakePlatformData{})
 		if !errors.Is(err, wantErr) {
 			t.Errorf("UpdateUserFromPlatform() err = %v, want %v", err, wantErr)
+		}
+	})
+
+	t.Run("US-38_AddLinkAndCleanupFailMessage", func(t *testing.T) {
+		as := &usFakeAccountStore{deleteErr: errBoom}
+		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, ErrNotFound}}, addErr: errInsertFailed}
+		svc := usNewService(as, als, &usFakeAccountSettingsStore{})
+
+		_, err := svc.UpdateUserFromPlatform(PlatformDiscord, "p1", usFakePlatformData{})
+		want := "failed to link account (insert failed) and failed to clean up the orphaned placeholder account: boom"
+		if err == nil || err.Error() != want {
+			t.Errorf("UpdateUserFromPlatform() err = %v, want %q", err, want)
 		}
 	})
 }

@@ -122,6 +122,7 @@
 | SV-07 | GetMojangPlayerByName | Happy Path | Cache+DB miss/stale, Mojang succeeds | Mojang 200 with player JSON | Upserts, caches, returns fetched player | P0 |  |
 | SV-08 | GetMojangPlayerByName | Error Path | Mojang returns 404 | Mojang status 404 | Returns ErrPlayerNotFound | P1 |  |
 | SV-09 | GetMojangPlayerByName | Error Path | Mojang returns non-200/404 | Mojang status 500 | Returns an error wrapping `ErrMojangAPI` (message `mojang API error: <status>`) | P2 |  |
+| SV-128 | GetMojangPlayerByName | Error Path | Mojang returns non-200/404, pinning the message | Mojang status 500 | The error text is exactly `mojang API error: 500 Internal Server Error` | P2 | |
 | SV-10 | GetMojangPlayerByName | Error Path | Mojang body is not valid JSON | malformed body | Returns decode error | P2 |  |
 | SV-11 | GetMojangPlayerByName | Error Path | UpsertPlayer fails after Mojang fetch | store error | Returns that error | P2 |  |
 | SV-12 | GetMojangPlayerByName | Error Path | SetPlayerInCache fails after Mojang fetch | store error | Returns that error | P2 |  |
@@ -199,24 +200,24 @@
 | SV-84 | resolveGeyserPlayerByXUID | Error Path | UpsertGeyserPlayer fails | store error | Returns that error | P2 |  |
 | SV-85 | GetGeyserProfile | Happy Path | Player and skin both resolve | both succeed | Returns combined GeyserProfile with Skin set | P1 |  |
 | SV-86 | GetGeyserProfile | Edge Case | GetGeyserSkin returns ErrSkinNotFound | no skin | Returns GeyserProfile with Skin nil, no error | P2 |  |
-| SV-87 | GetGeyserProfile | Error Path | resolveGeyserPlayerByXUID fails | error | Returns that error | P2 |  |
+| SV-87 | GetGeyserProfile | Error Path | resolveGeyserPlayerByXUID fails | error | Returns that error (an error wrapping `ErrGeyserAPI` for a Geyser 500) | P2 |  |
 | SV-88 | GetGeyserProfile | Error Path | GetGeyserSkin fails with a non-ErrSkinNotFound error | store/transport error | Returns that error | P2 | GetGeyserSkin discards the store's own lookup error as a cache-miss signal and falls through to a live fetch; the mocked non-2xx response there is what actually produces the propagated error |
 | SV-89 | GetGeyserProfileByGamertag | Happy Path | XUID and skin both resolve | both succeed | Returns combined GeyserProfile with Skin set | P1 |  |
 | SV-90 | GetGeyserProfileByGamertag | Edge Case | GetGeyserSkin returns ErrSkinNotFound | no skin | Returns GeyserProfile with Skin nil | P2 |  |
-| SV-91 | GetGeyserProfileByGamertag | Error Path | GetGeyserXUID fails | error | Returns that error | P2 |  |
+| SV-91 | GetGeyserProfileByGamertag | Error Path | GetGeyserXUID fails | error | Returns that error (an error wrapping `ErrGeyserAPI` for a Geyser 500) | P2 |  |
 | SV-92 | GetGeyserProfileByGamertag | Error Path | GetGeyserSkin fails with a non-ErrSkinNotFound error | error | Returns that error | P2 |  |
 | SV-93 | GetTextureContent | Happy Path | IsTextureInS3 true | present=true | Delegates to serveFromS3 | P1 |  |
 | SV-94 | GetTextureContent | Happy Path | IsTextureInS3 false | present=false | Delegates to fetchAndArchive | P1 |  |
 | SV-95 | GetTextureContent | Error Path | IsTextureInS3 fails | store error | Returns that error | P2 |  |
 | SV-96 | serveFromS3 | Happy Path | CDN returns 200 | body+content-type | Returns TextureResult with body+content-type | P1 |  |
 | SV-97 | serveFromS3 | Error Path | CDN returns 404 | status 404 | Returns ErrTextureNotFound, body closed | P1 |  |
-| SV-98 | serveFromS3 | Error Path | CDN returns other non-200 | status 500 | Returns wrapped status error, body closed | P2 |  |
+| SV-98 | serveFromS3 | Error Path | CDN returns other non-200 | status 500 | Returns an error wrapping `ErrBadStatusS3`, body closed | P2 |  |
 | SV-99 | serveFromS3 | Error Path | http.Client.Get fails | transport error | Returns that error | P2 |  |
 | SV-100 | serveFromS3 | Edge Case | Missing Content-Type header | no header | Defaults to "image/png" | P3 |  |
 | SV-101 | Close (bytesReadCloser) | Accessor | Called on any bytesReadCloser | any instance | Always returns nil | P3 |  |
 | SV-102 | fetchAndArchive | Happy Path | Mojang returns 200, archive succeeds | 200 with bytes | Returns TextureResult with correct bytes+content-type | P0 |  |
 | SV-103 | fetchAndArchive | Error Path | Mojang returns 404 | status 404 | Returns ErrTextureNotFound | P1 |  |
-| SV-104 | fetchAndArchive | Error Path | Mojang returns other non-200 | status 500 | Returns wrapped status error | P2 |  |
+| SV-104 | fetchAndArchive | Error Path | Mojang returns other non-200 | status 500 | Returns an error wrapping `ErrBadStatusRemote` | P2 |  |
 | SV-105 | fetchAndArchive | Error Path | http.Client.Get fails | transport error | Returns that error | P2 |  |
 | SV-106 | fetchAndArchive | Error Path | Response body read fails | erroring body | Returns that error | P2 | The fake server lies about Content-Length then hijacks the connection, since httptest can't otherwise induce a body-read error |
 | SV-107 | fetchAndArchive | Edge Case | PutTextureInS3 fails | store error | Logged only; response still succeeds; UpsertTextureHash not called | P2 |  |
@@ -227,7 +228,7 @@
 | SV-112 | GetGeyserTextureContent | Error Path | IsGeyserTextureInS3 fails | store error | Returns that error | P2 |  |
 | SV-113 | serveGeyserFromS3 | Happy Path | CDN returns 200 | body+content-type | Returns TextureResult | P1 |  |
 | SV-114 | serveGeyserFromS3 | Error Path | CDN returns 404 | status 404 | Returns ErrTextureNotFound | P1 |  |
-| SV-115 | serveGeyserFromS3 | Error Path | CDN returns other non-200 | status 500 | Returns wrapped status error | P2 |  |
+| SV-115 | serveGeyserFromS3 | Error Path | CDN returns other non-200 | status 500 | Returns an error wrapping `ErrBadStatusS3` | P2 |  |
 | SV-116 | serveGeyserFromS3 | Error Path | http.Client.Get fails | transport error | Returns that error | P2 |  |
 | SV-117 | serveGeyserFromS3 | Edge Case | Missing Content-Type header | no header | Defaults to "image/png" | P3 |  |
 | SV-118 | fetchAndArchiveGeyserTexture | Happy Path | Skin found with valid SkinURL, HTTP 200 | full success path | Archived and returned with correct bytes | P0 |  |
@@ -236,7 +237,7 @@
 | SV-121 | fetchAndArchiveGeyserTexture | Edge Case | skin.SkinURL() == "" | undecodable Value | Returns ErrTextureNotFound | P2 |  |
 | SV-122 | fetchAndArchiveGeyserTexture | Error Path | http.Client.Get fails | transport error | Returns that error | P2 |  |
 | SV-123 | fetchAndArchiveGeyserTexture | Error Path | Skin host returns 404 | status 404 | Returns ErrTextureNotFound | P2 |  |
-| SV-124 | fetchAndArchiveGeyserTexture | Error Path | Skin host returns other non-200 | status 500 | Returns wrapped status error | P2 |  |
+| SV-124 | fetchAndArchiveGeyserTexture | Error Path | Skin host returns other non-200 | status 500 | Returns an error wrapping `ErrBadStatusRemote` | P2 |  |
 | SV-125 | fetchAndArchiveGeyserTexture | Error Path | Response body read fails | erroring body | Returns that error | P2 |  |
 | SV-126 | fetchAndArchiveGeyserTexture | Edge Case | PutGeyserTextureInS3 fails | store error | Logged only; response still succeeds | P2 |  |
 | SV-127 | fetchAndArchiveGeyserTexture | Edge Case | Missing Content-Type header | no header | Defaults to "image/png" | P3 |  |
@@ -318,6 +319,7 @@ Rows marked "(live)" require `TEST_POSTGRES_URL` and/or `TEST_REDIS_URL` and `t.
 | ST-68 | PutTextureInS3 | Happy Path (local fake) | Body implements Len(); PUT returns 200 | fake S3 server | Content-Length header equals Len(); nil error | P1 |  |
 | ST-69 | PutTextureInS3 | Edge Case (local fake) | Body does not implement Len() | fake S3 server | ContentLength left unset; still succeeds | P2 |  |
 | ST-70 | PutTextureInS3 | Error Path (local fake) | PUT returns 500 | fake S3 server | Returns an error wrapping `ErrUploadS3` (message `failed to upload to s3: <cause>`) | P2 |  |
+| ST-77 | PutTextureInS3 | Error Path (local fake) | PUT returns 500, pinning the message | fake S3 server | The error text starts with `failed to upload to s3: ` | P2 | |
 | ST-71 | IsGeyserTextureInS3 | Happy Path (local fake) | HeadObject returns 200 at Geyser key | fake S3 server | Returns (true, nil); request key uses GeyserS3KeyPrefix | P1 |  |
 | ST-72 | IsGeyserTextureInS3 | Edge Case (local fake) | HeadObject returns 404 | fake S3 server | Returns (false, nil) | P2 |  |
 | ST-73 | IsGeyserTextureInS3 | Error Path (local fake) | HeadObject returns 500 | fake S3 server | Returns (false, non-nil error) | P2 |  |
