@@ -322,6 +322,33 @@ func TestGetReleasesHandler(t *testing.T) {
 		}
 	})
 
+	t.Run("PJ-14_EdgeCase_FMLFormatEmptyUpstream", func(t *testing.T) {
+		swapGithubToken(t, "test-token")
+		swapTransport(t, &fakeRoundTripper{resp: fakeResponse(http.StatusOK, `[]`)})
+
+		req := httptest.NewRequest(http.MethodGet, "/projects/releases/group/project?format=fml", nil)
+		req.SetPathValue("group", "group")
+		req.SetPathValue("project", "project")
+		rec := httptest.NewRecorder()
+
+		GetReleasesHandler(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+		}
+		var body map[string]interface{}
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatalf("failed to decode response body: %v", err)
+		}
+		if got := body["homepage"]; got != "https://github.com/group/project/releases" {
+			t.Errorf("homepage = %v, want %v", got, "https://github.com/group/project/releases")
+		}
+		promos, ok := body["promos"].(map[string]interface{})
+		if !ok || len(promos) != 0 {
+			t.Errorf("promos = %v, want an empty object", body["promos"])
+		}
+	})
+
 	t.Run("PJ-13_ErrorPath_UpstreamError", func(t *testing.T) {
 		swapGithubToken(t, "")
 
