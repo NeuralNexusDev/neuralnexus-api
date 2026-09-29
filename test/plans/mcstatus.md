@@ -25,13 +25,13 @@
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
 | SV-01 | NewService | Accessor | construct a service | none | Returns a non-nil `MCStatusService` backed by `*service` | P3 |  |
-| SV-02 | GetJavaServerStatus | Error Path | all of Ping17/16/14/Beta18 fail because the host is unreachable | `host`/`port` point at a closed local TCP port, `queryEnabled=false` | Returns `nil, errors.New("failed to get java server status")` | P1 |  |
-| SV-03 | GetJavaServerStatus | Edge Case | same as SV-02 but `queryEnabled=true`, so `QueryFull` also fails on the same unreachable host | closed local port, `queryEnabled=true` | Still returns `nil, errors.New("failed to get java server status")`; the query-enabled branch does not change the outcome when nothing succeeds | P2 |  |
-| SV-05 | GetBedrockServerStatus | Error Path | `bedrockping.Query` fails because the host is unreachable | `host`/`port` point at a closed local port | Returns `nil, errors.New("failed to get bedrock server status")` | P1 |  |
+| SV-02 | GetJavaServerStatus | Error Path | all of Ping17/16/14/Beta18 fail because the host is unreachable | `host`/`port` point at a closed local TCP port, `queryEnabled=false` | Returns `nil, ErrJavaStatus` | P1 |  |
+| SV-03 | GetJavaServerStatus | Edge Case | same as SV-02 but `queryEnabled=true`, so `QueryFull` also fails on the same unreachable host | closed local port, `queryEnabled=true` | Still returns `nil, ErrJavaStatus`; the query-enabled branch does not change the outcome when nothing succeeds | P2 |  |
+| SV-05 | GetBedrockServerStatus | Error Path | `bedrockping.Query` fails because the host is unreachable | `host`/`port` point at a closed local port | Returns `nil, ErrBedrockStatus` | P1 |  |
 | SV-09 | GetJavaServerStatus | Happy Path | a real, reachable Java server responds to at least one ping variant | `MC_LIVE_JAVA_SERVER` set to `host:port` of a live Java server; `queryEnabled=false` | Returns a non-nil `*MCServerStatus`, nil error; `Host`/`Port` match the input | P1 | Gated: `t.Skip`s when `MC_LIVE_JAVA_SERVER` is unset, same self-skip pattern as `TEST_POSTGRES_URL` |
 | SV-10 | GetBedrockServerStatus | Happy Path | a real, reachable Bedrock server responds | `MC_LIVE_BEDROCK_SERVER` set to `host:port` of a live Bedrock server | Returns a non-nil `*MCServerStatus`, nil error | P1 | Gated: `t.Skip`s when `MC_LIVE_BEDROCK_SERVER` is unset, same self-skip pattern as `TEST_POSTGRES_URL` |
-| SV-07 | GetServerStatus | Happy Path | `isBedrock=false` | unreachable host | Delegates to `GetJavaServerStatus`; returns its distinct error `"failed to get java server status"` | P1 |  |
-| SV-08 | GetServerStatus | Happy Path | `isBedrock=true` | unreachable host | Delegates to `GetBedrockServerStatus`; returns its distinct error `"failed to get bedrock server status"` | P1 |  |
+| SV-07 | GetServerStatus | Happy Path | `isBedrock=false` | unreachable host | Delegates to `GetJavaServerStatus`; returns its distinct error `ErrJavaStatus` | P1 |  |
+| SV-08 | GetServerStatus | Happy Path | `isBedrock=true` | unreachable host | Delegates to `GetBedrockServerStatus`; returns its distinct error `ErrBedrockStatus` | P1 |  |
 
 ## types.go
 

@@ -10,6 +10,11 @@ import (
 )
 
 // MCStatusService - Minecraft Status service
+var (
+	ErrJavaStatus    = errors.New("failed to get java server status")
+	ErrBedrockStatus = errors.New("failed to get bedrock server status")
+)
+
 type MCStatusService interface {
 	GetJavaServerStatus(host string, port int, queryEnabled bool, queryPort int) (*MCServerStatus, error)
 	GetBedrockServerStatus(host string, port int) (*MCServerStatus, error)
@@ -65,7 +70,7 @@ func (s *service) GetJavaServerStatus(host string, port int, queryEnabled bool, 
 		status.Port = int32(port)
 		return status, nil
 	}
-	return nil, errors.New("failed to get java server status")
+	return nil, ErrJavaStatus
 }
 
 // GetBedrockServerStatus - Get Bedrock server status
@@ -73,7 +78,7 @@ func (s *service) GetBedrockServerStatus(host string, port int) (*MCServerStatus
 	connect := host + ":" + fmt.Sprint(port)
 	status, err := bedrockping.Query(connect, 5*time.Second, 150*time.Millisecond)
 	if err != nil {
-		return nil, errors.New("failed to get bedrock server status")
+		return nil, ErrBedrockStatus
 	}
 	return GetBedrockStatus(status), nil
 }

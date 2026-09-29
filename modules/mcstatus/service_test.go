@@ -1,6 +1,7 @@
 package mcstatus
 
 import (
+	"errors"
 	"net"
 	"os"
 	"strconv"
@@ -80,8 +81,8 @@ func TestService_GetJavaServerStatus(t *testing.T) {
 		if status != nil {
 			t.Fatalf("expected nil status, got %+v", status)
 		}
-		if err == nil || err.Error() != "failed to get java server status" {
-			t.Fatalf("expected \"failed to get java server status\", got %v", err)
+		if !errors.Is(err, ErrJavaStatus) {
+			t.Fatalf("expected %v, got %v", ErrJavaStatus, err)
 		}
 	})
 
@@ -94,8 +95,8 @@ func TestService_GetJavaServerStatus(t *testing.T) {
 		if status != nil {
 			t.Fatalf("expected nil status, got %+v", status)
 		}
-		if err == nil || err.Error() != "failed to get java server status" {
-			t.Fatalf("expected \"failed to get java server status\", got %v", err)
+		if !errors.Is(err, ErrJavaStatus) {
+			t.Fatalf("expected %v, got %v", ErrJavaStatus, err)
 		}
 	})
 
@@ -130,8 +131,8 @@ func TestService_GetBedrockServerStatus(t *testing.T) {
 		if status != nil {
 			t.Fatalf("expected nil status, got %+v", status)
 		}
-		if err == nil || err.Error() != "failed to get bedrock server status" {
-			t.Fatalf("expected \"failed to get bedrock server status\", got %v", err)
+		if !errors.Is(err, ErrBedrockStatus) {
+			t.Fatalf("expected %v, got %v", ErrBedrockStatus, err)
 		}
 	})
 
@@ -157,8 +158,8 @@ func TestService_GetServerStatus(t *testing.T) {
 
 		_, err := s.GetServerStatus("127.0.0.1", port, false, false, 0)
 
-		if err == nil || err.Error() != "failed to get java server status" {
-			t.Fatalf("expected dispatch to GetJavaServerStatus (\"failed to get java server status\"), got %v", err)
+		if !errors.Is(err, ErrJavaStatus) {
+			t.Fatalf("expected dispatch to GetJavaServerStatus (%v), got %v", ErrJavaStatus, err)
 		}
 	})
 
@@ -168,8 +169,8 @@ func TestService_GetServerStatus(t *testing.T) {
 
 		_, err := s.GetServerStatus("127.0.0.1", port, true, false, 0)
 
-		if err == nil || err.Error() != "failed to get bedrock server status" {
-			t.Fatalf("expected dispatch to GetBedrockServerStatus (\"failed to get bedrock server status\"), got %v", err)
+		if !errors.Is(err, ErrBedrockStatus) {
+			t.Fatalf("expected dispatch to GetBedrockServerStatus (%v), got %v", ErrBedrockStatus, err)
 		}
 	})
 }

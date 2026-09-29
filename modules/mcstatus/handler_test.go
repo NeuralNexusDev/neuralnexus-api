@@ -248,7 +248,7 @@ func TestIconHandler(t *testing.T) {
 	})
 
 	t.Run("HD-09_ErrorReturnsNotFound", func(t *testing.T) {
-		mock := &hdMockService{javaErr: errors.New("java offline")}
+		mock := &hdMockService{javaErr: errJavaOffline}
 		req := hdRequest(t, "example.com:25565", "")
 		w := httptest.NewRecorder()
 
@@ -258,8 +258,8 @@ func TestIconHandler(t *testing.T) {
 			t.Fatalf("expected 404, got %d", w.Code)
 		}
 		p := hdDecodeProblem(t, w.Body.Bytes())
-		if p.Detail != "java offline" {
-			t.Fatalf("expected detail %q, got %q", "java offline", p.Detail)
+		if p.Detail != errJavaOffline.Error() {
+			t.Fatalf("expected detail %q, got %q", errJavaOffline.Error(), p.Detail)
 		}
 		if len(mock.javaCalls) != 1 {
 			t.Fatalf("expected exactly 1 call, got %d", len(mock.javaCalls))
@@ -284,7 +284,7 @@ func TestIconHandler(t *testing.T) {
 	})
 
 	t.Run("HD-11_BedrockFallsThroughAfterBadRequest", func(t *testing.T) {
-		mock := &hdMockService{javaErr: errors.New("java offline")}
+		mock := &hdMockService{javaErr: errJavaOffline}
 		req := hdRequest(t, "example.com:19132", "bedrock=true")
 		w := httptest.NewRecorder()
 
