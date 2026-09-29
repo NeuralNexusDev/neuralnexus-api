@@ -454,7 +454,7 @@ func (s *store) PutTextureInS3(hash string, body io.ReadCloser) error {
 
 	_, err := s.s3.PutObject(context.Background(), input)
 	if err != nil {
-		return fmt.Errorf("failed to upload to s3: %w", err)
+		return fmt.Errorf("%w: %w", ErrUploadS3, err)
 	}
 	return nil
 }
@@ -491,7 +491,7 @@ func (s *store) PutGeyserTextureInS3(hash string, body io.ReadCloser) error {
 
 	_, err := s.s3.PutObject(context.Background(), input)
 	if err != nil {
-		return fmt.Errorf("failed to upload to s3: %w", err)
+		return fmt.Errorf("%w: %w", ErrUploadS3, err)
 	}
 	return nil
 }

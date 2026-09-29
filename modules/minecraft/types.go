@@ -14,6 +14,17 @@ import (
 	"github.com/google/uuid"
 )
 
+var (
+	ErrMojangAPI             = errors.New("mojang API error")
+	ErrGeyserAPI             = errors.New("geyser API error")
+	ErrNoNamesProvided       = errors.New("no names provided")
+	ErrBatchLimit            = errors.New("batch lookup is limited to 10 names")
+	ErrBadStatusS3           = errors.New("bad status code from S3")
+	ErrBadStatusRemote       = errors.New("bad status code from remote URL")
+	ErrUploadS3              = errors.New("failed to upload to s3")
+	ErrNotDerivedBedrockUUID = errors.New("not a derived Bedrock UUID")
+)
+
 var ErrPlayerNotFound = errors.New("player not found")
 
 // ErrTextureNotFound - the requested texture does not exist upstream
@@ -275,7 +286,7 @@ func uuidToXUID(id string) (int64, error) {
 	}
 	for _, b := range parsed[:8] {
 		if b != 0 {
-			return 0, errors.New("not a derived Bedrock UUID")
+			return 0, ErrNotDerivedBedrockUUID
 		}
 	}
 	return int64(binary.BigEndian.Uint64(parsed[8:16])), nil

@@ -2,6 +2,7 @@ package minecraft
 
 import (
 	"encoding/base64"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -366,8 +367,8 @@ func TestTY36to38_UuidToXUID(t *testing.T) {
 
 	t.Run("TY-38_NonDerivedUUID", func(t *testing.T) {
 		_, err := uuidToXUID(uuid.New().String())
-		if err == nil {
-			t.Error("uuidToXUID() error = nil, want 'not a derived Bedrock UUID' error")
+		if !errors.Is(err, ErrNotDerivedBedrockUUID) {
+			t.Errorf("uuidToXUID() error = %v, want %v", err, ErrNotDerivedBedrockUUID)
 		}
 	})
 }

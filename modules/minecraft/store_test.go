@@ -1024,8 +1024,8 @@ func TestST68to70_PutTextureInS3(t *testing.T) {
 		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusInternalServerError) })
 		s := &store{s3: s3c}
 		err := s.PutTextureInS3("hash", mcSeekableReadCloser{strings.NewReader("hello")})
-		if err == nil || !strings.Contains(err.Error(), "failed to upload to s3") {
-			t.Errorf("err = %v, want a wrapped 'failed to upload to s3' error", err)
+		if !errors.Is(err, ErrUploadS3) {
+			t.Errorf("err = %v, want it to wrap %v", err, ErrUploadS3)
 		}
 	})
 }
@@ -1086,8 +1086,8 @@ func TestST74to75_PutGeyserTextureInS3(t *testing.T) {
 		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusInternalServerError) })
 		s := &store{s3: s3c}
 		err := s.PutGeyserTextureInS3("hash", mcSeekableReadCloser{strings.NewReader("hello")})
-		if err == nil || !strings.Contains(err.Error(), "failed to upload to s3") {
-			t.Errorf("err = %v, want a wrapped 'failed to upload to s3' error", err)
+		if !errors.Is(err, ErrUploadS3) {
+			t.Errorf("err = %v, want it to wrap %v", err, ErrUploadS3)
 		}
 	})
 }
