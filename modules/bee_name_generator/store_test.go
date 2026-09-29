@@ -3,6 +3,7 @@ package beenamegenerator
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -73,9 +74,9 @@ func bngLiveStore(t *testing.T) (*store, *pgxpool.Pool) {
 }
 
 // bngTruncatingConn relays the server's response to the first query written
-// after armed is set with its last 25 bytes cut off (the trailing
-// CommandComplete/ReadyForQuery and part of the last DataRow), then fails the
-// next read, so the client hits an error mid-result.
+// after armed is set with everything from the CommandComplete message onward
+// cut off, then fails the next read, so the client hits an error after the
+// last DataRow but before the result is complete.
 type bngTruncatingConn struct {
 	net.Conn
 	armed   *atomic.Bool
@@ -113,9 +114,20 @@ func (c *bngTruncatingConn) Read(b []byte) (int, error) {
 			return 0, err
 		}
 	}
-	const tail = 25
-	c.pending, c.failed, c.queried = resp[:len(resp)-tail], true, false
+	c.pending, c.failed, c.queried = resp[:bngCommandCompleteOffset(resp)], true, false
 	return c.Read(b)
+}
+
+// bngCommandCompleteOffset returns where the CommandComplete message starts
+// in a simple-protocol response, found by walking the message boundaries.
+func bngCommandCompleteOffset(resp []byte) int {
+	for off := 0; off+5 <= len(resp); {
+		if resp[off] == 'C' {
+			return off
+		}
+		off += 1 + int(binary.BigEndian.Uint32(resp[off+1:]))
+	}
+	return len(resp)
 }
 
 func bngPoolCuttingFirstResult(t *testing.T) (*pgxpool.Pool, *atomic.Bool) {
