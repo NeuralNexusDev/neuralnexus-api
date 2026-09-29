@@ -111,5 +111,6 @@ CREATE TABLE IF NOT EXISTS pets (
     name text not null,
     profile_picture text default null,
     created_at timestamp with time zone default current_timestamp,
-    CONSTRAINT name_check UNIQUE ( name )
+    CONSTRAINT name_check UNIQUE ( name ),
+    CONSTRAINT pets_name_not_empty CHECK ( name <> '' )
 );

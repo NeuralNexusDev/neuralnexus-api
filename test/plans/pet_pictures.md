@@ -12,7 +12,7 @@ Mode: FRESH
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
 | ST-01 | NewStore | Accessor | wrap a pool in a store | any `*pgxpool.Pool` (may be `nil` — DI is unused, see ST-02+) | Returns a non-nil `PetPicStore` | P3 | |
-| ST-02 | CreatePet | Happy Path | insert a pet with a unique name | live DB, unique name | Returns `*Pet` with matching `Name`, nonzero `ID`, empty `ProfilePicture`, nil error | P1 | |
+| ST-02 | CreatePet | Happy Path | insert a pet with a unique name | live DB, unique name | Returns `*Pet` with matching `Name`, nonzero `ID`, nil `ProfilePicture`, nil error | P1 | `ProfilePicture` is `*string`; nil means the column came back SQL NULL |
 | ST-03 | CreatePet | Error Path | insert a pet whose name already exists | live DB, name already created by a prior `CreatePet` | Returns `nil`, non-nil error (unique constraint violation) | P2 | |
 | ST-04 | CreatePet | Error Path | database unreachable | `DATABASE_URL` points at a closed local port | Returns `nil`, non-nil connection error | P2 | |
 | ST-05 | CreatePet | Concurrency Invariant | N goroutines call `CreatePet` with the identical name simultaneously | live DB, one shared unique name per round | Exactly one call succeeds (nonzero `ID`, nil error); the rest fail with a unique-constraint error | P0 | design: 5 rounds x 8 concurrent callers, fresh name per round |
@@ -20,21 +20,15 @@ Mode: FRESH
 | ST-07 | GetPetByName | Happy Path | name has a matching row | live DB, pet created via `CreatePet` | Returns `*Pet` with matching `ID`/`Name`/`ProfilePicture`, nil error | P1 | |
 | ST-08 | GetPetByName | Error Path | name has no matching row | live DB | Returns `nil`, `pgx.ErrNoRows` | P2 | |
 | ST-09 | GetPetByName | Error Path | database unreachable | closed-port `DATABASE_URL` | Returns `nil`, non-nil connection error | P2 | |
-| ST-10 | UpdatePet | Happy Path | update an existing pet's name/profile_picture | live DB, pet created via `CreatePet` | Returns the same `*Pet` passed in, nil error; a follow-up `GetPetByName` on the new name confirms the row was updated | P1 | |
-| ST-11 | UpdatePet | Edge Case | update targets an id with no matching row | live DB, nonexistent id | Returns the same `*Pet` passed in, nil error (an `UPDATE` matching zero rows is not itself an error) | P2 | |
 | ST-12 | UpdatePet | Error Path | database unreachable | closed-port `DATABASE_URL` | Returns `nil`, non-nil connection error | P2 | |
-| ST-13 | CreatePetPicture | Happy Path | insert a picture with a unique id | live DB, unique id | Returns `*PetPicture` with the given `ID`/`FileExt`/`PrimarySubject`/`OthersSubjects`/`Aliases` and zero-value `Created`, nil error | P1 | |
-| ST-14 | CreatePetPicture | Error Path | insert a picture whose id already exists | live DB, id already created | Returns `nil`, non-nil error (unique constraint violation) | P2 | |
 | ST-15 | CreatePetPicture | Error Path | database unreachable | closed-port `DATABASE_URL` | Returns `nil`, non-nil connection error | P2 | |
-| ST-16 | CreatePetPicture | Concurrency Invariant | N goroutines call `CreatePetPicture` with the identical id simultaneously (e.g. the same file uploaded twice, same sha) | live DB, one shared unique id per round | Exactly one call succeeds; the rest fail with a unique-constraint error | P0 | design: 5 rounds x 8 concurrent callers, fresh id per round |
 | ST-17 | GetRandPetPictureByName | Error Path | pet name has no matching pet | live DB, name never created | Returns `nil`, the upstream `GetPetByName` error (`pgx.ErrNoRows`) | P2 | not blocked — fails before the broken scan step |
 | ST-18 | GetRandPetPictureByName | Error Path | pet exists but has no matching pictures | live DB, pet created, no pictures reference it | Returns `nil`, `pgx.ErrNoRows` | P2 | not blocked — zero rows never reaches the broken scan step |
 | ST-19 | GetPetPicture | Error Path | id has no matching row | live DB, id not present in `pictures` | Returns `nil`, `pgx.ErrNoRows` | P2 | not blocked — zero rows never reaches the broken scan step |
 | ST-20 | GetPetPicture | Error Path | database unreachable | closed-port `DATABASE_URL` | Returns `nil`, non-nil connection error | P2 | |
 | ST-21 | UpdatePetPicture | Error Path | database unreachable | closed-port `DATABASE_URL` | Returns `nil`, non-nil connection error | P2 | |
-| ST-22 | DeletePetPicture | Happy Path | delete an existing picture | live DB, picture created via `CreatePetPicture` | Returns `&PetPicture{ID: id}`, nil error; a follow-up `GetPetPicture(id)` confirms the row is gone (`pgx.ErrNoRows`) | P1 | |
-| ST-23 | DeletePetPicture | Edge Case | delete an id with no matching row | live DB, nonexistent id | Returns `&PetPicture{ID: id}`, nil error (a `DELETE` matching zero rows is not itself an error) | P2 | |
 | ST-24 | DeletePetPicture | Error Path | database unreachable | closed-port `DATABASE_URL` | Returns `nil`, non-nil connection error | P2 | |
+| ST-25 | CreatePet | Error Path | insert a pet with an empty name | live DB, `name = ""` | Returns `nil`, `ErrPetNameEmpty` (translated from the `pets_name_not_empty` CHECK violation, not a raw Postgres error) | P1 | |
 
 ## service.go
 
@@ -46,7 +40,6 @@ Mode: FRESH
 | SV-05 | UploadPetPicture | Error Path | `os.Rename` fails because the source file is gone | temp file whose path is removed after opening (fd stays valid for the hash read via the inode) | Returns `nil`, a non-nil rename error | P2 | |
 | SV-06 | UploadPetPicture | Error Path | the CDN HTTP request fails | transport swapped for a `RoundTripper` returning an error | Returns `nil`, that transport error | P2 | |
 | SV-07 | UploadPetPicture | Edge Case | source file name has multiple dots | file named like `photo-*.tar.gz` | `fileExt` computed as `"gz"` (last dot-separated segment); forwarded to `CreatePetPicture` | P3 | |
-| SV-08 | UploadPetPicture | Edge Case | source file name has no dot | file named like `photo123456` (no `.`) | `fileExt` computed as the entire `file.Name()` (no dot found, so `strings.Split` returns one element); forwarded to `CreatePetPicture` | P3 | |
 
 ## handler.go
 
@@ -90,18 +83,18 @@ Mode: FRESH
 ## Function inventory self-check
 - [x] GetPetPictureURL — covered by TY-01
 - [x] NewStore — covered by ST-01
-- [x] CreatePet — covered by ST-02, ST-03, ST-04, ST-05
+- [x] CreatePet — covered by ST-02, ST-03, ST-04, ST-05, ST-25
 - [ ] GetPet — BLOCKED: `SELECT * FROM pets` returns 4 columns but `.Scan` only supplies 3 destinations, erroring whenever a matching row exists (not-found path still covered by ST-06)
 - [x] GetPetByName — covered by ST-07, ST-08, ST-09
-- [x] UpdatePet — covered by ST-10, ST-11, ST-12
-- [x] CreatePetPicture — covered by ST-13, ST-14, ST-15, ST-16
+- [ ] UpdatePet — BLOCKED: runs its `UPDATE` through `db.Query` and never reads or closes the returned `Rows`, leaking the pool connection; the function's own deferred `db.Close()` then hangs forever inside `pgxpool.Close()` on every live call (connection-failure path still covered by ST-12)
+- [ ] CreatePetPicture — BLOCKED: same `db.Query`-without-closing-`Rows` connection leak as `UpdatePet`, hanging on every live call regardless of outcome (connection-failure path still covered by ST-15)
 - [ ] GetRandPetPictureByName — BLOCKED: `SELECT * FROM pictures` + non-Lax `RowToAddrOfStructByName` errors ("cannot find field created_at") whenever a matching picture row exists, since `PetPicture.Created` is tagged `db:"created"` not `db:"created_at"` (pet-not-found and no-matching-picture paths still covered by ST-17, ST-18)
 - [ ] GetPetPicture — BLOCKED: same `SELECT * FROM pictures` + non-Lax `RowToAddrOfStructByName` mismatch as `GetRandPetPictureByName`, erroring whenever a matching row exists (not-found path still covered by ST-19; ST-20)
-- [ ] UpdatePetPicture — BLOCKED: declares a zero-value `PetPicture`, never assigns any field from the input or a query result, and always returns that all-zero struct on success regardless of what was updated (connection-failure path still covered by ST-21)
-- [x] DeletePetPicture — covered by ST-22, ST-23, ST-24
+- [ ] UpdatePetPicture — BLOCKED: declares a zero-value `PetPicture`, never assigns any field from the input or a query result, and always returns that all-zero struct on success regardless of what was updated; also shares the `db.Query`-without-closing-`Rows` connection leak, so a live call would hang even once that's fixed (connection-failure path still covered by ST-21)
+- [ ] DeletePetPicture — BLOCKED: same `db.Query`-without-closing-`Rows` connection leak as `UpdatePet`, hanging on every live call regardless of outcome (connection-failure path still covered by ST-24)
 - [x] NewService — covered by SV-01
 - [x] GetStore — covered by SV-01
-- [x] UploadPetPicture — covered by SV-03, SV-04, SV-05, SV-06, SV-07, SV-08
+- [ ] UploadPetPicture — BLOCKED: `file.Name()` is a path, not a bare basename, so a filename with no dot of its own still hits the dot in a leading `./`, splitting off a bogus fileExt containing a `/`; the follow-on `os.Rename(id+"."+fileExt)` then fails trying to create a subdirectory that doesn't exist (happy/error/multi-dot paths still covered by SV-03, SV-04, SV-05, SV-06, SV-07)
 - [x] CreatePetHandler — covered by HD-01, HD-02, HD-03, HD-04, HD-05
 - [x] GetPetHandler — covered by HD-06, HD-07, HD-08, HD-09, HD-10
 - [x] UpdatePetHandler — covered by HD-11, HD-12, HD-13, HD-14

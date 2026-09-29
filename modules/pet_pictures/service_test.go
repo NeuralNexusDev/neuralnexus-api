@@ -270,21 +270,8 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-08_NoDotFilenameUsesWholeName", func(t *testing.T) {
-		mockPic := &PetPicture{ID: "sv08-mock-id"}
-		file := svTempFile(t, "sv08nodotupload", []byte("bytes"))
-		wantExt := file.Name()
-		t.Cleanup(func() { os.Remove("sv08-mock-id." + wantExt) })
-		mock := &svMockStore{createPetPictureResult: mockPic}
-		svc := NewService(mock)
-
-		swapTransport(t, &svFakeRoundTripper{resp: svOKResponse()})
-
-		if _, err := svc.UploadPetPicture(file, 1, nil, nil); err != nil {
-			t.Fatalf("UploadPetPicture() error = %v, want nil", err)
-		}
-		if len(mock.createPetPictureCalls) != 1 || mock.createPetPictureCalls[0].fileExt != wantExt {
-			t.Errorf("CreatePetPicture fileExt = %q, want %q (file.Name() has no dot, so the whole name is used)", mock.createPetPictureCalls[0].fileExt, wantExt)
-		}
-	})
+	// SV-08 (no-dot filename) is deliberately not tested here: it's a known,
+	// deferred source bug (see test/plans/pet_pictures.md's self-check),
+	// not fixed in this pass, so no test asserts either the buggy behavior
+	// or a fix that doesn't exist yet.
 }
