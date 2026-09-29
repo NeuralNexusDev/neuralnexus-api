@@ -81,6 +81,20 @@ func ppCreatePicture(t *testing.T, pool *pgxpool.Pool, s *store, id string, prim
 	}
 }
 
+var ppSessionTimeZones = []string{"America/Los_Angeles", "Asia/Kolkata"}
+
+func ppAssertCreatedMatchesDatabase(t *testing.T, pool *pgxpool.Pool, id, got string) {
+	t.Helper()
+	var want time.Time
+	if err := pool.QueryRow(context.Background(), "SELECT created_at FROM pictures WHERE id = $1", id).Scan(&want); err != nil {
+		t.Fatalf("failed to read created_at for %q: %v", id, err)
+	}
+	created, err := time.Parse(time.RFC3339Nano, got)
+	if err != nil || !strings.HasSuffix(got, "Z") || !created.Equal(want) {
+		t.Errorf("Created = %q, want the instant %s as RFC3339 UTC ending in Z (parse error: %v)", got, want.UTC().Format(time.RFC3339Nano), err)
+	}
+}
+
 func ppUniqueID(prefix string) string {
 	return prefix + "-" + strings.ReplaceAll(uuid.New().String(), "-", "")
 }
@@ -348,20 +362,21 @@ func TestST17to20and28to29_GetPetPictureAndGetRandPetPictureByName(t *testing.T)
 		}
 	})
 
-	t.Run("ST-28_GetPetPictureHappyPath", func(t *testing.T) {
-		pool := ppLiveDatabase(t)
-		s := &store{}
-		id := ppUniqueID("pic")
-		ppCreatePicture(t, pool, s, id, 7, []int{8}, []string{"x"})
-		got, err := s.GetPetPicture(id)
-		if err != nil || got.ID != id || got.FileExt != "jpg" || got.PrimarySubject != 7 ||
-			!reflect.DeepEqual(got.OthersSubjects, []int{8}) || !reflect.DeepEqual(got.Aliases, []string{"x"}) {
-			t.Fatalf("GetPetPicture() = (%+v, %v), want the created row", got, err)
-		}
-		if created, err := time.Parse(time.RFC3339Nano, got.Created); err != nil || !strings.HasSuffix(got.Created, "Z") || time.Since(created) > time.Hour {
-			t.Errorf("GetPetPicture() Created = %q, want a recent RFC3339 UTC timestamp ending in Z (parse error: %v)", got.Created, err)
-		}
-	})
+	for _, tz := range ppSessionTimeZones {
+		t.Run("ST-28_GetPetPictureHappyPath_"+tz, func(t *testing.T) {
+			t.Setenv("PGTZ", tz)
+			pool := ppLiveDatabase(t)
+			s := &store{}
+			id := ppUniqueID("pic")
+			ppCreatePicture(t, pool, s, id, 7, []int{8}, []string{"x"})
+			got, err := s.GetPetPicture(id)
+			if err != nil || got.ID != id || got.FileExt != "jpg" || got.PrimarySubject != 7 ||
+				!reflect.DeepEqual(got.OthersSubjects, []int{8}) || !reflect.DeepEqual(got.Aliases, []string{"x"}) {
+				t.Fatalf("GetPetPicture() = (%+v, %v), want the created row", got, err)
+			}
+			ppAssertCreatedMatchesDatabase(t, pool, id, got.Created)
+		})
+	}
 
 	t.Run("ST-29_RandPictureHappyPath", func(t *testing.T) {
 		pool := ppLiveDatabase(t)
@@ -394,26 +409,27 @@ func TestST21to22and30_UpdatePetPicture(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-22_HappyPath", func(t *testing.T) {
-		pool := ppLiveDatabase(t)
-		s := &store{}
-		id := ppUniqueID("pic")
-		ppCreatePicture(t, pool, s, id, 1, nil, nil)
-		in := PetPicture{ID: id, FileExt: "webp", PrimarySubject: 2, OthersSubjects: []int{3}, Aliases: []string{"z"}}
-		got, err := s.UpdatePetPicture(in)
-		if err != nil || got.ID != id || got.FileExt != "webp" || got.PrimarySubject != 2 ||
-			!reflect.DeepEqual(got.OthersSubjects, []int{3}) || !reflect.DeepEqual(got.Aliases, []string{"z"}) {
-			t.Fatalf("UpdatePetPicture() = (%+v, %v), want the updated fields and nil error", got, err)
-		}
-		if _, err := time.Parse(time.RFC3339Nano, got.Created); err != nil {
-			t.Errorf("UpdatePetPicture() Created = %q, want the database's RFC3339 value: %v", got.Created, err)
-		}
-		after, err := s.GetPetPicture(id)
-		if err != nil || after.FileExt != "webp" || after.PrimarySubject != 2 ||
-			!reflect.DeepEqual(after.OthersSubjects, []int{3}) || !reflect.DeepEqual(after.Aliases, []string{"z"}) {
-			t.Errorf("GetPetPicture() after update = (%+v, %v), want the updated fields", after, err)
-		}
-	})
+	for _, tz := range ppSessionTimeZones {
+		t.Run("ST-22_HappyPath_"+tz, func(t *testing.T) {
+			t.Setenv("PGTZ", tz)
+			pool := ppLiveDatabase(t)
+			s := &store{}
+			id := ppUniqueID("pic")
+			ppCreatePicture(t, pool, s, id, 1, nil, nil)
+			in := PetPicture{ID: id, FileExt: "webp", PrimarySubject: 2, OthersSubjects: []int{3}, Aliases: []string{"z"}}
+			got, err := s.UpdatePetPicture(in)
+			if err != nil || got.ID != id || got.FileExt != "webp" || got.PrimarySubject != 2 ||
+				!reflect.DeepEqual(got.OthersSubjects, []int{3}) || !reflect.DeepEqual(got.Aliases, []string{"z"}) {
+				t.Fatalf("UpdatePetPicture() = (%+v, %v), want the updated fields and nil error", got, err)
+			}
+			ppAssertCreatedMatchesDatabase(t, pool, id, got.Created)
+			after, err := s.GetPetPicture(id)
+			if err != nil || after.FileExt != "webp" || after.PrimarySubject != 2 ||
+				!reflect.DeepEqual(after.OthersSubjects, []int{3}) || !reflect.DeepEqual(after.Aliases, []string{"z"}) {
+				t.Errorf("GetPetPicture() after update = (%+v, %v), want the updated fields", after, err)
+			}
+		})
+	}
 }
 
 func TestST23to25_DeletePetPicture(t *testing.T) {
