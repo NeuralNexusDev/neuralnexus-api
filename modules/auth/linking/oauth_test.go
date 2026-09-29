@@ -757,7 +757,7 @@ func TestOA17to26and83ResolveOrCreateAccountForPlatformUser(t *testing.T) {
 	})
 
 	t.Run("OA-22_AddLinkFailsCleanupSucceeds", func(t *testing.T) {
-		wantErr := errLinkInsertFailed
+		wantErr := errInsertFailed
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return wantErr }}
 
@@ -771,8 +771,8 @@ func TestOA17to26and83ResolveOrCreateAccountForPlatformUser(t *testing.T) {
 	})
 
 	t.Run("OA-23_AddLinkFailsCleanupAlsoFails", func(t *testing.T) {
-		linkErr := errLinkInsertFailed
-		cleanupErr := errors.New("delete failed")
+		linkErr := errInsertFailed
+		cleanupErr := errCleanupFailed
 		as := &oaMockAccountService{DeleteAccountFunc: func(string) error { return cleanupErr }}
 		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return linkErr }}
 
@@ -839,7 +839,7 @@ func TestOA17to26and83ResolveOrCreateAccountForPlatformUser(t *testing.T) {
 	})
 
 	t.Run("OA-26_RaceLostWinnerAccountFetchFails", func(t *testing.T) {
-		wantErr := errors.New("account fetch failed")
+		wantErr := errLookupFailed
 		as := &oaMockAccountService{GetAccountByIDFunc: func(string) (*auth.Account, error) { return nil, wantErr }}
 		var lookupCalls int
 		las := &oaMockLinkAccountStore{
@@ -861,10 +861,10 @@ func TestOA17to26and83ResolveOrCreateAccountForPlatformUser(t *testing.T) {
 
 	t.Run("OA-83_AddLinkAndCleanupFailMessage", func(t *testing.T) {
 		as := &oaMockAccountService{DeleteAccountFunc: func(string) error { return errCleanupFailed }}
-		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return errLinkInsertFailed }}
+		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return errInsertFailed }}
 
 		_, err := resolveOrCreateAccountForPlatformUser(as, las, auth.PlatformDiscord, user)
-		want := "failed to link account (link insert failed) and failed to clean up the orphaned placeholder account: cleanup failed"
+		want := "failed to link account (insert failed) and failed to clean up the orphaned placeholder account: cleanup failed"
 		if err == nil || err.Error() != want {
 			t.Errorf("error = %v, want %q", err, want)
 		}
@@ -1450,7 +1450,7 @@ func TestOA43to55ResolveOrCreateAccountForMicrosoftUser(t *testing.T) {
 	})
 
 	t.Run("OA-54_GetAccountByIDFails", func(t *testing.T) {
-		wantErr := errors.New("fetch failed")
+		wantErr := errLookupFailed
 		as := &oaMockAccountService{GetAccountByIDFunc: func(string) (*auth.Account, error) { return nil, wantErr }}
 		las := &oaMockLinkAccountStore{
 			GetLinkedAccountByPlatformIDFunc: func(platform auth.Platform, id string) (*auth.LinkedAccount, error) {
@@ -1468,7 +1468,7 @@ func TestOA43to55ResolveOrCreateAccountForMicrosoftUser(t *testing.T) {
 	})
 
 	t.Run("OA-55_EnsureIdentityLinkedFails", func(t *testing.T) {
-		wantErr := errLinkFailed
+		wantErr := errInsertFailed
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{
 			GetLinkedAccountByPlatformIDFunc: func(auth.Platform, string) (*auth.LinkedAccount, error) { return nil, auth.ErrNotFound },
@@ -1500,7 +1500,7 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 	})
 
 	t.Run("OA-57_LinkFailsNewAccountCleanupSucceeds", func(t *testing.T) {
-		wantErr := errLinkFailed
+		wantErr := errInsertFailed
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return wantErr }}
 
@@ -1514,7 +1514,7 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 	})
 
 	t.Run("OA-58_LinkFailsExistingAccountNoCleanup", func(t *testing.T) {
-		wantErr := errLinkFailed
+		wantErr := errInsertFailed
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return wantErr }}
 
@@ -1528,7 +1528,7 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 	})
 
 	t.Run("OA-59_LinkFailsCleanupAlsoFails", func(t *testing.T) {
-		linkErr := errLinkFailed
+		linkErr := errInsertFailed
 		cleanupErr := errCleanupFailed
 		as := &oaMockAccountService{DeleteAccountFunc: func(string) error { return cleanupErr }}
 		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return linkErr }}
@@ -1590,6 +1590,10 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 		if !errors.Is(err, lookupErr) || !errors.Is(err, cleanupErr) {
 			t.Errorf("error = %v, want it to wrap both %v and %v", err, lookupErr, cleanupErr)
 		}
+		want := "failed to link account (lookup failed) and failed to clean up the orphaned placeholder account: cleanup failed"
+		if err.Error() != want {
+			t.Errorf("error = %q, want %q", err.Error(), want)
+		}
 	})
 
 	t.Run("OA-63_RealConflictExistingAccountRejected", func(t *testing.T) {
@@ -1648,10 +1652,14 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 		if !errors.Is(err, cleanupErr) {
 			t.Fatalf("error = %v, want it to wrap %v", err, cleanupErr)
 		}
+		want := "failed to link account (" + auth.ErrAlreadyLinked.Error() + ") and failed to clean up the orphaned placeholder account: cleanup failed"
+		if err.Error() != want {
+			t.Errorf("error = %q, want %q", err.Error(), want)
+		}
 	})
 
 	t.Run("OA-66_RealConflictNewAccountWinnerFetchFails", func(t *testing.T) {
-		wantErr := errors.New("winner fetch failed")
+		wantErr := errLookupFailed
 		as := &oaMockAccountService{GetAccountByIDFunc: func(string) (*auth.Account, error) { return nil, wantErr }}
 		las := &oaMockLinkAccountStore{
 			AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return auth.ErrAlreadyLinked },
@@ -1668,10 +1676,10 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 
 	t.Run("OA-84_LinkAndCleanupFailMessage", func(t *testing.T) {
 		as := &oaMockAccountService{DeleteAccountFunc: func(string) error { return errCleanupFailed }}
-		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return errLinkFailed }}
+		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return errInsertFailed }}
 
 		_, _, err := ensureMicrosoftIdentityLinked(as, las, account, true, auth.PlatformXboxLive, xbox)
-		want := "failed to link account (link failed) and failed to clean up the orphaned placeholder account: cleanup failed"
+		want := "failed to link account (insert failed) and failed to clean up the orphaned placeholder account: cleanup failed"
 		if err == nil || err.Error() != want {
 			t.Errorf("error = %v, want %q", err, want)
 		}

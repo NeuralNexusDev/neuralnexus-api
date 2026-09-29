@@ -995,6 +995,18 @@ type mcSeekableReadCloser struct{ io.ReadSeeker }
 
 func (mcSeekableReadCloser) Close() error { return nil }
 
+func mcRequireUploadS3Text(t *testing.T, err error) {
+	t.Helper()
+	joined, ok := err.(interface{ Unwrap() []error })
+	if !ok || len(joined.Unwrap()) != 2 {
+		t.Fatalf("error = %v, want an error wrapping ErrUploadS3 and its cause", err)
+	}
+	want := ErrUploadS3.Error() + ": " + joined.Unwrap()[1].Error()
+	if err.Error() != want {
+		t.Errorf("error = %q, want %q", err.Error(), want)
+	}
+}
+
 func TestST68to70and77_PutTextureInS3(t *testing.T) {
 	t.Run("ST-68_WithLen", func(t *testing.T) {
 		var gotLen int64 = -1
@@ -1033,9 +1045,7 @@ func TestST68to70and77_PutTextureInS3(t *testing.T) {
 		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusInternalServerError) })
 		s := &store{s3: s3c}
 		err := s.PutTextureInS3("hash", mcSeekableReadCloser{strings.NewReader("hello")})
-		if err == nil || !strings.HasPrefix(err.Error(), "failed to upload to s3: ") {
-			t.Errorf("error = %v, want it to start with %q", err, "failed to upload to s3: ")
-		}
+		mcRequireUploadS3Text(t, err)
 	})
 }
 
@@ -1075,7 +1085,7 @@ func TestST71to73_IsGeyserTextureInS3(t *testing.T) {
 	})
 }
 
-func TestST74to75_PutGeyserTextureInS3(t *testing.T) {
+func TestST74to75and78_PutGeyserTextureInS3(t *testing.T) {
 	t.Run("ST-74_OK", func(t *testing.T) {
 		var gotPath string
 		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) {
@@ -1098,5 +1108,12 @@ func TestST74to75_PutGeyserTextureInS3(t *testing.T) {
 		if !errors.Is(err, ErrUploadS3) {
 			t.Errorf("err = %v, want it to wrap %v", err, ErrUploadS3)
 		}
+	})
+
+	t.Run("ST-78_ServerErrorMessage", func(t *testing.T) {
+		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusInternalServerError) })
+		s := &store{s3: s3c}
+		err := s.PutGeyserTextureInS3("hash", mcSeekableReadCloser{strings.NewReader("hello")})
+		mcRequireUploadS3Text(t, err)
 	})
 }

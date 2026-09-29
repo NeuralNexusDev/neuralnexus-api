@@ -3,7 +3,6 @@ package petpictures
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -272,7 +271,7 @@ func TestHD06to10_GetPetHandler(t *testing.T) {
 	})
 
 	t.Run("HD-10_StoreErrorNotFound", func(t *testing.T) {
-		mock := &hdMockStore{getPetErr: errNoSuchPet}
+		mock := &hdMockStore{getPetErr: pgx.ErrNoRows}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodGet, "/pets/7", nil)
 		req.SetPathValue("id", "7")
@@ -414,7 +413,7 @@ func TestHD15to18_GetRandPetPictureByNameHandler(t *testing.T) {
 	})
 
 	t.Run("HD-18_StoreErrorNotFound", func(t *testing.T) {
-		mock := &hdMockStore{getRandPetPictureByNameErr: errors.New("no pictures")}
+		mock := &hdMockStore{getRandPetPictureByNameErr: pgx.ErrNoRows}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodGet, "/pets/Rex/picture", nil)
 		req.SetPathValue("name", "Rex")
@@ -476,7 +475,7 @@ func TestHD19to22_GetPetPictureHandler(t *testing.T) {
 	})
 
 	t.Run("HD-22_StoreErrorNotFound", func(t *testing.T) {
-		mock := &hdMockStore{getPetPictureErr: errNotFound}
+		mock := &hdMockStore{getPetPictureErr: pgx.ErrNoRows}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodGet, "/pictures/abc123", nil)
 		req.SetPathValue("id", "abc123")
@@ -508,7 +507,7 @@ func TestHD23to27and36_UpdatePetPictureHandler(t *testing.T) {
 	})
 
 	t.Run("HD-24_PetNotFoundNotFound", func(t *testing.T) {
-		mock := &hdMockStore{getPetErr: errNoSuchPet}
+		mock := &hdMockStore{getPetErr: pgx.ErrNoRows}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPut, "/pictures", strings.NewReader(`{"id":"abc123","prime_subj":1}`))
 		w := httptest.NewRecorder()
@@ -651,7 +650,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 	})
 
 	t.Run("HD-31_GetPetPictureErrorNotFound", func(t *testing.T) {
-		mock := &hdMockStore{getPetPictureErr: errNotFound}
+		mock := &hdMockStore{getPetPictureErr: pgx.ErrNoRows}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodDelete, "/pictures/abc123", nil)
 		req.SetPathValue("id", "abc123")
@@ -670,7 +669,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 	t.Run("HD-32_GetPetErrorNotFound", func(t *testing.T) {
 		mock := &hdMockStore{
 			getPetPictureResult: &PetPicture{ID: "abc123", PrimarySubject: 1},
-			getPetErr:           errNoSuchPet,
+			getPetErr:           pgx.ErrNoRows,
 		}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodDelete, "/pictures/abc123", nil)

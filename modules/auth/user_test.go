@@ -448,7 +448,7 @@ func TestUS15to24and38UpdateUserFromPlatform(t *testing.T) {
 
 	t.Run("US-20_AddLinkFailsAndCleanupFailsWrapsBoth", func(t *testing.T) {
 		linkErr := errInsertFailed
-		deleteErr := errors.New("delete failed")
+		deleteErr := errDBDown
 		as := &usFakeAccountStore{deleteErr: deleteErr}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, ErrNotFound}}, addErr: linkErr}
 		svc := usNewService(as, als, &usFakeAccountSettingsStore{})
@@ -490,7 +490,7 @@ func TestUS15to24and38UpdateUserFromPlatform(t *testing.T) {
 	})
 
 	t.Run("US-22_LostRaceRefetchFails", func(t *testing.T) {
-		wantErr := errors.New("refetch failed")
+		wantErr := errDBDown
 		as := &usFakeAccountStore{}
 		als := &usFakeLinkAccountStore{
 			getByPlatformIDResults: []usLinkResult{{nil, ErrNotFound}, {nil, wantErr}},
@@ -505,7 +505,7 @@ func TestUS15to24and38UpdateUserFromPlatform(t *testing.T) {
 	})
 
 	t.Run("US-23_UpdateLinkedAccountFails", func(t *testing.T) {
-		wantErr := errors.New("update failed")
+		wantErr := errDBDown
 		existing := &LinkedAccount{UserID: "u1", Platform: PlatformDiscord, PlatformID: "p1"}
 		as := &usFakeAccountStore{}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{existing, nil}}, updateErr: wantErr}
@@ -518,7 +518,7 @@ func TestUS15to24and38UpdateUserFromPlatform(t *testing.T) {
 	})
 
 	t.Run("US-24_FinalGetAccountFails", func(t *testing.T) {
-		wantErr := errors.New("get failed")
+		wantErr := errDBDown
 		existing := &LinkedAccount{UserID: "u1", Platform: PlatformDiscord, PlatformID: "p1"}
 		as := &usFakeAccountStore{getByIDErr: wantErr}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{existing, nil}}}

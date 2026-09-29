@@ -3,7 +3,6 @@ package mcstatus
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"image"
 	"image/png"
 	"io"
@@ -126,7 +125,7 @@ func TestServerStatusHandler(t *testing.T) {
 	})
 
 	t.Run("HD-03_ErrorReturnsNotFound", func(t *testing.T) {
-		mock := &hdMockService{serverErr: errors.New("server offline")}
+		mock := &hdMockService{serverErr: ErrJavaStatus}
 		req := hdRequest(t, "mc.example.com:25565", "")
 		w := httptest.NewRecorder()
 
@@ -136,8 +135,8 @@ func TestServerStatusHandler(t *testing.T) {
 			t.Fatalf("expected 404, got %d", w.Code)
 		}
 		p := hdDecodeProblem(t, w.Body.Bytes())
-		if p.Detail != "server offline" {
-			t.Fatalf("expected detail %q, got %q", "server offline", p.Detail)
+		if p.Detail != ErrJavaStatus.Error() {
+			t.Fatalf("expected detail %q, got %q", ErrJavaStatus.Error(), p.Detail)
 		}
 	})
 
@@ -248,7 +247,7 @@ func TestIconHandler(t *testing.T) {
 	})
 
 	t.Run("HD-09_ErrorReturnsNotFound", func(t *testing.T) {
-		mock := &hdMockService{javaErr: errJavaOffline}
+		mock := &hdMockService{javaErr: ErrJavaStatus}
 		req := hdRequest(t, "example.com:25565", "")
 		w := httptest.NewRecorder()
 
@@ -258,8 +257,8 @@ func TestIconHandler(t *testing.T) {
 			t.Fatalf("expected 404, got %d", w.Code)
 		}
 		p := hdDecodeProblem(t, w.Body.Bytes())
-		if p.Detail != errJavaOffline.Error() {
-			t.Fatalf("expected detail %q, got %q", errJavaOffline.Error(), p.Detail)
+		if p.Detail != ErrJavaStatus.Error() {
+			t.Fatalf("expected detail %q, got %q", ErrJavaStatus.Error(), p.Detail)
 		}
 		if len(mock.javaCalls) != 1 {
 			t.Fatalf("expected exactly 1 call, got %d", len(mock.javaCalls))
@@ -284,7 +283,7 @@ func TestIconHandler(t *testing.T) {
 	})
 
 	t.Run("HD-11_BedrockFallsThroughAfterBadRequest", func(t *testing.T) {
-		mock := &hdMockService{javaErr: errJavaOffline}
+		mock := &hdMockService{javaErr: ErrJavaStatus}
 		req := hdRequest(t, "example.com:19132", "bedrock=true")
 		w := httptest.NewRecorder()
 
@@ -323,7 +322,7 @@ func TestSimpleStatusHandler(t *testing.T) {
 	})
 
 	t.Run("HD-13_ErrorReturnsOffline", func(t *testing.T) {
-		mock := &hdMockService{serverErr: errors.New("down")}
+		mock := &hdMockService{serverErr: ErrJavaStatus}
 		req := hdRequest(t, "example.com:25565", "")
 		w := httptest.NewRecorder()
 

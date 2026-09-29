@@ -177,7 +177,7 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 	})
 
 	t.Run("SV-04_StoreErrorPropagates", func(t *testing.T) {
-		wantErr := errors.New("db unavailable")
+		wantErr := errDBDown
 		mock := &svMockStore{createPetPictureErr: wantErr}
 		svc := NewService(mock)
 		file := svTempFile(t, "sv04-upload-*.jpg", []byte("bytes"))
@@ -221,7 +221,7 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 		svc := NewService(mock)
 		file := svTempFile(t, "sv06-upload-*.jpg", []byte("bytes"))
 
-		wantErr := errors.New("connection reset")
+		wantErr := errDBDown
 		swapTransport(t, &svFakeRoundTripper{err: wantErr})
 
 		got, err := svc.UploadPetPicture(file, 1, nil, nil)

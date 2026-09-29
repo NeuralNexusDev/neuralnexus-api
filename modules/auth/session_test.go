@@ -11,6 +11,7 @@ import (
 
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/redis/go-redis/v9"
 )
 
 type seFakeSessionStore struct {
@@ -161,7 +162,7 @@ func TestSE04to06IsValid(t *testing.T) {
 
 func TestSE07NewSessionService(t *testing.T) {
 	t.Run("SE-07_WiresGivenSubStore", func(t *testing.T) {
-		fs := &seFakeSessionStore{getFromDBErr: errCacheMiss, getFromCacheErr: errCacheMiss}
+		fs := &seFakeSessionStore{getFromDBErr: ErrNotFound, getFromCacheErr: redis.Nil}
 		svc := NewSessionService(&seFakeStore{ss: fs})
 
 		_, _ = svc.GetSession("s1")
@@ -225,7 +226,7 @@ func TestSE11to14GetSession(t *testing.T) {
 
 	t.Run("SE-12_CacheMissFallsBackToDB", func(t *testing.T) {
 		want := &Session{ID: "s1"}
-		fs := &seFakeSessionStore{getFromCacheErr: errCacheMiss, getFromDBSession: want}
+		fs := &seFakeSessionStore{getFromCacheErr: redis.Nil, getFromDBSession: want}
 		svc := NewSessionService(&seFakeStore{ss: fs})
 
 		got, err := svc.GetSession("s1")
@@ -239,7 +240,7 @@ func TestSE11to14GetSession(t *testing.T) {
 
 	t.Run("SE-13_CacheMissAndDBMiss", func(t *testing.T) {
 		wantErr := ErrNotFound
-		fs := &seFakeSessionStore{getFromCacheErr: errCacheMiss, getFromDBErr: wantErr}
+		fs := &seFakeSessionStore{getFromCacheErr: redis.Nil, getFromDBErr: wantErr}
 		svc := NewSessionService(&seFakeStore{ss: fs})
 
 		got, err := svc.GetSession("s1")
@@ -250,7 +251,7 @@ func TestSE11to14GetSession(t *testing.T) {
 
 	t.Run("SE-14_RepopulateFailureIsFailOpen", func(t *testing.T) {
 		want := &Session{ID: "s1"}
-		fs := &seFakeSessionStore{getFromCacheErr: errCacheMiss, getFromDBSession: want, addToCacheErr: errCacheDown}
+		fs := &seFakeSessionStore{getFromCacheErr: redis.Nil, getFromDBSession: want, addToCacheErr: errCacheDown}
 		svc := NewSessionService(&seFakeStore{ss: fs})
 
 		got, err := svc.GetSession("s1")
@@ -367,7 +368,7 @@ func TestSE21to22CreateJWT(t *testing.T) {
 
 func TestSE23to31ReadJWT(t *testing.T) {
 	newSvcAndToken := func(session *Session) (SessionService, *seFakeSessionStore, string) {
-		fs := &seFakeSessionStore{getFromCacheErr: errCacheMiss, getFromDBSession: session}
+		fs := &seFakeSessionStore{getFromCacheErr: redis.Nil, getFromDBSession: session}
 		svc := NewSessionService(&seFakeStore{ss: fs})
 		tok, err := svc.CreateJWT(session)
 		if err != nil {
@@ -461,7 +462,7 @@ func TestSE23to31ReadJWT(t *testing.T) {
 
 	t.Run("SE-29_RevokedSessionRejected", func(t *testing.T) {
 		session := &Session{ID: "s1", UserID: "u1", IssuedAt: time.Now().Unix(), ExpiresAt: time.Now().Add(time.Hour).Unix()}
-		fs := &seFakeSessionStore{getFromCacheErr: errCacheMiss, getFromDBSession: session}
+		fs := &seFakeSessionStore{getFromCacheErr: redis.Nil, getFromDBSession: session}
 		svc := NewSessionService(&seFakeStore{ss: fs})
 		tok, err := svc.CreateJWT(session)
 		if err != nil {
@@ -477,7 +478,7 @@ func TestSE23to31ReadJWT(t *testing.T) {
 
 	t.Run("SE-30_SubjectMismatch", func(t *testing.T) {
 		signedFor := &Session{ID: "s1", UserID: "user-A", IssuedAt: time.Now().Unix(), ExpiresAt: time.Now().Add(time.Hour).Unix()}
-		fs := &seFakeSessionStore{getFromCacheErr: errCacheMiss}
+		fs := &seFakeSessionStore{getFromCacheErr: redis.Nil}
 		svc := NewSessionService(&seFakeStore{ss: fs})
 		tok, err := svc.CreateJWT(signedFor)
 		if err != nil {
@@ -492,7 +493,7 @@ func TestSE23to31ReadJWT(t *testing.T) {
 
 	t.Run("SE-31_UpdateSessionFailurePropagates", func(t *testing.T) {
 		session := &Session{ID: "s1", UserID: "u1", IssuedAt: time.Now().Unix(), ExpiresAt: time.Now().Add(time.Hour).Unix()}
-		fs := &seFakeSessionStore{getFromCacheErr: errCacheMiss, getFromDBSession: session}
+		fs := &seFakeSessionStore{getFromCacheErr: redis.Nil, getFromDBSession: session}
 		svc := NewSessionService(&seFakeStore{ss: fs})
 		tok, err := svc.CreateJWT(session)
 		if err != nil {
