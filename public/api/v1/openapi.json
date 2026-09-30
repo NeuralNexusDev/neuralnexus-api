@@ -65,9 +65,6 @@
                     "204": {
                         "$ref": "#/components/responses/204NoContent"
                     },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
-                    },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
                     },
@@ -116,9 +113,6 @@
                     "200": {
                         "$ref": "#/components/responses/BNGNameResponse"
                     },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
-                    },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
                     },
@@ -148,9 +142,6 @@
                 "responses": {
                     "204": {
                         "$ref": "#/components/responses/204NoContent"
-                    },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
                     },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
@@ -222,9 +213,6 @@
                     "200": {
                         "$ref": "#/components/responses/BNGNameResponse"
                     },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
-                    },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
                     },
@@ -252,9 +240,6 @@
                 "responses": {
                     "200": {
                         "$ref": "#/components/responses/BNGNameResponse"
-                    },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
                     },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
@@ -286,9 +271,6 @@
                 "responses": {
                     "204": {
                         "$ref": "#/components/responses/204NoContent"
-                    },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
                     },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
@@ -973,9 +955,6 @@
                             }
                         }
                     },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
-                    },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
                     },
@@ -1160,16 +1139,13 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/MCPlayer"
+                                    "$ref": "#/components/schemas/MCProfile"
                                 }
                             }
                         }
                     },
                     "204": {
                         "$ref": "#/components/responses/204NoContent"
-                    },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
                     },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
@@ -1190,9 +1166,6 @@
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/MCUUIDSlug"
-                    },
-                    {
-                        "$ref": "#/components/parameters/UnsignedQuery"
                     }
                 ],
                 "responses": {
@@ -1201,7 +1174,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/MCPlayer"
+                                    "$ref": "#/components/schemas/MCProfile"
                                 }
                             }
                         }
@@ -1245,9 +1218,6 @@
                             }
                         }
                     },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
-                    },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
                     },
@@ -1284,9 +1254,6 @@
                             }
                         }
                     },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
-                    },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
                     },
@@ -1305,10 +1272,13 @@
         "/mcstatus/icon/{host}": {
             "get": {
                 "summary": "Get Minecraft server icon",
-                "description": "Get Minecraft server icon",
+                "description": "Bedrock servers have no icon: bedrock=true is refused with 400.",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/HostSlug"
+                    },
+                    {
+                        "$ref": "#/components/parameters/MCStatusBedrockQuery"
                     }
                 ],
                 "responses": {
@@ -1348,6 +1318,15 @@
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/HostSlug"
+                    },
+                    {
+                        "$ref": "#/components/parameters/MCStatusBedrockQuery"
+                    },
+                    {
+                        "$ref": "#/components/parameters/MCStatusQueryQuery"
+                    },
+                    {
+                        "$ref": "#/components/parameters/MCStatusQueryPortQuery"
                     }
                 ],
                 "responses": {
@@ -1375,31 +1354,13 @@
                         "$ref": "#/components/parameters/HostSlug"
                     },
                     {
-                        "name": "bedrock",
-                        "in": "query",
-                        "description": "Is the server bedrock edition",
-                        "required": false,
-                        "schema": {
-                            "type": "boolean"
-                        }
+                        "$ref": "#/components/parameters/MCStatusBedrockQuery"
                     },
                     {
-                        "name": "query",
-                        "in": "query",
-                        "description": "Is query enabled on the server",
-                        "required": false,
-                        "schema": {
-                            "type": "boolean"
-                        }
+                        "$ref": "#/components/parameters/MCStatusQueryQuery"
                     },
                     {
-                        "name": "query_port",
-                        "in": "query",
-                        "description": "Minecraft server query port",
-                        "required": false,
-                        "schema": {
-                            "type": "integer"
-                        }
+                        "$ref": "#/components/parameters/MCStatusQueryPortQuery"
                     },
                     {
                         "$ref": "#/components/parameters/GameRawQuery"
@@ -1668,9 +1629,6 @@
                             }
                         }
                     },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
-                    },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
                     },
@@ -1935,9 +1893,6 @@
                             }
                         }
                     },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
-                    },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
                     },
@@ -1968,9 +1923,6 @@
                 "responses": {
                     "204": {
                         "$ref": "#/components/responses/204NoContent"
-                    },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
                     },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
@@ -3220,7 +3172,101 @@
                         "items": {
                             "type": "string"
                         },
-                        "description": "Only present on full-profile responses (GET /mc/profile/{uuid}). Absent entirely on name/UUID lookups, which never populate it; an empty array means the profile was fetched and genuinely has no actions."
+                        "description": "Only present on GET /mc/mojang/profile/{uuid}. Absent entirely on name/UUID lookups, which never populate it; an empty array means the profile was fetched and genuinely has no actions."
+                    }
+                }
+            },
+            "MCTexture": {
+                "type": "object",
+                "required": [
+                    "url"
+                ],
+                "properties": {
+                    "url": {
+                        "type": "string"
+                    },
+                    "metadata": {
+                        "type": "object",
+                        "description": "Only present for the slim (Alex) model.",
+                        "required": [
+                            "model"
+                        ],
+                        "properties": {
+                            "model": {
+                                "type": "string",
+                                "enum": [
+                                    "slim"
+                                ]
+                            }
+                        }
+                    }
+                }
+            },
+            "MCProfile": {
+                "type": "object",
+                "description": "A player's full profile with its textures decoded.",
+                "required": [
+                    "id",
+                    "name"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "legacy": {
+                        "type": "boolean",
+                        "description": "Omitted when false."
+                    },
+                    "demo": {
+                        "type": "boolean",
+                        "description": "Omitted when false."
+                    },
+                    "profileActions": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Omitted when the profile has no actions."
+                    },
+                    "textures": {
+                        "type": "object",
+                        "description": "Omitted when the player has no textures property.",
+                        "required": [
+                            "timestamp",
+                            "profileId",
+                            "profileName",
+                            "textures"
+                        ],
+                        "properties": {
+                            "timestamp": {
+                                "type": "integer",
+                                "format": "int64"
+                            },
+                            "profileId": {
+                                "type": "string"
+                            },
+                            "profileName": {
+                                "type": "string"
+                            },
+                            "signatureRequired": {
+                                "type": "boolean",
+                                "description": "Omitted when false."
+                            },
+                            "textures": {
+                                "type": "object",
+                                "properties": {
+                                    "SKIN": {
+                                        "$ref": "#/components/schemas/MCTexture"
+                                    },
+                                    "CAPE": {
+                                        "$ref": "#/components/schemas/MCTexture"
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             },
@@ -3543,6 +3589,33 @@
                 "required": true,
                 "schema": {
                     "type": "string"
+                }
+            },
+            "MCStatusBedrockQuery": {
+                "name": "bedrock",
+                "in": "query",
+                "description": "Is the server bedrock edition",
+                "required": false,
+                "schema": {
+                    "type": "boolean"
+                }
+            },
+            "MCStatusQueryQuery": {
+                "name": "query",
+                "in": "query",
+                "description": "Is query enabled on the server",
+                "required": false,
+                "schema": {
+                    "type": "boolean"
+                }
+            },
+            "MCStatusQueryPortQuery": {
+                "name": "query_port",
+                "in": "query",
+                "description": "Minecraft server query port",
+                "required": false,
+                "schema": {
+                    "type": "integer"
                 }
             },
             "GamertagSlug": {
