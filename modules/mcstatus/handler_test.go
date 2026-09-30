@@ -156,6 +156,9 @@ func TestServerStatusHandler(t *testing.T) {
 		if got := mock.serverCalls[0].port; got != 25565 {
 			t.Fatalf("expected default java port 25565, got %d", got)
 		}
+		if got := mock.serverCalls[0].host; got != "example.com" {
+			t.Fatalf("expected host example.com, got %q", got)
+		}
 	})
 
 	t.Run("HD-05_NoPortSuffixDefaultsBedrockPort", func(t *testing.T) {
@@ -170,6 +173,9 @@ func TestServerStatusHandler(t *testing.T) {
 		}
 		if got := mock.serverCalls[0].port; got != 19132 {
 			t.Fatalf("expected default bedrock port 19132, got %d", got)
+		}
+		if got := mock.serverCalls[0].host; got != "example.com" {
+			t.Fatalf("expected host example.com, got %q", got)
 		}
 		if !mock.serverCalls[0].isBedrock {
 			t.Fatalf("expected isBedrock=true to be forwarded")
@@ -206,8 +212,8 @@ func TestServerStatusHandler(t *testing.T) {
 			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
 		}
 		call := mock.serverCalls[0]
-		if call.host != "example.com:25566" {
-			t.Fatalf("expected host forwarded as-is, got %q", call.host)
+		if call.host != "example.com" {
+			t.Fatalf("expected the bare host, got %q", call.host)
 		}
 		if call.port != 25566 {
 			t.Fatalf("expected port 25566, got %d", call.port)
@@ -248,6 +254,72 @@ func TestServerStatusHandler(t *testing.T) {
 			}
 		})
 	}
+	for _, tc := range []struct {
+		name  string
+		value string
+	}{
+		{"Zero", "0"},
+		{"Negative", "-5"},
+		{"TooLarge", "65536"},
+		{"NotANumber", "abc"},
+	} {
+		t.Run("HD-18_ServerStatus_InvalidQueryPort"+tc.name, func(t *testing.T) {
+			mock := &hdMockService{serverStatus: hdValidStatus(nil)}
+			req := hdRequest(t, "mc.example.com:25570", "query=true&query_port="+tc.value)
+
+			ServerStatusHandler(mock)(httptest.NewRecorder(), req)
+
+			if len(mock.serverCalls) != 1 {
+				t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
+			}
+			if got := mock.serverCalls[0].queryPort; got != 25570 {
+				t.Fatalf("queryPort = %d, want the server port 25570", got)
+			}
+		})
+	}
+
+	for _, bound := range []string{"1", "65535"} {
+		t.Run("HD-18_ServerStatus_BoundaryAccepted"+bound, func(t *testing.T) {
+			mock := &hdMockService{serverStatus: hdValidStatus(nil)}
+			req := hdRequest(t, "mc.example.com:25570", "query=true&query_port="+bound)
+
+			ServerStatusHandler(mock)(httptest.NewRecorder(), req)
+
+			want, _ := strconv.Atoi(bound)
+			if len(mock.serverCalls) != 1 || mock.serverCalls[0].queryPort != want {
+				t.Fatalf("calls = %+v, want one call with queryPort %d", mock.serverCalls, want)
+			}
+		})
+	}
+
+	t.Run("HD-21_HostPortSplitJava", func(t *testing.T) {
+		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
+		req := hdRequest(t, "mc.example.com:25570", "")
+
+		ServerStatusHandler(mock)(httptest.NewRecorder(), req)
+
+		if len(mock.serverCalls) != 1 {
+			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
+		}
+		if call := mock.serverCalls[0]; call.host != "mc.example.com" || call.port != 25570 || call.isBedrock {
+			t.Fatalf("call = %+v, want host mc.example.com, port 25570, java", call)
+		}
+	})
+
+	t.Run("HD-22_HostPortSplitBedrock", func(t *testing.T) {
+		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
+		req := hdRequest(t, "mc.example.com:19140", "bedrock=true")
+
+		ServerStatusHandler(mock)(httptest.NewRecorder(), req)
+
+		if len(mock.serverCalls) != 1 {
+			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
+		}
+		if call := mock.serverCalls[0]; call.host != "mc.example.com" || call.port != 19140 || !call.isBedrock {
+			t.Fatalf("call = %+v, want host mc.example.com, port 19140, bedrock", call)
+		}
+	})
+
 }
 
 func TestIconHandler(t *testing.T) {
@@ -324,6 +396,9 @@ func TestIconHandler(t *testing.T) {
 		if got := mock.javaCalls[0].port; got != 25565 {
 			t.Fatalf("expected default port 25565, got %d", got)
 		}
+		if got := mock.javaCalls[0].host; got != "example.com" {
+			t.Fatalf("expected host example.com, got %q", got)
+		}
 	})
 
 	t.Run("HD-11_BedrockWritesOneBadRequest", func(t *testing.T) {
@@ -343,6 +418,22 @@ func TestIconHandler(t *testing.T) {
 			t.Fatalf("expected no Java status lookup, got %d", len(mock.javaCalls))
 		}
 	})
+	t.Run("HD-23_HostPortSplit", func(t *testing.T) {
+		icon := image.NewRGBA(image.Rect(0, 0, 1, 1))
+		status := NewServerStatus("", 0, "Test", "MOTD", "", 20, 1, nil, "1.20.1", "", ServerTypeJava, nil, icon)
+		mock := &hdMockService{javaStatus: status}
+		req := hdRequest(t, "mc.example.com:25570", "")
+
+		IconHandler(mock)(httptest.NewRecorder(), req)
+
+		if len(mock.javaCalls) != 1 {
+			t.Fatalf("expected 1 call, got %d", len(mock.javaCalls))
+		}
+		if call := mock.javaCalls[0]; call.host != "mc.example.com" || call.port != 25570 {
+			t.Fatalf("call = %+v, want host mc.example.com, port 25570", call)
+		}
+	})
+
 }
 
 func TestSimpleStatusHandler(t *testing.T) {
@@ -396,6 +487,9 @@ func TestSimpleStatusHandler(t *testing.T) {
 		if got := mock.serverCalls[0].port; got != 19132 {
 			t.Fatalf("expected default bedrock port 19132, got %d", got)
 		}
+		if got := mock.serverCalls[0].host; got != "example.com" {
+			t.Fatalf("expected host example.com, got %q", got)
+		}
 	})
 
 	t.Run("HD-15_QueryFlagsForwarded", func(t *testing.T) {
@@ -409,13 +503,10 @@ func TestSimpleStatusHandler(t *testing.T) {
 			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
 		}
 		call := mock.serverCalls[0]
-		if !call.isBedrock || !call.queryEnabled || call.queryPort != 1234 || call.port != 25566 {
-			t.Fatalf("expected flags forwarded (bedrock=true, query=true, queryPort=1234, port=25566), got %+v", call)
+		if !call.isBedrock || !call.queryEnabled || call.queryPort != 1234 || call.port != 25566 || call.host != "example.com" {
+			t.Fatalf("expected flags forwarded (bedrock=true, query=true, queryPort=1234, host=example.com, port=25566), got %+v", call)
 		}
 	})
-}
-
-func TestHD18to19_QueryPortOutOfRangeFallsBackToPort(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		value string
@@ -425,21 +516,7 @@ func TestHD18to19_QueryPortOutOfRangeFallsBackToPort(t *testing.T) {
 		{"TooLarge", "65536"},
 		{"NotANumber", "abc"},
 	} {
-		t.Run("HD-18_ServerStatus"+tc.name, func(t *testing.T) {
-			mock := &hdMockService{serverStatus: hdValidStatus(nil)}
-			req := hdRequest(t, "mc.example.com:25570", "query=true&query_port="+tc.value)
-
-			ServerStatusHandler(mock)(httptest.NewRecorder(), req)
-
-			if len(mock.serverCalls) != 1 {
-				t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
-			}
-			if got := mock.serverCalls[0].queryPort; got != 25570 {
-				t.Fatalf("queryPort = %d, want the server port 25570", got)
-			}
-		})
-
-		t.Run("HD-19_SimpleStatus"+tc.name, func(t *testing.T) {
+		t.Run("HD-19_SimpleStatus_InvalidQueryPort"+tc.name, func(t *testing.T) {
 			mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 			req := hdRequest(t, "mc.example.com:25570", "query=true&query_port="+tc.value)
 
@@ -455,11 +532,11 @@ func TestHD18to19_QueryPortOutOfRangeFallsBackToPort(t *testing.T) {
 	}
 
 	for _, bound := range []string{"1", "65535"} {
-		t.Run("HD-18_ServerStatusBoundaryAccepted"+bound, func(t *testing.T) {
+		t.Run("HD-19_SimpleStatus_BoundaryAccepted"+bound, func(t *testing.T) {
 			mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 			req := hdRequest(t, "mc.example.com:25570", "query=true&query_port="+bound)
 
-			ServerStatusHandler(mock)(httptest.NewRecorder(), req)
+			SimpleStatusHandler(mock)(httptest.NewRecorder(), req)
 
 			want, _ := strconv.Atoi(bound)
 			if len(mock.serverCalls) != 1 || mock.serverCalls[0].queryPort != want {
@@ -467,4 +544,61 @@ func TestHD18to19_QueryPortOutOfRangeFallsBackToPort(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("HD-20_MissingQueryPortDefaultsToPort", func(t *testing.T) {
+		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
+		req := hdRequest(t, "mc.example.com:25570", "query=true")
+
+		SimpleStatusHandler(mock)(httptest.NewRecorder(), req)
+
+		if len(mock.serverCalls) != 1 {
+			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
+		}
+		if call := mock.serverCalls[0]; call.queryPort != call.port || call.port != 25570 {
+			t.Fatalf("call = %+v, want queryPort equal to port 25570", call)
+		}
+	})
+
+	t.Run("HD-24_HostPortSplitJava", func(t *testing.T) {
+		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
+		req := hdRequest(t, "mc.example.com:25570", "")
+
+		SimpleStatusHandler(mock)(httptest.NewRecorder(), req)
+
+		if len(mock.serverCalls) != 1 {
+			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
+		}
+		if call := mock.serverCalls[0]; call.host != "mc.example.com" || call.port != 25570 || call.isBedrock {
+			t.Fatalf("call = %+v, want host mc.example.com, port 25570, java", call)
+		}
+	})
+
+	t.Run("HD-25_HostPortSplitBedrock", func(t *testing.T) {
+		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
+		req := hdRequest(t, "mc.example.com:19140", "bedrock=true")
+
+		SimpleStatusHandler(mock)(httptest.NewRecorder(), req)
+
+		if len(mock.serverCalls) != 1 {
+			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
+		}
+		if call := mock.serverCalls[0]; call.host != "mc.example.com" || call.port != 19140 || !call.isBedrock {
+			t.Fatalf("call = %+v, want host mc.example.com, port 19140, bedrock", call)
+		}
+	})
+
+	t.Run("HD-26_NoPortSuffixDefaultsJavaPort", func(t *testing.T) {
+		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
+		req := hdRequest(t, "example.com", "")
+
+		SimpleStatusHandler(mock)(httptest.NewRecorder(), req)
+
+		if len(mock.serverCalls) != 1 {
+			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
+		}
+		if call := mock.serverCalls[0]; call.host != "example.com" || call.port != 25565 {
+			t.Fatalf("call = %+v, want host example.com, port 25565", call)
+		}
+	})
+
 }

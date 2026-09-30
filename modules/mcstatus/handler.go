@@ -12,8 +12,10 @@ import (
 )
 
 const (
-	minPort = 1
-	maxPort = 65535
+	minPort            = 1
+	maxPort            = 65535
+	defaultJavaPort    = 25565
+	defaultBedrockPort = 19132
 )
 
 const (
@@ -45,6 +47,18 @@ func respondStatusFailure(w http.ResponseWriter, r *http.Request, err error) {
 	responses.InternalServerError(w, r, msgFailedToGetServerStatus)
 }
 
+func splitHostPort(address string, isBedrock bool) (string, int) {
+	if i := strings.LastIndex(address, ":"); i >= 0 {
+		if port, err := strconv.Atoi(address[i+1:]); err == nil {
+			return address[:i], port
+		}
+	}
+	if isBedrock {
+		return address, defaultBedrockPort
+	}
+	return address, defaultJavaPort
+}
+
 func queryPortOrDefault(raw string, port int) int {
 	queryPort, err := strconv.Atoi(raw)
 	if err != nil || queryPort < minPort || queryPort > maxPort {
@@ -60,14 +74,7 @@ func ServerStatusHandler(s MCStatusService) http.HandlerFunc {
 		isBedrock := r.URL.Query().Get("bedrock") == "true"
 		queryEnabled := r.URL.Query().Get("query") == "true"
 		raw := r.URL.Query().Get("raw") == "true"
-		port, err := strconv.Atoi(host[strings.LastIndex(host, ":")+1:])
-		if err != nil {
-			if isBedrock {
-				port = 19132
-			} else {
-				port = 25565
-			}
-		}
+		host, port := splitHostPort(host, isBedrock)
 		queryPort := queryPortOrDefault(r.URL.Query().Get("query_port"), port)
 
 		status, err := s.GetServerStatus(host, port, isBedrock, queryEnabled, queryPort)
@@ -91,10 +98,7 @@ func IconHandler(s MCStatusService) http.HandlerFunc {
 			responses.BadRequest(w, r, msgBedrockNoIcons)
 			return
 		}
-		port, err := strconv.Atoi(host[strings.LastIndex(host, ":")+1:])
-		if err != nil {
-			port = 25565
-		}
+		host, port := splitHostPort(host, false)
 
 		status, err := s.GetJavaServerStatus(host, port, false, 0)
 		if err != nil {
@@ -114,19 +118,12 @@ func SimpleStatusHandler(s MCStatusService) http.HandlerFunc {
 		host := r.PathValue("host")
 		isBedrock := r.URL.Query().Get("bedrock") == "true"
 		queryEnabled := r.URL.Query().Get("query") == "true"
-		port, err := strconv.Atoi(host[strings.LastIndex(host, ":")+1:])
-		if err != nil {
-			if isBedrock {
-				port = 19132
-			} else {
-				port = 25565
-			}
-		}
+		host, port := splitHostPort(host, isBedrock)
 		queryPort := queryPortOrDefault(r.URL.Query().Get("query_port"), port)
 
 		status := "Online"
 		statusCode := http.StatusOK
-		_, err = s.GetServerStatus(host, port, isBedrock, queryEnabled, queryPort)
+		_, err := s.GetServerStatus(host, port, isBedrock, queryEnabled, queryPort)
 		if err != nil {
 			status = "Offline"
 			statusCode = http.StatusNotFound

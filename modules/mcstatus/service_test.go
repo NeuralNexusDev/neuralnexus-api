@@ -198,7 +198,10 @@ func svNewUDPRecorder(t *testing.T, port int) *svUDPRecorder {
 			if err != nil {
 				return
 			}
-			r.packets <- append([]byte(nil), buf[:n]...)
+			select {
+			case r.packets <- append([]byte(nil), buf[:n]...):
+			default:
+			}
 			conn.WriteToUDP([]byte{0}, addr)
 		}
 	}()
