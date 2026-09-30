@@ -550,13 +550,13 @@ func TestSessionMiddleware(t *testing.T) {
 	})
 }
 
-func mwRunRateLimit(svc auth.RateLimitService, prefix string, sessionLimit, ipLimit int, r *http.Request) (rec *httptest.ResponseRecorder, nextCalled bool) {
+func mwRunRateLimit(svc auth.RateLimitService, prefix string, sessionLimit, ipLimit int, r *http.Request) (rec *httptest.ResponseRecorder, nextCalls int) {
 	rec = httptest.NewRecorder()
 	next := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
-		nextCalled = true
+		nextCalls++
 	})
 	RateLimitMiddleware(svc, prefix, sessionLimit, ipLimit)(next).ServeHTTP(rec, r)
-	return rec, nextCalled
+	return rec, nextCalls
 }
 
 func mwRequireDetail(t *testing.T, rec *httptest.ResponseRecorder, want string) {
@@ -585,9 +585,9 @@ func TestRateLimitMiddleware(t *testing.T) {
 		svc := &mwFakeRateLimitSvc{getLimit: 3}
 		r := mwRateLimitRequest(&auth.Session{ID: "s1", UserID: "u1"}, "1.2.3.4:5678")
 
-		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
+		rec, nextCalls := mwRunRateLimit(svc, "rl", 5, 5, r)
 
-		if !nextCalled {
+		if nextCalls != 1 {
 			t.Error("expected next to be called when under the session limit")
 		}
 		if rec.Code != http.StatusOK {
@@ -602,9 +602,9 @@ func TestRateLimitMiddleware(t *testing.T) {
 		svc := &mwFakeRateLimitSvc{getLimit: 10}
 		r := mwRateLimitRequest(&auth.Session{ID: "s1", UserID: "u1"}, "1.2.3.4:5678")
 
-		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
+		rec, nextCalls := mwRunRateLimit(svc, "rl", 5, 5, r)
 
-		if nextCalled {
+		if nextCalls != 0 {
 			t.Error("expected next NOT to be called when over the session limit")
 		}
 		if rec.Code != http.StatusTooManyRequests {
@@ -621,9 +621,9 @@ func TestRateLimitMiddleware(t *testing.T) {
 		svc := &mwFakeRateLimitSvc{incrErr: testerrors.ErrRedisDown, getLimit: 10}
 		r := mwRateLimitRequest(&auth.Session{ID: "s1", UserID: "u1"}, "1.2.3.4:5678")
 
-		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
+		rec, nextCalls := mwRunRateLimit(svc, "rl", 5, 5, r)
 
-		if !nextCalled {
+		if nextCalls != 1 {
 			t.Error("expected next to be called")
 		}
 		if rec.Code != http.StatusOK || rec.Body.Len() != 0 {
@@ -642,9 +642,9 @@ func TestRateLimitMiddleware(t *testing.T) {
 		svc := &mwFakeRateLimitSvc{getErr: testerrors.ErrRedisDown, getErrLimit: 10}
 		r := mwRateLimitRequest(&auth.Session{ID: "s1", UserID: "u1"}, "1.2.3.4:5678")
 
-		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
+		rec, nextCalls := mwRunRateLimit(svc, "rl", 5, 5, r)
 
-		if !nextCalled {
+		if nextCalls != 1 {
 			t.Error("expected next to be called")
 		}
 		if rec.Code != http.StatusOK || rec.Body.Len() != 0 {
@@ -662,9 +662,9 @@ func TestRateLimitMiddleware(t *testing.T) {
 		svc := &mwFakeRateLimitSvc{getLimit: 1}
 		r := mwRateLimitRequest(nil, "9.8.7.6:1234")
 
-		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
+		rec, nextCalls := mwRunRateLimit(svc, "rl", 5, 5, r)
 
-		if !nextCalled {
+		if nextCalls != 1 {
 			t.Error("expected next to be called when under the IP limit")
 		}
 		if rec.Code != http.StatusOK {
@@ -679,9 +679,9 @@ func TestRateLimitMiddleware(t *testing.T) {
 		svc := &mwFakeRateLimitSvc{getLimit: 10}
 		r := mwRateLimitRequest(nil, "9.8.7.6:1234")
 
-		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
+		rec, nextCalls := mwRunRateLimit(svc, "rl", 5, 5, r)
 
-		if nextCalled {
+		if nextCalls != 0 {
 			t.Error("expected next NOT to be called when over the IP limit")
 		}
 		if rec.Code != http.StatusTooManyRequests {
@@ -694,9 +694,9 @@ func TestRateLimitMiddleware(t *testing.T) {
 		svc := &mwFakeRateLimitSvc{getLimit: 1}
 		r := mwRateLimitRequest(nil, "9.8.7.6")
 
-		_, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
+		_, nextCalls := mwRunRateLimit(svc, "rl", 5, 5, r)
 
-		if !nextCalled {
+		if nextCalls != 1 {
 			t.Error("expected next to be called when under the IP limit")
 		}
 		if len(svc.incrCalls) != 1 || svc.incrCalls[0] != "rl:9.8.7.6" {
@@ -709,9 +709,9 @@ func TestRateLimitMiddleware(t *testing.T) {
 		svc := &mwFakeRateLimitSvc{incrErr: testerrors.ErrRedisDown, getLimit: 1}
 		r := mwRateLimitRequest(nil, "9.8.7.6:1234")
 
-		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
+		rec, nextCalls := mwRunRateLimit(svc, "rl", 5, 5, r)
 
-		if !nextCalled {
+		if nextCalls != 1 {
 			t.Error("expected next to be called")
 		}
 		if rec.Code != http.StatusOK || rec.Body.Len() != 0 {
@@ -730,9 +730,9 @@ func TestRateLimitMiddleware(t *testing.T) {
 		svc := &mwFakeRateLimitSvc{incrErr: testerrors.ErrRedisDown, getLimit: 10}
 		r := mwRateLimitRequest(nil, "9.8.7.6:1234")
 
-		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
+		rec, nextCalls := mwRunRateLimit(svc, "rl", 5, 5, r)
 
-		if !nextCalled {
+		if nextCalls != 1 {
 			t.Error("expected next to be called")
 		}
 		if rec.Code != http.StatusOK || rec.Body.Len() != 0 {
@@ -751,9 +751,9 @@ func TestRateLimitMiddleware(t *testing.T) {
 		svc := &mwFakeRateLimitSvc{getErr: testerrors.ErrRedisDown, getErrLimit: 10}
 		r := mwRateLimitRequest(nil, "9.8.7.6:1234")
 
-		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
+		rec, nextCalls := mwRunRateLimit(svc, "rl", 5, 5, r)
 
-		if !nextCalled {
+		if nextCalls != 1 {
 			t.Error("expected next to be called")
 		}
 		if rec.Code != http.StatusOK || rec.Body.Len() != 0 {
@@ -786,8 +786,8 @@ func TestRateLimitMiddleware(t *testing.T) {
 					defer wg.Done()
 					<-start
 					r := mwRateLimitRequest(session, "1.2.3.4:5678")
-					_, nextCalled := mwRunRateLimit(svc, "rl-concurrent", limit, limit, r)
-					if nextCalled {
+					_, nextCalls := mwRunRateLimit(svc, "rl-concurrent", limit, limit, r)
+					if nextCalls == 1 {
 						atomic.AddInt32(&passed, 1)
 					}
 				}()
