@@ -3612,7 +3612,7 @@
             "MCStatusQueryPortQuery": {
                 "name": "query_port",
                 "in": "query",
-                "description": "Minecraft server query port. Defaults to the server port (from host:port, else 25565, or 19132 for bedrock) when omitted or not a number.",
+                "description": "Minecraft server query port. Accepted but currently not used: the query is always sent to the server port.",
                 "required": false,
                 "schema": {
                     "type": "integer"
