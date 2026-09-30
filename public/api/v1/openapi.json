@@ -1983,7 +1983,7 @@
             },
             "patch": {
                 "summary": "Update the caller's own account settings",
-                "description": "Requires a valid session. Always operates on the caller's own account. Disabling password login is refused with 400 unless another login method is linked and enabled; enabling it is refused with 400 if no password is set.",
+                "description": "Requires a valid session. Always operates on the caller's own account. Disabling password login is refused with 400 unless another verified, login-enabled platform is linked; enabling it is refused with 400 if no password is set.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -2432,7 +2432,7 @@
             },
             "patch": {
                 "summary": "Update a user's account settings",
-                "description": "Requires the admin:users scope, unless the caller is updating their own account. Disabling password login is refused with 400 unless another login method is linked and enabled; enabling it is refused with 400 if no password is set.",
+                "description": "Requires the admin:users scope, unless the caller is updating their own account. Disabling password login is refused with 400 unless another verified, login-enabled platform is linked; enabling it is refused with 400 if no password is set.",
                 "security": [
                     {
                         "bearerAuth": []
