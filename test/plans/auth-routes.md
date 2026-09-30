@@ -145,4 +145,3 @@
 | US-63 | UpdateUserFromPlatformHandler | Error Path | UserService.UpdateUserFromPlatform returns not found | Admin session, valid body, service returns `auth.ErrNotFound` | 404 Not Found `msgUserNotFound` | P2 |  |
 | US-64 | UpdateUserFromPlatformHandler | Error Path | UserService.UpdateUserFromPlatform returns a duplicate email | Admin session, valid body, service returns `auth.ErrEmailAlreadyExists` | 409 Conflict `msgEmailAlreadyExists` | P2 |  |
 | US-65 | UpdateUserFromPlatformHandler | Error Path | UserService.UpdateUserFromPlatform returns a duplicate username | Admin session, valid body, service returns `auth.ErrUsernameAlreadyExists` | 409 Conflict `msgUsernameAlreadyExists` | P2 |  |
-| US-66 | DeleteUserHandler | Error Path | UserService.DeleteUser returns not found | Admin session, service returns `auth.ErrNotFound` | 404 Not Found `msgUserNotFound` | P2 |  |

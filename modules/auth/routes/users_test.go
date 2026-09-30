@@ -913,15 +913,3 @@ func TestUS65UpdateUserFromPlatformHandlerUsernameExistsMapsTo409(t *testing.T) 
 		expectDetail(t, w, msgUsernameAlreadyExists)
 	})
 }
-
-func TestUS66DeleteUserHandlerNotFoundMapsTo404(t *testing.T) {
-	svc := &stubUserService{deleteUserErr: auth.ErrNotFound}
-	r := newSessionRequest(http.MethodDelete, adminUsersSession("admin1"), "u1", "", "")
-	w := httptest.NewRecorder()
-
-	t.Run("US-66_DeleteUserNotFoundMapsTo404", func(t *testing.T) {
-		DeleteUserHandler(svc)(w, r)
-		expectStatus(t, w, http.StatusNotFound)
-		expectDetail(t, w, msgUserNotFound)
-	})
-}

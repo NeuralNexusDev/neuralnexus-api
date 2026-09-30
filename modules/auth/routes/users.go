@@ -235,10 +235,6 @@ func DeleteUserHandler(service auth.UserService) http.HandlerFunc {
 		userID := r.PathValue("user_id")
 		err := service.DeleteUser(userID)
 		if err != nil {
-			if errors.Is(err, auth.ErrNotFound) {
-				responses.NotFound(w, r, msgUserNotFound)
-				return
-			}
 			log.Println(logFailedToDeleteUser, err)
 			responses.InternalServerError(w, r, msgFailedToDeleteUser)
 			return

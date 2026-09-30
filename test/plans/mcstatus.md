@@ -16,7 +16,7 @@
 | HD-10 | IconHandler | Edge Case | host has no `:port` suffix | host = `"example.com"` | Port parse fails, defaults to 25565 (regardless of `bedrock`), forwarded to `GetJavaServerStatus` | P2 |  |
 | HD-11 | IconHandler | Error Path | `bedrock=true` | any host | `responses.BadRequest` writes exactly one response: status 400, the whole body decodes as a single problem whose `detail` is `msgBedrockNoIcons`, and `GetJavaServerStatus` is never called | P1 |  |
 | HD-12 | SimpleStatusHandler | Happy Path | `GetServerStatus` succeeds | mock success | Response 200, `Content-Type: text/plain`, body `"Online"` | P1 |  |
-| HD-13 | SimpleStatusHandler | Error Path | `GetServerStatus` fails | mock returns `nil, err` | Response 404, body `"Offline"` (`ErrJavaStatus`) | P1 |  |
+| HD-13 | SimpleStatusHandler | Error Path | `GetServerStatus` fails | mock returns `nil, err` | Response 404, body `"Offline"` | P1 |  |
 | HD-14 | SimpleStatusHandler | Edge Case | host has no `:port` suffix, `bedrock=true` | host = `"example.com"` | Port defaults to 19132, forwarded to `GetServerStatus` | P2 |  |
 | HD-15 | SimpleStatusHandler | Happy Path | `bedrock=true`, `query=true`, explicit `query_port` given | full query string | `isBedrock`, `queryEnabled`, `queryPort`, `port` all forwarded to `GetServerStatus` unchanged | P2 |  |
 | HD-16 | ServerStatusHandler | Error Path | `s.GetServerStatus` returns `ErrJavaStatus`, `ErrBedrockStatus` (also wrapped with a cause) or an unrecognized error | mock returns `nil, err` | 502 Bad Gateway with `msgJavaStatusFailed` or `msgBedrockStatusFailed` for the sentinels; 500 Internal Server Error with `msgFailedToGetServerStatus` for an unrecognized error; no cause text | P1 | |
