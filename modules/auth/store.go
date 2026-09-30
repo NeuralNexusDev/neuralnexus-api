@@ -251,6 +251,9 @@ func (s *store) GetSessionFromDB(id string) (*Session, error) {
 
 	session, err = pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Session])
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
 		return nil, err
 	}
 	return session, nil
@@ -446,6 +449,12 @@ func (s *store) GetLinkedAccountByPlatformName(platform Platform, platformName s
 
 	al, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[LinkedAccount])
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		if errors.Is(err, pgx.ErrTooManyRows) {
+			return nil, ErrDuplicateLinkedAccount
+		}
 		return nil, err
 	}
 	return al, nil
@@ -760,6 +769,9 @@ func (s *store) GetOAuthTokenByUserID(userID string, platform Platform) (*OAuthT
 
 	token, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[OAuthToken])
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
 		return nil, err
 	}
 	return token, nil

@@ -56,17 +56,17 @@
 | SE-17 | UpdateSession | Edge Case | `UpdateSessionInDB` succeeds, `AddSessionToCache` fails | | Returns nil anyway (fail-open) | P1 |  |
 | SE-18 | DeleteSession | Happy Path | `DeleteSessionInDB` and `DeleteSessionFromCache` both succeed | | Returns nil | P1 |  |
 | SE-19 | DeleteSession | Error Path | `DeleteSessionInDB` fails | | Returns that error; cache eviction never attempted | P1 |  |
-| SE-20 | DeleteSession | Error Path | `DeleteSessionInDB` succeeds, `DeleteSessionFromCache` fails | | Returns an error wrapping the cache eviction failure (fail-closed, unlike Add/Update) | P0 |  |
+| SE-20 | DeleteSession | Error Path | `DeleteSessionInDB` succeeds, `DeleteSessionFromCache` fails | | Returns an error wrapping `testerrors.ErrCacheDown` (fail-closed, unlike Add/Update) | P0 |  |
 | SE-21 | CreateJWT | Happy Path | Session with nonzero `ExpiresAt` | | Returns a signed JWT string, err nil; decodes back to matching claims | P1 |  |
 | SE-22 | CreateJWT | Edge Case | `Session.ExpiresAt == 0` | | Returned JWT omits the `exp` claim entirely | P0 |  |
 | SE-23 | ReadJWT | Happy Path | Valid JWT for an existing session whose `UserID` matches the token subject | `store.GetSession` finds it | Returns the session, nil error; `LastUsedAt` bumped via `UpdateSession` | P1 |  |
 | SE-24 | ReadJWT | Error Path | Malformed/garbage token string | | Returns nil, parse error | P2 |  |
 | SE-25 | ReadJWT | Error Path | Token signed with a different secret / wrong algorithm | | Returns nil, error (signature/alg validation failure) | P1 |  |
-| SE-26 | ReadJWT | Error Path | Token's audience is empty | | Returns nil, "missing audience" error | P1 |  |
-| SE-27 | ReadJWT | Error Path | Token's audience contains an empty-string entry | | Returns nil, "empty audience entry" error | P2 |  |
-| SE-28 | ReadJWT | Error Path | Token's audience doesn't match `NN_SITE_URL`/`NN_API_URL` | | Returns nil, "invalid audience: ..." error | P1 |  |
+| SE-26 | ReadJWT | Error Path | Token's audience is empty | | Returns nil, `ErrMissingAudience` | P1 |  |
+| SE-27 | ReadJWT | Error Path | Token's audience contains an empty-string entry | | Returns nil, `ErrEmptyAudienceEntry` | P2 |  |
+| SE-28 | ReadJWT | Error Path | Token's audience doesn't match `NN_SITE_URL`/`NN_API_URL` | | Returns nil, an error wrapping `ErrInvalidAudience` | P1 |  |
 | SE-29 | ReadJWT | Error Path | Session lookup fails (e.g. session was deleted/revoked) even though the JWT is validly signed and unexpired | `store.GetSession` returns an error | Returns nil, an error wrapping `ErrNotFound` | P0 |  |
-| SE-30 | ReadJWT | Error Path | Session found but its `UserID` doesn't match the token's `Subject` claim | | Returns nil, "session does not match token subject" error | P0 |  |
+| SE-30 | ReadJWT | Error Path | Session found but its `UserID` doesn't match the token's `Subject` claim | | Returns nil, `ErrSessionSubjectMismatch` | P0 |  |
 | SE-31 | ReadJWT | Error Path | `UpdateSession` (LastUsedAt bump) fails after a valid lookup | | Returns nil, that error | P2 |  |
 | SE-32 | init | Happy Path | Package loads under the required `JWT_SECRET`/`NN_SITE_URL`/`NN_API_URL` env (the precondition every other test in this file already runs under) | | `JWT_SECRET` and `validAudiences` are populated from env without `log.Fatal` firing; `validAudiences == []string{NN_SITE_URL, NN_API_URL}` | P2 | Asserts init's already-established postcondition rather than re-invoking it |
 | SE-33 | init | Error Path | `JWT_SECRET` unset | Test binary re-exec'd as a subprocess with `JWT_SECRET=""`, other required env vars inherited unchanged | Subprocess exits non-zero via `log.Fatal(msgJWTSecretUnset)` | P1 | Re-exec/TestCrasher pattern (see `os/exec` docs) — init() runs unconditionally at process start, before any `-test.run` filtering |
@@ -151,6 +151,10 @@
 | ST-73 | SetPasswordAuthEnabled | Concurrency Invariant | `SetPasswordAuthEnabled(false)` races `SetLinkedAccountLoginEnabled` (sole link, false) on the same account | Same lock, many trials | Exactly one succeeds every trial; account never ends up with neither | P0 |  |
 | ST-74 | GetLinkedAccountsByUserID | Happy Path | Two linked accounts exist for a user | Real Postgres | Returns both rows | P2 |  |
 | ST-75 | AddLinkedAccountToDB | Error Path | Second insert reuses an existing `(platform, platformID)` pair under a different `userID` | Real Postgres unique-violation on `linked_accounts_platform_unique` | Returns `ErrAlreadyLinked` | P0 |  |
+| ST-76 | GetSessionFromDB | Error Path | No session with that ID | Real Postgres, unknown session ID | Returns nil, `ErrNotFound` | P2 | |
+| ST-77 | GetLinkedAccountByPlatformName | Error Path | No linked account with that platform and username | Real Postgres | Returns nil, `ErrNotFound` | P2 | |
+| ST-78 | GetLinkedAccountByPlatformName | Edge Case | Two linked accounts share the platform and username | Real Postgres, two users linked on the same platform with the same username | Returns nil, `ErrDuplicateLinkedAccount` | P2 | |
+| ST-79 | GetOAuthTokenByUserID | Error Path | No token for that user and platform | Real Postgres | Returns nil, `ErrNotFound` | P2 | |
 
 ## types.go
 

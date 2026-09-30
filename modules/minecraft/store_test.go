@@ -171,8 +171,8 @@ func TestST02to04_GetPlayerByUUID(t *testing.T) {
 	t.Run("ST-04_Live_NotFound", func(t *testing.T) {
 		s := mcLiveStoreDB(t)
 		_, err := s.GetPlayerByUUID(uuid.New().String())
-		if err == nil {
-			t.Error("expected a non-nil error for an unknown id")
+		if !errors.Is(err, ErrPlayerNotFound) {
+			t.Errorf("error = %v, want %v", err, ErrPlayerNotFound)
 		}
 	})
 }
@@ -205,8 +205,8 @@ func TestST05to07_GetPlayerByName(t *testing.T) {
 	t.Run("ST-07_Live_NotFound", func(t *testing.T) {
 		s := mcLiveStoreDB(t)
 		_, err := s.GetPlayerByName("definitely-not-a-real-name-" + mcUniqueHash("n"))
-		if err == nil {
-			t.Error("expected a non-nil error for an unknown name")
+		if !errors.Is(err, ErrPlayerNotFound) {
+			t.Errorf("error = %v, want %v", err, ErrPlayerNotFound)
 		}
 	})
 }
@@ -262,8 +262,8 @@ func TestST08to11_GetProfileByUUID(t *testing.T) {
 	t.Run("ST-11_Live_NotFound", func(t *testing.T) {
 		s := mcLiveStoreDB(t)
 		_, err := s.GetProfileByUUID(uuid.New().String())
-		if err == nil {
-			t.Error("expected a non-nil error for an unknown id")
+		if !errors.Is(err, ErrPlayerNotFound) {
+			t.Errorf("error = %v, want %v", err, ErrPlayerNotFound)
 		}
 	})
 }

@@ -250,14 +250,14 @@ Rows marked "(live)" require `TEST_POSTGRES_URL` and/or `TEST_REDIS_URL` and `t.
 | ST-01 | NewStore | Accessor | Construct with given db/rdb/s3 | valid args | Returned *store wraps exactly the given values | P3 |  |
 | ST-02 | GetPlayerByUUID | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |  |
 | ST-03 | GetPlayerByUUID | Happy Path (live) | Row seeded via UpsertPlayer | live DB | Returns matching Player (ProfileActions left zero-value: lax mapping) | P1 |  |
-| ST-04 | GetPlayerByUUID | Error Path (live) | No matching id | live DB, unknown id | Returns non-nil error | P2 |  |
+| ST-04 | GetPlayerByUUID | Error Path (live) | No matching id | live DB, unknown id | Returns `ErrPlayerNotFound` | P2 |  |
 | ST-05 | GetPlayerByName | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |  |
 | ST-06 | GetPlayerByName | Happy Path (live) | Row seeded via UpsertPlayer | live DB | Returns matching Player | P1 |  |
-| ST-07 | GetPlayerByName | Error Path (live) | No matching name | live DB, unknown name | Returns non-nil error | P2 |  |
+| ST-07 | GetPlayerByName | Error Path (live) | No matching name | live DB, unknown name | Returns `ErrPlayerNotFound` | P2 |  |
 | ST-08 | GetProfileByUUID | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |  |
 | ST-09 | GetProfileByUUID | Happy Path (live) | Player+textures seeded | live DB | Returns Profile with decoded Textures | P1 |  |
 | ST-10 | GetProfileByUUID | Edge Case (live) | Player seeded, no textures row | live DB | Returns Profile with Textures == nil | P2 |  |
-| ST-11 | GetProfileByUUID | Error Path (live) | No matching player | live DB, unknown id | Returns non-nil error | P2 |  |
+| ST-11 | GetProfileByUUID | Error Path (live) | No matching player | live DB, unknown id | Returns `ErrPlayerNotFound` | P2 |  |
 | ST-12 | getTextures | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P3 |  |
 | ST-13 | getTextures | Happy Path (live) | Texture row present | live DB | Returns decoded *TexturesValue | P2 |  |
 | ST-14 | getTextures | Edge Case (live) | No texture row for player | live DB | Returns (nil, nil) | P2 |  |

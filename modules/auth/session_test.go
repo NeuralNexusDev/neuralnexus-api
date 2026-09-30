@@ -426,8 +426,8 @@ func TestSE23to31ReadJWT(t *testing.T) {
 			t.Fatalf("failed to build fixture token: %v", err)
 		}
 		svc := NewSessionService(&seFakeStore{ss: &seFakeSessionStore{}})
-		if _, err := svc.ReadJWT(tok); err == nil {
-			t.Fatal("expected an error for a token with an empty audience")
+		if _, err := svc.ReadJWT(tok); !errors.Is(err, ErrMissingAudience) {
+			t.Fatalf("ReadJWT() error = %v, want %v", err, ErrMissingAudience)
 		}
 	})
 
@@ -441,8 +441,8 @@ func TestSE23to31ReadJWT(t *testing.T) {
 			t.Fatalf("failed to build fixture token: %v", err)
 		}
 		svc := NewSessionService(&seFakeStore{ss: &seFakeSessionStore{}})
-		if _, err := svc.ReadJWT(tok); err == nil {
-			t.Fatal("expected an error for a token with an empty-string audience entry")
+		if _, err := svc.ReadJWT(tok); !errors.Is(err, ErrEmptyAudienceEntry) {
+			t.Fatalf("ReadJWT() error = %v, want %v", err, ErrEmptyAudienceEntry)
 		}
 	})
 
@@ -456,8 +456,8 @@ func TestSE23to31ReadJWT(t *testing.T) {
 			t.Fatalf("failed to build fixture token: %v", err)
 		}
 		svc := NewSessionService(&seFakeStore{ss: &seFakeSessionStore{}})
-		if _, err := svc.ReadJWT(tok); err == nil {
-			t.Fatal("expected an error for a token with an audience that matches neither NN_SITE_URL nor NN_API_URL")
+		if _, err := svc.ReadJWT(tok); !errors.Is(err, ErrInvalidAudience) {
+			t.Fatalf("ReadJWT() error = %v, want %v", err, ErrInvalidAudience)
 		}
 	})
 
@@ -487,8 +487,8 @@ func TestSE23to31ReadJWT(t *testing.T) {
 		}
 		fs.getFromDBSession = &Session{ID: "s1", UserID: "user-B", ExpiresAt: signedFor.ExpiresAt}
 
-		if _, err := svc.ReadJWT(tok); err == nil {
-			t.Fatal("expected an error when the stored session's UserID doesn't match the token subject")
+		if _, err := svc.ReadJWT(tok); !errors.Is(err, ErrSessionSubjectMismatch) {
+			t.Fatalf("ReadJWT() error = %v, want %v", err, ErrSessionSubjectMismatch)
 		}
 	})
 

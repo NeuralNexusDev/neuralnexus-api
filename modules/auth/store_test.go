@@ -448,6 +448,12 @@ func TestST46DeleteOAuthToken(t *testing.T) {
 // files' ranges so it can't delete their data.
 func stLiveStore(t *testing.T) (AccountStore, LinkAccountStore, AccountSettingsStore) {
 	t.Helper()
+	s := stLiveFullStore(t)
+	return s.Account(), s.LinkAccount(), s.AccountSettings()
+}
+
+func stLiveFullStore(t *testing.T) Store {
+	t.Helper()
 
 	pgURL := os.Getenv("TEST_POSTGRES_URL")
 	if pgURL == "" {
@@ -483,6 +489,29 @@ func stLiveStore(t *testing.T) (AccountStore, LinkAccountStore, AccountSettingsS
 			CONSTRAINT linked_accounts_unique UNIQUE (user_id, platform),
 			CONSTRAINT linked_accounts_platform_unique UNIQUE (platform, platform_id)
 		)`,
+		`CREATE TABLE IF NOT EXISTS sessions (
+			session_id BIGINT PRIMARY KEY NOT NULL,
+			user_id BIGINT NOT NULL,
+			permissions TEXT[] NOT NULL,
+			iat BIGINT NOT NULL,
+			lua BIGINT NOT NULL,
+			exp BIGINT NOT NULL,
+			FOREIGN KEY (user_id) REFERENCES accounts(user_id)
+		)`,
+		`CREATE TABLE IF NOT EXISTS oauth_tokens (
+			user_id BIGINT NOT NULL,
+			platform TEXT NOT NULL,
+			access_token TEXT NOT NULL,
+			token_type TEXT,
+			refresh_token TEXT,
+			expiry BIGINT,
+			expires_in BIGINT,
+			scope TEXT[],
+			created_at timestamp with time zone default current_timestamp,
+			updated_at timestamp with time zone default current_timestamp,
+			FOREIGN KEY (user_id) REFERENCES accounts(user_id),
+			CONSTRAINT oauth_tokens_unique UNIQUE (user_id, platform)
+		)`,
 		`CREATE TABLE IF NOT EXISTS account_settings (
 			user_id BIGINT PRIMARY KEY NOT NULL REFERENCES accounts(user_id),
 			password_auth BOOLEAN NOT NULL DEFAULT true,
@@ -495,14 +524,15 @@ func stLiveStore(t *testing.T) (AccountStore, LinkAccountStore, AccountSettingsS
 	}
 
 	t.Cleanup(func() {
+		db.Exec(context.Background(), "DELETE FROM sessions WHERE user_id BETWEEN 910000000000000000 AND 910000000000009999")
+		db.Exec(context.Background(), "DELETE FROM oauth_tokens WHERE user_id BETWEEN 910000000000000000 AND 910000000000009999")
 		db.Exec(context.Background(), "DELETE FROM account_settings WHERE user_id BETWEEN 910000000000000000 AND 910000000000009999")
 		db.Exec(context.Background(), "DELETE FROM linked_accounts WHERE user_id BETWEEN 910000000000000000 AND 910000000000009999")
 		db.Exec(context.Background(), "DELETE FROM accounts WHERE user_id BETWEEN 910000000000000000 AND 910000000000009999")
 		db.Close()
 	})
 
-	s := NewStore(db, nil)
-	return s.Account(), s.LinkAccount(), s.AccountSettings()
+	return NewStore(db, nil)
 }
 
 func stSeedBareAccount(t *testing.T, as AccountStore, userID string) {
@@ -1128,6 +1158,43 @@ func TestST75AddLinkedAccountToDBDuplicatePlatformID(t *testing.T) {
 		})
 		if !errors.Is(err, ErrAlreadyLinked) {
 			t.Errorf("expected ErrAlreadyLinked, got %v", err)
+		}
+	})
+}
+
+func TestST76to79_NotFoundSentinels(t *testing.T) {
+	s := stLiveFullStore(t)
+
+	t.Run("ST-76_GetSessionFromDBNotFound", func(t *testing.T) {
+		got, err := s.Session().GetSessionFromDB("910000000000000101")
+		if got != nil || !errors.Is(err, ErrNotFound) {
+			t.Errorf("GetSessionFromDB() = (%v, %v), want (nil, %v)", got, err, ErrNotFound)
+		}
+	})
+
+	t.Run("ST-77_GetLinkedAccountByPlatformNameNotFound", func(t *testing.T) {
+		got, err := s.LinkAccount().GetLinkedAccountByPlatformName(PlatformDiscord, "sttest-missing-name")
+		if got != nil || !errors.Is(err, ErrNotFound) {
+			t.Errorf("GetLinkedAccountByPlatformName() = (%v, %v), want (nil, %v)", got, err, ErrNotFound)
+		}
+	})
+
+	t.Run("ST-78_GetLinkedAccountByPlatformNameDuplicate", func(t *testing.T) {
+		stSeedBareAccount(t, s.Account(), "910000000000000102")
+		stSeedBareAccount(t, s.Account(), "910000000000000103")
+		stSeedLink(t, s.LinkAccount(), "910000000000000102", PlatformDiscord, "sttest-dup-102", true, true)
+		stSeedLink(t, s.LinkAccount(), "910000000000000103", PlatformDiscord, "sttest-dup-103", true, true)
+
+		got, err := s.LinkAccount().GetLinkedAccountByPlatformName(PlatformDiscord, "sttest")
+		if got != nil || !errors.Is(err, ErrDuplicateLinkedAccount) {
+			t.Errorf("GetLinkedAccountByPlatformName() = (%v, %v), want (nil, %v)", got, err, ErrDuplicateLinkedAccount)
+		}
+	})
+
+	t.Run("ST-79_GetOAuthTokenByUserIDNotFound", func(t *testing.T) {
+		got, err := s.OAuthToken().GetOAuthTokenByUserID("910000000000000104", PlatformDiscord)
+		if got != nil || !errors.Is(err, ErrNotFound) {
+			t.Errorf("GetOAuthTokenByUserID() = (%v, %v), want (nil, %v)", got, err, ErrNotFound)
 		}
 	})
 }

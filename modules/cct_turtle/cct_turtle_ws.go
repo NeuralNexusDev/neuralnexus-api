@@ -10,6 +10,11 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+var (
+	ErrQueueNotFound = errors.New("queue does not exist")
+	ErrQueueEmpty    = errors.New("queue is empty")
+)
+
 // -------------- Globals --------------
 var (
 	upgrader = websocket.Upgrader{}
@@ -142,12 +147,12 @@ func (iq *InstructionQueue) SetState(label string, state InstructionState) {
 func (iq *InstructionQueue) GetResponse(label string) (TurtleStatus, error) {
 	// If the queue doesn't exist, return an empty string
 	if _, ok := iq.queue[label]; !ok {
-		return TurtleStatus{}, errors.New("queue does not exist")
+		return TurtleStatus{}, ErrQueueNotFound
 	}
 
 	// Get the response of the instruction
 	if len(iq.queue[label]) == 0 {
-		return TurtleStatus{}, errors.New("queue is empty")
+		return TurtleStatus{}, ErrQueueEmpty
 	}
 
 	var status TurtleStatus

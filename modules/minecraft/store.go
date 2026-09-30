@@ -85,7 +85,11 @@ func (s *store) GetPlayerByUUID(id string) (*Player, error) {
 	}
 	// Lax: this query intentionally omits profile_actions, unlike
 	// GetProfileByUUID, so Player.ProfileActions is left at its zero value.
-	return pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByNameLax[Player])
+	player, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByNameLax[Player])
+	if err != nil {
+		return nil, playerNotFound(err)
+	}
+	return player, nil
 }
 
 // GetPlayerByName gets a player by name from the database
@@ -96,7 +100,18 @@ func (s *store) GetPlayerByName(name string) (*Player, error) {
 		return nil, err
 	}
 	// Lax: see GetPlayerByUUID.
-	return pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByNameLax[Player])
+	player, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByNameLax[Player])
+	if err != nil {
+		return nil, playerNotFound(err)
+	}
+	return player, nil
+}
+
+func playerNotFound(err error) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrPlayerNotFound
+	}
+	return err
 }
 
 // GetProfileByUUID gets a player's full profile from the database by UUID
@@ -108,7 +123,7 @@ func (s *store) GetProfileByUUID(id string) (*Profile, error) {
 	}
 	player, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Player])
 	if err != nil {
-		return nil, err
+		return nil, playerNotFound(err)
 	}
 
 	textures, err := s.getTextures(id, player.Name)
