@@ -11,6 +11,8 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
+const msgFailedToCreateDatastore = "Failed to create datastore"
+
 // CreateDataStoreHandler - Create a new data store
 func CreateDataStoreHandler(s DSService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -23,14 +25,14 @@ func CreateDataStoreHandler(s DSService) http.HandlerFunc {
 		id, err := database.GenSnowflake()
 		if err != nil {
 			log.Println("Failed to generate snowflake:\n\t", err)
-			responses.InternalServerError(w, r, "Failed to create datastore")
+			responses.InternalServerError(w, r, msgFailedToCreateDatastore)
 			return
 		}
 		ds := NewDataStore(id, session.UserID)
 		ds, err = s.Create(ds)
 		if err != nil {
 			log.Println("Failed to create data store:\n\t", err)
-			responses.InternalServerError(w, r, "Failed to create datastore")
+			responses.InternalServerError(w, r, msgFailedToCreateDatastore)
 			return
 		}
 		responses.StructOK(w, r, ds)

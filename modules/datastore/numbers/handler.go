@@ -10,12 +10,14 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
+const msgNoPermissionToCreateNumberstore = "You do not have permission to create a numberstore"
+
 // CreateNumberHandler - Create a new number
 func CreateNumberHandler(s NumberService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if !session.HasPermission(perms.ScopeAdminNumberStore) {
-			responses.Forbidden(w, r, "You do not have permission to create a numberstore")
+			responses.Forbidden(w, r, msgNoPermissionToCreateNumberstore)
 			return
 		}
 
@@ -63,7 +65,7 @@ func UpdateNumberHandler(s NumberService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if !session.HasPermission(perms.ScopeAdminNumberStore) {
-			responses.Forbidden(w, r, "You do not have permission to create a numberstore")
+			responses.Forbidden(w, r, msgNoPermissionToCreateNumberstore)
 			return
 		}
 
