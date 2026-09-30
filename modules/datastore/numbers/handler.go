@@ -17,6 +17,7 @@ const (
 	msgFailedToDeleteNumberstore       = "Failed to delete numberstore"
 	logBadBody                         = "Bad body:\n\t"
 	msgNoPermissionToCreateNumberstore = "You do not have permission to create a numberstore"
+	msgNoPermissionToUpdateNumberstore = "You do not have permission to update a numberstore"
 )
 
 // CreateNumberHandler - Create a new number
@@ -72,7 +73,7 @@ func UpdateNumberHandler(s NumberService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if !session.HasPermission(perms.ScopeAdminNumberStore) {
-			responses.Forbidden(w, r, msgNoPermissionToCreateNumberstore)
+			responses.Forbidden(w, r, msgNoPermissionToUpdateNumberstore)
 			return
 		}
 
