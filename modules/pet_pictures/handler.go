@@ -36,7 +36,7 @@ const (
 // CreatePetHandler - Create a new pet
 func CreatePetHandler(s PetPicService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(auth.Session)
+		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if !session.HasPermission(perms.ScopeAdminPetPictures) {
 			responses.Forbidden(w, r, msgNoPermissionToCreatePet)
 			return
@@ -117,7 +117,7 @@ func UpdatePetHandler(s PetPicService) http.HandlerFunc {
 			return
 		}
 
-		session := r.Context().Value(mw.SessionKey).(auth.Session)
+		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if !session.HasPermission(perms.ScopePetPictures(pet.Name)) {
 			responses.Forbidden(w, r, msgNoPermissionToUpdatePet)
 			return
@@ -226,7 +226,7 @@ func UpdatePetPictureHandler(s PetPicService) http.HandlerFunc {
 			return
 		}
 
-		session := r.Context().Value(mw.SessionKey).(auth.Session)
+		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if !session.HasPermission(perms.ScopePetPictures(pet.Name)) {
 			responses.Forbidden(w, r, msgNoPermissionToUpdatePet)
 			return
@@ -284,7 +284,7 @@ func DeletePetPictureHandler(s PetPicService) http.HandlerFunc {
 			return
 		}
 
-		session := r.Context().Value(mw.SessionKey).(auth.Session)
+		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if !session.HasPermission(perms.ScopePetPictures(pet.Name)) {
 			responses.Forbidden(w, r, msgNoPermissionToUpdatePet)
 			return

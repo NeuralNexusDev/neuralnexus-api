@@ -86,11 +86,8 @@ func (m *hdMockStore) DeletePetPicture(id string) (*PetPicture, error) {
 	return m.deletePetPictureResult, m.deletePetPictureErr
 }
 
-// hdCtxWithSession returns a context carrying the given session under
-// mw.SessionKey as a value, matching the exact type handler.go's
-// `r.Context().Value(mw.SessionKey).(auth.Session)` assertion expects.
 func hdCtxWithSession(session auth.Session) context.Context {
-	return context.WithValue(context.Background(), mw.SessionKey, session)
+	return context.WithValue(context.Background(), mw.SessionKey, &session)
 }
 
 // hdSessionWithPermissions builds a session whose Permissions grant exactly
