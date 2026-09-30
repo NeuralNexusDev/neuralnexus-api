@@ -6,8 +6,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/jackc/pgx/v5"
-
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
@@ -109,7 +107,7 @@ func UpdatePetHandler(s PetPicService) http.HandlerFunc {
 		_, err = s.GetStore().UpdatePet(pet)
 		if err != nil {
 			log.Println("[Error]: Unable to update pet:\n\t", err)
-			if errors.Is(err, pgx.ErrNoRows) {
+			if errors.Is(err, ErrPetNotFound) {
 				responses.NotFound(w, r, msgPetNotFound)
 				return
 			}
@@ -198,7 +196,7 @@ func UpdatePetPictureHandler(s PetPicService) http.HandlerFunc {
 		_, err = s.GetStore().UpdatePetPicture(petPicture)
 		if err != nil {
 			log.Println("[Error]: Unable to update pet picture:\n\t", err)
-			if errors.Is(err, pgx.ErrNoRows) {
+			if errors.Is(err, ErrPetNotFound) {
 				responses.NotFound(w, r, "Pet picture not found")
 				return
 			}

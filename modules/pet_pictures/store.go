@@ -33,7 +33,17 @@ import (
 // created_at is timestamptz, which to_char renders in the session time zone; the literal Z needs UTC.
 const createdColumn = `COALESCE(to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'), '')`
 
-var ErrPetNameEmpty = errors.New("pet name must not be empty")
+var (
+	ErrPetNameEmpty = errors.New("pet name must not be empty")
+	ErrPetNotFound  = errors.New("pet not found")
+)
+
+func petNotFound(err error) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrPetNotFound
+	}
+	return err
+}
 
 func translatePetConstraintErr(err error) error {
 	var pgErr *pgconn.PgError
@@ -89,7 +99,7 @@ func (s *store) GetPet(id int) (*Pet, error) {
 	var pet Pet
 	err := db.QueryRow(context.Background(), "SELECT id, name, profile_picture FROM pets WHERE id = $1", id).Scan(&pet.ID, &pet.Name, &pet.ProfilePicture)
 	if err != nil {
-		return nil, err
+		return nil, petNotFound(err)
 	}
 	return &pet, nil
 }
@@ -102,7 +112,7 @@ func (s *store) GetPetByName(name string) (*Pet, error) {
 	var pet Pet
 	err := db.QueryRow(context.Background(), "SELECT id, name, profile_picture FROM pets WHERE name = $1", name).Scan(&pet.ID, &pet.Name, &pet.ProfilePicture)
 	if err != nil {
-		return nil, err
+		return nil, petNotFound(err)
 	}
 	return &pet, nil
 }
@@ -117,7 +127,7 @@ func (s *store) UpdatePet(pet *Pet) (*Pet, error) {
 		return nil, translatePetConstraintErr(err)
 	}
 	if tag.RowsAffected() == 0 {
-		return nil, pgx.ErrNoRows
+		return nil, ErrPetNotFound
 	}
 	return pet, nil
 }
@@ -162,7 +172,7 @@ func (s *store) GetRandPetPictureByName(name string) (*PetPicture, error) {
 	var picture *PetPicture
 	picture, err = pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[PetPicture])
 	if err != nil {
-		return nil, err
+		return nil, petNotFound(err)
 	}
 	return picture, nil
 }
@@ -180,7 +190,7 @@ func (s *store) GetPetPicture(id string) (*PetPicture, error) {
 	var picture *PetPicture
 	picture, err = pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[PetPicture])
 	if err != nil {
-		return nil, err
+		return nil, petNotFound(err)
 	}
 	return picture, nil
 }
@@ -195,7 +205,7 @@ func (s *store) UpdatePetPicture(picture PetPicture) (*PetPicture, error) {
 		picture.FileExt, picture.PrimarySubject, picture.OthersSubjects, picture.Aliases, picture.ID,
 	).Scan(&picture.Created)
 	if err != nil {
-		return nil, err
+		return nil, petNotFound(err)
 	}
 	return &picture, nil
 }

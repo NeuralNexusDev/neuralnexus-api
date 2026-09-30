@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -191,8 +190,8 @@ func TestST06to09and27_GetPetAndGetPetByName(t *testing.T) {
 		ppLiveDatabase(t)
 		s := &store{}
 		pet, err := s.GetPet(-1)
-		if pet != nil || !errors.Is(err, pgx.ErrNoRows) {
-			t.Errorf("GetPet(-1) = (%v, %v), want (nil, pgx.ErrNoRows)", pet, err)
+		if pet != nil || !errors.Is(err, ErrPetNotFound) {
+			t.Errorf("GetPet(-1) = (%v, %v), want (nil, ErrPetNotFound)", pet, err)
 		}
 	})
 
@@ -220,8 +219,8 @@ func TestST06to09and27_GetPetAndGetPetByName(t *testing.T) {
 		ppLiveDatabase(t)
 		s := &store{}
 		pet, err := s.GetPetByName(ppUniqueID("missing"))
-		if pet != nil || !errors.Is(err, pgx.ErrNoRows) {
-			t.Errorf("GetPetByName(missing) = (%v, %v), want (nil, pgx.ErrNoRows)", pet, err)
+		if pet != nil || !errors.Is(err, ErrPetNotFound) {
+			t.Errorf("GetPetByName(missing) = (%v, %v), want (nil, ErrPetNotFound)", pet, err)
 		}
 	})
 }
@@ -257,8 +256,8 @@ func TestST10to12_UpdatePet(t *testing.T) {
 		ppLiveDatabase(t)
 		s := &store{}
 		got, err := s.UpdatePet(&Pet{ID: -1, Name: ppUniqueID("ghost")})
-		if got != nil || !errors.Is(err, pgx.ErrNoRows) {
-			t.Errorf("UpdatePet(no row) = (%v, %v), want (nil, pgx.ErrNoRows)", got, err)
+		if got != nil || !errors.Is(err, ErrPetNotFound) {
+			t.Errorf("UpdatePet(no row) = (%v, %v), want (nil, ErrPetNotFound)", got, err)
 		}
 	})
 }
@@ -338,8 +337,8 @@ func TestST17to20and28to29_GetPetPictureAndGetRandPetPictureByName(t *testing.T)
 		ppLiveDatabase(t)
 		s := &store{}
 		got, err := s.GetRandPetPictureByName(ppUniqueID("missing"))
-		if got != nil || !errors.Is(err, pgx.ErrNoRows) {
-			t.Errorf("GetRandPetPictureByName(no pet) = (%v, %v), want (nil, pgx.ErrNoRows)", got, err)
+		if got != nil || !errors.Is(err, ErrPetNotFound) {
+			t.Errorf("GetRandPetPictureByName(no pet) = (%v, %v), want (nil, ErrPetNotFound)", got, err)
 		}
 	})
 
@@ -348,8 +347,8 @@ func TestST17to20and28to29_GetPetPictureAndGetRandPetPictureByName(t *testing.T)
 		s := &store{}
 		pet := ppCreatePet(t, pool, s, ppUniqueID("pet"))
 		got, err := s.GetRandPetPictureByName(pet.Name)
-		if got != nil || !errors.Is(err, pgx.ErrNoRows) {
-			t.Errorf("GetRandPetPictureByName(no pictures) = (%v, %v), want (nil, pgx.ErrNoRows)", got, err)
+		if got != nil || !errors.Is(err, ErrPetNotFound) {
+			t.Errorf("GetRandPetPictureByName(no pictures) = (%v, %v), want (nil, ErrPetNotFound)", got, err)
 		}
 	})
 
@@ -357,8 +356,8 @@ func TestST17to20and28to29_GetPetPictureAndGetRandPetPictureByName(t *testing.T)
 		ppLiveDatabase(t)
 		s := &store{}
 		got, err := s.GetPetPicture(ppUniqueID("missing"))
-		if got != nil || !errors.Is(err, pgx.ErrNoRows) {
-			t.Errorf("GetPetPicture(missing) = (%v, %v), want (nil, pgx.ErrNoRows)", got, err)
+		if got != nil || !errors.Is(err, ErrPetNotFound) {
+			t.Errorf("GetPetPicture(missing) = (%v, %v), want (nil, ErrPetNotFound)", got, err)
 		}
 	})
 
@@ -404,8 +403,8 @@ func TestST21to22and30_UpdatePetPicture(t *testing.T) {
 		ppLiveDatabase(t)
 		s := &store{}
 		got, err := s.UpdatePetPicture(PetPicture{ID: ppUniqueID("missing"), FileExt: "png", Created: "caller-supplied"})
-		if got != nil || !errors.Is(err, pgx.ErrNoRows) {
-			t.Errorf("UpdatePetPicture(no row) = (%v, %v), want (nil, pgx.ErrNoRows)", got, err)
+		if got != nil || !errors.Is(err, ErrPetNotFound) {
+			t.Errorf("UpdatePetPicture(no row) = (%v, %v), want (nil, ErrPetNotFound)", got, err)
 		}
 	})
 
@@ -450,8 +449,8 @@ func TestST23to25_DeletePetPicture(t *testing.T) {
 		if err != nil || !reflect.DeepEqual(got, &PetPicture{ID: id}) {
 			t.Fatalf("DeletePetPicture() = (%+v, %v), want (&PetPicture{ID: %q}, nil)", got, err, id)
 		}
-		if _, err := s.GetPetPicture(id); !errors.Is(err, pgx.ErrNoRows) {
-			t.Errorf("GetPetPicture() after delete error = %v, want pgx.ErrNoRows", err)
+		if _, err := s.GetPetPicture(id); !errors.Is(err, ErrPetNotFound) {
+			t.Errorf("GetPetPicture() after delete error = %v, want ErrPetNotFound", err)
 		}
 	})
 
