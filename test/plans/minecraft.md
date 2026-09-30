@@ -153,7 +153,7 @@
 | SV-38 | GetProfile | Error Path | resolveProfile fails | resolveProfile error | Returns that error | P2 |  |
 | SV-39 | GetProfile | Edge Case | Textures present, CAPE nil | only SKIN set | Only SKIN.URL rewritten | P3 |  |
 | SV-40 | GetProfileByName | Happy Path | Name resolves, then profile resolves | both succeed | Returns resolved profile | P1 |  |
-| SV-41 | GetProfileByName | Error Path | GetMojangPlayerByName fails | e.g. ErrPlayerNotFound | Returns that error (`ErrCacheMiss`) | P2 |  |
+| SV-41 | GetProfileByName | Error Path | GetMojangPlayerByName fails | e.g. ErrPlayerNotFound | Returns `ErrPlayerNotFound` | P2 |  |
 | SV-42 | GetProfileByName | Error Path | GetProfile fails after name resolves | GetProfile error | Returns that error | P2 |  |
 | SV-43 | resolveProfile | Happy Path | Cache hit | GetProfileFromCache succeeds | Returns cached profile | P1 |  |
 | SV-44 | resolveProfile | Error Path | Cache error not ErrCacheMiss | plain error | Returns that error | P2 |  |

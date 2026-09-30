@@ -501,8 +501,9 @@ func TestSE23to31ReadJWT(t *testing.T) {
 		}
 		fs.updateInDBErr = testerrors.ErrDBDown
 
-		if _, err := svc.ReadJWT(tok); err == nil {
-			t.Fatal("expected an error when the LastUsedAt bump fails")
+		got, err := svc.ReadJWT(tok)
+		if got != nil || !errors.Is(err, testerrors.ErrDBDown) {
+			t.Errorf("ReadJWT() = (%v, %v), want (nil, %v)", got, err, testerrors.ErrDBDown)
 		}
 	})
 }

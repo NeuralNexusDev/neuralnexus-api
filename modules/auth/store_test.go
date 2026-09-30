@@ -444,7 +444,7 @@ func TestST46DeleteOAuthToken(t *testing.T) {
 }
 
 // stLiveStore's cleanup deletes rows in userID range
-// 910000000000000000..910000000000009999, kept disjoint from other test
+// 910000000000000000..910000000000049999, kept disjoint from other test
 // files' ranges so it can't delete their data.
 func stLiveStore(t *testing.T) (AccountStore, LinkAccountStore, AccountSettingsStore) {
 	t.Helper()
@@ -524,11 +524,11 @@ func stLiveFullStore(t *testing.T) Store {
 	}
 
 	t.Cleanup(func() {
-		db.Exec(context.Background(), "DELETE FROM sessions WHERE user_id BETWEEN 910000000000000000 AND 910000000000009999")
-		db.Exec(context.Background(), "DELETE FROM oauth_tokens WHERE user_id BETWEEN 910000000000000000 AND 910000000000009999")
-		db.Exec(context.Background(), "DELETE FROM account_settings WHERE user_id BETWEEN 910000000000000000 AND 910000000000009999")
-		db.Exec(context.Background(), "DELETE FROM linked_accounts WHERE user_id BETWEEN 910000000000000000 AND 910000000000009999")
-		db.Exec(context.Background(), "DELETE FROM accounts WHERE user_id BETWEEN 910000000000000000 AND 910000000000009999")
+		db.Exec(context.Background(), "DELETE FROM sessions WHERE user_id BETWEEN 910000000000000000 AND 910000000000049999")
+		db.Exec(context.Background(), "DELETE FROM oauth_tokens WHERE user_id BETWEEN 910000000000000000 AND 910000000000049999")
+		db.Exec(context.Background(), "DELETE FROM account_settings WHERE user_id BETWEEN 910000000000000000 AND 910000000000049999")
+		db.Exec(context.Background(), "DELETE FROM linked_accounts WHERE user_id BETWEEN 910000000000000000 AND 910000000000049999")
+		db.Exec(context.Background(), "DELETE FROM accounts WHERE user_id BETWEEN 910000000000000000 AND 910000000000049999")
 		db.Close()
 	})
 

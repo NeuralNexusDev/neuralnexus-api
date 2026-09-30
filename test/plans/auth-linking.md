@@ -117,7 +117,7 @@
 | ST-08 | VerifySteamOpenIDCallback | Error Path | `claimed_id` missing or doesn't match the expected pattern | `openid.claimed_id` unset or garbage | Returns `ErrInvalidAssertion`-wrapped error | P1 |  |
 | ST-09 | VerifySteamOpenIDCallback | Error Path | `openid.signed` doesn't cover `claimed_id` | `openid.signed = "op_endpoint,assoc_handle"` (no `claimed_id`) | Returns `ErrInvalidAssertion`-wrapped error | P0 |  |
 | ST-10 | VerifySteamOpenIDCallback | Error Path | `check_authentication` request fails outright (network error) | `steamOpenIDLoginURL` points at an unreachable address | Returns a plain (non-`ErrInvalidAssertion`) error | P2 |  |
-| ST-11 | VerifySteamOpenIDCallback | Error Path | `check_authentication` returns a non-2xx status | Server responds HTTP 500 | Returns an error wrapping `ErrSteamOpenIDCheck` (`ErrInvalidAssertion`) | P2 |  |
+| ST-11 | VerifySteamOpenIDCallback | Error Path | `check_authentication` returns a non-2xx status | Server responds HTTP 500 | Returns an error wrapping `ErrSteamOpenIDCheck` (not `ErrInvalidAssertion`) | P2 |  |
 | ST-12 | VerifySteamOpenIDCallback | Error Path | Steam rejects the assertion (`is_valid:false`/absent) | Server responds 200 with `is_valid:false` | Returns `ErrInvalidAssertion`-wrapped error | P0 |  |
 | ST-13 | responseIsValid | Happy Path | Body contains an `is_valid:true` line | `[]byte("ns:foo\nis_valid:true\n")` | Returns true | P2 |  |
 | ST-14 | responseIsValid | Edge Case | `is_valid` present but false, or key absent | `"is_valid:false"` and separately `"ns:foo"` alone | Returns false | P2 |  |
