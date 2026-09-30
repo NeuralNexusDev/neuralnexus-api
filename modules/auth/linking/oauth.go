@@ -38,9 +38,6 @@ func ExtCodeForToken(config *oauth2.Config, code string) (*auth.OAuthToken, erro
 	if err != nil {
 		return nil, err
 	}
-	if token == nil {
-		return nil, ErrTokenExchangeFailed
-	}
 
 	var scopes []string
 	if rawScopes, ok := token.Extra("scope").([]interface{}); ok {
@@ -73,9 +70,6 @@ func RefreshToken(config *oauth2.Config, token *oauth2.Token) (*auth.OAuthToken,
 	newToken, err := config.TokenSource(context.Background(), token).Token()
 	if err != nil {
 		return nil, err
-	}
-	if newToken == nil {
-		return nil, ErrTokenRefreshFailed
 	}
 
 	var scopes []string
@@ -175,13 +169,11 @@ func ProcessOAuthLogin(as auth.AccountService, las auth.LinkAccountStore, ss aut
 }
 
 var (
-	ErrTokenExchangeFailed = errors.New("failed to exchange code for access token")
-	ErrTokenRefreshFailed  = errors.New("failed to refresh token")
-	ErrNoScopeInToken      = errors.New("failed to get scope from token")
-	ErrInvalidPlatform     = errors.New("invalid platform")
-	ErrSessionNotFound     = errors.New("session not found")
-	ErrSessionExpired      = errors.New("session expired")
-	ErrLinkAccountFailed   = errors.New("failed to link account")
+	ErrNoScopeInToken    = errors.New("failed to get scope from token")
+	ErrInvalidPlatform   = errors.New("invalid platform")
+	ErrSessionNotFound   = errors.New("session not found")
+	ErrSessionExpired    = errors.New("session expired")
+	ErrLinkAccountFailed = errors.New("failed to link account")
 )
 
 var ErrPlatformLoginDisabled = errors.New("this platform account is linked but disabled for login; use another linked platform or your password, or re-enable it first")
