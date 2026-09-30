@@ -7,7 +7,7 @@
 | AU-01 | LoginHandler | Happy Path | Login with username+password | Account exists for username, password matches, password auth enabled | 204 No Content, session cookie set | P1 |  |
 | AU-02 | LoginHandler | Happy Path | Login with email+password (username field empty) | Account exists for email, password matches, password auth enabled | 204 No Content, session cookie set | P1 |  |
 | AU-03 | LoginHandler | Error Path | Malformed request body | Body is not valid JSON | 400 Bad Request `msgInvalidUsernameOrPassword` | P2 |  |
-| AU-04 | LoginHandler | Error Path | Account lookup fails | AccountService.GetAccountByUsername/GetAccountByEmail returns an error | 400 Bad Request `msgInvalidUsernameOrPassword` | P2 |  |
+| AU-04 | LoginHandler | Error Path | Account lookup finds no account | AccountService.GetAccountByUsername/GetAccountByEmail returns `auth.ErrNotFound` | 400 Bad Request `msgInvalidUsernameOrPassword` | P2 |  |
 | AU-05 | LoginHandler | Error Path | Wrong password | Account found, Account.ValidateUser returns false | 400 Bad Request `msgInvalidUsernameOrPassword` | P2 |  |
 | AU-06 | LoginHandler | Error Path | IsPasswordAuthEnabled errors | Account and password valid, AccountService.IsPasswordAuthEnabled returns an error | 500 Internal Server Error `msgAuthenticationFailed` | P2 |  |
 | AU-07 | LoginHandler | Edge Case | Password auth disabled for account | Account and password valid, IsPasswordAuthEnabled returns (false, nil) | 400 Bad Request `msgInvalidUsernameOrPassword` | P2 |  |
