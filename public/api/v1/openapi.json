@@ -1359,24 +1359,7 @@
                         "$ref": "#/components/responses/403Forbidden"
                     },
                     "404": {
-                        "description": "No pet with that ID exists",
-                        "content": {
-                            "application/problem+json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/Problem"
-                                }
-                            },
-                            "application/problem+xml": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/Problem"
-                                }
-                            },
-                            "application/problem+x-protobuf": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/Problem"
-                                }
-                            }
-                        }
+                        "$ref": "#/components/responses/404NotFound"
                     },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
@@ -1642,7 +1625,24 @@
                         "$ref": "#/components/responses/400BadRequest"
                     },
                     "404": {
-                        "$ref": "#/components/responses/404NotFound"
+                        "description": "No pet with that name exists, or the pet has no pictures",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Problem"
+                                }
+                            },
+                            "application/problem+xml": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Problem"
+                                }
+                            },
+                            "application/problem+x-protobuf": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Problem"
+                                }
+                            }
+                        }
                     },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
@@ -2335,14 +2335,6 @@
     },
     "components": {
         "schemas": {
-            "Session": {
-                "type": "object",
-                "properties": {
-                    "session": {
-                        "type": "string"
-                    }
-                }
-            },
             "BNGName": {
                 "type": "object",
                 "required": [
@@ -3139,26 +3131,6 @@
                     "application/problem+x-protobuf": {
                         "schema": {
                             "$ref": "#/components/schemas/Problem"
-                        }
-                    }
-                }
-            },
-            "SessionResponse": {
-                "description": "Session response",
-                "content": {
-                    "application/json": {
-                        "schema": {
-                            "$ref": "#/components/schemas/Session"
-                        }
-                    },
-                    "application/xml": {
-                        "schema": {
-                            "$ref": "#/components/schemas/Session"
-                        }
-                    },
-                    "application/x-protobuf": {
-                        "schema": {
-                            "$ref": "#/components/schemas/Session"
                         }
                     }
                 }
