@@ -82,12 +82,18 @@ var (
 )
 
 var (
-	errUserinfoMissingSub       = errors.New("microsoft userinfo response missing sub")
-	errXboxLiveMissingToken     = errors.New("xbox live authentication response missing Token")
-	errXSTSMissingTokenOrClaims = errors.New("xsts authorization response missing Token or DisplayClaims")
-	errXSTSMissingUHS           = errors.New("xsts authorization response missing uhs in DisplayClaims")
-	errLoginMissingAccessToken  = errors.New("minecraft login-with-xbox response missing access_token")
-	errXSTSMissingXIDOrGTG      = errors.New("xsts authorization response missing xid or gtg in DisplayClaims")
+	ErrXSTSAuthentication       = errors.New("xbox XSTS authentication error")
+	ErrMicrosoftUserinfoLookup  = errors.New("microsoft userinfo lookup error")
+	ErrXboxLiveAuthentication   = errors.New("xbox live authentication error")
+	ErrXSTSAuthorization        = errors.New("xsts authorization error")
+	ErrMinecraftLoginWithXbox   = errors.New("minecraft login-with-xbox error")
+	ErrMinecraftProfileLookup   = errors.New("minecraft profile lookup error")
+	ErrUserinfoMissingSub       = errors.New("microsoft userinfo response missing sub")
+	ErrXboxLiveMissingToken     = errors.New("xbox live authentication response missing Token")
+	ErrXSTSMissingTokenOrClaims = errors.New("xsts authorization response missing Token or DisplayClaims")
+	ErrXSTSMissingUHS           = errors.New("xsts authorization response missing uhs in DisplayClaims")
+	ErrLoginMissingAccessToken  = errors.New("minecraft login-with-xbox response missing access_token")
+	ErrXSTSMissingXIDOrGTG      = errors.New("xsts authorization response missing xid or gtg in DisplayClaims")
 )
 
 func xstsErrForCode(code int64) error {
@@ -103,7 +109,7 @@ func xstsErrForCode(code int64) error {
 	case 2148916238:
 		return ErrAccountIsChild
 	default:
-		return fmt.Errorf("xbox XSTS authentication error, code: %d", code)
+		return fmt.Errorf("%w, code: %d", ErrXSTSAuthentication, code)
 	}
 }
 
@@ -194,7 +200,7 @@ func GetMicrosoftUser(token *auth.OAuthToken) (*MicrosoftUserData, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("microsoft userinfo lookup error: %s", resp.Status)
+		return nil, fmt.Errorf("%w: %s", ErrMicrosoftUserinfoLookup, resp.Status)
 	}
 
 	var user MicrosoftUserData
@@ -202,7 +208,7 @@ func GetMicrosoftUser(token *auth.OAuthToken) (*MicrosoftUserData, error) {
 		return nil, err
 	}
 	if user.Sub == "" {
-		return nil, errUserinfoMissingSub
+		return nil, ErrUserinfoMissingSub
 	}
 	return &user, nil
 }
@@ -268,7 +274,7 @@ func xblAuthenticate(msAccessToken string) (string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("xbox live authentication error: %s", resp.Status)
+		return "", fmt.Errorf("%w: %s", ErrXboxLiveAuthentication, resp.Status)
 	}
 
 	var xblResp xblAuthResponse
@@ -276,7 +282,7 @@ func xblAuthenticate(msAccessToken string) (string, error) {
 		return "", err
 	}
 	if xblResp.Token == "" {
-		return "", errXboxLiveMissingToken
+		return "", ErrXboxLiveMissingToken
 	}
 	return xblResp.Token, nil
 }
@@ -340,18 +346,18 @@ func xstsAuthorize(xblToken, relyingParty string) (xstsToken, userHash, xuid, ga
 		return "", "", "", "", xstsErrForCode(xstsResp.XErr)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", "", "", "", fmt.Errorf("xsts authorization error: %s", resp.Status)
+		return "", "", "", "", fmt.Errorf("%w: %s", ErrXSTSAuthorization, resp.Status)
 	}
 	if decodeErr != nil {
 		return "", "", "", "", decodeErr
 	}
 	if xstsResp.Token == "" || len(xstsResp.DisplayClaims.Xui) == 0 {
-		return "", "", "", "", errXSTSMissingTokenOrClaims
+		return "", "", "", "", ErrXSTSMissingTokenOrClaims
 	}
 
 	claims := xstsResp.DisplayClaims.Xui[0]
 	if claims.Uhs == "" {
-		return "", "", "", "", errXSTSMissingUHS
+		return "", "", "", "", ErrXSTSMissingUHS
 	}
 	return xstsResp.Token, claims.Uhs, claims.Xid, claims.Gtg, nil
 }
@@ -390,7 +396,7 @@ func minecraftLoginWithXbox(userHash, xstsToken string) (string, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("minecraft login-with-xbox error: %s: %s", resp.Status, respBody)
+		return "", fmt.Errorf("%w: %s: %s", ErrMinecraftLoginWithXbox, resp.Status, respBody)
 	}
 
 	var loginResp mcLoginWithXboxResponse
@@ -398,7 +404,7 @@ func minecraftLoginWithXbox(userHash, xstsToken string) (string, error) {
 		return "", err
 	}
 	if loginResp.AccessToken == "" {
-		return "", errLoginMissingAccessToken
+		return "", ErrLoginMissingAccessToken
 	}
 	return loginResp.AccessToken, nil
 }
@@ -437,7 +443,7 @@ func getMinecraftProfile(mcAccessToken string) (*MinecraftData, error) {
 		return nil, nil
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("minecraft profile lookup error: %s", resp.Status)
+		return nil, fmt.Errorf("%w: %s", ErrMinecraftProfileLookup, resp.Status)
 	}
 	if decodeErr != nil {
 		return nil, decodeErr
@@ -465,7 +471,7 @@ func authenticateXboxLiveIdentity(xblToken string) (*XboxLiveData, error) {
 		return nil, err
 	}
 	if xuid == "" || gamertag == "" {
-		return nil, errXSTSMissingXIDOrGTG
+		return nil, ErrXSTSMissingXIDOrGTG
 	}
 	return &XboxLiveData{XUID: xuid, Gamertag: gamertag}, nil
 }

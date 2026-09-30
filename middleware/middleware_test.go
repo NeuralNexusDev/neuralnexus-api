@@ -410,7 +410,7 @@ func TestSessionMiddleware(t *testing.T) {
 	})
 
 	t.Run("MW-17_ReadJWTErrorRejected", func(t *testing.T) {
-		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*auth.Session, error) { return nil, errors.New("bad token") }}
+		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*auth.Session, error) { return nil, testerrors.ErrBoom }}
 		rec, nextCalled, _ := mwRunSession(svc, mwSessionRequest("Bearer sometoken", ""))
 
 		if nextCalled {
@@ -427,7 +427,7 @@ func TestSessionMiddleware(t *testing.T) {
 		svc := &mwFakeSessionSvc{readJWTFunc: func(token string) (*auth.Session, error) {
 			tokenSeen = true
 			gotToken = token
-			return nil, errors.New("invalid token")
+			return nil, testerrors.ErrBoom
 		}}
 		rec, nextCalled, _ := mwRunSession(svc, mwSessionRequest("Bearer ", ""))
 
@@ -494,7 +494,7 @@ func TestSessionMiddleware(t *testing.T) {
 	})
 
 	t.Run("MW-21_CookieReadJWTErrorFailsOpen", func(t *testing.T) {
-		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*auth.Session, error) { return nil, errors.New("bad cookie") }}
+		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*auth.Session, error) { return nil, testerrors.ErrBoom }}
 		rec, nextCalled, gotSession := mwRunSession(svc, mwSessionRequest("", "badtoken"))
 
 		if !nextCalled {

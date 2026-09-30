@@ -43,8 +43,11 @@ var steamClaimedIDPattern = regexp.MustCompile(`^https://steamcommunity\.com/ope
 var ErrInvalidAssertion = errors.New("invalid openid assertion")
 
 var (
-	errSteamAPIKeyUnset = errors.New("STEAM_API_KEY is not set")
-	errSteamNoPlayers   = errors.New("steam player summary response contained no players")
+	ErrSteamOpenIDCheck         = errors.New("steam openid check_authentication error")
+	ErrSteamPlayerSummaryLookup = errors.New("steam player summary lookup error")
+	ErrSteamIDMismatch          = errors.New("steam player summary response steamid does not match requested")
+	ErrSteamAPIKeyUnset         = errors.New("STEAM_API_KEY is not set")
+	ErrSteamNoPlayers           = errors.New("steam player summary response contained no players")
 )
 
 // -------------- Structs --------------
@@ -124,7 +127,7 @@ func VerifySteamOpenIDCallback(query url.Values) (string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("steam openid check_authentication error: %s", resp.Status)
+		return "", fmt.Errorf("%w: %s", ErrSteamOpenIDCheck, resp.Status)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -155,7 +158,7 @@ func responseIsValid(body []byte) bool {
 // for a persona name/avatar beyond the bare SteamID64 OpenID provides.
 func GetSteamUser(steamID64 string) (*SteamData, error) {
 	if STEAM_API_KEY == "" {
-		return nil, errSteamAPIKeyUnset
+		return nil, ErrSteamAPIKeyUnset
 	}
 
 	reqURL := steamPlayerSummaryURL + "?key=" + url.QueryEscape(STEAM_API_KEY) + "&steamids=" + url.QueryEscape(steamID64)
@@ -171,7 +174,7 @@ func GetSteamUser(steamID64 string) (*SteamData, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("steam player summary lookup error: %s", resp.Status)
+		return nil, fmt.Errorf("%w: %s", ErrSteamPlayerSummaryLookup, resp.Status)
 	}
 
 	var parsed struct {
@@ -183,14 +186,22 @@ func GetSteamUser(steamID64 string) (*SteamData, error) {
 		return nil, err
 	}
 	if len(parsed.Response.Players) == 0 {
-		return nil, errSteamNoPlayers
+		return nil, ErrSteamNoPlayers
 	}
 	player := &parsed.Response.Players[0]
 	if player.SteamID64 != steamID64 {
-		return nil, fmt.Errorf("steam player summary response steamid %q does not match requested %q", player.SteamID64, steamID64)
+		return nil, steamIDMismatchError{got: player.SteamID64, want: steamID64}
 	}
 	return player, nil
 }
+
+type steamIDMismatchError struct{ got, want string }
+
+func (e steamIDMismatchError) Error() string {
+	return fmt.Sprintf("steam player summary response steamid %q does not match requested %q", e.got, e.want)
+}
+
+func (e steamIDMismatchError) Is(target error) bool { return target == ErrSteamIDMismatch }
 
 // ProcessSteamLogin resolves or creates an account for the given,
 // already-verified Steam identity and returns a new session for it.
@@ -214,10 +225,10 @@ func ProcessSteamLogin(as auth.AccountService, las auth.LinkAccountStore, ss aut
 func ProcessSteamLink(r *http.Request, las auth.LinkAccountStore, user *SteamData) (*auth.Session, error) {
 	session, ok := r.Context().Value(mw.SessionKey).(*auth.Session)
 	if !ok || session == nil {
-		return nil, errSessionNotFound
+		return nil, ErrSessionNotFound
 	}
 	if !session.IsValid() {
-		return nil, errSessionExpired
+		return nil, ErrSessionExpired
 	}
 	if err := linkPlatformUserToSession(las, session.UserID, auth.PlatformSteam, user); err != nil {
 		return nil, err

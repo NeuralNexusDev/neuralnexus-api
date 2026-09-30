@@ -124,9 +124,8 @@ func TestMS11to16XstsErrForCode(t *testing.T) {
 
 	t.Run("MS-16_UnrecognizedCode", func(t *testing.T) {
 		got := xstsErrForCode(999)
-		want := "xbox XSTS authentication error, code: 999"
-		if got == nil || got.Error() != want {
-			t.Errorf("xstsErrForCode(999) = %v, want %q", got, want)
+		if !errors.Is(got, ErrXSTSAuthentication) {
+			t.Errorf("xstsErrForCode(999) = %v, want it to wrap %v", got, ErrXSTSAuthentication)
 		}
 	})
 }
@@ -167,8 +166,8 @@ func TestMS17to21GetMicrosoftUser(t *testing.T) {
 		msSetURL(t, &microsoftUserInfoURL, ts.URL)
 
 		_, err := GetMicrosoftUser(&auth.OAuthToken{AccessToken: "tok"})
-		if err == nil {
-			t.Fatal("expected an error")
+		if !errors.Is(err, ErrMicrosoftUserinfoLookup) {
+			t.Fatalf("error = %v, want %v", err, ErrMicrosoftUserinfoLookup)
 		}
 	})
 
@@ -193,8 +192,8 @@ func TestMS17to21GetMicrosoftUser(t *testing.T) {
 		msSetURL(t, &microsoftUserInfoURL, ts.URL)
 
 		_, err := GetMicrosoftUser(&auth.OAuthToken{AccessToken: "tok"})
-		if !errors.Is(err, errUserinfoMissingSub) {
-			t.Fatalf("GetMicrosoftUser() error = %v, want %v", err, errUserinfoMissingSub)
+		if !errors.Is(err, ErrUserinfoMissingSub) {
+			t.Fatalf("GetMicrosoftUser() error = %v, want %v", err, ErrUserinfoMissingSub)
 		}
 	})
 }
@@ -232,8 +231,8 @@ func TestMS22to26XblAuthenticate(t *testing.T) {
 		msSetURL(t, &xboxLiveAuthenticateURL, ts.URL)
 
 		_, err := xblAuthenticate("ms-token")
-		if err == nil {
-			t.Fatal("expected an error")
+		if !errors.Is(err, ErrXboxLiveAuthentication) {
+			t.Fatalf("error = %v, want %v", err, ErrXboxLiveAuthentication)
 		}
 	})
 
@@ -258,8 +257,8 @@ func TestMS22to26XblAuthenticate(t *testing.T) {
 		msSetURL(t, &xboxLiveAuthenticateURL, ts.URL)
 
 		_, err := xblAuthenticate("ms-token")
-		if !errors.Is(err, errXboxLiveMissingToken) {
-			t.Fatalf("xblAuthenticate() error = %v, want %v", err, errXboxLiveMissingToken)
+		if !errors.Is(err, ErrXboxLiveMissingToken) {
+			t.Fatalf("xblAuthenticate() error = %v, want %v", err, ErrXboxLiveMissingToken)
 		}
 	})
 }
@@ -318,8 +317,8 @@ func TestMS27to34XstsAuthorize(t *testing.T) {
 		msSetURL(t, &xstsAuthorizeURL, ts.URL)
 
 		_, _, _, _, err := xstsAuthorize("xbl-token", xstsXboxLiveRelyingParty)
-		if err == nil {
-			t.Fatal("expected an error")
+		if !errors.Is(err, ErrXSTSAuthorization) {
+			t.Fatalf("error = %v, want %v", err, ErrXSTSAuthorization)
 		}
 	})
 
@@ -344,8 +343,8 @@ func TestMS27to34XstsAuthorize(t *testing.T) {
 		msSetURL(t, &xstsAuthorizeURL, ts.URL)
 
 		_, _, _, _, err := xstsAuthorize("xbl-token", xstsXboxLiveRelyingParty)
-		if !errors.Is(err, errXSTSMissingTokenOrClaims) {
-			t.Fatalf("xstsAuthorize() error = %v, want %v", err, errXSTSMissingTokenOrClaims)
+		if !errors.Is(err, ErrXSTSMissingTokenOrClaims) {
+			t.Fatalf("xstsAuthorize() error = %v, want %v", err, ErrXSTSMissingTokenOrClaims)
 		}
 	})
 
@@ -357,8 +356,8 @@ func TestMS27to34XstsAuthorize(t *testing.T) {
 		msSetURL(t, &xstsAuthorizeURL, ts.URL)
 
 		_, _, _, _, err := xstsAuthorize("xbl-token", xstsXboxLiveRelyingParty)
-		if !errors.Is(err, errXSTSMissingUHS) {
-			t.Fatalf("xstsAuthorize() error = %v, want %v", err, errXSTSMissingUHS)
+		if !errors.Is(err, ErrXSTSMissingUHS) {
+			t.Fatalf("xstsAuthorize() error = %v, want %v", err, ErrXSTSMissingUHS)
 		}
 	})
 
@@ -405,8 +404,8 @@ func TestMS35to39MinecraftLoginWithXbox(t *testing.T) {
 		msSetURL(t, &minecraftLoginURL, ts.URL)
 
 		_, err := minecraftLoginWithXbox("hash1", "xsts-t")
-		if err == nil {
-			t.Fatal("expected an error")
+		if !errors.Is(err, ErrMinecraftLoginWithXbox) {
+			t.Fatalf("error = %v, want %v", err, ErrMinecraftLoginWithXbox)
 		}
 	})
 
@@ -431,8 +430,8 @@ func TestMS35to39MinecraftLoginWithXbox(t *testing.T) {
 		msSetURL(t, &minecraftLoginURL, ts.URL)
 
 		_, err := minecraftLoginWithXbox("hash1", "xsts-t")
-		if !errors.Is(err, errLoginMissingAccessToken) {
-			t.Fatalf("minecraftLoginWithXbox() error = %v, want %v", err, errLoginMissingAccessToken)
+		if !errors.Is(err, ErrLoginMissingAccessToken) {
+			t.Fatalf("minecraftLoginWithXbox() error = %v, want %v", err, ErrLoginMissingAccessToken)
 		}
 	})
 }
@@ -504,8 +503,8 @@ func TestMS40to46GetMinecraftProfile(t *testing.T) {
 		msSetURL(t, &minecraftProfileURL, ts.URL)
 
 		_, err := getMinecraftProfile("mc-token")
-		if err == nil {
-			t.Fatal("expected an error")
+		if !errors.Is(err, ErrMinecraftProfileLookup) {
+			t.Fatalf("error = %v, want %v", err, ErrMinecraftProfileLookup)
 		}
 	})
 
@@ -574,8 +573,8 @@ func TestMS47to49AuthenticateXboxLiveIdentity(t *testing.T) {
 		msSetURL(t, &xstsAuthorizeURL, ts.URL)
 
 		_, err := authenticateXboxLiveIdentity("xbl-token")
-		if !errors.Is(err, errXSTSMissingXIDOrGTG) {
-			t.Fatalf("authenticateXboxLiveIdentity() error = %v, want %v", err, errXSTSMissingXIDOrGTG)
+		if !errors.Is(err, ErrXSTSMissingXIDOrGTG) {
+			t.Fatalf("authenticateXboxLiveIdentity() error = %v, want %v", err, ErrXSTSMissingXIDOrGTG)
 		}
 	})
 }
