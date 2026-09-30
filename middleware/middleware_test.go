@@ -56,9 +56,10 @@ func (f *mwFakeSessionSvc) ReadJWT(token string) (*auth.Session, error) {
 }
 
 type mwFakeRateLimitSvc struct {
-	incrErr  error
-	getLimit int
-	getErr   error
+	incrErr     error
+	getLimit    int
+	getErr      error
+	getErrLimit int
 
 	incrCalls []string
 	getCalls  []string
@@ -74,7 +75,7 @@ func (f *mwFakeRateLimitSvc) IncrRateLimit(key string) error {
 func (f *mwFakeRateLimitSvc) GetRateLimit(key string) (int, error) {
 	f.getCalls = append(f.getCalls, key)
 	if f.getErr != nil {
-		return 0, f.getErr
+		return f.getErrLimit, f.getErr
 	}
 	return f.getLimit, nil
 }
@@ -638,7 +639,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 
 	t.Run("MW-27_SessionGetErrorFailsOpen", func(t *testing.T) {
 		readLog := mwCaptureLog(t)
-		svc := &mwFakeRateLimitSvc{getErr: testerrors.ErrRedisDown}
+		svc := &mwFakeRateLimitSvc{getErr: testerrors.ErrRedisDown, getErrLimit: 10}
 		r := mwRateLimitRequest(&auth.Session{ID: "s1", UserID: "u1"}, "1.2.3.4:5678")
 
 		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
@@ -747,7 +748,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 
 	t.Run("MW-32_NoSessionGetErrorFailsOpen", func(t *testing.T) {
 		readLog := mwCaptureLog(t)
-		svc := &mwFakeRateLimitSvc{getErr: testerrors.ErrRedisDown}
+		svc := &mwFakeRateLimitSvc{getErr: testerrors.ErrRedisDown, getErrLimit: 10}
 		r := mwRateLimitRequest(nil, "9.8.7.6:1234")
 
 		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
