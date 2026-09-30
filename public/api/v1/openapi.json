@@ -1953,6 +1953,68 @@
                 }
             }
         },
+        "/users/me/settings": {
+            "get": {
+                "summary": "Get the caller's own account settings",
+                "description": "Requires a valid session. Always resolves to the caller's own settings.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AccountSettings"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            },
+            "patch": {
+                "summary": "Update the caller's own account settings",
+                "description": "Requires a valid session. Always operates on the caller's own account. Disabling password login is refused with 400 unless another login method is linked and enabled; enabling it is refused with 400 if no password is set.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateAccountSettingsRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "$ref": "#/components/responses/204NoContent"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
         "/users/{platform}/{platform_id}": {
             "get": {
                 "summary": "Get a user by their linked-platform identity",
@@ -2331,6 +2393,84 @@
                     }
                 }
             }
+        },
+        "/users/{user_id}/settings": {
+            "get": {
+                "summary": "Get a user's account settings",
+                "description": "Requires the admin:users scope, unless the caller is requesting their own settings.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/UserIdSlug"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AccountSettings"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            },
+            "patch": {
+                "summary": "Update a user's account settings",
+                "description": "Requires the admin:users scope, unless the caller is updating their own account. Disabling password login is refused with 400 unless another login method is linked and enabled; enabling it is refused with 400 if no password is set.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/UserIdSlug"
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateAccountSettingsRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "$ref": "#/components/responses/204NoContent"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
         }
     },
     "components": {
@@ -2581,6 +2721,35 @@
                     "created_at": {
                         "type": "string",
                         "format": "date-time"
+                    }
+                }
+            },
+            "AccountSettings": {
+                "type": "object",
+                "description": "An account's settings.",
+                "properties": {
+                    "user_id": {
+                        "type": "string"
+                    },
+                    "password_auth": {
+                        "type": "boolean",
+                        "description": "Whether the account can log in with its password."
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            },
+            "UpdateAccountSettingsRequest": {
+                "type": "object",
+                "required": [
+                    "password_auth"
+                ],
+                "properties": {
+                    "password_auth": {
+                        "type": "boolean",
+                        "description": "Whether the account can log in with its password."
                     }
                 }
             },
