@@ -1219,3 +1219,29 @@ func TestST80_GetSessionFromCacheMiss(t *testing.T) {
 		}
 	})
 }
+
+func TestST81to83_AccountSettingsUnknownUser(t *testing.T) {
+	_, _, ass := stLiveStore(t)
+	const unknownID = "910000000000000031"
+
+	t.Run("ST-81_GetAccountSettingsUnknownUser", func(t *testing.T) {
+		got, err := ass.GetAccountSettings(unknownID)
+		if got != nil || !errors.Is(err, ErrNotFound) {
+			t.Errorf("GetAccountSettings() = (%v, %v), want (nil, %v)", got, err, ErrNotFound)
+		}
+	})
+
+	t.Run("ST-82_EnablePasswordAuthUnknownUser", func(t *testing.T) {
+		err := ass.SetPasswordAuthEnabled(unknownID, true)
+		if !errors.Is(err, ErrNotFound) {
+			t.Errorf("SetPasswordAuthEnabled(true) err = %v, want %v", err, ErrNotFound)
+		}
+	})
+
+	t.Run("ST-83_DisablePasswordAuthUnknownUser", func(t *testing.T) {
+		err := ass.SetPasswordAuthEnabled(unknownID, false)
+		if !errors.Is(err, ErrNotFound) {
+			t.Errorf("SetPasswordAuthEnabled(false) err = %v, want %v", err, ErrNotFound)
+		}
+	})
+}

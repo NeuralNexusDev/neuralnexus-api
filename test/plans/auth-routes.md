@@ -145,3 +145,5 @@
 | US-63 | UpdateUserFromPlatformHandler | Error Path | UserService.UpdateUserFromPlatform returns not found | Admin session, valid body, service returns `auth.ErrNotFound` | 404 Not Found `msgUserNotFound` | P2 |  |
 | US-64 | UpdateUserFromPlatformHandler | Error Path | UserService.UpdateUserFromPlatform returns a duplicate email | Admin session, valid body, service returns `auth.ErrEmailAlreadyExists` | 409 Conflict `msgEmailAlreadyExists` | P2 |  |
 | US-65 | UpdateUserFromPlatformHandler | Error Path | UserService.UpdateUserFromPlatform returns a duplicate username | Admin session, valid body, service returns `auth.ErrUsernameAlreadyExists` | 409 Conflict `msgUsernameAlreadyExists` | P2 |  |
+| US-66 | GetAccountSettingsHandler | Error Path | UserService.GetAccountSettings returns not found | Permission check passes, service returns `auth.ErrNotFound` | 404 Not Found `msgUserNotFound` | P2 |  |
+| US-67 | UpdateAccountSettingsHandler | Error Path | UserService.SetPasswordAuthEnabled returns not found | Permission check passes, valid body, service returns `auth.ErrNotFound` | 404 Not Found `msgUserNotFound` | P2 |  |

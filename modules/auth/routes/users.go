@@ -335,6 +335,10 @@ func GetAccountSettingsHandler(service auth.UserService) http.HandlerFunc {
 		}
 		settings, err := service.GetAccountSettings(userID)
 		if err != nil {
+			if errors.Is(err, auth.ErrNotFound) {
+				responses.NotFound(w, r, msgUserNotFound)
+				return
+			}
 			responses.InternalServerError(w, r, msgFailedToGetAccountSettings)
 			return
 		}
@@ -369,6 +373,8 @@ func UpdateAccountSettingsHandler(service auth.UserService) http.HandlerFunc {
 		switch {
 		case err == nil:
 			responses.NoContent(w, r)
+		case errors.Is(err, auth.ErrNotFound):
+			responses.NotFound(w, r, msgUserNotFound)
 		case errors.Is(err, auth.ErrWouldLockAccount):
 			responses.BadRequest(w, r, msgEnableLoginMethodBeforeDisablingPassword)
 		case errors.Is(err, auth.ErrNoPasswordSet):

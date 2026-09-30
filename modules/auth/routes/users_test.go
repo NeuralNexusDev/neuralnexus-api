@@ -913,3 +913,27 @@ func TestUS65UpdateUserFromPlatformHandlerUsernameExistsMapsTo409(t *testing.T) 
 		expectDetail(t, w, msgUsernameAlreadyExists)
 	})
 }
+
+func TestUS66GetAccountSettingsHandlerNotFoundMapsTo404(t *testing.T) {
+	svc := &stubUserService{getSettingsErr: auth.ErrNotFound}
+	r := newSessionRequest(http.MethodGet, selfSession("u1"), "u1", "", "")
+	w := httptest.NewRecorder()
+
+	t.Run("US-66_GetAccountSettingsNotFoundMapsTo404", func(t *testing.T) {
+		GetAccountSettingsHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusNotFound)
+		expectDetail(t, w, msgUserNotFound)
+	})
+}
+
+func TestUS67UpdateAccountSettingsHandlerNotFoundMapsTo404(t *testing.T) {
+	svc := &stubUserService{setPasswordAuthErr: auth.ErrNotFound}
+	r := newSessionRequest(http.MethodPatch, selfSession("u1"), "u1", "", `{"password_auth":true}`)
+	w := httptest.NewRecorder()
+
+	t.Run("US-67_UpdateAccountSettingsNotFoundMapsTo404", func(t *testing.T) {
+		UpdateAccountSettingsHandler(svc)(w, r)
+		expectStatus(t, w, http.StatusNotFound)
+		expectDetail(t, w, msgUserNotFound)
+	})
+}

@@ -583,8 +583,8 @@ type AccountSettingsStore interface {
 
 var ErrNoPasswordSet = errors.New("this account has no password set")
 
-// GetAccountSettings returns userID's settings, or the defaults if it has
-// no account_settings row yet.
+// GetAccountSettings returns userID's settings, the defaults if the account
+// has no account_settings row yet, or ErrNotFound if the account does not exist.
 func (s *store) GetAccountSettings(userID string) (*AccountSettings, error) {
 	rows, err := s.db.Query(context.Background(), "SELECT * FROM account_settings WHERE user_id = $1", userID)
 	if err != nil {
@@ -594,6 +594,13 @@ func (s *store) GetAccountSettings(userID string) (*AccountSettings, error) {
 	settings, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[AccountSettings])
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
+			var exists bool
+			if err := s.db.QueryRow(context.Background(), "SELECT EXISTS (SELECT 1 FROM accounts WHERE user_id = $1)", userID).Scan(&exists); err != nil {
+				return nil, err
+			}
+			if !exists {
+				return nil, ErrNotFound
+			}
 			return DefaultAccountSettings(userID), nil
 		}
 		return nil, err
@@ -616,6 +623,14 @@ func (s *store) SetPasswordAuthEnabled(userID string, enabled bool) error {
 
 	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(27745, hashtext($1))", userID); err != nil {
 		return err
+	}
+
+	var exists bool
+	if err := tx.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM accounts WHERE user_id = $1)", userID).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		return ErrNotFound
 	}
 
 	var tag pgconn.CommandTag

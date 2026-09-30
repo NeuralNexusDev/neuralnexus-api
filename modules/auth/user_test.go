@@ -850,3 +850,25 @@ func TestUS36to37SetPasswordAuthEnabled(t *testing.T) {
 		}
 	})
 }
+
+func TestUS39to40_AccountSettingsNotFoundPassesThrough(t *testing.T) {
+	t.Run("US-39_GetAccountSettingsNotFound", func(t *testing.T) {
+		ass := &usFakeAccountSettingsStore{getErr: ErrNotFound}
+		svc := usNewService(&usFakeAccountStore{}, &usFakeLinkAccountStore{}, ass)
+
+		_, err := svc.GetAccountSettings("u1")
+		if !errors.Is(err, ErrNotFound) {
+			t.Errorf("GetAccountSettings() err = %v, want %v", err, ErrNotFound)
+		}
+	})
+
+	t.Run("US-40_SetPasswordAuthEnabledNotFound", func(t *testing.T) {
+		ass := &usFakeAccountSettingsStore{setErr: ErrNotFound}
+		svc := usNewService(&usFakeAccountStore{}, &usFakeLinkAccountStore{}, ass)
+
+		err := svc.SetPasswordAuthEnabled("u1", true)
+		if !errors.Is(err, ErrNotFound) {
+			t.Errorf("SetPasswordAuthEnabled() err = %v, want %v", err, ErrNotFound)
+		}
+	})
+}
