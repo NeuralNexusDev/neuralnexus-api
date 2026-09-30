@@ -340,14 +340,14 @@ func TestIPMiddleware(t *testing.T) {
 	})
 }
 
-func mwRunSession(svc auth.SessionService, r *http.Request) (rec *httptest.ResponseRecorder, nextCalled bool, gotSession *auth.Session) {
+func mwRunSession(svc auth.SessionService, r *http.Request) (rec *httptest.ResponseRecorder, nextCalls int, gotSession *auth.Session) {
 	rec = httptest.NewRecorder()
 	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-		nextCalled = true
+		nextCalls++
 		gotSession, _ = r.Context().Value(SessionKey).(*auth.Session)
 	})
 	SessionMiddleware(svc)(next).ServeHTTP(rec, r)
-	return rec, nextCalled, gotSession
+	return rec, nextCalls, gotSession
 }
 
 func mwSessionRequest(authHeader, cookieValue string) *http.Request {
@@ -364,10 +364,10 @@ func mwSessionRequest(authHeader, cookieValue string) *http.Request {
 func TestSessionMiddleware(t *testing.T) {
 	t.Run("MW-14_NoHeaderNoCookiePassesThrough", func(t *testing.T) {
 		svc := &mwFakeSessionSvc{}
-		rec, nextCalled, gotSession := mwRunSession(svc, mwSessionRequest("", ""))
+		rec, nextCalls, gotSession := mwRunSession(svc, mwSessionRequest("", ""))
 
-		if !nextCalled {
-			t.Fatal("expected next to be called")
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1", nextCalls)
 		}
 		if gotSession != nil {
 			t.Errorf("expected no session in context, got %+v", gotSession)
@@ -381,10 +381,10 @@ func TestSessionMiddleware(t *testing.T) {
 		for _, header := range []string{"Basic abc123", "Bearer"} {
 			t.Run(header, func(t *testing.T) {
 				svc := &mwFakeSessionSvc{}
-				rec, nextCalled, _ := mwRunSession(svc, mwSessionRequest(header, ""))
+				rec, nextCalls, _ := mwRunSession(svc, mwSessionRequest(header, ""))
 
-				if nextCalled {
-					t.Error("expected next NOT to be called")
+				if nextCalls != 0 {
+					t.Errorf("next called %d times, want 0", nextCalls)
 				}
 				if rec.Code != http.StatusUnauthorized {
 					t.Errorf("expected status 401, got %d", rec.Code)
@@ -399,10 +399,10 @@ func TestSessionMiddleware(t *testing.T) {
 	t.Run("MW-16_ValidBearerTokenSetsContextAndCallsNext", func(t *testing.T) {
 		session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
 		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*auth.Session, error) { return session, nil }}
-		rec, nextCalled, gotSession := mwRunSession(svc, mwSessionRequest("Bearer validtoken", ""))
+		rec, nextCalls, gotSession := mwRunSession(svc, mwSessionRequest("Bearer validtoken", ""))
 
-		if !nextCalled {
-			t.Fatal("expected next to be called")
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1", nextCalls)
 		}
 		if gotSession == nil || gotSession.UserID != "u1" {
 			t.Errorf("expected session in context, got %+v", gotSession)
@@ -414,10 +414,10 @@ func TestSessionMiddleware(t *testing.T) {
 
 	t.Run("MW-17_ReadJWTErrorRejected", func(t *testing.T) {
 		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*auth.Session, error) { return nil, testerrors.ErrBoom }}
-		rec, nextCalled, _ := mwRunSession(svc, mwSessionRequest("Bearer sometoken", ""))
+		rec, nextCalls, _ := mwRunSession(svc, mwSessionRequest("Bearer sometoken", ""))
 
-		if nextCalled {
-			t.Error("expected next NOT to be called")
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
 		}
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401, got %d", rec.Code)
@@ -432,7 +432,7 @@ func TestSessionMiddleware(t *testing.T) {
 			gotToken = token
 			return nil, testerrors.ErrBoom
 		}}
-		rec, nextCalled, _ := mwRunSession(svc, mwSessionRequest("Bearer ", ""))
+		rec, nextCalls, _ := mwRunSession(svc, mwSessionRequest("Bearer ", ""))
 
 		if !tokenSeen {
 			t.Fatal("expected ReadJWT to be called for a bare 'Bearer ' prefix")
@@ -440,8 +440,8 @@ func TestSessionMiddleware(t *testing.T) {
 		if gotToken != "" {
 			t.Errorf("expected ReadJWT to be called with an empty token, got %q", gotToken)
 		}
-		if nextCalled {
-			t.Error("expected next NOT to be called")
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
 		}
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401, got %d", rec.Code)
@@ -451,10 +451,10 @@ func TestSessionMiddleware(t *testing.T) {
 	t.Run("MW-18_ExpiredSessionRejectedAndDeleted", func(t *testing.T) {
 		session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
 		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*auth.Session, error) { return session, nil }}
-		rec, nextCalled, _ := mwRunSession(svc, mwSessionRequest("Bearer expiredtoken", ""))
+		rec, nextCalls, _ := mwRunSession(svc, mwSessionRequest("Bearer expiredtoken", ""))
 
-		if nextCalled {
-			t.Error("expected next NOT to be called")
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
 		}
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401, got %d", rec.Code)
@@ -470,10 +470,10 @@ func TestSessionMiddleware(t *testing.T) {
 			readJWTFunc: func(string) (*auth.Session, error) { return session, nil },
 			deleteFunc:  func(string) error { return testerrors.ErrCacheDown },
 		}
-		rec, nextCalled, _ := mwRunSession(svc, mwSessionRequest("Bearer expiredtoken", ""))
+		rec, nextCalls, _ := mwRunSession(svc, mwSessionRequest("Bearer expiredtoken", ""))
 
-		if nextCalled {
-			t.Error("expected next NOT to be called")
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
 		}
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401 regardless of the DeleteSession error, got %d", rec.Code)
@@ -483,10 +483,10 @@ func TestSessionMiddleware(t *testing.T) {
 	t.Run("MW-20_ValidCookieSessionSetsContextAndCallsNext", func(t *testing.T) {
 		session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
 		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*auth.Session, error) { return session, nil }}
-		rec, nextCalled, gotSession := mwRunSession(svc, mwSessionRequest("", "cookietoken"))
+		rec, nextCalls, gotSession := mwRunSession(svc, mwSessionRequest("", "cookietoken"))
 
-		if !nextCalled {
-			t.Fatal("expected next to be called")
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1", nextCalls)
 		}
 		if gotSession == nil || gotSession.UserID != "u1" {
 			t.Errorf("expected session in context, got %+v", gotSession)
@@ -498,10 +498,10 @@ func TestSessionMiddleware(t *testing.T) {
 
 	t.Run("MW-21_CookieReadJWTErrorFailsOpen", func(t *testing.T) {
 		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*auth.Session, error) { return nil, testerrors.ErrBoom }}
-		rec, nextCalled, gotSession := mwRunSession(svc, mwSessionRequest("", "badtoken"))
+		rec, nextCalls, gotSession := mwRunSession(svc, mwSessionRequest("", "badtoken"))
 
-		if !nextCalled {
-			t.Fatal("expected the request to fail open and reach next")
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1", nextCalls)
 		}
 		if gotSession != nil {
 			t.Errorf("expected no session in context, got %+v", gotSession)
@@ -514,10 +514,10 @@ func TestSessionMiddleware(t *testing.T) {
 	t.Run("MW-22_CookieExpiredSessionFailsOpenAndDeletes", func(t *testing.T) {
 		session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
 		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*auth.Session, error) { return session, nil }}
-		rec, nextCalled, gotSession := mwRunSession(svc, mwSessionRequest("", "expiredtoken"))
+		rec, nextCalls, gotSession := mwRunSession(svc, mwSessionRequest("", "expiredtoken"))
 
-		if !nextCalled {
-			t.Fatal("expected the request to fail open and reach next")
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1", nextCalls)
 		}
 		if gotSession != nil {
 			t.Errorf("expected no session in context, got %+v", gotSession)
@@ -536,10 +536,10 @@ func TestSessionMiddleware(t *testing.T) {
 			readJWTFunc: func(string) (*auth.Session, error) { return session, nil },
 			deleteFunc:  func(string) error { return testerrors.ErrCacheDown },
 		}
-		rec, nextCalled, gotSession := mwRunSession(svc, mwSessionRequest("", "expiredtoken"))
+		rec, nextCalls, gotSession := mwRunSession(svc, mwSessionRequest("", "expiredtoken"))
 
-		if !nextCalled {
-			t.Fatal("expected the request to fail open and reach next")
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1", nextCalls)
 		}
 		if gotSession != nil {
 			t.Errorf("expected no session in context, got %+v", gotSession)
@@ -787,7 +787,10 @@ func TestRateLimitMiddleware(t *testing.T) {
 					<-start
 					r := mwRateLimitRequest(session, "1.2.3.4:5678")
 					_, nextCalls := mwRunRateLimit(svc, "rl-concurrent", limit, limit, r)
-					if nextCalls == 1 {
+					if nextCalls > 1 {
+						t.Errorf("next called %d times for one request, want at most 1", nextCalls)
+					}
+					if nextCalls > 0 {
 						atomic.AddInt32(&passed, 1)
 					}
 				}()
@@ -887,13 +890,13 @@ func TestRequestLoggerMiddleware(t *testing.T) {
 	})
 }
 
-func mwRunAuth(svc auth.SessionService, r *http.Request) (rec *httptest.ResponseRecorder, nextCalled bool) {
+func mwRunAuth(svc auth.SessionService, r *http.Request) (rec *httptest.ResponseRecorder, nextCalls int) {
 	rec = httptest.NewRecorder()
 	next := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
-		nextCalled = true
+		nextCalls++
 	})
 	Auth(svc)(next).ServeHTTP(rec, r)
-	return rec, nextCalled
+	return rec, nextCalls
 }
 
 func TestAuth(t *testing.T) {
@@ -901,10 +904,10 @@ func TestAuth(t *testing.T) {
 		svc := &mwFakeSessionSvc{}
 		r := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(mwBaseCtx())
 
-		rec, nextCalled := mwRunAuth(svc, r)
+		rec, nextCalls := mwRunAuth(svc, r)
 
-		if nextCalled {
-			t.Error("expected next NOT to be called")
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
 		}
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401, got %d", rec.Code)
@@ -916,10 +919,10 @@ func TestAuth(t *testing.T) {
 		ctx := context.WithValue(mwBaseCtx(), SessionKey, (*auth.Session)(nil))
 		r := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
 
-		rec, nextCalled := mwRunAuth(svc, r)
+		rec, nextCalls := mwRunAuth(svc, r)
 
-		if nextCalled {
-			t.Error("expected next NOT to be called")
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
 		}
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401, got %d", rec.Code)
@@ -932,10 +935,10 @@ func TestAuth(t *testing.T) {
 		ctx := context.WithValue(mwBaseCtx(), SessionKey, session)
 		r := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
 
-		rec, nextCalled := mwRunAuth(svc, r)
+		rec, nextCalls := mwRunAuth(svc, r)
 
-		if nextCalled {
-			t.Error("expected next NOT to be called")
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
 		}
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401, got %d", rec.Code)
@@ -951,10 +954,10 @@ func TestAuth(t *testing.T) {
 		ctx := context.WithValue(mwBaseCtx(), SessionKey, session)
 		r := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
 
-		rec, nextCalled := mwRunAuth(svc, r)
+		rec, nextCalls := mwRunAuth(svc, r)
 
-		if nextCalled {
-			t.Error("expected next NOT to be called")
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
 		}
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401 regardless of the DeleteSession error, got %d", rec.Code)
@@ -967,10 +970,10 @@ func TestAuth(t *testing.T) {
 		ctx := context.WithValue(mwBaseCtx(), SessionKey, session)
 		r := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
 
-		rec, nextCalled := mwRunAuth(svc, r)
+		rec, nextCalls := mwRunAuth(svc, r)
 
-		if !nextCalled {
-			t.Error("expected next to be called for a valid session")
+		if nextCalls != 1 {
+			t.Errorf("next called %d times, want 1 (for a valid session)", nextCalls)
 		}
 		if rec.Code != http.StatusOK {
 			t.Errorf("expected status 200, got %d", rec.Code)
@@ -978,24 +981,24 @@ func TestAuth(t *testing.T) {
 	})
 }
 
-func mwRunSelfUserID(r *http.Request) (rec *httptest.ResponseRecorder, nextCalled bool, gotUserID string) {
+func mwRunSelfUserID(r *http.Request) (rec *httptest.ResponseRecorder, nextCalls int, gotUserID string) {
 	rec = httptest.NewRecorder()
 	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-		nextCalled = true
+		nextCalls++
 		gotUserID = r.PathValue("user_id")
 	})
 	SelfUserID(next).ServeHTTP(rec, r)
-	return rec, nextCalled, gotUserID
+	return rec, nextCalls, gotUserID
 }
 
 func TestSelfUserID(t *testing.T) {
 	t.Run("MW-43_NoSessionInContextRejected", func(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/users/me", nil)
 
-		rec, nextCalled, gotUserID := mwRunSelfUserID(r)
+		rec, nextCalls, gotUserID := mwRunSelfUserID(r)
 
-		if nextCalled {
-			t.Error("expected next NOT to be called")
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
 		}
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401, got %d", rec.Code)
@@ -1009,10 +1012,10 @@ func TestSelfUserID(t *testing.T) {
 		ctx := context.WithValue(context.Background(), SessionKey, (*auth.Session)(nil))
 		r := httptest.NewRequest(http.MethodGet, "/users/me", nil).WithContext(ctx)
 
-		rec, nextCalled, _ := mwRunSelfUserID(r)
+		rec, nextCalls, _ := mwRunSelfUserID(r)
 
-		if nextCalled {
-			t.Error("expected next NOT to be called")
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
 		}
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401, got %d", rec.Code)
@@ -1023,10 +1026,10 @@ func TestSelfUserID(t *testing.T) {
 		ctx := context.WithValue(context.Background(), SessionKey, &auth.Session{ID: "s1", UserID: "u1"})
 		r := httptest.NewRequest(http.MethodGet, "/users/me", nil).WithContext(ctx)
 
-		rec, nextCalled, gotUserID := mwRunSelfUserID(r)
+		rec, nextCalls, gotUserID := mwRunSelfUserID(r)
 
-		if !nextCalled {
-			t.Fatal("expected next to be called")
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1", nextCalls)
 		}
 		if gotUserID != "u1" {
 			t.Errorf("expected user_id path value %q, got %q", "u1", gotUserID)
@@ -1064,23 +1067,23 @@ func TestVerifyEd25519Middleware(t *testing.T) {
 		t.Fatalf("failed to generate ed25519 key: %v", err)
 	}
 
-	run := func(r *http.Request) (rec *httptest.ResponseRecorder, nextCalled bool, bodyInNext []byte) {
+	run := func(r *http.Request) (rec *httptest.ResponseRecorder, nextCalls int, bodyInNext []byte) {
 		rec = httptest.NewRecorder()
 		next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-			nextCalled = true
+			nextCalls++
 			bodyInNext, _ = io.ReadAll(r.Body)
 		})
 		VerifyEd25519Middleware(pub)(next).ServeHTTP(rec, r)
-		return rec, nextCalled, bodyInNext
+		return rec, nextCalls, bodyInNext
 	}
 
 	t.Run("MW-46_MissingSignatureHeaderRejected", func(t *testing.T) {
 		r := mwEd25519Request(t, nil, "1234567890", "{}", false)
 
-		rec, nextCalled, _ := run(r)
+		rec, nextCalls, _ := run(r)
 
-		if nextCalled {
-			t.Error("expected next NOT to be called")
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
 		}
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401, got %d", rec.Code)
@@ -1091,10 +1094,10 @@ func TestVerifyEd25519Middleware(t *testing.T) {
 	t.Run("MW-47_MissingTimestampHeaderRejected", func(t *testing.T) {
 		r := mwEd25519Request(t, priv, "", "{}", false)
 
-		rec, nextCalled, _ := run(r)
+		rec, nextCalls, _ := run(r)
 
-		if nextCalled {
-			t.Error("expected next NOT to be called")
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
 		}
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401, got %d", rec.Code)
@@ -1106,10 +1109,10 @@ func TestVerifyEd25519Middleware(t *testing.T) {
 		body := `{"type":1}`
 		r := mwEd25519Request(t, priv, "1700000000", body, false)
 
-		rec, nextCalled, bodyInNext := run(r)
+		rec, nextCalls, bodyInNext := run(r)
 
-		if !nextCalled {
-			t.Fatal("expected next to be called for a valid signature")
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1 (for a valid signature)", nextCalls)
 		}
 		if rec.Code != http.StatusOK {
 			t.Errorf("expected status 200, got %d", rec.Code)
@@ -1122,10 +1125,10 @@ func TestVerifyEd25519Middleware(t *testing.T) {
 	t.Run("MW-49_TamperedSignatureRejected", func(t *testing.T) {
 		r := mwEd25519Request(t, priv, "1700000000", "{}", true)
 
-		rec, nextCalled, _ := run(r)
+		rec, nextCalls, _ := run(r)
 
-		if nextCalled {
-			t.Error("expected next NOT to be called")
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
 		}
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401, got %d", rec.Code)
@@ -1138,10 +1141,10 @@ func TestVerifyEd25519Middleware(t *testing.T) {
 		r.Header.Set(XSignatureEd25519, "not-hex!!")
 		r.Header.Set(XSignatureTimestamp, "1700000000")
 
-		rec, nextCalled, _ := run(r)
+		rec, nextCalls, _ := run(r)
 
-		if nextCalled {
-			t.Error("expected next NOT to be called")
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
 		}
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401, got %d", rec.Code)
@@ -1155,10 +1158,10 @@ func TestVerifyEd25519Middleware(t *testing.T) {
 		r.Header.Set(XSignatureEd25519, fmt.Sprintf("%x", sig))
 		r.Header.Set(XSignatureTimestamp, "1700000000")
 
-		rec, nextCalled, _ := run(r)
+		rec, nextCalls, _ := run(r)
 
-		if nextCalled {
-			t.Error("expected next NOT to be called")
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
 		}
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401, got %d", rec.Code)
