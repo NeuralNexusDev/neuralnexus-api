@@ -137,6 +137,7 @@ func TestHD01to05_CreatePetHandler(t *testing.T) {
 		if w.Code != http.StatusForbidden {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusForbidden)
 		}
+		hdRequireDetail(t, w, msgNoPermissionToCreatePet)
 		if len(mock.createPetCalls) != 0 {
 			t.Errorf("CreatePet called %d times, want 0", len(mock.createPetCalls))
 		}
@@ -212,6 +213,7 @@ func TestHD01to05_CreatePetHandler(t *testing.T) {
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
 		}
+		hdRequireDetail(t, w, msgUnableToCreatePet)
 	})
 }
 
@@ -260,6 +262,7 @@ func TestHD06to10_GetPetHandler(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
 		}
+		hdRequireDetail(t, w, msgPetIDIsRequired)
 		if len(mock.getPetCalls) != 0 {
 			t.Errorf("GetPet called %d times, want 0", len(mock.getPetCalls))
 		}
@@ -277,6 +280,7 @@ func TestHD06to10_GetPetHandler(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
 		}
+		hdRequireDetail(t, w, msgPetIDIsRequired)
 		if len(mock.getPetCalls) != 0 {
 			t.Errorf("GetPet called %d times, want 0", len(mock.getPetCalls))
 		}
@@ -363,6 +367,7 @@ func TestHD11to14and35_UpdatePetHandler(t *testing.T) {
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
 		}
+		hdRequireDetail(t, w, msgUnableToUpdatePet)
 	})
 
 	t.Run("HD-35_StoreNoRowsNotFound", func(t *testing.T) {
@@ -441,6 +446,7 @@ func TestHD15to18_GetRandPetPictureByNameHandler(t *testing.T) {
 		if w.Code != http.StatusNotFound {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
 		}
+		hdRequireDetail(t, w, msgUnableToGetRandomPetPicture)
 	})
 }
 
@@ -596,6 +602,7 @@ func TestHD23to27and36_UpdatePetPictureHandler(t *testing.T) {
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
 		}
+		hdRequireDetail(t, w, msgUnableToUpdatePetPicture)
 	})
 
 	t.Run("HD-36_StoreNoRowsNotFound", func(t *testing.T) {
@@ -613,6 +620,7 @@ func TestHD23to27and36_UpdatePetPictureHandler(t *testing.T) {
 		if w.Code != http.StatusNotFound {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
 		}
+		hdRequireDetail(t, w, msgPetPictureNotFound)
 	})
 }
 
@@ -750,5 +758,6 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
 		}
+		hdRequireDetail(t, w, msgUnableToDeletePetPicture)
 	})
 }

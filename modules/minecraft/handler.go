@@ -24,6 +24,15 @@ const (
 	msgTextureNotFound          = "Texture not found"
 	msgPlayerNotFound           = "player not found"
 	msgFailedToGetTexture       = "Failed to get texture"
+	msgRequestMustBeJSON        = "Request must be of type application/json"
+	msgInvalidRequestBody       = "Invalid request body"
+	msgInvalidSize              = "size must be between 1 and 10"
+	msgInvalidProfileName       = "Invalid profile name"
+	msgFailedToGetPlayers       = "Failed to get players"
+	msgFailedToGetGeyserXUID    = "Failed to get Geyser XUID"
+	msgFailedToGetGeyserSkin    = "Failed to get Geyser skin"
+	msgNotAValidBedrockUUID     = "Not a valid Bedrock UUID: "
+	logFailedToGetPlayerProfile = "Failed to get player profile:\n\t"
 )
 
 // GetMojangPlayerByNameHandler - Get a player by name
@@ -76,24 +85,24 @@ func GetMojangPlayerByUUIDHandler(s Service) http.HandlerFunc {
 func GetMojangPlayersByNamesHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Content-Type") != "application/json" {
-			responses.UnsupportedMediaType(w, r, "Request must be of type application/json")
+			responses.UnsupportedMediaType(w, r, msgRequestMustBeJSON)
 			return
 		}
 
 		var names []string
 		if err := json.NewDecoder(r.Body).Decode(&names); err != nil {
-			responses.BadRequest(w, r, "Invalid request body")
+			responses.BadRequest(w, r, msgInvalidRequestBody)
 			return
 		}
 
 		if len(names) == 0 || len(names) > 10 {
-			responses.BadRequest(w, r, "size must be between 1 and 10")
+			responses.BadRequest(w, r, msgInvalidSize)
 			return
 		}
 
 		for _, name := range names {
 			if name == "" {
-				responses.BadRequest(w, r, "Invalid profile name")
+				responses.BadRequest(w, r, msgInvalidProfileName)
 				return
 			}
 		}
@@ -101,7 +110,7 @@ func GetMojangPlayersByNamesHandler(s Service) http.HandlerFunc {
 		players, err := s.GetMojangPlayersByNames(names)
 		if err != nil {
 			log.Println("Failed to get players by names:\n\t", err)
-			responses.InternalServerError(w, r, "Failed to get players")
+			responses.InternalServerError(w, r, msgFailedToGetPlayers)
 			return
 		}
 		responses.StructOK(w, r, players)
@@ -125,7 +134,7 @@ func GetMojangProfileHandler(s Service) http.HandlerFunc {
 				responses.NoContent(w, r)
 				return
 			}
-			log.Println("Failed to get player profile:\n\t", err)
+			log.Println(logFailedToGetPlayerProfile, err)
 			responses.InternalServerError(w, r, msgFailedToGetPlayerProfile)
 			return
 		}
@@ -148,7 +157,7 @@ func GetProfileHandler(s Service) http.HandlerFunc {
 				responses.NoContent(w, r)
 				return
 			}
-			log.Println("Failed to get player profile:\n\t", err)
+			log.Println(logFailedToGetPlayerProfile, err)
 			responses.InternalServerError(w, r, msgFailedToGetPlayerProfile)
 			return
 		}
@@ -199,7 +208,7 @@ func GetGeyserXUIDHandler(s Service) http.HandlerFunc {
 				return
 			}
 			log.Println("Failed to get Geyser XUID:\n\t", err)
-			responses.InternalServerError(w, r, "Failed to get Geyser XUID")
+			responses.InternalServerError(w, r, msgFailedToGetGeyserXUID)
 			return
 		}
 		responses.StructOK(w, r, player)
@@ -226,7 +235,7 @@ func GetGeyserSkinHandler(s Service) http.HandlerFunc {
 				return
 			}
 			log.Println("Failed to get Geyser skin:\n\t", err)
-			responses.InternalServerError(w, r, "Failed to get Geyser skin")
+			responses.InternalServerError(w, r, msgFailedToGetGeyserSkin)
 			return
 		}
 		responses.StructOK(w, r, skin)
@@ -239,7 +248,7 @@ func GetGeyserProfileHandler(s Service) http.HandlerFunc {
 		id := r.PathValue("uuid")
 		xuid, err := uuidToXUID(id)
 		if err != nil {
-			responses.BadRequest(w, r, "Not a valid Bedrock UUID: "+id)
+			responses.BadRequest(w, r, msgNotAValidBedrockUUID+id)
 			return
 		}
 

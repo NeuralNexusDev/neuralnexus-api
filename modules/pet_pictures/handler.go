@@ -13,13 +13,23 @@ import (
 )
 
 const (
-	msgPetNameIsRequired       = "Pet name is required"
-	msgPetNotFound             = "Pet not found"
-	msgUnableToParseBody       = "Invalid input, unable to parse body"
-	msgNoPermissionToUpdatePet = "You do not have permission to update this pet"
-	msgPetPictureIDIsRequired  = "Pet picture ID is required"
-	msgUnableToGetPetPicture   = "Unable to get pet picture"
-	msgUnableToGetPet          = "Unable to get pet"
+	msgPetNameIsRequired           = "Pet name is required"
+	msgPetNotFound                 = "Pet not found"
+	msgUnableToParseBody           = "Invalid input, unable to parse body"
+	msgNoPermissionToUpdatePet     = "You do not have permission to update this pet"
+	msgPetPictureIDIsRequired      = "Pet picture ID is required"
+	msgUnableToGetPetPicture       = "Unable to get pet picture"
+	msgUnableToGetPet              = "Unable to get pet"
+	msgNoPermissionToCreatePet     = "You do not have permission to create a pet"
+	msgUnableToCreatePet           = "Unable to create pet (pet may already exist)"
+	msgPetIDIsRequired             = "Pet ID is required"
+	msgUnableToUpdatePet           = "Unable to update pet"
+	msgUnableToGetRandomPetPicture = "Unable to get random pet picture"
+	msgPetPictureNotFound          = "Pet picture not found"
+	msgUnableToUpdatePetPicture    = "Unable to update pet picture"
+	msgUnableToDeletePetPicture    = "Unable to delete pet picture"
+	logUnableToGetPetPicture       = "[Error]: Unable to get pet picture:\n\t"
+	logUnableToGetPet              = "[Error]: Unable to get pet:\n\t"
 )
 
 // CreatePetHandler - Create a new pet
@@ -27,7 +37,7 @@ func CreatePetHandler(s PetPicService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(auth.Session)
 		if !session.HasPermission(perms.ScopeAdminPetPictures) {
-			responses.Forbidden(w, r, "You do not have permission to create a pet")
+			responses.Forbidden(w, r, msgNoPermissionToCreatePet)
 			return
 		}
 
@@ -47,7 +57,7 @@ func CreatePetHandler(s PetPicService) http.HandlerFunc {
 		petResponse, err := s.GetStore().CreatePet(petName)
 		if err != nil {
 			log.Println("[Error]: Unable to create pet:\n\t", err)
-			responses.InternalServerError(w, r, "Unable to create pet (pet may already exist)")
+			responses.InternalServerError(w, r, msgUnableToCreatePet)
 			return
 		}
 		responses.SendStruct(w, r, http.StatusCreated, petResponse)
@@ -74,13 +84,13 @@ func GetPetHandler(s PetPicService) http.HandlerFunc {
 			}
 		}
 		if petID == 0 {
-			responses.BadRequest(w, r, "Pet ID is required")
+			responses.BadRequest(w, r, msgPetIDIsRequired)
 			return
 		}
 
 		pet, err := s.GetStore().GetPet(petID)
 		if err != nil {
-			log.Println("[Error]: Unable to get pet:\n\t", err)
+			log.Println(logUnableToGetPet, err)
 			responses.NotFound(w, r, msgPetNotFound)
 			return
 		}
@@ -111,7 +121,7 @@ func UpdatePetHandler(s PetPicService) http.HandlerFunc {
 				responses.NotFound(w, r, msgPetNotFound)
 				return
 			}
-			responses.InternalServerError(w, r, "Unable to update pet")
+			responses.InternalServerError(w, r, msgUnableToUpdatePet)
 			return
 		}
 		responses.StructOK(w, r, pet)
@@ -137,7 +147,7 @@ func GetRandPetPictureByNameHandler(s PetPicService) http.HandlerFunc {
 		petPicture, err := s.GetStore().GetRandPetPictureByName(petName)
 		if err != nil {
 			log.Println("[Error]: Unable to get random pet picture:\n\t", err)
-			responses.NotFound(w, r, "Unable to get random pet picture")
+			responses.NotFound(w, r, msgUnableToGetRandomPetPicture)
 			return
 		}
 		responses.StructOK(w, r, petPicture)
@@ -162,7 +172,7 @@ func GetPetPictureHandler(s PetPicService) http.HandlerFunc {
 
 		petPicture, err := s.GetStore().GetPetPicture(petPictureID)
 		if err != nil {
-			log.Println("[Error]: Unable to get pet picture:\n\t", err)
+			log.Println(logUnableToGetPetPicture, err)
 			responses.NotFound(w, r, msgUnableToGetPetPicture)
 			return
 		}
@@ -182,7 +192,7 @@ func UpdatePetPictureHandler(s PetPicService) http.HandlerFunc {
 
 		pet, err := s.GetStore().GetPet(petPicture.PrimarySubject)
 		if err != nil {
-			log.Println("[Error]: Unable to get pet:\n\t", err)
+			log.Println(logUnableToGetPet, err)
 			responses.NotFound(w, r, msgUnableToGetPet)
 			return
 		}
@@ -197,10 +207,10 @@ func UpdatePetPictureHandler(s PetPicService) http.HandlerFunc {
 		if err != nil {
 			log.Println("[Error]: Unable to update pet picture:\n\t", err)
 			if errors.Is(err, ErrPetPictureNotFound) {
-				responses.NotFound(w, r, "Pet picture not found")
+				responses.NotFound(w, r, msgPetPictureNotFound)
 				return
 			}
-			responses.InternalServerError(w, r, "Unable to update pet picture")
+			responses.InternalServerError(w, r, msgUnableToUpdatePetPicture)
 			return
 		}
 		responses.StructOK(w, r, petPicture)
@@ -225,14 +235,14 @@ func DeletePetPictureHandler(s PetPicService) http.HandlerFunc {
 
 		petPicture, err := s.GetStore().GetPetPicture(petPictureID)
 		if err != nil {
-			log.Println("[Error]: Unable to get pet picture:\n\t", err)
+			log.Println(logUnableToGetPetPicture, err)
 			responses.NotFound(w, r, msgUnableToGetPetPicture)
 			return
 		}
 
 		pet, err := s.GetStore().GetPet(petPicture.PrimarySubject)
 		if err != nil {
-			log.Println("[Error]: Unable to get pet:\n\t", err)
+			log.Println(logUnableToGetPet, err)
 			responses.NotFound(w, r, msgUnableToGetPet)
 			return
 		}
@@ -246,7 +256,7 @@ func DeletePetPictureHandler(s PetPicService) http.HandlerFunc {
 		_, err = s.GetStore().DeletePetPicture(petPictureID)
 		if err != nil {
 			log.Println("[Error]: Unable to delete pet picture:\n\t", err)
-			responses.InternalServerError(w, r, "Unable to delete pet picture")
+			responses.InternalServerError(w, r, msgUnableToDeletePetPicture)
 			return
 		}
 		responses.NoContent(w, r)
