@@ -20,6 +20,7 @@ import (
 
 const (
 	logErrorDeletingSession       = "Error deleting session:\n\t"
+	logErrorReadingJWTFromCookie  = "Error reading JWT from cookie:\n\t"
 	logErrorIncrementingRateLimit = "Error incrementing rate limit:\n\t"
 	logErrorGettingRateLimit      = "Error getting rate limit:\n\t"
 )
@@ -149,7 +150,7 @@ func SessionMiddleware(service auth.SessionService) Middleware {
 			} else if cookie, err := r.Cookie(SessionCookieName); err == nil {
 				session, jwtErr := service.ReadJWT(cookie.Value)
 				if jwtErr != nil {
-					LogRequest(r.Context(), "Error reading JWT from cookie:\n\t", jwtErr.Error())
+					LogRequest(r.Context(), logErrorReadingJWTFromCookie, jwtErr.Error())
 				} else if !session.IsValid() {
 					if delErr := service.DeleteSession(session.ID); delErr != nil {
 						LogRequest(r.Context(), logErrorDeletingSession, delErr.Error())

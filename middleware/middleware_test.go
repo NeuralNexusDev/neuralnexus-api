@@ -465,6 +465,7 @@ func TestSessionMiddleware(t *testing.T) {
 	})
 
 	t.Run("MW-19_ExpiredSessionDeleteErrorStillUnauthorized", func(t *testing.T) {
+		readLog := mwCaptureLog(t)
 		session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
 		svc := &mwFakeSessionSvc{
 			readJWTFunc: func(string) (*auth.Session, error) { return session, nil },
@@ -477,6 +478,9 @@ func TestSessionMiddleware(t *testing.T) {
 		}
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401 regardless of the DeleteSession error, got %d", rec.Code)
+		}
+		if got := strings.Count(readLog(), logErrorDeletingSession); got != 1 {
+			t.Errorf("log contains %q %d times, want 1", logErrorDeletingSession, got)
 		}
 	})
 
@@ -497,6 +501,7 @@ func TestSessionMiddleware(t *testing.T) {
 	})
 
 	t.Run("MW-21_CookieReadJWTErrorFailsOpen", func(t *testing.T) {
+		readLog := mwCaptureLog(t)
 		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*auth.Session, error) { return nil, testerrors.ErrBoom }}
 		rec, nextCalls, gotSession := mwRunSession(svc, mwSessionRequest("", "badtoken"))
 
@@ -508,6 +513,9 @@ func TestSessionMiddleware(t *testing.T) {
 		}
 		if rec.Code != http.StatusOK {
 			t.Errorf("expected status 200 (fail open), got %d", rec.Code)
+		}
+		if got := strings.Count(readLog(), logErrorReadingJWTFromCookie); got != 1 {
+			t.Errorf("log contains %q %d times, want 1", logErrorReadingJWTFromCookie, got)
 		}
 	})
 
@@ -531,6 +539,7 @@ func TestSessionMiddleware(t *testing.T) {
 	})
 
 	t.Run("MW-23_CookieExpiredSessionDeleteErrorStillFailsOpen", func(t *testing.T) {
+		readLog := mwCaptureLog(t)
 		session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
 		svc := &mwFakeSessionSvc{
 			readJWTFunc: func(string) (*auth.Session, error) { return session, nil },
@@ -546,6 +555,9 @@ func TestSessionMiddleware(t *testing.T) {
 		}
 		if rec.Code != http.StatusOK {
 			t.Errorf("expected status 200 (fail open), got %d", rec.Code)
+		}
+		if got := strings.Count(readLog(), logErrorDeletingSession); got != 1 {
+			t.Errorf("log contains %q %d times, want 1", logErrorDeletingSession, got)
 		}
 	})
 }
@@ -949,6 +961,7 @@ func TestAuth(t *testing.T) {
 	})
 
 	t.Run("MW-41_ExpiredSessionDeleteErrorStillUnauthorized", func(t *testing.T) {
+		readLog := mwCaptureLog(t)
 		svc := &mwFakeSessionSvc{deleteFunc: func(string) error { return testerrors.ErrCacheDown }}
 		session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
 		ctx := context.WithValue(mwBaseCtx(), SessionKey, session)
@@ -961,6 +974,9 @@ func TestAuth(t *testing.T) {
 		}
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401 regardless of the DeleteSession error, got %d", rec.Code)
+		}
+		if got := strings.Count(readLog(), logErrorDeletingSession); got != 1 {
+			t.Errorf("log contains %q %d times, want 1", logErrorDeletingSession, got)
 		}
 	})
 
