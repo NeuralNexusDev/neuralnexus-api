@@ -255,6 +255,7 @@ func TestServerStatusHandler(t *testing.T) {
 			}
 		})
 	}
+
 	for _, tc := range []struct {
 		name  string
 		value string
@@ -330,7 +331,7 @@ func TestServerStatusHandler(t *testing.T) {
 		if len(mock.serverCalls) != 1 {
 			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
 		}
-		if call := mock.serverCalls[0]; call.host != "mc.example.com:abc" || call.port != 25565 || call.isBedrock != false {
+		if call := mock.serverCalls[0]; call.host != "mc.example.com:abc" || call.port != 25565 || call.isBedrock {
 			t.Fatalf("call = %+v, want host mc.example.com:abc, port 25565, bedrock false", call)
 		}
 	})
@@ -344,7 +345,7 @@ func TestServerStatusHandler(t *testing.T) {
 		if len(mock.serverCalls) != 1 {
 			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
 		}
-		if call := mock.serverCalls[0]; call.host != "mc.example.com:abc" || call.port != 19132 || call.isBedrock != true {
+		if call := mock.serverCalls[0]; call.host != "mc.example.com:abc" || call.port != 19132 || !call.isBedrock {
 			t.Fatalf("call = %+v, want host mc.example.com:abc, port 19132, bedrock true", call)
 		}
 	})
@@ -645,7 +646,7 @@ func TestSimpleStatusHandler(t *testing.T) {
 		if len(mock.serverCalls) != 1 {
 			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
 		}
-		if call := mock.serverCalls[0]; call.host != "mc.example.com:abc" || call.port != 25565 || call.isBedrock != false {
+		if call := mock.serverCalls[0]; call.host != "mc.example.com:abc" || call.port != 25565 || call.isBedrock {
 			t.Fatalf("call = %+v, want host mc.example.com:abc, port 25565, bedrock false", call)
 		}
 	})
@@ -659,7 +660,7 @@ func TestSimpleStatusHandler(t *testing.T) {
 		if len(mock.serverCalls) != 1 {
 			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
 		}
-		if call := mock.serverCalls[0]; call.host != "mc.example.com:abc" || call.port != 19132 || call.isBedrock != true {
+		if call := mock.serverCalls[0]; call.host != "mc.example.com:abc" || call.port != 19132 || !call.isBedrock {
 			t.Fatalf("call = %+v, want host mc.example.com:abc, port 19132, bedrock true", call)
 		}
 	})
