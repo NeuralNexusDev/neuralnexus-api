@@ -1337,6 +1337,26 @@
                     "403": {
                         "$ref": "#/components/responses/403Forbidden"
                     },
+                    "404": {
+                        "description": "No pet with that ID exists",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Problem"
+                                }
+                            },
+                            "application/problem+xml": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Problem"
+                                }
+                            },
+                            "application/problem+x-protobuf": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Problem"
+                                }
+                            }
+                        }
+                    },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
                     }
