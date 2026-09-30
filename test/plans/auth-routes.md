@@ -32,6 +32,22 @@
 | AU-56 | OpenIDHandler | Error Path | OpenID login fails while creating the session | Both Steam calls succeed; SessionService.AddSession returns testerrors.ErrDBDown | 303 redirect to state.RedirectURI with a problem of 500 whose detail is `msgAuthenticationFailed` | P2 |  |
 | AU-57 | OpenIDHandler | Error Path | OpenID login fails while signing the JWT | Both Steam calls succeed; SessionService.CreateJWT returns testerrors.ErrSigningFailed | 303 redirect to state.RedirectURI with a problem of 500 whose detail is `msgAuthenticationFailed` | P2 |  |
 | AU-58 | LoginHandler | Error Path | Account.NewSession fails | Account/password/enabled all valid; the test binary re-executes itself with SNOWFLAKE_NODE_ID above 31 so database.GenSnowflake fails | 500 Internal Server Error, `detail` is `msgAuthenticationFailed` | P2 | Re-exec because the snowflake settings are read from the environment at package init. |
+| AU-59 | LoginHandler | Error Path | Account lookup fails with a non-not-found error | AccountService.GetAccountByUsername returns `testerrors.ErrDBDown` | 500 Internal Server Error `msgAuthenticationFailed`; no session cookie | P2 |  |
+| AU-60 | oauthFailureResponse | Error Path | `linking.ErrInvalidPlatform` | err is the sentinel | 400 with `msgInvalidPlatform` | P2 |  |
+| AU-61 | oauthFailureResponse | Error Path | `linking.ErrNoScopeInToken` | err is the sentinel | 400 with `msgMissingOAuthScope` | P2 |  |
+| AU-62 | oauthFailureResponse | Error Path | `linking.ErrInvalidAssertion` | err is the sentinel | 400 with `msgInvalidState` | P2 |  |
+| AU-63 | oauthFailureResponse | Error Path | `linking.ErrSteamIDMismatch` | err is the sentinel | 400 with `msgSteamAccountMismatch` | P2 |  |
+| AU-64 | oauthFailureResponse | Error Path | `linking.ErrSessionNotFound` | err is the sentinel | 401 with `msgLoginRequiredToLink` | P2 |  |
+| AU-65 | oauthFailureResponse | Error Path | `linking.ErrSessionExpired` | err is the sentinel | 401 with `msgSessionExpired` | P2 |  |
+| AU-66 | oauthFailureResponse | Error Path | `linking.ErrPlatformLoginDisabled` | err is the sentinel | 403 with `msgPlatformLoginDisabled` | P2 |  |
+| AU-67 | oauthFailureResponse | Error Path | `linking.ErrSteamNoPlayers` | err is the sentinel | 404 with `msgSteamAccountNotFound` | P2 |  |
+| AU-68 | oauthFailureResponse | Error Path | `linking.ErrConflictingMicrosoftIdentities` | err is the sentinel | 409 with `msgConflictingMicrosoftIdentities` | P2 |  |
+| AU-69 | oauthFailureResponse | Error Path | `linking.ErrPlatformAlreadyLinkedToDifferentAccount` | err is the sentinel | 409 with `msgPlatformAlreadyLinked` | P2 |  |
+| AU-70 | oauthFailureResponse | Edge Case | `linking.ErrLinkAccountFailed` wrapping `linking.ErrPlatformAlreadyLinkedToDifferentAccount` | err wraps both | 500 with `msgAuthenticationFailed` (the link failure is not reclassified by its cause) | P2 |  |
+| AU-71 | oauthFailureResponse | Error Path | Unclassified error | err is `testerrors.ErrDBDown` | 500 with `msgAuthenticationFailed` | P2 |  |
+| AU-72 | OAuthHandler | Error Path | Login is disabled for the linked platform account | Valid state, mode=login, platform=discord with the Discord calls faked as in AU-50; the linked account store returns a verified link with login disabled | 303 redirect to state.RedirectURI with a problem of 403 whose detail is `msgPlatformLoginDisabled` | P2 |  |
+| AU-73 | OpenIDHandler | Error Path | Steam returns no player for the verified steamid | Valid state, both Steam endpoints faked as in AU-51 but the player summary lists no players | 303 redirect to state.RedirectURI with a problem of 404 whose detail is `msgSteamAccountNotFound` | P2 |  |
+| AU-74 | OpenIDHandler | Error Path | Login is disabled for the linked Steam account | Valid state, both Steam endpoints faked as in AU-51; the linked account store returns a verified link with login disabled | 303 redirect to state.RedirectURI with a problem of 403 whose detail is `msgPlatformLoginDisabled` | P2 |  |
 | AU-22 | decodeAndValidateState | Happy Path | Valid base64+JSON state, nonce cookie matches | state has Platform/Nonce/RedirectURI/Mode set, RedirectURI allowed, "nonce" cookie value == state.Nonce | Returns (state, true) | P1 |  |
 | AU-23 | decodeAndValidateState | Error Path | Missing "state" query param | No state param on the request | Returns (zero state, false); redirectBadRequest to auth.NN_SITE_URL (`msgInvalidRequest`) | P2 |  |
 | AU-24 | decodeAndValidateState | Error Path | "state" is not valid base64 | state param is not URL-safe base64 | Returns (zero state, false); redirectBadRequest to auth.NN_SITE_URL, detail `msgInvalidState` | P2 |  |
@@ -67,18 +83,18 @@
 | US-01 | GetUserHandler | Happy Path | Self-lookup | session.UserID == path user_id | 200 OK with the user struct | P1 |  |
 | US-02 | GetUserHandler | Happy Path | Admin looks up another user | session.UserID != path user_id, session has ScopeAdminUsers | 200 OK with the user struct | P1 |  |
 | US-03 | GetUserHandler | Error Path | No permission | session.UserID != path user_id, no ScopeAdminUsers | 403 Forbidden `msgNoPermissionToGetUser` | P2 |  |
-| US-04 | GetUserHandler | Error Path | UserService.GetUser errors | Permission check passes, service.GetUser returns an error | 404 Not Found `msgUserNotFound` | P2 |  |
+| US-04 | GetUserHandler | Error Path | UserService.GetUser fails with a non-not-found error | Permission check passes, service.GetUser returns `testerrors.ErrDBDown` | 500 Internal Server Error `msgFailedToGetUser` | P2 |  |
 | US-05 | GetUserFromPlatformHandler | Happy Path | Admin fetches a user by platform ID | session has ScopeAdminUsers, service.GetUserFromPlatform succeeds | 200 OK with the user struct | P1 |  |
 | US-06 | GetUserFromPlatformHandler | Error Path | No permission | session lacks ScopeAdminUsers | 403 Forbidden `msgNoPermissionToGetUsers` | P2 |  |
-| US-07 | GetUserFromPlatformHandler | Error Path | UserService.GetUserFromPlatform errors | Admin session, service returns an error | 404 Not Found `msgUserNotFound` | P2 |  |
+| US-07 | GetUserFromPlatformHandler | Error Path | UserService.GetUserFromPlatform errors | Admin session, service returns `auth.ErrNotFound` | 404 Not Found `msgUserNotFound` | P2 |  |
 | US-08 | GetUserPermissionsHandler | Happy Path | Self-lookup | session.UserID == path user_id | 200 OK with the permissions list | P1 |  |
 | US-09 | GetUserPermissionsHandler | Happy Path | Admin looks up another user's permissions | session.UserID != path user_id, session has ScopeAdminUsers | 200 OK with the permissions list | P2 |  |
 | US-10 | GetUserPermissionsHandler | Error Path | No permission | session.UserID != path user_id, no ScopeAdminUsers | 403 Forbidden `msgNoPermissionToGetUserPermissions` | P2 |  |
-| US-11 | GetUserPermissionsHandler | Error Path | UserService.GetUserPermissions errors | Permission check passes, service returns an error | 404 Not Found `msgUserNotFound` | P2 |  |
+| US-11 | GetUserPermissionsHandler | Error Path | UserService.GetUserPermissions fails with a non-not-found error | Permission check passes, service returns `testerrors.ErrDBDown` | 500 Internal Server Error `msgFailedToGetUser` | P2 |  |
 | US-12 | UpdateUserHandler | Happy Path | Admin updates a user | session has ScopeAdminUsers, valid JSON body, service.UpdateUser succeeds | 200 OK with the user struct; response UserID equals the path user_id (overridden after decode) | P1 |  |
 | US-13 | UpdateUserHandler | Error Path | No permission | session lacks ScopeAdminUsers | 403 Forbidden `msgNoPermissionToUpdateUsers` | P2 |  |
 | US-14 | UpdateUserHandler | Error Path | Malformed body | Admin session, body is not valid JSON | 400 Bad Request `msgInvalidRequestBody` | P2 |  |
-| US-15 | UpdateUserHandler | Error Path | UserService.UpdateUser errors | Admin session, valid body, service returns an error | 400 Bad Request `msgFailedToUpdateUser` | P2 |  |
+| US-15 | UpdateUserHandler | Error Path | UserService.UpdateUser fails with an unclassified error | Admin session, valid body, service returns `testerrors.ErrDBDown` | 500 Internal Server Error `msgFailedToUpdateUser` | P2 |  |
 | US-16 | UpdateUserFromPlatformHandler | Happy Path | platform=discord, valid body | Admin session, body decodes into linking.DiscordData, service succeeds | 200 OK with the user struct | P1 |  |
 | US-17 | UpdateUserFromPlatformHandler | Happy Path | platform=minecraft, valid body | Admin session, body decodes into linking.MinecraftData, service succeeds | 200 OK with the user struct | P2 |  |
 | US-18 | UpdateUserFromPlatformHandler | Happy Path | platform=twitch, valid body | Admin session, body decodes into twitch.Data, service succeeds | 200 OK with the user struct | P2 |  |
@@ -87,10 +103,10 @@
 | US-21 | UpdateUserFromPlatformHandler | Error Path | Unsupported platform value | platform path value matches none of the five known platforms | 400 Bad Request `msgUnsupportedPlatform` | P2 |  |
 | US-22 | UpdateUserFromPlatformHandler | Error Path | No permission | session lacks ScopeAdminUsers | 403 Forbidden `msgNoPermissionToUpdateUsers` | P2 |  |
 | US-23 | UpdateUserFromPlatformHandler | Error Path | Malformed body for the given platform | Admin session, platform=discord, body is not valid JSON | 400 Bad Request `msgInvalidRequestBody` | P2 |  |
-| US-24 | UpdateUserFromPlatformHandler | Error Path | UserService.UpdateUserFromPlatform errors | Admin session, valid body, service returns an error | 400 Bad Request `msgFailedToUpdateUser` | P2 |  |
+| US-24 | UpdateUserFromPlatformHandler | Error Path | UserService.UpdateUserFromPlatform fails with an unclassified error | Admin session, valid body, service returns `testerrors.ErrDBDown` | 500 Internal Server Error `msgFailedToUpdateUser` | P2 |  |
 | US-25 | DeleteUserHandler | Happy Path | Admin deletes a user | session has ScopeAdminUsers, service.DeleteUser succeeds | 204 No Content | P1 |  |
 | US-26 | DeleteUserHandler | Error Path | No permission | session lacks ScopeAdminUsers | 403 Forbidden `msgNoPermissionToDeleteUsers` | P2 |  |
-| US-27 | DeleteUserHandler | Error Path | UserService.DeleteUser errors | Admin session, service returns an error | 400 Bad Request `msgFailedToDeleteUser` | P2 |  |
+| US-27 | DeleteUserHandler | Error Path | UserService.DeleteUser fails with an unclassified error | Admin session, service returns `testerrors.ErrDBDown` | 500 Internal Server Error `msgFailedToDeleteUser` | P2 |  |
 | US-28 | GetUserLinkedAccountsHandler | Happy Path | Self-lookup | session.UserID == path user_id | 200 OK with the linked-accounts list | P1 |  |
 | US-29 | GetUserLinkedAccountsHandler | Happy Path | Admin looks up another user's linked accounts | session.UserID != path user_id, session has ScopeAdminUsers | 200 OK with the linked-accounts list | P2 |  |
 | US-30 | GetUserLinkedAccountsHandler | Error Path | No permission | session.UserID != path user_id, no ScopeAdminUsers | 403 Forbidden `msgNoPermissionToViewLinkedAccounts` | P2 |  |
@@ -120,3 +136,13 @@
 | US-54 | UpdateAccountSettingsHandler | Error Path | No password set | service.SetPasswordAuthEnabled returns auth.ErrNoPasswordSet | 400 Bad Request `msgSetPasswordBeforeEnablingPasswordLogin` | P2 |  |
 | US-55 | UpdateAccountSettingsHandler | Error Path | Unclassified service error | service.SetPasswordAuthEnabled returns some other error | 500 Internal Server Error `msgFailedToUpdateUserSettings` | P2 |  |
 | US-56 | UpdateUserFromPlatformHandler | Error Path | Malformed body for the Minecraft, Twitch, Xbox Live and Microsoft platforms | Admin session, body is not valid JSON | 400 Bad Request `msgInvalidRequestBody`; `UpdateUserFromPlatform` never called | P2 | |
+| US-57 | GetUserFromPlatformHandler | Error Path | UserService.GetUserFromPlatform fails with a non-not-found error | Admin session, service returns `testerrors.ErrDBDown` | 500 Internal Server Error `msgFailedToGetUser` | P2 |  |
+| US-58 | GetUserHandler | Error Path | UserService.GetUser returns not found | Permission check passes, service returns `auth.ErrNotFound` | 404 Not Found `msgUserNotFound` | P2 |  |
+| US-59 | GetUserPermissionsHandler | Error Path | UserService.GetUserPermissions returns not found | Permission check passes, service returns `auth.ErrNotFound` | 404 Not Found `msgUserNotFound` | P2 |  |
+| US-60 | UpdateUserHandler | Error Path | UserService.UpdateUser returns not found | Admin session, valid body, service returns `auth.ErrNotFound` | 404 Not Found `msgUserNotFound` | P2 |  |
+| US-61 | UpdateUserHandler | Error Path | UserService.UpdateUser returns a duplicate email | Admin session, valid body, service returns `auth.ErrEmailAlreadyExists` | 409 Conflict `msgEmailAlreadyExists` | P2 |  |
+| US-62 | UpdateUserHandler | Error Path | UserService.UpdateUser returns a duplicate username | Admin session, valid body, service returns `auth.ErrUsernameAlreadyExists` | 409 Conflict `msgUsernameAlreadyExists` | P2 |  |
+| US-63 | UpdateUserFromPlatformHandler | Error Path | UserService.UpdateUserFromPlatform returns not found | Admin session, valid body, service returns `auth.ErrNotFound` | 404 Not Found `msgUserNotFound` | P2 |  |
+| US-64 | UpdateUserFromPlatformHandler | Error Path | UserService.UpdateUserFromPlatform returns a duplicate email | Admin session, valid body, service returns `auth.ErrEmailAlreadyExists` | 409 Conflict `msgEmailAlreadyExists` | P2 |  |
+| US-65 | UpdateUserFromPlatformHandler | Error Path | UserService.UpdateUserFromPlatform returns a duplicate username | Admin session, valid body, service returns `auth.ErrUsernameAlreadyExists` | 409 Conflict `msgUsernameAlreadyExists` | P2 |  |
+| US-66 | DeleteUserHandler | Error Path | UserService.DeleteUser returns not found | Admin session, service returns `auth.ErrNotFound` | 404 Not Found `msgUserNotFound` | P2 |  |

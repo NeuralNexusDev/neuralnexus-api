@@ -3,6 +3,7 @@ package authroutes
 import (
 	"errors"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
+	"log"
 	"net/http"
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
@@ -40,7 +41,27 @@ const (
 	msgEnableLoginMethodBeforeDisablingPassword = "Link and enable another login method before disabling your password"
 	msgSetPasswordBeforeEnablingPasswordLogin   = "Set a password before enabling password login"
 	msgFailedToUpdateUserSettings               = "Failed to update user settings"
+	msgFailedToGetUser                          = "Failed to get user"
+	logFailedToGetUser                          = "Failed to get user:\n\t"
+	logFailedToDeleteUser                       = "Failed to delete user:\n\t"
+	logFailedToUpdateUser                       = "Failed to update user:\n\t"
+	msgEmailAlreadyExists                       = "An account with this email already exists"
+	msgUsernameAlreadyExists                    = "An account with this username already exists"
 )
+
+func respondUpdateUserFailure(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, auth.ErrNotFound):
+		responses.NotFound(w, r, msgUserNotFound)
+	case errors.Is(err, auth.ErrEmailAlreadyExists):
+		responses.Conflict(w, r, msgEmailAlreadyExists)
+	case errors.Is(err, auth.ErrUsernameAlreadyExists):
+		responses.Conflict(w, r, msgUsernameAlreadyExists)
+	default:
+		log.Println(logFailedToUpdateUser, err)
+		responses.InternalServerError(w, r, msgFailedToUpdateUser)
+	}
+}
 
 // GetUserHandler - Get a user
 func GetUserHandler(service auth.UserService) http.HandlerFunc {
@@ -57,7 +78,12 @@ func GetUserHandler(service auth.UserService) http.HandlerFunc {
 		}
 		user, err := service.GetUser(userID)
 		if err != nil {
-			responses.NotFound(w, r, msgUserNotFound)
+			if errors.Is(err, auth.ErrNotFound) {
+				responses.NotFound(w, r, msgUserNotFound)
+				return
+			}
+			log.Println(logFailedToGetUser, err)
+			responses.InternalServerError(w, r, msgFailedToGetUser)
 			return
 		}
 		responses.StructOK(w, r, user)
@@ -76,7 +102,12 @@ func GetUserFromPlatformHandler(service auth.UserService) http.HandlerFunc {
 		platformID := r.PathValue("platform_id")
 		user, err := service.GetUserFromPlatform(platform, platformID)
 		if err != nil {
-			responses.NotFound(w, r, msgUserNotFound)
+			if errors.Is(err, auth.ErrNotFound) {
+				responses.NotFound(w, r, msgUserNotFound)
+				return
+			}
+			log.Println(logFailedToGetUser, err)
+			responses.InternalServerError(w, r, msgFailedToGetUser)
 			return
 		}
 		responses.StructOK(w, r, user)
@@ -94,7 +125,12 @@ func GetUserPermissionsHandler(service auth.UserService) http.HandlerFunc {
 		}
 		permissions, err := service.GetUserPermissions(userID)
 		if err != nil {
-			responses.NotFound(w, r, msgUserNotFound)
+			if errors.Is(err, auth.ErrNotFound) {
+				responses.NotFound(w, r, msgUserNotFound)
+				return
+			}
+			log.Println(logFailedToGetUser, err)
+			responses.InternalServerError(w, r, msgFailedToGetUser)
 			return
 		}
 		responses.StructOK(w, r, permissions)
@@ -119,7 +155,7 @@ func UpdateUserHandler(service auth.UserService) http.HandlerFunc {
 		user.UserID = userID
 		err = service.UpdateUser(&user)
 		if err != nil {
-			responses.BadRequest(w, r, msgFailedToUpdateUser)
+			respondUpdateUserFailure(w, r, err)
 			return
 		}
 		responses.StructOK(w, r, user)
@@ -181,7 +217,7 @@ func UpdateUserFromPlatformHandler(service auth.UserService) http.HandlerFunc {
 
 		user, err := service.UpdateUserFromPlatform(platform, platformID, data)
 		if err != nil {
-			responses.BadRequest(w, r, msgFailedToUpdateUser)
+			respondUpdateUserFailure(w, r, err)
 			return
 		}
 		responses.StructOK(w, r, user)
@@ -199,7 +235,12 @@ func DeleteUserHandler(service auth.UserService) http.HandlerFunc {
 		userID := r.PathValue("user_id")
 		err := service.DeleteUser(userID)
 		if err != nil {
-			responses.BadRequest(w, r, msgFailedToDeleteUser)
+			if errors.Is(err, auth.ErrNotFound) {
+				responses.NotFound(w, r, msgUserNotFound)
+				return
+			}
+			log.Println(logFailedToDeleteUser, err)
+			responses.InternalServerError(w, r, msgFailedToDeleteUser)
 			return
 		}
 		responses.NoContent(w, r)

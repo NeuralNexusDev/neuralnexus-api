@@ -167,20 +167,21 @@ func TestGameServerStatusHandler(t *testing.T) {
 	})
 
 	for _, tc := range []struct {
-		name string
-		err  error
-		want string
+		name       string
+		err        error
+		wantStatus int
+		want       string
 	}{
-		{"GameQQuery", ErrGameQQuery, msgGameQQueryFailed},
-		{"GameQQueryWithCause", fmt.Errorf("%w: %w", ErrGameQQuery, testerrors.ErrTransportFailed), msgGameQQueryFailed},
-		{"GameDigQuery", ErrGameDigQuery, msgGameDigQueryFailed},
-		{"ReadBody", ErrReadBody, msgReadBodyFailed},
-		{"DecodeBody", ErrDecodeBody, msgDecodeBodyFailed},
-		{"NoGameQResponse", ErrNoGameQResponse, msgNoGameQResponse},
-		{"GameUnsupported", ErrGameUnsupported, msgGameUnsupported},
-		{"JavaStatus", mcstatus.ErrJavaStatus, msgJavaStatusFailed},
-		{"BedrockStatus", mcstatus.ErrBedrockStatus, msgBedrockStatusFailed},
-		{"Unrecognized", testerrors.ErrBoom, msgQueryFailed},
+		{"GameQQuery", ErrGameQQuery, 502, msgGameQQueryFailed},
+		{"GameQQueryWithCause", fmt.Errorf("%w: %w", ErrGameQQuery, testerrors.ErrTransportFailed), 502, msgGameQQueryFailed},
+		{"GameDigQuery", ErrGameDigQuery, 502, msgGameDigQueryFailed},
+		{"ReadBody", ErrReadBody, 502, msgReadBodyFailed},
+		{"DecodeBody", ErrDecodeBody, 502, msgDecodeBodyFailed},
+		{"NoGameQResponse", ErrNoGameQResponse, 502, msgNoGameQResponse},
+		{"GameUnsupported", ErrGameUnsupported, 400, msgGameUnsupported},
+		{"JavaStatus", mcstatus.ErrJavaStatus, 502, msgJavaStatusFailed},
+		{"BedrockStatus", mcstatus.ErrBedrockStatus, 502, msgBedrockStatusFailed},
+		{"Unrecognized", testerrors.ErrBoom, 500, msgQueryFailed},
 	} {
 		t.Run("HD-11_ErrorPath_"+tc.name, func(t *testing.T) {
 			fake := &fakeGSSService{err: tc.err}
@@ -194,8 +195,8 @@ func TestGameServerStatusHandler(t *testing.T) {
 			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 				t.Fatalf("failed to decode response body: %v", err)
 			}
-			if rec.Code != 404 || body["detail"] != tc.want {
-				t.Errorf("status = %d, detail = %v, want 404 and %q", rec.Code, body["detail"], tc.want)
+			if rec.Code != tc.wantStatus || body["detail"] != tc.want {
+				t.Errorf("status = %d, detail = %v, want %d and %q", rec.Code, body["detail"], tc.wantStatus, tc.want)
 			}
 		})
 	}

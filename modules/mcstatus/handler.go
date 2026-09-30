@@ -18,16 +18,26 @@ const (
 	msgBedrockNoIcons          = "Bedrock servers do not have icons."
 )
 
-func statusFailureMessage(err error) string {
+type failureMapping struct {
+	err     error
+	respond func(http.ResponseWriter, *http.Request, string)
+	msg     string
+}
+
+var statusFailures = []failureMapping{
+	{ErrJavaStatus, responses.BadGateway, msgJavaStatusFailed},
+	{ErrBedrockStatus, responses.BadGateway, msgBedrockStatusFailed},
+}
+
+func respondStatusFailure(w http.ResponseWriter, r *http.Request, err error) {
 	log.Println("[Error]: Unable to get server status:\n\t", err)
-	switch {
-	case errors.Is(err, ErrJavaStatus):
-		return msgJavaStatusFailed
-	case errors.Is(err, ErrBedrockStatus):
-		return msgBedrockStatusFailed
-	default:
-		return msgFailedToGetServerStatus
+	for _, m := range statusFailures {
+		if errors.Is(err, m.err) {
+			m.respond(w, r, m.msg)
+			return
+		}
 	}
+	responses.InternalServerError(w, r, msgFailedToGetServerStatus)
 }
 
 // ServerStatusHandler - Route that returns the server status
@@ -52,7 +62,7 @@ func ServerStatusHandler(s MCStatusService) http.HandlerFunc {
 
 		status, err := s.GetServerStatus(host, port, isBedrock, queryEnabled, queryPort)
 		if err != nil {
-			responses.NotFound(w, r, statusFailureMessage(err))
+			respondStatusFailure(w, r, err)
 			return
 		}
 		if !raw {
@@ -77,7 +87,7 @@ func IconHandler(s MCStatusService) http.HandlerFunc {
 
 		status, err := s.GetJavaServerStatus(host, port, false, 0)
 		if err != nil {
-			responses.NotFound(w, r, statusFailureMessage(err))
+			respondStatusFailure(w, r, err)
 			return
 		}
 

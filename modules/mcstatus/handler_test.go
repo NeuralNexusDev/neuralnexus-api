@@ -126,15 +126,15 @@ func TestServerStatusHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-03_ErrorReturnsNotFound", func(t *testing.T) {
+	t.Run("HD-03_ErrorReturnsBadGateway", func(t *testing.T) {
 		mock := &hdMockService{serverErr: ErrJavaStatus}
 		req := hdRequest(t, "mc.example.com:25565", "")
 		w := httptest.NewRecorder()
 
 		ServerStatusHandler(mock)(w, req)
 
-		if w.Code != http.StatusNotFound {
-			t.Fatalf("expected 404, got %d", w.Code)
+		if w.Code != http.StatusBadGateway {
+			t.Fatalf("expected 502, got %d", w.Code)
 		}
 		p := hdDecodeProblem(t, w.Body.Bytes())
 		if p.Detail != msgJavaStatusFailed {
@@ -222,14 +222,15 @@ func TestServerStatusHandler(t *testing.T) {
 		}
 	})
 	for _, tc := range []struct {
-		name string
-		err  error
-		want string
+		name       string
+		err        error
+		wantStatus int
+		want       string
 	}{
-		{"JavaStatus", ErrJavaStatus, msgJavaStatusFailed},
-		{"BedrockStatus", ErrBedrockStatus, msgBedrockStatusFailed},
-		{"BedrockStatusWithCause", fmt.Errorf("%w: %w", ErrBedrockStatus, testerrors.ErrTransportFailed), msgBedrockStatusFailed},
-		{"Unrecognized", testerrors.ErrBoom, msgFailedToGetServerStatus},
+		{"JavaStatus", ErrJavaStatus, http.StatusBadGateway, msgJavaStatusFailed},
+		{"BedrockStatus", ErrBedrockStatus, http.StatusBadGateway, msgBedrockStatusFailed},
+		{"BedrockStatusWithCause", fmt.Errorf("%w: %w", ErrBedrockStatus, testerrors.ErrTransportFailed), http.StatusBadGateway, msgBedrockStatusFailed},
+		{"Unrecognized", testerrors.ErrBoom, http.StatusInternalServerError, msgFailedToGetServerStatus},
 	} {
 		t.Run("HD-16_"+tc.name, func(t *testing.T) {
 			mock := &hdMockService{serverErr: tc.err}
@@ -238,8 +239,8 @@ func TestServerStatusHandler(t *testing.T) {
 
 			ServerStatusHandler(mock)(w, req)
 
-			if w.Code != http.StatusNotFound {
-				t.Fatalf("expected 404, got %d", w.Code)
+			if w.Code != tc.wantStatus {
+				t.Fatalf("expected %d, got %d", tc.wantStatus, w.Code)
 			}
 			if p := hdDecodeProblem(t, w.Body.Bytes()); p.Detail != tc.want {
 				t.Fatalf("expected detail %q, got %q", tc.want, p.Detail)
@@ -273,15 +274,15 @@ func TestIconHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-09_ErrorReturnsNotFound", func(t *testing.T) {
+	t.Run("HD-09_ErrorReturnsBadGateway", func(t *testing.T) {
 		mock := &hdMockService{javaErr: ErrJavaStatus}
 		req := hdRequest(t, "example.com:25565", "")
 		w := httptest.NewRecorder()
 
 		IconHandler(mock)(w, req)
 
-		if w.Code != http.StatusNotFound {
-			t.Fatalf("expected 404, got %d", w.Code)
+		if w.Code != http.StatusBadGateway {
+			t.Fatalf("expected 502, got %d", w.Code)
 		}
 		p := hdDecodeProblem(t, w.Body.Bytes())
 		if p.Detail != msgJavaStatusFailed {
@@ -289,6 +290,21 @@ func TestIconHandler(t *testing.T) {
 		}
 		if len(mock.javaCalls) != 1 {
 			t.Fatalf("expected exactly 1 call, got %d", len(mock.javaCalls))
+		}
+	})
+
+	t.Run("HD-17_UnrecognizedErrorReturnsInternalServerError", func(t *testing.T) {
+		mock := &hdMockService{javaErr: testerrors.ErrBoom}
+		req := hdRequest(t, "example.com:25565", "")
+		w := httptest.NewRecorder()
+
+		IconHandler(mock)(w, req)
+
+		if w.Code != http.StatusInternalServerError {
+			t.Fatalf("expected 500, got %d", w.Code)
+		}
+		if p := hdDecodeProblem(t, w.Body.Bytes()); p.Detail != msgFailedToGetServerStatus {
+			t.Fatalf("expected detail %q, got %q", msgFailedToGetServerStatus, p.Detail)
 		}
 	})
 

@@ -43,6 +43,9 @@
                     },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             }
@@ -690,8 +693,17 @@
                             }
                         }
                     },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
                     "404": {
                         "$ref": "#/components/responses/404NotFound"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    },
+                    "502": {
+                        "$ref": "#/components/responses/502BadGateway"
                     }
                 }
             }
@@ -1105,8 +1117,14 @@
                             }
                         }
                     },
-                    "404": {
-                        "$ref": "#/components/responses/404NotFound"
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    },
+                    "502": {
+                        "$ref": "#/components/responses/502BadGateway"
                     }
                 }
             }
@@ -1190,8 +1208,11 @@
                             }
                         }
                     },
-                    "404": {
-                        "$ref": "#/components/responses/404NotFound"
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    },
+                    "502": {
+                        "$ref": "#/components/responses/502BadGateway"
                     }
                 }
             }
@@ -1287,6 +1308,9 @@
                     },
                     "404": {
                         "$ref": "#/components/responses/404NotFound"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             },
@@ -1387,6 +1411,9 @@
                     },
                     "404": {
                         "$ref": "#/components/responses/404NotFound"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             }
@@ -1470,6 +1497,9 @@
                     },
                     "404": {
                         "$ref": "#/components/responses/404NotFound"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             },
@@ -1616,6 +1646,9 @@
                     },
                     "404": {
                         "$ref": "#/components/responses/404NotFound"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             }
@@ -1644,6 +1677,9 @@
                     },
                     "404": {
                         "$ref": "#/components/responses/404NotFound"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             },
@@ -1771,6 +1807,12 @@
                     },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             }
@@ -1904,6 +1946,12 @@
                     },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             }
@@ -1944,6 +1992,9 @@
                     },
                     "404": {
                         "$ref": "#/components/responses/404NotFound"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             },
@@ -2001,6 +2052,15 @@
                     },
                     "403": {
                         "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/409Conflict"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             }
@@ -2033,8 +2093,14 @@
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
                     },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
                     "404": {
                         "$ref": "#/components/responses/404NotFound"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             },
@@ -2089,6 +2155,15 @@
                     },
                     "403": {
                         "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/409Conflict"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             }
@@ -2253,6 +2328,9 @@
                     },
                     "404": {
                         "$ref": "#/components/responses/404NotFound"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             }
@@ -3136,6 +3214,26 @@
             },
             "404NotFound": {
                 "description": "Not found",
+                "content": {
+                    "application/problem+json": {
+                        "schema": {
+                            "$ref": "#/components/schemas/Problem"
+                        }
+                    },
+                    "application/problem+xml": {
+                        "schema": {
+                            "$ref": "#/components/schemas/Problem"
+                        }
+                    },
+                    "application/problem+x-protobuf": {
+                        "schema": {
+                            "$ref": "#/components/schemas/Problem"
+                        }
+                    }
+                }
+            },
+            "409Conflict": {
+                "description": "Conflict",
                 "content": {
                     "application/problem+json": {
                         "schema": {

@@ -145,6 +145,20 @@ func NotFound(w http.ResponseWriter, r *http.Request, message string) {
 	).SendProblem(w, r)
 }
 
+// Conflict -- Send a ConflictResponse as JSON or XML
+func Conflict(w http.ResponseWriter, r *http.Request, message string) {
+	if message == "" {
+		message = "The request conflicts with the current state of the resource."
+	}
+	NewProblem(
+		"about:blank",
+		http.StatusConflict,
+		"Conflict",
+		message,
+		"https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/409",
+	).SendProblem(w, r)
+}
+
 // UnsupportedMediaType -- Send a NotFoundResponse as JSON or XML
 func UnsupportedMediaType(w http.ResponseWriter, r *http.Request, message string) {
 	if message == "" {
@@ -199,6 +213,6 @@ func BadGateway(w http.ResponseWriter, r *http.Request, message string) {
 		http.StatusBadGateway,
 		"Bad Gateway",
 		message,
-		"https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/500",
+		"https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/502",
 	).SendProblem(w, r)
 }

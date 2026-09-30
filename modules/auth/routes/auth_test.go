@@ -38,12 +38,18 @@ func (s *stubAccountService) GetAccountByID(string) (*auth.Account, error) {
 	return nil, auth.ErrNotFound
 }
 func (s *stubAccountService) GetAccountByUsername(string) (*auth.Account, error) {
+	if s.lookupErr != nil {
+		return nil, s.lookupErr
+	}
 	if s.account != nil {
 		return s.account, s.lookupErr
 	}
 	return nil, auth.ErrNotFound
 }
 func (s *stubAccountService) GetAccountByEmail(string) (*auth.Account, error) {
+	if s.lookupErr != nil {
+		return nil, s.lookupErr
+	}
 	if s.account != nil {
 		return s.account, s.lookupErr
 	}
@@ -55,13 +61,18 @@ func (s *stubAccountService) IsPasswordAuthEnabled(string) (bool, error) {
 	return !s.passwordAuthDisabled, s.passwordAuthErr
 }
 
-type stubLinkAccountStore struct{}
+type stubLinkAccountStore struct {
+	existing *auth.LinkedAccount
+}
 
 var _ auth.LinkAccountStore = (*stubLinkAccountStore)(nil)
 
 func (s *stubLinkAccountStore) AddLinkedAccountToDB(*auth.LinkedAccount) error { return nil }
 func (s *stubLinkAccountStore) UpdateLinkedAccount(*auth.LinkedAccount) error  { return nil }
 func (s *stubLinkAccountStore) GetLinkedAccountByPlatformID(auth.Platform, string) (*auth.LinkedAccount, error) {
+	if s.existing != nil {
+		return s.existing, nil
+	}
 	return nil, auth.ErrNotFound
 }
 func (s *stubLinkAccountStore) GetLinkedAccountByPlatformName(auth.Platform, string) (*auth.LinkedAccount, error) {
@@ -615,7 +626,14 @@ func auOAuthRequest(t *testing.T, state linking.OAuthState) *http.Request {
 	return r
 }
 
+const auSteamPlayersBody = `{"response":{"players":[{"steamid":"76561198000000000","personaname":"steamplayer","profileurl":"https://steamcommunity.com/id/steamplayer","avatarfull":"https://avatar.example/a.jpg"}]}}`
+
 func auSteamTransport(t *testing.T, checkStatus, summaryStatus int) {
+	t.Helper()
+	auSteamTransportBody(t, checkStatus, summaryStatus, auSteamPlayersBody)
+}
+
+func auSteamTransportBody(t *testing.T, checkStatus, summaryStatus int, summaryBody string) {
 	t.Helper()
 	swapSteamAPIKey(t, "test-steam-api-key")
 	swapDefaultTransport(t, auRoundTripperFunc(func(req *http.Request) (*http.Response, error) {
@@ -623,7 +641,7 @@ func auSteamTransport(t *testing.T, checkStatus, summaryStatus int) {
 		case req.Method == http.MethodPost && req.URL.Host == "steamcommunity.com" && req.URL.Path == "/openid/login":
 			return auTextResponse(checkStatus, "ns:http://specs.openid.net/auth/2.0\nis_valid:true\n"), nil
 		case req.Method == http.MethodGet && req.URL.Host == "api.steampowered.com" && req.URL.Path == "/ISteamUser/GetPlayerSummaries/v2/":
-			return auJSONResponse(summaryStatus, `{"response":{"players":[{"steamid":"76561198000000000","personaname":"steamplayer","profileurl":"https://steamcommunity.com/id/steamplayer","avatarfull":"https://avatar.example/a.jpg"}]}}`), nil
+			return auJSONResponse(summaryStatus, summaryBody), nil
 		default:
 			return nil, fmt.Errorf("unexpected outbound request %s %s", req.Method, req.URL.String())
 		}
@@ -1181,5 +1199,91 @@ func TestAU49SessionCookie(t *testing.T) {
 		if c.SameSite != http.SameSiteLaxMode {
 			t.Errorf("expected SameSite=Lax, got %v", c.SameSite)
 		}
+	})
+}
+
+func TestAU59LoginHandlerAccountLookupInfraFails(t *testing.T) {
+	as := &stubAccountService{lookupErr: testerrors.ErrDBDown}
+	ss := &stubSessionService{}
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"someone","password":"whatever"}`))
+	w := httptest.NewRecorder()
+
+	t.Run("AU-59_LoginAccountLookupInfraFails", func(t *testing.T) {
+		LoginHandler(as, ss)(w, r)
+
+		if w.Code != http.StatusInternalServerError {
+			t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
+		}
+		requireProblemDetail(t, w, msgAuthenticationFailed)
+		if findCookie(w, mw.SessionCookieName) != nil {
+			t.Error("expected no session cookie on a failed lookup")
+		}
+	})
+}
+
+func TestAU60to71OAuthFailureResponse(t *testing.T) {
+	tests := []struct {
+		id         string
+		err        error
+		wantStatus int
+		wantMsg    string
+	}{
+		{"AU-60_InvalidPlatform", linking.ErrInvalidPlatform, http.StatusBadRequest, msgInvalidPlatform},
+		{"AU-61_NoScopeInToken", linking.ErrNoScopeInToken, http.StatusBadRequest, msgMissingOAuthScope},
+		{"AU-62_InvalidAssertion", linking.ErrInvalidAssertion, http.StatusBadRequest, msgInvalidState},
+		{"AU-63_SteamIDMismatch", linking.ErrSteamIDMismatch, http.StatusBadRequest, msgSteamAccountMismatch},
+		{"AU-64_SessionNotFound", linking.ErrSessionNotFound, http.StatusUnauthorized, msgLoginRequiredToLink},
+		{"AU-65_SessionExpired", linking.ErrSessionExpired, http.StatusUnauthorized, msgSessionExpired},
+		{"AU-66_PlatformLoginDisabled", linking.ErrPlatformLoginDisabled, http.StatusForbidden, msgPlatformLoginDisabled},
+		{"AU-67_SteamNoPlayers", linking.ErrSteamNoPlayers, http.StatusNotFound, msgSteamAccountNotFound},
+		{"AU-68_ConflictingMicrosoftIdentities", linking.ErrConflictingMicrosoftIdentities, http.StatusConflict, msgConflictingMicrosoftIdentities},
+		{"AU-69_PlatformAlreadyLinked", linking.ErrPlatformAlreadyLinkedToDifferentAccount, http.StatusConflict, msgPlatformAlreadyLinked},
+		{"AU-70_LinkAccountFailedStaysGeneral", fmt.Errorf("%w: %w", linking.ErrLinkAccountFailed, linking.ErrPlatformAlreadyLinkedToDifferentAccount), http.StatusInternalServerError, msgAuthenticationFailed},
+		{"AU-71_UnclassifiedStaysGeneral", testerrors.ErrDBDown, http.StatusInternalServerError, msgAuthenticationFailed},
+	}
+	for _, tc := range tests {
+		t.Run(tc.id, func(t *testing.T) {
+			gotStatus, gotMsg := oauthFailureResponse(tc.err)
+			if gotStatus != tc.wantStatus || gotMsg != tc.wantMsg {
+				t.Errorf("oauthFailureResponse() = (%d, %q), want (%d, %q)", gotStatus, gotMsg, tc.wantStatus, tc.wantMsg)
+			}
+		})
+	}
+}
+
+func TestAU72to74OAuthAndOpenIDFailuresUseMapping(t *testing.T) {
+	oauthState := linking.OAuthState{Platform: auth.PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	steamState := linking.OAuthState{Platform: auth.PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	okJWT := func(*auth.Session) (string, error) { return "test-jwt", nil }
+	disabledLink := &stubLinkAccountStore{existing: &auth.LinkedAccount{UserID: "u1", Verified: true, LoginEnabled: false}}
+
+	t.Run("AU-72_OAuthProcessMapsLoginDisabled", func(t *testing.T) {
+		auDiscordTransport(t)
+		w := httptest.NewRecorder()
+		ss := &stubSessionService{createJWT: okJWT}
+
+		OAuthHandler(&stubAccountService{}, disabledLink, ss)(w, auOAuthRequest(t, oauthState))
+
+		requireProblemRedirect(t, w, oauthState.RedirectURI, http.StatusForbidden, msgPlatformLoginDisabled)
+	})
+
+	t.Run("AU-73_OpenIDSteamUserMapsNoPlayers", func(t *testing.T) {
+		auSteamTransportBody(t, http.StatusOK, http.StatusOK, `{"response":{"players":[]}}`)
+		w := httptest.NewRecorder()
+		ss := &stubSessionService{createJWT: okJWT}
+
+		OpenIDHandler(&stubAccountService{}, &stubLinkAccountStore{}, ss)(w, auOpenIDRequest(t, steamState))
+
+		requireProblemRedirect(t, w, steamState.RedirectURI, http.StatusNotFound, msgSteamAccountNotFound)
+	})
+
+	t.Run("AU-74_OpenIDProcessMapsLoginDisabled", func(t *testing.T) {
+		auSteamTransport(t, http.StatusOK, http.StatusOK)
+		w := httptest.NewRecorder()
+		ss := &stubSessionService{createJWT: okJWT}
+
+		OpenIDHandler(&stubAccountService{}, disabledLink, ss)(w, auOpenIDRequest(t, steamState))
+
+		requireProblemRedirect(t, w, steamState.RedirectURI, http.StatusForbidden, msgPlatformLoginDisabled)
 	})
 }

@@ -26,32 +26,33 @@ const (
 	logUnableToQueryGameServer = "[Error]: Unable to query game server:\n\t"
 )
 
-func queryFailureMessage(err error) string {
-	switch {
-	case errors.Is(err, ErrGameQQuery):
-		return msgGameQQueryFailed
-	case errors.Is(err, ErrGameDigQuery):
-		return msgGameDigQueryFailed
-	case errors.Is(err, ErrReadBody):
-		return msgReadBodyFailed
-	case errors.Is(err, ErrDecodeBody):
-		return msgDecodeBodyFailed
-	case errors.Is(err, ErrNoGameQResponse):
-		return msgNoGameQResponse
-	case errors.Is(err, ErrServerOffline):
-		return msgServerOffline
-	case errors.Is(err, ErrGameUnsupported):
-		return msgGameUnsupported
-	case errors.Is(err, mcstatus.ErrJavaStatus):
-		log.Println(logUnableToQueryGameServer, err)
-		return msgJavaStatusFailed
-	case errors.Is(err, mcstatus.ErrBedrockStatus):
-		log.Println(logUnableToQueryGameServer, err)
-		return msgBedrockStatusFailed
-	default:
-		log.Println(logUnableToQueryGameServer, err)
-		return msgQueryFailed
+type failureMapping struct {
+	err     error
+	respond func(http.ResponseWriter, *http.Request, string)
+	msg     string
+}
+
+var queryFailures = []failureMapping{
+	{ErrServerOffline, responses.NotFound, msgServerOffline},
+	{ErrGameUnsupported, responses.BadRequest, msgGameUnsupported},
+	{ErrGameQQuery, responses.BadGateway, msgGameQQueryFailed},
+	{ErrGameDigQuery, responses.BadGateway, msgGameDigQueryFailed},
+	{ErrReadBody, responses.BadGateway, msgReadBodyFailed},
+	{ErrDecodeBody, responses.BadGateway, msgDecodeBodyFailed},
+	{ErrNoGameQResponse, responses.BadGateway, msgNoGameQResponse},
+	{mcstatus.ErrJavaStatus, responses.BadGateway, msgJavaStatusFailed},
+	{mcstatus.ErrBedrockStatus, responses.BadGateway, msgBedrockStatusFailed},
+}
+
+func respondQueryFailure(w http.ResponseWriter, r *http.Request, err error) {
+	log.Println(logUnableToQueryGameServer, err)
+	for _, m := range queryFailures {
+		if errors.Is(err, m.err) {
+			m.respond(w, r, m.msg)
+			return
+		}
 	}
+	responses.InternalServerError(w, r, msgQueryFailed)
 }
 
 // GameServerStatusHandler - Get the game server status
@@ -72,7 +73,7 @@ func GameServerStatusHandler(s GSSService) http.HandlerFunc {
 		queryType := ParseQueryType(r.URL.Query().Get("query_type"))
 		status, err := s.QueryGameServer(game, host, port, queryType)
 		if err != nil {
-			responses.NotFound(w, r, queryFailureMessage(err))
+			respondQueryFailure(w, r, err)
 			return
 		}
 		returnRaw := r.URL.Query().Get("raw") == "true"
