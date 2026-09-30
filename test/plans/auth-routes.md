@@ -66,9 +66,9 @@
 | AU-37 | createSessionJWTAndSetCookie | Error Path | ss.CreateJWT fails | ss.CreateJWT returns an error | Returns that error; no Set-Cookie header written | P2 |  |
 | AU-38 | redirectWithError | Happy Path | Well-formed target URL | target parses successfully with url.Parse | 303 redirect; redirect Location has a "problem" query param that base64url-decodes to the expected RFC 9457 JSON (status/title/detail) | P1 |  |
 | AU-39 | redirectWithError | Edge Case | Target URL fails url.Parse | target contains an invalid percent-escape (e.g. "%zz") | 303 redirect straight to target, unmodified (no "problem" param appended) | P3 |  |
-| AU-41 | redirectBadRequest | Accessor | Wraps redirectWithError with 400/"Bad Request" | any target/detail | redirectWithError called with http.StatusBadRequest, "Bad Request", the given detail | P2 |  |
-| AU-42 | redirectUnauthorized | Accessor | Wraps redirectWithError with 401/"Unauthorized" | any target/detail | redirectWithError called with http.StatusUnauthorized, "Unauthorized", the given detail | P2 |  |
-| AU-43 | redirectInternalServerError | Accessor | Wraps redirectWithError with 500/"Internal Server Error" | any target/detail | redirectWithError called with http.StatusInternalServerError, "Internal Server Error", the given detail | P2 |  |
+| AU-41 | redirectBadRequest | Accessor | Wraps redirectWithError with `http.StatusBadRequest` | any target/detail | Redirects to the target with a problem whose status is `http.StatusBadRequest` and whose detail is the given detail | P2 |  |
+| AU-42 | redirectUnauthorized | Accessor | Wraps redirectWithError with `http.StatusUnauthorized` | any target/detail | Redirects to the target with a problem whose status is `http.StatusUnauthorized` and whose detail is the given detail | P2 |  |
+| AU-43 | redirectInternalServerError | Accessor | Wraps redirectWithError with `http.StatusInternalServerError` | any target/detail | Redirects to the target with a problem whose status is `http.StatusInternalServerError` and whose detail is the given detail | P2 |  |
 | AU-44 | isAllowedRedirect | Happy Path | redirectURI scheme+host match auth.NN_SITE_URL | redirectURI = auth.NN_SITE_URL + some path | Returns true | P1 |  |
 | AU-45 | isAllowedRedirect | Error Path | redirectURI has a different host | Same scheme, different host than auth.NN_SITE_URL | Returns false | P2 |  |
 | AU-46 | isAllowedRedirect | Edge Case | redirectURI has a different scheme, same host | e.g. http vs https | Returns false | P3 |  |
