@@ -160,6 +160,10 @@ func GetRandPetPictureByNameHandler(s PetPicService) http.HandlerFunc {
 		petPicture, err := s.GetStore().GetRandPetPictureByName(petName)
 		if err != nil {
 			log.Println("[Error]: Unable to get random pet picture:\n\t", err)
+			if errors.Is(err, ErrPetNotFound) {
+				responses.NotFound(w, r, msgPetNotFound)
+				return
+			}
 			if errors.Is(err, ErrPetPictureNotFound) {
 				responses.NotFound(w, r, msgPetPictureNotFound)
 				return

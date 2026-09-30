@@ -809,6 +809,21 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 		hdRequireDetail(t, w, msgUnableToGetPet)
 	})
 
+	t.Run("HD-45_GetRandPetPicturePetNotFound", func(t *testing.T) {
+		mock := &hdMockStore{getRandPetPictureByNameErr: ErrPetNotFound}
+		svc := NewService(mock)
+		req := httptest.NewRequest(http.MethodGet, "/pets/Rex/picture", nil)
+		req.SetPathValue("name", "Rex")
+		w := httptest.NewRecorder()
+
+		GetRandPetPictureByNameHandler(svc)(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
+		}
+		hdRequireDetail(t, w, msgPetNotFound)
+	})
+
 	t.Run("HD-40_GetRandPetPictureStoreFailureInternalServerError", func(t *testing.T) {
 		mock := &hdMockStore{getRandPetPictureByNameErr: testerrors.ErrDBDown}
 		svc := NewService(mock)
