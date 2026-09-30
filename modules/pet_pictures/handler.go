@@ -196,7 +196,7 @@ func UpdatePetPictureHandler(s PetPicService) http.HandlerFunc {
 		_, err = s.GetStore().UpdatePetPicture(petPicture)
 		if err != nil {
 			log.Println("[Error]: Unable to update pet picture:\n\t", err)
-			if errors.Is(err, ErrPetNotFound) {
+			if errors.Is(err, ErrPetPictureNotFound) {
 				responses.NotFound(w, r, "Pet picture not found")
 				return
 			}

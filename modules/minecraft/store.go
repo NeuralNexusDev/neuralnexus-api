@@ -251,11 +251,18 @@ func (s *store) UpsertTextureHash(hash string) error {
 	return err
 }
 
+func cacheMiss(err error) error {
+	if errors.Is(err, redis.Nil) {
+		return ErrCacheMiss
+	}
+	return err
+}
+
 // GetPlayerFromCache gets a player from the cache by key (uuid or name)
 func (s *store) GetPlayerFromCache(key string) (*Player, error) {
 	val, err := s.rdb.Get(context.Background(), CachePlayer+key).Result()
 	if err != nil {
-		return nil, err
+		return nil, cacheMiss(err)
 	}
 	var player Player
 	if err := json.Unmarshal([]byte(val), &player); err != nil {
@@ -282,7 +289,7 @@ func (s *store) SetPlayerInCache(player *Player) error {
 func (s *store) GetProfileFromCache(id string) (*Profile, error) {
 	val, err := s.rdb.Get(context.Background(), CacheProfile+id).Result()
 	if err != nil {
-		return nil, err
+		return nil, cacheMiss(err)
 	}
 	var profile Profile
 	if err := json.Unmarshal([]byte(val), &profile); err != nil {
@@ -304,7 +311,7 @@ func (s *store) SetProfileInCache(profile *Profile) error {
 func (s *store) GetSignedProfileFromCache(id string) (*Player, error) {
 	val, err := s.rdb.Get(context.Background(), CacheProfileSigned+id).Result()
 	if err != nil {
-		return nil, err
+		return nil, cacheMiss(err)
 	}
 	var player Player
 	if err := json.Unmarshal([]byte(val), &player); err != nil {

@@ -116,8 +116,8 @@
 | SV-01 | NewService | Happy Path | client is nil | client == nil | Returned service uses http.DefaultClient | P2 |  |
 | SV-02 | NewService | Edge Case | client is provided | non-nil client | Retained as-is; nnGeyserTextureUrl == nnTextureUrl+"geyser/" | P3 |  |
 | SV-03 | GetMojangPlayerByName | Happy Path | Cache hit | store cache returns player, nil | Returns cached player; no DB/HTTP calls | P1 |  |
-| SV-04 | GetMojangPlayerByName | Error Path | Cache error is not redis.Nil | store cache error = plain error | Returns that error, no fallback | P2 |  |
-| SV-05 | GetMojangPlayerByName | Happy Path | Cache miss, DB entry fresh | cache=redis.Nil, DB player not stale | Caches and returns DB player, no Mojang call | P1 |  |
+| SV-04 | GetMojangPlayerByName | Error Path | Cache error is not ErrCacheMiss | store cache error = plain error | Returns that error, no fallback | P2 |  |
+| SV-05 | GetMojangPlayerByName | Happy Path | Cache miss, DB entry fresh | cache=ErrCacheMiss, DB player not stale | Caches and returns DB player, no Mojang call | P1 |  |
 | SV-06 | GetMojangPlayerByName | Error Path | DB fresh entry, SetPlayerInCache fails | SetPlayerInCache error | Returns that error | P2 |  |
 | SV-07 | GetMojangPlayerByName | Happy Path | Cache+DB miss/stale, Mojang succeeds | Mojang 200 with player JSON | Upserts, caches, returns fetched player | P0 |  |
 | SV-08 | GetMojangPlayerByName | Error Path | Mojang returns 404 | Mojang status 404 | Returns ErrPlayerNotFound | P1 |  |
@@ -127,14 +127,14 @@
 | SV-12 | GetMojangPlayerByName | Error Path | SetPlayerInCache fails after Mojang fetch | store error | Returns that error | P2 |  |
 | SV-13 | GetMojangPlayerByName | Error Path | http.Client.Get fails | transport error | Returns that error | P2 |  |
 | SV-14 | GetMojangPlayerByUUID | Happy Path | Cache hit | store cache returns player | Returns cached player; no DB/HTTP calls | P1 |  |
-| SV-15 | GetMojangPlayerByUUID | Error Path | Cache error is not redis.Nil | plain error | Returns that error | P2 |  |
+| SV-15 | GetMojangPlayerByUUID | Error Path | Cache error is not ErrCacheMiss | plain error | Returns that error | P2 |  |
 | SV-16 | GetMojangPlayerByUUID | Happy Path | Cache miss, DB entry fresh | DB player not stale | Caches and returns DB player | P1 |  |
 | SV-17 | GetMojangPlayerByUUID | Happy Path | Cache+DB miss, Mojang succeeds | Mojang 200 | Upserts, caches, returns fetched player | P0 |  |
 | SV-18 | GetMojangPlayerByUUID | Error Path | Mojang returns 404 | Mojang status 404 | Returns ErrPlayerNotFound | P1 |  |
 | SV-19 | GetMojangPlayersByNames | Error Path | names is empty | len(names)==0 | Returns `ErrNoNamesProvided` | P1 |  |
 | SV-20 | GetMojangPlayersByNames | Error Path | names has more than 10 entries | len(names)==11 | Returns `ErrBatchLimit` | P1 |  |
 | SV-21 | GetMojangPlayersByNames | Happy Path | All names are cache hits | every GetPlayerFromCache succeeds | Returns players from cache; no Mojang call | P1 |  |
-| SV-22 | GetMojangPlayersByNames | Happy Path | Cache miss but DB entry fresh for all names | cache=redis.Nil, DB fresh | Resolved via DB+cache-set; no Mojang call | P1 |  |
+| SV-22 | GetMojangPlayersByNames | Happy Path | Cache miss but DB entry fresh for all names | cache=ErrCacheMiss, DB fresh | Resolved via DB+cache-set; no Mojang call | P1 |  |
 | SV-23 | GetMojangPlayersByNames | Error Path | DB-fresh path SetPlayerInCache fails | store error | Returns that error | P2 |  |
 | SV-24 | GetMojangPlayersByNames | Happy Path | Some names miss cache+DB | Mojang bulk 200 with fetched players | Upserts+caches fetched entries, appended to result | P0 |  |
 | SV-25 | GetMojangPlayersByNames | Error Path | Mojang bulk POST fails | transport error | Returns that error | P2 |  |
@@ -143,7 +143,7 @@
 | SV-28 | GetMojangPlayersByNames | Error Path | UpsertPlayer fails on a fetched entry | store error | Returns that error | P2 |  |
 | SV-29 | GetMojangPlayersByNames | Error Path | SetPlayerInCache fails on a fetched entry | store error | Returns that error | P2 |  |
 | SV-30 | GetMojangProfile | Happy Path | signed=true, cache hit | GetSignedProfileFromCache succeeds | Returns cached signed player | P1 |  |
-| SV-31 | GetMojangProfile | Error Path | signed=true, cache error not redis.Nil | plain error | Returns that error | P2 |  |
+| SV-31 | GetMojangProfile | Error Path | signed=true, cache error not ErrCacheMiss | plain error | Returns that error | P2 |  |
 | SV-32 | GetMojangProfile | Happy Path | signed=true, cache miss | fetchProfileFromMojang(id,true) succeeds | Returns fetched player | P1 |  |
 | SV-33 | GetMojangProfile | Error Path | signed=true, fetchProfileFromMojang fails | mojang error | Returns that error | P2 |  |
 | SV-34 | GetMojangProfile | Happy Path | signed=false | resolveProfile succeeds | Returns profile.ToPlayer() result | P1 |  |
@@ -156,7 +156,7 @@
 | SV-41 | GetProfileByName | Error Path | GetMojangPlayerByName fails | e.g. ErrPlayerNotFound | Returns that error | P2 |  |
 | SV-42 | GetProfileByName | Error Path | GetProfile fails after name resolves | GetProfile error | Returns that error | P2 |  |
 | SV-43 | resolveProfile | Happy Path | Cache hit | GetProfileFromCache succeeds | Returns cached profile | P1 |  |
-| SV-44 | resolveProfile | Error Path | Cache error not redis.Nil | plain error | Returns that error | P2 |  |
+| SV-44 | resolveProfile | Error Path | Cache error not ErrCacheMiss | plain error | Returns that error | P2 |  |
 | SV-45 | resolveProfile | Happy Path | DB profile fresh | not stale | Caches and returns DB profile | P1 |  |
 | SV-46 | resolveProfile | Edge Case | DB profile fresh, ProfileActions nil | ProfileActions == nil | Normalized to []string{} before caching/return | P2 |  |
 | SV-47 | resolveProfile | Error Path | DB profile fresh, SetProfileInCache fails | store error | Returns that error | P2 |  |
@@ -278,18 +278,18 @@ Rows marked "(live)" require `TEST_POSTGRES_URL` and/or `TEST_REDIS_URL` and `t.
 | ST-76 | UpsertTextureHash | Concurrency Invariant (live) | N goroutines UpsertTextureHash the same hash concurrently | live DB | No unique-violation errors from any goroutine; `textures.hash` being a PRIMARY KEY then guarantees exactly one surviving row (looped trials) | P0 | 50 concurrent writers — fewer wouldn't reliably reproduce a broken ON CONFLICT guard's race on every run |
 | ST-29 | GetPlayerFromCache | Error Path | Redis unreachable | closed-port client | Raw connection error passed through unchanged | P2 |  |
 | ST-30 | GetPlayerFromCache | Happy Path (live) | Key set via SetPlayerInCache | live Redis | Returns decoded *Player | P1 |  |
-| ST-31 | GetPlayerFromCache | Error Path (live) | Missing key | live Redis, unknown key | Returns redis.Nil | P1 |  |
+| ST-31 | GetPlayerFromCache | Error Path (live) | Missing key | live Redis, unknown key | Returns ErrCacheMiss | P1 |  |
 | ST-32 | GetPlayerFromCache | Error Path (live) | Value is not valid JSON | live Redis, malformed value | Returns unmarshal error | P2 |  |
 | ST-33 | SetPlayerInCache | Error Path | Redis unreachable | closed-port client | Raw connection error passed through unchanged | P2 |  |
 | ST-34 | SetPlayerInCache | Happy Path (live) | Valid player | live Redis | Both ID-keyed and Name-keyed entries set with TTL, readable back | P1 |  |
 | ST-35 | GetProfileFromCache | Error Path | Redis unreachable | closed-port client | Raw connection error passed through unchanged | P2 |  |
 | ST-36 | GetProfileFromCache | Happy Path (live) | Key set via SetProfileInCache | live Redis | Returns decoded *Profile | P1 |  |
-| ST-37 | GetProfileFromCache | Error Path (live) | Missing key | live Redis, unknown key | Returns redis.Nil | P2 |  |
+| ST-37 | GetProfileFromCache | Error Path (live) | Missing key | live Redis, unknown key | Returns ErrCacheMiss | P2 |  |
 | ST-38 | SetProfileInCache | Error Path | Redis unreachable | closed-port client | Raw connection error passed through unchanged | P2 |  |
 | ST-39 | SetProfileInCache | Happy Path (live) | Valid profile | live Redis | Key set with TTL, readable back | P1 |  |
 | ST-40 | GetSignedProfileFromCache | Error Path | Redis unreachable | closed-port client | Raw connection error passed through unchanged | P2 |  |
 | ST-41 | GetSignedProfileFromCache | Happy Path (live) | Key set via SetSignedProfileInCache | live Redis | Returns decoded *Player | P1 |  |
-| ST-42 | GetSignedProfileFromCache | Error Path (live) | Missing key | live Redis, unknown key | Returns redis.Nil | P2 |  |
+| ST-42 | GetSignedProfileFromCache | Error Path (live) | Missing key | live Redis, unknown key | Returns ErrCacheMiss | P2 |  |
 | ST-43 | SetSignedProfileInCache | Error Path | Redis unreachable | closed-port client | Raw connection error passed through unchanged | P2 |  |
 | ST-44 | SetSignedProfileInCache | Happy Path (live) | Valid player | live Redis | Key set with TTL, readable back | P1 |  |
 | ST-45 | IsTextureInS3 | Happy Path (local fake) | HeadObject returns 200 | fake S3 server | Returns (true, nil) | P1 |  |

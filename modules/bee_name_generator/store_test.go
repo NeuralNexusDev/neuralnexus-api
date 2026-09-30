@@ -209,8 +209,8 @@ func TestST02to04_GetBeeName(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected a non-nil error when bee_name has no rows")
 		}
-		if !errors.Is(err, pgx.ErrNoRows) {
-			t.Errorf("err = %v, want pgx.ErrNoRows", err)
+		if !errors.Is(err, ErrBeeNameNotFound) {
+			t.Errorf("err = %v, want %v", err, ErrBeeNameNotFound)
 		}
 	})
 

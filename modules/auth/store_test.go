@@ -1198,3 +1198,24 @@ func TestST76to79_NotFoundSentinels(t *testing.T) {
 		}
 	})
 }
+
+func TestST80_GetSessionFromCacheMiss(t *testing.T) {
+	url := os.Getenv("TEST_REDIS_URL")
+	if url == "" {
+		t.Skip("TEST_REDIS_URL not set; skipping live-Redis test")
+	}
+	opts, err := redis.ParseURL(url)
+	if err != nil {
+		t.Fatalf("failed to parse TEST_REDIS_URL: %v", err)
+	}
+	rdb := redis.NewClient(opts)
+	t.Cleanup(func() { rdb.Close() })
+	s := &store{rdb: rdb}
+
+	t.Run("ST-80_GetSessionFromCacheNotFound", func(t *testing.T) {
+		got, err := s.GetSessionFromCache("910000000000000201")
+		if got != nil || !errors.Is(err, ErrNotFound) {
+			t.Errorf("GetSessionFromCache() = (%v, %v), want (nil, %v)", got, err, ErrNotFound)
+		}
+	})
+}

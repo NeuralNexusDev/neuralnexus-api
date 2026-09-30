@@ -318,6 +318,9 @@ func (s *store) GetSessionFromCache(id string) (*Session, error) {
 	var session Session
 	stringSession, err := s.rdb.Get(context.Background(), "session:"+id).Result()
 	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return nil, ErrNotFound
+		}
 		return nil, err
 	}
 

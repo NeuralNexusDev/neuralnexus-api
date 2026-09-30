@@ -19,6 +19,7 @@ var (
 	// ErrTextureNotFound - the requested texture does not exist upstream
 	ErrTextureNotFound = errors.New("texture not found")
 
+	ErrCacheMiss             = errors.New("cache miss")
 	ErrMojangAPI             = errors.New("mojang API error")
 	ErrGeyserAPI             = errors.New("geyser API error")
 	ErrNoNamesProvided       = errors.New("no names provided")

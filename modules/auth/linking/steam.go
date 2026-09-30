@@ -186,18 +186,10 @@ func GetSteamUser(steamID64 string) (*SteamData, error) {
 	}
 	player := &parsed.Response.Players[0]
 	if player.SteamID64 != steamID64 {
-		return nil, steamIDMismatchError{got: player.SteamID64, want: steamID64}
+		return nil, fmt.Errorf("%w: got %q, want %q", ErrSteamIDMismatch, player.SteamID64, steamID64)
 	}
 	return player, nil
 }
-
-type steamIDMismatchError struct{ got, want string }
-
-func (e steamIDMismatchError) Error() string {
-	return fmt.Sprintf("steam player summary response steamid %q does not match requested %q", e.got, e.want)
-}
-
-func (e steamIDMismatchError) Is(target error) bool { return target == ErrSteamIDMismatch }
 
 // ProcessSteamLogin resolves or creates an account for the given,
 // already-verified Steam identity and returns a new session for it.

@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/goccy/go-json"
-	"github.com/redis/go-redis/v9"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 )
@@ -83,7 +82,7 @@ func (m *mcMockStore) GetPlayerFromCache(key string) (*Player, error) {
 	if m.getPlayerFromCache != nil {
 		return m.getPlayerFromCache(key)
 	}
-	return nil, redis.Nil
+	return nil, ErrCacheMiss
 }
 func (m *mcMockStore) SetPlayerInCache(player *Player) error {
 	if m.setPlayerInCache != nil {
@@ -95,7 +94,7 @@ func (m *mcMockStore) GetProfileFromCache(id string) (*Profile, error) {
 	if m.getProfileFromCache != nil {
 		return m.getProfileFromCache(id)
 	}
-	return nil, redis.Nil
+	return nil, ErrCacheMiss
 }
 func (m *mcMockStore) SetProfileInCache(profile *Profile) error {
 	if m.setProfileInCache != nil {
@@ -107,7 +106,7 @@ func (m *mcMockStore) GetSignedProfileFromCache(id string) (*Player, error) {
 	if m.getSignedProfileFromCache != nil {
 		return m.getSignedProfileFromCache(id)
 	}
-	return nil, redis.Nil
+	return nil, ErrCacheMiss
 }
 func (m *mcMockStore) SetSignedProfileInCache(player *Player) error {
 	if m.setSignedProfileInCache != nil {
@@ -675,7 +674,7 @@ func TestSV40to42_GetProfileByName(t *testing.T) {
 	})
 
 	t.Run("SV-41_NameLookupFails", func(t *testing.T) {
-		store := &mcMockStore{getPlayerFromCache: func(string) (*Player, error) { return nil, redis.Nil }}
+		store := &mcMockStore{getPlayerFromCache: func(string) (*Player, error) { return nil, ErrCacheMiss }}
 		s := mcNewService(t, store, func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
 		})

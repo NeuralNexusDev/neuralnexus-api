@@ -546,7 +546,7 @@ func TestST29to32_GetPlayerFromCache(t *testing.T) {
 	t.Run("ST-29_Unreachable", func(t *testing.T) {
 		s := mcStoreWithUnreachableRedis(t)
 		_, err := s.GetPlayerFromCache("key")
-		if err == nil || errors.Is(err, redis.Nil) {
+		if err == nil || errors.Is(err, ErrCacheMiss) {
 			t.Errorf("err = %v, want a raw connection error", err)
 		}
 	})
@@ -567,8 +567,8 @@ func TestST29to32_GetPlayerFromCache(t *testing.T) {
 	t.Run("ST-31_Live_Miss", func(t *testing.T) {
 		s := mcLiveStoreRedis(t)
 		_, err := s.GetPlayerFromCache("no-such-key-" + mcUniqueHash("k"))
-		if !errors.Is(err, redis.Nil) {
-			t.Errorf("err = %v, want redis.Nil", err)
+		if !errors.Is(err, ErrCacheMiss) {
+			t.Errorf("err = %v, want %v", err, ErrCacheMiss)
 		}
 	})
 
@@ -636,8 +636,8 @@ func TestST35to37_GetProfileFromCache(t *testing.T) {
 	t.Run("ST-37_Live_Miss", func(t *testing.T) {
 		s := mcLiveStoreRedis(t)
 		_, err := s.GetProfileFromCache(uuid.New().String())
-		if !errors.Is(err, redis.Nil) {
-			t.Errorf("err = %v, want redis.Nil", err)
+		if !errors.Is(err, ErrCacheMiss) {
+			t.Errorf("err = %v, want %v", err, ErrCacheMiss)
 		}
 	})
 }
@@ -687,8 +687,8 @@ func TestST40to42_GetSignedProfileFromCache(t *testing.T) {
 	t.Run("ST-42_Live_Miss", func(t *testing.T) {
 		s := mcLiveStoreRedis(t)
 		_, err := s.GetSignedProfileFromCache(uuid.New().String())
-		if !errors.Is(err, redis.Nil) {
-			t.Errorf("err = %v, want redis.Nil", err)
+		if !errors.Is(err, ErrCacheMiss) {
+			t.Errorf("err = %v, want %v", err, ErrCacheMiss)
 		}
 	})
 }

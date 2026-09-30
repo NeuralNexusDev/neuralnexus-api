@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/goccy/go-json"
-	"github.com/redis/go-redis/v9"
 )
 
 // Alternatives:
@@ -104,7 +103,7 @@ func (s *service) GetMojangPlayerByName(name string) (*Player, error) {
 	if err == nil {
 		return cached, nil
 	}
-	if !errors.Is(err, redis.Nil) {
+	if !errors.Is(err, ErrCacheMiss) {
 		return nil, err
 	}
 
@@ -151,7 +150,7 @@ func (s *service) GetMojangPlayerByUUID(id string) (*Player, error) {
 	if err == nil {
 		return cached, nil
 	}
-	if !errors.Is(err, redis.Nil) {
+	if !errors.Is(err, ErrCacheMiss) {
 		return nil, err
 	}
 
@@ -271,7 +270,7 @@ func (s *service) GetMojangProfile(id string, signed bool) (*Player, error) {
 		if err == nil {
 			return cached, nil
 		}
-		if !errors.Is(err, redis.Nil) {
+		if !errors.Is(err, ErrCacheMiss) {
 			return nil, err
 		}
 		player, _, err := s.fetchProfileFromMojang(id, true)
@@ -320,7 +319,7 @@ func (s *service) resolveProfile(id string) (*Profile, error) {
 	if err == nil {
 		return cached, nil
 	}
-	if !errors.Is(err, redis.Nil) {
+	if !errors.Is(err, ErrCacheMiss) {
 		return nil, err
 	}
 

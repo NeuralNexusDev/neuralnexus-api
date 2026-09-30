@@ -48,7 +48,7 @@
 | ST-01 | NewStore | Accessor | Wraps the given pool | db = *pgxpool.Pool | Returned BNGStore is a *store whose db field == the given pool | P3 |  |
 | ST-02 | GetBeeName | Error Path | DB connection unreachable | store.db points at a closed local port | Returns ("", non-nil connection error) | P2 |  |
 | ST-03 | GetBeeName | Happy Path | A row exists in bee_name | seeded via UploadBeeName (requires live DB) | Returns (name, nil) for one of the seeded names | P1 |  |
-| ST-04 | GetBeeName | Edge Case | bee_name has no matching row (empty/only-other-rows result) | table filtered to nothing scannable (requires live DB) | Returns ("", non-nil error, e.g. pgx.ErrNoRows) | P2 | Achieved by clearing bee_name first - safe since this module owns that table exclusively, and avoids relying on test execution order. |
+| ST-04 | GetBeeName | Edge Case | bee_name has no matching row (empty/only-other-rows result) | table filtered to nothing scannable (requires live DB) | Returns ("", `ErrBeeNameNotFound`) | P2 | Achieved by clearing bee_name first - safe since this module owns that table exclusively, and avoids relying on test execution order. |
 | ST-05 | UploadBeeName | Error Path | DB connection unreachable | store.db points at a closed local port | Returns ("", non-nil connection error) | P2 |  |
 | ST-06 | UploadBeeName | Happy Path | Valid name | live store (requires live DB) | Returns (name, nil); row is queryable back via GetBeeName | P1 |  |
 | ST-07 | DeleteBeeName | Error Path | DB connection unreachable | store.db points at a closed local port | Returns ("", non-nil connection error) | P2 |  |

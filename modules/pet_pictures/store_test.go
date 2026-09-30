@@ -347,8 +347,8 @@ func TestST17to20and28to29_GetPetPictureAndGetRandPetPictureByName(t *testing.T)
 		s := &store{}
 		pet := ppCreatePet(t, pool, s, ppUniqueID("pet"))
 		got, err := s.GetRandPetPictureByName(pet.Name)
-		if got != nil || !errors.Is(err, ErrPetNotFound) {
-			t.Errorf("GetRandPetPictureByName(no pictures) = (%v, %v), want (nil, ErrPetNotFound)", got, err)
+		if got != nil || !errors.Is(err, ErrPetPictureNotFound) {
+			t.Errorf("GetRandPetPictureByName(no pictures) = (%v, %v), want (nil, ErrPetPictureNotFound)", got, err)
 		}
 	})
 
@@ -356,8 +356,8 @@ func TestST17to20and28to29_GetPetPictureAndGetRandPetPictureByName(t *testing.T)
 		ppLiveDatabase(t)
 		s := &store{}
 		got, err := s.GetPetPicture(ppUniqueID("missing"))
-		if got != nil || !errors.Is(err, ErrPetNotFound) {
-			t.Errorf("GetPetPicture(missing) = (%v, %v), want (nil, ErrPetNotFound)", got, err)
+		if got != nil || !errors.Is(err, ErrPetPictureNotFound) {
+			t.Errorf("GetPetPicture(missing) = (%v, %v), want (nil, ErrPetPictureNotFound)", got, err)
 		}
 	})
 
@@ -403,8 +403,8 @@ func TestST21to22and30_UpdatePetPicture(t *testing.T) {
 		ppLiveDatabase(t)
 		s := &store{}
 		got, err := s.UpdatePetPicture(PetPicture{ID: ppUniqueID("missing"), FileExt: "png", Created: "caller-supplied"})
-		if got != nil || !errors.Is(err, ErrPetNotFound) {
-			t.Errorf("UpdatePetPicture(no row) = (%v, %v), want (nil, ErrPetNotFound)", got, err)
+		if got != nil || !errors.Is(err, ErrPetPictureNotFound) {
+			t.Errorf("UpdatePetPicture(no row) = (%v, %v), want (nil, ErrPetPictureNotFound)", got, err)
 		}
 	})
 
@@ -449,8 +449,8 @@ func TestST23to25_DeletePetPicture(t *testing.T) {
 		if err != nil || !reflect.DeepEqual(got, &PetPicture{ID: id}) {
 			t.Fatalf("DeletePetPicture() = (%+v, %v), want (&PetPicture{ID: %q}, nil)", got, err, id)
 		}
-		if _, err := s.GetPetPicture(id); !errors.Is(err, ErrPetNotFound) {
-			t.Errorf("GetPetPicture() after delete error = %v, want ErrPetNotFound", err)
+		if _, err := s.GetPetPicture(id); !errors.Is(err, ErrPetPictureNotFound) {
+			t.Errorf("GetPetPicture() after delete error = %v, want ErrPetPictureNotFound", err)
 		}
 	})
 

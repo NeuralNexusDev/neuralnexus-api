@@ -29,15 +29,15 @@
 | ST-15 | CreatePetPicture | Error Path | database unreachable | closed-port `DATABASE_URL` | Returns `nil`, non-nil connection error | P2 | |
 | ST-16 | CreatePetPicture | Concurrency Invariant | N goroutines call `CreatePetPicture` with the identical id simultaneously (e.g. the same file uploaded twice, same sha) | live DB, one shared unique id per round | Exactly one call succeeds; the rest fail with a unique-constraint error | P0 | design: 5 rounds x 8 concurrent callers, fresh id per round |
 | ST-17 | GetRandPetPictureByName | Error Path | pet name has no matching pet | live DB, name never created | Returns `nil`, the upstream `GetPetByName` error (`ErrPetNotFound`) | P2 | |
-| ST-18 | GetRandPetPictureByName | Error Path | pet exists but has no matching pictures | live DB, pet created, no pictures reference it | Returns `nil`, `ErrPetNotFound` | P2 | |
-| ST-19 | GetPetPicture | Error Path | id has no matching row | live DB, id not present in `pictures` | Returns `nil`, `ErrPetNotFound` | P2 | |
+| ST-18 | GetRandPetPictureByName | Error Path | pet exists but has no matching pictures | live DB, pet created, no pictures reference it | Returns `nil`, `ErrPetPictureNotFound` | P2 | |
+| ST-19 | GetPetPicture | Error Path | id has no matching row | live DB, id not present in `pictures` | Returns `nil`, `ErrPetPictureNotFound` | P2 | |
 | ST-28 | GetPetPicture | Happy Path | id has a matching row | live DB, picture created via `CreatePetPicture`, session time zone set to a non-UTC zone (America/Los_Angeles, Asia/Kolkata) via `PGTZ` | Returns the row's `ID`/`FileExt`/`PrimarySubject`/`OthersSubjects`/`Aliases`, and `Created` as the same instant in RFC3339 UTC ending in `Z`, nil error | P1 | |
 | ST-29 | GetRandPetPictureByName | Happy Path | pet has a picture | live DB, pet created and one picture with `prime_subj` = its id | Returns that picture, nil error | P1 | |
 | ST-20 | GetPetPicture | Error Path | database unreachable | closed-port `DATABASE_URL` | Returns `nil`, non-nil connection error | P2 | |
 | ST-21 | UpdatePetPicture | Error Path | database unreachable | closed-port `DATABASE_URL` | Returns `nil`, non-nil connection error | P2 | |
 | ST-22 | UpdatePetPicture | Happy Path | update an existing picture's fields | live DB, picture created via `CreatePetPicture`, session time zone set to a non-UTC zone (America/Los_Angeles, Asia/Kolkata) via `PGTZ` | Returns `*PetPicture` reflecting the updated fields, with `Created` read back from the database as the same instant in RFC3339 UTC, nil error | P1 | |
-| ST-30 | UpdatePetPicture | Error Path | update targets an id with no matching row | live DB, nonexistent id | Returns `nil`, `ErrPetNotFound` | P2 | |
-| ST-23 | DeletePetPicture | Happy Path | delete an existing picture | live DB, picture created via `CreatePetPicture` | Returns `&PetPicture{ID: id}`, nil error; a follow-up `GetPetPicture(id)` confirms the row is gone (`ErrPetNotFound`) | P1 | |
+| ST-30 | UpdatePetPicture | Error Path | update targets an id with no matching row | live DB, nonexistent id | Returns `nil`, `ErrPetPictureNotFound` | P2 | |
+| ST-23 | DeletePetPicture | Happy Path | delete an existing picture | live DB, picture created via `CreatePetPicture` | Returns `&PetPicture{ID: id}`, nil error; a follow-up `GetPetPicture(id)` confirms the row is gone (`ErrPetPictureNotFound`) | P1 | |
 | ST-25 | DeletePetPicture | Edge Case | delete an id with no matching row | live DB, nonexistent id | Returns `&PetPicture{ID: id}`, nil error (a `DELETE` matching zero rows is not itself an error) | P2 | |
 | ST-24 | DeletePetPicture | Error Path | database unreachable | closed-port `DATABASE_URL` | Returns `nil`, non-nil connection error | P2 | |
 
@@ -85,7 +85,7 @@
 | HD-25 | UpdatePetPictureHandler | Error Path | session lacks permission for the pet's name | mock `GetPet` succeeds, session scoped to a different name | 403 Forbidden; `store.UpdatePetPicture` never called, `detail` is `msgNoPermissionToUpdatePet` | P1 | |
 | HD-26 | UpdatePetPictureHandler | Happy Path | valid body, pet found, session has permission | mock `UpdatePetPicture` succeeds | 200 OK with picture JSON | P1 | |
 | HD-27 | UpdatePetPictureHandler | Error Path | `store.UpdatePetPicture` returns an error | mock returns `nil, err` | 500 Internal Server Error | P2 | |
-| HD-36 | UpdatePetPictureHandler | Error Path | `store.UpdatePetPicture` returns `ErrPetNotFound` | mock returns `nil, pgx.ErrNoRows` | 404 Not Found | P2 | |
+| HD-36 | UpdatePetPictureHandler | Error Path | `store.UpdatePetPicture` returns `ErrPetPictureNotFound` | mock returns `nil, pgx.ErrNoRows` | 404 Not Found | P2 | |
 | HD-28 | DeletePetPictureHandler | Happy Path | path value `id` present, all checks pass | mocks succeed, session has permission | 204 No Content; `DeletePetPicture` called with the id | P1 | |
 | HD-29 | DeletePetPictureHandler | Edge Case | path value absent, body supplies id | JSON body `{"id":"abc123"}` | `GetPetPicture` called with `"abc123"`; 204 No Content | P2 | |
 | HD-30 | DeletePetPictureHandler | Error Path | both path value and body id absent/empty | empty body | 400 Bad Request, `detail` is `msgPetPictureIDIsRequired` | P2 | |

@@ -34,9 +34,17 @@ import (
 const createdColumn = `COALESCE(to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'), '')`
 
 var (
-	ErrPetNameEmpty = errors.New("pet name must not be empty")
-	ErrPetNotFound  = errors.New("pet not found")
+	ErrPetNameEmpty       = errors.New("pet name must not be empty")
+	ErrPetNotFound        = errors.New("pet not found")
+	ErrPetPictureNotFound = errors.New("pet picture not found")
 )
+
+func petPictureNotFound(err error) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrPetPictureNotFound
+	}
+	return err
+}
 
 func petNotFound(err error) error {
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -172,7 +180,7 @@ func (s *store) GetRandPetPictureByName(name string) (*PetPicture, error) {
 	var picture *PetPicture
 	picture, err = pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[PetPicture])
 	if err != nil {
-		return nil, petNotFound(err)
+		return nil, petPictureNotFound(err)
 	}
 	return picture, nil
 }
@@ -190,7 +198,7 @@ func (s *store) GetPetPicture(id string) (*PetPicture, error) {
 	var picture *PetPicture
 	picture, err = pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[PetPicture])
 	if err != nil {
-		return nil, petNotFound(err)
+		return nil, petPictureNotFound(err)
 	}
 	return picture, nil
 }
@@ -205,7 +213,7 @@ func (s *store) UpdatePetPicture(picture PetPicture) (*PetPicture, error) {
 		picture.FileExt, picture.PrimarySubject, picture.OthersSubjects, picture.Aliases, picture.ID,
 	).Scan(&picture.Created)
 	if err != nil {
-		return nil, petNotFound(err)
+		return nil, petPictureNotFound(err)
 	}
 	return &picture, nil
 }
