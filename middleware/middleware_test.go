@@ -222,15 +222,15 @@ func TestCreateStack(t *testing.T) {
 
 	t.Run("MW-06_EmptyStackIsPassthrough", func(t *testing.T) {
 		stack := CreateStack()
-		called := false
+		nextCalls := 0
 		final := stack(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			called = true
+			nextCalls++
 		}))
 
 		final.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
 
-		if !called {
-			t.Error("expected an empty middleware stack to still call the final handler")
+		if nextCalls != 1 {
+			t.Errorf("final handler called %d times, want 1", nextCalls)
 		}
 	})
 }
@@ -588,7 +588,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 		rec, nextCalls := mwRunRateLimit(svc, "rl", 5, 5, r)
 
 		if nextCalls != 1 {
-			t.Error("expected next to be called when under the session limit")
+			t.Errorf("next called %d times, want 1 (when under the session limit)", nextCalls)
 		}
 		if rec.Code != http.StatusOK {
 			t.Errorf("expected status 200, got %d", rec.Code)
@@ -605,7 +605,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 		rec, nextCalls := mwRunRateLimit(svc, "rl", 5, 5, r)
 
 		if nextCalls != 0 {
-			t.Error("expected next NOT to be called when over the session limit")
+			t.Errorf("next called %d times, want 0 (when over the session limit)", nextCalls)
 		}
 		if rec.Code != http.StatusTooManyRequests {
 			t.Errorf("expected status 429, got %d", rec.Code)
@@ -624,7 +624,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 		rec, nextCalls := mwRunRateLimit(svc, "rl", 5, 5, r)
 
 		if nextCalls != 1 {
-			t.Error("expected next to be called")
+			t.Errorf("next called %d times, want 1", nextCalls)
 		}
 		if rec.Code != http.StatusOK || rec.Body.Len() != 0 {
 			t.Errorf("expected the middleware to write nothing, got status %d body %q", rec.Code, rec.Body.String())
@@ -645,7 +645,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 		rec, nextCalls := mwRunRateLimit(svc, "rl", 5, 5, r)
 
 		if nextCalls != 1 {
-			t.Error("expected next to be called")
+			t.Errorf("next called %d times, want 1", nextCalls)
 		}
 		if rec.Code != http.StatusOK || rec.Body.Len() != 0 {
 			t.Errorf("expected the middleware to write nothing, got status %d body %q", rec.Code, rec.Body.String())
@@ -665,7 +665,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 		rec, nextCalls := mwRunRateLimit(svc, "rl", 5, 5, r)
 
 		if nextCalls != 1 {
-			t.Error("expected next to be called when under the IP limit")
+			t.Errorf("next called %d times, want 1 (when under the IP limit)", nextCalls)
 		}
 		if rec.Code != http.StatusOK {
 			t.Errorf("expected status 200, got %d", rec.Code)
@@ -682,7 +682,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 		rec, nextCalls := mwRunRateLimit(svc, "rl", 5, 5, r)
 
 		if nextCalls != 0 {
-			t.Error("expected next NOT to be called when over the IP limit")
+			t.Errorf("next called %d times, want 0 (when over the IP limit)", nextCalls)
 		}
 		if rec.Code != http.StatusTooManyRequests {
 			t.Errorf("expected status 429, got %d", rec.Code)
@@ -697,7 +697,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 		_, nextCalls := mwRunRateLimit(svc, "rl", 5, 5, r)
 
 		if nextCalls != 1 {
-			t.Error("expected next to be called when under the IP limit")
+			t.Errorf("next called %d times, want 1 (when under the IP limit)", nextCalls)
 		}
 		if len(svc.incrCalls) != 1 || svc.incrCalls[0] != "rl:9.8.7.6" {
 			t.Errorf("expected the raw RemoteAddr to be used as the key, got %v", svc.incrCalls)
@@ -712,7 +712,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 		rec, nextCalls := mwRunRateLimit(svc, "rl", 5, 5, r)
 
 		if nextCalls != 1 {
-			t.Error("expected next to be called")
+			t.Errorf("next called %d times, want 1", nextCalls)
 		}
 		if rec.Code != http.StatusOK || rec.Body.Len() != 0 {
 			t.Errorf("expected the middleware to write nothing, got status %d body %q", rec.Code, rec.Body.String())
@@ -733,7 +733,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 		rec, nextCalls := mwRunRateLimit(svc, "rl", 5, 5, r)
 
 		if nextCalls != 1 {
-			t.Error("expected next to be called")
+			t.Errorf("next called %d times, want 1", nextCalls)
 		}
 		if rec.Code != http.StatusOK || rec.Body.Len() != 0 {
 			t.Errorf("expected the middleware to write nothing, got status %d body %q", rec.Code, rec.Body.String())
@@ -754,7 +754,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 		rec, nextCalls := mwRunRateLimit(svc, "rl", 5, 5, r)
 
 		if nextCalls != 1 {
-			t.Error("expected next to be called")
+			t.Errorf("next called %d times, want 1", nextCalls)
 		}
 		if rec.Code != http.StatusOK || rec.Body.Len() != 0 {
 			t.Errorf("expected the middleware to write nothing, got status %d body %q", rec.Code, rec.Body.String())
