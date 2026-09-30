@@ -119,7 +119,7 @@ func (s *store) GetEvent(id string) (*Event, error) {
 func (s *store) GetEventsByPlatform(platform auth.Platform) ([]*Event, error) {
 	rows, err := s.db.Query(context.Background(), "SELECT * FROM event_log WHERE platform = $1", platform)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %w", ErrEventsQueryFailed, err)
 	}
 	defer rows.Close()
 
