@@ -79,6 +79,7 @@ func IconHandler(s MCStatusService) http.HandlerFunc {
 		isBedrock := r.URL.Query().Get("bedrock") == "true"
 		if isBedrock {
 			responses.BadRequest(w, r, msgBedrockNoIcons)
+			return
 		}
 		port, err := strconv.Atoi(host[strings.LastIndex(host, ":")+1:])
 		if err != nil {

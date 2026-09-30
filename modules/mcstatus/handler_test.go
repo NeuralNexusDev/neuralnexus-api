@@ -325,7 +325,7 @@ func TestIconHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-11_BedrockFallsThroughAfterBadRequest", func(t *testing.T) {
+	t.Run("HD-11_BedrockWritesOneBadRequest", func(t *testing.T) {
 		mock := &hdMockService{javaErr: ErrJavaStatus}
 		req := hdRequest(t, "example.com:19132", "bedrock=true")
 		w := httptest.NewRecorder()
@@ -335,12 +335,11 @@ func TestIconHandler(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400, got %d", w.Code)
 		}
-		var p responses.Problem
-		if err := json.NewDecoder(w.Body).Decode(&p); err != nil {
-			t.Fatalf("failed to decode first problem: %v", err)
-		}
-		if p.Detail != msgBedrockNoIcons {
+		if p := hdDecodeProblem(t, w.Body.Bytes()); p.Detail != msgBedrockNoIcons {
 			t.Fatalf("detail = %q, want %q", p.Detail, msgBedrockNoIcons)
+		}
+		if len(mock.javaCalls) != 0 {
+			t.Fatalf("expected no Java status lookup, got %d", len(mock.javaCalls))
 		}
 	})
 }
