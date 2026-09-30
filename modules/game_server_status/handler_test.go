@@ -251,6 +251,13 @@ func TestSimpleGameServerStatus(t *testing.T) {
 		if rec.Code != 400 {
 			t.Fatalf("status = %d, want 400", rec.Code)
 		}
+		var body map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if body["detail"] != msgInvalidHost {
+			t.Errorf(`detail = %v, want %q`, body["detail"], msgInvalidHost)
+		}
 		if fake.called {
 			t.Error("QueryGameServer should not have been called")
 		}
@@ -266,6 +273,13 @@ func TestSimpleGameServerStatus(t *testing.T) {
 
 		if rec.Code != 400 {
 			t.Fatalf("status = %d, want 400", rec.Code)
+		}
+		var body map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if body["detail"] != msgInvalidPort {
+			t.Errorf(`detail = %v, want %q`, body["detail"], msgInvalidPort)
 		}
 		if fake.called {
 			t.Error("QueryGameServer should not have been called")

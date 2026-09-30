@@ -15,6 +15,7 @@ const (
 	msgJavaStatusFailed        = "failed to get java server status"
 	msgBedrockStatusFailed     = "failed to get bedrock server status"
 	msgFailedToGetServerStatus = "Failed to get server status"
+	msgBedrockNoIcons          = "Bedrock servers do not have icons."
 )
 
 func statusFailureMessage(err error) string {
@@ -67,7 +68,7 @@ func IconHandler(s MCStatusService) http.HandlerFunc {
 		host := r.PathValue("host")
 		isBedrock := r.URL.Query().Get("bedrock") == "true"
 		if isBedrock {
-			responses.BadRequest(w, r, "Bedrock servers do not have icons.")
+			responses.BadRequest(w, r, msgBedrockNoIcons)
 		}
 		port, err := strconv.Atoi(host[strings.LastIndex(host, ":")+1:])
 		if err != nil {

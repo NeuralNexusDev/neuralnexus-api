@@ -319,8 +319,12 @@ func TestIconHandler(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400, got %d", w.Code)
 		}
-		if !bytes.Contains(w.Body.Bytes(), []byte("Bedrock servers do not have icons.")) {
-			t.Fatalf("expected the BadRequest message to be present in the body, got %q", w.Body.String())
+		var p responses.Problem
+		if err := json.NewDecoder(w.Body).Decode(&p); err != nil {
+			t.Fatalf("failed to decode first problem: %v", err)
+		}
+		if p.Detail != msgBedrockNoIcons {
+			t.Fatalf("detail = %q, want %q", p.Detail, msgBedrockNoIcons)
 		}
 	})
 }

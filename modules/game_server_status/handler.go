@@ -11,18 +11,19 @@ import (
 )
 
 const (
-	msgInvalidHost         = "Invalid host"
-	msgInvalidPort         = "Invalid port"
-	msgGameQQueryFailed    = "failed to query GameQ API"
-	msgGameDigQueryFailed  = "failed to query GameDig API"
-	msgReadBodyFailed      = "failed to read response body"
-	msgDecodeBodyFailed    = "failed to decode response body"
-	msgNoGameQResponse     = "no response from GameQ API"
-	msgServerOffline       = "server is offline"
-	msgGameUnsupported     = "this game is not supported, or the given query type doesn't support this game"
-	msgJavaStatusFailed    = "failed to get java server status"
-	msgBedrockStatusFailed = "failed to get bedrock server status"
-	msgQueryFailed         = "Failed to query game server"
+	msgInvalidHost             = "Invalid host"
+	msgInvalidPort             = "Invalid port"
+	msgGameQQueryFailed        = "failed to query GameQ API"
+	msgGameDigQueryFailed      = "failed to query GameDig API"
+	msgReadBodyFailed          = "failed to read response body"
+	msgDecodeBodyFailed        = "failed to decode response body"
+	msgNoGameQResponse         = "no response from GameQ API"
+	msgServerOffline           = "server is offline"
+	msgGameUnsupported         = "this game is not supported, or the given query type doesn't support this game"
+	msgJavaStatusFailed        = "failed to get java server status"
+	msgBedrockStatusFailed     = "failed to get bedrock server status"
+	msgQueryFailed             = "Failed to query game server"
+	logUnableToQueryGameServer = "[Error]: Unable to query game server:\n\t"
 )
 
 func queryFailureMessage(err error) string {
@@ -42,13 +43,13 @@ func queryFailureMessage(err error) string {
 	case errors.Is(err, ErrGameUnsupported):
 		return msgGameUnsupported
 	case errors.Is(err, mcstatus.ErrJavaStatus):
-		log.Println("[Error]: Unable to query game server:\n\t", err)
+		log.Println(logUnableToQueryGameServer, err)
 		return msgJavaStatusFailed
 	case errors.Is(err, mcstatus.ErrBedrockStatus):
-		log.Println("[Error]: Unable to query game server:\n\t", err)
+		log.Println(logUnableToQueryGameServer, err)
 		return msgBedrockStatusFailed
 	default:
-		log.Println("[Error]: Unable to query game server:\n\t", err)
+		log.Println(logUnableToQueryGameServer, err)
 		return msgQueryFailed
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"testing/iotest"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
+	"github.com/goccy/go-json"
 )
 
 // fakeRoundTripper is swapped in for http.DefaultTransport: QueryGameQ and
@@ -152,6 +153,10 @@ func TestQueryGameQ(t *testing.T) {
 		if !errors.Is(err, ErrDecodeBody) {
 			t.Errorf("QueryGameQ() error = %v, want %v", err, ErrDecodeBody)
 		}
+		var syntaxErr *json.SyntaxError
+		if !errors.As(err, &syntaxErr) {
+			t.Errorf("QueryGameQ() error = %v, want wrapped *json.SyntaxError", err)
+		}
 		if resp != nil {
 			t.Errorf("QueryGameQ() response = %+v, want nil", resp)
 		}
@@ -246,6 +251,10 @@ func TestQueryGameDig(t *testing.T) {
 		}
 		if !errors.Is(err, ErrDecodeBody) {
 			t.Errorf("QueryGameDig() error = %v, want %v", err, ErrDecodeBody)
+		}
+		var syntaxErr *json.SyntaxError
+		if !errors.As(err, &syntaxErr) {
+			t.Errorf("QueryGameDig() error = %v, want wrapped *json.SyntaxError", err)
 		}
 		if resp != nil {
 			t.Errorf("QueryGameDig() response = %+v, want nil", resp)

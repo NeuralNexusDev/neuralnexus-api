@@ -23,9 +23,10 @@ var (
 const (
 	EventSubMessageType = "twitch-eventsub-message-type"
 
-	EventSubTypeRevocation   = "revocation"
-	EventSubTypeVerification = "webhook_callback_verification"
-	EventSubTypeNotification = "notification"
+	EventSubTypeRevocation         = "revocation"
+	EventSubTypeVerification       = "webhook_callback_verification"
+	EventSubTypeNotification       = "notification"
+	msgFailedToHandleEventSubEvent = "Failed to handle EventSub event"
 )
 
 // HandleEventSub handles the EventSub notifications
@@ -70,7 +71,7 @@ func HandleEventSub(eventsub EventSubService, tokens auth.OAuthTokenStore, linke
 		}
 		if err != nil {
 			mw.LogRequest(r.Context(), userId, "Failed to handle EventSub event:", err.Error())
-			responses.InternalServerError(w, r, "Failed to handle EventSub event")
+			responses.InternalServerError(w, r, msgFailedToHandleEventSubEvent)
 			return
 		}
 		responses.NoContent(w, r)
