@@ -57,39 +57,39 @@
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| HD-01 | CreatePetHandler | Error Path | session lacks `ScopeAdminPetPictures` | session with unrelated/no permissions | 403 Forbidden; `store.CreatePet` never called | P1 | |
+| HD-01 | CreatePetHandler | Error Path | session lacks `ScopeAdminPetPictures` | session with unrelated/no permissions | 403 Forbidden; `store.CreatePet` never called (`msgNoPermissionToCreatePet`) | P1 | |
 | HD-02 | CreatePetHandler | Happy Path | path value `name` present, session has permission | mock `CreatePet` returns `*Pet` | 201 Created with the pet JSON; `CreatePet` called with the path name | P1 | |
 | HD-03 | CreatePetHandler | Edge Case | path value absent, body supplies name | JSON body `{"name":"Fido"}` | `CreatePet` called with `"Fido"`; 201 Created | P2 | |
 | HD-04 | CreatePetHandler | Error Path | both path value and body name absent/empty | empty body, no path value | 400 Bad Request; `store.CreatePet` never called, `detail` is `msgPetNameIsRequired` | P2 | |
-| HD-05 | CreatePetHandler | Error Path | `store.CreatePet` returns an error | mock returns `nil, err` | 500 Internal Server Error | P2 | |
+| HD-05 | CreatePetHandler | Error Path | `store.CreatePet` returns an error | mock returns `nil, err` | 500 Internal Server Error (`msgUnableToCreatePet`) | P2 | |
 | HD-06 | GetPetHandler | Happy Path | path value `id` present and numeric | mock `GetPet` returns `*Pet` | 200 OK with pet JSON; `GetPet` called with the parsed id | P1 | |
 | HD-07 | GetPetHandler | Edge Case | path value absent, body supplies id | JSON body `{"id":7}` | `GetPet` called with `7`; 200 OK | P2 | |
-| HD-08 | GetPetHandler | Error Path | both path value and body id absent/zero | empty body, no path value | 400 Bad Request; `store.GetPet` never called | P2 | |
-| HD-09 | GetPetHandler | Edge Case | path value present but non-numeric, no body fallback | path id = `"abc"` | falls back to id `0`; 400 Bad Request | P3 | |
-| HD-10 | GetPetHandler | Error Path | `store.GetPet` returns an error | mock returns `nil, err` | 404 Not Found, `detail` is `msgPetNotFound` | P2 | |
+| HD-08 | GetPetHandler | Error Path | both path value and body id absent/zero | empty body, no path value | 400 Bad Request; `store.GetPet` never called (`msgPetIDIsRequired`) | P2 | |
+| HD-09 | GetPetHandler | Edge Case | path value present but non-numeric, no body fallback | path id = `"abc"` | falls back to id `0`; 400 Bad Request (`msgPetIDIsRequired`) | P3 | |
+| HD-10 | GetPetHandler | Error Path | `store.GetPet` returns an error | mock returns `nil, err` | 404 Not Found, `detail` is `msgPetNotFound` (`ErrPetNotFound`) | P2 | |
 | HD-11 | UpdatePetHandler | Error Path | request body fails to decode | malformed JSON body | 400 Bad Request; `store.UpdatePet` never called, `detail` is `msgUnableToParseBody` | P2 | |
 | HD-12 | UpdatePetHandler | Error Path | session lacks permission for the decoded pet's name | session scoped to a different pet name | 403 Forbidden; `store.UpdatePet` never called, `detail` is `msgNoPermissionToUpdatePet` | P1 | |
 | HD-13 | UpdatePetHandler | Happy Path | valid body, session has permission | mock `UpdatePet` succeeds | 200 OK with the decoded pet JSON; `UpdatePet` called with the decoded pet | P1 | |
-| HD-14 | UpdatePetHandler | Error Path | `store.UpdatePet` returns an error | mock returns `nil, err` | 500 Internal Server Error | P2 | |
-| HD-35 | UpdatePetHandler | Error Path | `store.UpdatePet` returns `ErrPetNotFound` | mock returns `nil, pgx.ErrNoRows` | 404 Not Found, `detail` is `msgPetNotFound` | P2 | |
+| HD-14 | UpdatePetHandler | Error Path | `store.UpdatePet` returns an error | mock returns `nil, err` | 500 Internal Server Error (`msgUnableToUpdatePet`) | P2 | |
+| HD-35 | UpdatePetHandler | Error Path | `store.UpdatePet` returns `ErrPetNotFound` | mock returns `nil, ErrPetNotFound` | 404 Not Found, `detail` is `msgPetNotFound` | P2 | |
 | HD-15 | GetRandPetPictureByNameHandler | Happy Path | path value `name` present | mock returns `*PetPicture` | 200 OK with picture JSON; `GetRandPetPictureByName` called with the path name | P1 | |
 | HD-16 | GetRandPetPictureByNameHandler | Edge Case | path value absent, body supplies name | JSON body `{"name":"Rex"}` | `GetRandPetPictureByName` called with `"Rex"`; 200 OK | P2 | |
 | HD-17 | GetRandPetPictureByNameHandler | Error Path | both path value and body name absent/empty | empty body | 400 Bad Request, `detail` is `msgPetNameIsRequired` | P2 | |
-| HD-18 | GetRandPetPictureByNameHandler | Error Path | `store` returns an error | mock returns `nil, err` | 404 Not Found | P2 | |
+| HD-18 | GetRandPetPictureByNameHandler | Error Path | `store` returns `ErrPetPictureNotFound` | mock returns `nil, ErrPetPictureNotFound` | 404 Not Found, `detail` is `msgUnableToGetRandomPetPicture` | P2 | |
 | HD-19 | GetPetPictureHandler | Happy Path | path value `id` present | mock returns `*PetPicture` | 200 OK with picture JSON; `GetPetPicture` called with the path id | P1 | |
 | HD-20 | GetPetPictureHandler | Edge Case | path value absent, body supplies id | JSON body `{"id":"abc123"}` | `GetPetPicture` called with `"abc123"`; 200 OK | P2 | |
 | HD-21 | GetPetPictureHandler | Error Path | both path value and body id absent/empty | empty body | 400 Bad Request, `detail` is `msgPetPictureIDIsRequired` | P2 | |
-| HD-22 | GetPetPictureHandler | Error Path | `store` returns an error | mock returns `nil, err` | 404 Not Found, `detail` is `msgUnableToGetPetPicture` | P2 | |
+| HD-22 | GetPetPictureHandler | Error Path | `store` returns an error | mock returns `nil, err` | 404 Not Found, `detail` is `msgUnableToGetPetPicture` (`ErrPetPictureNotFound`) | P2 | |
 | HD-23 | UpdatePetPictureHandler | Error Path | request body fails to decode | malformed JSON body | 400 Bad Request; `store.GetPet`/`UpdatePetPicture` never called, `detail` is `msgUnableToParseBody` | P2 | |
-| HD-24 | UpdatePetPictureHandler | Error Path | `store.GetPet(PrimarySubject)` returns an error | mock `GetPet` returns `nil, err` | 404 Not Found; `store.UpdatePetPicture` never called, `detail` is `msgUnableToGetPet` | P2 | |
+| HD-24 | UpdatePetPictureHandler | Error Path | `store.GetPet(PrimarySubject)` returns an error | mock `GetPet` returns `nil, err` | 404 Not Found; `store.UpdatePetPicture` never called, `detail` is `msgUnableToGetPet` (`ErrPetNotFound`) | P2 | |
 | HD-25 | UpdatePetPictureHandler | Error Path | session lacks permission for the pet's name | mock `GetPet` succeeds, session scoped to a different name | 403 Forbidden; `store.UpdatePetPicture` never called, `detail` is `msgNoPermissionToUpdatePet` | P1 | |
 | HD-26 | UpdatePetPictureHandler | Happy Path | valid body, pet found, session has permission | mock `UpdatePetPicture` succeeds | 200 OK with picture JSON | P1 | |
-| HD-27 | UpdatePetPictureHandler | Error Path | `store.UpdatePetPicture` returns an error | mock returns `nil, err` | 500 Internal Server Error | P2 | |
-| HD-36 | UpdatePetPictureHandler | Error Path | `store.UpdatePetPicture` returns `ErrPetPictureNotFound` | mock returns `nil, pgx.ErrNoRows` | 404 Not Found | P2 | |
+| HD-27 | UpdatePetPictureHandler | Error Path | `store.UpdatePetPicture` returns an error | mock returns `nil, err` | 500 Internal Server Error (`msgUnableToUpdatePetPicture`) | P2 | |
+| HD-36 | UpdatePetPictureHandler | Error Path | `store.UpdatePetPicture` returns `ErrPetPictureNotFound` | mock returns `nil, ErrPetPictureNotFound` | 404 Not Found, `detail` is `msgPetPictureNotFound` | P2 | |
 | HD-28 | DeletePetPictureHandler | Happy Path | path value `id` present, all checks pass | mocks succeed, session has permission | 204 No Content; `DeletePetPicture` called with the id | P1 | |
 | HD-29 | DeletePetPictureHandler | Edge Case | path value absent, body supplies id | JSON body `{"id":"abc123"}` | `GetPetPicture` called with `"abc123"`; 204 No Content | P2 | |
 | HD-30 | DeletePetPictureHandler | Error Path | both path value and body id absent/empty | empty body | 400 Bad Request, `detail` is `msgPetPictureIDIsRequired` | P2 | |
-| HD-31 | DeletePetPictureHandler | Error Path | `store.GetPetPicture` returns an error | mock returns `nil, err` | 404 Not Found; `store.DeletePetPicture` never called, `detail` is `msgUnableToGetPetPicture` | P2 | |
-| HD-32 | DeletePetPictureHandler | Error Path | `store.GetPet(PrimarySubject)` returns an error | mock `GetPetPicture` succeeds, `GetPet` returns `nil, err` | 404 Not Found; `store.DeletePetPicture` never called, `detail` is `msgUnableToGetPet` | P2 | |
+| HD-31 | DeletePetPictureHandler | Error Path | `store.GetPetPicture` returns an error | mock returns `nil, err` | 404 Not Found; `store.DeletePetPicture` never called, `detail` is `msgUnableToGetPetPicture` (`ErrPetPictureNotFound`) | P2 | |
+| HD-32 | DeletePetPictureHandler | Error Path | `store.GetPet(PrimarySubject)` returns an error | mock `GetPetPicture` succeeds, `GetPet` returns `nil, err` | 404 Not Found; `store.DeletePetPicture` never called, `detail` is `msgUnableToGetPet` (`ErrPetNotFound`) | P2 | |
 | HD-33 | DeletePetPictureHandler | Error Path | session lacks permission for the pet's name | mocks succeed, session scoped to a different name | 403 Forbidden; `store.DeletePetPicture` never called, `detail` is `msgNoPermissionToUpdatePet` | P1 | |
-| HD-34 | DeletePetPictureHandler | Error Path | `store.DeletePetPicture` returns an error | mock returns `nil, err` | 500 Internal Server Error | P2 | |
+| HD-34 | DeletePetPictureHandler | Error Path | `store.DeletePetPicture` returns an error | mock returns `nil, err` | 500 Internal Server Error (`msgUnableToDeletePetPicture`) | P2 | |

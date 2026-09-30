@@ -60,13 +60,13 @@
 | HD-06 | GetMojangPlayerByUUIDHandler | Happy Path | Valid UUID, service succeeds | mock returns *Player | 200 OK with player JSON body | P1 |  |
 | HD-07 | GetMojangPlayerByUUIDHandler | Error Path | Service returns ErrPlayerNotFound | mock error = ErrPlayerNotFound | 404 Not Found, `detail` is `msgPlayerNotFound` | P1 |  |
 | HD-08 | GetMojangPlayerByUUIDHandler | Error Path | Service returns a generic error | mock error = errors.New(...) | 500 Internal Server Error, `detail` is `msgFailedToGetPlayer` | P2 |  |
-| HD-09 | GetMojangPlayersByNamesHandler | Error Path | Content-Type header is not application/json | header omitted | 415 Unsupported Media Type | P2 |  |
-| HD-10 | GetMojangPlayersByNamesHandler | Error Path | Body is not valid JSON | body = "{not json" | 400 Bad Request | P2 |  |
-| HD-11 | GetMojangPlayersByNamesHandler | Error Path | names array is empty | body = "[]" | 400 Bad Request | P2 |  |
-| HD-12 | GetMojangPlayersByNamesHandler | Error Path | names array has more than 10 entries | 11 names | 400 Bad Request | P2 |  |
-| HD-13 | GetMojangPlayersByNamesHandler | Error Path | names array contains an empty string | ["a", ""] | 400 Bad Request | P3 |  |
+| HD-09 | GetMojangPlayersByNamesHandler | Error Path | Content-Type header is not application/json | header omitted | 415 Unsupported Media Type (`msgRequestMustBeJSON`) | P2 |  |
+| HD-10 | GetMojangPlayersByNamesHandler | Error Path | Body is not valid JSON | body = "{not json" | 400 Bad Request (`msgInvalidRequestBody`) | P2 |  |
+| HD-11 | GetMojangPlayersByNamesHandler | Error Path | names array is empty | body = "[]" | 400 Bad Request (`msgInvalidSize`) | P2 |  |
+| HD-12 | GetMojangPlayersByNamesHandler | Error Path | names array has more than 10 entries | 11 names | 400 Bad Request (`msgInvalidSize`) | P2 |  |
+| HD-13 | GetMojangPlayersByNamesHandler | Error Path | names array contains an empty string | ["a", ""] | 400 Bad Request (`msgInvalidProfileName`) | P3 |  |
 | HD-14 | GetMojangPlayersByNamesHandler | Happy Path | Valid names, service succeeds | mock returns []*Player | 200 OK with players JSON body | P1 |  |
-| HD-15 | GetMojangPlayersByNamesHandler | Error Path | Service returns an error | mock error | 500 Internal Server Error | P2 |  |
+| HD-15 | GetMojangPlayersByNamesHandler | Error Path | Service returns an error | mock error | 500 Internal Server Error (`msgFailedToGetPlayers`) | P2 |  |
 | HD-16 | GetMojangProfileHandler | Error Path | Invalid UUID path value | r.PathValue("uuid") invalid | 400 Bad Request, `detail` is `msgNotAValidUUID` followed by the id | P2 |  |
 | HD-17 | GetMojangProfileHandler | Happy Path | No "unsigned" query param, service succeeds | query omitted | signed=false passed to service; 200 OK | P1 |  |
 | HD-18 | GetMojangProfileHandler | Edge Case | Query "unsigned=false" | ?unsigned=false | signed=true passed to service | P2 |  |
@@ -84,13 +84,13 @@
 | HD-30 | GetGeyserXUIDHandler | Happy Path | Valid gamertag, service succeeds | mock returns *GeyserPlayer | 200 OK with player JSON body | P1 |  |
 | HD-31 | GetGeyserXUIDHandler | Error Path | Service returns ErrPlayerNotFound | mock error | 404 Not Found, `detail` is `msgPlayerNotFound` | P1 |  |
 | HD-32 | GetGeyserXUIDHandler | Error Path | Service returns ErrInvalidGeyserRequest | mock error | 400 Bad Request, `detail` is `msgInvalidGamertag` | P2 |  |
-| HD-33 | GetGeyserXUIDHandler | Error Path | Service returns a generic error | mock error | 500 Internal Server Error | P2 |  |
+| HD-33 | GetGeyserXUIDHandler | Error Path | Service returns a generic error | mock error | 500 Internal Server Error (`msgFailedToGetGeyserXUID`) | P2 |  |
 | HD-34 | GetGeyserSkinHandler | Error Path | Non-numeric xuid path value | xuid == "abc" | 400 Bad Request, `detail` is `msgInvalidXuid` | P2 |  |
 | HD-35 | GetGeyserSkinHandler | Happy Path | Valid xuid, service succeeds | mock returns *GeyserSkin | 200 OK with skin JSON body | P1 |  |
 | HD-36 | GetGeyserSkinHandler | Error Path | Service returns ErrSkinNotFound | mock error | 204 No Content | P1 |  |
 | HD-37 | GetGeyserSkinHandler | Error Path | Service returns ErrInvalidGeyserRequest | mock error | 400 Bad Request, `detail` is `msgInvalidXuid` | P2 |  |
-| HD-38 | GetGeyserSkinHandler | Error Path | Service returns a generic error | mock error | 500 Internal Server Error | P2 |  |
-| HD-39 | GetGeyserProfileHandler | Error Path | uuid path value is not a derived Bedrock UUID | uuidToXUID fails | 400 Bad Request | P2 |  |
+| HD-38 | GetGeyserSkinHandler | Error Path | Service returns a generic error | mock error | 500 Internal Server Error (`msgFailedToGetGeyserSkin`) | P2 |  |
+| HD-39 | GetGeyserProfileHandler | Error Path | uuid path value is not a derived Bedrock UUID | uuidToXUID fails | 400 Bad Request (`msgNotAValidBedrockUUID`) | P2 |  |
 | HD-40 | GetGeyserProfileHandler | Happy Path | Valid Bedrock UUID, service succeeds | mock returns *GeyserProfile | 200 OK with profile JSON body | P1 |  |
 | HD-41 | GetGeyserProfileHandler | Error Path | Service returns ErrPlayerNotFound | mock error | 404 Not Found, `detail` is `msgPlayerNotFound` | P1 |  |
 | HD-42 | GetGeyserProfileHandler | Error Path | Service returns ErrInvalidGeyserRequest | mock error | 400 Bad Request, `detail` is `msgInvalidXuid` | P2 |  |
@@ -145,7 +145,7 @@
 | SV-30 | GetMojangProfile | Happy Path | signed=true, cache hit | GetSignedProfileFromCache succeeds | Returns cached signed player | P1 |  |
 | SV-31 | GetMojangProfile | Error Path | signed=true, cache error not ErrCacheMiss | plain error | Returns that error | P2 |  |
 | SV-32 | GetMojangProfile | Happy Path | signed=true, cache miss | fetchProfileFromMojang(id,true) succeeds | Returns fetched player | P1 |  |
-| SV-33 | GetMojangProfile | Error Path | signed=true, fetchProfileFromMojang fails | mojang error | Returns that error | P2 |  |
+| SV-33 | GetMojangProfile | Error Path | signed=true, fetchProfileFromMojang fails | mojang error | Returns that error (`ErrPlayerNotFound`) | P2 |  |
 | SV-34 | GetMojangProfile | Happy Path | signed=false | resolveProfile succeeds | Returns profile.ToPlayer() result | P1 |  |
 | SV-35 | GetMojangProfile | Error Path | signed=false, resolveProfile fails | resolveProfile error | Returns that error | P2 |  |
 | SV-36 | GetProfile | Happy Path | resolveProfile succeeds, SKIN+CAPE present | Textures with both | Both URLs rewritten to nnTextureUrl+hash | P1 |  |
@@ -153,7 +153,7 @@
 | SV-38 | GetProfile | Error Path | resolveProfile fails | resolveProfile error | Returns that error | P2 |  |
 | SV-39 | GetProfile | Edge Case | Textures present, CAPE nil | only SKIN set | Only SKIN.URL rewritten | P3 |  |
 | SV-40 | GetProfileByName | Happy Path | Name resolves, then profile resolves | both succeed | Returns resolved profile | P1 |  |
-| SV-41 | GetProfileByName | Error Path | GetMojangPlayerByName fails | e.g. ErrPlayerNotFound | Returns that error | P2 |  |
+| SV-41 | GetProfileByName | Error Path | GetMojangPlayerByName fails | e.g. ErrPlayerNotFound | Returns that error (`ErrCacheMiss`) | P2 |  |
 | SV-42 | GetProfileByName | Error Path | GetProfile fails after name resolves | GetProfile error | Returns that error | P2 |  |
 | SV-43 | resolveProfile | Happy Path | Cache hit | GetProfileFromCache succeeds | Returns cached profile | P1 |  |
 | SV-44 | resolveProfile | Error Path | Cache error not ErrCacheMiss | plain error | Returns that error | P2 |  |
@@ -248,7 +248,7 @@ Rows marked "(live)" require `TEST_POSTGRES_URL` and/or `TEST_REDIS_URL` and `t.
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
 | ST-01 | NewStore | Accessor | Construct with given db/rdb/s3 | valid args | Returned *store wraps exactly the given values | P3 |  |
-| ST-02 | GetPlayerByUUID | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |  |
+| ST-02 | GetPlayerByUUID | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged (`ErrPlayerNotFound`) | P2 |  |
 | ST-03 | GetPlayerByUUID | Happy Path (live) | Row seeded via UpsertPlayer | live DB | Returns matching Player (ProfileActions left zero-value: lax mapping) | P1 |  |
 | ST-04 | GetPlayerByUUID | Error Path (live) | No matching id | live DB, unknown id | Returns `ErrPlayerNotFound` | P2 |  |
 | ST-05 | GetPlayerByName | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |  |
@@ -276,7 +276,7 @@ Rows marked "(live)" require `TEST_POSTGRES_URL` and/or `TEST_REDIS_URL` and `t.
 | ST-27 | UpsertTextureHash | Happy Path (live) | New hash | live DB | Row inserted | P1 |  |
 | ST-28 | UpsertTextureHash | Edge Case (live) | Duplicate hash | live DB | ON CONFLICT DO NOTHING; no error | P2 |  |
 | ST-76 | UpsertTextureHash | Concurrency Invariant (live) | N goroutines UpsertTextureHash the same hash concurrently | live DB | No unique-violation errors from any goroutine; `textures.hash` being a PRIMARY KEY then guarantees exactly one surviving row (looped trials) | P0 | 50 concurrent writers — fewer wouldn't reliably reproduce a broken ON CONFLICT guard's race on every run |
-| ST-29 | GetPlayerFromCache | Error Path | Redis unreachable | closed-port client | Raw connection error passed through unchanged | P2 |  |
+| ST-29 | GetPlayerFromCache | Error Path | Redis unreachable | closed-port client | Raw connection error passed through unchanged (`ErrCacheMiss`) | P2 |  |
 | ST-30 | GetPlayerFromCache | Happy Path (live) | Key set via SetPlayerInCache | live Redis | Returns decoded *Player | P1 |  |
 | ST-31 | GetPlayerFromCache | Error Path (live) | Missing key | live Redis, unknown key | Returns ErrCacheMiss | P1 |  |
 | ST-32 | GetPlayerFromCache | Error Path (live) | Value is not valid JSON | live Redis, malformed value | Returns unmarshal error | P2 |  |
@@ -297,17 +297,17 @@ Rows marked "(live)" require `TEST_POSTGRES_URL` and/or `TEST_REDIS_URL` and `t.
 | ST-47 | IsTextureInS3 | Error Path (local fake) | HeadObject returns 500 | fake S3 server | Returns (false, non-nil error) | P2 |  |
 | ST-48 | GetGeyserPlayerByGamertag | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |  |
 | ST-49 | GetGeyserPlayerByGamertag | Happy Path (live) | Row seeded via UpsertGeyserPlayer | live DB | Returns GeyserPlayer with derived UUID | P1 |  |
-| ST-50 | GetGeyserPlayerByGamertag | Error Path (live) | No matching gamertag | live DB, unknown gamertag | Returns non-nil error | P2 |  |
+| ST-50 | GetGeyserPlayerByGamertag | Error Path (live) | No matching gamertag | live DB, unknown gamertag | Returns `ErrPlayerNotFound` (pgx.ErrNoRows is mapped) | P2 |  |
 | ST-51 | GetGeyserPlayerByXUID | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |  |
 | ST-52 | GetGeyserPlayerByXUID | Happy Path (live) | Row seeded via UpsertGeyserPlayer | live DB | Returns GeyserPlayer with derived UUID | P1 |  |
-| ST-53 | GetGeyserPlayerByXUID | Error Path (live) | No matching xuid | live DB, unknown xuid | Returns non-nil error | P2 |  |
+| ST-53 | GetGeyserPlayerByXUID | Error Path (live) | No matching xuid | live DB, unknown xuid | Returns `ErrPlayerNotFound` (pgx.ErrNoRows is mapped) | P2 |  |
 | ST-54 | UpsertGeyserPlayer | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |  |
 | ST-55 | UpsertGeyserPlayer | Happy Path (live) | New xuid | live DB | Row inserted | P1 |  |
 | ST-56 | UpsertGeyserPlayer | Edge Case (live) | Same xuid upserted twice | live DB | Second call updates gamertag/last_seen in place | P2 |  |
 | ST-57 | UpsertGeyserPlayer | Concurrency Invariant (live) | N goroutines UpsertGeyserPlayer the same xuid concurrently | live DB | No unique-violation errors from any goroutine; `geyser_players`' xuid PRIMARY KEY then guarantees a single surviving row (looped trials) | P0 |  |
 | ST-58 | GetGeyserSkin | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |  |
 | ST-59 | GetGeyserSkin | Happy Path (live) | Row seeded via UpsertGeyserSkin | live DB | Returns most-recently-seen skin | P1 |  |
-| ST-60 | GetGeyserSkin | Error Path (live) | No matching xuid | live DB, unknown xuid | Returns non-nil error | P2 |  |
+| ST-60 | GetGeyserSkin | Error Path (live) | No matching xuid | live DB, unknown xuid | Returns `ErrSkinNotFound` (pgx.ErrNoRows is mapped) | P2 |  |
 | ST-61 | GetGeyserSkinByHash | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |  |
 | ST-62 | GetGeyserSkinByHash | Happy Path (live) | Row seeded via UpsertGeyserSkin | live DB | Returns matching skin | P1 |  |
 | ST-63 | GetGeyserSkinByHash | Edge Case (live) | No matching hash | live DB, unknown hash | Returns (nil, nil) | P2 |  |
