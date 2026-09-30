@@ -36,10 +36,6 @@ var (
 // openid.claimed_id, capturing the numeric SteamID64.
 var steamClaimedIDPattern = regexp.MustCompile(`^https://steamcommunity\.com/openid/id/(\d+)$`)
 
-// ErrInvalidAssertion marks a rejection of the caller's own OpenID
-// assertion (malformed, unsigned, or rejected by Steam) as distinct from a
-// network/service failure reaching Steam, so callers can map the two to
-// different response codes.
 var ErrInvalidAssertion = errors.New("invalid openid assertion")
 
 var (

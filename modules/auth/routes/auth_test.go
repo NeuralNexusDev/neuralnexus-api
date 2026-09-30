@@ -344,7 +344,7 @@ func TestAU09LoginHandlerCreateJWTFails(t *testing.T) {
 		t.Fatalf("failed to build account: %v", err)
 	}
 	as := &stubAccountService{account: account}
-	ss := &stubSessionService{createJWT: func(*auth.Session) (string, error) { return "", errSigningFailed }}
+	ss := &stubSessionService{createJWT: func(*auth.Session) (string, error) { return "", testerrors.ErrSigningFailed }}
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
 	w := httptest.NewRecorder()
 
@@ -875,7 +875,7 @@ func TestAU36CreateSessionJWTAndSetCookieHappyPath(t *testing.T) {
 
 func TestAU37CreateSessionJWTAndSetCookieCreateJWTFails(t *testing.T) {
 	session := &auth.Session{ID: "s1", UserID: "u1"}
-	wantErr := errSigningFailed
+	wantErr := testerrors.ErrSigningFailed
 	ss := &stubSessionService{createJWT: func(*auth.Session) (string, error) { return "", wantErr }}
 	w := httptest.NewRecorder()
 

@@ -173,12 +173,12 @@ func TestQueryGameQ(t *testing.T) {
 	})
 
 	t.Run("SV-30_ErrorPath_NonOKStatusBodyUnreadable", func(t *testing.T) {
-		resp := &http.Response{StatusCode: http.StatusInternalServerError, Body: io.NopCloser(iotest.ErrReader(errBodyRead)), Header: make(http.Header)}
+		resp := &http.Response{StatusCode: http.StatusInternalServerError, Body: io.NopCloser(iotest.ErrReader(testerrors.ErrBodyRead)), Header: make(http.Header)}
 		swapTransport(t, &fakeRoundTripper{resp: resp})
 
 		got, err := svc.QueryGameQ("cs16", "1.2.3.4", 27015)
-		if !errors.Is(err, ErrReadBody) || !errors.Is(err, errBodyRead) {
-			t.Errorf("error = %v, want it to wrap both %v and %v", err, ErrReadBody, errBodyRead)
+		if !errors.Is(err, ErrReadBody) || !errors.Is(err, testerrors.ErrBodyRead) {
+			t.Errorf("error = %v, want it to wrap both %v and %v", err, ErrReadBody, testerrors.ErrBodyRead)
 		}
 		if got != nil {
 			t.Errorf("QueryGameQ() response = %+v, want nil", got)
@@ -253,12 +253,12 @@ func TestQueryGameDig(t *testing.T) {
 	})
 
 	t.Run("SV-31_ErrorPath_NonOKStatusBodyUnreadable", func(t *testing.T) {
-		resp := &http.Response{StatusCode: http.StatusInternalServerError, Body: io.NopCloser(iotest.ErrReader(errBodyRead)), Header: make(http.Header)}
+		resp := &http.Response{StatusCode: http.StatusInternalServerError, Body: io.NopCloser(iotest.ErrReader(testerrors.ErrBodyRead)), Header: make(http.Header)}
 		swapTransport(t, &fakeRoundTripper{resp: resp})
 
 		got, err := svc.QueryGameDig("valheim", "1.2.3.4", 27015)
-		if !errors.Is(err, ErrReadBody) || !errors.Is(err, errBodyRead) {
-			t.Errorf("error = %v, want it to wrap both %v and %v", err, ErrReadBody, errBodyRead)
+		if !errors.Is(err, ErrReadBody) || !errors.Is(err, testerrors.ErrBodyRead) {
+			t.Errorf("error = %v, want it to wrap both %v and %v", err, ErrReadBody, testerrors.ErrBodyRead)
 		}
 		if got != nil {
 			t.Errorf("QueryGameDig() response = %+v, want nil", got)

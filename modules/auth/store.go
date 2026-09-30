@@ -12,9 +12,6 @@ import (
 	"time"
 )
 
-// ErrNotFound is returned by lookup methods that translate a "no rows"
-// result into a stable, driver-independent sentinel so callers can tell a
-// genuine not-found apart from a real query/connection error.
 var ErrNotFound = errors.New("not found")
 
 // Store interface
@@ -96,12 +93,8 @@ type AccountStore interface {
 	DeleteAccountFromDB(userID string) error
 }
 
-// ErrEmailAlreadyExists is returned by AddAccountToDB when another account
-// already has this exact email.
 var ErrEmailAlreadyExists = errors.New("account with this email already exists")
 
-// ErrUsernameAlreadyExists is returned by AddAccountToDB/UpdateAccountInDB
-// when another account already has this exact, non-empty username.
 var ErrUsernameAlreadyExists = errors.New("account with this username already exists")
 
 // translateAccountConstraintErr maps a Postgres unique-violation on the
@@ -376,26 +369,12 @@ type LinkAccountStore interface {
 	SetLinkedAccountLoginEnabled(userID string, platform Platform, enabled bool) error
 }
 
-// ErrAlreadyLinked is returned by AddLinkedAccountToDB when a concurrent
-// insert already linked this exact (platform, platform_id) pair first -
-// the caller lost the race and should re-fetch via
-// GetLinkedAccountByPlatformID and use the winner's row instead of
-// treating this as a hard failure.
 var ErrAlreadyLinked = errors.New("platform account already linked")
 
-// ErrDuplicateLinkedAccount is returned by GetLinkedAccountByPlatformID
-// when more than one linked_accounts row matches the same (platform,
-// platform_id) pair. Unlike ErrAlreadyLinked, this isn't auto-recovered:
-// which row is "correct" isn't knowable from this query alone, so it
-// fails closed and needs a manual data fix instead of guessing.
 var ErrDuplicateLinkedAccount = errors.New("multiple linked accounts found for platform ID")
 
-// ErrWouldLockAccount means the change would leave the account with no
-// password and no other usable login method.
 var ErrWouldLockAccount = errors.New("this is the account's last usable login method; set a password or link another platform first")
 
-// ErrLinkedAccountUnverified means login can't be enabled for a row that
-// isn't Verified.
 var ErrLinkedAccountUnverified = errors.New("this linked account is unverified and can't be enabled for login")
 
 // AddLinkedAccountToDB adds a linked account to the database
@@ -594,8 +573,6 @@ type AccountSettingsStore interface {
 	SetPasswordAuthEnabled(userID string, enabled bool) error
 }
 
-// ErrNoPasswordSet is returned by SetPasswordAuthEnabled(userID, true) when
-// the account has no hashed_secret to enable login with.
 var ErrNoPasswordSet = errors.New("this account has no password set")
 
 // GetAccountSettings returns userID's settings, or the defaults if it has

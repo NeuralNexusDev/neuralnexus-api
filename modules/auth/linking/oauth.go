@@ -184,8 +184,6 @@ var (
 	ErrLinkAccountFailed   = errors.New("failed to link account")
 )
 
-// ErrPlatformLoginDisabled means the platform identity is linked but not
-// usable for login (unverified, or disabled) - never treated as unlinked.
 var ErrPlatformLoginDisabled = errors.New("this platform account is linked but disabled for login; use another linked platform or your password, or re-enable it first")
 
 // resolveOrCreateAccountForPlatformUser resolves the auth.Account linked to
@@ -338,9 +336,6 @@ func ProcessOAuthLink(r *http.Request, las auth.LinkAccountStore, code string, s
 	return session, nil
 }
 
-// ErrConflictingMicrosoftIdentities is returned when a Microsoft account's
-// Xbox Live and Minecraft: Java Edition identities are linked to two
-// different NN accounts.
 var ErrConflictingMicrosoftIdentities = errors.New("this Microsoft account's Xbox Live and Minecraft: Java Edition identities are linked to two different accounts; unlink one before linking via Microsoft again")
 
 // resolveOrCreateAccountForMicrosoftUser resolves the auth.Account for a
@@ -481,8 +476,6 @@ func ensureMicrosoftIdentityLinked(as auth.AccountService, las auth.LinkAccountS
 	return winner, false, nil
 }
 
-// ErrPlatformAlreadyLinkedToDifferentAccount is returned when a platform
-// identity belongs to an account other than the one being linked into.
 var ErrPlatformAlreadyLinkedToDifferentAccount = errors.New("this platform account is already linked to a different account; log in with it directly if you want to use that account, or unlink it there first")
 
 // linkPlatformUserToSession links the given platform identity to userID. If
