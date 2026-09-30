@@ -1258,6 +1258,10 @@ func TestST84_SetPasswordAuthEnabledAccountDeletedConcurrently(t *testing.T) {
 			t.Fatalf("failed to begin the deleting transaction: %v", err)
 		}
 		defer tx.Rollback(ctx)
+		var deleterPID int32
+		if err := tx.QueryRow(ctx, "SELECT pg_backend_pid()").Scan(&deleterPID); err != nil {
+			t.Fatalf("failed to read the deleting backend pid: %v", err)
+		}
 		if _, err := tx.Exec(ctx, "DELETE FROM accounts WHERE user_id = $1", a.UserID); err != nil {
 			t.Fatalf("failed to delete the account: %v", err)
 		}
@@ -1268,8 +1272,8 @@ func TestST84_SetPasswordAuthEnabledAccountDeletedConcurrently(t *testing.T) {
 		deadline := time.Now().Add(5 * time.Second)
 		for {
 			var waiting int
-			if err := db.QueryRow(ctx, "SELECT count(*) FROM pg_locks WHERE NOT granted").Scan(&waiting); err != nil {
-				t.Fatalf("failed to read pg_locks: %v", err)
+			if err := db.QueryRow(ctx, "SELECT count(*) FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))", deleterPID).Scan(&waiting); err != nil {
+				t.Fatalf("failed to read the blocked backends: %v", err)
 			}
 			if waiting > 0 {
 				break
