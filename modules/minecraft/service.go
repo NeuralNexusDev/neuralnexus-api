@@ -525,6 +525,13 @@ func (s *service) resolveGeyserPlayerByXUID(xuid int64) (*GeyserPlayer, error) {
 	return player, nil
 }
 
+func skinStepFailure(err error) error {
+	if errors.Is(err, ErrInvalidGeyserRequest) {
+		return fmt.Errorf("%w: skin lookup rejected a resolved xuid", ErrGeyserAPI)
+	}
+	return err
+}
+
 // GetGeyserProfile gets a Bedrock player's full profile (identity + skin) by
 // XUID. A missing skin leaves Skin nil.
 func (s *service) GetGeyserProfile(xuid int64) (*GeyserProfile, error) {
@@ -534,7 +541,7 @@ func (s *service) GetGeyserProfile(xuid int64) (*GeyserProfile, error) {
 	}
 	skin, err := s.GetGeyserSkin(xuid)
 	if err != nil && !errors.Is(err, ErrSkinNotFound) {
-		return nil, err
+		return nil, skinStepFailure(err)
 	}
 	return &GeyserProfile{UUID: player.UUID, XUID: player.XUID, Gamertag: player.Gamertag, Skin: skin}, nil
 }
@@ -547,7 +554,7 @@ func (s *service) GetGeyserProfileByGamertag(gamertag string) (*GeyserProfile, e
 	}
 	skin, err := s.GetGeyserSkin(player.XUID)
 	if err != nil && !errors.Is(err, ErrSkinNotFound) {
-		return nil, err
+		return nil, skinStepFailure(err)
 	}
 	return &GeyserProfile{UUID: player.UUID, XUID: player.XUID, Gamertag: player.Gamertag, Skin: skin}, nil
 }

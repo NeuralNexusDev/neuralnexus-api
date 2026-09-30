@@ -652,3 +652,25 @@ func TestHD53to56_GetGeyserTextureHandler(t *testing.T) {
 		mcRequireDetail(t, w, msgFailedToGetTexture)
 	})
 }
+
+func TestHD57to58_GeyserProfileUpstreamFailure(t *testing.T) {
+	bedrockUUID := xuidToUUID(42)
+
+	t.Run("HD-57_ByNameGeyserAPIError", func(t *testing.T) {
+		svc := &mcMockService{getGeyserProfileByGamertag: func(string) (*GeyserProfile, error) { return nil, ErrGeyserAPI }}
+		h := GetGeyserProfileByNameHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/gpn/x", nil, map[string]string{"name": "x"}))
+		mcRequireStatus(t, w, http.StatusInternalServerError)
+		mcRequireDetail(t, w, msgFailedToGetGeyserProfile)
+	})
+
+	t.Run("HD-58_ByUUIDGeyserAPIError", func(t *testing.T) {
+		svc := &mcMockService{getGeyserProfile: func(int64) (*GeyserProfile, error) { return nil, ErrGeyserAPI }}
+		h := GetGeyserProfileHandler(svc)
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/gp/"+bedrockUUID, nil, map[string]string{"uuid": bedrockUUID}))
+		mcRequireStatus(t, w, http.StatusInternalServerError)
+		mcRequireDetail(t, w, msgFailedToGetGeyserProfile)
+	})
+}

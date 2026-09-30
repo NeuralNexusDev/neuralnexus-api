@@ -1758,3 +1758,51 @@ func TestSV118to127_FetchAndArchiveGeyserTexture(t *testing.T) {
 		}
 	})
 }
+
+func TestSV128to131_GeyserProfileSkinStepRejection(t *testing.T) {
+	skinBadRequest := func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusBadRequest) }
+
+	t.Run("SV-128_ProfileSkinBadRequestIsGeyserAPIError", func(t *testing.T) {
+		store := &mcMockStore{
+			getGeyserPlayerByXUID: func(int64) (*GeyserPlayer, error) { return &GeyserPlayer{Gamertag: "Notch", LastSeen: mcNow()}, nil },
+		}
+		s := mcNewService(t, store, skinBadRequest)
+		_, err := s.GetGeyserProfile(1)
+		if !errors.Is(err, ErrGeyserAPI) {
+			t.Errorf("err = %v, want it to wrap %v", err, ErrGeyserAPI)
+		}
+		if errors.Is(err, ErrInvalidGeyserRequest) {
+			t.Errorf("err = %v, must not satisfy %v", err, ErrInvalidGeyserRequest)
+		}
+	})
+
+	t.Run("SV-129_ByGamertagSkinBadRequestIsGeyserAPIError", func(t *testing.T) {
+		store := &mcMockStore{
+			getGeyserPlayerByGamertag: func(string) (*GeyserPlayer, error) { return &GeyserPlayer{XUID: 1, LastSeen: mcNow()}, nil },
+		}
+		s := mcNewService(t, store, skinBadRequest)
+		_, err := s.GetGeyserProfileByGamertag("Notch")
+		if !errors.Is(err, ErrGeyserAPI) {
+			t.Errorf("err = %v, want it to wrap %v", err, ErrGeyserAPI)
+		}
+		if errors.Is(err, ErrInvalidGeyserRequest) {
+			t.Errorf("err = %v, must not satisfy %v", err, ErrInvalidGeyserRequest)
+		}
+	})
+
+	t.Run("SV-130_ProfileResolveBadRequestStaysInvalidRequest", func(t *testing.T) {
+		s := mcNewService(t, &mcMockStore{}, skinBadRequest)
+		_, err := s.GetGeyserProfile(1)
+		if !errors.Is(err, ErrInvalidGeyserRequest) {
+			t.Errorf("err = %v, want %v", err, ErrInvalidGeyserRequest)
+		}
+	})
+
+	t.Run("SV-131_ByGamertagLookupBadRequestStaysInvalidRequest", func(t *testing.T) {
+		s := mcNewService(t, &mcMockStore{}, skinBadRequest)
+		_, err := s.GetGeyserProfileByGamertag("Notch")
+		if !errors.Is(err, ErrInvalidGeyserRequest) {
+			t.Errorf("err = %v, want %v", err, ErrInvalidGeyserRequest)
+		}
+	})
+}

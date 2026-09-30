@@ -108,6 +108,8 @@
 | HD-54 | GetGeyserTextureHandler | Happy Path | Valid hash, service succeeds | mock returns *TextureResult | 200 OK, body bytes copied verbatim | P1 |  |
 | HD-55 | GetGeyserTextureHandler | Error Path | Service returns ErrTextureNotFound | mock error | 404 Not Found, `detail` is `msgTextureNotFound` | P1 |  |
 | HD-56 | GetGeyserTextureHandler | Error Path | Service returns a generic error | mock error | 502 Bad Gateway, `detail` is `msgFailedToGetTexture` | P2 |  |
+| HD-57 | GetGeyserProfileByNameHandler | Error Path | Service returns `ErrGeyserAPI` | mock service returns `nil, ErrGeyserAPI` | 500 Internal Server Error, `detail` is `msgFailedToGetGeyserProfile` | P1 |  |
+| HD-58 | GetGeyserProfileHandler | Error Path | Service returns `ErrGeyserAPI` | mock service returns `nil, ErrGeyserAPI` | 500 Internal Server Error, `detail` is `msgFailedToGetGeyserProfile` | P1 |  |
 
 ## service.go
 
@@ -240,6 +242,10 @@
 | SV-125 | fetchAndArchiveGeyserTexture | Error Path | Response body read fails | erroring body | Returns that error | P2 |  |
 | SV-126 | fetchAndArchiveGeyserTexture | Edge Case | PutGeyserTextureInS3 fails | store error | Logged only; response still succeeds | P2 |  |
 | SV-127 | fetchAndArchiveGeyserTexture | Edge Case | Missing Content-Type header | no header | Defaults to "image/png" | P3 |  |
+| SV-128 | GetGeyserProfile | Error Path | Skin lookup answers 400 after the player resolved | player by xuid fresh in the DB; fake Geyser skin endpoint answers 400 | Error wraps `ErrGeyserAPI` and does not satisfy `ErrInvalidGeyserRequest` | P1 |  |
+| SV-129 | GetGeyserProfileByGamertag | Error Path | Skin lookup answers 400 after the gamertag resolved | player by gamertag fresh in the DB; fake Geyser skin endpoint answers 400 | Error wraps `ErrGeyserAPI` and does not satisfy `ErrInvalidGeyserRequest` | P1 |  |
+| SV-130 | GetGeyserProfile | Error Path | Player lookup by xuid answers 400 | empty DB; fake Geyser endpoint answers 400 | Error is `ErrInvalidGeyserRequest` | P2 |  |
+| SV-131 | GetGeyserProfileByGamertag | Error Path | Gamertag lookup answers 400 | empty DB; fake Geyser endpoint answers 400 | Error is `ErrInvalidGeyserRequest` | P2 |  |
 
 ## store.go
 
