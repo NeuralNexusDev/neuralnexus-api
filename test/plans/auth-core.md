@@ -43,7 +43,7 @@
 | SE-04 | IsValid | Happy Path | `ExpiresAt` in the future | | Returns true | P1 |  |
 | SE-05 | IsValid | Edge Case | `ExpiresAt == 0` (never expires) | | Returns true | P1 |  |
 | SE-06 | IsValid | Edge Case | `ExpiresAt` in the past | | Returns false | P0 |  |
-| SE-07 | NewSessionService | Happy Path | Service wired to `store.Session()` | fake `Store` | Returned service delegates to the exact `SessionStore` the fake `Store` returned (`ErrNotFound`) | P2 |  |
+| SE-07 | NewSessionService | Happy Path | Service wired to `store.Session()` | fake `Store` | Returned service delegates to the exact `SessionStore` the fake `Store` returned | P2 |  |
 | SE-08 | AddSession | Happy Path | `store.AddSessionToDB` and `store.AddSessionToCache` both succeed | | Returns nil; both called exactly once | P1 |  |
 | SE-09 | AddSession | Error Path | `store.AddSessionToDB` fails | | Returns that error; `AddSessionToCache` never called | P1 |  |
 | SE-10 | AddSession | Edge Case | `AddSessionToDB` succeeds but `AddSessionToCache` fails | | Returns nil anyway (cache failure is fail-open, only logged) | P0 |  |

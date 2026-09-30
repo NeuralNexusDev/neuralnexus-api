@@ -714,10 +714,6 @@ func TestAU52to57OAuthAndOpenIDFailuresHideCause(t *testing.T) {
 	})
 }
 
-// snowflakeBrokenEnv makes database.GenSnowflake fail: its generator settings
-// are read from the environment at package init, and a node ID above 31 is
-// rejected by spaceflake.Generate. The account is built by hand because
-// auth.NewAccount draws a snowflake too.
 const snowflakeBrokenEnv = "AU58_BROKEN_SNOWFLAKE"
 
 func TestAU58LoginHandlerNewSessionFails(t *testing.T) {
