@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -709,6 +711,41 @@ func TestAU52to57OAuthAndOpenIDFailuresHideCause(t *testing.T) {
 		OpenIDHandler(&stubAccountService{}, &stubLinkAccountStore{}, ss)(w, auOpenIDRequest(t, steamState))
 
 		requireProblemRedirect(t, w, steamState.RedirectURI, http.StatusInternalServerError, msgAuthenticationFailed)
+	})
+}
+
+// snowflakeBrokenEnv makes database.GenSnowflake fail: its generator settings
+// are read from the environment at package init, and a node ID above 31 is
+// rejected by spaceflake.Generate. The account is built by hand because
+// auth.NewAccount draws a snowflake too.
+const snowflakeBrokenEnv = "AU58_BROKEN_SNOWFLAKE"
+
+func TestAU58LoginHandlerNewSessionFails(t *testing.T) {
+	if os.Getenv(snowflakeBrokenEnv) != "1" {
+		cmd := exec.Command(os.Args[0], "-test.run=^TestAU58LoginHandlerNewSessionFails$", "-test.v")
+		cmd.Env = append(os.Environ(), snowflakeBrokenEnv+"=1", "SNOWFLAKE_NODE_ID=99")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("child test run failed: %v\n%s", err, out)
+		}
+		return
+	}
+
+	account := &auth.Account{UserID: "u1", Username: "testuser"}
+	if err := account.HashPassword("correct-password"); err != nil {
+		t.Fatalf("failed to hash password: %v", err)
+	}
+	as := &stubAccountService{account: account}
+	ss := &stubSessionService{createJWT: func(*auth.Session) (string, error) { return "test-jwt", nil }}
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
+	w := httptest.NewRecorder()
+
+	t.Run("AU-58_LoginNewSessionFails", func(t *testing.T) {
+		LoginHandler(as, ss)(w, r)
+
+		if w.Code != http.StatusInternalServerError {
+			t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
+		}
+		requireProblemDetail(t, w, msgAuthenticationFailed)
 	})
 }
 
