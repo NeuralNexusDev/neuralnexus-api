@@ -22,7 +22,6 @@ var (
 )
 
 var (
-	ErrInvalidTokenClaims     = errors.New("invalid token claims")
 	ErrMissingAudience        = errors.New("missing audience")
 	ErrEmptyAudienceEntry     = errors.New("empty audience entry")
 	ErrInvalidAudience        = errors.New("invalid audience")
@@ -193,16 +192,12 @@ func (s *sessionService) CreateJWT(session *Session) (string, error) {
 
 // ReadJWT reads a JWT and returns the session
 func (s *sessionService) ReadJWT(tokenStr string) (*Session, error) {
-	token, err := jwt.ParseWithClaims(tokenStr, &SessionClaims{}, func(token *jwt.Token) (interface{}, error) {
+	claims := &SessionClaims{}
+	_, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
 		return JWT_SECRET, nil
 	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
 	if err != nil {
 		return nil, err
-	}
-
-	claims, ok := token.Claims.(*SessionClaims)
-	if !ok {
-		return nil, ErrInvalidTokenClaims
 	}
 
 	// Validate audience: an empty/missing aud claim must fail closed rather
