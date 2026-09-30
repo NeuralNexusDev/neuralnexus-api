@@ -525,6 +525,8 @@ func (s *service) resolveGeyserPlayerByXUID(xuid int64) (*GeyserPlayer, error) {
 	return player, nil
 }
 
+// skinStepFailure reports a skin-lookup failure for an xuid that was already
+// resolved. It must not wrap ErrInvalidGeyserRequest, which the handlers map to 400.
 func skinStepFailure(err error) error {
 	if errors.Is(err, ErrInvalidGeyserRequest) {
 		return fmt.Errorf("%w: skin lookup rejected a resolved xuid", ErrGeyserAPI)

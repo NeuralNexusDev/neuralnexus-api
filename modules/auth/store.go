@@ -625,12 +625,12 @@ func (s *store) SetPasswordAuthEnabled(userID string, enabled bool) error {
 		return err
 	}
 
-	var exists bool
-	if err := tx.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM accounts WHERE user_id = $1)", userID).Scan(&exists); err != nil {
+	var one int
+	if err := tx.QueryRow(ctx, "SELECT 1 FROM accounts WHERE user_id = $1 FOR KEY SHARE", userID).Scan(&one); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
 		return err
-	}
-	if !exists {
-		return ErrNotFound
 	}
 
 	var tag pgconn.CommandTag

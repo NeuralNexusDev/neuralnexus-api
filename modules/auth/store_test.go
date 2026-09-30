@@ -1245,3 +1245,46 @@ func TestST81to83_AccountSettingsUnknownUser(t *testing.T) {
 		}
 	})
 }
+
+func TestST84_SetPasswordAuthEnabledAccountDeletedConcurrently(t *testing.T) {
+	full := stLiveFullStore(t)
+	db := full.(*store).db
+	a := stSeedPasswordAccount(t, full.Account(), "910000000000000032")
+	ctx := context.Background()
+
+	t.Run("ST-84_AccountDeletedWhileEnabling", func(t *testing.T) {
+		tx, err := db.Begin(ctx)
+		if err != nil {
+			t.Fatalf("failed to begin the deleting transaction: %v", err)
+		}
+		defer tx.Rollback(ctx)
+		if _, err := tx.Exec(ctx, "DELETE FROM accounts WHERE user_id = $1", a.UserID); err != nil {
+			t.Fatalf("failed to delete the account: %v", err)
+		}
+
+		done := make(chan error, 1)
+		go func() { done <- full.AccountSettings().SetPasswordAuthEnabled(a.UserID, true) }()
+
+		deadline := time.Now().Add(5 * time.Second)
+		for {
+			var waiting int
+			if err := db.QueryRow(ctx, "SELECT count(*) FROM pg_locks WHERE NOT granted").Scan(&waiting); err != nil {
+				t.Fatalf("failed to read pg_locks: %v", err)
+			}
+			if waiting > 0 {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("SetPasswordAuthEnabled never waited on the account row")
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		if err := tx.Commit(ctx); err != nil {
+			t.Fatalf("failed to commit the delete: %v", err)
+		}
+
+		if err := <-done; !errors.Is(err, ErrNotFound) {
+			t.Errorf("SetPasswordAuthEnabled() err = %v, want %v", err, ErrNotFound)
+		}
+	})
+}

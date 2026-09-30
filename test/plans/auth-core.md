@@ -157,8 +157,9 @@
 | ST-79 | GetOAuthTokenByUserID | Error Path | No token for that user and platform | Real Postgres | Returns nil, `ErrNotFound` | P2 | |
 | ST-80 | GetSessionFromCache | Error Path | No cached session for that ID | Real Redis, unknown session ID | Returns nil, `ErrNotFound` | P2 | |
 | ST-81 | GetAccountSettings | Error Path (live) | No account exists for userID | Real Postgres, unknown user ID | Returns nil settings and `ErrNotFound` | P1 |  |
-| ST-82 | SetPasswordAuthEnabled | Error Path (live) | Enable for a user ID with no account | Real Postgres, unknown user ID | Returns `ErrNotFound`, not `ErrNoPasswordSet` | P1 |  |
-| ST-83 | SetPasswordAuthEnabled | Error Path (live) | Disable for a user ID with no account | Real Postgres, unknown user ID | Returns `ErrNotFound`, not `ErrWouldLockAccount` | P1 |  |
+| ST-82 | SetPasswordAuthEnabled | Error Path (live) | Enable for a user ID with no account | Real Postgres, unknown user ID | Returns `ErrNotFound` | P1 |  |
+| ST-83 | SetPasswordAuthEnabled | Error Path (live) | Disable for a user ID with no account | Real Postgres, unknown user ID | Returns `ErrNotFound` | P1 |  |
+| ST-84 | SetPasswordAuthEnabled | Concurrency Invariant (live) | The account is deleted while the enable call waits on its row | Real Postgres; a separate transaction has deleted the account but not committed; the call is running and blocked on the account row | After the delete commits the call returns `ErrNotFound` | P1 |  |
 
 ## types.go
 
