@@ -174,10 +174,14 @@ func RateLimitMiddleware(service auth.RateLimitService, prefix string, sessionLi
 				err := service.IncrRateLimit(prefix + ":" + session.UserID)
 				if err != nil {
 					LogRequest(r.Context(), logErrorIncrementingRateLimit, err.Error())
+					next.ServeHTTP(w, r)
+					return
 				}
 				limit, err := service.GetRateLimit(prefix + ":" + session.UserID)
 				if err != nil {
 					LogRequest(r.Context(), logErrorGettingRateLimit, err.Error())
+					next.ServeHTTP(w, r)
+					return
 				}
 				if limit > sessionLimit {
 					responses.TooManyRequests(w, r, RetryAfter, msgRateLimited)
@@ -191,10 +195,14 @@ func RateLimitMiddleware(service auth.RateLimitService, prefix string, sessionLi
 				err = service.IncrRateLimit(prefix + ":" + ip)
 				if err != nil {
 					LogRequest(r.Context(), logErrorIncrementingRateLimit, err.Error())
+					next.ServeHTTP(w, r)
+					return
 				}
 				limit, err := service.GetRateLimit(prefix + ":" + ip)
 				if err != nil {
 					LogRequest(r.Context(), logErrorGettingRateLimit, err.Error())
+					next.ServeHTTP(w, r)
+					return
 				}
 				if limit > ipLimit {
 					responses.TooManyRequests(w, r, RetryAfter, msgRateLimited)

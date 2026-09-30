@@ -616,33 +616,44 @@ func TestRateLimitMiddleware(t *testing.T) {
 	})
 
 	t.Run("MW-26_SessionIncrErrorFailsOpen", func(t *testing.T) {
-		svc := &mwFakeRateLimitSvc{incrErr: testerrors.ErrRedisDown, getLimit: 1}
+		readLog := mwCaptureLog(t)
+		svc := &mwFakeRateLimitSvc{incrErr: testerrors.ErrRedisDown, getLimit: 10}
 		r := mwRateLimitRequest(&auth.Session{ID: "s1", UserID: "u1"}, "1.2.3.4:5678")
 
 		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
 
 		if !nextCalled {
-			t.Error("expected the session branch to still call next after an IncrRateLimit error")
+			t.Error("expected next to be called")
 		}
-		if rec.Code != http.StatusOK {
-			t.Errorf("expected status 200, got %d", rec.Code)
+		if rec.Code != http.StatusOK || rec.Body.Len() != 0 {
+			t.Errorf("expected the middleware to write nothing, got status %d body %q", rec.Code, rec.Body.String())
 		}
-		if len(svc.getCalls) != 1 {
-			t.Errorf("expected GetRateLimit to still be called after the Incr error, got %v", svc.getCalls)
+		if len(svc.getCalls) != 0 {
+			t.Errorf("GetRateLimit calls = %v, want 0", svc.getCalls)
+		}
+		if !strings.Contains(readLog(), logErrorIncrementingRateLimit) {
+			t.Errorf("expected the log to contain %q", logErrorIncrementingRateLimit)
 		}
 	})
 
 	t.Run("MW-27_SessionGetErrorFailsOpen", func(t *testing.T) {
+		readLog := mwCaptureLog(t)
 		svc := &mwFakeRateLimitSvc{getErr: testerrors.ErrRedisDown}
 		r := mwRateLimitRequest(&auth.Session{ID: "s1", UserID: "u1"}, "1.2.3.4:5678")
 
 		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
 
 		if !nextCalled {
-			t.Error("expected the session branch to still call next after a GetRateLimit error")
+			t.Error("expected next to be called")
 		}
-		if rec.Code != http.StatusOK {
-			t.Errorf("expected status 200, got %d", rec.Code)
+		if rec.Code != http.StatusOK || rec.Body.Len() != 0 {
+			t.Errorf("expected the middleware to write nothing, got status %d body %q", rec.Code, rec.Body.String())
+		}
+		if len(svc.getCalls) != 1 {
+			t.Errorf("GetRateLimit calls = %v, want 1", svc.getCalls)
+		}
+		if !strings.Contains(readLog(), logErrorGettingRateLimit) {
+			t.Errorf("expected the log to contain %q", logErrorGettingRateLimit)
 		}
 	})
 
@@ -692,49 +703,66 @@ func TestRateLimitMiddleware(t *testing.T) {
 		}
 	})
 
-	t.Run("MW-31_NoSessionIncrErrorStillChecksLimitAndCallsNext", func(t *testing.T) {
+	t.Run("MW-31_NoSessionIncrErrorFailsOpen", func(t *testing.T) {
+		readLog := mwCaptureLog(t)
 		svc := &mwFakeRateLimitSvc{incrErr: testerrors.ErrRedisDown, getLimit: 1}
 		r := mwRateLimitRequest(nil, "9.8.7.6:1234")
 
 		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
 
 		if !nextCalled {
-			t.Error("expected next to be called on an IncrRateLimit error on the IP branch")
+			t.Error("expected next to be called")
 		}
-		if rec.Code != http.StatusOK {
-			t.Errorf("expected 200, got %d", rec.Code)
+		if rec.Code != http.StatusOK || rec.Body.Len() != 0 {
+			t.Errorf("expected the middleware to write nothing, got status %d body %q", rec.Code, rec.Body.String())
 		}
-		if len(svc.getCalls) != 1 {
-			t.Errorf("expected GetRateLimit to still be called after the IncrRateLimit error, got %d calls", len(svc.getCalls))
+		if len(svc.getCalls) != 0 {
+			t.Errorf("GetRateLimit calls = %v, want 0", svc.getCalls)
+		}
+		if !strings.Contains(readLog(), logErrorIncrementingRateLimit) {
+			t.Errorf("expected the log to contain %q", logErrorIncrementingRateLimit)
 		}
 	})
 
-	t.Run("MW-54_NoSessionIncrErrorStillEnforcesLimit", func(t *testing.T) {
+	t.Run("MW-54_NoSessionIncrErrorFailsOpenEvenOverLimit", func(t *testing.T) {
+		readLog := mwCaptureLog(t)
 		svc := &mwFakeRateLimitSvc{incrErr: testerrors.ErrRedisDown, getLimit: 10}
 		r := mwRateLimitRequest(nil, "9.8.7.6:1234")
 
 		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
 
-		if nextCalled {
-			t.Error("expected next NOT to be called when GetRateLimit reports over the limit after an IncrRateLimit error")
+		if !nextCalled {
+			t.Error("expected next to be called")
 		}
-		if rec.Code != http.StatusTooManyRequests {
-			t.Errorf("expected status 429, got %d", rec.Code)
+		if rec.Code != http.StatusOK || rec.Body.Len() != 0 {
+			t.Errorf("expected the middleware to write nothing, got status %d body %q", rec.Code, rec.Body.String())
 		}
-		mwRequireDetail(t, rec, msgRateLimited)
+		if len(svc.getCalls) != 0 {
+			t.Errorf("GetRateLimit calls = %v, want 0", svc.getCalls)
+		}
+		if !strings.Contains(readLog(), logErrorIncrementingRateLimit) {
+			t.Errorf("expected the log to contain %q", logErrorIncrementingRateLimit)
+		}
 	})
 
-	t.Run("MW-32_NoSessionGetErrorFailsOpenAndCallsNext", func(t *testing.T) {
+	t.Run("MW-32_NoSessionGetErrorFailsOpen", func(t *testing.T) {
+		readLog := mwCaptureLog(t)
 		svc := &mwFakeRateLimitSvc{getErr: testerrors.ErrRedisDown}
 		r := mwRateLimitRequest(nil, "9.8.7.6:1234")
 
 		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
 
 		if !nextCalled {
-			t.Error("expected next to be called on a GetRateLimit error on the IP branch")
+			t.Error("expected next to be called")
 		}
-		if rec.Code != http.StatusOK {
-			t.Errorf("expected 200, got %d", rec.Code)
+		if rec.Code != http.StatusOK || rec.Body.Len() != 0 {
+			t.Errorf("expected the middleware to write nothing, got status %d body %q", rec.Code, rec.Body.String())
+		}
+		if len(svc.getCalls) != 1 {
+			t.Errorf("GetRateLimit calls = %v, want 1", svc.getCalls)
+		}
+		if !strings.Contains(readLog(), logErrorGettingRateLimit) {
+			t.Errorf("expected the log to contain %q", logErrorGettingRateLimit)
 		}
 	})
 
