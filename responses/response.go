@@ -179,7 +179,7 @@ func TooManyRequests(w http.ResponseWriter, r *http.Request, retryAfter int, mes
 		message = "You have made too many requests in a short period of time."
 	}
 	after := time.Now().Add(time.Duration(retryAfter) * time.Second)
-	w.Header().Set("Retry-After", after.Format(time.RFC1123))
+	w.Header().Set("Retry-After", after.UTC().Format(http.TimeFormat))
 	NewProblem(
 		"about:blank",
 		http.StatusTooManyRequests,
