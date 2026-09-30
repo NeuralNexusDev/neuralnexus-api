@@ -118,5 +118,6 @@ func DeleteDataStoreHandler(s DSService) http.HandlerFunc {
 			responses.InternalServerError(w, r, msgFailedToDeleteDatastore)
 			return
 		}
+		responses.NoContent(w, r)
 	}
 }
