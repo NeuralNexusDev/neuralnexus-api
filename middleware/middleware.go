@@ -19,6 +19,12 @@ import (
 )
 
 const (
+	logErrorDeletingSession       = "Error deleting session:\n\t"
+	logErrorIncrementingRateLimit = "Error incrementing rate limit:\n\t"
+	logErrorGettingRateLimit      = "Error getting rate limit:\n\t"
+)
+
+const (
 	msgRateLimited      = "You have been rate limited. Please try again later."
 	msgInvalidSignature = "Invalid signature"
 )
@@ -133,7 +139,7 @@ func SessionMiddleware(service auth.SessionService) Middleware {
 				if !session.IsValid() {
 					responses.Unauthorized(w, r, "")
 					if delErr := service.DeleteSession(session.ID); delErr != nil {
-						LogRequest(r.Context(), "Error deleting session:\n\t", delErr.Error())
+						LogRequest(r.Context(), logErrorDeletingSession, delErr.Error())
 					}
 					return
 				}
@@ -146,7 +152,7 @@ func SessionMiddleware(service auth.SessionService) Middleware {
 					LogRequest(r.Context(), "Error reading JWT from cookie:\n\t", jwtErr.Error())
 				} else if !session.IsValid() {
 					if delErr := service.DeleteSession(session.ID); delErr != nil {
-						LogRequest(r.Context(), "Error deleting session:\n\t", delErr.Error())
+						LogRequest(r.Context(), logErrorDeletingSession, delErr.Error())
 					}
 				} else {
 					ctx := context.WithValue(r.Context(), SessionKey, session)
@@ -167,11 +173,11 @@ func RateLimitMiddleware(service auth.RateLimitService, prefix string, sessionLi
 			if ok && session != nil {
 				err := service.IncrRateLimit(prefix + ":" + session.UserID)
 				if err != nil {
-					LogRequest(r.Context(), "Error incrementing rate limit:\n\t", err.Error())
+					LogRequest(r.Context(), logErrorIncrementingRateLimit, err.Error())
 				}
 				limit, err := service.GetRateLimit(prefix + ":" + session.UserID)
 				if err != nil {
-					LogRequest(r.Context(), "Error getting rate limit:\n\t", err.Error())
+					LogRequest(r.Context(), logErrorGettingRateLimit, err.Error())
 				}
 				if limit > sessionLimit {
 					responses.TooManyRequests(w, r, RetryAfter, msgRateLimited)
@@ -184,11 +190,11 @@ func RateLimitMiddleware(service auth.RateLimitService, prefix string, sessionLi
 				}
 				err = service.IncrRateLimit(prefix + ":" + ip)
 				if err != nil {
-					LogRequest(r.Context(), "Error incrementing rate limit:\n\t", err.Error())
+					LogRequest(r.Context(), logErrorIncrementingRateLimit, err.Error())
 				}
 				limit, err := service.GetRateLimit(prefix + ":" + ip)
 				if err != nil {
-					LogRequest(r.Context(), "Error getting rate limit:\n\t", err.Error())
+					LogRequest(r.Context(), logErrorGettingRateLimit, err.Error())
 				}
 				if limit > ipLimit {
 					responses.TooManyRequests(w, r, RetryAfter, msgRateLimited)
@@ -250,7 +256,7 @@ func Auth(service auth.SessionService) Middleware {
 				responses.Unauthorized(w, r, "")
 				err := service.DeleteSession(session.ID)
 				if err != nil {
-					LogRequest(r.Context(), "Error deleting session:\n\t", err.Error())
+					LogRequest(r.Context(), logErrorDeletingSession, err.Error())
 				}
 				return
 			}

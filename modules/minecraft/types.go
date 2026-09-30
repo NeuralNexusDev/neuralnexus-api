@@ -15,8 +15,7 @@ import (
 )
 
 var (
-	ErrPlayerNotFound = errors.New("player not found")
-	// ErrTextureNotFound - the requested texture does not exist upstream
+	ErrPlayerNotFound  = errors.New("player not found")
 	ErrTextureNotFound = errors.New("texture not found")
 
 	ErrCacheMiss             = errors.New("cache miss")
@@ -232,12 +231,8 @@ func (p *GeyserPlayer) IsStale() bool {
 	return time.Now().UnixMilli()-p.LastSeen > stalenessThreshold.Milliseconds()
 }
 
-// ErrSkinNotFound - the Bedrock player has no converted skin yet (Geyser's
-// skin API returns 200 with an empty object rather than a 404 for this case)
 var ErrSkinNotFound = errors.New("skin not found")
 
-// ErrInvalidGeyserRequest - Geyser's API rejected the request as malformed,
-// distinct from ErrPlayerNotFound/ErrSkinNotFound (well-formed, just no match).
 var ErrInvalidGeyserRequest = errors.New("invalid request")
 
 // GeyserSkin - a Bedrock player's most recently converted skin.

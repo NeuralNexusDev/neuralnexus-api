@@ -19,6 +19,7 @@ const (
 	msgInvalidUsernameOrPassword = "Invalid username or password"
 	msgAuthenticationFailed      = "Authentication failed"
 	msgInvalidRequest            = "Invalid request"
+	logInvalidState              = "Invalid state"
 	msgInvalidState              = "Invalid state"
 	msgLoginRequiredToLink       = "You must be logged in to link an account"
 	msgInvalidSession            = "Invalid session"
@@ -227,7 +228,7 @@ func decodeAndValidateState(w http.ResponseWriter, r *http.Request) (linking.OAu
 		return state, false
 	}
 	if state.Platform == "" || state.Nonce == "" || state.RedirectURI == "" || state.Mode == "" {
-		log.Println(msgInvalidState)
+		log.Println(logInvalidState)
 		redirectBadRequest(w, r, auth.NN_SITE_URL, msgInvalidState)
 		return state, false
 	}

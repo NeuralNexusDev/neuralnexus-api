@@ -12,6 +12,11 @@ import (
 	"time"
 )
 
+const (
+	sessionKeyPrefix   = "session:"
+	rateLimitKeyPrefix = "rl:"
+)
+
 var ErrNotFound = errors.New("not found")
 
 // Store interface
@@ -306,7 +311,7 @@ func (s *store) AddSessionToCache(session *Session) error {
 		}
 	}
 
-	_, err = s.rdb.Set(context.Background(), "session:"+session.ID, stringSession, ttl).Result()
+	_, err = s.rdb.Set(context.Background(), sessionKeyPrefix+session.ID, stringSession, ttl).Result()
 	if err != nil {
 		return err
 	}
@@ -316,7 +321,7 @@ func (s *store) AddSessionToCache(session *Session) error {
 // GetSessionFromCache gets a session from the cache
 func (s *store) GetSessionFromCache(id string) (*Session, error) {
 	var session Session
-	stringSession, err := s.rdb.Get(context.Background(), "session:"+id).Result()
+	stringSession, err := s.rdb.Get(context.Background(), sessionKeyPrefix+id).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
 			return nil, ErrNotFound
@@ -333,7 +338,7 @@ func (s *store) GetSessionFromCache(id string) (*Session, error) {
 
 // DeleteSessionFromCache deletes a session from the cache
 func (s *store) DeleteSessionFromCache(id string) error {
-	_, err := s.rdb.Del(context.Background(), "session:"+id).Result()
+	_, err := s.rdb.Del(context.Background(), sessionKeyPrefix+id).Result()
 	if err != nil {
 		return err
 	}
@@ -648,7 +653,7 @@ type RateLimitStore interface {
 
 // GetRateLimit gets the rate limit for a key
 func (s *store) GetRateLimit(key string) (int, error) {
-	val, err := s.rdb.Get(context.Background(), "rl:"+key).Int()
+	val, err := s.rdb.Get(context.Background(), rateLimitKeyPrefix+key).Int()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
 			err = s.SetRateLimit(key, 1)
@@ -664,7 +669,7 @@ func (s *store) GetRateLimit(key string) (int, error) {
 
 // SetRateLimit sets the rate limit for a key
 func (s *store) SetRateLimit(key string, val int) error {
-	_, err := s.rdb.Set(context.Background(), "rl:"+key, val, time.Minute).Result()
+	_, err := s.rdb.Set(context.Background(), rateLimitKeyPrefix+key, val, time.Minute).Result()
 	if err != nil {
 		return err
 	}
@@ -673,7 +678,7 @@ func (s *store) SetRateLimit(key string, val int) error {
 
 // IncrementRateLimit increments the rate limit for a key
 func (s *store) IncrementRateLimit(key string) error {
-	rediskey := "rl:" + key
+	rediskey := rateLimitKeyPrefix + key
 	_, err := s.rdb.Incr(context.Background(), rediskey).Result()
 	if err != nil {
 		return err
