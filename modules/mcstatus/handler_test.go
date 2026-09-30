@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
@@ -412,4 +413,58 @@ func TestSimpleStatusHandler(t *testing.T) {
 			t.Fatalf("expected flags forwarded (bedrock=true, query=true, queryPort=1234, port=25566), got %+v", call)
 		}
 	})
+}
+
+func TestHD18to19_QueryPortOutOfRangeFallsBackToPort(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		value string
+	}{
+		{"Zero", "0"},
+		{"Negative", "-5"},
+		{"TooLarge", "65536"},
+		{"NotANumber", "abc"},
+	} {
+		t.Run("HD-18_ServerStatus"+tc.name, func(t *testing.T) {
+			mock := &hdMockService{serverStatus: hdValidStatus(nil)}
+			req := hdRequest(t, "mc.example.com:25570", "query=true&query_port="+tc.value)
+
+			ServerStatusHandler(mock)(httptest.NewRecorder(), req)
+
+			if len(mock.serverCalls) != 1 {
+				t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
+			}
+			if got := mock.serverCalls[0].queryPort; got != 25570 {
+				t.Fatalf("queryPort = %d, want the server port 25570", got)
+			}
+		})
+
+		t.Run("HD-19_SimpleStatus"+tc.name, func(t *testing.T) {
+			mock := &hdMockService{serverStatus: hdValidStatus(nil)}
+			req := hdRequest(t, "mc.example.com:25570", "query=true&query_port="+tc.value)
+
+			SimpleStatusHandler(mock)(httptest.NewRecorder(), req)
+
+			if len(mock.serverCalls) != 1 {
+				t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
+			}
+			if got := mock.serverCalls[0].queryPort; got != 25570 {
+				t.Fatalf("queryPort = %d, want the server port 25570", got)
+			}
+		})
+	}
+
+	for _, bound := range []string{"1", "65535"} {
+		t.Run("HD-18_ServerStatusBoundaryAccepted"+bound, func(t *testing.T) {
+			mock := &hdMockService{serverStatus: hdValidStatus(nil)}
+			req := hdRequest(t, "mc.example.com:25570", "query=true&query_port="+bound)
+
+			ServerStatusHandler(mock)(httptest.NewRecorder(), req)
+
+			want, _ := strconv.Atoi(bound)
+			if len(mock.serverCalls) != 1 || mock.serverCalls[0].queryPort != want {
+				t.Fatalf("calls = %+v, want one call with queryPort %d", mock.serverCalls, want)
+			}
+		})
+	}
 }

@@ -56,7 +56,7 @@ func (s *service) GetJavaServerStatus(host string, port int, queryEnabled bool, 
 	}
 
 	if queryEnabled {
-		query, err := pinger.QueryFull(host, port)
+		query, err := pinger.QueryFull(host, queryPort)
 		if err == nil {
 			queryStatus := GetQueryStatus(query)
 			if status != nil {

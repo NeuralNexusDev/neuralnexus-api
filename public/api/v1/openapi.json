@@ -3612,7 +3612,7 @@
             "MCStatusQueryPortQuery": {
                 "name": "query_port",
                 "in": "query",
-                "description": "Minecraft server query port. Accepted but currently not used: the query is always sent to the server port.",
+                "description": "Java only: the UDP query port used when query is enabled. Defaults to the server port when omitted or invalid (not a number, or outside 1-65535). Ignored for bedrock servers.",
                 "required": false,
                 "schema": {
                     "type": "integer"

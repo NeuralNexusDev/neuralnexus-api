@@ -12,6 +12,11 @@ import (
 )
 
 const (
+	minPort = 1
+	maxPort = 65535
+)
+
+const (
 	msgJavaStatusFailed        = "failed to get java server status"
 	msgBedrockStatusFailed     = "failed to get bedrock server status"
 	msgFailedToGetServerStatus = "Failed to get server status"
@@ -40,6 +45,14 @@ func respondStatusFailure(w http.ResponseWriter, r *http.Request, err error) {
 	responses.InternalServerError(w, r, msgFailedToGetServerStatus)
 }
 
+func queryPortOrDefault(raw string, port int) int {
+	queryPort, err := strconv.Atoi(raw)
+	if err != nil || queryPort < minPort || queryPort > maxPort {
+		return port
+	}
+	return queryPort
+}
+
 // ServerStatusHandler - Route that returns the server status
 func ServerStatusHandler(s MCStatusService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -55,10 +68,7 @@ func ServerStatusHandler(s MCStatusService) http.HandlerFunc {
 				port = 25565
 			}
 		}
-		queryPort, err := strconv.Atoi(r.URL.Query().Get("query_port"))
-		if err != nil {
-			queryPort = port
-		}
+		queryPort := queryPortOrDefault(r.URL.Query().Get("query_port"), port)
 
 		status, err := s.GetServerStatus(host, port, isBedrock, queryEnabled, queryPort)
 		if err != nil {
@@ -112,10 +122,7 @@ func SimpleStatusHandler(s MCStatusService) http.HandlerFunc {
 				port = 25565
 			}
 		}
-		queryPort, err := strconv.Atoi(r.URL.Query().Get("query_port"))
-		if err != nil {
-			queryPort = port
-		}
+		queryPort := queryPortOrDefault(r.URL.Query().Get("query_port"), port)
 
 		status := "Online"
 		statusCode := http.StatusOK

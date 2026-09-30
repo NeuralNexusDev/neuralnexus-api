@@ -21,6 +21,8 @@
 | HD-15 | SimpleStatusHandler | Happy Path | `bedrock=true`, `query=true`, explicit `query_port` given | full query string | `isBedrock`, `queryEnabled`, `queryPort`, `port` all forwarded to `GetServerStatus` unchanged | P2 |  |
 | HD-16 | ServerStatusHandler | Error Path | `s.GetServerStatus` returns `ErrJavaStatus`, `ErrBedrockStatus` (also wrapped with a cause) or an unrecognized error | mock returns `nil, err` | 502 Bad Gateway with `msgJavaStatusFailed` or `msgBedrockStatusFailed` for the sentinels; 500 Internal Server Error with `msgFailedToGetServerStatus` for an unrecognized error; no cause text | P1 | |
 | HD-17 | IconHandler | Error Path | `GetJavaServerStatus` returns an unrecognized error | mock returns `nil, testerrors.ErrBoom` | 500 Internal Server Error, `detail` is `msgFailedToGetServerStatus` | P2 |  |
+| HD-18 | ServerStatusHandler | Edge Case | `query_port` is outside 1-65535 or not a number | `query=true` with `query_port` of `0`, `-5`, `65536` or `abc`, and a host carrying a port | `GetServerStatus` is called with `queryPort` equal to the server port; the boundary values `1` and `65535` are passed through unchanged | P2 |  |
+| HD-19 | SimpleStatusHandler | Edge Case | `query_port` is outside 1-65535 or not a number | `query=true` with `query_port` of `0`, `-5`, `65536` or `abc`, and a host carrying a port | `GetServerStatus` is called with `queryPort` equal to the server port | P2 |  |
 
 ## service.go
 
@@ -32,6 +34,9 @@
 | SV-05 | GetBedrockServerStatus | Error Path | `bedrockping.Query` fails because the host is unreachable | `host`/`port` point at a closed local port | Returns `nil` and an error wrapping both `ErrBedrockStatus` and the underlying `net.Error` | P1 |  |
 | SV-09 | GetJavaServerStatus | Happy Path | a real, reachable Java server responds to at least one ping variant | `MC_LIVE_JAVA_SERVER` set to `host:port` of a live Java server; `queryEnabled=false` | Returns a non-nil `*MCServerStatus`, nil error; `Host`/`Port` match the input | P1 | Gated: `t.Skip`s when `MC_LIVE_JAVA_SERVER` is unset, same self-skip pattern as `TEST_POSTGRES_URL` |
 | SV-10 | GetBedrockServerStatus | Happy Path | a real, reachable Bedrock server responds | `MC_LIVE_BEDROCK_SERVER` set to `host:port` of a live Bedrock server | Returns a non-nil `*MCServerStatus`, nil error | P1 | Gated: `t.Skip`s when `MC_LIVE_BEDROCK_SERVER` is unset, same self-skip pattern as `TEST_POSTGRES_URL` |
+| SV-11 | GetJavaServerStatus | Edge Case | Query is enabled and `queryPort` differs from `port` | local UDP recorders on two distinct ports (one as `port`, one as `queryPort`), `queryEnabled=true` | The recorder on `queryPort` receives a query handshake packet (prefix `FE FD 09`); the recorder on `port` receives nothing; returns `ErrJavaStatus` | P1 |  |
+| SV-12 | GetJavaServerStatus | Edge Case | Query is enabled and `queryPort` equals `port` | local UDP recorder on `port`, `queryEnabled=true`, `queryPort == port` | The recorder receives a query handshake packet; returns `ErrJavaStatus` | P1 |  |
+| SV-13 | GetJavaServerStatus | Edge Case | Query is disabled | local UDP recorders on `port` and `queryPort`, `queryEnabled=false` | Neither recorder receives a packet; returns `ErrJavaStatus` | P2 |  |
 | SV-07 | GetServerStatus | Happy Path | `isBedrock=false` | unreachable host | Delegates to `GetJavaServerStatus`; returns its distinct error `ErrJavaStatus` | P1 |  |
 | SV-08 | GetServerStatus | Happy Path | `isBedrock=true` | unreachable host | Delegates to `GetBedrockServerStatus`; returns its distinct error `ErrBedrockStatus` | P1 |  |
 
