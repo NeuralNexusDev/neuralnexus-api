@@ -1,13 +1,33 @@
 package mcstatus
 
 import (
+	"errors"
 	"image/png"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
+
+const (
+	msgJavaStatusFailed        = "failed to get java server status"
+	msgBedrockStatusFailed     = "failed to get bedrock server status"
+	msgFailedToGetServerStatus = "Failed to get server status"
+)
+
+func statusFailureMessage(err error) string {
+	log.Println("[Error]: Unable to get server status:\n\t", err)
+	switch {
+	case errors.Is(err, ErrJavaStatus):
+		return msgJavaStatusFailed
+	case errors.Is(err, ErrBedrockStatus):
+		return msgBedrockStatusFailed
+	default:
+		return msgFailedToGetServerStatus
+	}
+}
 
 // ServerStatusHandler - Route that returns the server status
 func ServerStatusHandler(s MCStatusService) http.HandlerFunc {
@@ -31,7 +51,7 @@ func ServerStatusHandler(s MCStatusService) http.HandlerFunc {
 
 		status, err := s.GetServerStatus(host, port, isBedrock, queryEnabled, queryPort)
 		if err != nil {
-			responses.NotFound(w, r, err.Error())
+			responses.NotFound(w, r, statusFailureMessage(err))
 			return
 		}
 		if !raw {
@@ -56,7 +76,7 @@ func IconHandler(s MCStatusService) http.HandlerFunc {
 
 		status, err := s.GetJavaServerStatus(host, port, false, 0)
 		if err != nil {
-			responses.NotFound(w, r, err.Error())
+			responses.NotFound(w, r, statusFailureMessage(err))
 			return
 		}
 

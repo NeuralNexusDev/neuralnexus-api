@@ -8,12 +8,13 @@
 | HD-02 | GameServerStatusHandler | Happy Path | Valid host/port, raw=true requested | Same as HD-01 plus `raw=true` query param | 200 OK, JSON body includes the "raw" field with the service's raw value | P2 |  |
 | HD-03 | GameServerStatusHandler | Error Path | Missing host | `host` query param absent or empty | 400 Bad Request, problem detail `msgInvalidHost` | P2 |  |
 | HD-04 | GameServerStatusHandler | Error Path | Non-numeric port | `host` set, `port` query param is not an integer (e.g. "abc") | 400 Bad Request, problem detail `msgInvalidPort` | P2 |  |
-| HD-05 | GameServerStatusHandler | Error Path | Underlying service returns an error | host/port valid, fake GSSService.QueryGameServer returns (nil, someErr) | 404 Not Found, problem detail equals someErr.Error() | P1 |  |
+| HD-05 | GameServerStatusHandler | Error Path | Underlying service returns an error | host/port valid, fake GSSService.QueryGameServer returns (nil, someErr) | 404 Not Found, problem detail is `msgServerOffline` for `ErrServerOffline` | P1 |  |
 | HD-06 | GameServerStatusHandler | Edge Case | Unrecognized `query_type` query param | `query_type=totallybogus`, host/port valid | ParseQueryType falls back to QueryTypeUnknown; fake service's QueryGameServer is invoked with queryType==QueryTypeUnknown; 200 OK on service success | P3 |  |
 | HD-07 | SimpleGameServerStatus | Happy Path | Underlying service succeeds | host/port valid, fake GSSService.QueryGameServer returns (status, nil) | 200 OK, Content-Type text/plain, body "Online" | P1 |  |
 | HD-08 | SimpleGameServerStatus | Error Path | Missing host | `host` query param absent or empty | 400 Bad Request, problem detail `msgInvalidHost` | P2 |  |
 | HD-09 | SimpleGameServerStatus | Error Path | Non-numeric port | `host` set, `port` is not an integer | 400 Bad Request, problem detail `msgInvalidPort` | P2 |  |
 | HD-10 | SimpleGameServerStatus | Error Path | Underlying service returns an error | host/port valid, fake GSSService.QueryGameServer returns (nil, someErr) | 404 Not Found, body "Offline" | P1 |  |
+| HD-11 | GameServerStatusHandler | Error Path | Underlying service returns each known sentinel, wrapped or not | fake `QueryGameServer` returns `ErrGameQQuery` (also wrapped with a cause), `ErrGameDigQuery`, `ErrReadBody`, `ErrDecodeBody`, `ErrNoGameQResponse`, `ErrGameUnsupported`, `mcstatus.ErrJavaStatus`, `mcstatus.ErrBedrockStatus`, or an unrecognized error | 404 Not Found, problem detail is the matching `msg...` const (`msgGameQQueryFailed`, `msgGameDigQueryFailed`, `msgReadBodyFailed`, `msgDecodeBodyFailed`, `msgNoGameQResponse`, `msgGameUnsupported`, `msgJavaStatusFailed`, `msgBedrockStatusFailed`) or `msgQueryFailed`; no cause text | P1 | |
 
 ## service.go
 
@@ -21,12 +22,12 @@
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
 | SV-01 | NewService | Accessor | Constructs a usable service | none | Returns non-nil GSSService backed by *service | P3 |  |
 | SV-02 | QueryGameQ | Happy Path | Upstream returns 200 with one server keyed in the response map | Fake transport returns `{"srv":{"gq_online":true,...}}` | Returns the decoded *GameQResponse for that entry, nil error | P1 |  |
-| SV-03 | QueryGameQ | Error Path | http.Get fails at the transport level | Fake transport's RoundTrip returns an error | Returns nil, `ErrGameQQuery` | P2 |  |
+| SV-03 | QueryGameQ | Error Path | http.Get fails at the transport level | Fake transport's RoundTrip returns an error | Returns nil, an error wrapping both `ErrGameQQuery` and the transport error (`testerrors.ErrTransportFailed`) | P2 |  |
 | SV-04 | QueryGameQ | Error Path | Upstream returns non-200 status | Fake transport returns 500 with a readable body | Returns nil, `ErrGameQQuery` | P2 |  |
 | SV-05 | QueryGameQ | Error Path | Upstream returns 200 with unparseable body | Fake transport returns 200 with body "not json" | Returns nil, `ErrDecodeBody` | P2 |  |
 | SV-06 | QueryGameQ | Edge Case | Upstream returns 200 with an empty response map | Fake transport returns body "{}" | Returns nil, `ErrNoGameQResponse` | P3 |  |
 | SV-07 | QueryGameDig | Happy Path | Upstream returns 200 with a valid GameDigResponse body | Fake transport returns a valid single-object JSON body | Returns the decoded *GameDigResponse, nil error | P1 |  |
-| SV-08 | QueryGameDig | Error Path | http.Get fails at the transport level | Fake transport's RoundTrip returns an error | Returns nil, `ErrGameDigQuery` | P2 |  |
+| SV-08 | QueryGameDig | Error Path | http.Get fails at the transport level | Fake transport's RoundTrip returns an error | Returns nil, an error wrapping both `ErrGameDigQuery` and the transport error (`testerrors.ErrTransportFailed`) | P2 |  |
 | SV-09 | QueryGameDig | Error Path | Upstream returns non-200 status | Fake transport returns 500 with a readable body | Returns nil, `ErrGameDigQuery` | P2 |  |
 | SV-10 | QueryGameDig | Error Path | Upstream returns 200 with unparseable body | Fake transport returns 200 with body "not json" | Returns nil, `ErrDecodeBody` | P2 |  |
 | SV-11 | DetermineOrVerifyQueryType | Happy Path | Game exclusive to MinecraftList, explicit matching type | game="bedrock" (in MinecraftList only), queryType=QueryTypeMinecraft | Returns (QueryTypeMinecraft, true) | P1 |  |
@@ -48,8 +49,8 @@
 | SV-27 | QueryGameServer | Error Path | GameQ dispatch, underlying transport error | game="aa3", queryType=QueryTypeGameQ, fake transport's RoundTrip returns an error | Returns nil, error propagated from QueryGameQ | P2 |  |
 | SV-28 | QueryGameServer | Happy Path | GameDig dispatch success | game="aoc", queryType=QueryTypeGameDig, fake transport returns a valid 200 body | Returns *GameServerStatus with QueryType==QueryTypeGameDig and fields matching the normalized GameDigResponse, nil error | P1 |  |
 | SV-29 | QueryGameServer | Error Path | GameDig dispatch, underlying transport error | game="aoc", queryType=QueryTypeGameDig, fake transport's RoundTrip returns an error | Returns nil, error propagated from QueryGameDig | P2 |  |
-| SV-30 | QueryGameQ | Error Path | Upstream returns non-200 status and reading its body fails | Fake transport returns 500 with a body whose `Read` errors | Returns nil, `ErrReadBody` | P2 | |
-| SV-31 | QueryGameDig | Error Path | Upstream returns non-200 status and reading its body fails | Fake transport returns 500 with a body whose `Read` errors | Returns nil, `ErrReadBody` | P2 | |
+| SV-30 | QueryGameQ | Error Path | Upstream returns non-200 status and reading its body fails | Fake transport returns 500 with a body whose `Read` errors | Returns nil, an error wrapping both `ErrReadBody` and the body read error (`errBodyRead`) | P2 | |
+| SV-31 | QueryGameDig | Error Path | Upstream returns non-200 status and reading its body fails | Fake transport returns 500 with a body whose `Read` errors | Returns nil, an error wrapping both `ErrReadBody` and the body read error (`errBodyRead`) | P2 | |
 
 ## types.go
 

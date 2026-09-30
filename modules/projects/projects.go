@@ -58,6 +58,11 @@ type Release struct {
 
 var ErrGitHubTokenUnset = errors.New("GITHUB_TOKEN is not set")
 
+const (
+	msgGitHubTokenUnset    = "GITHUB_TOKEN is not set"
+	msgFailedToGetReleases = "Failed to get releases"
+)
+
 // -------------- Functions --------------
 func getReleases(group string, project string) ([]Release, error) {
 	if githubToken == "" {
@@ -127,7 +132,11 @@ func GetReleasesHandler(w http.ResponseWriter, r *http.Request) {
 	releases, err := getReleases(group, project)
 	if err != nil {
 		log.Println(err.Error())
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		if errors.Is(err, ErrGitHubTokenUnset) {
+			http.Error(w, msgGitHubTokenUnset, http.StatusInternalServerError)
+			return
+		}
+		http.Error(w, msgFailedToGetReleases, http.StatusInternalServerError)
 		return
 	}
 

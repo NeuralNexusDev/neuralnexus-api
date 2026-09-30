@@ -2,9 +2,12 @@ package gss
 
 import (
 	"errors"
+	"fmt"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/mcstatus"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/proto/gsspb"
 	"github.com/goccy/go-json"
 )
@@ -158,10 +161,44 @@ func TestGameServerStatusHandler(t *testing.T) {
 		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 			t.Fatalf("failed to decode response body: %v", err)
 		}
-		if got := body["detail"]; got != ErrServerOffline.Error() {
-			t.Errorf(`body["detail"] = %v, want %q`, got, ErrServerOffline.Error())
+		if got := body["detail"]; got != msgServerOffline {
+			t.Errorf(`body["detail"] = %v, want %q`, got, msgServerOffline)
 		}
 	})
+
+	for _, tc := range []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"GameQQuery", ErrGameQQuery, msgGameQQueryFailed},
+		{"GameQQueryWithCause", fmt.Errorf("%w: %w", ErrGameQQuery, testerrors.ErrTransportFailed), msgGameQQueryFailed},
+		{"GameDigQuery", ErrGameDigQuery, msgGameDigQueryFailed},
+		{"ReadBody", ErrReadBody, msgReadBodyFailed},
+		{"DecodeBody", ErrDecodeBody, msgDecodeBodyFailed},
+		{"NoGameQResponse", ErrNoGameQResponse, msgNoGameQResponse},
+		{"GameUnsupported", ErrGameUnsupported, msgGameUnsupported},
+		{"JavaStatus", mcstatus.ErrJavaStatus, msgJavaStatusFailed},
+		{"BedrockStatus", mcstatus.ErrBedrockStatus, msgBedrockStatusFailed},
+		{"Unrecognized", testerrors.ErrBoom, msgQueryFailed},
+	} {
+		t.Run("HD-11_ErrorPath_"+tc.name, func(t *testing.T) {
+			fake := &fakeGSSService{err: tc.err}
+			req := httptest.NewRequest("GET", "/gss/minecraft/status?host=1.2.3.4&port=25565", nil)
+			req.SetPathValue("game", "minecraft")
+			rec := httptest.NewRecorder()
+
+			GameServerStatusHandler(fake)(rec, req)
+
+			var body map[string]interface{}
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatalf("failed to decode response body: %v", err)
+			}
+			if rec.Code != 404 || body["detail"] != tc.want {
+				t.Errorf("status = %d, detail = %v, want 404 and %q", rec.Code, body["detail"], tc.want)
+			}
+		})
+	}
 
 	t.Run("HD-06_EdgeCase_UnrecognizedQueryTypeParam", func(t *testing.T) {
 		fake := &fakeGSSService{status: newTestStatus(nil)}

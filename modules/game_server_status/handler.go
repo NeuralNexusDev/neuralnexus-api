@@ -1,16 +1,57 @@
 package gss
 
 import (
+	"errors"
+	"log"
 	"net/http"
 	"strconv"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/mcstatus"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
 const (
-	msgInvalidHost = "Invalid host"
-	msgInvalidPort = "Invalid port"
+	msgInvalidHost         = "Invalid host"
+	msgInvalidPort         = "Invalid port"
+	msgGameQQueryFailed    = "failed to query GameQ API"
+	msgGameDigQueryFailed  = "failed to query GameDig API"
+	msgReadBodyFailed      = "failed to read response body"
+	msgDecodeBodyFailed    = "failed to decode response body"
+	msgNoGameQResponse     = "no response from GameQ API"
+	msgServerOffline       = "server is offline"
+	msgGameUnsupported     = "this game is not supported, or the given query type doesn't support this game"
+	msgJavaStatusFailed    = "failed to get java server status"
+	msgBedrockStatusFailed = "failed to get bedrock server status"
+	msgQueryFailed         = "Failed to query game server"
 )
+
+func queryFailureMessage(err error) string {
+	switch {
+	case errors.Is(err, ErrGameQQuery):
+		return msgGameQQueryFailed
+	case errors.Is(err, ErrGameDigQuery):
+		return msgGameDigQueryFailed
+	case errors.Is(err, ErrReadBody):
+		return msgReadBodyFailed
+	case errors.Is(err, ErrDecodeBody):
+		return msgDecodeBodyFailed
+	case errors.Is(err, ErrNoGameQResponse):
+		return msgNoGameQResponse
+	case errors.Is(err, ErrServerOffline):
+		return msgServerOffline
+	case errors.Is(err, ErrGameUnsupported):
+		return msgGameUnsupported
+	case errors.Is(err, mcstatus.ErrJavaStatus):
+		log.Println("[Error]: Unable to query game server:\n\t", err)
+		return msgJavaStatusFailed
+	case errors.Is(err, mcstatus.ErrBedrockStatus):
+		log.Println("[Error]: Unable to query game server:\n\t", err)
+		return msgBedrockStatusFailed
+	default:
+		log.Println("[Error]: Unable to query game server:\n\t", err)
+		return msgQueryFailed
+	}
+}
 
 // GameServerStatusHandler - Get the game server status
 func GameServerStatusHandler(s GSSService) http.HandlerFunc {
@@ -30,7 +71,7 @@ func GameServerStatusHandler(s GSSService) http.HandlerFunc {
 		queryType := ParseQueryType(r.URL.Query().Get("query_type"))
 		status, err := s.QueryGameServer(game, host, port, queryType)
 		if err != nil {
-			responses.NotFound(w, r, err.Error())
+			responses.NotFound(w, r, queryFailureMessage(err))
 			return
 		}
 		returnRaw := r.URL.Query().Get("raw") == "true"

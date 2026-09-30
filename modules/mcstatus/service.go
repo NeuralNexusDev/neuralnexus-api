@@ -78,7 +78,7 @@ func (s *service) GetBedrockServerStatus(host string, port int) (*MCServerStatus
 	connect := host + ":" + fmt.Sprint(port)
 	status, err := bedrockping.Query(connect, 5*time.Second, 150*time.Millisecond)
 	if err != nil {
-		return nil, ErrBedrockStatus
+		return nil, fmt.Errorf("%w: %w", ErrBedrockStatus, err)
 	}
 	return GetBedrockStatus(status), nil
 }

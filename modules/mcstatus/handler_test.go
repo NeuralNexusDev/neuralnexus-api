@@ -3,6 +3,7 @@ package mcstatus
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"image"
 	"image/png"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
@@ -135,8 +137,8 @@ func TestServerStatusHandler(t *testing.T) {
 			t.Fatalf("expected 404, got %d", w.Code)
 		}
 		p := hdDecodeProblem(t, w.Body.Bytes())
-		if p.Detail != ErrJavaStatus.Error() {
-			t.Fatalf("expected detail %q, got %q", ErrJavaStatus.Error(), p.Detail)
+		if p.Detail != msgJavaStatusFailed {
+			t.Fatalf("expected detail %q, got %q", msgJavaStatusFailed, p.Detail)
 		}
 	})
 
@@ -219,6 +221,31 @@ func TestServerStatusHandler(t *testing.T) {
 			t.Fatalf("expected queryPort 9999, got %d", call.queryPort)
 		}
 	})
+	for _, tc := range []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"JavaStatus", ErrJavaStatus, msgJavaStatusFailed},
+		{"BedrockStatus", ErrBedrockStatus, msgBedrockStatusFailed},
+		{"BedrockStatusWithCause", fmt.Errorf("%w: %w", ErrBedrockStatus, testerrors.ErrTransportFailed), msgBedrockStatusFailed},
+		{"Unrecognized", testerrors.ErrBoom, msgFailedToGetServerStatus},
+	} {
+		t.Run("HD-16_"+tc.name, func(t *testing.T) {
+			mock := &hdMockService{serverErr: tc.err}
+			req := hdRequest(t, "mc.example.com:25565", "")
+			w := httptest.NewRecorder()
+
+			ServerStatusHandler(mock)(w, req)
+
+			if w.Code != http.StatusNotFound {
+				t.Fatalf("expected 404, got %d", w.Code)
+			}
+			if p := hdDecodeProblem(t, w.Body.Bytes()); p.Detail != tc.want {
+				t.Fatalf("expected detail %q, got %q", tc.want, p.Detail)
+			}
+		})
+	}
 }
 
 func TestIconHandler(t *testing.T) {
@@ -257,8 +284,8 @@ func TestIconHandler(t *testing.T) {
 			t.Fatalf("expected 404, got %d", w.Code)
 		}
 		p := hdDecodeProblem(t, w.Body.Bytes())
-		if p.Detail != ErrJavaStatus.Error() {
-			t.Fatalf("expected detail %q, got %q", ErrJavaStatus.Error(), p.Detail)
+		if p.Detail != msgJavaStatusFailed {
+			t.Fatalf("expected detail %q, got %q", msgJavaStatusFailed, p.Detail)
 		}
 		if len(mock.javaCalls) != 1 {
 			t.Fatalf("expected exactly 1 call, got %d", len(mock.javaCalls))

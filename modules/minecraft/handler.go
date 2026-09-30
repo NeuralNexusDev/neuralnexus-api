@@ -22,6 +22,7 @@ const (
 	msgFailedToGetGeyserProfile = "Failed to get Geyser profile"
 	msgInvalidHash              = "Invalid hash"
 	msgTextureNotFound          = "Texture not found"
+	msgPlayerNotFound           = "player not found"
 	msgFailedToGetTexture       = "Failed to get texture"
 )
 
@@ -37,7 +38,7 @@ func GetMojangPlayerByNameHandler(s Service) http.HandlerFunc {
 		player, err := s.GetMojangPlayerByName(name)
 		if err != nil {
 			if errors.Is(err, ErrPlayerNotFound) {
-				responses.NotFound(w, r, ErrPlayerNotFound.Error())
+				responses.NotFound(w, r, msgPlayerNotFound)
 				return
 			}
 			log.Println("Failed to get player by name:\n\t", err)
@@ -60,7 +61,7 @@ func GetMojangPlayerByUUIDHandler(s Service) http.HandlerFunc {
 		player, err := s.GetMojangPlayerByUUID(id)
 		if err != nil {
 			if errors.Is(err, ErrPlayerNotFound) {
-				responses.NotFound(w, r, ErrPlayerNotFound.Error())
+				responses.NotFound(w, r, msgPlayerNotFound)
 				return
 			}
 			log.Println("Failed to get player by UUID:\n\t", err)
@@ -190,7 +191,7 @@ func GetGeyserXUIDHandler(s Service) http.HandlerFunc {
 		player, err := s.GetGeyserXUID(gamertag)
 		if err != nil {
 			if errors.Is(err, ErrPlayerNotFound) {
-				responses.NotFound(w, r, ErrPlayerNotFound.Error())
+				responses.NotFound(w, r, msgPlayerNotFound)
 				return
 			}
 			if errors.Is(err, ErrInvalidGeyserRequest) {
@@ -245,7 +246,7 @@ func GetGeyserProfileHandler(s Service) http.HandlerFunc {
 		profile, err := s.GetGeyserProfile(xuid)
 		if err != nil {
 			if errors.Is(err, ErrPlayerNotFound) {
-				responses.NotFound(w, r, ErrPlayerNotFound.Error())
+				responses.NotFound(w, r, msgPlayerNotFound)
 				return
 			}
 			if errors.Is(err, ErrInvalidGeyserRequest) {
@@ -272,7 +273,7 @@ func GetGeyserProfileByNameHandler(s Service) http.HandlerFunc {
 		profile, err := s.GetGeyserProfileByGamertag(gamertag)
 		if err != nil {
 			if errors.Is(err, ErrPlayerNotFound) {
-				responses.NotFound(w, r, ErrPlayerNotFound.Error())
+				responses.NotFound(w, r, msgPlayerNotFound)
 				return
 			}
 			if errors.Is(err, ErrInvalidGeyserRequest) {

@@ -364,9 +364,27 @@ func TestGetReleasesHandler(t *testing.T) {
 		if rec.Code != http.StatusInternalServerError {
 			t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
 		}
-		wantBody := ErrGitHubTokenUnset.Error() + "\n"
+		wantBody := msgGitHubTokenUnset + "\n"
 		if got := rec.Body.String(); got != wantBody {
 			t.Errorf("body = %q, want %q", got, wantBody)
+		}
+	})
+	t.Run("PJ-15_ErrorPath_OtherFailureHidesCause", func(t *testing.T) {
+		swapGithubToken(t, "test-token")
+		swapTransport(t, &fakeRoundTripper{err: testerrors.ErrTransportFailed})
+
+		req := httptest.NewRequest(http.MethodGet, "/projects/releases/group/project", nil)
+		req.SetPathValue("group", "group")
+		req.SetPathValue("project", "project")
+		rec := httptest.NewRecorder()
+
+		GetReleasesHandler(rec, req)
+
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+		}
+		if got, want := rec.Body.String(), msgFailedToGetReleases+"\n"; got != want {
+			t.Errorf("body = %q, want %q", got, want)
 		}
 	})
 }
