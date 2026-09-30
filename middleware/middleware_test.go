@@ -251,13 +251,13 @@ func TestWrappedWriterWriteHeader(t *testing.T) {
 	})
 }
 
-func mwRunIP(r *http.Request) *http.Request {
-	var got *http.Request
+func mwRunIP(r *http.Request) (got *http.Request, nextCalls int) {
 	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		nextCalls++
 		got = r
 	})
 	IPMiddleware(next).ServeHTTP(httptest.NewRecorder(), r)
-	return got
+	return got, nextCalls
 }
 
 func TestIPMiddleware(t *testing.T) {
@@ -266,7 +266,10 @@ func TestIPMiddleware(t *testing.T) {
 		r.RemoteAddr = "10.0.0.1:1234"
 		r.Header.Set(CFConnectingIPHeader, "1.2.3.4")
 
-		got := mwRunIP(r)
+		got, nextCalls := mwRunIP(r)
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1", nextCalls)
+		}
 
 		if got.RemoteAddr != "1.2.3.4" {
 			t.Errorf("expected RemoteAddr %q, got %q", "1.2.3.4", got.RemoteAddr)
@@ -281,7 +284,10 @@ func TestIPMiddleware(t *testing.T) {
 		r.RemoteAddr = "10.0.0.1:1234"
 		r.Header.Set(XForwardedForHeader, "5.6.7.8")
 
-		got := mwRunIP(r)
+		got, nextCalls := mwRunIP(r)
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1", nextCalls)
+		}
 
 		if got.RemoteAddr != "5.6.7.8" {
 			t.Errorf("expected RemoteAddr %q, got %q", "5.6.7.8", got.RemoteAddr)
@@ -293,7 +299,10 @@ func TestIPMiddleware(t *testing.T) {
 		r.RemoteAddr = "10.0.0.1:1234"
 		r.Header.Set(XForwardedForHeader, "9.9.9.9, 10.10.10.10")
 
-		got := mwRunIP(r)
+		got, nextCalls := mwRunIP(r)
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1", nextCalls)
+		}
 
 		if got.RemoteAddr != "9.9.9.9" {
 			t.Errorf("expected leftmost trimmed IP %q, got %q", "9.9.9.9", got.RemoteAddr)
@@ -306,7 +315,10 @@ func TestIPMiddleware(t *testing.T) {
 		r.Header.Set(CFConnectingIPHeader, "1.1.1.1")
 		r.Header.Set(XForwardedForHeader, "2.2.2.2")
 
-		got := mwRunIP(r)
+		got, nextCalls := mwRunIP(r)
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1", nextCalls)
+		}
 
 		if got.RemoteAddr != "1.1.1.1" {
 			t.Errorf("expected CF-Connecting-IP to win, got %q", got.RemoteAddr)
@@ -318,7 +330,10 @@ func TestIPMiddleware(t *testing.T) {
 		r.RemoteAddr = "10.0.0.1:1234"
 		r.Header.Set(XForwardedForHeader, " ,3.3.3.3")
 
-		got := mwRunIP(r)
+		got, nextCalls := mwRunIP(r)
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1", nextCalls)
+		}
 
 		if got.RemoteAddr != "10.0.0.1:1234" {
 			t.Errorf("expected RemoteAddr to be left unchanged, got %q", got.RemoteAddr)
@@ -329,7 +344,10 @@ func TestIPMiddleware(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		r.RemoteAddr = "10.0.0.1:1234"
 
-		got := mwRunIP(r)
+		got, nextCalls := mwRunIP(r)
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1", nextCalls)
+		}
 
 		if got.RemoteAddr != "10.0.0.1:1234" {
 			t.Errorf("expected RemoteAddr to be left unchanged, got %q", got.RemoteAddr)
@@ -817,20 +835,23 @@ func TestRateLimitMiddleware(t *testing.T) {
 	})
 }
 
-func mwRunRequestID(r *http.Request) *http.Request {
-	var got *http.Request
+func mwRunRequestID(r *http.Request) (got *http.Request, nextCalls int) {
 	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		nextCalls++
 		got = r
 	})
 	RequestIDMiddleware(next).ServeHTTP(httptest.NewRecorder(), r)
-	return got
+	return got, nextCalls
 }
 
 func TestRequestIDMiddleware(t *testing.T) {
 	t.Run("MW-33_NoHeaderGeneratesIDFromTime", func(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 
-		got := mwRunRequestID(r)
+		got, nextCalls := mwRunRequestID(r)
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1", nextCalls)
+		}
 
 		id, ok := got.Context().Value(RequestIDKey).(int)
 		if !ok || id == 0 {
@@ -845,7 +866,10 @@ func TestRequestIDMiddleware(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		r.Header.Set(XRequestIDHeader, "42")
 
-		got := mwRunRequestID(r)
+		got, nextCalls := mwRunRequestID(r)
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1", nextCalls)
+		}
 
 		id, ok := got.Context().Value(RequestIDKey).(int)
 		if !ok || id != 42 {
@@ -857,7 +881,10 @@ func TestRequestIDMiddleware(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		r.Header.Set(XRequestIDHeader, "not-a-number")
 
-		got := mwRunRequestID(r)
+		got, nextCalls := mwRunRequestID(r)
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1", nextCalls)
+		}
 
 		id, ok := got.Context().Value(RequestIDKey).(int)
 		if !ok || id != 0 {
@@ -869,13 +896,19 @@ func TestRequestIDMiddleware(t *testing.T) {
 func TestRequestLoggerMiddleware(t *testing.T) {
 	t.Run("MW-36_LogsStatusMethodAndPath", func(t *testing.T) {
 		getLog := mwCaptureLog(t)
+		nextCalls := 0
 		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			nextCalls++
 			w.WriteHeader(http.StatusCreated)
 		})
 		handler := RequestLoggerMiddleware(next)
 
 		r := httptest.NewRequest(http.MethodPost, "/things", nil).WithContext(mwBaseCtx())
 		handler.ServeHTTP(httptest.NewRecorder(), r)
+
+		if nextCalls != 1 {
+			t.Errorf("next called %d times, want 1", nextCalls)
+		}
 
 		out := getLog()
 		wantFragment := fmt.Sprintf("%d %s %s", http.StatusCreated, http.MethodPost, "/things")
@@ -886,13 +919,19 @@ func TestRequestLoggerMiddleware(t *testing.T) {
 
 	t.Run("MW-37_NoExplicitWriteHeaderLogsDefaultOK", func(t *testing.T) {
 		getLog := mwCaptureLog(t)
+		nextCalls := 0
 		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			nextCalls++
 			_, _ = w.Write([]byte("body without an explicit status"))
 		})
 		handler := RequestLoggerMiddleware(next)
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(mwBaseCtx())
 		handler.ServeHTTP(httptest.NewRecorder(), r)
+
+		if nextCalls != 1 {
+			t.Errorf("next called %d times, want 1", nextCalls)
+		}
 
 		out := getLog()
 		wantFragment := fmt.Sprintf("%d %s", http.StatusOK, http.MethodGet)
