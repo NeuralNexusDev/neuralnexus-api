@@ -365,7 +365,7 @@ func (s *store) GetGeyserPlayerByGamertag(gamertag string) (*GeyserPlayer, error
 	}
 	player, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[GeyserPlayer])
 	if err != nil {
-		return nil, err
+		return nil, playerNotFound(err)
 	}
 	player.UUID = xuidToUUID(player.XUID)
 	return player, nil
@@ -383,7 +383,7 @@ func (s *store) GetGeyserPlayerByXUID(xuid int64) (*GeyserPlayer, error) {
 	}
 	player, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[GeyserPlayer])
 	if err != nil {
-		return nil, err
+		return nil, playerNotFound(err)
 	}
 	player.UUID = xuidToUUID(player.XUID)
 	return player, nil
@@ -415,7 +415,14 @@ func (s *store) GetGeyserSkin(xuid int64) (*GeyserSkin, error) {
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[GeyserSkin])
+	skin, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[GeyserSkin])
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrSkinNotFound
+		}
+		return nil, err
+	}
+	return skin, nil
 }
 
 // GetGeyserSkinByHash gets any row carrying the given hash (multiple xuids

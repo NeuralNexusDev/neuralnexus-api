@@ -2,6 +2,7 @@ package events
 
 import (
 	"context"
+	"errors"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/goccy/go-json"
@@ -9,6 +10,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"time"
 )
+
+var ErrEventNotFound = errors.New("event not found")
 
 // CREATE DATABASE events;
 
@@ -101,6 +104,9 @@ func (s *store) GetEvent(id string) (*Event, error) {
 		&event.ID, &event.Platform, &event.Type, &event.Payload, &event.Status, &event.CreatedAt, &event.UpdatedAt,
 	)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrEventNotFound
+		}
 		return nil, err
 	}
 	return &event, nil

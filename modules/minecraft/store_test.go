@@ -771,8 +771,8 @@ func TestST48to50_GetGeyserPlayerByGamertag(t *testing.T) {
 	t.Run("ST-50_Live_NotFound", func(t *testing.T) {
 		s := mcLiveStoreDB(t)
 		_, err := s.GetGeyserPlayerByGamertag("no-such-gamertag-" + mcUniqueHash("g"))
-		if err == nil {
-			t.Error("expected a non-nil error")
+		if !errors.Is(err, ErrPlayerNotFound) {
+			t.Errorf("error = %v, want %v", err, ErrPlayerNotFound)
 		}
 	})
 }
@@ -801,8 +801,8 @@ func TestST51to53_GetGeyserPlayerByXUID(t *testing.T) {
 	t.Run("ST-53_Live_NotFound", func(t *testing.T) {
 		s := mcLiveStoreDB(t)
 		_, err := s.GetGeyserPlayerByXUID(mcUniqueXUID())
-		if err == nil {
-			t.Error("expected a non-nil error")
+		if !errors.Is(err, ErrPlayerNotFound) {
+			t.Errorf("error = %v, want %v", err, ErrPlayerNotFound)
 		}
 	})
 }
@@ -885,8 +885,8 @@ func TestST58to60_GetGeyserSkin(t *testing.T) {
 	t.Run("ST-60_Live_NotFound", func(t *testing.T) {
 		s := mcLiveStoreDB(t)
 		_, err := s.GetGeyserSkin(mcUniqueXUID())
-		if err == nil {
-			t.Error("expected a non-nil error")
+		if !errors.Is(err, ErrSkinNotFound) {
+			t.Errorf("error = %v, want %v", err, ErrSkinNotFound)
 		}
 	})
 }

@@ -2,10 +2,13 @@ package datastore
 
 import (
 	"context"
+	"errors"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+var ErrDataStoreNotFound = errors.New("data store not found")
 
 // CREATE TRIGGER update_datastores_modtime
 // BEFORE UPDATE ON datastores
@@ -48,6 +51,9 @@ func RunQueryAndReturn(db *pgxpool.Pool, query string, args ...any) (*Store, err
 	var data *Store
 	data, err = pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Store])
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrDataStoreNotFound
+		}
 		return nil, err
 	}
 	return data, nil
