@@ -3,6 +3,7 @@ package events
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/goccy/go-json"
@@ -12,6 +13,8 @@ import (
 )
 
 var ErrEventNotFound = errors.New("event not found")
+
+var ErrEventsQueryFailed = errors.New("failed to query events")
 
 // CREATE DATABASE events;
 
@@ -122,6 +125,9 @@ func (s *store) GetEventsByPlatform(platform auth.Platform) ([]*Event, error) {
 
 	var events []*Event
 	events, err = pgx.CollectRows(rows, pgx.RowToAddrOfStructByName[Event])
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrEventsQueryFailed, err)
+	}
 	return events, nil
 }
 
