@@ -21,6 +21,9 @@ const (
 	msgInvalidRequest            = "Invalid request"
 	msgInvalidState              = "Invalid state"
 	msgLoginRequiredToLink       = "You must be logged in to link an account"
+	msgInvalidSession            = "Invalid session"
+	msgFailedToDeleteSession     = "Failed to delete session"
+	logFailedToCreateJWT         = "Failed to create JWT:\n\t"
 )
 
 // Login struct for login request
@@ -82,7 +85,7 @@ func LoginHandler(as auth.AccountService, ss auth.SessionService) http.HandlerFu
 		}
 
 		if err := createSessionJWTAndSetCookie(ss, w, session); err != nil {
-			log.Println("Failed to create JWT:\n\t", err)
+			log.Println(logFailedToCreateJWT, err)
 			responses.InternalServerError(w, r, msgAuthenticationFailed)
 			return
 		}
@@ -95,13 +98,13 @@ func LogoutHandler(ss auth.SessionService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if session == nil {
-			responses.BadRequest(w, r, "Invalid session")
+			responses.BadRequest(w, r, msgInvalidSession)
 			return
 		}
 		err := ss.DeleteSession(session.ID)
 		if err != nil {
 			log.Println("Failed to delete session:\n\t", err)
-			responses.InternalServerError(w, r, "Failed to delete session")
+			responses.InternalServerError(w, r, msgFailedToDeleteSession)
 			return
 		}
 		http.SetCookie(w, sessionCookie("", time.Unix(0, 0)))
@@ -142,7 +145,7 @@ func OAuthHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Ses
 		}
 
 		if err := createSessionJWTAndSetCookie(ss, w, session); err != nil {
-			log.Println("Failed to create JWT:\n\t", err)
+			log.Println(logFailedToCreateJWT, err)
 			redirectInternalServerError(w, r, state.RedirectURI, msgAuthenticationFailed)
 			return
 		}
@@ -193,7 +196,7 @@ func OpenIDHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Se
 		}
 
 		if err := createSessionJWTAndSetCookie(ss, w, session); err != nil {
-			log.Println("Failed to create JWT:\n\t", err)
+			log.Println(logFailedToCreateJWT, err)
 			redirectInternalServerError(w, r, state.RedirectURI, msgAuthenticationFailed)
 			return
 		}

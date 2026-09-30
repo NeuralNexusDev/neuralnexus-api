@@ -402,6 +402,7 @@ func TestAU11LogoutHandlerNilSessionInContext(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
 		}
+		requireProblemDetail(t, w, msgInvalidSession)
 		if len(ss.deletedIDs) != 0 {
 			t.Error("expected DeleteSession to never be called for a nil session")
 		}
@@ -421,6 +422,7 @@ func TestAU12LogoutHandlerDeleteSessionFails(t *testing.T) {
 		if w.Code != http.StatusInternalServerError {
 			t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
 		}
+		requireProblemDetail(t, w, msgFailedToDeleteSession)
 		if findCookie(w, mw.SessionCookieName) != nil {
 			t.Error("expected no cleared cookie when DeleteSession fails")
 		}
@@ -587,6 +589,126 @@ func TestAU51OpenIDHandlerLoginHappyPath(t *testing.T) {
 		if cookie == nil || cookie.Value != "test-jwt" {
 			t.Errorf("expected session cookie with value %q, got %+v", "test-jwt", cookie)
 		}
+	})
+}
+
+func auDiscordTransport(t *testing.T) {
+	t.Helper()
+	swapDefaultTransport(t, auRoundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		switch {
+		case req.Method == http.MethodPost && req.URL.Host == "discord.com" && req.URL.Path == "/api/oauth2/token":
+			return auJSONResponse(http.StatusOK, `{"access_token":"disc-at","token_type":"Bearer","expires_in":3600,"scope":"identify"}`), nil
+		case req.Method == http.MethodGet && req.URL.Host == "discord.com" && strings.HasSuffix(req.URL.Path, "/users/@me"):
+			return auJSONResponse(http.StatusOK, `{"id":"d1","username":"alice","email":"a@b.com"}`), nil
+		default:
+			return nil, fmt.Errorf("unexpected outbound request %s %s", req.Method, req.URL.String())
+		}
+	}))
+}
+
+func auOAuthRequest(t *testing.T, state linking.OAuthState) *http.Request {
+	t.Helper()
+	r := httptest.NewRequest(http.MethodGet, "/api/oauth?code=disc-code&state="+encodeState(t, state), nil)
+	r.AddCookie(&http.Cookie{Name: "nonce", Value: state.Nonce})
+	return r
+}
+
+func auSteamTransport(t *testing.T, checkStatus, summaryStatus int) {
+	t.Helper()
+	swapSteamAPIKey(t, "test-steam-api-key")
+	swapDefaultTransport(t, auRoundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		switch {
+		case req.Method == http.MethodPost && req.URL.Host == "steamcommunity.com" && req.URL.Path == "/openid/login":
+			return auTextResponse(checkStatus, "ns:http://specs.openid.net/auth/2.0\nis_valid:true\n"), nil
+		case req.Method == http.MethodGet && req.URL.Host == "api.steampowered.com" && req.URL.Path == "/ISteamUser/GetPlayerSummaries/v2/":
+			return auJSONResponse(summaryStatus, `{"response":{"players":[{"steamid":"76561198000000000","personaname":"steamplayer","profileurl":"https://steamcommunity.com/id/steamplayer","avatarfull":"https://avatar.example/a.jpg"}]}}`), nil
+		default:
+			return nil, fmt.Errorf("unexpected outbound request %s %s", req.Method, req.URL.String())
+		}
+	}))
+}
+
+func auOpenIDRequest(t *testing.T, state linking.OAuthState) *http.Request {
+	t.Helper()
+	q := url.Values{
+		"state":               {encodeState(t, state)},
+		"openid.mode":         {"id_res"},
+		"openid.claimed_id":   {"https://steamcommunity.com/openid/id/76561198000000000"},
+		"openid.identity":     {"https://steamcommunity.com/openid/id/76561198000000000"},
+		"openid.signed":       {"op_endpoint,claimed_id,identity,return_to,response_nonce,assoc_handle"},
+		"openid.sig":          {"deadbeef=="},
+		"openid.return_to":    {"https://neuralnexus.test/api/openid"},
+		"openid.assoc_handle": {"handle1"},
+	}
+	r := httptest.NewRequest(http.MethodGet, "/api/openid?"+q.Encode(), nil)
+	r.AddCookie(&http.Cookie{Name: "nonce", Value: state.Nonce})
+	return r
+}
+
+func TestAU52to57OAuthAndOpenIDFailuresHideCause(t *testing.T) {
+	oauthState := linking.OAuthState{Platform: auth.PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	steamState := linking.OAuthState{Platform: auth.PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	okJWT := func(*auth.Session) (string, error) { return "test-jwt", nil }
+	failJWT := func(*auth.Session) (string, error) { return "", testerrors.ErrSigningFailed }
+
+	t.Run("AU-52_OAuthProcessFails", func(t *testing.T) {
+		auDiscordTransport(t)
+		w := httptest.NewRecorder()
+		ss := &stubSessionService{createJWT: okJWT, addSessionErr: testerrors.ErrDBDown}
+
+		OAuthHandler(&stubAccountService{}, &stubLinkAccountStore{}, ss)(w, auOAuthRequest(t, oauthState))
+
+		requireProblemRedirect(t, w, oauthState.RedirectURI, http.StatusInternalServerError, msgAuthenticationFailed)
+	})
+
+	t.Run("AU-53_OAuthJWTFails", func(t *testing.T) {
+		auDiscordTransport(t)
+		w := httptest.NewRecorder()
+		ss := &stubSessionService{createJWT: failJWT}
+
+		OAuthHandler(&stubAccountService{}, &stubLinkAccountStore{}, ss)(w, auOAuthRequest(t, oauthState))
+
+		requireProblemRedirect(t, w, oauthState.RedirectURI, http.StatusInternalServerError, msgAuthenticationFailed)
+	})
+
+	t.Run("AU-54_OpenIDVerifyFailsWithoutRejectingAssertion", func(t *testing.T) {
+		auSteamTransport(t, http.StatusInternalServerError, http.StatusOK)
+		w := httptest.NewRecorder()
+		ss := &stubSessionService{createJWT: okJWT}
+
+		OpenIDHandler(&stubAccountService{}, &stubLinkAccountStore{}, ss)(w, auOpenIDRequest(t, steamState))
+
+		requireProblemRedirect(t, w, steamState.RedirectURI, http.StatusInternalServerError, msgAuthenticationFailed)
+	})
+
+	t.Run("AU-55_OpenIDGetSteamUserFails", func(t *testing.T) {
+		auSteamTransport(t, http.StatusOK, http.StatusInternalServerError)
+		w := httptest.NewRecorder()
+		ss := &stubSessionService{createJWT: okJWT}
+
+		OpenIDHandler(&stubAccountService{}, &stubLinkAccountStore{}, ss)(w, auOpenIDRequest(t, steamState))
+
+		requireProblemRedirect(t, w, steamState.RedirectURI, http.StatusInternalServerError, msgAuthenticationFailed)
+	})
+
+	t.Run("AU-56_OpenIDProcessFails", func(t *testing.T) {
+		auSteamTransport(t, http.StatusOK, http.StatusOK)
+		w := httptest.NewRecorder()
+		ss := &stubSessionService{createJWT: okJWT, addSessionErr: testerrors.ErrDBDown}
+
+		OpenIDHandler(&stubAccountService{}, &stubLinkAccountStore{}, ss)(w, auOpenIDRequest(t, steamState))
+
+		requireProblemRedirect(t, w, steamState.RedirectURI, http.StatusInternalServerError, msgAuthenticationFailed)
+	})
+
+	t.Run("AU-57_OpenIDJWTFails", func(t *testing.T) {
+		auSteamTransport(t, http.StatusOK, http.StatusOK)
+		w := httptest.NewRecorder()
+		ss := &stubSessionService{createJWT: failJWT}
+
+		OpenIDHandler(&stubAccountService{}, &stubLinkAccountStore{}, ss)(w, auOpenIDRequest(t, steamState))
+
+		requireProblemRedirect(t, w, steamState.RedirectURI, http.StatusInternalServerError, msgAuthenticationFailed)
 	})
 }
 

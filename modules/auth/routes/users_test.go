@@ -154,6 +154,7 @@ func TestUS03GetUserHandlerForbidden(t *testing.T) {
 	t.Run("US-03_GetUserForbidden", func(t *testing.T) {
 		GetUserHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusForbidden)
+		expectDetail(t, w, msgNoPermissionToGetUser)
 	})
 }
 
@@ -190,6 +191,7 @@ func TestUS06GetUserFromPlatformHandlerForbidden(t *testing.T) {
 	t.Run("US-06_GetUserFromPlatformForbidden", func(t *testing.T) {
 		GetUserFromPlatformHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusForbidden)
+		expectDetail(t, w, msgNoPermissionToGetUsers)
 	})
 }
 
@@ -236,6 +238,7 @@ func TestUS10GetUserPermissionsHandlerForbidden(t *testing.T) {
 	t.Run("US-10_GetUserPermissionsForbidden", func(t *testing.T) {
 		GetUserPermissionsHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusForbidden)
+		expectDetail(t, w, msgNoPermissionToGetUserPermissions)
 	})
 }
 
@@ -340,6 +343,7 @@ func TestUS21UpdateUserFromPlatformHandlerUnsupportedPlatform(t *testing.T) {
 	t.Run("US-21_UpdateUserFromPlatformUnsupportedPlatform", func(t *testing.T) {
 		UpdateUserFromPlatformHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusBadRequest)
+		expectDetail(t, w, msgUnsupportedPlatform)
 		if svc.updateFromPlatformCalled {
 			t.Error("expected UpdateUserFromPlatform to never be called for an unsupported platform")
 		}
@@ -378,6 +382,25 @@ func TestUS23UpdateUserFromPlatformHandlerMalformedBody(t *testing.T) {
 	})
 }
 
+func TestUS56UpdateUserFromPlatformHandlerMalformedBodyOtherPlatforms(t *testing.T) {
+	for _, platform := range []auth.Platform{auth.PlatformMinecraft, auth.PlatformTwitch, auth.PlatformXboxLive, auth.PlatformMicrosoft} {
+		t.Run("US-56_MalformedBody_"+string(platform), func(t *testing.T) {
+			svc := &stubUserService{}
+			r := newSessionRequest(http.MethodPatch, adminUsersSession("admin1"), "", string(platform), `not json`)
+			r.SetPathValue("platform_id", "123")
+			w := httptest.NewRecorder()
+
+			UpdateUserFromPlatformHandler(svc)(w, r)
+
+			expectStatus(t, w, http.StatusBadRequest)
+			expectDetail(t, w, msgInvalidRequestBody)
+			if svc.updateFromPlatformCalled {
+				t.Error("expected UpdateUserFromPlatform to never be called for a malformed body")
+			}
+		})
+	}
+}
+
 func TestUS24UpdateUserFromPlatformHandlerServiceErrorMapsTo400(t *testing.T) {
 	svc := &stubUserService{updateFromPlatformErr: testerrors.ErrDBDown}
 	r := newSessionRequest(http.MethodPatch, adminUsersSession("admin1"), "", "discord", `{"id":"123"}`)
@@ -410,6 +433,7 @@ func TestUS26DeleteUserHandlerForbidden(t *testing.T) {
 	t.Run("US-26_DeleteUserForbidden", func(t *testing.T) {
 		DeleteUserHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusForbidden)
+		expectDetail(t, w, msgNoPermissionToDeleteUsers)
 	})
 }
 
@@ -421,6 +445,7 @@ func TestUS27DeleteUserHandlerServiceErrorMapsTo400(t *testing.T) {
 	t.Run("US-27_DeleteUserServiceErrorMapsTo400", func(t *testing.T) {
 		DeleteUserHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusBadRequest)
+		expectDetail(t, w, msgFailedToDeleteUser)
 	})
 }
 
@@ -454,6 +479,7 @@ func TestUS30GetUserLinkedAccountsHandlerForbidden(t *testing.T) {
 	t.Run("US-30_GetUserLinkedAccountsForbidden", func(t *testing.T) {
 		GetUserLinkedAccountsHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusForbidden)
+		expectDetail(t, w, msgNoPermissionToViewLinkedAccounts)
 	})
 }
 
@@ -465,6 +491,7 @@ func TestUS31GetUserLinkedAccountsHandlerServiceErrorMapsTo500(t *testing.T) {
 	t.Run("US-31_GetUserLinkedAccountsServiceErrorMapsTo500", func(t *testing.T) {
 		GetUserLinkedAccountsHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusInternalServerError)
+		expectDetail(t, w, msgFailedToGetLinkedAccounts)
 	})
 }
 
@@ -490,6 +517,7 @@ func TestUS33UnlinkPlatformHandlerForbidden(t *testing.T) {
 	t.Run("US-33_UnlinkPlatformForbidden", func(t *testing.T) {
 		UnlinkPlatformHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusForbidden)
+		expectDetail(t, w, msgNoPermissionToUnlinkPlatforms)
 		if len(svc.unlinkCalls) != 0 {
 			t.Error("expected UnlinkPlatform to never be called for a forbidden request")
 		}
@@ -516,6 +544,7 @@ func TestUS35UnlinkPlatformHandlerWouldLockAccountMapsTo400(t *testing.T) {
 	t.Run("US-35_UnlinkPlatformWouldLockAccountMapsTo400", func(t *testing.T) {
 		UnlinkPlatformHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusBadRequest)
+		expectDetail(t, w, msgSetPasswordOrLinkBeforeUnlinking)
 	})
 }
 
@@ -527,6 +556,7 @@ func TestUS36UnlinkPlatformHandlerUnclassifiedErrorMapsTo500(t *testing.T) {
 	t.Run("US-36_UnlinkPlatformUnclassifiedErrorMapsTo500", func(t *testing.T) {
 		UnlinkPlatformHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusInternalServerError)
+		expectDetail(t, w, msgFailedToUnlinkPlatform)
 	})
 }
 
@@ -552,6 +582,7 @@ func TestUS38SetPlatformLoginEnabledHandlerForbidden(t *testing.T) {
 	t.Run("US-38_SetPlatformLoginEnabledForbidden", func(t *testing.T) {
 		SetPlatformLoginEnabledHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusForbidden)
+		expectDetail(t, w, msgNoPermissionToUpdatePlatforms)
 	})
 }
 
@@ -605,6 +636,7 @@ func TestUS42SetPlatformLoginEnabledHandlerWouldLockAccountMapsTo400(t *testing.
 	t.Run("US-42_SetPlatformLoginEnabledWouldLockAccountMapsTo400", func(t *testing.T) {
 		SetPlatformLoginEnabledHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusBadRequest)
+		expectDetail(t, w, msgSetPasswordOrLinkBeforeDisabling)
 	})
 }
 
@@ -616,6 +648,7 @@ func TestUS43SetPlatformLoginEnabledHandlerUnverifiedMapsTo400(t *testing.T) {
 	t.Run("US-43_SetPlatformLoginEnabledUnverifiedMapsTo400", func(t *testing.T) {
 		SetPlatformLoginEnabledHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusBadRequest)
+		expectDetail(t, w, msgLinkedAccountUnverified)
 	})
 }
 
@@ -627,6 +660,7 @@ func TestUS44SetPlatformLoginEnabledHandlerUnclassifiedErrorMapsTo500(t *testing
 	t.Run("US-44_SetPlatformLoginEnabledUnclassifiedErrorMapsTo500", func(t *testing.T) {
 		SetPlatformLoginEnabledHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusInternalServerError)
+		expectDetail(t, w, msgFailedToUpdatePlatform)
 	})
 }
 
@@ -660,6 +694,7 @@ func TestUS47GetAccountSettingsHandlerForbidden(t *testing.T) {
 	t.Run("US-47_GetAccountSettingsForbidden", func(t *testing.T) {
 		GetAccountSettingsHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusForbidden)
+		expectDetail(t, w, msgNoPermissionToViewSettings)
 	})
 }
 
@@ -671,6 +706,7 @@ func TestUS48GetAccountSettingsHandlerServiceErrorMapsTo500(t *testing.T) {
 	t.Run("US-48_GetAccountSettingsServiceErrorMapsTo500", func(t *testing.T) {
 		GetAccountSettingsHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusInternalServerError)
+		expectDetail(t, w, msgFailedToGetAccountSettings)
 	})
 }
 
@@ -696,6 +732,7 @@ func TestUS50UpdateAccountSettingsHandlerForbidden(t *testing.T) {
 	t.Run("US-50_UpdateAccountSettingsForbidden", func(t *testing.T) {
 		UpdateAccountSettingsHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusForbidden)
+		expectDetail(t, w, msgNoPermissionToUpdateSettings)
 		if len(svc.setPasswordAuthCalls) != 0 {
 			t.Error("expected SetPasswordAuthEnabled to never be called for a forbidden request")
 		}
@@ -737,6 +774,7 @@ func TestUS53UpdateAccountSettingsHandlerWouldLockAccountMapsTo400(t *testing.T)
 	t.Run("US-53_UpdateAccountSettingsWouldLockAccountMapsTo400", func(t *testing.T) {
 		UpdateAccountSettingsHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusBadRequest)
+		expectDetail(t, w, msgEnableLoginMethodBeforeDisablingPassword)
 	})
 }
 
@@ -748,6 +786,7 @@ func TestUS54UpdateAccountSettingsHandlerNoPasswordSetMapsTo400(t *testing.T) {
 	t.Run("US-54_UpdateAccountSettingsNoPasswordSetMapsTo400", func(t *testing.T) {
 		UpdateAccountSettingsHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusBadRequest)
+		expectDetail(t, w, msgSetPasswordBeforeEnablingPasswordLogin)
 	})
 }
 
@@ -759,5 +798,6 @@ func TestUS55UpdateAccountSettingsHandlerUnclassifiedErrorMapsTo500(t *testing.T
 	t.Run("US-55_UpdateAccountSettingsUnclassifiedErrorMapsTo500", func(t *testing.T) {
 		UpdateAccountSettingsHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusInternalServerError)
+		expectDetail(t, w, msgFailedToUpdateUserSettings)
 	})
 }
