@@ -35,14 +35,11 @@
                     }
                 },
                 "responses": {
-                    "200": {
-                        "$ref": "#/components/responses/SessionResponse"
+                    "204": {
+                        "$ref": "#/components/responses/204NoContent"
                     },
                     "400": {
                         "$ref": "#/components/responses/400BadRequest"
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/401Unauthorized"
                     },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
