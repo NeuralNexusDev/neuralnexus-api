@@ -16,14 +16,14 @@
 | HD-01 | GetBeeNameHandler | Happy Path | Store returns a name | fake.GetBeeName -> ("Buzzy", nil) | 200 OK, body decodes to BeeName{Name:"Buzzy"} | P1 |  |
 | HD-02 | GetBeeNameHandler | Error Path | Store returns an error | fake.GetBeeName -> ("", err) | 500 Internal Server Error | P2 |  |
 | HD-03 | UploadBeeNameHandler | Error Path | Session lacks the admin scope | session without ScopeAdminBeeNameGenerator | 403 Forbidden, store not called | P1 |  |
-| HD-04 | UploadBeeNameHandler | Edge Case | Empty name path value | session has scope; name = "" | 400 Bad Request, store not called | P2 |  |
+| HD-04 | UploadBeeNameHandler | Edge Case | Empty name path value | session has scope; name = "" | 400 Bad Request, store not called, `detail` is `msgInvalidName` | P2 |  |
 | HD-05 | UploadBeeNameHandler | Happy Path | Valid name, authorized session | fake.UploadBeeName -> (name, nil) | 200 OK, body decodes to BeeName{Name:name} | P1 |  |
 | HD-06 | UploadBeeNameHandler | Error Path | Store returns an error | fake.UploadBeeName -> ("", err) | 500 Internal Server Error | P2 |  |
 | HD-07 | DeleteBeeNameHandler | Error Path | Session lacks the admin scope | session without ScopeAdminBeeNameGenerator | 403 Forbidden, store not called | P1 |  |
-| HD-08 | DeleteBeeNameHandler | Edge Case | Empty name path value | session has scope; name = "" | 400 Bad Request, store not called | P2 |  |
+| HD-08 | DeleteBeeNameHandler | Edge Case | Empty name path value | session has scope; name = "" | 400 Bad Request, store not called, `detail` is `msgInvalidName` | P2 |  |
 | HD-09 | DeleteBeeNameHandler | Happy Path | Valid name, authorized session | fake.DeleteBeeName -> (name, nil) | 204 No Content | P1 |  |
 | HD-10 | DeleteBeeNameHandler | Error Path | Store returns an error | fake.DeleteBeeName -> ("", err) | 500 Internal Server Error | P2 |  |
-| HD-11 | SubmitBeeNameHandler | Edge Case | Empty name path value | name = "" | 400 Bad Request, store not called | P2 |  |
+| HD-11 | SubmitBeeNameHandler | Edge Case | Empty name path value | name = "" | 400 Bad Request, store not called, `detail` is `msgInvalidName` | P2 |  |
 | HD-12 | SubmitBeeNameHandler | Happy Path | Valid name (no auth required) | fake.SubmitBeeName -> (name, nil) | 200 OK, body decodes to BeeName{Name:name} | P1 |  |
 | HD-13 | SubmitBeeNameHandler | Error Path | Store returns an error | fake.SubmitBeeName -> ("", err) | 500 Internal Server Error | P2 |  |
 | HD-14 | GetBeeNameSuggestionsHandler | Error Path | Session lacks the admin scope | session without ScopeAdminBeeNameGenerator | 403 Forbidden, store not called | P1 |  |
@@ -33,11 +33,11 @@
 | HD-18 | GetBeeNameSuggestionsHandler | Happy Path | Amount is a valid positive integer | amount = "5"; fake.GetBeeNameSuggestions -> ([]string{"a","b"}, nil) | 200 OK, body decodes to BeeNameSuggestions{Suggestions:["a","b"]} | P1 |  |
 | HD-19 | GetBeeNameSuggestionsHandler | Error Path | Store returns an error | fake.GetBeeNameSuggestions -> (nil, err) | 500 Internal Server Error | P2 |  |
 | HD-20 | AcceptBeeNameSuggestionHandler | Error Path | Session lacks the admin scope | session without ScopeAdminBeeNameGenerator | 403 Forbidden, store not called | P1 |  |
-| HD-21 | AcceptBeeNameSuggestionHandler | Edge Case | Empty name path value | session has scope; name = "" | 400 Bad Request, store not called | P2 |  |
+| HD-21 | AcceptBeeNameSuggestionHandler | Edge Case | Empty name path value | session has scope; name = "" | 400 Bad Request, store not called, `detail` is `msgInvalidName` | P2 |  |
 | HD-22 | AcceptBeeNameSuggestionHandler | Happy Path | Valid name, authorized session | fake.AcceptBeeNameSuggestion -> (name, nil) | 200 OK, body decodes to BeeName{Name:name} | P1 |  |
 | HD-23 | AcceptBeeNameSuggestionHandler | Error Path | Store returns an error | fake.AcceptBeeNameSuggestion -> ("", err) | 500 Internal Server Error | P2 |  |
 | HD-24 | RejectBeeNameSuggestionHandler | Error Path | Session lacks the admin scope | session without ScopeAdminBeeNameGenerator | 403 Forbidden, store not called | P1 |  |
-| HD-25 | RejectBeeNameSuggestionHandler | Edge Case | Empty name path value | session has scope; name = "" | 400 Bad Request, store not called | P2 |  |
+| HD-25 | RejectBeeNameSuggestionHandler | Edge Case | Empty name path value | session has scope; name = "" | 400 Bad Request, store not called, `detail` is `msgInvalidName` | P2 |  |
 | HD-26 | RejectBeeNameSuggestionHandler | Happy Path | Valid name, authorized session | fake.RejectBeeNameSuggestion -> (name, nil) | 204 No Content | P1 |  |
 | HD-27 | RejectBeeNameSuggestionHandler | Error Path | Store returns an error | fake.RejectBeeNameSuggestion -> ("", err) | 500 Internal Server Error | P2 |  |
 

@@ -12,6 +12,7 @@ import (
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
+	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
 type hdMockStore struct {
@@ -111,6 +112,17 @@ func hdDecodeJSON(t *testing.T, body []byte) map[string]interface{} {
 	return m
 }
 
+func hdRequireDetail(t *testing.T, w *httptest.ResponseRecorder, want string) {
+	t.Helper()
+	var p responses.Problem
+	if err := json.Unmarshal(w.Body.Bytes(), &p); err != nil {
+		t.Fatalf("failed to decode problem body %q: %v", w.Body.String(), err)
+	}
+	if p.Detail != want {
+		t.Fatalf("detail = %q, want %q", p.Detail, want)
+	}
+}
+
 func TestHD01to05_CreatePetHandler(t *testing.T) {
 	t.Run("HD-01_NoPermissionForbidden", func(t *testing.T) {
 		mock := &hdMockStore{createPetResult: &Pet{ID: 1, Name: "Rex"}}
@@ -181,6 +193,7 @@ func TestHD01to05_CreatePetHandler(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
 		}
+		hdRequireDetail(t, w, msgPetNameIsRequired)
 		if len(mock.createPetCalls) != 0 {
 			t.Errorf("CreatePet called %d times, want 0", len(mock.createPetCalls))
 		}
@@ -281,6 +294,7 @@ func TestHD06to10_GetPetHandler(t *testing.T) {
 		if w.Code != http.StatusNotFound {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
 		}
+		hdRequireDetail(t, w, msgPetNotFound)
 	})
 }
 
@@ -296,6 +310,7 @@ func TestHD11to14and35_UpdatePetHandler(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
 		}
+		hdRequireDetail(t, w, msgUnableToParseBody)
 		if len(mock.updatePetCalls) != 0 {
 			t.Errorf("UpdatePet called %d times, want 0", len(mock.updatePetCalls))
 		}
@@ -313,6 +328,7 @@ func TestHD11to14and35_UpdatePetHandler(t *testing.T) {
 		if w.Code != http.StatusForbidden {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusForbidden)
 		}
+		hdRequireDetail(t, w, msgNoPermissionToUpdatePet)
 		if len(mock.updatePetCalls) != 0 {
 			t.Errorf("UpdatePet called %d times, want 0", len(mock.updatePetCalls))
 		}
@@ -361,6 +377,7 @@ func TestHD11to14and35_UpdatePetHandler(t *testing.T) {
 		if w.Code != http.StatusNotFound {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
 		}
+		hdRequireDetail(t, w, msgPetNotFound)
 	})
 }
 
@@ -409,6 +426,7 @@ func TestHD15to18_GetRandPetPictureByNameHandler(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
 		}
+		hdRequireDetail(t, w, msgPetNameIsRequired)
 	})
 
 	t.Run("HD-18_StoreErrorNotFound", func(t *testing.T) {
@@ -471,6 +489,7 @@ func TestHD19to22_GetPetPictureHandler(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
 		}
+		hdRequireDetail(t, w, msgPetPictureIDIsRequired)
 	})
 
 	t.Run("HD-22_StoreErrorNotFound", func(t *testing.T) {
@@ -485,6 +504,7 @@ func TestHD19to22_GetPetPictureHandler(t *testing.T) {
 		if w.Code != http.StatusNotFound {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
 		}
+		hdRequireDetail(t, w, msgUnableToGetPetPicture)
 	})
 }
 
@@ -500,6 +520,7 @@ func TestHD23to27and36_UpdatePetPictureHandler(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
 		}
+		hdRequireDetail(t, w, msgUnableToParseBody)
 		if len(mock.getPetCalls) != 0 || len(mock.updatePetPictureCalls) != 0 {
 			t.Errorf("expected no store calls, got GetPet=%v UpdatePetPicture=%v", mock.getPetCalls, mock.updatePetPictureCalls)
 		}
@@ -516,6 +537,7 @@ func TestHD23to27and36_UpdatePetPictureHandler(t *testing.T) {
 		if w.Code != http.StatusNotFound {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
 		}
+		hdRequireDetail(t, w, msgUnableToGetPet)
 		if len(mock.updatePetPictureCalls) != 0 {
 			t.Errorf("UpdatePetPicture called %d times, want 0", len(mock.updatePetPictureCalls))
 		}
@@ -533,6 +555,7 @@ func TestHD23to27and36_UpdatePetPictureHandler(t *testing.T) {
 		if w.Code != http.StatusForbidden {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusForbidden)
 		}
+		hdRequireDetail(t, w, msgNoPermissionToUpdatePet)
 		if len(mock.updatePetPictureCalls) != 0 {
 			t.Errorf("UpdatePetPicture called %d times, want 0", len(mock.updatePetPictureCalls))
 		}
@@ -646,6 +669,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
 		}
+		hdRequireDetail(t, w, msgPetPictureIDIsRequired)
 	})
 
 	t.Run("HD-31_GetPetPictureErrorNotFound", func(t *testing.T) {
@@ -660,6 +684,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 		if w.Code != http.StatusNotFound {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
 		}
+		hdRequireDetail(t, w, msgUnableToGetPetPicture)
 		if len(mock.deletePetPictureCalls) != 0 {
 			t.Errorf("DeletePetPicture called %d times, want 0", len(mock.deletePetPictureCalls))
 		}
@@ -680,6 +705,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 		if w.Code != http.StatusNotFound {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
 		}
+		hdRequireDetail(t, w, msgUnableToGetPet)
 		if len(mock.deletePetPictureCalls) != 0 {
 			t.Errorf("DeletePetPicture called %d times, want 0", len(mock.deletePetPictureCalls))
 		}
@@ -701,6 +727,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 		if w.Code != http.StatusForbidden {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusForbidden)
 		}
+		hdRequireDetail(t, w, msgNoPermissionToUpdatePet)
 		if len(mock.deletePetPictureCalls) != 0 {
 			t.Errorf("DeletePetPicture called %d times, want 0", len(mock.deletePetPictureCalls))
 		}

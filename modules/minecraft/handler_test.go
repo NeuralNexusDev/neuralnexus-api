@@ -10,6 +10,7 @@ import (
 	"github.com/goccy/go-json"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
+	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
 type mcMockService struct {
@@ -73,6 +74,17 @@ func mcRequest(t *testing.T, method, target string, body io.Reader, pathValues m
 	return r
 }
 
+func mcRequireDetail(t *testing.T, w *httptest.ResponseRecorder, want string) {
+	t.Helper()
+	var p responses.Problem
+	if err := json.Unmarshal(w.Body.Bytes(), &p); err != nil {
+		t.Fatalf("failed to decode problem body %q: %v", w.Body.String(), err)
+	}
+	if p.Detail != want {
+		t.Fatalf("detail = %q, want %q", p.Detail, want)
+	}
+}
+
 func mcRequireStatus(t *testing.T, w *httptest.ResponseRecorder, want int) {
 	t.Helper()
 	if w.Code != want {
@@ -86,6 +98,7 @@ func TestHD01to04_GetMojangPlayerByNameHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/name/", nil, map[string]string{"name": ""}))
 		mcRequireStatus(t, w, http.StatusBadRequest)
+		mcRequireDetail(t, w, msgInvalidName)
 	})
 
 	t.Run("HD-02_OK", func(t *testing.T) {
@@ -108,6 +121,7 @@ func TestHD01to04_GetMojangPlayerByNameHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/name/x", nil, map[string]string{"name": "x"}))
 		mcRequireStatus(t, w, http.StatusNotFound)
+		mcRequireDetail(t, w, msgPlayerNotFound)
 	})
 
 	t.Run("HD-04_InternalError", func(t *testing.T) {
@@ -116,6 +130,7 @@ func TestHD01to04_GetMojangPlayerByNameHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/name/x", nil, map[string]string{"name": "x"}))
 		mcRequireStatus(t, w, http.StatusInternalServerError)
+		mcRequireDetail(t, w, msgFailedToGetPlayer)
 	})
 }
 
@@ -127,6 +142,7 @@ func TestHD05to08_GetMojangPlayerByUUIDHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/uuid/not-a-uuid", nil, map[string]string{"uuid": "not-a-uuid"}))
 		mcRequireStatus(t, w, http.StatusBadRequest)
+		mcRequireDetail(t, w, msgNotAValidUUID+"not-a-uuid")
 	})
 
 	t.Run("HD-06_OK", func(t *testing.T) {
@@ -145,6 +161,7 @@ func TestHD05to08_GetMojangPlayerByUUIDHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/uuid/"+validUUID, nil, map[string]string{"uuid": validUUID}))
 		mcRequireStatus(t, w, http.StatusNotFound)
+		mcRequireDetail(t, w, msgPlayerNotFound)
 	})
 
 	t.Run("HD-08_InternalError", func(t *testing.T) {
@@ -153,6 +170,7 @@ func TestHD05to08_GetMojangPlayerByUUIDHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/uuid/"+validUUID, nil, map[string]string{"uuid": validUUID}))
 		mcRequireStatus(t, w, http.StatusInternalServerError)
+		mcRequireDetail(t, w, msgFailedToGetPlayer)
 	})
 }
 
@@ -236,6 +254,7 @@ func TestHD16to20_GetMojangProfileHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/profile/bad", nil, map[string]string{"uuid": "bad"}))
 		mcRequireStatus(t, w, http.StatusBadRequest)
+		mcRequireDetail(t, w, msgNotAValidUUID+"bad")
 	})
 
 	t.Run("HD-17_DefaultQuerySignedFalse", func(t *testing.T) {
@@ -282,6 +301,7 @@ func TestHD16to20_GetMojangProfileHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/profile/"+validUUID, nil, map[string]string{"uuid": validUUID}))
 		mcRequireStatus(t, w, http.StatusInternalServerError)
+		mcRequireDetail(t, w, msgFailedToGetPlayerProfile)
 	})
 }
 
@@ -293,6 +313,7 @@ func TestHD21to24_GetProfileHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/p/bad", nil, map[string]string{"uuid": "bad"}))
 		mcRequireStatus(t, w, http.StatusBadRequest)
+		mcRequireDetail(t, w, msgNotAValidUUID+"bad")
 	})
 
 	t.Run("HD-22_OK", func(t *testing.T) {
@@ -317,6 +338,7 @@ func TestHD21to24_GetProfileHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/p/"+validUUID, nil, map[string]string{"uuid": validUUID}))
 		mcRequireStatus(t, w, http.StatusInternalServerError)
+		mcRequireDetail(t, w, msgFailedToGetPlayerProfile)
 	})
 }
 
@@ -326,6 +348,7 @@ func TestHD25to28_GetProfileByNameHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/pn/", nil, map[string]string{"name": ""}))
 		mcRequireStatus(t, w, http.StatusBadRequest)
+		mcRequireDetail(t, w, msgInvalidName)
 	})
 
 	t.Run("HD-26_OK", func(t *testing.T) {
@@ -350,6 +373,7 @@ func TestHD25to28_GetProfileByNameHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/pn/x", nil, map[string]string{"name": "x"}))
 		mcRequireStatus(t, w, http.StatusInternalServerError)
+		mcRequireDetail(t, w, msgFailedToGetPlayerProfile)
 	})
 }
 
@@ -359,6 +383,7 @@ func TestHD29to33_GetGeyserXUIDHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/g/", nil, map[string]string{"gamertag": ""}))
 		mcRequireStatus(t, w, http.StatusBadRequest)
+		mcRequireDetail(t, w, msgInvalidGamertag)
 	})
 
 	t.Run("HD-30_OK", func(t *testing.T) {
@@ -375,6 +400,7 @@ func TestHD29to33_GetGeyserXUIDHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/g/x", nil, map[string]string{"gamertag": "x"}))
 		mcRequireStatus(t, w, http.StatusNotFound)
+		mcRequireDetail(t, w, msgPlayerNotFound)
 	})
 
 	t.Run("HD-32_InvalidGeyserRequest", func(t *testing.T) {
@@ -383,6 +409,7 @@ func TestHD29to33_GetGeyserXUIDHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/g/x", nil, map[string]string{"gamertag": "x"}))
 		mcRequireStatus(t, w, http.StatusBadRequest)
+		mcRequireDetail(t, w, msgInvalidGamertag)
 	})
 
 	t.Run("HD-33_InternalError", func(t *testing.T) {
@@ -400,6 +427,7 @@ func TestHD34to38_GetGeyserSkinHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/s/abc", nil, map[string]string{"xuid": "abc"}))
 		mcRequireStatus(t, w, http.StatusBadRequest)
+		mcRequireDetail(t, w, msgInvalidXuid)
 	})
 
 	t.Run("HD-35_OK", func(t *testing.T) {
@@ -424,6 +452,7 @@ func TestHD34to38_GetGeyserSkinHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/s/1", nil, map[string]string{"xuid": "1"}))
 		mcRequireStatus(t, w, http.StatusBadRequest)
+		mcRequireDetail(t, w, msgInvalidXuid)
 	})
 
 	t.Run("HD-38_InternalError", func(t *testing.T) {
@@ -461,6 +490,7 @@ func TestHD39to43_GetGeyserProfileHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/gp/"+bedrockUUID, nil, map[string]string{"uuid": bedrockUUID}))
 		mcRequireStatus(t, w, http.StatusNotFound)
+		mcRequireDetail(t, w, msgPlayerNotFound)
 	})
 
 	t.Run("HD-42_InvalidGeyserRequest", func(t *testing.T) {
@@ -469,6 +499,7 @@ func TestHD39to43_GetGeyserProfileHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/gp/"+bedrockUUID, nil, map[string]string{"uuid": bedrockUUID}))
 		mcRequireStatus(t, w, http.StatusBadRequest)
+		mcRequireDetail(t, w, msgInvalidXuid)
 	})
 
 	t.Run("HD-43_InternalError", func(t *testing.T) {
@@ -477,6 +508,7 @@ func TestHD39to43_GetGeyserProfileHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/gp/"+bedrockUUID, nil, map[string]string{"uuid": bedrockUUID}))
 		mcRequireStatus(t, w, http.StatusInternalServerError)
+		mcRequireDetail(t, w, msgFailedToGetGeyserProfile)
 	})
 }
 
@@ -486,6 +518,7 @@ func TestHD44to48_GetGeyserProfileByNameHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/gpn/", nil, map[string]string{"name": ""}))
 		mcRequireStatus(t, w, http.StatusBadRequest)
+		mcRequireDetail(t, w, msgInvalidGamertag)
 	})
 
 	t.Run("HD-45_OK", func(t *testing.T) {
@@ -504,6 +537,7 @@ func TestHD44to48_GetGeyserProfileByNameHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/gpn/x", nil, map[string]string{"name": "x"}))
 		mcRequireStatus(t, w, http.StatusNotFound)
+		mcRequireDetail(t, w, msgPlayerNotFound)
 	})
 
 	t.Run("HD-47_InvalidGeyserRequest", func(t *testing.T) {
@@ -512,6 +546,7 @@ func TestHD44to48_GetGeyserProfileByNameHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/gpn/x", nil, map[string]string{"name": "x"}))
 		mcRequireStatus(t, w, http.StatusBadRequest)
+		mcRequireDetail(t, w, msgInvalidGamertag)
 	})
 
 	t.Run("HD-48_InternalError", func(t *testing.T) {
@@ -520,6 +555,7 @@ func TestHD44to48_GetGeyserProfileByNameHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/gpn/x", nil, map[string]string{"name": "x"}))
 		mcRequireStatus(t, w, http.StatusInternalServerError)
+		mcRequireDetail(t, w, msgFailedToGetGeyserProfile)
 	})
 }
 
@@ -529,6 +565,7 @@ func TestHD49to52_GetTextureHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/t/", nil, map[string]string{"hash": ""}))
 		mcRequireStatus(t, w, http.StatusBadRequest)
+		mcRequireDetail(t, w, msgInvalidHash)
 	})
 
 	t.Run("HD-50_OK", func(t *testing.T) {
@@ -553,6 +590,7 @@ func TestHD49to52_GetTextureHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/t/abc", nil, map[string]string{"hash": "abc"}))
 		mcRequireStatus(t, w, http.StatusNotFound)
+		mcRequireDetail(t, w, msgTextureNotFound)
 	})
 
 	t.Run("HD-52_ServiceError", func(t *testing.T) {
@@ -561,6 +599,7 @@ func TestHD49to52_GetTextureHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/t/abc", nil, map[string]string{"hash": "abc"}))
 		mcRequireStatus(t, w, http.StatusBadGateway)
+		mcRequireDetail(t, w, msgFailedToGetTexture)
 	})
 }
 
@@ -570,6 +609,7 @@ func TestHD53to56_GetGeyserTextureHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/gt/", nil, map[string]string{"hash": ""}))
 		mcRequireStatus(t, w, http.StatusBadRequest)
+		mcRequireDetail(t, w, msgInvalidHash)
 	})
 
 	t.Run("HD-54_OK", func(t *testing.T) {
@@ -591,6 +631,7 @@ func TestHD53to56_GetGeyserTextureHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/gt/abc", nil, map[string]string{"hash": "abc"}))
 		mcRequireStatus(t, w, http.StatusNotFound)
+		mcRequireDetail(t, w, msgTextureNotFound)
 	})
 
 	t.Run("HD-56_ServiceError", func(t *testing.T) {
@@ -599,5 +640,6 @@ func TestHD53to56_GetGeyserTextureHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/gt/abc", nil, map[string]string{"hash": "abc"}))
 		mcRequireStatus(t, w, http.StatusBadGateway)
+		mcRequireDetail(t, w, msgFailedToGetTexture)
 	})
 }

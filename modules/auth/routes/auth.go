@@ -18,12 +18,9 @@ import (
 const (
 	msgInvalidUsernameOrPassword = "Invalid username or password"
 	msgAuthenticationFailed      = "Authentication failed"
-)
-
-const (
-	msgInvalidRequest      = "Invalid request"
-	msgInvalidState        = "Invalid state"
-	msgLoginRequiredToLink = "You must be logged in to link an account"
+	msgInvalidRequest            = "Invalid request"
+	msgInvalidState              = "Invalid state"
+	msgLoginRequiredToLink       = "You must be logged in to link an account"
 )
 
 // Login struct for login request

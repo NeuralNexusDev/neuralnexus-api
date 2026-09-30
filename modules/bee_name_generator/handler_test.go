@@ -12,6 +12,7 @@ import (
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/proto/bngpb"
+	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
 type bngMockStore struct {
@@ -63,6 +64,17 @@ func bngRequest(t *testing.T, method, target string, pathValues map[string]strin
 	return r
 }
 
+func bngRequireDetail(t *testing.T, w *httptest.ResponseRecorder, want string) {
+	t.Helper()
+	var p responses.Problem
+	if err := json.Unmarshal(w.Body.Bytes(), &p); err != nil {
+		t.Fatalf("failed to decode problem body %q: %v", w.Body.String(), err)
+	}
+	if p.Detail != want {
+		t.Fatalf("detail = %q, want %q", p.Detail, want)
+	}
+}
+
 func bngRequireStatus(t *testing.T, w *httptest.ResponseRecorder, want int) {
 	t.Helper()
 	if w.Code != want {
@@ -105,6 +117,7 @@ func TestHD03to06_UploadBeeNameHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodPut, "/", map[string]string{"name": ""}, bngAuthorizedSession))
 		bngRequireStatus(t, w, http.StatusBadRequest)
+		bngRequireDetail(t, w, msgInvalidName)
 	})
 
 	t.Run("HD-05_OK", func(t *testing.T) {
@@ -141,6 +154,7 @@ func TestHD07to10_DeleteBeeNameHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodDelete, "/", map[string]string{"name": ""}, bngAuthorizedSession))
 		bngRequireStatus(t, w, http.StatusBadRequest)
+		bngRequireDetail(t, w, msgInvalidName)
 	})
 
 	t.Run("HD-09_OK", func(t *testing.T) {
@@ -166,6 +180,7 @@ func TestHD11to13_SubmitBeeNameHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodPost, "/", map[string]string{"name": ""}, nil))
 		bngRequireStatus(t, w, http.StatusBadRequest)
+		bngRequireDetail(t, w, msgInvalidName)
 	})
 
 	t.Run("HD-12_OK", func(t *testing.T) {
@@ -259,6 +274,7 @@ func TestHD20to23_AcceptBeeNameSuggestionHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodPost, "/", map[string]string{"name": ""}, bngAuthorizedSession))
 		bngRequireStatus(t, w, http.StatusBadRequest)
+		bngRequireDetail(t, w, msgInvalidName)
 	})
 
 	t.Run("HD-22_OK", func(t *testing.T) {
@@ -295,6 +311,7 @@ func TestHD24to27_RejectBeeNameSuggestionHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodPost, "/", map[string]string{"name": ""}, bngAuthorizedSession))
 		bngRequireStatus(t, w, http.StatusBadRequest)
+		bngRequireDetail(t, w, msgInvalidName)
 	})
 
 	t.Run("HD-26_OK", func(t *testing.T) {

@@ -126,6 +126,17 @@ func requireRedirect(t *testing.T, w *httptest.ResponseRecorder, wantTarget stri
 	return u
 }
 
+func requireProblemDetail(t *testing.T, w *httptest.ResponseRecorder, want string) {
+	t.Helper()
+	var p responses.Problem
+	if err := json.Unmarshal(w.Body.Bytes(), &p); err != nil {
+		t.Fatalf("failed to decode problem body %q: %v", w.Body.String(), err)
+	}
+	if p.Detail != want {
+		t.Fatalf("detail = %q, want %q", p.Detail, want)
+	}
+}
+
 func requireProblemRedirect(t *testing.T, w *httptest.ResponseRecorder, wantTarget string, wantStatus int, wantDetail string) {
 	t.Helper()
 	u := requireRedirect(t, w, wantTarget)
@@ -215,6 +226,7 @@ func TestAU03LoginHandlerMalformedBody(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
 		}
+		requireProblemDetail(t, w, msgInvalidUsernameOrPassword)
 	})
 }
 
@@ -230,6 +242,7 @@ func TestAU04LoginHandlerAccountLookupFails(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
 		}
+		requireProblemDetail(t, w, msgInvalidUsernameOrPassword)
 		if findCookie(w, mw.SessionCookieName) != nil {
 			t.Error("expected no session cookie on a failed lookup")
 		}
@@ -252,6 +265,7 @@ func TestAU05LoginHandlerWrongPassword(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
 		}
+		requireProblemDetail(t, w, msgInvalidUsernameOrPassword)
 		if findCookie(w, mw.SessionCookieName) != nil {
 			t.Error("expected no session cookie on a wrong password")
 		}
@@ -274,6 +288,7 @@ func TestAU06LoginHandlerPasswordAuthCheckErrors(t *testing.T) {
 		if w.Code != http.StatusInternalServerError {
 			t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
 		}
+		requireProblemDetail(t, w, msgAuthenticationFailed)
 	})
 }
 
@@ -293,6 +308,7 @@ func TestAU07LoginHandlerPasswordAuthDisabled(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
 		}
+		requireProblemDetail(t, w, msgInvalidUsernameOrPassword)
 		if findCookie(w, mw.SessionCookieName) != nil {
 			t.Error("expected no session cookie when password auth is disabled")
 		}
@@ -315,6 +331,7 @@ func TestAU08LoginHandlerAddSessionFails(t *testing.T) {
 		if w.Code != http.StatusInternalServerError {
 			t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
 		}
+		requireProblemDetail(t, w, msgAuthenticationFailed)
 		if findCookie(w, mw.SessionCookieName) != nil {
 			t.Error("expected no session cookie when AddSession fails")
 		}
@@ -337,6 +354,7 @@ func TestAU09LoginHandlerCreateJWTFails(t *testing.T) {
 		if w.Code != http.StatusInternalServerError {
 			t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
 		}
+		requireProblemDetail(t, w, msgAuthenticationFailed)
 		if findCookie(w, mw.SessionCookieName) != nil {
 			t.Error("expected no session cookie when CreateJWT fails")
 		}

@@ -121,11 +121,8 @@ func TestGetReleases(t *testing.T) {
 		swapTransport(t, &fakeRoundTripper{err: wantErr})
 
 		releases, err := getReleases("group", "project")
-		if err == nil {
-			t.Fatal("getReleases() error = nil, want non-nil")
-		}
-		if !strings.Contains(err.Error(), wantErr.Error()) {
-			t.Errorf("getReleases() error = %q, want it to contain %q", err.Error(), wantErr.Error())
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("getReleases() error = %v, want it to wrap %v", err, wantErr)
 		}
 		if releases != nil {
 			t.Errorf("getReleases() releases = %+v, want nil", releases)

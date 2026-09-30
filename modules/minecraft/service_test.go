@@ -1210,17 +1210,16 @@ func TestSV85to88_GetGeyserProfile(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-88_SkinFailsWithOtherError", func(t *testing.T) {
+	t.Run("SV-88_SkinLookupFailsWithGeyserError", func(t *testing.T) {
 		store := &mcMockStore{
 			getGeyserPlayerByXUID: func(int64) (*GeyserPlayer, error) { return &GeyserPlayer{Gamertag: "Notch", LastSeen: mcNow()}, nil },
-			getGeyserSkin:         func(int64) (*GeyserSkin, error) { return nil, testerrors.ErrBoom },
 		}
 		s := mcNewService(t, store, func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 		})
 		_, err := s.GetGeyserProfile(1)
-		if err == nil || errors.Is(err, ErrSkinNotFound) {
-			t.Errorf("err = %v, want a non-nil error other than ErrSkinNotFound", err)
+		if !errors.Is(err, ErrGeyserAPI) {
+			t.Errorf("err = %v, want it to wrap %v", err, ErrGeyserAPI)
 		}
 	})
 }
@@ -1257,17 +1256,16 @@ func TestSV89to92_GetGeyserProfileByGamertag(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-92_SkinFailsWithOtherError", func(t *testing.T) {
+	t.Run("SV-92_SkinLookupFailsWithGeyserError", func(t *testing.T) {
 		store := &mcMockStore{
 			getGeyserPlayerByGamertag: func(string) (*GeyserPlayer, error) { return &GeyserPlayer{XUID: 1, LastSeen: mcNow()}, nil },
-			getGeyserSkin:             func(int64) (*GeyserSkin, error) { return nil, testerrors.ErrBoom },
 		}
 		s := mcNewService(t, store, func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 		})
 		_, err := s.GetGeyserProfileByGamertag("Notch")
-		if err == nil || errors.Is(err, ErrSkinNotFound) {
-			t.Errorf("err = %v, want a non-nil error other than ErrSkinNotFound", err)
+		if !errors.Is(err, ErrGeyserAPI) {
+			t.Errorf("err = %v, want it to wrap %v", err, ErrGeyserAPI)
 		}
 	})
 }

@@ -52,14 +52,14 @@
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| HD-01 | GetMojangPlayerByNameHandler | Error Path | Empty name path value | r.PathValue("name") == "" | 400 Bad Request | P2 |  |
+| HD-01 | GetMojangPlayerByNameHandler | Error Path | Empty name path value | r.PathValue("name") == "" | 400 Bad Request, `detail` is `msgInvalidName` | P2 |  |
 | HD-02 | GetMojangPlayerByNameHandler | Happy Path | Valid name, service succeeds | mock returns *Player | 200 OK with player JSON body | P1 |  |
-| HD-03 | GetMojangPlayerByNameHandler | Error Path | Service returns ErrPlayerNotFound | mock error = ErrPlayerNotFound | 404 Not Found | P1 |  |
-| HD-04 | GetMojangPlayerByNameHandler | Error Path | Service returns a generic error | mock error = errors.New(...) | 500 Internal Server Error | P2 |  |
-| HD-05 | GetMojangPlayerByUUIDHandler | Error Path | Invalid UUID path value | r.PathValue("uuid") == "not-a-uuid" | 400 Bad Request | P2 |  |
+| HD-03 | GetMojangPlayerByNameHandler | Error Path | Service returns ErrPlayerNotFound | mock error = ErrPlayerNotFound | 404 Not Found, `detail` is `msgPlayerNotFound` | P1 |  |
+| HD-04 | GetMojangPlayerByNameHandler | Error Path | Service returns a generic error | mock error = errors.New(...) | 500 Internal Server Error, `detail` is `msgFailedToGetPlayer` | P2 |  |
+| HD-05 | GetMojangPlayerByUUIDHandler | Error Path | Invalid UUID path value | r.PathValue("uuid") == "not-a-uuid" | 400 Bad Request, `detail` is `msgNotAValidUUID` followed by the id | P2 |  |
 | HD-06 | GetMojangPlayerByUUIDHandler | Happy Path | Valid UUID, service succeeds | mock returns *Player | 200 OK with player JSON body | P1 |  |
-| HD-07 | GetMojangPlayerByUUIDHandler | Error Path | Service returns ErrPlayerNotFound | mock error = ErrPlayerNotFound | 404 Not Found | P1 |  |
-| HD-08 | GetMojangPlayerByUUIDHandler | Error Path | Service returns a generic error | mock error = errors.New(...) | 500 Internal Server Error | P2 |  |
+| HD-07 | GetMojangPlayerByUUIDHandler | Error Path | Service returns ErrPlayerNotFound | mock error = ErrPlayerNotFound | 404 Not Found, `detail` is `msgPlayerNotFound` | P1 |  |
+| HD-08 | GetMojangPlayerByUUIDHandler | Error Path | Service returns a generic error | mock error = errors.New(...) | 500 Internal Server Error, `detail` is `msgFailedToGetPlayer` | P2 |  |
 | HD-09 | GetMojangPlayersByNamesHandler | Error Path | Content-Type header is not application/json | header omitted | 415 Unsupported Media Type | P2 |  |
 | HD-10 | GetMojangPlayersByNamesHandler | Error Path | Body is not valid JSON | body = "{not json" | 400 Bad Request | P2 |  |
 | HD-11 | GetMojangPlayersByNamesHandler | Error Path | names array is empty | body = "[]" | 400 Bad Request | P2 |  |
@@ -67,47 +67,47 @@
 | HD-13 | GetMojangPlayersByNamesHandler | Error Path | names array contains an empty string | ["a", ""] | 400 Bad Request | P3 |  |
 | HD-14 | GetMojangPlayersByNamesHandler | Happy Path | Valid names, service succeeds | mock returns []*Player | 200 OK with players JSON body | P1 |  |
 | HD-15 | GetMojangPlayersByNamesHandler | Error Path | Service returns an error | mock error | 500 Internal Server Error | P2 |  |
-| HD-16 | GetMojangProfileHandler | Error Path | Invalid UUID path value | r.PathValue("uuid") invalid | 400 Bad Request | P2 |  |
+| HD-16 | GetMojangProfileHandler | Error Path | Invalid UUID path value | r.PathValue("uuid") invalid | 400 Bad Request, `detail` is `msgNotAValidUUID` followed by the id | P2 |  |
 | HD-17 | GetMojangProfileHandler | Happy Path | No "unsigned" query param, service succeeds | query omitted | signed=false passed to service; 200 OK | P1 |  |
 | HD-18 | GetMojangProfileHandler | Edge Case | Query "unsigned=false" | ?unsigned=false | signed=true passed to service | P2 |  |
 | HD-19 | GetMojangProfileHandler | Error Path | Service returns ErrPlayerNotFound | mock error | 204 No Content | P1 |  |
-| HD-20 | GetMojangProfileHandler | Error Path | Service returns a generic error | mock error | 500 Internal Server Error | P2 |  |
-| HD-21 | GetProfileHandler | Error Path | Invalid UUID path value | invalid uuid | 400 Bad Request | P2 |  |
+| HD-20 | GetMojangProfileHandler | Error Path | Service returns a generic error | mock error | 500 Internal Server Error, `detail` is `msgFailedToGetPlayerProfile` | P2 |  |
+| HD-21 | GetProfileHandler | Error Path | Invalid UUID path value | invalid uuid | 400 Bad Request, `detail` is `msgNotAValidUUID` followed by the id | P2 |  |
 | HD-22 | GetProfileHandler | Happy Path | Valid UUID, service succeeds | mock returns *Profile | 200 OK with profile JSON body | P1 |  |
 | HD-23 | GetProfileHandler | Error Path | Service returns ErrPlayerNotFound | mock error | 204 No Content | P1 |  |
-| HD-24 | GetProfileHandler | Error Path | Service returns a generic error | mock error | 500 Internal Server Error | P2 |  |
-| HD-25 | GetProfileByNameHandler | Error Path | Empty name path value | name == "" | 400 Bad Request | P2 |  |
+| HD-24 | GetProfileHandler | Error Path | Service returns a generic error | mock error | 500 Internal Server Error, `detail` is `msgFailedToGetPlayerProfile` | P2 |  |
+| HD-25 | GetProfileByNameHandler | Error Path | Empty name path value | name == "" | 400 Bad Request, `detail` is `msgInvalidName` | P2 |  |
 | HD-26 | GetProfileByNameHandler | Happy Path | Valid name, service succeeds | mock returns *Profile | 200 OK with profile JSON body | P1 |  |
 | HD-27 | GetProfileByNameHandler | Error Path | Service returns ErrPlayerNotFound | mock error | 204 No Content | P1 |  |
-| HD-28 | GetProfileByNameHandler | Error Path | Service returns a generic error | mock error | 500 Internal Server Error | P2 |  |
-| HD-29 | GetGeyserXUIDHandler | Error Path | Empty gamertag path value | gamertag == "" | 400 Bad Request | P2 |  |
+| HD-28 | GetProfileByNameHandler | Error Path | Service returns a generic error | mock error | 500 Internal Server Error, `detail` is `msgFailedToGetPlayerProfile` | P2 |  |
+| HD-29 | GetGeyserXUIDHandler | Error Path | Empty gamertag path value | gamertag == "" | 400 Bad Request, `detail` is `msgInvalidGamertag` | P2 |  |
 | HD-30 | GetGeyserXUIDHandler | Happy Path | Valid gamertag, service succeeds | mock returns *GeyserPlayer | 200 OK with player JSON body | P1 |  |
-| HD-31 | GetGeyserXUIDHandler | Error Path | Service returns ErrPlayerNotFound | mock error | 404 Not Found | P1 |  |
-| HD-32 | GetGeyserXUIDHandler | Error Path | Service returns ErrInvalidGeyserRequest | mock error | 400 Bad Request | P2 |  |
+| HD-31 | GetGeyserXUIDHandler | Error Path | Service returns ErrPlayerNotFound | mock error | 404 Not Found, `detail` is `msgPlayerNotFound` | P1 |  |
+| HD-32 | GetGeyserXUIDHandler | Error Path | Service returns ErrInvalidGeyserRequest | mock error | 400 Bad Request, `detail` is `msgInvalidGamertag` | P2 |  |
 | HD-33 | GetGeyserXUIDHandler | Error Path | Service returns a generic error | mock error | 500 Internal Server Error | P2 |  |
-| HD-34 | GetGeyserSkinHandler | Error Path | Non-numeric xuid path value | xuid == "abc" | 400 Bad Request | P2 |  |
+| HD-34 | GetGeyserSkinHandler | Error Path | Non-numeric xuid path value | xuid == "abc" | 400 Bad Request, `detail` is `msgInvalidXuid` | P2 |  |
 | HD-35 | GetGeyserSkinHandler | Happy Path | Valid xuid, service succeeds | mock returns *GeyserSkin | 200 OK with skin JSON body | P1 |  |
 | HD-36 | GetGeyserSkinHandler | Error Path | Service returns ErrSkinNotFound | mock error | 204 No Content | P1 |  |
-| HD-37 | GetGeyserSkinHandler | Error Path | Service returns ErrInvalidGeyserRequest | mock error | 400 Bad Request | P2 |  |
+| HD-37 | GetGeyserSkinHandler | Error Path | Service returns ErrInvalidGeyserRequest | mock error | 400 Bad Request, `detail` is `msgInvalidXuid` | P2 |  |
 | HD-38 | GetGeyserSkinHandler | Error Path | Service returns a generic error | mock error | 500 Internal Server Error | P2 |  |
 | HD-39 | GetGeyserProfileHandler | Error Path | uuid path value is not a derived Bedrock UUID | uuidToXUID fails | 400 Bad Request | P2 |  |
 | HD-40 | GetGeyserProfileHandler | Happy Path | Valid Bedrock UUID, service succeeds | mock returns *GeyserProfile | 200 OK with profile JSON body | P1 |  |
-| HD-41 | GetGeyserProfileHandler | Error Path | Service returns ErrPlayerNotFound | mock error | 404 Not Found | P1 |  |
-| HD-42 | GetGeyserProfileHandler | Error Path | Service returns ErrInvalidGeyserRequest | mock error | 400 Bad Request | P2 |  |
-| HD-43 | GetGeyserProfileHandler | Error Path | Service returns a generic error | mock error | 500 Internal Server Error | P2 |  |
-| HD-44 | GetGeyserProfileByNameHandler | Error Path | Empty gamertag path value | gamertag == "" | 400 Bad Request | P2 |  |
+| HD-41 | GetGeyserProfileHandler | Error Path | Service returns ErrPlayerNotFound | mock error | 404 Not Found, `detail` is `msgPlayerNotFound` | P1 |  |
+| HD-42 | GetGeyserProfileHandler | Error Path | Service returns ErrInvalidGeyserRequest | mock error | 400 Bad Request, `detail` is `msgInvalidXuid` | P2 |  |
+| HD-43 | GetGeyserProfileHandler | Error Path | Service returns a generic error | mock error | 500 Internal Server Error, `detail` is `msgFailedToGetGeyserProfile` | P2 |  |
+| HD-44 | GetGeyserProfileByNameHandler | Error Path | Empty gamertag path value | gamertag == "" | 400 Bad Request, `detail` is `msgInvalidGamertag` | P2 |  |
 | HD-45 | GetGeyserProfileByNameHandler | Happy Path | Valid gamertag, service succeeds | mock returns *GeyserProfile | 200 OK with profile JSON body | P1 |  |
-| HD-46 | GetGeyserProfileByNameHandler | Error Path | Service returns ErrPlayerNotFound | mock error | 404 Not Found | P1 |  |
-| HD-47 | GetGeyserProfileByNameHandler | Error Path | Service returns ErrInvalidGeyserRequest | mock error | 400 Bad Request | P2 |  |
-| HD-48 | GetGeyserProfileByNameHandler | Error Path | Service returns a generic error | mock error | 500 Internal Server Error | P2 |  |
-| HD-49 | GetTextureHandler | Error Path | Empty hash path value | hash == "" | 400 Bad Request | P2 |  |
+| HD-46 | GetGeyserProfileByNameHandler | Error Path | Service returns ErrPlayerNotFound | mock error | 404 Not Found, `detail` is `msgPlayerNotFound` | P1 |  |
+| HD-47 | GetGeyserProfileByNameHandler | Error Path | Service returns ErrInvalidGeyserRequest | mock error | 400 Bad Request, `detail` is `msgInvalidGamertag` | P2 |  |
+| HD-48 | GetGeyserProfileByNameHandler | Error Path | Service returns a generic error | mock error | 500 Internal Server Error, `detail` is `msgFailedToGetGeyserProfile` | P2 |  |
+| HD-49 | GetTextureHandler | Error Path | Empty hash path value | hash == "" | 400 Bad Request, `detail` is `msgInvalidHash` | P2 |  |
 | HD-50 | GetTextureHandler | Happy Path | Valid hash, service succeeds | mock returns *TextureResult | 200 OK, body bytes copied verbatim, Content-Type header set | P1 |  |
-| HD-51 | GetTextureHandler | Error Path | Service returns ErrTextureNotFound | mock error | 404 Not Found | P1 |  |
-| HD-52 | GetTextureHandler | Error Path | Service returns a generic error | mock error | 502 Bad Gateway | P2 |  |
-| HD-53 | GetGeyserTextureHandler | Error Path | Empty hash path value | hash == "" | 400 Bad Request | P2 |  |
+| HD-51 | GetTextureHandler | Error Path | Service returns ErrTextureNotFound | mock error | 404 Not Found, `detail` is `msgTextureNotFound` | P1 |  |
+| HD-52 | GetTextureHandler | Error Path | Service returns a generic error | mock error | 502 Bad Gateway, `detail` is `msgFailedToGetTexture` | P2 |  |
+| HD-53 | GetGeyserTextureHandler | Error Path | Empty hash path value | hash == "" | 400 Bad Request, `detail` is `msgInvalidHash` | P2 |  |
 | HD-54 | GetGeyserTextureHandler | Happy Path | Valid hash, service succeeds | mock returns *TextureResult | 200 OK, body bytes copied verbatim | P1 |  |
-| HD-55 | GetGeyserTextureHandler | Error Path | Service returns ErrTextureNotFound | mock error | 404 Not Found | P1 |  |
-| HD-56 | GetGeyserTextureHandler | Error Path | Service returns a generic error | mock error | 502 Bad Gateway | P2 |  |
+| HD-55 | GetGeyserTextureHandler | Error Path | Service returns ErrTextureNotFound | mock error | 404 Not Found, `detail` is `msgTextureNotFound` | P1 |  |
+| HD-56 | GetGeyserTextureHandler | Error Path | Service returns a generic error | mock error | 502 Bad Gateway, `detail` is `msgFailedToGetTexture` | P2 |  |
 
 ## service.go
 
@@ -200,11 +200,11 @@
 | SV-85 | GetGeyserProfile | Happy Path | Player and skin both resolve | both succeed | Returns combined GeyserProfile with Skin set | P1 |  |
 | SV-86 | GetGeyserProfile | Edge Case | GetGeyserSkin returns ErrSkinNotFound | no skin | Returns GeyserProfile with Skin nil, no error | P2 |  |
 | SV-87 | GetGeyserProfile | Error Path | resolveGeyserPlayerByXUID fails | error | Returns that error, which for a Geyser 500 wraps `ErrGeyserAPI` | P2 |  |
-| SV-88 | GetGeyserProfile | Error Path | GetGeyserSkin fails with a non-ErrSkinNotFound error | store/transport error | Returns that error | P2 | GetGeyserSkin discards the store's own lookup error as a cache-miss signal and falls through to a live fetch; the mocked non-2xx response there is what actually produces the propagated error |
+| SV-88 | GetGeyserProfile | Error Path | GetGeyserSkin misses the store and the live Geyser fetch fails | Geyser responds 500 | Returns an error wrapping `ErrGeyserAPI` | P2 | The store's own lookup error is intentionally discarded as a cache-miss signal |
 | SV-89 | GetGeyserProfileByGamertag | Happy Path | XUID and skin both resolve | both succeed | Returns combined GeyserProfile with Skin set | P1 |  |
 | SV-90 | GetGeyserProfileByGamertag | Edge Case | GetGeyserSkin returns ErrSkinNotFound | no skin | Returns GeyserProfile with Skin nil | P2 |  |
 | SV-91 | GetGeyserProfileByGamertag | Error Path | GetGeyserXUID fails | error | Returns that error, which for a Geyser 500 wraps `ErrGeyserAPI` | P2 |  |
-| SV-92 | GetGeyserProfileByGamertag | Error Path | GetGeyserSkin fails with a non-ErrSkinNotFound error | error | Returns that error | P2 |  |
+| SV-92 | GetGeyserProfileByGamertag | Error Path | GetGeyserSkin misses the store and the live Geyser fetch fails | Geyser responds 500 | Returns an error wrapping `ErrGeyserAPI` | P2 |  |
 | SV-93 | GetTextureContent | Happy Path | IsTextureInS3 true | present=true | Delegates to serveFromS3 | P1 |  |
 | SV-94 | GetTextureContent | Happy Path | IsTextureInS3 false | present=false | Delegates to fetchAndArchive | P1 |  |
 | SV-95 | GetTextureContent | Error Path | IsTextureInS3 fails | store error | Returns that error | P2 |  |
@@ -318,10 +318,10 @@ Rows marked "(live)" require `TEST_POSTGRES_URL` and/or `TEST_REDIS_URL` and `t.
 | ST-68 | PutTextureInS3 | Happy Path (local fake) | Body implements Len(); PUT returns 200 | fake S3 server | Content-Length header equals Len(); nil error | P1 |  |
 | ST-69 | PutTextureInS3 | Edge Case (local fake) | Body does not implement Len() | fake S3 server | ContentLength left unset; still succeeds | P2 |  |
 | ST-70 | PutTextureInS3 | Error Path (local fake) | PUT returns 500 | fake S3 server | Returns an error wrapping `ErrUploadS3` | P2 |  |
-| ST-77 | PutTextureInS3 | Error Path (local fake) | PUT returns 500, asserting the cause is chained | fake S3 server | Returns an error wrapping both `ErrUploadS3` and the S3 response error | P2 | |
+| ST-77 | PutTextureInS3 | Error Path (local fake) | PUT returns 500, asserting the cause is chained | fake S3 server | Returns an error wrapping both `ErrUploadS3` and `*awshttp.ResponseError` | P2 | |
 | ST-71 | IsGeyserTextureInS3 | Happy Path (local fake) | HeadObject returns 200 at Geyser key | fake S3 server | Returns (true, nil); request key uses GeyserS3KeyPrefix | P1 |  |
 | ST-72 | IsGeyserTextureInS3 | Edge Case (local fake) | HeadObject returns 404 | fake S3 server | Returns (false, nil) | P2 |  |
 | ST-73 | IsGeyserTextureInS3 | Error Path (local fake) | HeadObject returns 500 | fake S3 server | Returns (false, non-nil error) | P2 |  |
 | ST-74 | PutGeyserTextureInS3 | Happy Path (local fake) | PUT returns 200 | fake S3 server | nil error; request key uses GeyserS3KeyPrefix | P1 |  |
 | ST-75 | PutGeyserTextureInS3 | Error Path (local fake) | PUT returns 500 | fake S3 server | Returns an error wrapping `ErrUploadS3` | P2 |  |
-| ST-78 | PutGeyserTextureInS3 | Error Path (local fake) | PUT returns 500, asserting the cause is chained | fake S3 server | Returns an error wrapping both `ErrUploadS3` and the S3 response error | P2 | |
+| ST-78 | PutGeyserTextureInS3 | Error Path (local fake) | PUT returns 500, asserting the cause is chained | fake S3 server | Returns an error wrapping both `ErrUploadS3` and `*awshttp.ResponseError` | P2 | |

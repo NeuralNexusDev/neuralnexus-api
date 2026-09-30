@@ -16,8 +16,10 @@ import (
 	"testing"
 	"time"
 
+	"encoding/json"
 	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
+	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"golang.org/x/crypto/ed25519"
 )
 
@@ -556,6 +558,17 @@ func mwRunRateLimit(svc auth.RateLimitService, prefix string, sessionLimit, ipLi
 	return rec, nextCalled
 }
 
+func mwRequireDetail(t *testing.T, rec *httptest.ResponseRecorder, want string) {
+	t.Helper()
+	var p responses.Problem
+	if err := json.Unmarshal(rec.Body.Bytes(), &p); err != nil {
+		t.Fatalf("failed to decode problem body %q: %v", rec.Body.String(), err)
+	}
+	if p.Detail != want {
+		t.Fatalf("detail = %q, want %q", p.Detail, want)
+	}
+}
+
 func mwRateLimitRequest(session *auth.Session, remoteAddr string) *http.Request {
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	r.RemoteAddr = remoteAddr
@@ -596,6 +609,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 		if rec.Code != http.StatusTooManyRequests {
 			t.Errorf("expected status 429, got %d", rec.Code)
 		}
+		mwRequireDetail(t, rec, msgRateLimited)
 		if rec.Header().Get("Retry-After") == "" {
 			t.Error("expected a Retry-After header on a 429 response")
 		}
@@ -661,6 +675,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 		if rec.Code != http.StatusTooManyRequests {
 			t.Errorf("expected status 429, got %d", rec.Code)
 		}
+		mwRequireDetail(t, rec, msgRateLimited)
 	})
 
 	t.Run("MW-30_NoSessionRemoteAddrWithoutPortUsesRawValue", func(t *testing.T) {
@@ -706,6 +721,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 		if rec.Code != http.StatusTooManyRequests {
 			t.Errorf("expected status 429, got %d", rec.Code)
 		}
+		mwRequireDetail(t, rec, msgRateLimited)
 	})
 
 	t.Run("MW-32_NoSessionGetErrorFailsOpenAndCallsNext", func(t *testing.T) {
@@ -1040,6 +1056,7 @@ func TestVerifyEd25519Middleware(t *testing.T) {
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401, got %d", rec.Code)
 		}
+		mwRequireDetail(t, rec, msgInvalidSignature)
 	})
 
 	t.Run("MW-47_MissingTimestampHeaderRejected", func(t *testing.T) {
@@ -1053,6 +1070,7 @@ func TestVerifyEd25519Middleware(t *testing.T) {
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401, got %d", rec.Code)
 		}
+		mwRequireDetail(t, rec, msgInvalidSignature)
 	})
 
 	t.Run("MW-48_ValidSignatureCallsNextWithReadableBody", func(t *testing.T) {
@@ -1083,6 +1101,7 @@ func TestVerifyEd25519Middleware(t *testing.T) {
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401, got %d", rec.Code)
 		}
+		mwRequireDetail(t, rec, msgInvalidSignature)
 	})
 
 	t.Run("MW-50_NonHexSignatureWithTimestampRejected", func(t *testing.T) {
@@ -1115,5 +1134,6 @@ func TestVerifyEd25519Middleware(t *testing.T) {
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401, got %d", rec.Code)
 		}
+		mwRequireDetail(t, rec, msgInvalidSignature)
 	})
 }

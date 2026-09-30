@@ -2,6 +2,7 @@ package authroutes
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
+	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
 type stubUserService struct {
@@ -111,6 +113,17 @@ func expectStatus(t *testing.T, w *httptest.ResponseRecorder, want int) {
 	}
 }
 
+func expectDetail(t *testing.T, w *httptest.ResponseRecorder, want string) {
+	t.Helper()
+	var p responses.Problem
+	if err := json.Unmarshal(w.Body.Bytes(), &p); err != nil {
+		t.Fatalf("failed to decode problem body %q: %v", w.Body.String(), err)
+	}
+	if p.Detail != want {
+		t.Fatalf("detail = %q, want %q", p.Detail, want)
+	}
+}
+
 func TestUS01GetUserHandlerSelfHappyPath(t *testing.T) {
 	svc := &stubUserService{user: &auth.Account{UserID: "u1"}}
 	r := newSessionRequest(http.MethodGet, selfSession("u1"), "u1", "", "")
@@ -152,6 +165,7 @@ func TestUS04GetUserHandlerServiceErrorMapsTo404(t *testing.T) {
 	t.Run("US-04_GetUserServiceErrorMapsTo404", func(t *testing.T) {
 		GetUserHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusNotFound)
+		expectDetail(t, w, msgUserNotFound)
 	})
 }
 
@@ -188,6 +202,7 @@ func TestUS07GetUserFromPlatformHandlerServiceErrorMapsTo404(t *testing.T) {
 	t.Run("US-07_GetUserFromPlatformServiceErrorMapsTo404", func(t *testing.T) {
 		GetUserFromPlatformHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusNotFound)
+		expectDetail(t, w, msgUserNotFound)
 	})
 }
 
@@ -232,6 +247,7 @@ func TestUS11GetUserPermissionsHandlerServiceErrorMapsTo404(t *testing.T) {
 	t.Run("US-11_GetUserPermissionsServiceErrorMapsTo404", func(t *testing.T) {
 		GetUserPermissionsHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusNotFound)
+		expectDetail(t, w, msgUserNotFound)
 	})
 }
 
@@ -257,6 +273,7 @@ func TestUS13UpdateUserHandlerForbidden(t *testing.T) {
 	t.Run("US-13_UpdateUserForbidden", func(t *testing.T) {
 		UpdateUserHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusForbidden)
+		expectDetail(t, w, msgNoPermissionToUpdateUsers)
 	})
 }
 
@@ -268,6 +285,7 @@ func TestUS14UpdateUserHandlerMalformedBody(t *testing.T) {
 	t.Run("US-14_UpdateUserMalformedBody", func(t *testing.T) {
 		UpdateUserHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusBadRequest)
+		expectDetail(t, w, msgInvalidRequestBody)
 	})
 }
 
@@ -279,6 +297,7 @@ func TestUS15UpdateUserHandlerServiceErrorMapsTo400(t *testing.T) {
 	t.Run("US-15_UpdateUserServiceErrorMapsTo400", func(t *testing.T) {
 		UpdateUserHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusBadRequest)
+		expectDetail(t, w, msgFailedToUpdateUser)
 	})
 }
 
@@ -336,6 +355,7 @@ func TestUS22UpdateUserFromPlatformHandlerForbidden(t *testing.T) {
 	t.Run("US-22_UpdateUserFromPlatformForbidden", func(t *testing.T) {
 		UpdateUserFromPlatformHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusForbidden)
+		expectDetail(t, w, msgNoPermissionToUpdateUsers)
 		if svc.updateFromPlatformCalled {
 			t.Error("expected UpdateUserFromPlatform to never be called for a forbidden request")
 		}
@@ -351,6 +371,7 @@ func TestUS23UpdateUserFromPlatformHandlerMalformedBody(t *testing.T) {
 	t.Run("US-23_UpdateUserFromPlatformMalformedBody", func(t *testing.T) {
 		UpdateUserFromPlatformHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusBadRequest)
+		expectDetail(t, w, msgInvalidRequestBody)
 		if svc.updateFromPlatformCalled {
 			t.Error("expected UpdateUserFromPlatform to never be called for a malformed body")
 		}
@@ -366,6 +387,7 @@ func TestUS24UpdateUserFromPlatformHandlerServiceErrorMapsTo400(t *testing.T) {
 	t.Run("US-24_UpdateUserFromPlatformServiceErrorMapsTo400", func(t *testing.T) {
 		UpdateUserFromPlatformHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusBadRequest)
+		expectDetail(t, w, msgFailedToUpdateUser)
 	})
 }
 
@@ -482,6 +504,7 @@ func TestUS34UnlinkPlatformHandlerNotFoundMapsTo404(t *testing.T) {
 	t.Run("US-34_UnlinkPlatformNotFoundMapsTo404", func(t *testing.T) {
 		UnlinkPlatformHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusNotFound)
+		expectDetail(t, w, msgPlatformNotLinked)
 	})
 }
 
@@ -540,6 +563,7 @@ func TestUS39SetPlatformLoginEnabledHandlerMalformedBody(t *testing.T) {
 	t.Run("US-39_SetPlatformLoginEnabledMalformedBody", func(t *testing.T) {
 		SetPlatformLoginEnabledHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusBadRequest)
+		expectDetail(t, w, msgInvalidRequestBody)
 		if len(svc.setEnableCalls) != 0 {
 			t.Error("expected SetPlatformLoginEnabled to never be called for a malformed body")
 		}
@@ -554,6 +578,7 @@ func TestUS40SetPlatformLoginEnabledHandlerMissingField(t *testing.T) {
 	t.Run("US-40_SetPlatformLoginEnabledMissingField", func(t *testing.T) {
 		SetPlatformLoginEnabledHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusBadRequest)
+		expectDetail(t, w, msgInvalidRequestBody)
 		if len(svc.setEnableCalls) != 0 {
 			t.Error("expected SetPlatformLoginEnabled to never be called when login_enabled is omitted")
 		}
@@ -568,6 +593,7 @@ func TestUS41SetPlatformLoginEnabledHandlerNotFoundMapsTo404(t *testing.T) {
 	t.Run("US-41_SetPlatformLoginEnabledNotFoundMapsTo404", func(t *testing.T) {
 		SetPlatformLoginEnabledHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusNotFound)
+		expectDetail(t, w, msgPlatformNotLinked)
 	})
 }
 
@@ -684,6 +710,7 @@ func TestUS51UpdateAccountSettingsHandlerMalformedBody(t *testing.T) {
 	t.Run("US-51_UpdateAccountSettingsMalformedBody", func(t *testing.T) {
 		UpdateAccountSettingsHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusBadRequest)
+		expectDetail(t, w, msgInvalidRequestBody)
 	})
 }
 
@@ -695,6 +722,7 @@ func TestUS52UpdateAccountSettingsHandlerMissingField(t *testing.T) {
 	t.Run("US-52_UpdateAccountSettingsMissingField", func(t *testing.T) {
 		UpdateAccountSettingsHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusBadRequest)
+		expectDetail(t, w, msgInvalidRequestBody)
 		if len(svc.setPasswordAuthCalls) != 0 {
 			t.Error("expected SetPasswordAuthEnabled to never be called when password_auth is omitted")
 		}

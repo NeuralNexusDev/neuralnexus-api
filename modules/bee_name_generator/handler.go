@@ -11,9 +11,7 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
-const (
-	msgInvalidName = "Invalid name"
-)
+const msgInvalidName = "Invalid name"
 
 // GetBeeNameHandler Get a bee name
 func GetBeeNameHandler(s BNGStore) http.HandlerFunc {
