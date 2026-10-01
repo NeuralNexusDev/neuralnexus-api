@@ -5,7 +5,9 @@ import (
 	"image"
 	"image/png"
 	"log"
+	"net"
 	"net/http"
+	"net/netip"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -57,15 +59,29 @@ func respondStatusFailure(w http.ResponseWriter, r *http.Request, err error) {
 }
 
 func splitHostPort(address string, isBedrock bool) (string, int) {
+	defaultPort := defaultJavaPort
+	if isBedrock {
+		defaultPort = defaultBedrockPort
+	}
+	if strings.HasPrefix(address, "[") {
+		if host, rawPort, err := net.SplitHostPort(address); err == nil {
+			if port, err := strconv.Atoi(rawPort); err == nil {
+				return host, port
+			}
+		} else if strings.HasSuffix(address, "]") {
+			return strings.Trim(address, "[]"), defaultPort
+		}
+		return address, defaultPort
+	}
+	if ip, err := netip.ParseAddr(address); err == nil && ip.Is6() {
+		return address, defaultPort
+	}
 	if i := strings.LastIndex(address, ":"); i >= 0 {
 		if port, err := strconv.Atoi(address[i+1:]); err == nil {
 			return address[:i], port
 		}
 	}
-	if isBedrock {
-		return address, defaultBedrockPort
-	}
-	return address, defaultJavaPort
+	return address, defaultPort
 }
 
 func queryPortOrDefault(raw string, port int) int {

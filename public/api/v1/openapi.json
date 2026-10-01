@@ -3583,7 +3583,8 @@
                 "required": true,
                 "schema": {
                     "type": "string"
-                }
+                },
+                "description": "Server hostname or address, optionally followed by :port. An IPv6 address is written in brackets, as in [2001:db8::1] or [2001:db8::1]:25565, or bare as 2001:db8::1."
             },
             "MCStatusBedrockQuery": {
                 "name": "bedrock",

@@ -643,3 +643,17 @@ func TestMergeQueryStatus(t *testing.T) {
 		}
 	})
 }
+
+func TestBedrockAddress(t *testing.T) {
+	t.Run("SV-26_Ipv6HostIsBracketed", func(t *testing.T) {
+		if got := bedrockAddress("2001:db8::1", 19132); got != "[2001:db8::1]:19132" {
+			t.Fatalf("address = %q, want the IPv6 host in brackets", got)
+		}
+	})
+
+	t.Run("SV-27_HostnameJoinedWithPort", func(t *testing.T) {
+		if got := bedrockAddress("example.com", 19132); got != "example.com:19132" {
+			t.Fatalf("address = %q, want host:port", got)
+		}
+	})
+}

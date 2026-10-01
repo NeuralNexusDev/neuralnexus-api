@@ -38,6 +38,12 @@
 | HD-32 | IconHandler | Error Path | the status has a nil `Icon` and `defaultIconFile` is missing from `iconDir` | empty icon directory | Response is 500 via `responses.InternalServerError`, body `detail` is `msgIconUnavailable` | P2 |  |
 | HD-33 | IconHandler | Error Path | `bedrock=true` and `bedrockIconFile` is missing from `iconDir` | empty icon directory | Response is 500 via `responses.InternalServerError`, body `detail` is `msgIconUnavailable` | P2 |  |
 | HD-34 | IconHandler | Edge Case | the status has a nil `Icon` and `Legacy` set (from `GetPing16Status`) | mock returns a legacy status | Response 200, body is the `legacyIconFile` image from `iconDir` | P1 |  |
+| HD-35 | ServerStatusHandler | Happy Path | java host is a bracketed IPv6 literal with a `:port` suffix | host = `"[2001:db8::1]:25570"` | `GetServerStatus` receives host `"2001:db8::1"` (no brackets) and port 25570 | P1 |  |
+| HD-36 | ServerStatusHandler | Edge Case | `bedrock=true` and host is a bracketed IPv6 literal with no port | host = `"[2001:db8::1]"` | `GetServerStatus` receives host `"2001:db8::1"` and port 19132 | P1 |  |
+| HD-37 | ServerStatusHandler | Edge Case | java host is a bare IPv6 literal | host = `"2001:db8::1"` | The whole string is forwarded as the host and the port defaults to 25565 | P1 |  |
+| HD-38 | ServerStatusHandler | Edge Case | java host is a bracketed IPv6 literal with a non-numeric port | host = `"[2001:db8::1]:abc"` | The whole string is forwarded as the host and the port defaults to 25565 | P2 |  |
+| HD-39 | SimpleStatusHandler | Happy Path | java host is a bracketed IPv6 literal with a `:port` suffix | host = `"[2001:db8::1]:25570"` | `GetServerStatus` receives host `"2001:db8::1"` and port 25570 | P1 |  |
+| HD-40 | IconHandler | Happy Path | host is a bracketed IPv6 literal with a `:port` suffix | host = `"[2001:db8::1]:25570"` | `GetJavaServerStatus` receives host `"2001:db8::1"` and port 25570 | P1 |  |
 
 ## service.go
 
@@ -63,6 +69,8 @@
 | SV-23 | GetJavaServerStatus | Edge Case | `queryEnabled` is true, every ping fails and the query answers | closed TCP port, local UDP query server | The query status is returned (`Version` from the query reply, `Host` and `Port` set to the requested ones) with a nil `Icon` and `Legacy` false | P1 |  |
 | SV-24 | GetJavaServerStatus | Edge Case | `queryEnabled` is true and the 1.7 ping answers at once but the query answers after a delay | local TCP server answering at once, UDP query server delaying its reply | The query status is returned, so the call waited for the query | P1 |  |
 | SV-25 | GetJavaServerStatus | Edge Case | `queryEnabled` is true, every ping is refused and the query answers after a delay | closed TCP port, UDP query server delaying its reply | The query status is returned, so the call waited for the query | P1 |  |
+| SV-26 | bedrockAddress | Happy Path | host is an IPv6 literal | host `"2001:db8::1"`, port 19132 | The address is `"[2001:db8::1]:19132"` | P1 |  |
+| SV-27 | bedrockAddress | Happy Path | host is a hostname | host `"example.com"`, port 19132 | The address is `"example.com:19132"` | P2 |  |
 | SV-07 | GetServerStatus | Happy Path | `isBedrock=false` | unreachable host | Delegates to `GetJavaServerStatus`; returns its distinct error `ErrJavaStatus` | P1 |  |
 | SV-08 | GetServerStatus | Happy Path | `isBedrock=true` | unreachable host | Delegates to `GetBedrockServerStatus`; returns its distinct error `ErrBedrockStatus` | P1 |  |
 
