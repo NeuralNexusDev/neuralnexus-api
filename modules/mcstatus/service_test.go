@@ -1,13 +1,18 @@
 package mcstatus
 
 import (
+	"bufio"
 	"bytes"
+	"encoding/binary"
 	"errors"
+	"image"
 	"net"
 	"os"
 	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
+	"unicode/utf16"
 )
 
 // svUnusedPort binds and immediately releases a TCP port, which then refuses
@@ -272,5 +277,127 @@ func TestService_GetJavaServerStatusQueryPort(t *testing.T) {
 		}
 		svRequireNoPacket(t, queryPort)
 		svRequireNoPacket(t, serverPort)
+	})
+}
+
+type svJavaServer struct {
+	answer17    bool
+	answer16    bool
+	conns17     atomic.Int32
+	connsLegacy atomic.Int32
+}
+
+func svNewJavaServer(t *testing.T, answer17, answer16 bool) (*svJavaServer, int) {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	t.Cleanup(func() { l.Close() })
+	srv := &svJavaServer{answer17: answer17, answer16: answer16}
+	go func() {
+		for {
+			conn, err := l.Accept()
+			if err != nil {
+				return
+			}
+			go srv.serve(conn)
+		}
+	}()
+	return srv, l.Addr().(*net.TCPAddr).Port
+}
+
+func (s *svJavaServer) serve(conn net.Conn) {
+	defer conn.Close()
+	conn.SetDeadline(time.Now().Add(2 * time.Second))
+	r := bufio.NewReader(conn)
+	first, err := r.Peek(1)
+	if err != nil {
+		return
+	}
+	if first[0] == 0xFE {
+		s.connsLegacy.Add(1)
+		buf := make([]byte, 64)
+		n, _ := r.Read(buf)
+		if s.answer16 && bytes.IndexByte(buf[:n], 0xFA) >= 0 {
+			units := utf16.Encode([]rune("\u00a71\x00127\x001.6.4\x00legacy motd\x001\x0020"))
+			out := []byte{0xFF}
+			out = binary.BigEndian.AppendUint16(out, uint16(len(units)))
+			for _, u := range units {
+				out = binary.BigEndian.AppendUint16(out, u)
+			}
+			conn.Write(out)
+		}
+		return
+	}
+	s.conns17.Add(1)
+	if !s.answer17 {
+		return
+	}
+	for i := 0; i < 2; i++ {
+		length, err := binary.ReadUvarint(r)
+		if err != nil {
+			return
+		}
+		if _, err := r.Discard(int(length)); err != nil {
+			return
+		}
+	}
+	body := `{"version":{"name":"1.20","protocol":763},"players":{"max":20,"online":1},"description":{"text":"modern motd"}}`
+	payload := binary.AppendUvarint(nil, 0)
+	payload = binary.AppendUvarint(payload, uint64(len(body)))
+	payload = append(payload, body...)
+	packet := binary.AppendUvarint(nil, uint64(len(payload)))
+	conn.Write(append(packet, payload...))
+}
+
+func TestService_GetJavaServerStatusProbeOrder(t *testing.T) {
+	t.Run("SV-14_FirstSuccessfulPingWins", func(t *testing.T) {
+		srv, port := svNewJavaServer(t, true, true)
+
+		status, err := NewService().GetJavaServerStatus("127.0.0.1", port, false, 0)
+
+		if err != nil {
+			t.Fatalf("expected nil error, got %v", err)
+		}
+		if status.Legacy || status.Version != "1.20" {
+			t.Fatalf("status = legacy %v, version %q; want the modern status", status.Legacy, status.Version)
+		}
+		if got := srv.connsLegacy.Load(); got != 0 {
+			t.Fatalf("legacy pings = %d, want 0 once the modern ping succeeded", got)
+		}
+	})
+
+	t.Run("SV-15_LegacyPingUsedWhenModernFails", func(t *testing.T) {
+		srv, port := svNewJavaServer(t, false, true)
+
+		status, err := NewService().GetJavaServerStatus("127.0.0.1", port, false, 0)
+
+		if err != nil {
+			t.Fatalf("expected nil error, got %v", err)
+		}
+		if !status.Legacy || status.Version != "1.6" {
+			t.Fatalf("status = legacy %v, version %q; want the 1.6 legacy status", status.Legacy, status.Version)
+		}
+		if got := srv.connsLegacy.Load(); got != 1 {
+			t.Fatalf("legacy pings = %d, want 1 once the 1.6 ping succeeded", got)
+		}
+	})
+}
+
+func TestMergeQueryStatus(t *testing.T) {
+	t.Run("SV-16_QueryStatusKeepsPingIconAndLegacy", func(t *testing.T) {
+		icon := image.NewRGBA(image.Rect(0, 0, 1, 1))
+		ping := &MCServerStatus{Icon: icon, Legacy: true}
+		query := &MCServerStatus{}
+
+		got := mergeQueryStatus(ping, query)
+
+		if got != query {
+			t.Fatalf("expected the query status to be returned")
+		}
+		if got.Icon != icon || !got.Legacy {
+			t.Fatalf("status = icon %v, legacy %v; want the ping's icon and legacy flag", got.Icon, got.Legacy)
+		}
 	})
 }

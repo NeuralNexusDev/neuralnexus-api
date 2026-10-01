@@ -52,6 +52,9 @@
 | SV-11 | GetJavaServerStatus | Edge Case | Query is enabled and `queryPort` differs from `port` | local UDP recorders on two distinct ports (one as `port`, one as `queryPort`), `queryEnabled=true` | The recorder on `queryPort` receives a query handshake packet (prefix `FE FD 09`); the recorder on `port` receives nothing; returns `ErrJavaStatus` | P1 |  |
 | SV-12 | GetJavaServerStatus | Edge Case | Query is enabled and `queryPort` equals `port` | local UDP recorder on `port`, `queryEnabled=true`, `queryPort == port` | The recorder receives a query handshake packet; returns `ErrJavaStatus` | P1 |  |
 | SV-13 | GetJavaServerStatus | Edge Case | Query is disabled | local UDP recorders on `port` and `queryPort`, `queryEnabled=false` | Neither recorder receives a packet; returns `ErrJavaStatus` | P2 |  |
+| SV-14 | GetJavaServerStatus | Happy Path | the server answers both the 1.7 ping and the legacy 1.6 ping | local TCP server answering both | The 1.7 status is returned (`Version` from the 1.7 reply, `Legacy` false) and no legacy ping connection is made | P1 |  |
+| SV-15 | GetJavaServerStatus | Edge Case | the server refuses the 1.7 ping but answers the legacy 1.6 ping | local TCP server answering only the 1.6 ping | The 1.6 status is returned (`Version` `"1.6"`, `Legacy` true) after exactly one legacy ping connection | P1 |  |
+| SV-16 | mergeQueryStatus | Edge Case | a ping status with an icon and `Legacy` set is merged with a query status | ping status with `Icon` set and `Legacy` true | The query status is returned carrying the ping's `Icon` and `Legacy` | P2 |  |
 | SV-07 | GetServerStatus | Happy Path | `isBedrock=false` | unreachable host | Delegates to `GetJavaServerStatus`; returns its distinct error `ErrJavaStatus` | P1 |  |
 | SV-08 | GetServerStatus | Happy Path | `isBedrock=true` | unreachable host | Delegates to `GetBedrockServerStatus`; returns its distinct error `ErrBedrockStatus` | P1 |  |
 
