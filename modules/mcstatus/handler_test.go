@@ -433,6 +433,9 @@ func TestIconHandler(t *testing.T) {
 		if w.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d", w.Code)
 		}
+		if ct := w.Header().Get("Content-Type"); ct != "image/png" {
+			t.Fatalf("expected Content-Type image/png, got %q", ct)
+		}
 		if got := hdDecodePixel(t, w.Body.Bytes()); got != hdDefaultIconColor {
 			t.Fatalf("pixel = %v, want the default icon %v", got, hdDefaultIconColor)
 		}
