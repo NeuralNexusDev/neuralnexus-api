@@ -37,9 +37,6 @@ func init() {
 	if len(JWT_SECRET) == 0 {
 		log.Fatal(msgJWTSecretUnset)
 	}
-	// If left unset, validAudiences would contain empty strings, which would
-	// make ReadJWT's audience check accept a token with an empty-string aud
-	// entry - defeating the check silently rather than failing loudly here.
 	if NN_SITE_URL == "" || NN_API_URL == "" {
 		log.Fatal(msgSiteAPIURLUnset)
 	}
