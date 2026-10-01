@@ -1296,6 +1296,9 @@
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
                     },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
                     "429": {
                         "$ref": "#/components/responses/429TooManyRequests"
                     },
@@ -1383,6 +1386,9 @@
                     },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
                     },
                     "429": {
                         "$ref": "#/components/responses/429TooManyRequests"

@@ -167,15 +167,15 @@ func TestServerStatusHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-03_ErrorReturnsInternalServerError", func(t *testing.T) {
+	t.Run("HD-03_ErrorReturnsNotFound", func(t *testing.T) {
 		mock := &hdMockService{serverErr: ErrJavaStatus}
 		req := hdRequest(t, "mc.example.com:25565", "")
 		w := httptest.NewRecorder()
 
 		ServerStatusHandler(mock)(w, req)
 
-		if w.Code != http.StatusInternalServerError {
-			t.Fatalf("expected 500, got %d", w.Code)
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("expected 404, got %d", w.Code)
 		}
 		p := hdDecodeProblem(t, w.Body.Bytes())
 		if p.Detail != msgJavaStatusFailed {
@@ -275,9 +275,9 @@ func TestServerStatusHandler(t *testing.T) {
 		wantStatus int
 		want       string
 	}{
-		{"JavaStatus", ErrJavaStatus, http.StatusInternalServerError, msgJavaStatusFailed},
-		{"BedrockStatus", ErrBedrockStatus, http.StatusInternalServerError, msgBedrockStatusFailed},
-		{"BedrockStatusWithCause", fmt.Errorf("%w: %w", ErrBedrockStatus, testerrors.ErrTransportFailed), http.StatusInternalServerError, msgBedrockStatusFailed},
+		{"JavaStatus", ErrJavaStatus, http.StatusNotFound, msgJavaStatusFailed},
+		{"BedrockStatus", ErrBedrockStatus, http.StatusNotFound, msgBedrockStatusFailed},
+		{"BedrockStatusWithCause", fmt.Errorf("%w: %w", ErrBedrockStatus, testerrors.ErrTransportFailed), http.StatusNotFound, msgBedrockStatusFailed},
 		{"Unrecognized", testerrors.ErrBoom, http.StatusInternalServerError, msgFailedToGetServerStatus},
 	} {
 		t.Run("HD-16_"+tc.name, func(t *testing.T) {
@@ -422,15 +422,15 @@ func TestIconHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-09_ErrorReturnsInternalServerError", func(t *testing.T) {
+	t.Run("HD-09_ErrorReturnsNotFound", func(t *testing.T) {
 		mock := &hdMockService{javaErr: ErrJavaStatus}
 		req := hdRequest(t, "example.com:25565", "")
 		w := httptest.NewRecorder()
 
 		IconHandler(mock)(w, req)
 
-		if w.Code != http.StatusInternalServerError {
-			t.Fatalf("expected 500, got %d", w.Code)
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("expected 404, got %d", w.Code)
 		}
 		p := hdDecodeProblem(t, w.Body.Bytes())
 		if p.Detail != msgJavaStatusFailed {

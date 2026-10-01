@@ -49,7 +49,7 @@ func respondStatusFailure(w http.ResponseWriter, r *http.Request, err error) {
 	log.Println("[Error]: Unable to get server status:\n\t", err)
 	for _, m := range statusFailures {
 		if errors.Is(err, m.err) {
-			responses.InternalServerError(w, r, m.msg)
+			responses.NotFound(w, r, m.msg)
 			return
 		}
 	}
