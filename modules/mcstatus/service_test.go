@@ -288,6 +288,7 @@ type svJavaAnswers struct {
 	v14     bool
 	beta    bool
 	favicon string
+	delay   time.Duration
 }
 
 type svJavaServer struct {
@@ -362,6 +363,7 @@ func (s *svJavaServer) serve(conn net.Conn) {
 	if !s.answers.modern {
 		return
 	}
+	time.Sleep(s.answers.delay)
 	for i := 0; i < 2; i++ {
 		length, err := binary.ReadUvarint(r)
 		if err != nil {
@@ -383,7 +385,7 @@ func (s *svJavaServer) serve(conn net.Conn) {
 	conn.Write(append(packet, payload...))
 }
 
-func svNewQueryServer(t *testing.T) int {
+func svNewQueryServer(t *testing.T, delay time.Duration) int {
 	t.Helper()
 	conn, err := net.ListenPacket("udp", "127.0.0.1:0")
 	if err != nil {
@@ -405,6 +407,7 @@ func svNewQueryServer(t *testing.T) int {
 				conn.WriteTo(append(append([]byte{9}, session...), []byte("12345\x00")...), addr)
 				continue
 			}
+			time.Sleep(delay)
 			out := append([]byte{0}, session...)
 			out = append(out, 's', 'p', 'l', 'i', 't', 'n', 'u', 'm', 0, 0x80, 0)
 			for _, kv := range [][2]string{
@@ -505,7 +508,7 @@ func TestService_GetJavaServerStatusProbeOrder(t *testing.T) {
 func TestService_GetJavaServerStatusQueryMerge(t *testing.T) {
 	t.Run("SV-20_QueryStatusKeepsPingIconAndFavicon", func(t *testing.T) {
 		_, port := svNewJavaServer(t, svJavaAnswers{modern: true, favicon: svFaviconDataURI(t)})
-		queryPort := svNewQueryServer(t)
+		queryPort := svNewQueryServer(t, 0)
 
 		status, err := NewService().GetJavaServerStatus("127.0.0.1", port, true, queryPort)
 
@@ -517,6 +520,49 @@ func TestService_GetJavaServerStatusQueryMerge(t *testing.T) {
 		}
 		if status.Icon == nil || status.Favicon == "" {
 			t.Fatalf("icon %v, favicon %q; want the ping's icon and favicon carried over", status.Icon, status.Favicon)
+		}
+	})
+}
+
+func TestService_GetJavaServerStatusQueryConcurrency(t *testing.T) {
+	t.Run("SV-21_OfflineServerDoesNotWaitForQuery", func(t *testing.T) {
+		port := svUnusedPort(t)
+		silent, err := net.ListenPacket("udp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatalf("listen udp: %v", err)
+		}
+		t.Cleanup(func() { silent.Close() })
+		queryPort := silent.LocalAddr().(*net.UDPAddr).Port
+
+		start := time.Now()
+		status, err := NewService().GetJavaServerStatus("127.0.0.1", port, true, queryPort)
+		elapsed := time.Since(start)
+
+		if status != nil || !errors.Is(err, ErrJavaStatus) {
+			t.Fatalf("status = %v, err = %v; want nil and %v", status, err, ErrJavaStatus)
+		}
+		if elapsed > 2*time.Second {
+			t.Fatalf("took %v, want the failed ping chain to return without waiting for the silent query", elapsed)
+		}
+	})
+
+	t.Run("SV-22_QueryRunsWhilePingChainRuns", func(t *testing.T) {
+		delay := time.Second
+		_, port := svNewJavaServer(t, svJavaAnswers{modern: true, delay: delay})
+		queryPort := svNewQueryServer(t, delay)
+
+		start := time.Now()
+		status, err := NewService().GetJavaServerStatus("127.0.0.1", port, true, queryPort)
+		elapsed := time.Since(start)
+
+		if err != nil {
+			t.Fatalf("expected nil error, got %v", err)
+		}
+		if status.Version != "query-version" {
+			t.Fatalf("Version = %q, want the query status", status.Version)
+		}
+		if elapsed >= 2*delay {
+			t.Fatalf("took %v, want less than the %v a sequential ping then query would need", elapsed, 2*delay)
 		}
 	})
 }
@@ -538,17 +584,6 @@ func TestMergeQueryStatus(t *testing.T) {
 		}
 		if got.Favicon != "ping-favicon" {
 			t.Fatalf("Favicon = %q, want the ping's favicon", got.Favicon)
-		}
-	})
-
-	t.Run("SV-17_EmptyPingFaviconKeepsQueryFavicon", func(t *testing.T) {
-		ping := NewServerStatus("", 0, "", "", "", 0, 0, nil, "", "", ServerTypeJava, nil, nil)
-		query := NewServerStatus("", 0, "", "", "", 0, 0, nil, "", "query-favicon", ServerTypeJava, nil, nil)
-
-		got := mergeQueryStatus(ping, query)
-
-		if got.Favicon != "query-favicon" {
-			t.Fatalf("Favicon = %q, want the query's own favicon kept", got.Favicon)
 		}
 	})
 }

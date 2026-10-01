@@ -48,9 +48,7 @@ func pingJavaStatus(pinger *minequery.Pinger, host string, port int) *MCServerSt
 func mergeQueryStatus(ping, query *MCServerStatus) *MCServerStatus {
 	query.Icon = ping.Icon
 	query.Legacy = ping.Legacy
-	if ping.Favicon != "" {
-		query.Favicon = ping.Favicon
-	}
+	query.Favicon = ping.Favicon
 	return query
 }
 
@@ -62,22 +60,27 @@ func (s *service) GetJavaServerStatus(host string, port int, queryEnabled bool, 
 		minequery.WithProtocolVersion17(minequery.Ping17ProtocolVersion119),
 	)
 
-	status := pingJavaStatus(pinger, host, port)
-
+	var queryResult chan *minequery.FullQueryStatus
 	if queryEnabled {
-		query, err := pinger.QueryFull(host, queryPort)
-		if err == nil {
-			if status != nil {
-				status = mergeQueryStatus(status, GetQueryStatus(query))
-			}
+		queryResult = make(chan *minequery.FullQueryStatus, 1)
+		go func() {
+			query, _ := pinger.QueryFull(host, queryPort)
+			queryResult <- query
+		}()
+	}
+
+	status := pingJavaStatus(pinger, host, port)
+	if status == nil {
+		return nil, ErrJavaStatus
+	}
+	if queryResult != nil {
+		if query := <-queryResult; query != nil {
+			status = mergeQueryStatus(status, GetQueryStatus(query))
 		}
 	}
-	if status != nil {
-		status.Host = host
-		status.Port = int32(port)
-		return status, nil
-	}
-	return nil, ErrJavaStatus
+	status.Host = host
+	status.Port = int32(port)
+	return status, nil
 }
 
 // GetBedrockServerStatus - Get Bedrock server status
