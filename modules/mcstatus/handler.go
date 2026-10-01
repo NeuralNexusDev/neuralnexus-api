@@ -2,9 +2,11 @@ package mcstatus
 
 import (
 	"errors"
+	"image"
 	"image/png"
 	"log"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -22,9 +24,15 @@ const (
 	msgJavaStatusFailed        = "failed to get java server status"
 	msgBedrockStatusFailed     = "failed to get bedrock server status"
 	msgFailedToGetServerStatus = "Failed to get server status"
-	msgBedrockNoIcons          = "Bedrock servers do not have icons."
-	msgServerNoIcon            = "Server has no icon."
+	msgIconUnavailable         = "Failed to load server icon"
 )
+
+const (
+	bedrockIconFile = "bedrock.png"
+	defaultIconFile = "default.png"
+)
+
+var iconDir = filepath.Join("public", "mcstatus", "icons")
 
 type failureMapping struct {
 	err     error
@@ -90,30 +98,45 @@ func ServerStatusHandler(s MCStatusService) http.HandlerFunc {
 	}
 }
 
+func writeIcon(w http.ResponseWriter, img image.Image) {
+	w.Header().Set("Content-Type", "image/png")
+	w.WriteHeader(http.StatusOK)
+	png.Encode(w, img)
+}
+
+func writeStockIcon(w http.ResponseWriter, r *http.Request, name string) {
+	img, err := LoadImgFromFile(filepath.Join(iconDir, name))
+	if err != nil {
+		log.Println("[Error]: Unable to load stock icon:\n\t", err)
+		responses.InternalServerError(w, r, msgIconUnavailable)
+		return
+	}
+	writeIcon(w, img)
+}
+
 // IconHandler - Route that returns the server icon as a PNG
 func IconHandler(s MCStatusService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		host := r.PathValue("host")
 		isBedrock := r.URL.Query().Get("bedrock") == "true"
 		if isBedrock {
-			responses.BadRequest(w, r, msgBedrockNoIcons)
+			writeStockIcon(w, r, bedrockIconFile)
 			return
 		}
 		host, port := splitHostPort(host, false)
 
 		status, err := s.GetJavaServerStatus(host, port, false, 0)
 		if err != nil {
-			respondStatusFailure(w, r, err)
+			log.Println("[Error]: Unable to get server icon:\n\t", err)
+			responses.InternalServerError(w, r, msgFailedToGetServerStatus)
 			return
 		}
 		if status.Icon == nil {
-			responses.NotFound(w, r, msgServerNoIcon)
+			writeStockIcon(w, r, defaultIconFile)
 			return
 		}
 
-		w.Header().Set("Content-Type", "image/png")
-		w.WriteHeader(http.StatusOK)
-		png.Encode(w, status.Icon)
+		writeIcon(w, status.Icon)
 	}
 }
 

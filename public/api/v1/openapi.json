@@ -1272,7 +1272,7 @@
         "/mcstatus/icon/{host}": {
             "get": {
                 "summary": "Get Minecraft server icon",
-                "description": "Bedrock servers have no icon: bedrock=true is refused with 400. A Java server that has no icon is answered with 404.",
+                "description": "Returns the server's own icon. A Java server with no icon gets the default icon, and bedrock=true returns the bedrock icon without contacting the server.",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/HostSlug"
@@ -1293,23 +1293,14 @@
                             }
                         }
                     },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
-                    },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/404NotFound"
                     },
                     "429": {
                         "$ref": "#/components/responses/429TooManyRequests"
                     },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
-                    },
-                    "502": {
-                        "$ref": "#/components/responses/502BadGateway"
                     }
                 }
             }

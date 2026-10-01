@@ -12,9 +12,9 @@
 | HD-06 | ServerStatusHandler | Edge Case | `query_port` param missing | host has an explicit port | `queryPort` forwarded equals the parsed `port` | P2 |  |
 | HD-07 | ServerStatusHandler | Happy Path | `bedrock=true`, `query=true`, explicit `query_port` given | full query string | `isBedrock`, `queryEnabled`, `queryPort`, and `port` all forwarded to `GetServerStatus` unchanged, and `host` is forwarded without the port suffix | P1 |  |
 | HD-08 | IconHandler | Happy Path | valid host, `bedrock` absent, `GetJavaServerStatus` succeeds with a non-nil icon | mock returns a status with `Icon` set | Response `Content-Type: image/png`, 200, body is a valid PNG decoding to the same bounds; `GetJavaServerStatus` is called once with `queryEnabled` false and `queryPort` 0 | P1 |  |
-| HD-09 | IconHandler | Error Path | `GetJavaServerStatus` returns an error | mock returns `nil, err` | Response is 502 via `responses.BadGateway`, body `detail` is `msgJavaStatusFailed` for `ErrJavaStatus`; handler returns without writing a PNG | P1 |  |
+| HD-09 | IconHandler | Error Path | `GetJavaServerStatus` returns an error | mock returns `ErrJavaStatus` | Response is 500 via `responses.InternalServerError`, body `detail` is `msgFailedToGetServerStatus`; handler returns without writing a PNG | P1 |  |
 | HD-10 | IconHandler | Edge Case | host has no `:port` suffix | host = `"example.com"` | Port parse fails, defaults to 25565 (regardless of `bedrock`), the bare host is forwarded to `GetJavaServerStatus` | P2 |  |
-| HD-11 | IconHandler | Error Path | `bedrock=true` | any host | `responses.BadRequest` writes exactly one response: status 400, the whole body decodes as a single problem whose `detail` is `msgBedrockNoIcons`, and `GetJavaServerStatus` is never called | P1 |  |
+| HD-11 | IconHandler | Happy Path | `bedrock=true` | any host | Response 200, `Content-Type: image/png`, body is the `bedrockIconFile` image from `iconDir`, and `GetJavaServerStatus` is never called | P1 |  |
 | HD-12 | SimpleStatusHandler | Happy Path | `GetServerStatus` succeeds | mock success | Response 200, `Content-Type: text/plain`, body `"Online"` | P1 |  |
 | HD-13 | SimpleStatusHandler | Error Path | `GetServerStatus` fails | mock returns `nil, err` | Response 404, body `"Offline"` | P1 |  |
 | HD-14 | SimpleStatusHandler | Edge Case | host has no `:port` suffix, `bedrock=true` | host = `"example.com"` | Port defaults to 19132, the bare host is forwarded to `GetServerStatus` | P2 |  |
@@ -34,7 +34,9 @@
 | HD-28 | ServerStatusHandler | Edge Case | `bedrock=true` and host has a non-numeric `:` suffix | host = `"mc.example.com:abc"` | The whole string is forwarded as the host and the port defaults to 19132 | P2 |  |
 | HD-29 | SimpleStatusHandler | Edge Case | java host has a non-numeric `:` suffix | host = `"mc.example.com:abc"` | The whole string is forwarded as the host and the port defaults to 25565 | P2 |  |
 | HD-30 | SimpleStatusHandler | Edge Case | `bedrock=true` and host has a non-numeric `:` suffix | host = `"mc.example.com:abc"` | The whole string is forwarded as the host and the port defaults to 19132 | P2 |  |
-| HD-31 | IconHandler | Error Path | `GetJavaServerStatus` succeeds but the status has a nil `Icon` | mock returns a status with no icon | Response is 404 via `responses.NotFound`, body `detail` is `msgServerNoIcon`; no PNG is written and the handler does not panic | P1 |  |
+| HD-31 | IconHandler | Edge Case | `GetJavaServerStatus` succeeds but the status has a nil `Icon` | mock returns a status with no icon | Response 200, `Content-Type: image/png`, body is the `defaultIconFile` image from `iconDir`; the handler does not panic | P1 |  |
+| HD-32 | IconHandler | Error Path | the status has a nil `Icon` and `defaultIconFile` is missing from `iconDir` | empty icon directory | Response is 500 via `responses.InternalServerError`, body `detail` is `msgIconUnavailable` | P2 |  |
+| HD-33 | IconHandler | Error Path | `bedrock=true` and `bedrockIconFile` is missing from `iconDir` | empty icon directory | Response is 500 via `responses.InternalServerError`, body `detail` is `msgIconUnavailable` | P2 |  |
 
 ## service.go
 

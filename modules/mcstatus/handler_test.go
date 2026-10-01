@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"image"
+	"image/color"
 	"image/png"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strconv"
 	"testing"
 
@@ -89,6 +92,41 @@ func hdDecodeProblem(t *testing.T, body []byte) responses.Problem {
 
 func hdValidStatus(raw interface{}) *MCServerStatus {
 	return NewServerStatus("", 0, "Test Server", "Welcome", "world", 20, 5, nil, "1.20.1", "", ServerTypeJava, raw, nil)
+}
+
+var (
+	hdBedrockIconColor = color.RGBA{R: 255, A: 255}
+	hdDefaultIconColor = color.RGBA{B: 255, A: 255}
+)
+
+func hdUseIconDir(t *testing.T, withIcons bool) {
+	t.Helper()
+	dir := t.TempDir()
+	if withIcons {
+		for name, c := range map[string]color.RGBA{bedrockIconFile: hdBedrockIconColor, defaultIconFile: hdDefaultIconColor} {
+			img := image.NewRGBA(image.Rect(0, 0, 1, 1))
+			img.Set(0, 0, c)
+			var buf bytes.Buffer
+			if err := png.Encode(&buf, img); err != nil {
+				t.Fatalf("encode %s: %v", name, err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, name), buf.Bytes(), 0o644); err != nil {
+				t.Fatalf("write %s: %v", name, err)
+			}
+		}
+	}
+	prev := iconDir
+	iconDir = dir
+	t.Cleanup(func() { iconDir = prev })
+}
+
+func hdDecodePixel(t *testing.T, body []byte) color.RGBA {
+	t.Helper()
+	img, err := png.Decode(bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("expected a valid PNG body, decode failed: %v", err)
+	}
+	return color.RGBAModel.Convert(img.At(0, 0)).(color.RGBA)
 }
 
 func TestServerStatusHandler(t *testing.T) {
@@ -382,19 +420,19 @@ func TestIconHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-09_ErrorReturnsBadGateway", func(t *testing.T) {
+	t.Run("HD-09_ErrorReturnsInternalServerError", func(t *testing.T) {
 		mock := &hdMockService{javaErr: ErrJavaStatus}
 		req := hdRequest(t, "example.com:25565", "")
 		w := httptest.NewRecorder()
 
 		IconHandler(mock)(w, req)
 
-		if w.Code != http.StatusBadGateway {
-			t.Fatalf("expected 502, got %d", w.Code)
+		if w.Code != http.StatusInternalServerError {
+			t.Fatalf("expected 500, got %d", w.Code)
 		}
 		p := hdDecodeProblem(t, w.Body.Bytes())
-		if p.Detail != msgJavaStatusFailed {
-			t.Fatalf("expected detail %q, got %q", msgJavaStatusFailed, p.Detail)
+		if p.Detail != msgFailedToGetServerStatus {
+			t.Fatalf("expected detail %q, got %q", msgFailedToGetServerStatus, p.Detail)
 		}
 		if len(mock.javaCalls) != 1 {
 			t.Fatalf("expected exactly 1 call, got %d", len(mock.javaCalls))
@@ -436,18 +474,22 @@ func TestIconHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-11_BedrockWritesOneBadRequest", func(t *testing.T) {
+	t.Run("HD-11_BedrockServesBedrockIcon", func(t *testing.T) {
+		hdUseIconDir(t, true)
 		mock := &hdMockService{javaErr: ErrJavaStatus}
 		req := hdRequest(t, "example.com:19132", "bedrock=true")
 		w := httptest.NewRecorder()
 
 		IconHandler(mock)(w, req)
 
-		if w.Code != http.StatusBadRequest {
-			t.Fatalf("expected 400, got %d", w.Code)
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", w.Code)
 		}
-		if p := hdDecodeProblem(t, w.Body.Bytes()); p.Detail != msgBedrockNoIcons {
-			t.Fatalf("detail = %q, want %q", p.Detail, msgBedrockNoIcons)
+		if ct := w.Header().Get("Content-Type"); ct != "image/png" {
+			t.Fatalf("expected Content-Type image/png, got %q", ct)
+		}
+		if got := hdDecodePixel(t, w.Body.Bytes()); got != hdBedrockIconColor {
+			t.Fatalf("pixel = %v, want the bedrock icon %v", got, hdBedrockIconColor)
 		}
 		if len(mock.javaCalls) != 0 {
 			t.Fatalf("expected no Java status lookup, got %d", len(mock.javaCalls))
@@ -470,18 +512,51 @@ func TestIconHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-31_NoIconReturnsNotFound", func(t *testing.T) {
+	t.Run("HD-31_NoIconServesDefaultIcon", func(t *testing.T) {
+		hdUseIconDir(t, true)
 		mock := &hdMockService{javaStatus: hdValidStatus(nil)}
 		req := hdRequest(t, "example.com:25565", "")
 		w := httptest.NewRecorder()
 
 		IconHandler(mock)(w, req)
 
-		if w.Code != http.StatusNotFound {
-			t.Fatalf("expected 404, got %d", w.Code)
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", w.Code)
 		}
-		if p := hdDecodeProblem(t, w.Body.Bytes()); p.Detail != msgServerNoIcon {
-			t.Fatalf("detail = %q, want %q", p.Detail, msgServerNoIcon)
+		if got := hdDecodePixel(t, w.Body.Bytes()); got != hdDefaultIconColor {
+			t.Fatalf("pixel = %v, want the default icon %v", got, hdDefaultIconColor)
+		}
+	})
+
+	t.Run("HD-32_MissingDefaultIconReturns500", func(t *testing.T) {
+		hdUseIconDir(t, false)
+		mock := &hdMockService{javaStatus: hdValidStatus(nil)}
+		req := hdRequest(t, "example.com:25565", "")
+		w := httptest.NewRecorder()
+
+		IconHandler(mock)(w, req)
+
+		if w.Code != http.StatusInternalServerError {
+			t.Fatalf("expected 500, got %d", w.Code)
+		}
+		if p := hdDecodeProblem(t, w.Body.Bytes()); p.Detail != msgIconUnavailable {
+			t.Fatalf("detail = %q, want %q", p.Detail, msgIconUnavailable)
+		}
+	})
+
+	t.Run("HD-33_MissingBedrockIconReturns500", func(t *testing.T) {
+		hdUseIconDir(t, false)
+		mock := &hdMockService{}
+		req := hdRequest(t, "example.com:19132", "bedrock=true")
+		w := httptest.NewRecorder()
+
+		IconHandler(mock)(w, req)
+
+		if w.Code != http.StatusInternalServerError {
+			t.Fatalf("expected 500, got %d", w.Code)
+		}
+		if p := hdDecodeProblem(t, w.Body.Bytes()); p.Detail != msgIconUnavailable {
+			t.Fatalf("detail = %q, want %q", p.Detail, msgIconUnavailable)
 		}
 	})
 }
