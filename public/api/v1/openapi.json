@@ -1345,7 +1345,7 @@
         "/mcstatus/{host}": {
             "get": {
                 "summary": "Get Minecraft server status",
-                "description": "Get Minecraft server status",
+                "description": "Get Minecraft server status. For Java servers with query enabled, the query reply is merged over the ping status, and a server that answers only the query is still reported.",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/HostSlug"

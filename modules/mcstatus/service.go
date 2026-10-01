@@ -70,13 +70,17 @@ func (s *service) GetJavaServerStatus(host string, port int, queryEnabled bool, 
 	}
 
 	status := pingJavaStatus(pinger, host, port)
-	if status == nil {
-		return nil, ErrJavaStatus
-	}
+	var query *minequery.FullQueryStatus
 	if queryResult != nil {
-		if query := <-queryResult; query != nil {
-			status = mergeQueryStatus(status, GetQueryStatus(query))
-		}
+		query = <-queryResult
+	}
+	switch {
+	case status != nil && query != nil:
+		status = mergeQueryStatus(status, GetQueryStatus(query))
+	case query != nil:
+		status = GetQueryStatus(query)
+	case status == nil:
+		return nil, ErrJavaStatus
 	}
 	status.Host = host
 	status.Port = int32(port)

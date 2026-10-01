@@ -34,6 +34,19 @@ func svUnusedPort(t *testing.T) int {
 	return port
 }
 
+func svUnusedUDPPort(t *testing.T) int {
+	t.Helper()
+	l, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to find an unused UDP port: %v", err)
+	}
+	port := l.LocalAddr().(*net.UDPAddr).Port
+	if err := l.Close(); err != nil {
+		t.Fatalf("failed to close probe listener: %v", err)
+	}
+	return port
+}
+
 func svLiveJavaServer(t *testing.T) (string, int) {
 	t.Helper()
 	addr := os.Getenv("MC_LIVE_JAVA_SERVER")
@@ -525,14 +538,9 @@ func TestService_GetJavaServerStatusQueryMerge(t *testing.T) {
 }
 
 func TestService_GetJavaServerStatusQueryConcurrency(t *testing.T) {
-	t.Run("SV-21_OfflineServerDoesNotWaitForQuery", func(t *testing.T) {
+	t.Run("SV-21_DeadPingAndDeadQueryReturnsError", func(t *testing.T) {
 		port := svUnusedPort(t)
-		silent, err := net.ListenPacket("udp", "127.0.0.1:0")
-		if err != nil {
-			t.Fatalf("listen udp: %v", err)
-		}
-		t.Cleanup(func() { silent.Close() })
-		queryPort := silent.LocalAddr().(*net.UDPAddr).Port
+		queryPort := svUnusedUDPPort(t)
 
 		start := time.Now()
 		status, err := NewService().GetJavaServerStatus("127.0.0.1", port, true, queryPort)
@@ -542,7 +550,24 @@ func TestService_GetJavaServerStatusQueryConcurrency(t *testing.T) {
 			t.Fatalf("status = %v, err = %v; want nil and %v", status, err, ErrJavaStatus)
 		}
 		if elapsed > 2*time.Second {
-			t.Fatalf("took %v, want the failed ping chain to return without waiting for the silent query", elapsed)
+			t.Fatalf("took %v, want a refused ping chain and refused query to fail fast", elapsed)
+		}
+	})
+
+	t.Run("SV-23_QueryAnswersWhenEveryPingFails", func(t *testing.T) {
+		port := svUnusedPort(t)
+		queryPort := svNewQueryServer(t, 0)
+
+		status, err := NewService().GetJavaServerStatus("127.0.0.1", port, true, queryPort)
+
+		if err != nil {
+			t.Fatalf("expected nil error, got %v", err)
+		}
+		if status.Version != "query-version" || status.Host != "127.0.0.1" || status.Port != int32(port) {
+			t.Fatalf("status = version %q, host %q, port %d; want the query status for the pinged host and port", status.Version, status.Host, status.Port)
+		}
+		if status.Icon != nil || status.Legacy {
+			t.Fatalf("icon %v, legacy %v; want no icon and not legacy", status.Icon, status.Legacy)
 		}
 	})
 
