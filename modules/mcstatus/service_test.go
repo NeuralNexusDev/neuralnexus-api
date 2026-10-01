@@ -528,8 +528,8 @@ func TestService_GetJavaServerStatusQueryMerge(t *testing.T) {
 		if err != nil {
 			t.Fatalf("expected nil error, got %v", err)
 		}
-		if status.Version != "query-version" {
-			t.Fatalf("Version = %q, want the query status", status.Version)
+		if status.Version != "query-version" || status.Host != "127.0.0.1" || status.Port != int32(port) {
+			t.Fatalf("status = version %q, host %q, port %d; want the query status for the pinged host and port", status.Version, status.Host, status.Port)
 		}
 		if status.Icon == nil || status.Favicon == "" {
 			t.Fatalf("icon %v, favicon %q; want the ping's icon and favicon carried over", status.Icon, status.Favicon)
@@ -551,6 +551,34 @@ func TestService_GetJavaServerStatusQueryConcurrency(t *testing.T) {
 		}
 		if elapsed > 2*time.Second {
 			t.Fatalf("took %v, want a refused ping chain and refused query to fail fast", elapsed)
+		}
+	})
+
+	t.Run("SV-24_PingStatusWaitsForSlowQuery", func(t *testing.T) {
+		_, port := svNewJavaServer(t, svJavaAnswers{modern: true})
+		queryPort := svNewQueryServer(t, 500*time.Millisecond)
+
+		status, err := NewService().GetJavaServerStatus("127.0.0.1", port, true, queryPort)
+
+		if err != nil {
+			t.Fatalf("expected nil error, got %v", err)
+		}
+		if status.Version != "query-version" {
+			t.Fatalf("Version = %q, want the query status once the slow query answered", status.Version)
+		}
+	})
+
+	t.Run("SV-25_QueryOnlyStatusWaitsForSlowQuery", func(t *testing.T) {
+		port := svUnusedPort(t)
+		queryPort := svNewQueryServer(t, 500*time.Millisecond)
+
+		status, err := NewService().GetJavaServerStatus("127.0.0.1", port, true, queryPort)
+
+		if err != nil {
+			t.Fatalf("expected nil error, got %v", err)
+		}
+		if status.Version != "query-version" {
+			t.Fatalf("Version = %q, want the query status once the slow query answered", status.Version)
 		}
 	})
 

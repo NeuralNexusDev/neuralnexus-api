@@ -62,7 +62,7 @@ func (s *service) GetJavaServerStatus(host string, port int, queryEnabled bool, 
 
 	var queryResult chan *minequery.FullQueryStatus
 	if queryEnabled {
-		queryResult = make(chan *minequery.FullQueryStatus, 1)
+		queryResult = make(chan *minequery.FullQueryStatus)
 		go func() {
 			query, _ := pinger.QueryFull(host, queryPort)
 			queryResult <- query
