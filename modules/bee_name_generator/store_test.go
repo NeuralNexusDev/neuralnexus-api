@@ -1,17 +1,22 @@
 package beenamegenerator
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -69,6 +74,91 @@ func bngLiveStore(t *testing.T) (*store, *pgxpool.Pool) {
 	return &store{db: db}, db
 }
 
+// bngTruncatingConn relays the server's response to the first query written
+// after armed is set with everything from the CommandComplete message onward
+// cut off, then fails the next read, so the client hits an error after the
+// last DataRow but before the result is complete.
+type bngTruncatingConn struct {
+	net.Conn
+	armed   *atomic.Bool
+	queried bool
+	pending []byte
+	failed  bool
+}
+
+func (c *bngTruncatingConn) Write(b []byte) (int, error) {
+	if c.armed.Load() {
+		c.queried = true
+	}
+	return c.Conn.Write(b)
+}
+
+func (c *bngTruncatingConn) Read(b []byte) (int, error) {
+	if len(c.pending) > 0 {
+		n := copy(b, c.pending)
+		c.pending = c.pending[n:]
+		return n, nil
+	}
+	if c.failed {
+		return 0, io.ErrUnexpectedEOF
+	}
+	if !c.queried {
+		return c.Conn.Read(b)
+	}
+	readyForQuery := []byte{'Z', 0, 0, 0, 5, 'I'}
+	var resp []byte
+	buf := make([]byte, 4096)
+	for !bytes.HasSuffix(resp, readyForQuery) {
+		n, err := c.Conn.Read(buf)
+		resp = append(resp, buf[:n]...)
+		if err != nil {
+			return 0, err
+		}
+	}
+	c.pending, c.failed, c.queried = resp[:bngCommandCompleteOffset(resp)], true, false
+	return c.Read(b)
+}
+
+func bngCommandCompleteOffset(resp []byte) int {
+	for off := 0; off+5 <= len(resp); {
+		if resp[off] == 'C' {
+			return off
+		}
+		off += 1 + int(binary.BigEndian.Uint32(resp[off+1:]))
+	}
+	return len(resp)
+}
+
+func bngPoolCuttingFirstResult(t *testing.T) (*pgxpool.Pool, *atomic.Bool) {
+	t.Helper()
+	dsn := os.Getenv("TEST_POSTGRES_URL")
+	if dsn == "" {
+		t.Skip("TEST_POSTGRES_URL not set; skipping live-Postgres test")
+	}
+	cfg, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		t.Fatalf("failed to parse TEST_POSTGRES_URL: %v", err)
+	}
+	var armed atomic.Bool
+	cfg.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
+	cfg.ConnConfig.DialFunc = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		conn, err := (&net.Dialer{}).DialContext(ctx, network, addr)
+		if err != nil {
+			return nil, err
+		}
+		return &bngTruncatingConn{Conn: conn, armed: &armed}, nil
+	}
+	pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("failed to create pool: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	if err := pool.Ping(context.Background()); err != nil {
+		t.Fatalf("failed to warm the pool: %v", err)
+	}
+	return pool, &armed
+}
+
 func bngUniqueName(prefix string) string {
 	return fmt.Sprintf("%s_%s", prefix, strings.ReplaceAll(uuid.New().String(), "-", ""))
 }
@@ -119,8 +209,8 @@ func TestST02to04_GetBeeName(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected a non-nil error when bee_name has no rows")
 		}
-		if !errors.Is(err, pgx.ErrNoRows) {
-			t.Errorf("err = %v, want pgx.ErrNoRows", err)
+		if !errors.Is(err, ErrBeeNameNotFound) {
+			t.Errorf("err = %v, want %v", err, ErrBeeNameNotFound)
 		}
 	})
 
@@ -142,7 +232,7 @@ func TestST02to04_GetBeeName(t *testing.T) {
 	})
 }
 
-func TestST05to06and21_UploadBeeName(t *testing.T) {
+func TestST05to06and21and24_UploadBeeName(t *testing.T) {
 	t.Run("ST-05_Unreachable", func(t *testing.T) {
 		s := bngStoreWithUnreachableDB(t)
 		_, err := s.UploadBeeName(bngUniqueName("up"))
@@ -197,6 +287,26 @@ func TestST05to06and21_UploadBeeName(t *testing.T) {
 			_, _ = s.DeleteBeeName(name)
 		}
 	})
+
+	t.Run("ST-24_Live_WhitespaceOnlyNameRejected", func(t *testing.T) {
+		s, db := bngLiveStore(t)
+		blank := "  \t "
+		t.Cleanup(func() {
+			_, _ = db.Exec(context.Background(), "DELETE FROM bee_name WHERE name = $1", blank)
+		})
+
+		got, err := s.UploadBeeName(blank)
+		var pgErr *pgconn.PgError
+		if !errors.As(err, &pgErr) || pgErr.Code != "23514" {
+			t.Errorf("UploadBeeName() error = %v, want a CHECK violation (SQLSTATE 23514)", err)
+		}
+		if got != "" {
+			t.Errorf("UploadBeeName() = %q, want an empty string on error", got)
+		}
+		if n := bngCountByName(t, db, "bee_name", blank); n != 0 {
+			t.Errorf("bee_name holds %d rows named %q, want 0", n, blank)
+		}
+	})
 }
 
 func TestST07to09_DeleteBeeName(t *testing.T) {
@@ -240,7 +350,7 @@ func TestST07to09_DeleteBeeName(t *testing.T) {
 	})
 }
 
-func TestST10to11and22_SubmitBeeName(t *testing.T) {
+func TestST10to11and22and25_SubmitBeeName(t *testing.T) {
 	t.Run("ST-10_Unreachable", func(t *testing.T) {
 		s := bngStoreWithUnreachableDB(t)
 		_, err := s.SubmitBeeName(bngUniqueName("sub"))
@@ -295,9 +405,29 @@ func TestST10to11and22_SubmitBeeName(t *testing.T) {
 			_, _ = s.RejectBeeNameSuggestion(name)
 		}
 	})
+
+	t.Run("ST-25_Live_WhitespaceOnlyNameRejected", func(t *testing.T) {
+		s, db := bngLiveStore(t)
+		blank := "  \t "
+		t.Cleanup(func() {
+			_, _ = db.Exec(context.Background(), "DELETE FROM bee_name_suggestion WHERE name = $1", blank)
+		})
+
+		got, err := s.SubmitBeeName(blank)
+		var pgErr *pgconn.PgError
+		if !errors.As(err, &pgErr) || pgErr.Code != "23514" {
+			t.Errorf("SubmitBeeName() error = %v, want a CHECK violation (SQLSTATE 23514)", err)
+		}
+		if got != "" {
+			t.Errorf("SubmitBeeName() = %q, want an empty string on error", got)
+		}
+		if n := bngCountByName(t, db, "bee_name_suggestion", blank); n != 0 {
+			t.Errorf("bee_name_suggestion holds %d rows named %q, want 0", n, blank)
+		}
+	})
 }
 
-func TestST12to14_GetBeeNameSuggestions(t *testing.T) {
+func TestST12to14and23_GetBeeNameSuggestions(t *testing.T) {
 	t.Run("ST-12_Unreachable", func(t *testing.T) {
 		s := bngStoreWithUnreachableDB(t)
 		got, err := s.GetBeeNameSuggestions(5)
@@ -348,9 +478,36 @@ func TestST12to14_GetBeeNameSuggestions(t *testing.T) {
 			t.Errorf("got %d suggestions, want %d", len(got), n)
 		}
 	})
+
+	t.Run("ST-23_Live_IterationError", func(t *testing.T) {
+		seed, db := bngLiveStore(t)
+		bngClearTable(t, db, "bee_name_suggestion")
+		names := make([]string, 5)
+		for i := range names {
+			names[i] = bngUniqueName("sugg")
+			if _, err := seed.SubmitBeeName(names[i]); err != nil {
+				t.Fatalf("seed SubmitBeeName() error = %v", err)
+			}
+		}
+		t.Cleanup(func() {
+			for _, name := range names {
+				_, _ = seed.RejectBeeNameSuggestion(name)
+			}
+		})
+
+		pool, armed := bngPoolCuttingFirstResult(t)
+		armed.Store(true)
+		got, err := (&store{db: pool}).GetBeeNameSuggestions(int64(len(names)))
+		if err == nil {
+			t.Error("GetBeeNameSuggestions() error = nil, want the iteration error")
+		}
+		if got != nil {
+			t.Errorf("got %v, want nil alongside an iteration error", got)
+		}
+	})
 }
 
-func TestST15to17_AcceptBeeNameSuggestion(t *testing.T) {
+func TestST15to17and26_AcceptBeeNameSuggestion(t *testing.T) {
 	t.Run("ST-15_Unreachable", func(t *testing.T) {
 		s := bngStoreWithUnreachableDB(t)
 		_, err := s.AcceptBeeNameSuggestion(bngUniqueName("acc"))
@@ -416,6 +573,26 @@ func TestST15to17_AcceptBeeNameSuggestion(t *testing.T) {
 			}
 
 			_, _ = s.DeleteBeeName(name)
+		}
+	})
+
+	t.Run("ST-26_Live_WhitespaceOnlyNameRejected", func(t *testing.T) {
+		s, db := bngLiveStore(t)
+		blank := "  \t "
+		t.Cleanup(func() {
+			_, _ = db.Exec(context.Background(), "DELETE FROM bee_name WHERE name = $1", blank)
+		})
+
+		got, err := s.AcceptBeeNameSuggestion(blank)
+		var pgErr *pgconn.PgError
+		if !errors.As(err, &pgErr) || pgErr.Code != "23514" {
+			t.Errorf("AcceptBeeNameSuggestion() error = %v, want a CHECK violation (SQLSTATE 23514)", err)
+		}
+		if got != "" {
+			t.Errorf("AcceptBeeNameSuggestion() = %q, want an empty string on error", got)
+		}
+		if n := bngCountByName(t, db, "bee_name", blank); n != 0 {
+			t.Errorf("bee_name holds %d rows named %q, want 0", n, blank)
 		}
 	})
 }

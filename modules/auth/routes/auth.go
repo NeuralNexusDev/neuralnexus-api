@@ -15,6 +15,57 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
+const (
+	msgInvalidUsernameOrPassword = "Invalid username or password"
+	msgAuthenticationFailed      = "Authentication failed"
+	msgInvalidRequest            = "Invalid request"
+	logInvalidState              = "Invalid state"
+	msgInvalidState              = "Invalid state"
+	msgLoginRequiredToLink       = "You must be logged in to link an account"
+	msgInvalidSession            = "Invalid session"
+	msgFailedToDeleteSession     = "Failed to delete session"
+	logFailedToCreateJWT         = "Failed to create JWT:\n\t"
+
+	msgInvalidPlatform                = "Invalid platform"
+	msgSessionExpired                 = "Your session has expired"
+	msgMissingOAuthScope              = "The platform did not grant the required access"
+	msgPlatformLoginDisabled          = "Login with this platform is disabled for this account"
+	msgConflictingMicrosoftIdentities = "This Microsoft account's Xbox Live and Minecraft: Java Edition identities belong to different accounts"
+	msgPlatformAlreadyLinked          = "This platform account is already linked to a different account"
+	msgSteamAccountNotFound           = "Steam account not found"
+	msgSteamAccountMismatch           = "Steam account mismatch"
+)
+
+type failureMapping struct {
+	err    error
+	status int
+	msg    string
+}
+
+var oauthFailures = []failureMapping{
+	{linking.ErrInvalidPlatform, http.StatusBadRequest, msgInvalidPlatform},
+	{linking.ErrNoScopeInToken, http.StatusBadRequest, msgMissingOAuthScope},
+	{linking.ErrInvalidAssertion, http.StatusBadRequest, msgInvalidState},
+	{linking.ErrSteamIDMismatch, http.StatusBadRequest, msgSteamAccountMismatch},
+	{linking.ErrSessionNotFound, http.StatusUnauthorized, msgLoginRequiredToLink},
+	{linking.ErrSessionExpired, http.StatusUnauthorized, msgSessionExpired},
+	{linking.ErrPlatformLoginDisabled, http.StatusForbidden, msgPlatformLoginDisabled},
+	{linking.ErrSteamNoPlayers, http.StatusNotFound, msgSteamAccountNotFound},
+	{linking.ErrConflictingMicrosoftIdentities, http.StatusConflict, msgConflictingMicrosoftIdentities},
+	{linking.ErrPlatformAlreadyLinkedToDifferentAccount, http.StatusConflict, msgPlatformAlreadyLinked},
+}
+
+func oauthFailureResponse(err error) (int, string) {
+	if !errors.Is(err, linking.ErrLinkAccountFailed) {
+		for _, m := range oauthFailures {
+			if errors.Is(err, m.err) {
+				return m.status, m.msg
+			}
+		}
+	}
+	return http.StatusInternalServerError, msgAuthenticationFailed
+}
+
 // Login struct for login request
 type Login struct {
 	Username string `json:"username" xml:"username" validate:"required_without=GetEmail"`
@@ -28,7 +79,7 @@ func LoginHandler(as auth.AccountService, ss auth.SessionService) http.HandlerFu
 		var login Login
 		err := responses.DecodeStruct(r, &login)
 		if err != nil {
-			responses.BadRequest(w, r, "Invalid username or password")
+			responses.BadRequest(w, r, msgInvalidUsernameOrPassword)
 			return
 		}
 
@@ -39,43 +90,48 @@ func LoginHandler(as auth.AccountService, ss auth.SessionService) http.HandlerFu
 			account, err = as.GetAccountByEmail(login.Email)
 		}
 		if err != nil {
+			if !errors.Is(err, auth.ErrNotFound) {
+				log.Println("Failed to look up account:\n\t", err)
+				responses.InternalServerError(w, r, msgAuthenticationFailed)
+				return
+			}
 			auth.DummyValidateUser(login.Password)
-			responses.BadRequest(w, r, "Invalid username or password")
+			responses.BadRequest(w, r, msgInvalidUsernameOrPassword)
 			return
 		}
 
 		if !account.ValidateUser(login.Password) {
-			responses.BadRequest(w, r, "Invalid username or password")
+			responses.BadRequest(w, r, msgInvalidUsernameOrPassword)
 			return
 		}
 
 		enabled, err := as.IsPasswordAuthEnabled(account.UserID)
 		if err != nil {
 			log.Println("Failed to check password auth setting:\n\t", err)
-			responses.InternalServerError(w, r, "Authentication failed")
+			responses.InternalServerError(w, r, msgAuthenticationFailed)
 			return
 		}
 		if !enabled {
-			responses.BadRequest(w, r, "Invalid username or password")
+			responses.BadRequest(w, r, msgInvalidUsernameOrPassword)
 			return
 		}
 
 		session, err := account.NewSession(time.Now().Add(time.Hour * 24).Unix())
 		if err != nil {
 			log.Println("Failed to create session:\n\t", err)
-			responses.InternalServerError(w, r, "Authentication failed")
+			responses.InternalServerError(w, r, msgAuthenticationFailed)
 			return
 		}
 
 		if err = ss.AddSession(session); err != nil {
 			log.Println("Failed to add session:\n\t", err)
-			responses.InternalServerError(w, r, "Authentication failed")
+			responses.InternalServerError(w, r, msgAuthenticationFailed)
 			return
 		}
 
 		if err := createSessionJWTAndSetCookie(ss, w, session); err != nil {
-			log.Println("Failed to create JWT:\n\t", err)
-			responses.InternalServerError(w, r, "Authentication failed")
+			log.Println(logFailedToCreateJWT, err)
+			responses.InternalServerError(w, r, msgAuthenticationFailed)
 			return
 		}
 		responses.NoContent(w, r)
@@ -87,13 +143,13 @@ func LogoutHandler(ss auth.SessionService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if session == nil {
-			responses.BadRequest(w, r, "Invalid session")
+			responses.BadRequest(w, r, msgInvalidSession)
 			return
 		}
 		err := ss.DeleteSession(session.ID)
 		if err != nil {
 			log.Println("Failed to delete session:\n\t", err)
-			responses.InternalServerError(w, r, "Failed to delete session")
+			responses.InternalServerError(w, r, msgFailedToDeleteSession)
 			return
 		}
 		http.SetCookie(w, sessionCookie("", time.Unix(0, 0)))
@@ -107,7 +163,7 @@ func OAuthHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Ses
 		code := r.URL.Query().Get("code")
 		if code == "" {
 			log.Println("No code provided")
-			redirectBadRequest(w, r, auth.NN_SITE_URL, "Invalid request")
+			redirectBadRequest(w, r, auth.NN_SITE_URL, msgInvalidRequest)
 			return
 		}
 
@@ -129,13 +185,14 @@ func OAuthHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Ses
 		}
 		if err != nil {
 			log.Println("Failed to process OAuth:\n\t", err)
-			redirectInternalServerError(w, r, state.RedirectURI, "Authentication failed")
+			status, msg := oauthFailureResponse(err)
+			redirectProblem(w, r, state.RedirectURI, status, msg)
 			return
 		}
 
 		if err := createSessionJWTAndSetCookie(ss, w, session); err != nil {
-			log.Println("Failed to create JWT:\n\t", err)
-			redirectInternalServerError(w, r, state.RedirectURI, "Authentication failed")
+			log.Println(logFailedToCreateJWT, err)
+			redirectInternalServerError(w, r, state.RedirectURI, msgAuthenticationFailed)
 			return
 		}
 		http.Redirect(w, r, state.RedirectURI, http.StatusSeeOther)
@@ -156,18 +213,16 @@ func OpenIDHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Se
 		steamID64, err := linking.VerifySteamOpenIDCallback(r.URL.Query())
 		if err != nil {
 			log.Println("Failed to verify Steam OpenID callback:\n\t", err)
-			if errors.Is(err, linking.ErrInvalidAssertion) {
-				redirectBadRequest(w, r, state.RedirectURI, "Invalid state")
-			} else {
-				redirectInternalServerError(w, r, state.RedirectURI, "Authentication failed")
-			}
+			status, msg := oauthFailureResponse(err)
+			redirectProblem(w, r, state.RedirectURI, status, msg)
 			return
 		}
 
 		user, err := linking.GetSteamUser(steamID64)
 		if err != nil {
 			log.Println("Failed to get Steam user:\n\t", err)
-			redirectInternalServerError(w, r, state.RedirectURI, "Authentication failed")
+			status, msg := oauthFailureResponse(err)
+			redirectProblem(w, r, state.RedirectURI, status, msg)
 			return
 		}
 
@@ -180,13 +235,14 @@ func OpenIDHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Se
 		}
 		if err != nil {
 			log.Println("Failed to process Steam OpenID:\n\t", err)
-			redirectInternalServerError(w, r, state.RedirectURI, "Authentication failed")
+			status, msg := oauthFailureResponse(err)
+			redirectProblem(w, r, state.RedirectURI, status, msg)
 			return
 		}
 
 		if err := createSessionJWTAndSetCookie(ss, w, session); err != nil {
-			log.Println("Failed to create JWT:\n\t", err)
-			redirectInternalServerError(w, r, state.RedirectURI, "Authentication failed")
+			log.Println(logFailedToCreateJWT, err)
+			redirectInternalServerError(w, r, state.RedirectURI, msgAuthenticationFailed)
 			return
 		}
 		http.Redirect(w, r, state.RedirectURI, http.StatusSeeOther)
@@ -201,40 +257,40 @@ func decodeAndValidateState(w http.ResponseWriter, r *http.Request) (linking.OAu
 	stateB64 := r.URL.Query().Get("state")
 	if stateB64 == "" {
 		log.Println("No state provided")
-		redirectBadRequest(w, r, auth.NN_SITE_URL, "Invalid request")
+		redirectBadRequest(w, r, auth.NN_SITE_URL, msgInvalidRequest)
 		return state, false
 	}
 	stateBytes, err := base64.URLEncoding.DecodeString(stateB64)
 	if err != nil {
 		log.Println("Failed to decode state:\n\t", err)
-		redirectBadRequest(w, r, auth.NN_SITE_URL, "Invalid state")
+		redirectBadRequest(w, r, auth.NN_SITE_URL, msgInvalidState)
 		return state, false
 	}
 	if err := json.Unmarshal(stateBytes, &state); err != nil {
 		log.Println("Failed to unmarshal state:\n\t", err)
-		redirectBadRequest(w, r, auth.NN_SITE_URL, "Invalid state")
+		redirectBadRequest(w, r, auth.NN_SITE_URL, msgInvalidState)
 		return state, false
 	}
 	if state.Platform == "" || state.Nonce == "" || state.RedirectURI == "" || state.Mode == "" {
-		log.Println("Invalid state")
-		redirectBadRequest(w, r, auth.NN_SITE_URL, "Invalid state")
+		log.Println(logInvalidState)
+		redirectBadRequest(w, r, auth.NN_SITE_URL, msgInvalidState)
 		return state, false
 	}
 	if !isAllowedRedirect(state.RedirectURI) {
 		log.Println("Redirect URI is not allowed:\n\t", state.RedirectURI)
-		redirectBadRequest(w, r, auth.NN_SITE_URL, "Invalid state")
+		redirectBadRequest(w, r, auth.NN_SITE_URL, msgInvalidState)
 		return state, false
 	}
 
 	cookie, err := r.Cookie("nonce")
 	if err != nil {
 		log.Println("Failed to get nonce cookie:\n\t", err)
-		redirectBadRequest(w, r, auth.NN_SITE_URL, "Invalid state")
+		redirectBadRequest(w, r, auth.NN_SITE_URL, msgInvalidState)
 		return state, false
 	}
 	if cookie.Value != state.Nonce {
 		log.Println("Nonce does not match")
-		redirectBadRequest(w, r, auth.NN_SITE_URL, "Invalid state")
+		redirectBadRequest(w, r, auth.NN_SITE_URL, msgInvalidState)
 		return state, false
 	}
 
@@ -251,11 +307,11 @@ func requireValidModeAndSession(w http.ResponseWriter, r *http.Request, mode lin
 		if session, ok := r.Context().Value(mw.SessionKey).(*auth.Session); ok && session != nil && session.IsValid() {
 			return true
 		}
-		redirectUnauthorized(w, r, redirectURI, "You must be logged in to link an account")
+		redirectUnauthorized(w, r, redirectURI, msgLoginRequiredToLink)
 		return false
 	default:
 		log.Println("Invalid mode")
-		redirectBadRequest(w, r, redirectURI, "Invalid state")
+		redirectBadRequest(w, r, redirectURI, msgInvalidState)
 		return false
 	}
 }
@@ -299,6 +355,9 @@ func redirectBadRequest(w http.ResponseWriter, r *http.Request, target, detail s
 }
 func redirectUnauthorized(w http.ResponseWriter, r *http.Request, target, detail string) {
 	redirectWithError(w, r, target, http.StatusUnauthorized, "Unauthorized", detail)
+}
+func redirectProblem(w http.ResponseWriter, r *http.Request, target string, status int, detail string) {
+	redirectWithError(w, r, target, status, http.StatusText(status), detail)
 }
 func redirectInternalServerError(w http.ResponseWriter, r *http.Request, target, detail string) {
 	redirectWithError(w, r, target, http.StatusInternalServerError, "Internal Server Error", detail)

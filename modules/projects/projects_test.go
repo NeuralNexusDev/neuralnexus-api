@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/goccy/go-json"
+
+	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 )
 
 // fakeRoundTripper is swapped in for http.DefaultTransport: getReleases
@@ -93,8 +95,8 @@ func TestGetReleases(t *testing.T) {
 		if err == nil {
 			t.Fatal("getReleases() error = nil, want non-nil")
 		}
-		if err.Error() != "GITHUB_TOKEN is not set" {
-			t.Errorf("getReleases() error = %q, want %q", err.Error(), "GITHUB_TOKEN is not set")
+		if !errors.Is(err, ErrGitHubTokenUnset) {
+			t.Errorf("getReleases() error = %v, want %v", err, ErrGitHubTokenUnset)
 		}
 		if releases != nil {
 			t.Errorf("getReleases() releases = %+v, want nil", releases)
@@ -115,15 +117,12 @@ func TestGetReleases(t *testing.T) {
 
 	t.Run("PJ-04_ErrorPath_TransportError", func(t *testing.T) {
 		swapGithubToken(t, "test-token")
-		wantErr := errors.New("simulated transport failure")
+		wantErr := testerrors.ErrTransportFailed
 		swapTransport(t, &fakeRoundTripper{err: wantErr})
 
 		releases, err := getReleases("group", "project")
-		if err == nil {
-			t.Fatal("getReleases() error = nil, want non-nil")
-		}
-		if !strings.Contains(err.Error(), wantErr.Error()) {
-			t.Errorf("getReleases() error = %q, want it to contain %q", err.Error(), wantErr.Error())
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("getReleases() error = %v, want it to wrap %v", err, wantErr)
 		}
 		if releases != nil {
 			t.Errorf("getReleases() releases = %+v, want nil", releases)
@@ -219,6 +218,46 @@ func TestConvertToFMLFormat(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("PJ-09_EdgeCase_EmptyReleases", func(t *testing.T) {
+		result := ConvertToFMLFormat("https://github.com/g/p/releases", []Release{})
+
+		if got := result["homepage"]; got != "https://github.com/g/p/releases" {
+			t.Errorf("homepage = %v, want %v", got, "https://github.com/g/p/releases")
+		}
+		promos, ok := result["promos"].(map[string]string)
+		if !ok {
+			t.Fatalf("promos has type %T, want map[string]string", result["promos"])
+		}
+		if len(promos) != 0 {
+			t.Errorf("promos = %+v, want empty", promos)
+		}
+		for _, version := range forgeModVersions {
+			versionMap, ok := result[version].(map[string]string)
+			if !ok {
+				t.Fatalf("result[%q] has type %T, want map[string]string", version, result[version])
+			}
+			if len(versionMap) != 0 {
+				t.Errorf("result[%q] = %+v, want empty", version, versionMap)
+			}
+		}
+	})
+
+	t.Run("PJ-10_ErrorPath_TagMissingVPrefix", func(t *testing.T) {
+		releases := []Release{{TagName: "1.20.1", URL: "https://example/1"}}
+		result := ConvertToFMLFormat("https://github.com/g/p/releases", releases)
+
+		wantReleaseMap := map[string]string{"1.20.1": "https://example/1"}
+		for _, version := range forgeModVersions {
+			versionMap, ok := result[version].(map[string]string)
+			if !ok {
+				t.Fatalf("result[%q] has type %T, want map[string]string", version, result[version])
+			}
+			if !reflect.DeepEqual(versionMap, wantReleaseMap) {
+				t.Errorf("result[%q] = %+v, want %+v", version, versionMap, wantReleaseMap)
+			}
+		}
+	})
 }
 
 func TestGetReleasesHandler(t *testing.T) {
@@ -282,6 +321,33 @@ func TestGetReleasesHandler(t *testing.T) {
 		}
 	})
 
+	t.Run("PJ-14_EdgeCase_FMLFormatEmptyUpstream", func(t *testing.T) {
+		swapGithubToken(t, "test-token")
+		swapTransport(t, &fakeRoundTripper{resp: fakeResponse(http.StatusOK, `[]`)})
+
+		req := httptest.NewRequest(http.MethodGet, "/projects/releases/group/project?format=fml", nil)
+		req.SetPathValue("group", "group")
+		req.SetPathValue("project", "project")
+		rec := httptest.NewRecorder()
+
+		GetReleasesHandler(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+		}
+		var body map[string]interface{}
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatalf("failed to decode response body: %v", err)
+		}
+		if got := body["homepage"]; got != "https://github.com/group/project/releases" {
+			t.Errorf("homepage = %v, want %v", got, "https://github.com/group/project/releases")
+		}
+		promos, ok := body["promos"].(map[string]interface{})
+		if !ok || len(promos) != 0 {
+			t.Errorf("promos = %v, want an empty object", body["promos"])
+		}
+	})
+
 	t.Run("PJ-13_ErrorPath_UpstreamError", func(t *testing.T) {
 		swapGithubToken(t, "")
 
@@ -295,9 +361,27 @@ func TestGetReleasesHandler(t *testing.T) {
 		if rec.Code != http.StatusInternalServerError {
 			t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
 		}
-		wantBody := "GITHUB_TOKEN is not set\n"
+		wantBody := msgGitHubTokenUnset + "\n"
 		if got := rec.Body.String(); got != wantBody {
 			t.Errorf("body = %q, want %q", got, wantBody)
+		}
+	})
+	t.Run("PJ-15_ErrorPath_OtherFailureHidesCause", func(t *testing.T) {
+		swapGithubToken(t, "test-token")
+		swapTransport(t, &fakeRoundTripper{err: testerrors.ErrTransportFailed})
+
+		req := httptest.NewRequest(http.MethodGet, "/projects/releases/group/project", nil)
+		req.SetPathValue("group", "group")
+		req.SetPathValue("project", "project")
+		rec := httptest.NewRecorder()
+
+		GetReleasesHandler(rec, req)
+
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+		}
+		if got, want := rec.Body.String(), msgFailedToGetReleases+"\n"; got != want {
+			t.Errorf("body = %q, want %q", got, want)
 		}
 	})
 }

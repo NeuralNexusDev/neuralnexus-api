@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/google/uuid"
@@ -170,8 +171,8 @@ func TestST02to04_GetPlayerByUUID(t *testing.T) {
 	t.Run("ST-04_Live_NotFound", func(t *testing.T) {
 		s := mcLiveStoreDB(t)
 		_, err := s.GetPlayerByUUID(uuid.New().String())
-		if err == nil {
-			t.Error("expected a non-nil error for an unknown id")
+		if !errors.Is(err, ErrPlayerNotFound) {
+			t.Errorf("error = %v, want %v", err, ErrPlayerNotFound)
 		}
 	})
 }
@@ -204,8 +205,8 @@ func TestST05to07_GetPlayerByName(t *testing.T) {
 	t.Run("ST-07_Live_NotFound", func(t *testing.T) {
 		s := mcLiveStoreDB(t)
 		_, err := s.GetPlayerByName("definitely-not-a-real-name-" + mcUniqueHash("n"))
-		if err == nil {
-			t.Error("expected a non-nil error for an unknown name")
+		if !errors.Is(err, ErrPlayerNotFound) {
+			t.Errorf("error = %v, want %v", err, ErrPlayerNotFound)
 		}
 	})
 }
@@ -261,8 +262,8 @@ func TestST08to11_GetProfileByUUID(t *testing.T) {
 	t.Run("ST-11_Live_NotFound", func(t *testing.T) {
 		s := mcLiveStoreDB(t)
 		_, err := s.GetProfileByUUID(uuid.New().String())
-		if err == nil {
-			t.Error("expected a non-nil error for an unknown id")
+		if !errors.Is(err, ErrPlayerNotFound) {
+			t.Errorf("error = %v, want %v", err, ErrPlayerNotFound)
 		}
 	})
 }
@@ -545,7 +546,7 @@ func TestST29to32_GetPlayerFromCache(t *testing.T) {
 	t.Run("ST-29_Unreachable", func(t *testing.T) {
 		s := mcStoreWithUnreachableRedis(t)
 		_, err := s.GetPlayerFromCache("key")
-		if err == nil || errors.Is(err, redis.Nil) {
+		if err == nil || errors.Is(err, ErrCacheMiss) {
 			t.Errorf("err = %v, want a raw connection error", err)
 		}
 	})
@@ -566,8 +567,8 @@ func TestST29to32_GetPlayerFromCache(t *testing.T) {
 	t.Run("ST-31_Live_Miss", func(t *testing.T) {
 		s := mcLiveStoreRedis(t)
 		_, err := s.GetPlayerFromCache("no-such-key-" + mcUniqueHash("k"))
-		if !errors.Is(err, redis.Nil) {
-			t.Errorf("err = %v, want redis.Nil", err)
+		if !errors.Is(err, ErrCacheMiss) {
+			t.Errorf("err = %v, want %v", err, ErrCacheMiss)
 		}
 	})
 
@@ -635,8 +636,8 @@ func TestST35to37_GetProfileFromCache(t *testing.T) {
 	t.Run("ST-37_Live_Miss", func(t *testing.T) {
 		s := mcLiveStoreRedis(t)
 		_, err := s.GetProfileFromCache(uuid.New().String())
-		if !errors.Is(err, redis.Nil) {
-			t.Errorf("err = %v, want redis.Nil", err)
+		if !errors.Is(err, ErrCacheMiss) {
+			t.Errorf("err = %v, want %v", err, ErrCacheMiss)
 		}
 	})
 }
@@ -686,8 +687,8 @@ func TestST40to42_GetSignedProfileFromCache(t *testing.T) {
 	t.Run("ST-42_Live_Miss", func(t *testing.T) {
 		s := mcLiveStoreRedis(t)
 		_, err := s.GetSignedProfileFromCache(uuid.New().String())
-		if !errors.Is(err, redis.Nil) {
-			t.Errorf("err = %v, want redis.Nil", err)
+		if !errors.Is(err, ErrCacheMiss) {
+			t.Errorf("err = %v, want %v", err, ErrCacheMiss)
 		}
 	})
 }
@@ -770,8 +771,8 @@ func TestST48to50_GetGeyserPlayerByGamertag(t *testing.T) {
 	t.Run("ST-50_Live_NotFound", func(t *testing.T) {
 		s := mcLiveStoreDB(t)
 		_, err := s.GetGeyserPlayerByGamertag("no-such-gamertag-" + mcUniqueHash("g"))
-		if err == nil {
-			t.Error("expected a non-nil error")
+		if !errors.Is(err, ErrPlayerNotFound) {
+			t.Errorf("error = %v, want %v", err, ErrPlayerNotFound)
 		}
 	})
 }
@@ -800,8 +801,8 @@ func TestST51to53_GetGeyserPlayerByXUID(t *testing.T) {
 	t.Run("ST-53_Live_NotFound", func(t *testing.T) {
 		s := mcLiveStoreDB(t)
 		_, err := s.GetGeyserPlayerByXUID(mcUniqueXUID())
-		if err == nil {
-			t.Error("expected a non-nil error")
+		if !errors.Is(err, ErrPlayerNotFound) {
+			t.Errorf("error = %v, want %v", err, ErrPlayerNotFound)
 		}
 	})
 }
@@ -884,8 +885,8 @@ func TestST58to60_GetGeyserSkin(t *testing.T) {
 	t.Run("ST-60_Live_NotFound", func(t *testing.T) {
 		s := mcLiveStoreDB(t)
 		_, err := s.GetGeyserSkin(mcUniqueXUID())
-		if err == nil {
-			t.Error("expected a non-nil error")
+		if !errors.Is(err, ErrSkinNotFound) {
+			t.Errorf("error = %v, want %v", err, ErrSkinNotFound)
 		}
 	})
 }
@@ -995,7 +996,18 @@ type mcSeekableReadCloser struct{ io.ReadSeeker }
 
 func (mcSeekableReadCloser) Close() error { return nil }
 
-func TestST68to70_PutTextureInS3(t *testing.T) {
+func mcRequireUploadS3Chain(t *testing.T, err error) {
+	t.Helper()
+	if !errors.Is(err, ErrUploadS3) {
+		t.Fatalf("error = %v, want it to wrap %v", err, ErrUploadS3)
+	}
+	var respErr *awshttp.ResponseError
+	if !errors.As(err, &respErr) || respErr.HTTPStatusCode() != http.StatusInternalServerError {
+		t.Errorf("error = %v, want it to chain the S3 500 response error", err)
+	}
+}
+
+func TestST68to70and77_PutTextureInS3(t *testing.T) {
 	t.Run("ST-68_WithLen", func(t *testing.T) {
 		var gotLen int64 = -1
 		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) {
@@ -1024,9 +1036,16 @@ func TestST68to70_PutTextureInS3(t *testing.T) {
 		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusInternalServerError) })
 		s := &store{s3: s3c}
 		err := s.PutTextureInS3("hash", mcSeekableReadCloser{strings.NewReader("hello")})
-		if err == nil || !strings.Contains(err.Error(), "failed to upload to s3") {
-			t.Errorf("err = %v, want a wrapped 'failed to upload to s3' error", err)
+		if !errors.Is(err, ErrUploadS3) {
+			t.Errorf("err = %v, want it to wrap %v", err, ErrUploadS3)
 		}
+	})
+
+	t.Run("ST-77_ServerErrorWrapsCause", func(t *testing.T) {
+		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusInternalServerError) })
+		s := &store{s3: s3c}
+		err := s.PutTextureInS3("hash", mcSeekableReadCloser{strings.NewReader("hello")})
+		mcRequireUploadS3Chain(t, err)
 	})
 }
 
@@ -1066,7 +1085,7 @@ func TestST71to73_IsGeyserTextureInS3(t *testing.T) {
 	})
 }
 
-func TestST74to75_PutGeyserTextureInS3(t *testing.T) {
+func TestST74to75and78_PutGeyserTextureInS3(t *testing.T) {
 	t.Run("ST-74_OK", func(t *testing.T) {
 		var gotPath string
 		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) {
@@ -1086,8 +1105,15 @@ func TestST74to75_PutGeyserTextureInS3(t *testing.T) {
 		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusInternalServerError) })
 		s := &store{s3: s3c}
 		err := s.PutGeyserTextureInS3("hash", mcSeekableReadCloser{strings.NewReader("hello")})
-		if err == nil || !strings.Contains(err.Error(), "failed to upload to s3") {
-			t.Errorf("err = %v, want a wrapped 'failed to upload to s3' error", err)
+		if !errors.Is(err, ErrUploadS3) {
+			t.Errorf("err = %v, want it to wrap %v", err, ErrUploadS3)
 		}
+	})
+
+	t.Run("ST-78_ServerErrorWrapsCause", func(t *testing.T) {
+		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusInternalServerError) })
+		s := &store{s3: s3c}
+		err := s.PutGeyserTextureInS3("hash", mcSeekableReadCloser{strings.NewReader("hello")})
+		mcRequireUploadS3Chain(t, err)
 	})
 }

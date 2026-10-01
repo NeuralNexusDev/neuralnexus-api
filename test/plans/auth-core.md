@@ -49,28 +49,28 @@
 | SE-10 | AddSession | Edge Case | `AddSessionToDB` succeeds but `AddSessionToCache` fails | | Returns nil anyway (cache failure is fail-open, only logged) | P0 |  |
 | SE-11 | GetSession | Happy Path | `store.GetSessionFromCache` succeeds | | Returns the cached session; `GetSessionFromDB` never called | P1 |  |
 | SE-12 | GetSession | Edge Case | Cache miss (`GetSessionFromCache` errors), DB hit | `store.GetSessionFromDB` succeeds | Returns the DB session; `AddSessionToCache` called once to repopulate | P1 |  |
-| SE-13 | GetSession | Error Path | Cache miss and DB miss | `GetSessionFromDB` fails | Returns nil, error | P2 |  |
+| SE-13 | GetSession | Error Path | Cache miss and DB miss | `GetSessionFromDB` fails | Returns nil, error (`ErrNotFound`) | P2 |  |
 | SE-14 | GetSession | Edge Case | Cache miss, DB hit, repopulating the cache fails | `AddSessionToCache` errors | Still returns the DB session with nil error (repopulation failure is fail-open) | P1 |  |
 | SE-15 | UpdateSession | Happy Path | `UpdateSessionInDB` and `AddSessionToCache` both succeed | | Returns nil | P1 |  |
 | SE-16 | UpdateSession | Error Path | `UpdateSessionInDB` fails | | Returns that error; cache never touched | P1 |  |
 | SE-17 | UpdateSession | Edge Case | `UpdateSessionInDB` succeeds, `AddSessionToCache` fails | | Returns nil anyway (fail-open) | P1 |  |
 | SE-18 | DeleteSession | Happy Path | `DeleteSessionInDB` and `DeleteSessionFromCache` both succeed | | Returns nil | P1 |  |
 | SE-19 | DeleteSession | Error Path | `DeleteSessionInDB` fails | | Returns that error; cache eviction never attempted | P1 |  |
-| SE-20 | DeleteSession | Error Path | `DeleteSessionInDB` succeeds, `DeleteSessionFromCache` fails | | Returns a wrapped "deleted from db but failed to evict from cache" error (fail-closed, unlike Add/Update) | P0 |  |
+| SE-20 | DeleteSession | Error Path | `DeleteSessionInDB` succeeds, `DeleteSessionFromCache` fails | | Returns an error wrapping `testerrors.ErrCacheDown` (fail-closed, unlike Add/Update) | P0 |  |
 | SE-21 | CreateJWT | Happy Path | Session with nonzero `ExpiresAt` | | Returns a signed JWT string, err nil; decodes back to matching claims | P1 |  |
 | SE-22 | CreateJWT | Edge Case | `Session.ExpiresAt == 0` | | Returned JWT omits the `exp` claim entirely | P0 |  |
 | SE-23 | ReadJWT | Happy Path | Valid JWT for an existing session whose `UserID` matches the token subject | `store.GetSession` finds it | Returns the session, nil error; `LastUsedAt` bumped via `UpdateSession` | P1 |  |
 | SE-24 | ReadJWT | Error Path | Malformed/garbage token string | | Returns nil, parse error | P2 |  |
 | SE-25 | ReadJWT | Error Path | Token signed with a different secret / wrong algorithm | | Returns nil, error (signature/alg validation failure) | P1 |  |
-| SE-26 | ReadJWT | Error Path | Token's audience is empty | | Returns nil, "missing audience" error | P1 |  |
-| SE-27 | ReadJWT | Error Path | Token's audience contains an empty-string entry | | Returns nil, "empty audience entry" error | P2 |  |
-| SE-28 | ReadJWT | Error Path | Token's audience doesn't match `NN_SITE_URL`/`NN_API_URL` | | Returns nil, "invalid audience: ..." error | P1 |  |
-| SE-29 | ReadJWT | Error Path | Session lookup fails (e.g. session was deleted/revoked) even though the JWT is validly signed and unexpired | `store.GetSession` returns an error | Returns nil, wrapped "session not found" error | P0 |  |
-| SE-30 | ReadJWT | Error Path | Session found but its `UserID` doesn't match the token's `Subject` claim | | Returns nil, "session does not match token subject" error | P0 |  |
-| SE-31 | ReadJWT | Error Path | `UpdateSession` (LastUsedAt bump) fails after a valid lookup | | Returns nil, that error | P2 |  |
+| SE-26 | ReadJWT | Error Path | Token's audience is empty | | Returns nil, `ErrMissingAudience` | P1 |  |
+| SE-27 | ReadJWT | Error Path | Token's audience contains an empty-string entry | | Returns nil, `ErrEmptyAudienceEntry` | P2 |  |
+| SE-28 | ReadJWT | Error Path | Token's audience doesn't match `NN_SITE_URL`/`NN_API_URL` | | Returns nil, an error wrapping `ErrInvalidAudience` | P1 |  |
+| SE-29 | ReadJWT | Error Path | Session lookup fails (e.g. session was deleted/revoked) even though the JWT is validly signed and unexpired | `store.GetSession` returns an error | Returns nil, an error wrapping `ErrNotFound` | P0 |  |
+| SE-30 | ReadJWT | Error Path | Session found but its `UserID` doesn't match the token's `Subject` claim | | Returns nil, `ErrSessionSubjectMismatch` | P0 |  |
+| SE-31 | ReadJWT | Error Path | `UpdateSession` (LastUsedAt bump) fails after a valid lookup | `UpdateSessionInDB` returns `testerrors.ErrDBDown` | Returns nil session and an error matching `testerrors.ErrDBDown` | P2 |  |
 | SE-32 | init | Happy Path | Package loads under the required `JWT_SECRET`/`NN_SITE_URL`/`NN_API_URL` env (the precondition every other test in this file already runs under) | | `JWT_SECRET` and `validAudiences` are populated from env without `log.Fatal` firing; `validAudiences == []string{NN_SITE_URL, NN_API_URL}` | P2 | Asserts init's already-established postcondition rather than re-invoking it |
-| SE-33 | init | Error Path | `JWT_SECRET` unset | Test binary re-exec'd as a subprocess with `JWT_SECRET=""`, other required env vars inherited unchanged | Subprocess exits non-zero via `log.Fatal("JWT_SECRET environment variable must be set")` | P1 | Re-exec/TestCrasher pattern (see `os/exec` docs) — init() runs unconditionally at process start, before any `-test.run` filtering |
-| SE-34 | init | Error Path | `NN_SITE_URL` or `NN_API_URL` unset (`JWT_SECRET` set) | Test binary re-exec'd as a subprocess with each cleared in turn | Subprocess exits non-zero via `log.Fatal("NN_SITE_URL and NN_API_URL environment variables must be set")` | P1 | Same re-exec pattern; exercises both var slots of the OR condition |
+| SE-33 | init | Error Path | `JWT_SECRET` unset | Test binary re-exec'd as a subprocess with `JWT_SECRET=""`, other required env vars inherited unchanged | Subprocess exits non-zero via `log.Fatal(msgJWTSecretUnset)` | P1 | Re-exec/TestCrasher pattern (see `os/exec` docs) — init() runs unconditionally at process start, before any `-test.run` filtering |
+| SE-34 | init | Error Path | `NN_SITE_URL` or `NN_API_URL` unset (`JWT_SECRET` set) | Test binary re-exec'd as a subprocess with each cleared in turn | Subprocess exits non-zero via `log.Fatal(msgSiteAPIURLUnset)` | P1 | Same re-exec pattern; exercises both var slots of the OR condition |
 
 ## store.go
 
@@ -83,7 +83,7 @@
 | ST-05 | LinkAccount | Accessor | | | Same pointer-identity check | P3 |  |
 | ST-06 | RateLimit | Accessor | | | Same pointer-identity check | P3 |  |
 | ST-07 | OAuthToken | Accessor | | | Same pointer-identity check | P3 |  |
-| ST-08 | translateAccountConstraintErr | Edge Case | `err` is not a `*pgconn.PgError` | plain `errors.New("boom")` | Returned unchanged | P1 |  |
+| ST-08 | translateAccountConstraintErr | Edge Case | `err` is not a `*pgconn.PgError` | a plain error that is not a `*pgconn.PgError` (`testerrors.ErrBoom`) | Returned unchanged | P1 |  |
 | ST-09 | translateAccountConstraintErr | Edge Case | `*pgconn.PgError` with `Code != "23505"` | | Returned unchanged | P2 |  |
 | ST-10 | translateAccountConstraintErr | Edge Case | `Code == "23505"`, unrecognized `ConstraintName` | | Returned unchanged (falls through the switch) | P1 |  |
 | ST-11 | translateAccountConstraintErr | Happy Path | `Code == "23505"`, `ConstraintName == "accounts_email_key"` | | Returns `ErrEmailAlreadyExists` | P0 |  |
@@ -130,27 +130,36 @@
 | ST-52 | AddAccountToDB | Error Path | Second account reuses an existing non-empty username | Real Postgres unique-violation on `accounts_username_key` | Returns `ErrUsernameAlreadyExists` | P1 |  |
 | ST-53 | AddAccountToDB | Error Path | Second account reuses an existing non-empty email | Real Postgres unique-violation on `accounts_email_key` | Returns `ErrEmailAlreadyExists` | P1 |  |
 | ST-54 | DeleteLinkedAccount | Edge Case | Passwordless account, exactly one verified+enabled link, no other fallback | Guard denies removing the only usable login method | Returns `ErrWouldLockAccount`; the link still exists afterward | P0 |  |
-| ST-55 | DeleteLinkedAccount | Happy Path | Account has a password (`hashed_secret` set, password auth enabled) | Guard allows since the password remains usable | Returns nil; link removed | P1 |  |
+| ST-55 | DeleteLinkedAccount | Happy Path | Account has a password (`hashed_secret` set, password auth enabled) | Guard allows since the password remains usable | Returns nil; link removed (`ErrNotFound`) | P1 |  |
 | ST-56 | DeleteLinkedAccount | Happy Path | Passwordless account with a second verified+enabled link on another platform | Guard allows | Returns nil; the other link is left untouched | P1 |  |
 | ST-57 | DeleteLinkedAccount | Error Path | No `linked_accounts` row exists for `(userID, platform)` | Existence check after the 0-row guard result | Returns `ErrNotFound` (not `ErrWouldLockAccount`) | P1 |  |
 | ST-58 | DeleteLinkedAccount | Edge Case | A second link exists on another platform but has `login_enabled = false` | Guard only counts verified+enabled others | Returns `ErrWouldLockAccount` | P2 |  |
 | ST-59 | DeleteLinkedAccount | Edge Case | Account has `hashed_secret` but `account_settings.password_auth` is false | Guard treats disabled password auth as unusable | Returns `ErrWouldLockAccount` | P1 |  |
-| ST-60 | DeleteLinkedAccount | Concurrency Invariant | Two concurrent deletes target different platforms on the same account, each the other's sole fallback | `pg_advisory_xact_lock(27745, hashtext(userID))` serializes them; run many trials against real Postgres | Exactly one of the two succeeds every trial; exactly one link always remains | P0 |  |
+| ST-60 | DeleteLinkedAccount | Concurrency Invariant | Two concurrent deletes target different platforms on the same account, each the other's sole fallback | `pg_advisory_xact_lock(27745, hashtext(userID))` serializes them; run many trials against real Postgres | Exactly one of the two succeeds every trial; exactly one link always remains (`ErrWouldLockAccount`) | P0 |  |
 | ST-61 | SetLinkedAccountLoginEnabled | Happy Path | `enabled=true` on a `Verified` row | | Returns nil; `LoginEnabled` becomes true | P1 |  |
 | ST-62 | SetLinkedAccountLoginEnabled | Error Path | `enabled=true` on an unverified row | 0 rows match the `verified = true` clause | Returns `ErrLinkedAccountUnverified` | P0 |  |
 | ST-63 | SetLinkedAccountLoginEnabled | Edge Case | `enabled=false`, this is the account's last usable login method | Same guard as `DeleteLinkedAccount` | Returns `ErrWouldLockAccount`; `LoginEnabled` remains true | P0 |  |
 | ST-64 | SetLinkedAccountLoginEnabled | Happy Path | `enabled=false`, another verified+enabled link exists | | Returns nil; `LoginEnabled` becomes false | P1 |  |
 | ST-65 | SetLinkedAccountLoginEnabled | Edge Case | `enabled=false`, `account_settings.password_auth` is false and this is the only enabled link | | Returns `ErrWouldLockAccount` | P1 |  |
-| ST-66 | SetLinkedAccountLoginEnabled | Concurrency Invariant | Two concurrent disables target different platforms, each the other's sole fallback | Same lock as ST-60, many trials | Exactly one succeeds every trial; exactly one link remains login-enabled | P0 |  |
-| ST-67 | GetAccountSettings | Edge Case | No `account_settings` row exists yet for userID | Real Postgres, `pgx.ErrNoRows` | Returns `DefaultAccountSettings(userID)` (`PasswordAuthEnabled: true`), nil error | P1 |  |
+| ST-66 | SetLinkedAccountLoginEnabled | Concurrency Invariant | Two concurrent disables target different platforms, each the other's sole fallback | Same lock as ST-60, many trials | Exactly one succeeds every trial; exactly one link remains login-enabled (`ErrWouldLockAccount`) | P0 |  |
+| ST-67 | GetAccountSettings | Edge Case | The account exists but has no `account_settings` row yet | Real Postgres, `pgx.ErrNoRows` | Returns `DefaultAccountSettings(userID)` (`PasswordAuthEnabled: true`), nil error | P1 |  |
 | ST-68 | SetPasswordAuthEnabled | Error Path | `enabled=true`, account has no `hashed_secret` | 0 rows match the `INSERT ... WHERE EXISTS` clause | Returns `ErrNoPasswordSet` | P1 |  |
 | ST-69 | SetPasswordAuthEnabled | Happy Path | `enabled=true`, account has `hashed_secret` | | Returns nil; settings read back `PasswordAuthEnabled=true` | P1 |  |
 | ST-70 | SetPasswordAuthEnabled | Edge Case | `enabled=false`, account has a password but no linked platform | Guard denies (no fallback) | Returns `ErrWouldLockAccount`; settings unchanged | P0 |  |
 | ST-71 | SetPasswordAuthEnabled | Happy Path | `enabled=false`, account has a password and one verified+enabled link | Guard allows | Returns nil; settings read back `PasswordAuthEnabled=false` | P1 |  |
-| ST-72 | SetPasswordAuthEnabled | Concurrency Invariant | `SetPasswordAuthEnabled(false)` races `DeleteLinkedAccount` (sole link) on the same account | Same lock, many trials | Exactly one succeeds every trial; account never ends up with neither a password nor a link | P0 |  |
-| ST-73 | SetPasswordAuthEnabled | Concurrency Invariant | `SetPasswordAuthEnabled(false)` races `SetLinkedAccountLoginEnabled` (sole link, false) on the same account | Same lock, many trials | Exactly one succeeds every trial; account never ends up with neither | P0 |  |
+| ST-72 | SetPasswordAuthEnabled | Concurrency Invariant | `SetPasswordAuthEnabled(false)` races `DeleteLinkedAccount` (sole link) on the same account | Same lock, many trials | Exactly one succeeds every trial; account never ends up with neither a password nor a link (`ErrWouldLockAccount`) | P0 |  |
+| ST-73 | SetPasswordAuthEnabled | Concurrency Invariant | `SetPasswordAuthEnabled(false)` races `SetLinkedAccountLoginEnabled` (sole link, false) on the same account | Same lock, many trials | Exactly one succeeds every trial; account never ends up with neither (`ErrWouldLockAccount`) | P0 |  |
 | ST-74 | GetLinkedAccountsByUserID | Happy Path | Two linked accounts exist for a user | Real Postgres | Returns both rows | P2 |  |
 | ST-75 | AddLinkedAccountToDB | Error Path | Second insert reuses an existing `(platform, platformID)` pair under a different `userID` | Real Postgres unique-violation on `linked_accounts_platform_unique` | Returns `ErrAlreadyLinked` | P0 |  |
+| ST-76 | GetSessionFromDB | Error Path | No session with that ID | Real Postgres, unknown session ID | Returns nil, `ErrNotFound` | P2 | |
+| ST-77 | GetLinkedAccountByPlatformName | Error Path | No linked account with that platform and username | Real Postgres | Returns nil, `ErrNotFound` | P2 | |
+| ST-78 | GetLinkedAccountByPlatformName | Edge Case | Two linked accounts share the platform and username | Real Postgres, two users linked on the same platform with the same username | Returns nil, `ErrDuplicateLinkedAccount` | P2 | |
+| ST-79 | GetOAuthTokenByUserID | Error Path | No token for that user and platform | Real Postgres | Returns nil, `ErrNotFound` | P2 | |
+| ST-80 | GetSessionFromCache | Error Path | No cached session for that ID | Real Redis, unknown session ID | Returns nil, `ErrNotFound` | P2 | |
+| ST-81 | GetAccountSettings | Error Path (live) | No account exists for userID | Real Postgres, unknown user ID | Returns nil settings and `ErrNotFound` | P1 |  |
+| ST-82 | SetPasswordAuthEnabled | Error Path (live) | Enable for a user ID with no account | Real Postgres, unknown user ID | Returns `ErrNotFound` | P1 |  |
+| ST-83 | SetPasswordAuthEnabled | Error Path (live) | Disable for a user ID with no account | Real Postgres, unknown user ID | Returns `ErrNotFound` | P1 |  |
+| ST-84 | SetPasswordAuthEnabled | Concurrency Invariant (live) | The account is deleted while the enable call waits on its row | Real Postgres; a separate transaction has deleted the account but not committed; the call is running and blocked on the account row | After the delete commits the call returns `ErrNotFound` | P1 |  |
 
 ## types.go
 
@@ -180,7 +189,7 @@
 | TY-25 | NewSession (Account) | Edge Case | `Account.Roles` empty | | `Session.Permissions` empty, nil error | P2 |  |
 | TY-26 | NewLinkedAccount | Happy Path | userID, platform, username, platformID, data given | | Returns `*LinkedAccount` with all fields copied, `Verified == true`, `LoginEnabled == true` | P2 |  |
 | TY-27 | init | Happy Path | Package loads under the required `PEPPER` env (the precondition every other test in this file already runs under) | | `pepper` is populated from env without `log.Fatal` firing | P2 | Asserts init's already-established postcondition rather than re-invoking it |
-| TY-28 | init | Error Path | `PEPPER` unset | Test binary re-exec'd as a subprocess with `PEPPER=""` | Subprocess exits non-zero via `log.Fatal("PEPPER environment variable must be set")` | P1 | Re-exec/TestCrasher pattern (see `os/exec` docs) |
+| TY-28 | init | Error Path | `PEPPER` unset | Test binary re-exec'd as a subprocess with `PEPPER=""` | Subprocess exits non-zero via `log.Fatal(msgPepperUnset)` | P1 | Re-exec/TestCrasher pattern (see `os/exec` docs) |
 
 ## user.go
 
@@ -223,3 +232,6 @@
 | US-35 | GetAccountSettings | Error Path | `ass.GetAccountSettings` fails | | Error propagated unchanged | P2 |  |
 | US-36 | SetPasswordAuthEnabled | Happy Path | `ass.SetPasswordAuthEnabled` succeeds | | Returns nil | P1 |  |
 | US-37 | SetPasswordAuthEnabled | Error Path | `ass.SetPasswordAuthEnabled` fails | | Error propagated unchanged | P2 |  |
+| US-38 | UpdateUserFromPlatform | Error Path | Same as US-20, asserting both causes | `AddLinkedAccountToDB` fails with `testerrors.ErrInsertFailed`; `DeleteAccountFromDB` fails with `testerrors.ErrBoom` | Returns an error wrapping both `testerrors.ErrInsertFailed` and `testerrors.ErrBoom` | P2 | |
+| US-39 | GetAccountSettings | Error Path | `ass.GetAccountSettings` returns `ErrNotFound` | fake settings store returns `ErrNotFound` | Returns an error matching `ErrNotFound` | P2 |  |
+| US-40 | SetPasswordAuthEnabled | Error Path | `ass.SetPasswordAuthEnabled` returns `ErrNotFound` | fake settings store returns `ErrNotFound` | Returns an error matching `ErrNotFound` | P2 |  |

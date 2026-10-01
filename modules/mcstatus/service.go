@@ -9,6 +9,11 @@ import (
 	"github.com/dreamscached/minequery/v2"
 )
 
+var (
+	ErrJavaStatus    = errors.New("failed to get java server status")
+	ErrBedrockStatus = errors.New("failed to get bedrock server status")
+)
+
 // MCStatusService - Minecraft Status service
 type MCStatusService interface {
 	GetJavaServerStatus(host string, port int, queryEnabled bool, queryPort int) (*MCServerStatus, error)
@@ -51,7 +56,7 @@ func (s *service) GetJavaServerStatus(host string, port int, queryEnabled bool, 
 	}
 
 	if queryEnabled {
-		query, err := pinger.QueryFull(host, port)
+		query, err := pinger.QueryFull(host, queryPort)
 		if err == nil {
 			queryStatus := GetQueryStatus(query)
 			if status != nil {
@@ -65,7 +70,7 @@ func (s *service) GetJavaServerStatus(host string, port int, queryEnabled bool, 
 		status.Port = int32(port)
 		return status, nil
 	}
-	return nil, errors.New("failed to get java server status")
+	return nil, ErrJavaStatus
 }
 
 // GetBedrockServerStatus - Get Bedrock server status
@@ -73,7 +78,7 @@ func (s *service) GetBedrockServerStatus(host string, port int) (*MCServerStatus
 	connect := host + ":" + fmt.Sprint(port)
 	status, err := bedrockping.Query(connect, 5*time.Second, 150*time.Millisecond)
 	if err != nil {
-		return nil, errors.New("failed to get bedrock server status")
+		return nil, fmt.Errorf("%w: %w", ErrBedrockStatus, err)
 	}
 	return GetBedrockStatus(status), nil
 }

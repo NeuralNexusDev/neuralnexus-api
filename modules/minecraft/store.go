@@ -85,7 +85,11 @@ func (s *store) GetPlayerByUUID(id string) (*Player, error) {
 	}
 	// Lax: this query intentionally omits profile_actions, unlike
 	// GetProfileByUUID, so Player.ProfileActions is left at its zero value.
-	return pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByNameLax[Player])
+	player, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByNameLax[Player])
+	if err != nil {
+		return nil, playerNotFound(err)
+	}
+	return player, nil
 }
 
 // GetPlayerByName gets a player by name from the database
@@ -96,7 +100,18 @@ func (s *store) GetPlayerByName(name string) (*Player, error) {
 		return nil, err
 	}
 	// Lax: see GetPlayerByUUID.
-	return pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByNameLax[Player])
+	player, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByNameLax[Player])
+	if err != nil {
+		return nil, playerNotFound(err)
+	}
+	return player, nil
+}
+
+func playerNotFound(err error) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrPlayerNotFound
+	}
+	return err
 }
 
 // GetProfileByUUID gets a player's full profile from the database by UUID
@@ -108,7 +123,7 @@ func (s *store) GetProfileByUUID(id string) (*Profile, error) {
 	}
 	player, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Player])
 	if err != nil {
-		return nil, err
+		return nil, playerNotFound(err)
 	}
 
 	textures, err := s.getTextures(id, player.Name)
@@ -236,11 +251,18 @@ func (s *store) UpsertTextureHash(hash string) error {
 	return err
 }
 
+func cacheMiss(err error) error {
+	if errors.Is(err, redis.Nil) {
+		return ErrCacheMiss
+	}
+	return err
+}
+
 // GetPlayerFromCache gets a player from the cache by key (uuid or name)
 func (s *store) GetPlayerFromCache(key string) (*Player, error) {
 	val, err := s.rdb.Get(context.Background(), CachePlayer+key).Result()
 	if err != nil {
-		return nil, err
+		return nil, cacheMiss(err)
 	}
 	var player Player
 	if err := json.Unmarshal([]byte(val), &player); err != nil {
@@ -267,7 +289,7 @@ func (s *store) SetPlayerInCache(player *Player) error {
 func (s *store) GetProfileFromCache(id string) (*Profile, error) {
 	val, err := s.rdb.Get(context.Background(), CacheProfile+id).Result()
 	if err != nil {
-		return nil, err
+		return nil, cacheMiss(err)
 	}
 	var profile Profile
 	if err := json.Unmarshal([]byte(val), &profile); err != nil {
@@ -289,7 +311,7 @@ func (s *store) SetProfileInCache(profile *Profile) error {
 func (s *store) GetSignedProfileFromCache(id string) (*Player, error) {
 	val, err := s.rdb.Get(context.Background(), CacheProfileSigned+id).Result()
 	if err != nil {
-		return nil, err
+		return nil, cacheMiss(err)
 	}
 	var player Player
 	if err := json.Unmarshal([]byte(val), &player); err != nil {
@@ -343,7 +365,7 @@ func (s *store) GetGeyserPlayerByGamertag(gamertag string) (*GeyserPlayer, error
 	}
 	player, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[GeyserPlayer])
 	if err != nil {
-		return nil, err
+		return nil, playerNotFound(err)
 	}
 	player.UUID = xuidToUUID(player.XUID)
 	return player, nil
@@ -361,7 +383,7 @@ func (s *store) GetGeyserPlayerByXUID(xuid int64) (*GeyserPlayer, error) {
 	}
 	player, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[GeyserPlayer])
 	if err != nil {
-		return nil, err
+		return nil, playerNotFound(err)
 	}
 	player.UUID = xuidToUUID(player.XUID)
 	return player, nil
@@ -393,7 +415,14 @@ func (s *store) GetGeyserSkin(xuid int64) (*GeyserSkin, error) {
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[GeyserSkin])
+	skin, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[GeyserSkin])
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrSkinNotFound
+		}
+		return nil, err
+	}
+	return skin, nil
 }
 
 // GetGeyserSkinByHash gets any row carrying the given hash (multiple xuids
@@ -454,7 +483,7 @@ func (s *store) PutTextureInS3(hash string, body io.ReadCloser) error {
 
 	_, err := s.s3.PutObject(context.Background(), input)
 	if err != nil {
-		return fmt.Errorf("failed to upload to s3: %w", err)
+		return fmt.Errorf("%w: %w", ErrUploadS3, err)
 	}
 	return nil
 }
@@ -491,7 +520,7 @@ func (s *store) PutGeyserTextureInS3(hash string, body io.ReadCloser) error {
 
 	_, err := s.s3.PutObject(context.Background(), input)
 	if err != nil {
-		return fmt.Errorf("failed to upload to s3: %w", err)
+		return fmt.Errorf("%w: %w", ErrUploadS3, err)
 	}
 	return nil
 }

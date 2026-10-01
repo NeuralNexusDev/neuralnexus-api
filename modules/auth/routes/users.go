@@ -3,6 +3,7 @@ package authroutes
 import (
 	"errors"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
+	"log"
 	"net/http"
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
@@ -12,6 +13,55 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
+
+const (
+	msgUserNotFound                             = "User not found"
+	msgNoPermissionToUpdateUsers                = "You do not have permission to update users"
+	msgInvalidRequestBody                       = "Invalid request body"
+	msgFailedToUpdateUser                       = "Failed to update user"
+	msgPlatformNotLinked                        = "This platform isn't linked to this user"
+	msgNoPermissionToGetUser                    = "You do not have permission to get this user"
+	msgNoPermissionToGetUsers                   = "You do not have permission to get users"
+	msgNoPermissionToGetUserPermissions         = "You do not have permission to get user permissions"
+	msgUnsupportedPlatform                      = "Unsupported platform"
+	msgNoPermissionToDeleteUsers                = "You do not have permission to delete users"
+	msgFailedToDeleteUser                       = "Failed to delete user"
+	msgNoPermissionToViewLinkedAccounts         = "You do not have permission to view this user's linked accounts"
+	msgFailedToGetLinkedAccounts                = "Failed to get linked accounts"
+	msgNoPermissionToUnlinkPlatforms            = "You do not have permission to unlink this user's platforms"
+	msgSetPasswordOrLinkBeforeUnlinking         = "Set a password or link another platform before unlinking your last one"
+	msgFailedToUnlinkPlatform                   = "Failed to unlink platform"
+	msgNoPermissionToUpdatePlatforms            = "You do not have permission to update this user's platforms"
+	msgSetPasswordOrLinkBeforeDisabling         = "Set a password or link another platform before disabling your last login method"
+	msgLinkedAccountUnverified                  = "This linked account is unverified and can't be enabled for login"
+	msgFailedToUpdatePlatform                   = "Failed to update platform"
+	msgNoPermissionToViewSettings               = "You do not have permission to view this user's settings"
+	msgFailedToGetAccountSettings               = "Failed to get account settings"
+	msgNoPermissionToUpdateSettings             = "You do not have permission to update this user's settings"
+	msgEnableLoginMethodBeforeDisablingPassword = "Link and enable another login method before disabling your password"
+	msgSetPasswordBeforeEnablingPasswordLogin   = "Set a password before enabling password login"
+	msgFailedToUpdateUserSettings               = "Failed to update user settings"
+	msgFailedToGetUser                          = "Failed to get user"
+	logFailedToGetUser                          = "Failed to get user:\n\t"
+	logFailedToDeleteUser                       = "Failed to delete user:\n\t"
+	logFailedToUpdateUser                       = "Failed to update user:\n\t"
+	msgEmailAlreadyExists                       = "An account with this email already exists"
+	msgUsernameAlreadyExists                    = "An account with this username already exists"
+)
+
+func respondUpdateUserFailure(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, auth.ErrNotFound):
+		responses.NotFound(w, r, msgUserNotFound)
+	case errors.Is(err, auth.ErrEmailAlreadyExists):
+		responses.Conflict(w, r, msgEmailAlreadyExists)
+	case errors.Is(err, auth.ErrUsernameAlreadyExists):
+		responses.Conflict(w, r, msgUsernameAlreadyExists)
+	default:
+		log.Println(logFailedToUpdateUser, err)
+		responses.InternalServerError(w, r, msgFailedToUpdateUser)
+	}
+}
 
 // GetUserHandler - Get a user
 func GetUserHandler(service auth.UserService) http.HandlerFunc {
@@ -23,12 +73,17 @@ func GetUserHandler(service auth.UserService) http.HandlerFunc {
 		// integrations) but isn't implemented yet - don't open this up
 		// generally until that consent mechanism actually exists.
 		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
-			responses.Forbidden(w, r, "You do not have permission to get this user")
+			responses.Forbidden(w, r, msgNoPermissionToGetUser)
 			return
 		}
 		user, err := service.GetUser(userID)
 		if err != nil {
-			responses.NotFound(w, r, "User not found")
+			if errors.Is(err, auth.ErrNotFound) {
+				responses.NotFound(w, r, msgUserNotFound)
+				return
+			}
+			log.Println(logFailedToGetUser, err)
+			responses.InternalServerError(w, r, msgFailedToGetUser)
 			return
 		}
 		responses.StructOK(w, r, user)
@@ -40,14 +95,19 @@ func GetUserFromPlatformHandler(service auth.UserService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if !session.HasPermission(perms.ScopeAdminUsers) {
-			responses.Forbidden(w, r, "You do not have permission to get users")
+			responses.Forbidden(w, r, msgNoPermissionToGetUsers)
 			return
 		}
 		platform := auth.Platform(r.PathValue("platform"))
 		platformID := r.PathValue("platform_id")
 		user, err := service.GetUserFromPlatform(platform, platformID)
 		if err != nil {
-			responses.NotFound(w, r, "User not found")
+			if errors.Is(err, auth.ErrNotFound) {
+				responses.NotFound(w, r, msgUserNotFound)
+				return
+			}
+			log.Println(logFailedToGetUser, err)
+			responses.InternalServerError(w, r, msgFailedToGetUser)
 			return
 		}
 		responses.StructOK(w, r, user)
@@ -60,12 +120,17 @@ func GetUserPermissionsHandler(service auth.UserService) http.HandlerFunc {
 		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		userID := r.PathValue("user_id")
 		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
-			responses.Forbidden(w, r, "You do not have permission to get user permissions")
+			responses.Forbidden(w, r, msgNoPermissionToGetUserPermissions)
 			return
 		}
 		permissions, err := service.GetUserPermissions(userID)
 		if err != nil {
-			responses.NotFound(w, r, "User not found")
+			if errors.Is(err, auth.ErrNotFound) {
+				responses.NotFound(w, r, msgUserNotFound)
+				return
+			}
+			log.Println(logFailedToGetUser, err)
+			responses.InternalServerError(w, r, msgFailedToGetUser)
 			return
 		}
 		responses.StructOK(w, r, permissions)
@@ -77,20 +142,20 @@ func UpdateUserHandler(service auth.UserService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if !session.HasPermission(perms.ScopeAdminUsers) {
-			responses.Forbidden(w, r, "You do not have permission to update users")
+			responses.Forbidden(w, r, msgNoPermissionToUpdateUsers)
 			return
 		}
 		userID := r.PathValue("user_id")
 		var user auth.Account
 		err := responses.DecodeStruct(r, &user)
 		if err != nil {
-			responses.BadRequest(w, r, "Invalid request body")
+			responses.BadRequest(w, r, msgInvalidRequestBody)
 			return
 		}
 		user.UserID = userID
 		err = service.UpdateUser(&user)
 		if err != nil {
-			responses.BadRequest(w, r, "Failed to update user")
+			respondUpdateUserFailure(w, r, err)
 			return
 		}
 		responses.StructOK(w, r, user)
@@ -102,7 +167,7 @@ func UpdateUserFromPlatformHandler(service auth.UserService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if !session.HasPermission(perms.ScopeAdminUsers) {
-			responses.Forbidden(w, r, "You do not have permission to update users")
+			responses.Forbidden(w, r, msgNoPermissionToUpdateUsers)
 			return
 		}
 		platform := auth.Platform(r.PathValue("platform"))
@@ -113,46 +178,46 @@ func UpdateUserFromPlatformHandler(service auth.UserService) http.HandlerFunc {
 		case auth.PlatformDiscord:
 			var d linking.DiscordData
 			if err := responses.DecodeStruct(r, &d); err != nil {
-				responses.BadRequest(w, r, "Invalid request body")
+				responses.BadRequest(w, r, msgInvalidRequestBody)
 				return
 			}
 			data = &d
 		case auth.PlatformMinecraft:
 			var d linking.MinecraftData
 			if err := responses.DecodeStruct(r, &d); err != nil {
-				responses.BadRequest(w, r, "Invalid request body")
+				responses.BadRequest(w, r, msgInvalidRequestBody)
 				return
 			}
 			data = &d
 		case auth.PlatformTwitch:
 			var d twitch.Data
 			if err := responses.DecodeStruct(r, &d); err != nil {
-				responses.BadRequest(w, r, "Invalid request body")
+				responses.BadRequest(w, r, msgInvalidRequestBody)
 				return
 			}
 			data = &d
 		case auth.PlatformXboxLive:
 			var d linking.XboxLiveData
 			if err := responses.DecodeStruct(r, &d); err != nil {
-				responses.BadRequest(w, r, "Invalid request body")
+				responses.BadRequest(w, r, msgInvalidRequestBody)
 				return
 			}
 			data = &d
 		case auth.PlatformMicrosoft:
 			var d linking.MicrosoftUserData
 			if err := responses.DecodeStruct(r, &d); err != nil {
-				responses.BadRequest(w, r, "Invalid request body")
+				responses.BadRequest(w, r, msgInvalidRequestBody)
 				return
 			}
 			data = &d
 		default:
-			responses.BadRequest(w, r, "Unsupported platform")
+			responses.BadRequest(w, r, msgUnsupportedPlatform)
 			return
 		}
 
 		user, err := service.UpdateUserFromPlatform(platform, platformID, data)
 		if err != nil {
-			responses.BadRequest(w, r, "Failed to update user")
+			respondUpdateUserFailure(w, r, err)
 			return
 		}
 		responses.StructOK(w, r, user)
@@ -164,13 +229,14 @@ func DeleteUserHandler(service auth.UserService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if !session.HasPermission(perms.ScopeAdminUsers) {
-			responses.Forbidden(w, r, "You do not have permission to delete users")
+			responses.Forbidden(w, r, msgNoPermissionToDeleteUsers)
 			return
 		}
 		userID := r.PathValue("user_id")
 		err := service.DeleteUser(userID)
 		if err != nil {
-			responses.BadRequest(w, r, "Failed to delete user")
+			log.Println(logFailedToDeleteUser, err)
+			responses.InternalServerError(w, r, msgFailedToDeleteUser)
 			return
 		}
 		responses.NoContent(w, r)
@@ -183,12 +249,12 @@ func GetUserLinkedAccountsHandler(service auth.UserService) http.HandlerFunc {
 		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		userID := r.PathValue("user_id")
 		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
-			responses.Forbidden(w, r, "You do not have permission to view this user's linked accounts")
+			responses.Forbidden(w, r, msgNoPermissionToViewLinkedAccounts)
 			return
 		}
 		links, err := service.GetUserLinkedAccounts(userID)
 		if err != nil {
-			responses.InternalServerError(w, r, "Failed to get linked accounts")
+			responses.InternalServerError(w, r, msgFailedToGetLinkedAccounts)
 			return
 		}
 		responses.StructOK(w, r, links)
@@ -201,7 +267,7 @@ func UnlinkPlatformHandler(service auth.UserService) http.HandlerFunc {
 		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		userID := r.PathValue("user_id")
 		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
-			responses.Forbidden(w, r, "You do not have permission to unlink this user's platforms")
+			responses.Forbidden(w, r, msgNoPermissionToUnlinkPlatforms)
 			return
 		}
 		platform := auth.Platform(r.PathValue("platform"))
@@ -210,11 +276,11 @@ func UnlinkPlatformHandler(service auth.UserService) http.HandlerFunc {
 		case err == nil:
 			responses.NoContent(w, r)
 		case errors.Is(err, auth.ErrNotFound):
-			responses.NotFound(w, r, "This platform isn't linked to this user")
+			responses.NotFound(w, r, msgPlatformNotLinked)
 		case errors.Is(err, auth.ErrWouldLockAccount):
-			responses.BadRequest(w, r, "Set a password or link another platform before unlinking your last one")
+			responses.BadRequest(w, r, msgSetPasswordOrLinkBeforeUnlinking)
 		default:
-			responses.InternalServerError(w, r, "Failed to unlink platform")
+			responses.InternalServerError(w, r, msgFailedToUnlinkPlatform)
 		}
 	}
 }
@@ -232,13 +298,13 @@ func SetPlatformLoginEnabledHandler(service auth.UserService) http.HandlerFunc {
 		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		userID := r.PathValue("user_id")
 		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
-			responses.Forbidden(w, r, "You do not have permission to update this user's platforms")
+			responses.Forbidden(w, r, msgNoPermissionToUpdatePlatforms)
 			return
 		}
 		platform := auth.Platform(r.PathValue("platform"))
 		var body SetPlatformLoginEnabledRequest
 		if err := responses.DecodeStruct(r, &body); err != nil || body.LoginEnabled == nil {
-			responses.BadRequest(w, r, "Invalid request body")
+			responses.BadRequest(w, r, msgInvalidRequestBody)
 			return
 		}
 
@@ -247,13 +313,13 @@ func SetPlatformLoginEnabledHandler(service auth.UserService) http.HandlerFunc {
 		case err == nil:
 			responses.NoContent(w, r)
 		case errors.Is(err, auth.ErrNotFound):
-			responses.NotFound(w, r, "This platform isn't linked to this user")
+			responses.NotFound(w, r, msgPlatformNotLinked)
 		case errors.Is(err, auth.ErrWouldLockAccount):
-			responses.BadRequest(w, r, "Set a password or link another platform before disabling your last login method")
+			responses.BadRequest(w, r, msgSetPasswordOrLinkBeforeDisabling)
 		case errors.Is(err, auth.ErrLinkedAccountUnverified):
-			responses.BadRequest(w, r, "This linked account is unverified and can't be enabled for login")
+			responses.BadRequest(w, r, msgLinkedAccountUnverified)
 		default:
-			responses.InternalServerError(w, r, "Failed to update platform")
+			responses.InternalServerError(w, r, msgFailedToUpdatePlatform)
 		}
 	}
 }
@@ -264,12 +330,16 @@ func GetAccountSettingsHandler(service auth.UserService) http.HandlerFunc {
 		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		userID := r.PathValue("user_id")
 		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
-			responses.Forbidden(w, r, "You do not have permission to view this user's settings")
+			responses.Forbidden(w, r, msgNoPermissionToViewSettings)
 			return
 		}
 		settings, err := service.GetAccountSettings(userID)
 		if err != nil {
-			responses.InternalServerError(w, r, "Failed to get account settings")
+			if errors.Is(err, auth.ErrNotFound) {
+				responses.NotFound(w, r, msgUserNotFound)
+				return
+			}
+			responses.InternalServerError(w, r, msgFailedToGetAccountSettings)
 			return
 		}
 		responses.StructOK(w, r, settings)
@@ -290,12 +360,12 @@ func UpdateAccountSettingsHandler(service auth.UserService) http.HandlerFunc {
 		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		userID := r.PathValue("user_id")
 		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
-			responses.Forbidden(w, r, "You do not have permission to update this user's settings")
+			responses.Forbidden(w, r, msgNoPermissionToUpdateSettings)
 			return
 		}
 		var body UpdateAccountSettingsRequest
 		if err := responses.DecodeStruct(r, &body); err != nil || body.PasswordAuthEnabled == nil {
-			responses.BadRequest(w, r, "Invalid request body")
+			responses.BadRequest(w, r, msgInvalidRequestBody)
 			return
 		}
 
@@ -303,12 +373,14 @@ func UpdateAccountSettingsHandler(service auth.UserService) http.HandlerFunc {
 		switch {
 		case err == nil:
 			responses.NoContent(w, r)
+		case errors.Is(err, auth.ErrNotFound):
+			responses.NotFound(w, r, msgUserNotFound)
 		case errors.Is(err, auth.ErrWouldLockAccount):
-			responses.BadRequest(w, r, "Link and enable another login method before disabling your password")
+			responses.BadRequest(w, r, msgEnableLoginMethodBeforeDisablingPassword)
 		case errors.Is(err, auth.ErrNoPasswordSet):
-			responses.BadRequest(w, r, "Set a password before enabling password login")
+			responses.BadRequest(w, r, msgSetPasswordBeforeEnablingPasswordLogin)
 		default:
-			responses.InternalServerError(w, r, "Failed to update user settings")
+			responses.InternalServerError(w, r, msgFailedToUpdateUserSettings)
 		}
 	}
 }

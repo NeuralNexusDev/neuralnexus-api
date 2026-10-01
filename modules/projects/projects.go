@@ -56,10 +56,17 @@ type Release struct {
 	URL     string `json:"html_url"`
 }
 
+var ErrGitHubTokenUnset = errors.New("GITHUB_TOKEN is not set")
+
+const (
+	msgGitHubTokenUnset    = "GITHUB_TOKEN is not set"
+	msgFailedToGetReleases = "Failed to get releases"
+)
+
 // -------------- Functions --------------
 func getReleases(group string, project string) ([]Release, error) {
 	if githubToken == "" {
-		return nil, errors.New("GITHUB_TOKEN is not set")
+		return nil, ErrGitHubTokenUnset
 	}
 
 	githubURL := "https://api.github.com/repos/" + group + "/" + project + "/releases"
@@ -94,14 +101,16 @@ func ConvertToFMLFormat(gitHubReleasesURL string, releases []Release) map[string
 
 	releaseMap := make(map[string]string)
 	for _, release := range releases {
-		versionTagName := strings.Split(release.TagName, "v")[1]
+		versionTagName := strings.TrimPrefix(release.TagName, "v")
 		releaseMap[versionTagName] = release.URL
 	}
 
 	promosMap := make(map[string]string)
-	for _, version := range forgeModVersions {
-		promosMap[version+"-latest"] = releases[0].URL
-		promosMap[version+"-recommended"] = releases[0].URL
+	if len(releases) > 0 {
+		for _, version := range forgeModVersions {
+			promosMap[version+"-latest"] = releases[0].URL
+			promosMap[version+"-recommended"] = releases[0].URL
+		}
 	}
 
 	fmlFormat["homepage"] = gitHubReleasesURL
@@ -123,7 +132,11 @@ func GetReleasesHandler(w http.ResponseWriter, r *http.Request) {
 	releases, err := getReleases(group, project)
 	if err != nil {
 		log.Println(err.Error())
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		if errors.Is(err, ErrGitHubTokenUnset) {
+			http.Error(w, msgGitHubTokenUnset, http.StatusInternalServerError)
+			return
+		}
+		http.Error(w, msgFailedToGetReleases, http.StatusInternalServerError)
 		return
 	}
 

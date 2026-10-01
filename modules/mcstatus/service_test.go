@@ -1,10 +1,13 @@
 package mcstatus
 
 import (
+	"bytes"
+	"errors"
 	"net"
 	"os"
 	"strconv"
 	"testing"
+	"time"
 )
 
 // svUnusedPort binds and immediately releases a TCP port, which then refuses
@@ -80,8 +83,8 @@ func TestService_GetJavaServerStatus(t *testing.T) {
 		if status != nil {
 			t.Fatalf("expected nil status, got %+v", status)
 		}
-		if err == nil || err.Error() != "failed to get java server status" {
-			t.Fatalf("expected \"failed to get java server status\", got %v", err)
+		if !errors.Is(err, ErrJavaStatus) {
+			t.Fatalf("expected %v, got %v", ErrJavaStatus, err)
 		}
 	})
 
@@ -94,8 +97,8 @@ func TestService_GetJavaServerStatus(t *testing.T) {
 		if status != nil {
 			t.Fatalf("expected nil status, got %+v", status)
 		}
-		if err == nil || err.Error() != "failed to get java server status" {
-			t.Fatalf("expected \"failed to get java server status\", got %v", err)
+		if !errors.Is(err, ErrJavaStatus) {
+			t.Fatalf("expected %v, got %v", ErrJavaStatus, err)
 		}
 	})
 
@@ -130,8 +133,9 @@ func TestService_GetBedrockServerStatus(t *testing.T) {
 		if status != nil {
 			t.Fatalf("expected nil status, got %+v", status)
 		}
-		if err == nil || err.Error() != "failed to get bedrock server status" {
-			t.Fatalf("expected \"failed to get bedrock server status\", got %v", err)
+		var netErr net.Error
+		if !errors.Is(err, ErrBedrockStatus) || !errors.As(err, &netErr) {
+			t.Fatalf("expected an error wrapping %v and a net.Error, got %v", ErrBedrockStatus, err)
 		}
 	})
 
@@ -157,8 +161,8 @@ func TestService_GetServerStatus(t *testing.T) {
 
 		_, err := s.GetServerStatus("127.0.0.1", port, false, false, 0)
 
-		if err == nil || err.Error() != "failed to get java server status" {
-			t.Fatalf("expected dispatch to GetJavaServerStatus (\"failed to get java server status\"), got %v", err)
+		if !errors.Is(err, ErrJavaStatus) {
+			t.Fatalf("expected dispatch to GetJavaServerStatus (%v), got %v", ErrJavaStatus, err)
 		}
 	})
 
@@ -168,8 +172,105 @@ func TestService_GetServerStatus(t *testing.T) {
 
 		_, err := s.GetServerStatus("127.0.0.1", port, true, false, 0)
 
-		if err == nil || err.Error() != "failed to get bedrock server status" {
-			t.Fatalf("expected dispatch to GetBedrockServerStatus (\"failed to get bedrock server status\"), got %v", err)
+		if !errors.Is(err, ErrBedrockStatus) {
+			t.Fatalf("expected dispatch to GetBedrockServerStatus (%v), got %v", ErrBedrockStatus, err)
 		}
+	})
+}
+
+type svUDPRecorder struct {
+	conn    *net.UDPConn
+	packets chan []byte
+}
+
+func svNewUDPRecorder(t *testing.T, port int) *svUDPRecorder {
+	t.Helper()
+	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: port})
+	if err != nil {
+		t.Fatalf("failed to listen on UDP port %d: %v", port, err)
+	}
+	r := &svUDPRecorder{conn: conn, packets: make(chan []byte, 4)}
+	t.Cleanup(func() { conn.Close() })
+	go func() {
+		buf := make([]byte, 1024)
+		for {
+			n, addr, err := conn.ReadFromUDP(buf)
+			if err != nil {
+				return
+			}
+			select {
+			case r.packets <- append([]byte(nil), buf[:n]...):
+			default:
+			}
+			conn.WriteToUDP([]byte{0}, addr)
+		}
+	}()
+	return r
+}
+
+func (r *svUDPRecorder) port() int { return r.conn.LocalAddr().(*net.UDPAddr).Port }
+
+func svQueryHandshakePrefix() []byte { return []byte{0xFE, 0xFD, 0x09} }
+
+func svRequireHandshake(t *testing.T, r *svUDPRecorder) {
+	t.Helper()
+	select {
+	case pkt := <-r.packets:
+		if !bytes.HasPrefix(pkt, svQueryHandshakePrefix()) {
+			t.Errorf("packet = %x, want a query handshake starting %x", pkt, svQueryHandshakePrefix())
+		}
+	case <-time.After(3 * time.Second):
+		t.Errorf("no query handshake reached UDP port %d", r.port())
+	}
+}
+
+func svRequireNoPacket(t *testing.T, r *svUDPRecorder) {
+	t.Helper()
+	select {
+	case pkt := <-r.packets:
+		t.Errorf("unexpected packet %x on UDP port %d", pkt, r.port())
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
+func TestService_GetJavaServerStatusQueryPort(t *testing.T) {
+	t.Run("SV-11_QueryGoesToQueryPort", func(t *testing.T) {
+		serverPort := svNewUDPRecorder(t, 0)
+		queryPort := svNewUDPRecorder(t, 0)
+		s := NewService()
+
+		_, err := s.GetJavaServerStatus("127.0.0.1", serverPort.port(), true, queryPort.port())
+
+		if !errors.Is(err, ErrJavaStatus) {
+			t.Fatalf("expected %v, got %v", ErrJavaStatus, err)
+		}
+		svRequireHandshake(t, queryPort)
+		svRequireNoPacket(t, serverPort)
+	})
+
+	t.Run("SV-12_QueryGoesToServerPortWhenQueryPortEqualsIt", func(t *testing.T) {
+		serverPort := svNewUDPRecorder(t, 0)
+		s := NewService()
+
+		_, err := s.GetJavaServerStatus("127.0.0.1", serverPort.port(), true, serverPort.port())
+
+		if !errors.Is(err, ErrJavaStatus) {
+			t.Fatalf("expected %v, got %v", ErrJavaStatus, err)
+		}
+		svRequireHandshake(t, serverPort)
+	})
+
+	t.Run("SV-13_NoQueryWhenQueryDisabled", func(t *testing.T) {
+		serverPort := svNewUDPRecorder(t, 0)
+		queryPort := svNewUDPRecorder(t, 0)
+		s := NewService()
+
+		_, err := s.GetJavaServerStatus("127.0.0.1", serverPort.port(), false, queryPort.port())
+
+		if !errors.Is(err, ErrJavaStatus) {
+			t.Fatalf("expected %v, got %v", ErrJavaStatus, err)
+		}
+		svRequireNoPacket(t, queryPort)
+		svRequireNoPacket(t, serverPort)
 	})
 }

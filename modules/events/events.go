@@ -2,6 +2,8 @@ package events
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/goccy/go-json"
@@ -9,6 +11,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"time"
 )
+
+var ErrEventNotFound = errors.New("event not found")
+
+var ErrEventsQueryFailed = errors.New("failed to query events")
 
 // CREATE DATABASE events;
 
@@ -101,6 +107,9 @@ func (s *store) GetEvent(id string) (*Event, error) {
 		&event.ID, &event.Platform, &event.Type, &event.Payload, &event.Status, &event.CreatedAt, &event.UpdatedAt,
 	)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrEventNotFound
+		}
 		return nil, err
 	}
 	return &event, nil
@@ -110,12 +119,15 @@ func (s *store) GetEvent(id string) (*Event, error) {
 func (s *store) GetEventsByPlatform(platform auth.Platform) ([]*Event, error) {
 	rows, err := s.db.Query(context.Background(), "SELECT * FROM event_log WHERE platform = $1", platform)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %w", ErrEventsQueryFailed, err)
 	}
 	defer rows.Close()
 
 	var events []*Event
 	events, err = pgx.CollectRows(rows, pgx.RowToAddrOfStructByName[Event])
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrEventsQueryFailed, err)
+	}
 	return events, nil
 }
 

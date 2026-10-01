@@ -35,14 +35,20 @@
                     }
                 },
                 "responses": {
-                    "200": {
-                        "$ref": "#/components/responses/SessionResponse"
+                    "204": {
+                        "$ref": "#/components/responses/204NoContent"
                     },
                     "400": {
                         "$ref": "#/components/responses/400BadRequest"
                     },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             }
@@ -59,11 +65,14 @@
                     "204": {
                         "$ref": "#/components/responses/204NoContent"
                     },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
-                    },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             }
@@ -75,6 +84,12 @@
                     "200": {
                         "$ref": "#/components/responses/BNGNameResponse"
                     },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
                     }
@@ -83,7 +98,7 @@
         },
         "/bee-name-generator/name/{name}": {
             "post": {
-                "summary": "Get a specific bee name",
+                "summary": "Upload a bee name",
                 "security": [
                     {
                         "bearerAuth": []
@@ -98,8 +113,14 @@
                     "200": {
                         "$ref": "#/components/responses/BNGNameResponse"
                     },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
                     },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
@@ -122,8 +143,14 @@
                     "204": {
                         "$ref": "#/components/responses/204NoContent"
                     },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
                     },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
@@ -165,6 +192,9 @@
                     "403": {
                         "$ref": "#/components/responses/403Forbidden"
                     },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
                     }
@@ -183,8 +213,11 @@
                     "200": {
                         "$ref": "#/components/responses/BNGNameResponse"
                     },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
                     },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
@@ -208,14 +241,14 @@
                     "200": {
                         "$ref": "#/components/responses/BNGNameResponse"
                     },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
-                    },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
                     },
                     "403": {
                         "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
                     },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
@@ -239,14 +272,14 @@
                     "204": {
                         "$ref": "#/components/responses/204NoContent"
                     },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
-                    },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
                     },
                     "403": {
                         "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
                     },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
@@ -279,6 +312,9 @@
                     },
                     "403": {
                         "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
                     },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
@@ -320,6 +356,12 @@
                     },
                     "400": {
                         "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
                     },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
@@ -373,6 +415,9 @@
                     "403": {
                         "$ref": "#/components/responses/403Forbidden"
                     },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
                     }
@@ -417,6 +462,9 @@
                     },
                     "403": {
                         "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
                     },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
@@ -472,6 +520,9 @@
                     "403": {
                         "$ref": "#/components/responses/403Forbidden"
                     },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
                     }
@@ -512,6 +563,12 @@
                     },
                     "400": {
                         "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
                     },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
@@ -565,6 +622,9 @@
                     "403": {
                         "$ref": "#/components/responses/403Forbidden"
                     },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
                     }
@@ -614,6 +674,9 @@
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
                     },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
                     }
@@ -642,8 +705,17 @@
                     "200": {
                         "$ref": "#/components/responses/SimpleOnlineResponse"
                     },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
                     "404": {
                         "$ref": "#/components/responses/SimpleOfflineResponse"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
                     }
                 }
             }
@@ -690,8 +762,23 @@
                             }
                         }
                     },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
                     "404": {
                         "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    },
+                    "502": {
+                        "$ref": "#/components/responses/502BadGateway"
                     }
                 }
             }
@@ -712,6 +799,12 @@
                                 }
                             }
                         }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
                     }
                 }
             }
@@ -742,6 +835,12 @@
                     "400": {
                         "$ref": "#/components/responses/400BadRequest"
                     },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
                     }
@@ -771,8 +870,14 @@
                     "400": {
                         "$ref": "#/components/responses/400BadRequest"
                     },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
                     "404": {
                         "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
                     },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
@@ -780,71 +885,7 @@
                 }
             }
         },
-        "/mc/profile/bedrock/name/{name}": {
-            "get": {
-                "summary": "Get a Bedrock player's full profile (identity + skin) by gamertag",
-                "description": "Looks up a Bedrock player by Xbox gamertag.",
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/BedrockGamertagNameSlug"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/GeyserProfile"
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/404NotFound"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/500InternalServerError"
-                    }
-                }
-            }
-        },
-        "/mc/profile/bedrock/{uuid}": {
-            "get": {
-                "summary": "Get a Bedrock player's full profile (identity + skin) by derived UUID",
-                "description": "Looks up a Bedrock player by their synthetic UUID, derived from an Xbox XUID (see GeyserPlayer.uuid). Returns 400 if the UUID isn't a validly-derived Bedrock UUID.",
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/BedrockUUIDSlug"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/GeyserProfile"
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/404NotFound"
-                    },
-                    "500": {
-                        "$ref": "#/components/responses/500InternalServerError"
-                    }
-                }
-            }
-        },
-        "/mc/profile/lookup/bulk/byname": {
+        "/mc/mojang/lookup/bulk/byname": {
             "post": {
                 "summary": "Look up players by name in batch",
                 "description": "Body must be a JSON array of 1 to 10 non-empty names; Content-Type must be application/json.",
@@ -880,8 +921,14 @@
                     "400": {
                         "$ref": "#/components/responses/400BadRequest"
                     },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
                     "415": {
                         "$ref": "#/components/responses/415UnsupportedMediaType"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
                     },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
@@ -889,7 +936,7 @@
                 }
             }
         },
-        "/mc/profile/lookup/name/{name}": {
+        "/mc/mojang/lookup/name/{name}": {
             "get": {
                 "summary": "Look up a player by name",
                 "parameters": [
@@ -908,11 +955,14 @@
                             }
                         }
                     },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
                     },
                     "404": {
                         "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
                     },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
@@ -920,7 +970,7 @@
                 }
             }
         },
-        "/mc/profile/lookup/{uuid}": {
+        "/mc/mojang/lookup/{uuid}": {
             "get": {
                 "summary": "Look up a player by UUID",
                 "parameters": [
@@ -942,40 +992,14 @@
                     "400": {
                         "$ref": "#/components/responses/400BadRequest"
                     },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
                     "404": {
                         "$ref": "#/components/responses/404NotFound"
                     },
-                    "500": {
-                        "$ref": "#/components/responses/500InternalServerError"
-                    }
-                }
-            }
-        },
-        "/mc/profile/name/{name}": {
-            "get": {
-                "summary": "Get a player's full profile by name",
-                "description": "Resolves the name to a UUID via Mojang, then returns the decoded profile. Returns 204 (not 404) when the profile can't be found.",
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/MCNameSlug"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/MCPlayer"
-                                }
-                            }
-                        }
-                    },
-                    "204": {
-                        "$ref": "#/components/responses/204NoContent"
-                    },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
                     },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
@@ -983,10 +1007,10 @@
                 }
             }
         },
-        "/mc/profile/{uuid}": {
+        "/mc/mojang/profile/{uuid}": {
             "get": {
-                "summary": "Get a player's full profile",
-                "description": "Returns 204 (not 404) when the profile can't be found.",
+                "summary": "Get a player's full profile from Mojang",
+                "description": "Mirrors the Mojang API. Returns 204 (not 404) when the profile can't be found.",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/MCUUIDSlug"
@@ -1011,6 +1035,161 @@
                     },
                     "400": {
                         "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/mc/profile/bedrock/name/{name}": {
+            "get": {
+                "summary": "Get a Bedrock player's full profile (identity + skin) by gamertag",
+                "description": "Looks up a Bedrock player by Xbox gamertag.",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/BedrockGamertagNameSlug"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GeyserProfile"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/mc/profile/bedrock/{uuid}": {
+            "get": {
+                "summary": "Get a Bedrock player's full profile (identity + skin) by derived UUID",
+                "description": "Looks up a Bedrock player by their synthetic UUID, derived from an Xbox XUID (see GeyserPlayer.uuid). Returns 400 if the UUID isn't a validly-derived Bedrock UUID.",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/BedrockUUIDSlug"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GeyserProfile"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/mc/profile/name/{name}": {
+            "get": {
+                "summary": "Get a player's full profile by name",
+                "description": "Resolves the name to a UUID via Mojang, then returns the decoded profile. Returns 204 (not 404) when the profile can't be found.",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/MCNameSlug"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MCProfile"
+                                }
+                            }
+                        }
+                    },
+                    "204": {
+                        "$ref": "#/components/responses/204NoContent"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/mc/profile/{uuid}": {
+            "get": {
+                "summary": "Get a player's full profile",
+                "description": "Returns 204 (not 404) when the profile can't be found.",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/MCUUIDSlug"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MCProfile"
+                                }
+                            }
+                        }
+                    },
+                    "204": {
+                        "$ref": "#/components/responses/204NoContent"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
                     },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
@@ -1039,11 +1218,14 @@
                             }
                         }
                     },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
                     },
                     "404": {
                         "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
                     },
                     "502": {
                         "$ref": "#/components/responses/502BadGateway"
@@ -1072,11 +1254,14 @@
                             }
                         }
                     },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
                     },
                     "404": {
                         "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
                     },
                     "502": {
                         "$ref": "#/components/responses/502BadGateway"
@@ -1087,10 +1272,13 @@
         "/mcstatus/icon/{host}": {
             "get": {
                 "summary": "Get Minecraft server icon",
-                "description": "Get Minecraft server icon",
+                "description": "Bedrock servers have no icon: bedrock=true is refused with 400.",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/HostSlug"
+                    },
+                    {
+                        "$ref": "#/components/parameters/MCStatusBedrockQuery"
                     }
                 ],
                 "responses": {
@@ -1105,8 +1293,20 @@
                             }
                         }
                     },
-                    "404": {
-                        "$ref": "#/components/responses/404NotFound"
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    },
+                    "502": {
+                        "$ref": "#/components/responses/502BadGateway"
                     }
                 }
             }
@@ -1118,14 +1318,29 @@
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/HostSlug"
+                    },
+                    {
+                        "$ref": "#/components/parameters/MCStatusBedrockQuery"
+                    },
+                    {
+                        "$ref": "#/components/parameters/MCStatusQueryQuery"
+                    },
+                    {
+                        "$ref": "#/components/parameters/MCStatusQueryPortQuery"
                     }
                 ],
                 "responses": {
                     "200": {
                         "$ref": "#/components/responses/SimpleOnlineResponse"
                     },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
                     "404": {
                         "$ref": "#/components/responses/SimpleOfflineResponse"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
                     }
                 }
             }
@@ -1139,31 +1354,13 @@
                         "$ref": "#/components/parameters/HostSlug"
                     },
                     {
-                        "name": "bedrock",
-                        "in": "query",
-                        "description": "Is the server bedrock edition",
-                        "required": false,
-                        "schema": {
-                            "type": "boolean"
-                        }
+                        "$ref": "#/components/parameters/MCStatusBedrockQuery"
                     },
                     {
-                        "name": "query",
-                        "in": "query",
-                        "description": "Is query enabled on the server",
-                        "required": false,
-                        "schema": {
-                            "type": "boolean"
-                        }
+                        "$ref": "#/components/parameters/MCStatusQueryQuery"
                     },
                     {
-                        "name": "query_port",
-                        "in": "query",
-                        "description": "Minecraft server query port",
-                        "required": false,
-                        "schema": {
-                            "type": "integer"
-                        }
+                        "$ref": "#/components/parameters/MCStatusQueryPortQuery"
                     },
                     {
                         "$ref": "#/components/parameters/GameRawQuery"
@@ -1190,8 +1387,17 @@
                             }
                         }
                     },
-                    "404": {
-                        "$ref": "#/components/responses/404NotFound"
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    },
+                    "502": {
+                        "$ref": "#/components/responses/502BadGateway"
                     }
                 }
             }
@@ -1244,6 +1450,9 @@
                     "403": {
                         "$ref": "#/components/responses/403Forbidden"
                     },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
                     }
@@ -1285,8 +1494,17 @@
                     "400": {
                         "$ref": "#/components/responses/400BadRequest"
                     },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
                     "404": {
                         "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             },
@@ -1337,6 +1555,12 @@
                     "403": {
                         "$ref": "#/components/responses/403Forbidden"
                     },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
                     }
@@ -1365,8 +1589,17 @@
                     "400": {
                         "$ref": "#/components/responses/400BadRequest"
                     },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
                     "404": {
                         "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             }
@@ -1396,14 +1629,14 @@
                             }
                         }
                     },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
-                    },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
                     },
                     "403": {
                         "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
                     },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
@@ -1448,8 +1681,17 @@
                     "400": {
                         "$ref": "#/components/responses/400BadRequest"
                     },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
                     "404": {
                         "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             },
@@ -1503,6 +1745,9 @@
                     "404": {
                         "$ref": "#/components/responses/404NotFound"
                     },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
                     }
@@ -1551,6 +1796,9 @@
                     "404": {
                         "$ref": "#/components/responses/404NotFound"
                     },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
                     }
@@ -1594,8 +1842,34 @@
                     "400": {
                         "$ref": "#/components/responses/400BadRequest"
                     },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
                     "404": {
-                        "$ref": "#/components/responses/404NotFound"
+                        "description": "No pet with that name exists, or the pet has no pictures",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Problem"
+                                }
+                            },
+                            "application/problem+xml": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Problem"
+                                }
+                            },
+                            "application/problem+x-protobuf": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Problem"
+                                }
+                            }
+                        }
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             }
@@ -1619,11 +1893,17 @@
                             }
                         }
                     },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
                     },
                     "404": {
                         "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             },
@@ -1644,9 +1924,6 @@
                     "204": {
                         "$ref": "#/components/responses/204NoContent"
                     },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
-                    },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
                     },
@@ -1655,6 +1932,9 @@
                     },
                     "404": {
                         "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
                     },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
@@ -1699,6 +1979,12 @@
                             }
                         }
                     },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
                     "500": {
                         "description": "Internal server error",
                         "content": {
@@ -1716,6 +2002,9 @@
             "get": {
                 "summary": "I'm a teapot",
                 "responses": {
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
                     "418": {
                         "description": "I'm a teapot",
                         "content": {
@@ -1725,6 +2014,9 @@
                                 }
                             }
                         }
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
                     }
                 }
             }
@@ -1751,6 +2043,15 @@
                     },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             }
@@ -1781,6 +2082,12 @@
                     },
                     "404": {
                         "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             },
@@ -1826,6 +2133,12 @@
                     },
                     "404": {
                         "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             }
@@ -1855,6 +2168,12 @@
                     },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             }
@@ -1884,6 +2203,89 @@
                     },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/users/me/settings": {
+            "get": {
+                "summary": "Get the caller's own account settings",
+                "description": "Requires a valid session. Always resolves to the caller's own settings.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AccountSettings"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            },
+            "patch": {
+                "summary": "Update the caller's own account settings",
+                "description": "Requires a valid session. Always operates on the caller's own account. Disabling password login is refused with 400 unless another verified, login-enabled platform is linked; enabling it is refused with 400 if no password is set.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateAccountSettingsRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "$ref": "#/components/responses/204NoContent"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             }
@@ -1924,6 +2326,12 @@
                     },
                     "404": {
                         "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             },
@@ -1981,6 +2389,18 @@
                     },
                     "403": {
                         "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/409Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             }
@@ -2013,8 +2433,17 @@
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
                     },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
                     "404": {
                         "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             },
@@ -2069,6 +2498,18 @@
                     },
                     "403": {
                         "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/409Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             }
@@ -2105,6 +2546,12 @@
                     },
                     "404": {
                         "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             },
@@ -2156,6 +2603,12 @@
                     },
                     "404": {
                         "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             }
@@ -2193,6 +2646,12 @@
                     },
                     "403": {
                         "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             }
@@ -2233,6 +2692,102 @@
                     },
                     "404": {
                         "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/users/{user_id}/settings": {
+            "get": {
+                "summary": "Get a user's account settings",
+                "description": "Requires the admin:users scope, unless the caller is requesting their own settings.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/UserIdSlug"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AccountSettings"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            },
+            "patch": {
+                "summary": "Update a user's account settings",
+                "description": "Requires the admin:users scope, unless the caller is updating their own account. Disabling password login is refused with 400 unless another verified, login-enabled platform is linked; enabling it is refused with 400 if no password is set.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/UserIdSlug"
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateAccountSettingsRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "204": {
+                        "$ref": "#/components/responses/204NoContent"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
                     }
                 }
             }
@@ -2240,14 +2795,6 @@
     },
     "components": {
         "schemas": {
-            "Session": {
-                "type": "object",
-                "properties": {
-                    "session": {
-                        "type": "string"
-                    }
-                }
-            },
             "BNGName": {
                 "type": "object",
                 "required": [
@@ -2497,6 +3044,35 @@
                     }
                 }
             },
+            "AccountSettings": {
+                "type": "object",
+                "description": "An account's settings.",
+                "properties": {
+                    "user_id": {
+                        "type": "string"
+                    },
+                    "password_auth": {
+                        "type": "boolean",
+                        "description": "Whether the account can log in with its password."
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            },
+            "UpdateAccountSettingsRequest": {
+                "type": "object",
+                "required": [
+                    "password_auth"
+                ],
+                "properties": {
+                    "password_auth": {
+                        "type": "boolean",
+                        "description": "Whether the account can log in with its password."
+                    }
+                }
+            },
             "DataStore": {
                 "type": "object",
                 "properties": {
@@ -2596,7 +3172,101 @@
                         "items": {
                             "type": "string"
                         },
-                        "description": "Only present on full-profile responses (GET /mc/profile/{uuid}). Absent entirely on name/UUID lookups, which never populate it; an empty array means the profile was fetched and genuinely has no actions."
+                        "description": "Only present on GET /mc/mojang/profile/{uuid}. Absent entirely on name/UUID lookups, which never populate it; an empty array means the profile was fetched and genuinely has no actions."
+                    }
+                }
+            },
+            "MCTexture": {
+                "type": "object",
+                "required": [
+                    "url"
+                ],
+                "properties": {
+                    "url": {
+                        "type": "string"
+                    },
+                    "metadata": {
+                        "type": "object",
+                        "description": "Only present for the slim (Alex) model.",
+                        "required": [
+                            "model"
+                        ],
+                        "properties": {
+                            "model": {
+                                "type": "string",
+                                "enum": [
+                                    "slim"
+                                ]
+                            }
+                        }
+                    }
+                }
+            },
+            "MCProfile": {
+                "type": "object",
+                "description": "A player's full profile with its textures decoded.",
+                "required": [
+                    "id",
+                    "name"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "legacy": {
+                        "type": "boolean",
+                        "description": "Omitted when false."
+                    },
+                    "demo": {
+                        "type": "boolean",
+                        "description": "Omitted when false."
+                    },
+                    "profileActions": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Omitted when the profile has no actions."
+                    },
+                    "textures": {
+                        "type": "object",
+                        "description": "Omitted when the player has no textures property.",
+                        "required": [
+                            "timestamp",
+                            "profileId",
+                            "profileName",
+                            "textures"
+                        ],
+                        "properties": {
+                            "timestamp": {
+                                "type": "integer",
+                                "format": "int64"
+                            },
+                            "profileId": {
+                                "type": "string"
+                            },
+                            "profileName": {
+                                "type": "string"
+                            },
+                            "signatureRequired": {
+                                "type": "boolean",
+                                "description": "Omitted when false."
+                            },
+                            "textures": {
+                                "type": "object",
+                                "properties": {
+                                    "SKIN": {
+                                        "$ref": "#/components/schemas/MCTexture"
+                                    },
+                                    "CAPE": {
+                                        "$ref": "#/components/schemas/MCTexture"
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             },
@@ -2921,6 +3591,33 @@
                     "type": "string"
                 }
             },
+            "MCStatusBedrockQuery": {
+                "name": "bedrock",
+                "in": "query",
+                "description": "Is the server bedrock edition",
+                "required": false,
+                "schema": {
+                    "type": "boolean"
+                }
+            },
+            "MCStatusQueryQuery": {
+                "name": "query",
+                "in": "query",
+                "description": "Is query enabled on the server",
+                "required": false,
+                "schema": {
+                    "type": "boolean"
+                }
+            },
+            "MCStatusQueryPortQuery": {
+                "name": "query_port",
+                "in": "query",
+                "description": "Java only: the UDP query port used when query is enabled. Defaults to the server port when omitted or invalid (not a number, or outside 1-65535). Ignored for bedrock servers.",
+                "required": false,
+                "schema": {
+                    "type": "integer"
+                }
+            },
             "GamertagSlug": {
                 "name": "gamertag",
                 "in": "path",
@@ -3048,26 +3745,6 @@
                     }
                 }
             },
-            "SessionResponse": {
-                "description": "Session response",
-                "content": {
-                    "application/json": {
-                        "schema": {
-                            "$ref": "#/components/schemas/Session"
-                        }
-                    },
-                    "application/xml": {
-                        "schema": {
-                            "$ref": "#/components/schemas/Session"
-                        }
-                    },
-                    "application/x-protobuf": {
-                        "schema": {
-                            "$ref": "#/components/schemas/Session"
-                        }
-                    }
-                }
-            },
             "BNGNameResponse": {
                 "description": "Bee name response",
                 "content": {
@@ -3116,6 +3793,54 @@
             },
             "404NotFound": {
                 "description": "Not found",
+                "content": {
+                    "application/problem+json": {
+                        "schema": {
+                            "$ref": "#/components/schemas/Problem"
+                        }
+                    },
+                    "application/problem+xml": {
+                        "schema": {
+                            "$ref": "#/components/schemas/Problem"
+                        }
+                    },
+                    "application/problem+x-protobuf": {
+                        "schema": {
+                            "$ref": "#/components/schemas/Problem"
+                        }
+                    }
+                }
+            },
+            "409Conflict": {
+                "description": "Conflict",
+                "content": {
+                    "application/problem+json": {
+                        "schema": {
+                            "$ref": "#/components/schemas/Problem"
+                        }
+                    },
+                    "application/problem+xml": {
+                        "schema": {
+                            "$ref": "#/components/schemas/Problem"
+                        }
+                    },
+                    "application/problem+x-protobuf": {
+                        "schema": {
+                            "$ref": "#/components/schemas/Problem"
+                        }
+                    }
+                }
+            },
+            "429TooManyRequests": {
+                "description": "Too many requests",
+                "headers": {
+                    "Retry-After": {
+                        "description": "The time after which the request can be retried, as an HTTP-date.",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                },
                 "content": {
                     "application/problem+json": {
                         "schema": {

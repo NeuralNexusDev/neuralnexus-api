@@ -2,9 +2,13 @@ package numbersds
 
 import (
 	"context"
+	"errors"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+var ErrNumberNotFound = errors.New("number not found")
 
 // CREATE TRIGGER update_datastore_numbers_modtime
 // BEFORE UPDATE ON datastore_numbers
@@ -63,6 +67,9 @@ func (s *numberStore) Read(storeID, userID string) (float64, error) {
 	var value float64
 	err := s.db.QueryRow(context.Background(), "SELECT value FROM datastore_numbers WHERE store_id = $1 AND user_id = $2", storeID, userID).Scan(&value)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, ErrNumberNotFound
+		}
 		return 0, err
 	}
 	return value, nil

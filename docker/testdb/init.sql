@@ -1,7 +1,3 @@
--- Schema for the Minecraft module's player/texture tables, mirroring
--- production DDL. Applied automatically by Postgres on first boot of the
--- test-env container (see docker-compose.test.yml).
-
 CREATE TABLE IF NOT EXISTS textures (
     hash TEXT NOT NULL PRIMARY KEY,
     CONSTRAINT textures_hash_not_empty CHECK (hash <> '')
@@ -24,18 +20,10 @@ CREATE TABLE IF NOT EXISTS player_textures (
     cape TEXT REFERENCES textures(hash),
     first_seen BIGINT NOT NULL,
     last_seen BIGINT NOT NULL,
-    -- Empty-string hashes are never valid: an absent skin/cape must be
-    -- represented as NULL, not "". Enforced here so no write path (this
-    -- app, a future one, a manual backfill) can smuggle one in.
     CONSTRAINT player_textures_skin_not_empty CHECK (skin IS NULL OR skin <> ''),
     CONSTRAINT player_textures_cape_not_empty CHECK (cape IS NULL OR cape <> '')
 );
 
--- Not promotable to a table CONSTRAINT: it's built on COALESCE(...)
--- expressions (so a NULL model/cape collides with an empty one for dedup
--- purposes), and Postgres only allows ADD CONSTRAINT ... USING INDEX for
--- plain-column indexes. store.go's ON CONFLICT targets these same
--- expressions directly instead of a constraint name.
 CREATE UNIQUE INDEX IF NOT EXISTS player_textures_unique
     ON player_textures (player_id, COALESCE(skin, ''), COALESCE(model, ''), COALESCE(cape, ''));
 
@@ -47,8 +35,6 @@ CREATE TABLE IF NOT EXISTS player_names (
     PRIMARY KEY (player_id, name)
 );
 
--- Bedrock players' gamertag<->XUID mapping. Keyed by xuid (stable across
--- gamertag changes); the synthetic UUID is derived at read time, never stored.
 CREATE TABLE IF NOT EXISTS geyser_players (
     xuid BIGINT PRIMARY KEY NOT NULL,
     gamertag TEXT NOT NULL,
@@ -56,9 +42,6 @@ CREATE TABLE IF NOT EXISTS geyser_players (
     last_seen BIGINT NOT NULL
 );
 
--- Bedrock players' converted skins, half-mirroring player_textures. No FK to
--- geyser_players(xuid): a xuid can reach this table without ever going
--- through the gamertag->xuid lookup first.
 CREATE TABLE IF NOT EXISTS geyser_player_textures (
     xuid BIGINT NOT NULL,
     hash TEXT NOT NULL,
@@ -74,24 +57,14 @@ CREATE TABLE IF NOT EXISTS geyser_player_textures (
 CREATE UNIQUE INDEX IF NOT EXISTS geyser_player_textures_unique
     ON geyser_player_textures (xuid, hash);
 
--- Bee Name Generator module's name/suggestion tables. name is the natural
--- key in both: GetBeeName picks uniformly at random from bee_name, which
--- only makes sense if the confirmed list has no duplicates to skew that
--- distribution, and nothing in store.go handles a duplicate-key error
--- specially, which would be the surprising gap if duplicates were actually
--- allowed.
 CREATE TABLE IF NOT EXISTS bee_name (
-    name TEXT PRIMARY KEY NOT NULL
+    name TEXT PRIMARY KEY NOT NULL CHECK (name !~ '^\s*$')
 );
 
 CREATE TABLE IF NOT EXISTS bee_name_suggestion (
-    name TEXT PRIMARY KEY NOT NULL
+    name TEXT PRIMARY KEY NOT NULL CHECK (name !~ '^\s*$')
 );
 
--- pet_pictures is its own database on the Postgres server in production
--- (see api.go's database.GetDB(dbUrl + "/pet_pictures")), not a schema
--- inside neuralnexus_test like every other module above, so it needs its
--- own CREATE DATABASE here rather than just more tables.
 CREATE DATABASE pet_pictures;
 
 \connect pet_pictures

@@ -8,9 +8,12 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 )
 
 type svCreatePetPictureArgs struct {
@@ -176,7 +179,7 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 	})
 
 	t.Run("SV-04_StoreErrorPropagates", func(t *testing.T) {
-		wantErr := errors.New("db unavailable")
+		wantErr := testerrors.ErrDBDown
 		mock := &svMockStore{createPetPictureErr: wantErr}
 		svc := NewService(mock)
 		file := svTempFile(t, "sv04-upload-*.jpg", []byte("bytes"))
@@ -220,15 +223,15 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 		svc := NewService(mock)
 		file := svTempFile(t, "sv06-upload-*.jpg", []byte("bytes"))
 
-		wantErr := errors.New("connection reset")
+		wantErr := testerrors.ErrTransportFailed
 		swapTransport(t, &svFakeRoundTripper{err: wantErr})
 
 		got, err := svc.UploadPetPicture(file, 1, nil, nil)
 		if got != nil {
 			t.Errorf("UploadPetPicture() picture = %+v, want nil", got)
 		}
-		if err == nil || !strings.Contains(err.Error(), wantErr.Error()) {
-			t.Errorf("UploadPetPicture() error = %v, want it to contain %q", err, wantErr.Error())
+		if !errors.Is(err, wantErr) {
+			t.Errorf("UploadPetPicture() error = %v, want it to wrap %v", err, wantErr)
 		}
 	})
 
@@ -246,6 +249,25 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 		}
 		if len(mock.createPetPictureCalls) != 1 || mock.createPetPictureCalls[0].fileExt != "gz" {
 			t.Errorf("CreatePetPicture fileExt = %q, want %q", mock.createPetPictureCalls[0].fileExt, "gz")
+		}
+	})
+
+	t.Run("SV-08_NoDotFilenameUsesWholeBasename", func(t *testing.T) {
+		mockPic := &PetPicture{ID: "sv08-mock-id"}
+		mock := &svMockStore{createPetPictureResult: mockPic}
+		svc := NewService(mock)
+		file := svTempFile(t, "sv08photo", []byte("bytes"))
+		base := filepath.Base(file.Name())
+		renamed := "sv08-mock-id." + base
+		t.Cleanup(func() { os.Remove(renamed) })
+
+		swapTransport(t, &svFakeRoundTripper{resp: svOKResponse()})
+
+		if _, err := svc.UploadPetPicture(file, 1, nil, nil); err != nil {
+			t.Fatalf("UploadPetPicture() error = %v, want nil", err)
+		}
+		if len(mock.createPetPictureCalls) != 1 || mock.createPetPictureCalls[0].fileExt != base {
+			t.Errorf("CreatePetPicture calls = %+v, want one call with fileExt %q", mock.createPetPictureCalls, base)
 		}
 	})
 }

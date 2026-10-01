@@ -1,11 +1,14 @@
 package cctturtle
 
 import (
+	"log"
 	"net/http"
 	"time"
 
 	"github.com/goccy/go-json"
 )
+
+const msgFailedToGetTurtleResponse = "Failed to get turtle response"
 
 // -------------- Globals --------------
 
@@ -122,7 +125,8 @@ func TurtleHelper(w http.ResponseWriter, r *http.Request, function string) {
 	}
 	status, err := Queue.GetResponse(label)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Println("[Error]: Unable to get turtle response:\n\t", err)
+		http.Error(w, msgFailedToGetTurtleResponse, http.StatusInternalServerError)
 		return
 	}
 	Queue.RemoveInstruction(label, 0)

@@ -18,6 +18,18 @@ import (
 	"golang.org/x/crypto/ed25519"
 )
 
+const (
+	logErrorDeletingSession       = "Error deleting session:\n\t"
+	logErrorReadingJWTFromCookie  = "Error reading JWT from cookie:\n\t"
+	logErrorIncrementingRateLimit = "Error incrementing rate limit:\n\t"
+	logErrorGettingRateLimit      = "Error getting rate limit:\n\t"
+)
+
+const (
+	msgRateLimited      = "You have been rate limited. Please try again later."
+	msgInvalidSignature = "Invalid signature"
+)
+
 // Middleware - Middleware type
 type Middleware func(http.Handler) http.Handler
 
@@ -128,7 +140,7 @@ func SessionMiddleware(service auth.SessionService) Middleware {
 				if !session.IsValid() {
 					responses.Unauthorized(w, r, "")
 					if delErr := service.DeleteSession(session.ID); delErr != nil {
-						LogRequest(r.Context(), "Error deleting session:\n\t", delErr.Error())
+						LogRequest(r.Context(), logErrorDeletingSession, delErr.Error())
 					}
 					return
 				}
@@ -138,10 +150,10 @@ func SessionMiddleware(service auth.SessionService) Middleware {
 			} else if cookie, err := r.Cookie(SessionCookieName); err == nil {
 				session, jwtErr := service.ReadJWT(cookie.Value)
 				if jwtErr != nil {
-					LogRequest(r.Context(), "Error reading JWT from cookie:\n\t", jwtErr.Error())
+					LogRequest(r.Context(), logErrorReadingJWTFromCookie, jwtErr.Error())
 				} else if !session.IsValid() {
 					if delErr := service.DeleteSession(session.ID); delErr != nil {
-						LogRequest(r.Context(), "Error deleting session:\n\t", delErr.Error())
+						LogRequest(r.Context(), logErrorDeletingSession, delErr.Error())
 					}
 				} else {
 					ctx := context.WithValue(r.Context(), SessionKey, session)
@@ -162,14 +174,18 @@ func RateLimitMiddleware(service auth.RateLimitService, prefix string, sessionLi
 			if ok && session != nil {
 				err := service.IncrRateLimit(prefix + ":" + session.UserID)
 				if err != nil {
-					LogRequest(r.Context(), "Error incrementing rate limit:\n\t", err.Error())
+					LogRequest(r.Context(), logErrorIncrementingRateLimit, err.Error())
+					next.ServeHTTP(w, r)
+					return
 				}
 				limit, err := service.GetRateLimit(prefix + ":" + session.UserID)
 				if err != nil {
-					LogRequest(r.Context(), "Error getting rate limit:\n\t", err.Error())
+					LogRequest(r.Context(), logErrorGettingRateLimit, err.Error())
+					next.ServeHTTP(w, r)
+					return
 				}
 				if limit > sessionLimit {
-					responses.TooManyRequests(w, r, RetryAfter, "You have been rate limited. Please try again later.")
+					responses.TooManyRequests(w, r, RetryAfter, msgRateLimited)
 					return
 				}
 			} else {
@@ -179,16 +195,18 @@ func RateLimitMiddleware(service auth.RateLimitService, prefix string, sessionLi
 				}
 				err = service.IncrRateLimit(prefix + ":" + ip)
 				if err != nil {
-					LogRequest(r.Context(), "Error incrementing rate limit:\n\t", err.Error())
+					LogRequest(r.Context(), logErrorIncrementingRateLimit, err.Error())
+					next.ServeHTTP(w, r)
 					return
 				}
 				limit, err := service.GetRateLimit(prefix + ":" + ip)
 				if err != nil {
-					LogRequest(r.Context(), "Error getting rate limit:\n\t", err.Error())
+					LogRequest(r.Context(), logErrorGettingRateLimit, err.Error())
+					next.ServeHTTP(w, r)
 					return
 				}
 				if limit > ipLimit {
-					responses.TooManyRequests(w, r, RetryAfter, "You have been rate limited. Please try again later.")
+					responses.TooManyRequests(w, r, RetryAfter, msgRateLimited)
 					return
 				}
 			}
@@ -247,7 +265,7 @@ func Auth(service auth.SessionService) Middleware {
 				responses.Unauthorized(w, r, "")
 				err := service.DeleteSession(session.ID)
 				if err != nil {
-					LogRequest(r.Context(), "Error deleting session:\n\t", err.Error())
+					LogRequest(r.Context(), logErrorDeletingSession, err.Error())
 				}
 				return
 			}
@@ -283,14 +301,14 @@ func VerifyEd25519Middleware(publicKey ed25519.PublicKey) Middleware {
 				if err != nil {
 					LogRequest(r.Context(), "Error decoding signature:\n\t", err.Error())
 				}
-				responses.Unauthorized(w, r, "Invalid signature")
+				responses.Unauthorized(w, r, msgInvalidSignature)
 				return
 			}
 
 			bodyBytes, err := io.ReadAll(r.Body)
 			if err != nil {
 				LogRequest(r.Context(), "Error reading body:\n\t", err.Error())
-				responses.Unauthorized(w, r, "Invalid signature")
+				responses.Unauthorized(w, r, msgInvalidSignature)
 				return
 			}
 
@@ -298,7 +316,7 @@ func VerifyEd25519Middleware(publicKey ed25519.PublicKey) Middleware {
 			buffer.WriteString(timestamp)
 			buffer.Write(bodyBytes)
 			if !ed25519.Verify(publicKey, buffer.Bytes(), signature) {
-				responses.Unauthorized(w, r, "Invalid signature")
+				responses.Unauthorized(w, r, msgInvalidSignature)
 				return
 			}
 

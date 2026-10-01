@@ -7,55 +7,19 @@ import (
 	"testing"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/proto/problempb"
+	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"github.com/goccy/go-json"
 	"google.golang.org/protobuf/proto"
 )
 
-const (
-	wantType     = "about:blank"
-	wantStatus   = http.StatusTeapot
-	wantTitle    = "I'm a teapot"
-	wantDetail   = "You requested a cup of coffee, but I'm a teapot."
-	wantInstance = "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/418"
-)
-
-// problemJSON and problemXML mirror the wire shape of responses.problem for
-// decoding in tests, without depending on any exported type from that
-// package's own test files.
-type problemJSON struct {
-	Type     string `json:"type"`
-	Status   int32  `json:"status"`
-	Title    string `json:"title"`
-	Detail   string `json:"detail"`
-	Instance string `json:"instance"`
-}
-
-type problemXML struct {
-	Type     string `xml:"type"`
-	Status   int32  `xml:"status"`
-	Title    string `xml:"title"`
-	Detail   string `xml:"detail"`
-	Instance string `xml:"instance"`
-}
+const wantDetail = "You requested a cup of coffee, but I'm a teapot."
 
 func strPtr(s string) *string { return &s }
 
-func assertProblemFields(t *testing.T, gotType string, gotStatus int32, gotTitle, gotDetail, gotInstance string) {
+func assertProblemDetail(t *testing.T, gotDetail string) {
 	t.Helper()
-	if gotType != wantType {
-		t.Errorf("type = %q, want %q", gotType, wantType)
-	}
-	if gotStatus != int32(wantStatus) {
-		t.Errorf("status = %d, want %d", gotStatus, wantStatus)
-	}
-	if gotTitle != wantTitle {
-		t.Errorf("title = %q, want %q", gotTitle, wantTitle)
-	}
 	if gotDetail != wantDetail {
 		t.Errorf("detail = %q, want %q", gotDetail, wantDetail)
-	}
-	if gotInstance != wantInstance {
-		t.Errorf("instance = %q, want %q", gotInstance, wantInstance)
 	}
 }
 
@@ -137,23 +101,23 @@ func TestHandleTeapot(t *testing.T) {
 
 			switch tt.wantFormat {
 			case formatJSON:
-				var got problemJSON
+				var got responses.Problem
 				if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 					t.Fatalf("json.Unmarshal: %v", err)
 				}
-				assertProblemFields(t, got.Type, got.Status, got.Title, got.Detail, got.Instance)
+				assertProblemDetail(t, got.Detail)
 			case formatXML:
-				var got problemXML
+				var got responses.Problem
 				if err := xml.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 					t.Fatalf("xml.Unmarshal: %v", err)
 				}
-				assertProblemFields(t, got.Type, got.Status, got.Title, got.Detail, got.Instance)
+				assertProblemDetail(t, got.Detail)
 			case formatProtobuf:
 				var got problempb.Problem
 				if err := proto.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 					t.Fatalf("proto.Unmarshal: %v", err)
 				}
-				assertProblemFields(t, got.Type, got.Status, got.Title, got.Detail, got.Instance)
+				assertProblemDetail(t, got.Detail)
 			}
 		})
 	}

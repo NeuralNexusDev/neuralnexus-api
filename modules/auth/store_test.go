@@ -13,6 +13,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 )
 
 // stUnusedTCPPort returns a port unlikely to be reused, so a later connection
@@ -118,7 +120,7 @@ func TestST02to07Accessors(t *testing.T) {
 
 func TestST08to12TranslateAccountConstraintErr(t *testing.T) {
 	t.Run("ST-08_NonPgError", func(t *testing.T) {
-		orig := errors.New("boom")
+		orig := testerrors.ErrBoom
 		if got := translateAccountConstraintErr(orig); !errors.Is(got, orig) {
 			t.Errorf("translateAccountConstraintErr() = %v, want unchanged %v", got, orig)
 		}
@@ -442,9 +444,15 @@ func TestST46DeleteOAuthToken(t *testing.T) {
 }
 
 // stLiveStore's cleanup deletes rows in userID range
-// 910000000000000000..910000000000009999, kept disjoint from other test
+// 910000000000000000..910000000000049999, kept disjoint from other test
 // files' ranges so it can't delete their data.
 func stLiveStore(t *testing.T) (AccountStore, LinkAccountStore, AccountSettingsStore) {
+	t.Helper()
+	s := stLiveFullStore(t)
+	return s.Account(), s.LinkAccount(), s.AccountSettings()
+}
+
+func stLiveFullStore(t *testing.T) Store {
 	t.Helper()
 
 	pgURL := os.Getenv("TEST_POSTGRES_URL")
@@ -481,6 +489,29 @@ func stLiveStore(t *testing.T) (AccountStore, LinkAccountStore, AccountSettingsS
 			CONSTRAINT linked_accounts_unique UNIQUE (user_id, platform),
 			CONSTRAINT linked_accounts_platform_unique UNIQUE (platform, platform_id)
 		)`,
+		`CREATE TABLE IF NOT EXISTS sessions (
+			session_id BIGINT PRIMARY KEY NOT NULL,
+			user_id BIGINT NOT NULL,
+			permissions TEXT[] NOT NULL,
+			iat BIGINT NOT NULL,
+			lua BIGINT NOT NULL,
+			exp BIGINT NOT NULL,
+			FOREIGN KEY (user_id) REFERENCES accounts(user_id)
+		)`,
+		`CREATE TABLE IF NOT EXISTS oauth_tokens (
+			user_id BIGINT NOT NULL,
+			platform TEXT NOT NULL,
+			access_token TEXT NOT NULL,
+			token_type TEXT,
+			refresh_token TEXT,
+			expiry BIGINT,
+			expires_in BIGINT,
+			scope TEXT[],
+			created_at timestamp with time zone default current_timestamp,
+			updated_at timestamp with time zone default current_timestamp,
+			FOREIGN KEY (user_id) REFERENCES accounts(user_id),
+			CONSTRAINT oauth_tokens_unique UNIQUE (user_id, platform)
+		)`,
 		`CREATE TABLE IF NOT EXISTS account_settings (
 			user_id BIGINT PRIMARY KEY NOT NULL REFERENCES accounts(user_id),
 			password_auth BOOLEAN NOT NULL DEFAULT true,
@@ -493,14 +524,15 @@ func stLiveStore(t *testing.T) (AccountStore, LinkAccountStore, AccountSettingsS
 	}
 
 	t.Cleanup(func() {
-		db.Exec(context.Background(), "DELETE FROM account_settings WHERE user_id BETWEEN 910000000000000000 AND 910000000000009999")
-		db.Exec(context.Background(), "DELETE FROM linked_accounts WHERE user_id BETWEEN 910000000000000000 AND 910000000000009999")
-		db.Exec(context.Background(), "DELETE FROM accounts WHERE user_id BETWEEN 910000000000000000 AND 910000000000009999")
+		db.Exec(context.Background(), "DELETE FROM sessions WHERE user_id BETWEEN 910000000000000000 AND 910000000000049999")
+		db.Exec(context.Background(), "DELETE FROM oauth_tokens WHERE user_id BETWEEN 910000000000000000 AND 910000000000049999")
+		db.Exec(context.Background(), "DELETE FROM account_settings WHERE user_id BETWEEN 910000000000000000 AND 910000000000049999")
+		db.Exec(context.Background(), "DELETE FROM linked_accounts WHERE user_id BETWEEN 910000000000000000 AND 910000000000049999")
+		db.Exec(context.Background(), "DELETE FROM accounts WHERE user_id BETWEEN 910000000000000000 AND 910000000000049999")
 		db.Close()
 	})
 
-	s := NewStore(db, nil)
-	return s.Account(), s.LinkAccount(), s.AccountSettings()
+	return NewStore(db, nil)
 }
 
 func stSeedBareAccount(t *testing.T, as AccountStore, userID string) {
@@ -1126,6 +1158,137 @@ func TestST75AddLinkedAccountToDBDuplicatePlatformID(t *testing.T) {
 		})
 		if !errors.Is(err, ErrAlreadyLinked) {
 			t.Errorf("expected ErrAlreadyLinked, got %v", err)
+		}
+	})
+}
+
+func TestST76to79_NotFoundSentinels(t *testing.T) {
+	s := stLiveFullStore(t)
+
+	t.Run("ST-76_GetSessionFromDBNotFound", func(t *testing.T) {
+		got, err := s.Session().GetSessionFromDB("910000000000000101")
+		if got != nil || !errors.Is(err, ErrNotFound) {
+			t.Errorf("GetSessionFromDB() = (%v, %v), want (nil, %v)", got, err, ErrNotFound)
+		}
+	})
+
+	t.Run("ST-77_GetLinkedAccountByPlatformNameNotFound", func(t *testing.T) {
+		got, err := s.LinkAccount().GetLinkedAccountByPlatformName(PlatformDiscord, "sttest-missing-name")
+		if got != nil || !errors.Is(err, ErrNotFound) {
+			t.Errorf("GetLinkedAccountByPlatformName() = (%v, %v), want (nil, %v)", got, err, ErrNotFound)
+		}
+	})
+
+	t.Run("ST-78_GetLinkedAccountByPlatformNameDuplicate", func(t *testing.T) {
+		stSeedBareAccount(t, s.Account(), "910000000000000102")
+		stSeedBareAccount(t, s.Account(), "910000000000000103")
+		stSeedLink(t, s.LinkAccount(), "910000000000000102", PlatformDiscord, "sttest-dup-102", true, true)
+		stSeedLink(t, s.LinkAccount(), "910000000000000103", PlatformDiscord, "sttest-dup-103", true, true)
+
+		got, err := s.LinkAccount().GetLinkedAccountByPlatformName(PlatformDiscord, "sttest")
+		if got != nil || !errors.Is(err, ErrDuplicateLinkedAccount) {
+			t.Errorf("GetLinkedAccountByPlatformName() = (%v, %v), want (nil, %v)", got, err, ErrDuplicateLinkedAccount)
+		}
+	})
+
+	t.Run("ST-79_GetOAuthTokenByUserIDNotFound", func(t *testing.T) {
+		got, err := s.OAuthToken().GetOAuthTokenByUserID("910000000000000104", PlatformDiscord)
+		if got != nil || !errors.Is(err, ErrNotFound) {
+			t.Errorf("GetOAuthTokenByUserID() = (%v, %v), want (nil, %v)", got, err, ErrNotFound)
+		}
+	})
+}
+
+func TestST80_GetSessionFromCacheMiss(t *testing.T) {
+	url := os.Getenv("TEST_REDIS_URL")
+	if url == "" {
+		t.Skip("TEST_REDIS_URL not set; skipping live-Redis test")
+	}
+	opts, err := redis.ParseURL(url)
+	if err != nil {
+		t.Fatalf("failed to parse TEST_REDIS_URL: %v", err)
+	}
+	rdb := redis.NewClient(opts)
+	t.Cleanup(func() { rdb.Close() })
+	s := &store{rdb: rdb}
+
+	t.Run("ST-80_GetSessionFromCacheNotFound", func(t *testing.T) {
+		got, err := s.GetSessionFromCache("910000000000000201")
+		if got != nil || !errors.Is(err, ErrNotFound) {
+			t.Errorf("GetSessionFromCache() = (%v, %v), want (nil, %v)", got, err, ErrNotFound)
+		}
+	})
+}
+
+func TestST81to83_AccountSettingsUnknownUser(t *testing.T) {
+	_, _, ass := stLiveStore(t)
+	const unknownID = "910000000000000031"
+
+	t.Run("ST-81_GetAccountSettingsUnknownUser", func(t *testing.T) {
+		got, err := ass.GetAccountSettings(unknownID)
+		if got != nil || !errors.Is(err, ErrNotFound) {
+			t.Errorf("GetAccountSettings() = (%v, %v), want (nil, %v)", got, err, ErrNotFound)
+		}
+	})
+
+	t.Run("ST-82_EnablePasswordAuthUnknownUser", func(t *testing.T) {
+		err := ass.SetPasswordAuthEnabled(unknownID, true)
+		if !errors.Is(err, ErrNotFound) {
+			t.Errorf("SetPasswordAuthEnabled(true) err = %v, want %v", err, ErrNotFound)
+		}
+	})
+
+	t.Run("ST-83_DisablePasswordAuthUnknownUser", func(t *testing.T) {
+		err := ass.SetPasswordAuthEnabled(unknownID, false)
+		if !errors.Is(err, ErrNotFound) {
+			t.Errorf("SetPasswordAuthEnabled(false) err = %v, want %v", err, ErrNotFound)
+		}
+	})
+}
+
+func TestST84_SetPasswordAuthEnabledAccountDeletedConcurrently(t *testing.T) {
+	full := stLiveFullStore(t)
+	db := full.(*store).db
+	a := stSeedPasswordAccount(t, full.Account(), "910000000000000032")
+	ctx := context.Background()
+
+	t.Run("ST-84_AccountDeletedWhileEnabling", func(t *testing.T) {
+		tx, err := db.Begin(ctx)
+		if err != nil {
+			t.Fatalf("failed to begin the deleting transaction: %v", err)
+		}
+		defer tx.Rollback(ctx)
+		var deleterPID int32
+		if err := tx.QueryRow(ctx, "SELECT pg_backend_pid()").Scan(&deleterPID); err != nil {
+			t.Fatalf("failed to read the deleting backend pid: %v", err)
+		}
+		if _, err := tx.Exec(ctx, "DELETE FROM accounts WHERE user_id = $1", a.UserID); err != nil {
+			t.Fatalf("failed to delete the account: %v", err)
+		}
+
+		done := make(chan error, 1)
+		go func() { done <- full.AccountSettings().SetPasswordAuthEnabled(a.UserID, true) }()
+
+		deadline := time.Now().Add(5 * time.Second)
+		for {
+			var waiting int
+			if err := db.QueryRow(ctx, "SELECT count(*) FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))", deleterPID).Scan(&waiting); err != nil {
+				t.Fatalf("failed to read the blocked backends: %v", err)
+			}
+			if waiting > 0 {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("SetPasswordAuthEnabled never waited on the account row")
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		if err := tx.Commit(ctx); err != nil {
+			t.Fatalf("failed to commit the delete: %v", err)
+		}
+
+		if err := <-done; !errors.Is(err, ErrNotFound) {
+			t.Errorf("SetPasswordAuthEnabled() err = %v, want %v", err, ErrNotFound)
 		}
 	})
 }

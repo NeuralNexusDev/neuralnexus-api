@@ -2,16 +2,17 @@ package beenamegenerator
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/goccy/go-json"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/proto/bngpb"
+	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
 type bngMockStore struct {
@@ -63,6 +64,17 @@ func bngRequest(t *testing.T, method, target string, pathValues map[string]strin
 	return r
 }
 
+func bngRequireDetail(t *testing.T, w *httptest.ResponseRecorder, want string) {
+	t.Helper()
+	var p responses.Problem
+	if err := json.Unmarshal(w.Body.Bytes(), &p); err != nil {
+		t.Fatalf("failed to decode problem body %q: %v", w.Body.String(), err)
+	}
+	if p.Detail != want {
+		t.Fatalf("detail = %q, want %q", p.Detail, want)
+	}
+}
+
 func bngRequireStatus(t *testing.T, w *httptest.ResponseRecorder, want int) {
 	t.Helper()
 	if w.Code != want {
@@ -84,11 +96,12 @@ func TestHD01to02_GetBeeNameHandler(t *testing.T) {
 	})
 
 	t.Run("HD-02_StoreError", func(t *testing.T) {
-		s := &bngMockStore{getBeeName: func() (string, error) { return "", errors.New("boom") }}
+		s := &bngMockStore{getBeeName: func() (string, error) { return "", testerrors.ErrBoom }}
 		h := GetBeeNameHandler(s)
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodGet, "/", nil, nil))
 		bngRequireStatus(t, w, http.StatusInternalServerError)
+		bngRequireDetail(t, w, msgFailedToGetBeeName)
 	})
 }
 
@@ -98,6 +111,7 @@ func TestHD03to06_UploadBeeNameHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodPut, "/Buzzy", map[string]string{"name": "Buzzy"}, bngUnauthorizedSession))
 		bngRequireStatus(t, w, http.StatusForbidden)
+		bngRequireDetail(t, w, msgNoPermissionToUploadBeeNames)
 	})
 
 	t.Run("HD-04_EmptyName", func(t *testing.T) {
@@ -105,6 +119,7 @@ func TestHD03to06_UploadBeeNameHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodPut, "/", map[string]string{"name": ""}, bngAuthorizedSession))
 		bngRequireStatus(t, w, http.StatusBadRequest)
+		bngRequireDetail(t, w, msgInvalidName)
 	})
 
 	t.Run("HD-05_OK", func(t *testing.T) {
@@ -120,11 +135,12 @@ func TestHD03to06_UploadBeeNameHandler(t *testing.T) {
 	})
 
 	t.Run("HD-06_StoreError", func(t *testing.T) {
-		s := &bngMockStore{uploadBeeName: func(string) (string, error) { return "", errors.New("boom") }}
+		s := &bngMockStore{uploadBeeName: func(string) (string, error) { return "", testerrors.ErrBoom }}
 		h := UploadBeeNameHandler(s)
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodPut, "/Buzzy", map[string]string{"name": "Buzzy"}, bngAuthorizedSession))
 		bngRequireStatus(t, w, http.StatusInternalServerError)
+		bngRequireDetail(t, w, msgFailedToUploadBeeName)
 	})
 }
 
@@ -134,6 +150,7 @@ func TestHD07to10_DeleteBeeNameHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodDelete, "/Buzzy", map[string]string{"name": "Buzzy"}, bngUnauthorizedSession))
 		bngRequireStatus(t, w, http.StatusForbidden)
+		bngRequireDetail(t, w, msgNoPermissionToDeleteBeeNames)
 	})
 
 	t.Run("HD-08_EmptyName", func(t *testing.T) {
@@ -141,6 +158,7 @@ func TestHD07to10_DeleteBeeNameHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodDelete, "/", map[string]string{"name": ""}, bngAuthorizedSession))
 		bngRequireStatus(t, w, http.StatusBadRequest)
+		bngRequireDetail(t, w, msgInvalidName)
 	})
 
 	t.Run("HD-09_OK", func(t *testing.T) {
@@ -152,11 +170,12 @@ func TestHD07to10_DeleteBeeNameHandler(t *testing.T) {
 	})
 
 	t.Run("HD-10_StoreError", func(t *testing.T) {
-		s := &bngMockStore{deleteBeeName: func(string) (string, error) { return "", errors.New("boom") }}
+		s := &bngMockStore{deleteBeeName: func(string) (string, error) { return "", testerrors.ErrBoom }}
 		h := DeleteBeeNameHandler(s)
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodDelete, "/Buzzy", map[string]string{"name": "Buzzy"}, bngAuthorizedSession))
 		bngRequireStatus(t, w, http.StatusInternalServerError)
+		bngRequireDetail(t, w, msgFailedToDeleteBeeName)
 	})
 }
 
@@ -166,6 +185,7 @@ func TestHD11to13_SubmitBeeNameHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodPost, "/", map[string]string{"name": ""}, nil))
 		bngRequireStatus(t, w, http.StatusBadRequest)
+		bngRequireDetail(t, w, msgInvalidName)
 	})
 
 	t.Run("HD-12_OK", func(t *testing.T) {
@@ -181,11 +201,12 @@ func TestHD11to13_SubmitBeeNameHandler(t *testing.T) {
 	})
 
 	t.Run("HD-13_StoreError", func(t *testing.T) {
-		s := &bngMockStore{submitBeeName: func(string) (string, error) { return "", errors.New("boom") }}
+		s := &bngMockStore{submitBeeName: func(string) (string, error) { return "", testerrors.ErrBoom }}
 		h := SubmitBeeNameHandler(s)
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodPost, "/Buzzy", map[string]string{"name": "Buzzy"}, nil))
 		bngRequireStatus(t, w, http.StatusInternalServerError)
+		bngRequireDetail(t, w, msgFailedToSubmitBeeName)
 	})
 }
 
@@ -195,6 +216,7 @@ func TestHD14to19_GetBeeNameSuggestionsHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodGet, "/5", map[string]string{"amount": "5"}, bngUnauthorizedSession))
 		bngRequireStatus(t, w, http.StatusForbidden)
+		bngRequireDetail(t, w, msgNoPermissionToGetBeeNameSuggestions)
 	})
 
 	t.Run("HD-15_EmptyAmount", func(t *testing.T) {
@@ -202,6 +224,7 @@ func TestHD14to19_GetBeeNameSuggestionsHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodGet, "/", map[string]string{"amount": ""}, bngAuthorizedSession))
 		bngRequireStatus(t, w, http.StatusBadRequest)
+		bngRequireDetail(t, w, msgInvalidAmountProvided)
 	})
 
 	t.Run("HD-16_ZeroAmount", func(t *testing.T) {
@@ -209,6 +232,7 @@ func TestHD14to19_GetBeeNameSuggestionsHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodGet, "/0", map[string]string{"amount": "0"}, bngAuthorizedSession))
 		bngRequireStatus(t, w, http.StatusBadRequest)
+		bngRequireDetail(t, w, msgInvalidAmountProvided)
 	})
 
 	t.Run("HD-17_NonNumericAmount", func(t *testing.T) {
@@ -216,6 +240,7 @@ func TestHD14to19_GetBeeNameSuggestionsHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodGet, "/abc", map[string]string{"amount": "abc"}, bngAuthorizedSession))
 		bngRequireStatus(t, w, http.StatusBadRequest)
+		bngRequireDetail(t, w, msgInvalidAmountProvided)
 	})
 
 	t.Run("HD-18_OK", func(t *testing.T) {
@@ -238,11 +263,12 @@ func TestHD14to19_GetBeeNameSuggestionsHandler(t *testing.T) {
 	})
 
 	t.Run("HD-19_StoreError", func(t *testing.T) {
-		s := &bngMockStore{getBeeNameSuggestions: func(int64) ([]string, error) { return nil, errors.New("boom") }}
+		s := &bngMockStore{getBeeNameSuggestions: func(int64) ([]string, error) { return nil, testerrors.ErrBoom }}
 		h := GetBeeNameSuggestionsHandler(s)
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodGet, "/5", map[string]string{"amount": "5"}, bngAuthorizedSession))
 		bngRequireStatus(t, w, http.StatusInternalServerError)
+		bngRequireDetail(t, w, msgFailedToGetBeeNameSuggestions)
 	})
 }
 
@@ -252,6 +278,7 @@ func TestHD20to23_AcceptBeeNameSuggestionHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodPost, "/Buzzy", map[string]string{"name": "Buzzy"}, bngUnauthorizedSession))
 		bngRequireStatus(t, w, http.StatusForbidden)
+		bngRequireDetail(t, w, msgNoPermissionToAcceptBeeNameSuggestions)
 	})
 
 	t.Run("HD-21_EmptyName", func(t *testing.T) {
@@ -259,6 +286,7 @@ func TestHD20to23_AcceptBeeNameSuggestionHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodPost, "/", map[string]string{"name": ""}, bngAuthorizedSession))
 		bngRequireStatus(t, w, http.StatusBadRequest)
+		bngRequireDetail(t, w, msgInvalidName)
 	})
 
 	t.Run("HD-22_OK", func(t *testing.T) {
@@ -274,11 +302,12 @@ func TestHD20to23_AcceptBeeNameSuggestionHandler(t *testing.T) {
 	})
 
 	t.Run("HD-23_StoreError", func(t *testing.T) {
-		s := &bngMockStore{acceptBeeNameSuggestion: func(string) (string, error) { return "", errors.New("boom") }}
+		s := &bngMockStore{acceptBeeNameSuggestion: func(string) (string, error) { return "", testerrors.ErrBoom }}
 		h := AcceptBeeNameSuggestionHandler(s)
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodPost, "/Buzzy", map[string]string{"name": "Buzzy"}, bngAuthorizedSession))
 		bngRequireStatus(t, w, http.StatusInternalServerError)
+		bngRequireDetail(t, w, msgFailedToAcceptBeeNameSuggestion)
 	})
 }
 
@@ -288,6 +317,7 @@ func TestHD24to27_RejectBeeNameSuggestionHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodPost, "/Buzzy", map[string]string{"name": "Buzzy"}, bngUnauthorizedSession))
 		bngRequireStatus(t, w, http.StatusForbidden)
+		bngRequireDetail(t, w, msgNoPermissionToRejectBeeNameSuggestions)
 	})
 
 	t.Run("HD-25_EmptyName", func(t *testing.T) {
@@ -295,6 +325,7 @@ func TestHD24to27_RejectBeeNameSuggestionHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodPost, "/", map[string]string{"name": ""}, bngAuthorizedSession))
 		bngRequireStatus(t, w, http.StatusBadRequest)
+		bngRequireDetail(t, w, msgInvalidName)
 	})
 
 	t.Run("HD-26_OK", func(t *testing.T) {
@@ -306,10 +337,11 @@ func TestHD24to27_RejectBeeNameSuggestionHandler(t *testing.T) {
 	})
 
 	t.Run("HD-27_StoreError", func(t *testing.T) {
-		s := &bngMockStore{rejectBeeNameSuggestion: func(string) (string, error) { return "", errors.New("boom") }}
+		s := &bngMockStore{rejectBeeNameSuggestion: func(string) (string, error) { return "", testerrors.ErrBoom }}
 		h := RejectBeeNameSuggestionHandler(s)
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodPost, "/Buzzy", map[string]string{"name": "Buzzy"}, bngAuthorizedSession))
 		bngRequireStatus(t, w, http.StatusInternalServerError)
+		bngRequireDetail(t, w, msgFailedToRejectBeeNameSuggestion)
 	})
 }

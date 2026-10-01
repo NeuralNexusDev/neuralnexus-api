@@ -2,10 +2,13 @@ package twitch
 
 import (
 	"context"
+	"errors"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"time"
 )
+
+var ErrEventSubSubscriptionNotFound = errors.New("eventsub subscription not found")
 
 // store struct for storing Twitch data
 type store struct {
@@ -60,6 +63,9 @@ func (s *store) GetEventSubSubscription(id string) (*EventSubEntry, error) {
 
 	entry, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[EventSubEntry])
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrEventSubSubscriptionNotFound
+		}
 		return nil, err
 	}
 	return entry, nil

@@ -2,9 +2,13 @@ package beenamegenerator
 
 import (
 	"context"
+	"errors"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+var ErrBeeNameNotFound = errors.New("no bee names found")
 
 // BNGStore - Bee Name Generator Store
 type BNGStore interface {
@@ -32,6 +36,9 @@ func (s *store) GetBeeName() (string, error) {
 	var beeName string
 	err := s.db.QueryRow(context.Background(), "SELECT name FROM bee_name ORDER BY random() LIMIT 1").Scan(&beeName)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", ErrBeeNameNotFound
+		}
 		return "", err
 	}
 	return beeName, nil
@@ -82,8 +89,12 @@ func (s *store) GetBeeNameSuggestions(amount int64) ([]string, error) {
 		beeNames = append(beeNames, beeName)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
 	if len(beeNames) == 0 {
-		return []string{}, err
+		return []string{}, nil
 	}
 	return beeNames, nil
 }

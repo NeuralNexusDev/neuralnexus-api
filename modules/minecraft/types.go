@@ -14,10 +14,20 @@ import (
 	"github.com/google/uuid"
 )
 
-var ErrPlayerNotFound = errors.New("player not found")
+var (
+	ErrPlayerNotFound  = errors.New("player not found")
+	ErrTextureNotFound = errors.New("texture not found")
 
-// ErrTextureNotFound - the requested texture does not exist upstream
-var ErrTextureNotFound = errors.New("texture not found")
+	ErrCacheMiss             = errors.New("cache miss")
+	ErrMojangAPI             = errors.New("mojang API error")
+	ErrGeyserAPI             = errors.New("geyser API error")
+	ErrNoNamesProvided       = errors.New("no names provided")
+	ErrBatchLimit            = errors.New("batch lookup is limited to 10 names")
+	ErrBadStatusS3           = errors.New("bad status code from S3")
+	ErrBadStatusRemote       = errors.New("bad status code from remote URL")
+	ErrUploadS3              = errors.New("failed to upload to s3")
+	ErrNotDerivedBedrockUUID = errors.New("not a derived Bedrock UUID")
+)
 
 // TextureResult - the bytes and content type of fetched texture, ready to stream to a client
 type TextureResult struct {
@@ -221,12 +231,8 @@ func (p *GeyserPlayer) IsStale() bool {
 	return time.Now().UnixMilli()-p.LastSeen > stalenessThreshold.Milliseconds()
 }
 
-// ErrSkinNotFound - the Bedrock player has no converted skin yet (Geyser's
-// skin API returns 200 with an empty object rather than a 404 for this case)
 var ErrSkinNotFound = errors.New("skin not found")
 
-// ErrInvalidGeyserRequest - Geyser's API rejected the request as malformed,
-// distinct from ErrPlayerNotFound/ErrSkinNotFound (well-formed, just no match).
 var ErrInvalidGeyserRequest = errors.New("invalid request")
 
 // GeyserSkin - a Bedrock player's most recently converted skin.
@@ -275,7 +281,7 @@ func uuidToXUID(id string) (int64, error) {
 	}
 	for _, b := range parsed[:8] {
 		if b != 0 {
-			return 0, errors.New("not a derived Bedrock UUID")
+			return 0, ErrNotDerivedBedrockUUID
 		}
 	}
 	return int64(binary.BigEndian.Uint64(parsed[8:16])), nil

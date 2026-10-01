@@ -14,7 +14,11 @@ import (
 	"time"
 )
 
-const EventSubStatusVersionRemoved = "version_removed"
+const (
+	EventSubStatusVersionRemoved = "version_removed"
+
+	logMinecraftAlreadyLinked = "Minecraft account is already linked to this user:"
+)
 
 // eventSubNotification Outlines the structure of the EventSub notification
 type eventSubNotification struct {
@@ -142,13 +146,13 @@ func handleChannelChatMessage(ctx context.Context, userId string, eventsub Event
 			// 2. The Twitch user is already linked to another Minecraft account
 
 			if fromLinkedAccount != nil && toLinkedAccount != nil && fromLinkedAccount.UserID == toLinkedAccount.UserID {
-				mw.LogRequest(ctx, userId, "Minecraft account is already linked to this user:", toLinkedAccount.PlatformUsername)
+				mw.LogRequest(ctx, userId, logMinecraftAlreadyLinked, toLinkedAccount.PlatformUsername)
 				// return errors.New("user is already linked to Minecraft account")
 				// TODO: Reply with Twitch API
 				return nil
 			} else if fromLinkedAccount != nil && alreadyLinkedAccount != nil {
 				if alreadyLinkedAccount.PlatformUsername == toLinkedAccount.PlatformUsername {
-					mw.LogRequest(ctx, userId, "Minecraft account is already linked to this user:", alreadyLinkedAccount.PlatformUsername)
+					mw.LogRequest(ctx, userId, logMinecraftAlreadyLinked, alreadyLinkedAccount.PlatformUsername)
 					// return errors.New("user is already linked to Minecraft account")
 				}
 			} else if toLinkedAccount != nil {

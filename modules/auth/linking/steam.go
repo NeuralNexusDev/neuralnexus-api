@@ -36,11 +36,15 @@ var (
 // openid.claimed_id, capturing the numeric SteamID64.
 var steamClaimedIDPattern = regexp.MustCompile(`^https://steamcommunity\.com/openid/id/(\d+)$`)
 
-// ErrInvalidAssertion marks a rejection of the caller's own OpenID
-// assertion (malformed, unsigned, or rejected by Steam) as distinct from a
-// network/service failure reaching Steam, so callers can map the two to
-// different response codes.
 var ErrInvalidAssertion = errors.New("invalid openid assertion")
+
+var (
+	ErrSteamOpenIDCheck         = errors.New("steam openid check_authentication error")
+	ErrSteamPlayerSummaryLookup = errors.New("steam player summary lookup error")
+	ErrSteamIDMismatch          = errors.New("steam player summary response steamid does not match requested")
+	ErrSteamAPIKeyUnset         = errors.New("STEAM_API_KEY is not set")
+	ErrSteamNoPlayers           = errors.New("steam player summary response contained no players")
+)
 
 // -------------- Structs --------------
 
@@ -119,7 +123,7 @@ func VerifySteamOpenIDCallback(query url.Values) (string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("steam openid check_authentication error: %s", resp.Status)
+		return "", fmt.Errorf("%w: %s", ErrSteamOpenIDCheck, resp.Status)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -150,7 +154,7 @@ func responseIsValid(body []byte) bool {
 // for a persona name/avatar beyond the bare SteamID64 OpenID provides.
 func GetSteamUser(steamID64 string) (*SteamData, error) {
 	if STEAM_API_KEY == "" {
-		return nil, errors.New("STEAM_API_KEY is not set")
+		return nil, ErrSteamAPIKeyUnset
 	}
 
 	reqURL := steamPlayerSummaryURL + "?key=" + url.QueryEscape(STEAM_API_KEY) + "&steamids=" + url.QueryEscape(steamID64)
@@ -166,7 +170,7 @@ func GetSteamUser(steamID64 string) (*SteamData, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("steam player summary lookup error: %s", resp.Status)
+		return nil, fmt.Errorf("%w: %s", ErrSteamPlayerSummaryLookup, resp.Status)
 	}
 
 	var parsed struct {
@@ -178,11 +182,11 @@ func GetSteamUser(steamID64 string) (*SteamData, error) {
 		return nil, err
 	}
 	if len(parsed.Response.Players) == 0 {
-		return nil, errors.New("steam player summary response contained no players")
+		return nil, ErrSteamNoPlayers
 	}
 	player := &parsed.Response.Players[0]
 	if player.SteamID64 != steamID64 {
-		return nil, fmt.Errorf("steam player summary response steamid %q does not match requested %q", player.SteamID64, steamID64)
+		return nil, fmt.Errorf("%w: got %q, want %q", ErrSteamIDMismatch, player.SteamID64, steamID64)
 	}
 	return player, nil
 }
@@ -209,10 +213,10 @@ func ProcessSteamLogin(as auth.AccountService, las auth.LinkAccountStore, ss aut
 func ProcessSteamLink(r *http.Request, las auth.LinkAccountStore, user *SteamData) (*auth.Session, error) {
 	session, ok := r.Context().Value(mw.SessionKey).(*auth.Session)
 	if !ok || session == nil {
-		return nil, errors.New("session not found")
+		return nil, ErrSessionNotFound
 	}
 	if !session.IsValid() {
-		return nil, errors.New("session expired")
+		return nil, ErrSessionExpired
 	}
 	if err := linkPlatformUserToSession(las, session.UserID, auth.PlatformSteam, user); err != nil {
 		return nil, err

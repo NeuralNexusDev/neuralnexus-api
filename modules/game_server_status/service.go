@@ -11,6 +11,16 @@ import (
 	"github.com/goccy/go-json"
 )
 
+var (
+	ErrGameQQuery      = errors.New("failed to query GameQ API")
+	ErrGameDigQuery    = errors.New("failed to query GameDig API")
+	ErrReadBody        = errors.New("failed to read response body")
+	ErrDecodeBody      = errors.New("failed to decode response body")
+	ErrNoGameQResponse = errors.New("no response from GameQ API")
+	ErrServerOffline   = errors.New("server is offline")
+	ErrGameUnsupported = errors.New("this game is not supported, or the given query type doesn't support this game")
+)
+
 // GSSService - Game Server Status service
 type GSSService interface {
 	QueryGameQ(game string, host string, port int) (*GameQResponse, error)
@@ -33,29 +43,29 @@ func (s *service) QueryGameQ(game string, host string, port int) (*GameQResponse
 	resp, err := http.Get(url)
 	if err != nil {
 		log.Println(err)
-		return nil, errors.New("failed to query GameQ API")
+		return nil, fmt.Errorf("%w: %w", ErrGameQQuery, err)
 	}
 	if resp.StatusCode != http.StatusOK {
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			log.Println(err)
-			return nil, errors.New("failed to read response body")
+			return nil, fmt.Errorf("%w: %w", ErrReadBody, err)
 		}
 		log.Println(string(body))
-		return nil, errors.New("failed to query GameQ API")
+		return nil, ErrGameQQuery
 	}
 	defer resp.Body.Close()
 
 	err = json.NewDecoder(resp.Body).Decode(&response)
 	if err != nil {
 		log.Println(err)
-		return nil, errors.New("failed to decode response body")
+		return nil, fmt.Errorf("%w: %w", ErrDecodeBody, err)
 	}
 
 	for _, v := range response {
 		return &v, nil
 	}
-	return nil, errors.New("no response from GameQ API")
+	return nil, ErrNoGameQResponse
 }
 
 // QueryGameDig - Query GameDig REST API
@@ -65,23 +75,23 @@ func (s *service) QueryGameDig(game string, host string, port int) (*GameDigResp
 	resp, err := http.Get(url)
 	if err != nil {
 		log.Println(err)
-		return nil, errors.New("failed to query GameDig API")
+		return nil, fmt.Errorf("%w: %w", ErrGameDigQuery, err)
 	}
 	if resp.StatusCode != http.StatusOK {
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			log.Println(err)
-			return nil, errors.New("failed to read response body")
+			return nil, fmt.Errorf("%w: %w", ErrReadBody, err)
 		}
 		log.Println(string(body))
-		return nil, errors.New("failed to query GameDig API")
+		return nil, ErrGameDigQuery
 	}
 	defer resp.Body.Close()
 
 	err = json.NewDecoder(resp.Body).Decode(&response)
 	if err != nil {
 		log.Println(err)
-		return nil, errors.New("failed to decode response body")
+		return nil, fmt.Errorf("%w: %w", ErrDecodeBody, err)
 	}
 
 	return &response, nil
@@ -129,7 +139,7 @@ func DetermineOrVerifyQueryType(game string, queryType QueryType) (QueryType, bo
 func (s *service) QueryGameServer(game string, host string, port int, queryType QueryType) (*GameServerStatus, error) {
 	queryType, valid := DetermineOrVerifyQueryType(game, queryType)
 	if !valid {
-		return nil, errors.New("this game is not supported, or the given query type doesn't support this game")
+		return nil, ErrGameUnsupported
 	}
 	switch queryType {
 	case QueryTypeMinecraft:
@@ -145,7 +155,7 @@ func (s *service) QueryGameServer(game string, host string, port int, queryType 
 			return nil, err
 		}
 		if !response.Online {
-			return nil, errors.New("server is offline")
+			return nil, ErrServerOffline
 		}
 		return response.Normalize(), nil
 	case QueryTypeGameDig:
@@ -155,6 +165,6 @@ func (s *service) QueryGameServer(game string, host string, port int, queryType 
 		}
 		return response.Normalize(), nil
 	default:
-		return nil, errors.New("game not supported")
+		return nil, ErrGameUnsupported
 	}
 }

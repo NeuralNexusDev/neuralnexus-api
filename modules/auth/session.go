@@ -21,15 +21,24 @@ var (
 	validAudiences = []string{NN_SITE_URL, NN_API_URL}
 )
 
+var (
+	ErrMissingAudience        = errors.New("missing audience")
+	ErrEmptyAudienceEntry     = errors.New("empty audience entry")
+	ErrInvalidAudience        = errors.New("invalid audience")
+	ErrSessionSubjectMismatch = errors.New("session does not match token subject")
+)
+
+const (
+	msgJWTSecretUnset  = "JWT_SECRET environment variable must be set"
+	msgSiteAPIURLUnset = "NN_SITE_URL and NN_API_URL environment variables must be set"
+)
+
 func init() {
 	if len(JWT_SECRET) == 0 {
-		log.Fatal("JWT_SECRET environment variable must be set")
+		log.Fatal(msgJWTSecretUnset)
 	}
-	// If left unset, validAudiences would contain empty strings, which would
-	// make ReadJWT's audience check accept a token with an empty-string aud
-	// entry - defeating the check silently rather than failing loudly here.
 	if NN_SITE_URL == "" || NN_API_URL == "" {
-		log.Fatal("NN_SITE_URL and NN_API_URL environment variables must be set")
+		log.Fatal(msgSiteAPIURLUnset)
 	}
 }
 
@@ -180,28 +189,20 @@ func (s *sessionService) CreateJWT(session *Session) (string, error) {
 
 // ReadJWT reads a JWT and returns the session
 func (s *sessionService) ReadJWT(tokenStr string) (*Session, error) {
-	token, err := jwt.ParseWithClaims(tokenStr, &SessionClaims{}, func(token *jwt.Token) (interface{}, error) {
+	claims := &SessionClaims{}
+	_, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
 		return JWT_SECRET, nil
 	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
 	if err != nil {
 		return nil, err
 	}
 
-	claims, ok := token.Claims.(*SessionClaims)
-	if !ok {
-		return nil, errors.New("invalid token claims")
-	}
-
-	// Validate audience: an empty/missing aud claim must fail closed rather
-	// than vacuously pass the loop below with no entries to check.
 	if len(claims.Audience) == 0 {
-		return nil, errors.New("missing audience")
+		return nil, ErrMissingAudience
 	}
 	for _, aud := range claims.Audience {
-		// An empty entry must never validate, even if validAudiences itself
-		// were ever misconfigured to contain one (e.g. an unset URL env var).
 		if aud == "" {
-			return nil, errors.New("empty audience entry")
+			return nil, ErrEmptyAudienceEntry
 		}
 		valid := false
 		for _, validAud := range validAudiences {
@@ -211,7 +212,7 @@ func (s *sessionService) ReadJWT(tokenStr string) (*Session, error) {
 			}
 		}
 		if !valid {
-			return nil, fmt.Errorf("invalid audience: %s", aud)
+			return nil, fmt.Errorf("%w: %s", ErrInvalidAudience, aud)
 		}
 	}
 
@@ -222,7 +223,7 @@ func (s *sessionService) ReadJWT(tokenStr string) (*Session, error) {
 		return nil, fmt.Errorf("session not found: %w", err)
 	}
 	if session.UserID != claims.Subject {
-		return nil, errors.New("session does not match token subject")
+		return nil, ErrSessionSubjectMismatch
 	}
 
 	session.LastUsedAt = time.Now().Unix()

@@ -323,7 +323,7 @@ func TestTY27to28InitTypesGo(t *testing.T) {
 		if !errors.As(err, &exitErr) || exitErr.Success() {
 			t.Fatalf("re-exec with PEPPER unset: got err=%v, want a non-zero exit from init()'s log.Fatal; stderr:\n%s", err, stderr.String())
 		}
-		if !strings.Contains(stderr.String(), "PEPPER environment variable must be set") {
+		if !strings.Contains(stderr.String(), msgPepperUnset) {
 			t.Errorf("subprocess stderr = %q, want it to contain init()'s PEPPER message", stderr.String())
 		}
 	})

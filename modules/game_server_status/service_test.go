@@ -9,6 +9,10 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"testing/iotest"
+
+	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
+	"github.com/goccy/go-json"
 )
 
 // fakeRoundTripper is swapped in for http.DefaultTransport: QueryGameQ and
@@ -110,14 +114,14 @@ func TestQueryGameQ(t *testing.T) {
 	})
 
 	t.Run("SV-03_ErrorPath_TransportError", func(t *testing.T) {
-		swapTransport(t, &fakeRoundTripper{err: errors.New("simulated transport failure")})
+		swapTransport(t, &fakeRoundTripper{err: testerrors.ErrTransportFailed})
 
 		resp, err := svc.QueryGameQ("cs16", "1.2.3.4", 27015)
 		if err == nil {
 			t.Fatal("QueryGameQ() error = nil, want non-nil")
 		}
-		if err.Error() != "failed to query GameQ API" {
-			t.Errorf("QueryGameQ() error = %q, want %q", err.Error(), "failed to query GameQ API")
+		if !errors.Is(err, ErrGameQQuery) || !errors.Is(err, testerrors.ErrTransportFailed) {
+			t.Errorf("error = %v, want it to wrap both %v and %v", err, ErrGameQQuery, testerrors.ErrTransportFailed)
 		}
 		if resp != nil {
 			t.Errorf("QueryGameQ() response = %+v, want nil", resp)
@@ -131,8 +135,8 @@ func TestQueryGameQ(t *testing.T) {
 		if err == nil {
 			t.Fatal("QueryGameQ() error = nil, want non-nil")
 		}
-		if err.Error() != "failed to query GameQ API" {
-			t.Errorf("QueryGameQ() error = %q, want %q", err.Error(), "failed to query GameQ API")
+		if !errors.Is(err, ErrGameQQuery) {
+			t.Errorf("QueryGameQ() error = %v, want %v", err, ErrGameQQuery)
 		}
 		if resp != nil {
 			t.Errorf("QueryGameQ() response = %+v, want nil", resp)
@@ -146,8 +150,12 @@ func TestQueryGameQ(t *testing.T) {
 		if err == nil {
 			t.Fatal("QueryGameQ() error = nil, want non-nil")
 		}
-		if err.Error() != "failed to decode response body" {
-			t.Errorf("QueryGameQ() error = %q, want %q", err.Error(), "failed to decode response body")
+		if !errors.Is(err, ErrDecodeBody) {
+			t.Errorf("QueryGameQ() error = %v, want %v", err, ErrDecodeBody)
+		}
+		var syntaxErr *json.SyntaxError
+		if !errors.As(err, &syntaxErr) {
+			t.Errorf("QueryGameQ() error = %v, want wrapped *json.SyntaxError", err)
 		}
 		if resp != nil {
 			t.Errorf("QueryGameQ() response = %+v, want nil", resp)
@@ -161,11 +169,24 @@ func TestQueryGameQ(t *testing.T) {
 		if err == nil {
 			t.Fatal("QueryGameQ() error = nil, want non-nil")
 		}
-		if err.Error() != "no response from GameQ API" {
-			t.Errorf("QueryGameQ() error = %q, want %q", err.Error(), "no response from GameQ API")
+		if !errors.Is(err, ErrNoGameQResponse) {
+			t.Errorf("QueryGameQ() error = %v, want %v", err, ErrNoGameQResponse)
 		}
 		if resp != nil {
 			t.Errorf("QueryGameQ() response = %+v, want nil", resp)
+		}
+	})
+
+	t.Run("SV-30_ErrorPath_NonOKStatusBodyUnreadable", func(t *testing.T) {
+		resp := &http.Response{StatusCode: http.StatusInternalServerError, Body: io.NopCloser(iotest.ErrReader(testerrors.ErrBodyRead)), Header: make(http.Header)}
+		swapTransport(t, &fakeRoundTripper{resp: resp})
+
+		got, err := svc.QueryGameQ("cs16", "1.2.3.4", 27015)
+		if !errors.Is(err, ErrReadBody) || !errors.Is(err, testerrors.ErrBodyRead) {
+			t.Errorf("error = %v, want it to wrap both %v and %v", err, ErrReadBody, testerrors.ErrBodyRead)
+		}
+		if got != nil {
+			t.Errorf("QueryGameQ() response = %+v, want nil", got)
 		}
 	})
 }
@@ -192,14 +213,14 @@ func TestQueryGameDig(t *testing.T) {
 	})
 
 	t.Run("SV-08_ErrorPath_TransportError", func(t *testing.T) {
-		swapTransport(t, &fakeRoundTripper{err: errors.New("simulated transport failure")})
+		swapTransport(t, &fakeRoundTripper{err: testerrors.ErrTransportFailed})
 
 		resp, err := svc.QueryGameDig("factorio", "1.2.3.4", 25566)
 		if err == nil {
 			t.Fatal("QueryGameDig() error = nil, want non-nil")
 		}
-		if err.Error() != "failed to query GameDig API" {
-			t.Errorf("QueryGameDig() error = %q, want %q", err.Error(), "failed to query GameDig API")
+		if !errors.Is(err, ErrGameDigQuery) || !errors.Is(err, testerrors.ErrTransportFailed) {
+			t.Errorf("error = %v, want it to wrap both %v and %v", err, ErrGameDigQuery, testerrors.ErrTransportFailed)
 		}
 		if resp != nil {
 			t.Errorf("QueryGameDig() response = %+v, want nil", resp)
@@ -213,8 +234,8 @@ func TestQueryGameDig(t *testing.T) {
 		if err == nil {
 			t.Fatal("QueryGameDig() error = nil, want non-nil")
 		}
-		if err.Error() != "failed to query GameDig API" {
-			t.Errorf("QueryGameDig() error = %q, want %q", err.Error(), "failed to query GameDig API")
+		if !errors.Is(err, ErrGameDigQuery) {
+			t.Errorf("QueryGameDig() error = %v, want %v", err, ErrGameDigQuery)
 		}
 		if resp != nil {
 			t.Errorf("QueryGameDig() response = %+v, want nil", resp)
@@ -228,11 +249,28 @@ func TestQueryGameDig(t *testing.T) {
 		if err == nil {
 			t.Fatal("QueryGameDig() error = nil, want non-nil")
 		}
-		if err.Error() != "failed to decode response body" {
-			t.Errorf("QueryGameDig() error = %q, want %q", err.Error(), "failed to decode response body")
+		if !errors.Is(err, ErrDecodeBody) {
+			t.Errorf("QueryGameDig() error = %v, want %v", err, ErrDecodeBody)
+		}
+		var syntaxErr *json.SyntaxError
+		if !errors.As(err, &syntaxErr) {
+			t.Errorf("QueryGameDig() error = %v, want wrapped *json.SyntaxError", err)
 		}
 		if resp != nil {
 			t.Errorf("QueryGameDig() response = %+v, want nil", resp)
+		}
+	})
+
+	t.Run("SV-31_ErrorPath_NonOKStatusBodyUnreadable", func(t *testing.T) {
+		resp := &http.Response{StatusCode: http.StatusInternalServerError, Body: io.NopCloser(iotest.ErrReader(testerrors.ErrBodyRead)), Header: make(http.Header)}
+		swapTransport(t, &fakeRoundTripper{resp: resp})
+
+		got, err := svc.QueryGameDig("valheim", "1.2.3.4", 27015)
+		if !errors.Is(err, ErrReadBody) || !errors.Is(err, testerrors.ErrBodyRead) {
+			t.Errorf("error = %v, want it to wrap both %v and %v", err, ErrReadBody, testerrors.ErrBodyRead)
+		}
+		if got != nil {
+			t.Errorf("QueryGameDig() response = %+v, want nil", got)
 		}
 	})
 }
@@ -276,8 +314,8 @@ func TestQueryGameServer(t *testing.T) {
 		if err == nil {
 			t.Fatal("QueryGameServer() error = nil, want non-nil")
 		}
-		if err.Error() != "this game is not supported, or the given query type doesn't support this game" {
-			t.Errorf("QueryGameServer() error = %q, want the unsupported-game message", err.Error())
+		if !errors.Is(err, ErrGameUnsupported) {
+			t.Errorf("QueryGameServer() error = %v, want %v", err, ErrGameUnsupported)
 		}
 		if status != nil {
 			t.Errorf("QueryGameServer() status = %+v, want nil", status)
@@ -353,8 +391,8 @@ func TestQueryGameServer(t *testing.T) {
 		if err == nil {
 			t.Fatal("QueryGameServer() error = nil, want non-nil")
 		}
-		if err.Error() != "server is offline" {
-			t.Errorf("QueryGameServer() error = %q, want %q", err.Error(), "server is offline")
+		if !errors.Is(err, ErrServerOffline) {
+			t.Errorf("QueryGameServer() error = %v, want %v", err, ErrServerOffline)
 		}
 		if status != nil {
 			t.Errorf("QueryGameServer() status = %+v, want nil", status)
@@ -362,14 +400,14 @@ func TestQueryGameServer(t *testing.T) {
 	})
 
 	t.Run("SV-27_ErrorPath_GameQDispatchTransportError", func(t *testing.T) {
-		swapTransport(t, &fakeRoundTripper{err: errors.New("simulated transport failure")})
+		swapTransport(t, &fakeRoundTripper{err: testerrors.ErrTransportFailed})
 
 		status, err := svc.QueryGameServer("aa3", "1.2.3.4", 27015, QueryTypeGameQ)
 		if err == nil {
 			t.Fatal("QueryGameServer() error = nil, want non-nil")
 		}
-		if err.Error() != "failed to query GameQ API" {
-			t.Errorf("QueryGameServer() error = %q, want %q", err.Error(), "failed to query GameQ API")
+		if !errors.Is(err, ErrGameQQuery) {
+			t.Errorf("QueryGameServer() error = %v, want %v", err, ErrGameQQuery)
 		}
 		if status != nil {
 			t.Errorf("QueryGameServer() status = %+v, want nil", status)
@@ -399,14 +437,14 @@ func TestQueryGameServer(t *testing.T) {
 	})
 
 	t.Run("SV-29_ErrorPath_GameDigDispatchTransportError", func(t *testing.T) {
-		swapTransport(t, &fakeRoundTripper{err: errors.New("simulated transport failure")})
+		swapTransport(t, &fakeRoundTripper{err: testerrors.ErrTransportFailed})
 
 		status, err := svc.QueryGameServer("aoc", "1.2.3.4", 25566, QueryTypeGameDig)
 		if err == nil {
 			t.Fatal("QueryGameServer() error = nil, want non-nil")
 		}
-		if err.Error() != "failed to query GameDig API" {
-			t.Errorf("QueryGameServer() error = %q, want %q", err.Error(), "failed to query GameDig API")
+		if !errors.Is(err, ErrGameDigQuery) {
+			t.Errorf("QueryGameServer() error = %v, want %v", err, ErrGameDigQuery)
 		}
 		if status != nil {
 			t.Errorf("QueryGameServer() status = %+v, want nil", status)

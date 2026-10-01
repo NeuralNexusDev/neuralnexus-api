@@ -12,9 +12,11 @@ import (
 	"time"
 )
 
-// ErrNotFound is returned by lookup methods that translate a "no rows"
-// result into a stable, driver-independent sentinel so callers can tell a
-// genuine not-found apart from a real query/connection error.
+const (
+	sessionKeyPrefix   = "session:"
+	rateLimitKeyPrefix = "rl:"
+)
+
 var ErrNotFound = errors.New("not found")
 
 // Store interface
@@ -96,12 +98,8 @@ type AccountStore interface {
 	DeleteAccountFromDB(userID string) error
 }
 
-// ErrEmailAlreadyExists is returned by AddAccountToDB when another account
-// already has this exact email.
 var ErrEmailAlreadyExists = errors.New("account with this email already exists")
 
-// ErrUsernameAlreadyExists is returned by AddAccountToDB/UpdateAccountInDB
-// when another account already has this exact, non-empty username.
 var ErrUsernameAlreadyExists = errors.New("account with this username already exists")
 
 // translateAccountConstraintErr maps a Postgres unique-violation on the
@@ -251,6 +249,9 @@ func (s *store) GetSessionFromDB(id string) (*Session, error) {
 
 	session, err = pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Session])
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
 		return nil, err
 	}
 	return session, nil
@@ -310,7 +311,7 @@ func (s *store) AddSessionToCache(session *Session) error {
 		}
 	}
 
-	_, err = s.rdb.Set(context.Background(), "session:"+session.ID, stringSession, ttl).Result()
+	_, err = s.rdb.Set(context.Background(), sessionKeyPrefix+session.ID, stringSession, ttl).Result()
 	if err != nil {
 		return err
 	}
@@ -320,8 +321,11 @@ func (s *store) AddSessionToCache(session *Session) error {
 // GetSessionFromCache gets a session from the cache
 func (s *store) GetSessionFromCache(id string) (*Session, error) {
 	var session Session
-	stringSession, err := s.rdb.Get(context.Background(), "session:"+id).Result()
+	stringSession, err := s.rdb.Get(context.Background(), sessionKeyPrefix+id).Result()
 	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return nil, ErrNotFound
+		}
 		return nil, err
 	}
 
@@ -334,7 +338,7 @@ func (s *store) GetSessionFromCache(id string) (*Session, error) {
 
 // DeleteSessionFromCache deletes a session from the cache
 func (s *store) DeleteSessionFromCache(id string) error {
-	_, err := s.rdb.Del(context.Background(), "session:"+id).Result()
+	_, err := s.rdb.Del(context.Background(), sessionKeyPrefix+id).Result()
 	if err != nil {
 		return err
 	}
@@ -373,26 +377,12 @@ type LinkAccountStore interface {
 	SetLinkedAccountLoginEnabled(userID string, platform Platform, enabled bool) error
 }
 
-// ErrAlreadyLinked is returned by AddLinkedAccountToDB when a concurrent
-// insert already linked this exact (platform, platform_id) pair first -
-// the caller lost the race and should re-fetch via
-// GetLinkedAccountByPlatformID and use the winner's row instead of
-// treating this as a hard failure.
 var ErrAlreadyLinked = errors.New("platform account already linked")
 
-// ErrDuplicateLinkedAccount is returned by GetLinkedAccountByPlatformID
-// when more than one linked_accounts row matches the same (platform,
-// platform_id) pair. Unlike ErrAlreadyLinked, this isn't auto-recovered:
-// which row is "correct" isn't knowable from this query alone, so it
-// fails closed and needs a manual data fix instead of guessing.
 var ErrDuplicateLinkedAccount = errors.New("multiple linked accounts found for platform ID")
 
-// ErrWouldLockAccount means the change would leave the account with no
-// password and no other usable login method.
 var ErrWouldLockAccount = errors.New("this is the account's last usable login method; set a password or link another platform first")
 
-// ErrLinkedAccountUnverified means login can't be enabled for a row that
-// isn't Verified.
 var ErrLinkedAccountUnverified = errors.New("this linked account is unverified and can't be enabled for login")
 
 // AddLinkedAccountToDB adds a linked account to the database
@@ -446,6 +436,12 @@ func (s *store) GetLinkedAccountByPlatformName(platform Platform, platformName s
 
 	al, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[LinkedAccount])
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		if errors.Is(err, pgx.ErrTooManyRows) {
+			return nil, ErrDuplicateLinkedAccount
+		}
 		return nil, err
 	}
 	return al, nil
@@ -585,12 +581,10 @@ type AccountSettingsStore interface {
 	SetPasswordAuthEnabled(userID string, enabled bool) error
 }
 
-// ErrNoPasswordSet is returned by SetPasswordAuthEnabled(userID, true) when
-// the account has no hashed_secret to enable login with.
 var ErrNoPasswordSet = errors.New("this account has no password set")
 
-// GetAccountSettings returns userID's settings, or the defaults if it has
-// no account_settings row yet.
+// GetAccountSettings returns userID's settings, the defaults if the account
+// has no account_settings row yet, or ErrNotFound if the account does not exist.
 func (s *store) GetAccountSettings(userID string) (*AccountSettings, error) {
 	rows, err := s.db.Query(context.Background(), "SELECT * FROM account_settings WHERE user_id = $1", userID)
 	if err != nil {
@@ -600,6 +594,13 @@ func (s *store) GetAccountSettings(userID string) (*AccountSettings, error) {
 	settings, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[AccountSettings])
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
+			var exists bool
+			if err := s.db.QueryRow(context.Background(), "SELECT EXISTS (SELECT 1 FROM accounts WHERE user_id = $1)", userID).Scan(&exists); err != nil {
+				return nil, err
+			}
+			if !exists {
+				return nil, ErrNotFound
+			}
 			return DefaultAccountSettings(userID), nil
 		}
 		return nil, err
@@ -621,6 +622,14 @@ func (s *store) SetPasswordAuthEnabled(userID string, enabled bool) error {
 	defer tx.Rollback(ctx)
 
 	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(27745, hashtext($1))", userID); err != nil {
+		return err
+	}
+
+	var one int
+	if err := tx.QueryRow(ctx, "SELECT 1 FROM accounts WHERE user_id = $1 FOR KEY SHARE", userID).Scan(&one); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
 		return err
 	}
 
@@ -659,7 +668,7 @@ type RateLimitStore interface {
 
 // GetRateLimit gets the rate limit for a key
 func (s *store) GetRateLimit(key string) (int, error) {
-	val, err := s.rdb.Get(context.Background(), "rl:"+key).Int()
+	val, err := s.rdb.Get(context.Background(), rateLimitKeyPrefix+key).Int()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
 			err = s.SetRateLimit(key, 1)
@@ -675,7 +684,7 @@ func (s *store) GetRateLimit(key string) (int, error) {
 
 // SetRateLimit sets the rate limit for a key
 func (s *store) SetRateLimit(key string, val int) error {
-	_, err := s.rdb.Set(context.Background(), "rl:"+key, val, time.Minute).Result()
+	_, err := s.rdb.Set(context.Background(), rateLimitKeyPrefix+key, val, time.Minute).Result()
 	if err != nil {
 		return err
 	}
@@ -684,7 +693,7 @@ func (s *store) SetRateLimit(key string, val int) error {
 
 // IncrementRateLimit increments the rate limit for a key
 func (s *store) IncrementRateLimit(key string) error {
-	rediskey := "rl:" + key
+	rediskey := rateLimitKeyPrefix + key
 	_, err := s.rdb.Incr(context.Background(), rediskey).Result()
 	if err != nil {
 		return err
@@ -760,6 +769,9 @@ func (s *store) GetOAuthTokenByUserID(userID string, platform Platform) (*OAuthT
 
 	token, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[OAuthToken])
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
 		return nil, err
 	}
 	return token, nil

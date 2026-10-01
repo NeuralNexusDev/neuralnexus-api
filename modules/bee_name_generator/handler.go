@@ -11,13 +11,30 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
+const (
+	msgFailedToGetBeeName                     = "Failed to get bee name"
+	msgNoPermissionToUploadBeeNames           = "You do not have permission to upload bee names"
+	msgFailedToUploadBeeName                  = "Failed to upload bee name"
+	msgNoPermissionToDeleteBeeNames           = "You do not have permission to delete bee names"
+	msgFailedToDeleteBeeName                  = "Failed to delete bee name"
+	msgFailedToSubmitBeeName                  = "Failed to submit bee name"
+	msgNoPermissionToGetBeeNameSuggestions    = "You do not have permission to get bee name suggestions"
+	msgInvalidAmountProvided                  = "Invalid amount provided"
+	msgFailedToGetBeeNameSuggestions          = "Failed to get bee name suggestions"
+	msgNoPermissionToAcceptBeeNameSuggestions = "You do not have permission to accept bee name suggestions"
+	msgFailedToAcceptBeeNameSuggestion        = "Failed to accept bee name suggestion"
+	msgNoPermissionToRejectBeeNameSuggestions = "You do not have permission to reject bee name suggestions"
+	msgFailedToRejectBeeNameSuggestion        = "Failed to reject bee name suggestion"
+	msgInvalidName                            = "Invalid name"
+)
+
 // GetBeeNameHandler Get a bee name
 func GetBeeNameHandler(s BNGStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		beeName, err := s.GetBeeName()
 		if err != nil {
 			log.Println("Failed to get bee name:\n\t", err)
-			responses.InternalServerError(w, r, "Failed to get bee name")
+			responses.InternalServerError(w, r, msgFailedToGetBeeName)
 			return
 		}
 		responses.StructOK(w, r, NewBeeName(beeName))
@@ -29,20 +46,20 @@ func UploadBeeNameHandler(s BNGStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if !session.HasPermission(perms.ScopeAdminBeeNameGenerator) {
-			responses.Forbidden(w, r, "You do not have permission to upload bee names")
+			responses.Forbidden(w, r, msgNoPermissionToUploadBeeNames)
 			return
 		}
 
 		beeName := r.PathValue("name")
 		if beeName == "" {
-			responses.BadRequest(w, r, "Invalid name")
+			responses.BadRequest(w, r, msgInvalidName)
 			return
 		}
 
 		_, err := s.UploadBeeName(beeName)
 		if err != nil {
 			log.Println("Failed to upload bee name:\n\t", err)
-			responses.InternalServerError(w, r, "Failed to upload bee name")
+			responses.InternalServerError(w, r, msgFailedToUploadBeeName)
 			return
 		}
 		responses.StructOK(w, r, NewBeeName(beeName))
@@ -54,20 +71,20 @@ func DeleteBeeNameHandler(s BNGStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if !session.HasPermission(perms.ScopeAdminBeeNameGenerator) {
-			responses.Forbidden(w, r, "You do not have permission to delete bee names")
+			responses.Forbidden(w, r, msgNoPermissionToDeleteBeeNames)
 			return
 		}
 
 		beeName := r.PathValue("name")
 		if beeName == "" {
-			responses.BadRequest(w, r, "Invalid name")
+			responses.BadRequest(w, r, msgInvalidName)
 			return
 		}
 
 		_, err := s.DeleteBeeName(beeName)
 		if err != nil {
 			log.Println("Failed to delete bee name:\n\t", err)
-			responses.InternalServerError(w, r, "Failed to delete bee name")
+			responses.InternalServerError(w, r, msgFailedToDeleteBeeName)
 			return
 		}
 		responses.NoContent(w, r)
@@ -79,14 +96,14 @@ func SubmitBeeNameHandler(s BNGStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		beeName := r.PathValue("name")
 		if beeName == "" {
-			responses.BadRequest(w, r, "Invalid name")
+			responses.BadRequest(w, r, msgInvalidName)
 			return
 		}
 
 		_, err := s.SubmitBeeName(beeName)
 		if err != nil {
 			log.Println("Failed to submit bee name:\n\t", err)
-			responses.InternalServerError(w, r, "Failed to submit bee name")
+			responses.InternalServerError(w, r, msgFailedToSubmitBeeName)
 			return
 		}
 		responses.StructOK(w, r, NewBeeName(beeName))
@@ -98,7 +115,7 @@ func GetBeeNameSuggestionsHandler(s BNGStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if !session.HasPermission(perms.ScopeAdminBeeNameGenerator) {
-			responses.Forbidden(w, r, "You do not have permission to get bee name suggestions")
+			responses.Forbidden(w, r, msgNoPermissionToGetBeeNameSuggestions)
 			return
 		}
 
@@ -108,14 +125,14 @@ func GetBeeNameSuggestionsHandler(s BNGStore) http.HandlerFunc {
 		}
 		amountInt, err := strconv.ParseInt(amount, 10, 64)
 		if err != nil {
-			responses.BadRequest(w, r, "Invalid amount provided")
+			responses.BadRequest(w, r, msgInvalidAmountProvided)
 			return
 		}
 
 		suggestions, err := s.GetBeeNameSuggestions(amountInt)
 		if err != nil {
 			log.Println("Failed to get bee name suggestions:\n\t", err)
-			responses.InternalServerError(w, r, "Failed to get bee name suggestions")
+			responses.InternalServerError(w, r, msgFailedToGetBeeNameSuggestions)
 			return
 		}
 		responses.StructOK(w, r, NewBeeNameSuggestions(suggestions))
@@ -127,20 +144,20 @@ func AcceptBeeNameSuggestionHandler(s BNGStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if !session.HasPermission(perms.ScopeAdminBeeNameGenerator) {
-			responses.Forbidden(w, r, "You do not have permission to accept bee name suggestions")
+			responses.Forbidden(w, r, msgNoPermissionToAcceptBeeNameSuggestions)
 			return
 		}
 
 		beeName := r.PathValue("name")
 		if beeName == "" {
-			responses.BadRequest(w, r, "Invalid name")
+			responses.BadRequest(w, r, msgInvalidName)
 			return
 		}
 
 		_, err := s.AcceptBeeNameSuggestion(beeName)
 		if err != nil {
 			log.Println("Failed to accept bee name suggestion:\n\t", err)
-			responses.InternalServerError(w, r, "Failed to accept bee name suggestion")
+			responses.InternalServerError(w, r, msgFailedToAcceptBeeNameSuggestion)
 			return
 		}
 		responses.StructOK(w, r, NewBeeName(beeName))
@@ -152,19 +169,19 @@ func RejectBeeNameSuggestionHandler(s BNGStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*auth.Session)
 		if !session.HasPermission(perms.ScopeAdminBeeNameGenerator) {
-			responses.Forbidden(w, r, "You do not have permission to reject bee name suggestions")
+			responses.Forbidden(w, r, msgNoPermissionToRejectBeeNameSuggestions)
 			return
 		}
 
 		beeName := r.PathValue("name")
 		if beeName == "" {
-			responses.BadRequest(w, r, "Invalid name")
+			responses.BadRequest(w, r, msgInvalidName)
 			return
 		}
 
 		_, err := s.RejectBeeNameSuggestion(beeName)
 		if err != nil {
-			responses.InternalServerError(w, r, "Failed to reject bee name suggestion")
+			responses.InternalServerError(w, r, msgFailedToRejectBeeNameSuggestion)
 			return
 		}
 		responses.NoContent(w, r)

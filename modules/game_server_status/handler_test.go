@@ -2,9 +2,12 @@ package gss
 
 import (
 	"errors"
+	"fmt"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/mcstatus"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/proto/gsspb"
 	"github.com/goccy/go-json"
 )
@@ -112,8 +115,8 @@ func TestGameServerStatusHandler(t *testing.T) {
 		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 			t.Fatalf("failed to decode response body: %v", err)
 		}
-		if got := body["detail"]; got != "Invalid host" {
-			t.Errorf(`body["detail"] = %v, want "Invalid host"`, got)
+		if got := body["detail"]; got != msgInvalidHost {
+			t.Errorf(`body["detail"] = %v, want %q`, got, msgInvalidHost)
 		}
 		if fake.called {
 			t.Error("QueryGameServer should not have been called")
@@ -135,8 +138,8 @@ func TestGameServerStatusHandler(t *testing.T) {
 		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 			t.Fatalf("failed to decode response body: %v", err)
 		}
-		if got := body["detail"]; got != "Invalid port" {
-			t.Errorf(`body["detail"] = %v, want "Invalid port"`, got)
+		if got := body["detail"]; got != msgInvalidPort {
+			t.Errorf(`body["detail"] = %v, want %q`, got, msgInvalidPort)
 		}
 		if fake.called {
 			t.Error("QueryGameServer should not have been called")
@@ -144,7 +147,7 @@ func TestGameServerStatusHandler(t *testing.T) {
 	})
 
 	t.Run("HD-05_ErrorPath_ServiceError", func(t *testing.T) {
-		fake := &fakeGSSService{err: errors.New("server unreachable")}
+		fake := &fakeGSSService{err: ErrServerOffline}
 		req := httptest.NewRequest("GET", "/gss/minecraft/status?host=1.2.3.4&port=25565", nil)
 		req.SetPathValue("game", "minecraft")
 		rec := httptest.NewRecorder()
@@ -158,10 +161,45 @@ func TestGameServerStatusHandler(t *testing.T) {
 		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 			t.Fatalf("failed to decode response body: %v", err)
 		}
-		if got := body["detail"]; got != "server unreachable" {
-			t.Errorf(`body["detail"] = %v, want "server unreachable"`, got)
+		if got := body["detail"]; got != msgServerOffline {
+			t.Errorf(`body["detail"] = %v, want %q`, got, msgServerOffline)
 		}
 	})
+
+	for _, tc := range []struct {
+		name       string
+		err        error
+		wantStatus int
+		want       string
+	}{
+		{"GameQQuery", ErrGameQQuery, 502, msgGameQQueryFailed},
+		{"GameQQueryWithCause", fmt.Errorf("%w: %w", ErrGameQQuery, testerrors.ErrTransportFailed), 502, msgGameQQueryFailed},
+		{"GameDigQuery", ErrGameDigQuery, 502, msgGameDigQueryFailed},
+		{"ReadBody", ErrReadBody, 502, msgReadBodyFailed},
+		{"DecodeBody", ErrDecodeBody, 502, msgDecodeBodyFailed},
+		{"NoGameQResponse", ErrNoGameQResponse, 502, msgNoGameQResponse},
+		{"GameUnsupported", ErrGameUnsupported, 400, msgGameUnsupported},
+		{"JavaStatus", mcstatus.ErrJavaStatus, 502, msgJavaStatusFailed},
+		{"BedrockStatus", mcstatus.ErrBedrockStatus, 502, msgBedrockStatusFailed},
+		{"Unrecognized", testerrors.ErrBoom, 500, msgQueryFailed},
+	} {
+		t.Run("HD-11_ErrorPath_"+tc.name, func(t *testing.T) {
+			fake := &fakeGSSService{err: tc.err}
+			req := httptest.NewRequest("GET", "/gss/minecraft/status?host=1.2.3.4&port=25565", nil)
+			req.SetPathValue("game", "minecraft")
+			rec := httptest.NewRecorder()
+
+			GameServerStatusHandler(fake)(rec, req)
+
+			var body map[string]interface{}
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatalf("failed to decode response body: %v", err)
+			}
+			if rec.Code != tc.wantStatus || body["detail"] != tc.want {
+				t.Errorf("status = %d, detail = %v, want %d and %q", rec.Code, body["detail"], tc.wantStatus, tc.want)
+			}
+		})
+	}
 
 	t.Run("HD-06_EdgeCase_UnrecognizedQueryTypeParam", func(t *testing.T) {
 		fake := &fakeGSSService{status: newTestStatus(nil)}
@@ -214,6 +252,13 @@ func TestSimpleGameServerStatus(t *testing.T) {
 		if rec.Code != 400 {
 			t.Fatalf("status = %d, want 400", rec.Code)
 		}
+		var body map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if body["detail"] != msgInvalidHost {
+			t.Errorf(`detail = %v, want %q`, body["detail"], msgInvalidHost)
+		}
 		if fake.called {
 			t.Error("QueryGameServer should not have been called")
 		}
@@ -230,13 +275,20 @@ func TestSimpleGameServerStatus(t *testing.T) {
 		if rec.Code != 400 {
 			t.Fatalf("status = %d, want 400", rec.Code)
 		}
+		var body map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if body["detail"] != msgInvalidPort {
+			t.Errorf(`detail = %v, want %q`, body["detail"], msgInvalidPort)
+		}
 		if fake.called {
 			t.Error("QueryGameServer should not have been called")
 		}
 	})
 
 	t.Run("HD-10_ErrorPath_Offline", func(t *testing.T) {
-		fake := &fakeGSSService{err: errors.New("server unreachable")}
+		fake := &fakeGSSService{err: ErrServerOffline}
 		req := httptest.NewRequest("GET", "/gss/minecraft/simple?host=1.2.3.4&port=25565", nil)
 		req.SetPathValue("game", "minecraft")
 		rec := httptest.NewRecorder()

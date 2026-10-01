@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -16,7 +17,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
+	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"golang.org/x/crypto/ed25519"
 )
 
@@ -53,9 +56,10 @@ func (f *mwFakeSessionSvc) ReadJWT(token string) (*auth.Session, error) {
 }
 
 type mwFakeRateLimitSvc struct {
-	incrErr  error
-	getLimit int
-	getErr   error
+	incrErr     error
+	getLimit    int
+	getErr      error
+	getErrLimit int
 
 	incrCalls []string
 	getCalls  []string
@@ -71,7 +75,7 @@ func (f *mwFakeRateLimitSvc) IncrRateLimit(key string) error {
 func (f *mwFakeRateLimitSvc) GetRateLimit(key string) (int, error) {
 	f.getCalls = append(f.getCalls, key)
 	if f.getErr != nil {
-		return 0, f.getErr
+		return f.getErrLimit, f.getErr
 	}
 	return f.getLimit, nil
 }
@@ -218,15 +222,15 @@ func TestCreateStack(t *testing.T) {
 
 	t.Run("MW-06_EmptyStackIsPassthrough", func(t *testing.T) {
 		stack := CreateStack()
-		called := false
+		nextCalls := 0
 		final := stack(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			called = true
+			nextCalls++
 		}))
 
 		final.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
 
-		if !called {
-			t.Error("expected an empty middleware stack to still call the final handler")
+		if nextCalls != 1 {
+			t.Errorf("final handler called %d times, want 1", nextCalls)
 		}
 	})
 }
@@ -247,13 +251,13 @@ func TestWrappedWriterWriteHeader(t *testing.T) {
 	})
 }
 
-func mwRunIP(r *http.Request) *http.Request {
-	var got *http.Request
+func mwRunIP(r *http.Request) (got *http.Request, nextCalls int) {
 	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		nextCalls++
 		got = r
 	})
 	IPMiddleware(next).ServeHTTP(httptest.NewRecorder(), r)
-	return got
+	return got, nextCalls
 }
 
 func TestIPMiddleware(t *testing.T) {
@@ -262,7 +266,10 @@ func TestIPMiddleware(t *testing.T) {
 		r.RemoteAddr = "10.0.0.1:1234"
 		r.Header.Set(CFConnectingIPHeader, "1.2.3.4")
 
-		got := mwRunIP(r)
+		got, nextCalls := mwRunIP(r)
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1", nextCalls)
+		}
 
 		if got.RemoteAddr != "1.2.3.4" {
 			t.Errorf("expected RemoteAddr %q, got %q", "1.2.3.4", got.RemoteAddr)
@@ -277,7 +284,10 @@ func TestIPMiddleware(t *testing.T) {
 		r.RemoteAddr = "10.0.0.1:1234"
 		r.Header.Set(XForwardedForHeader, "5.6.7.8")
 
-		got := mwRunIP(r)
+		got, nextCalls := mwRunIP(r)
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1", nextCalls)
+		}
 
 		if got.RemoteAddr != "5.6.7.8" {
 			t.Errorf("expected RemoteAddr %q, got %q", "5.6.7.8", got.RemoteAddr)
@@ -289,7 +299,10 @@ func TestIPMiddleware(t *testing.T) {
 		r.RemoteAddr = "10.0.0.1:1234"
 		r.Header.Set(XForwardedForHeader, "9.9.9.9, 10.10.10.10")
 
-		got := mwRunIP(r)
+		got, nextCalls := mwRunIP(r)
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1", nextCalls)
+		}
 
 		if got.RemoteAddr != "9.9.9.9" {
 			t.Errorf("expected leftmost trimmed IP %q, got %q", "9.9.9.9", got.RemoteAddr)
@@ -302,7 +315,10 @@ func TestIPMiddleware(t *testing.T) {
 		r.Header.Set(CFConnectingIPHeader, "1.1.1.1")
 		r.Header.Set(XForwardedForHeader, "2.2.2.2")
 
-		got := mwRunIP(r)
+		got, nextCalls := mwRunIP(r)
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1", nextCalls)
+		}
 
 		if got.RemoteAddr != "1.1.1.1" {
 			t.Errorf("expected CF-Connecting-IP to win, got %q", got.RemoteAddr)
@@ -314,7 +330,10 @@ func TestIPMiddleware(t *testing.T) {
 		r.RemoteAddr = "10.0.0.1:1234"
 		r.Header.Set(XForwardedForHeader, " ,3.3.3.3")
 
-		got := mwRunIP(r)
+		got, nextCalls := mwRunIP(r)
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1", nextCalls)
+		}
 
 		if got.RemoteAddr != "10.0.0.1:1234" {
 			t.Errorf("expected RemoteAddr to be left unchanged, got %q", got.RemoteAddr)
@@ -325,7 +344,10 @@ func TestIPMiddleware(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		r.RemoteAddr = "10.0.0.1:1234"
 
-		got := mwRunIP(r)
+		got, nextCalls := mwRunIP(r)
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1", nextCalls)
+		}
 
 		if got.RemoteAddr != "10.0.0.1:1234" {
 			t.Errorf("expected RemoteAddr to be left unchanged, got %q", got.RemoteAddr)
@@ -336,14 +358,14 @@ func TestIPMiddleware(t *testing.T) {
 	})
 }
 
-func mwRunSession(svc auth.SessionService, r *http.Request) (rec *httptest.ResponseRecorder, nextCalled bool, gotSession *auth.Session) {
+func mwRunSession(svc auth.SessionService, r *http.Request) (rec *httptest.ResponseRecorder, nextCalls int, gotSession *auth.Session) {
 	rec = httptest.NewRecorder()
 	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-		nextCalled = true
+		nextCalls++
 		gotSession, _ = r.Context().Value(SessionKey).(*auth.Session)
 	})
 	SessionMiddleware(svc)(next).ServeHTTP(rec, r)
-	return rec, nextCalled, gotSession
+	return rec, nextCalls, gotSession
 }
 
 func mwSessionRequest(authHeader, cookieValue string) *http.Request {
@@ -360,10 +382,10 @@ func mwSessionRequest(authHeader, cookieValue string) *http.Request {
 func TestSessionMiddleware(t *testing.T) {
 	t.Run("MW-14_NoHeaderNoCookiePassesThrough", func(t *testing.T) {
 		svc := &mwFakeSessionSvc{}
-		rec, nextCalled, gotSession := mwRunSession(svc, mwSessionRequest("", ""))
+		rec, nextCalls, gotSession := mwRunSession(svc, mwSessionRequest("", ""))
 
-		if !nextCalled {
-			t.Fatal("expected next to be called")
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1", nextCalls)
 		}
 		if gotSession != nil {
 			t.Errorf("expected no session in context, got %+v", gotSession)
@@ -377,10 +399,10 @@ func TestSessionMiddleware(t *testing.T) {
 		for _, header := range []string{"Basic abc123", "Bearer"} {
 			t.Run(header, func(t *testing.T) {
 				svc := &mwFakeSessionSvc{}
-				rec, nextCalled, _ := mwRunSession(svc, mwSessionRequest(header, ""))
+				rec, nextCalls, _ := mwRunSession(svc, mwSessionRequest(header, ""))
 
-				if nextCalled {
-					t.Error("expected next NOT to be called")
+				if nextCalls != 0 {
+					t.Errorf("next called %d times, want 0", nextCalls)
 				}
 				if rec.Code != http.StatusUnauthorized {
 					t.Errorf("expected status 401, got %d", rec.Code)
@@ -395,10 +417,10 @@ func TestSessionMiddleware(t *testing.T) {
 	t.Run("MW-16_ValidBearerTokenSetsContextAndCallsNext", func(t *testing.T) {
 		session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
 		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*auth.Session, error) { return session, nil }}
-		rec, nextCalled, gotSession := mwRunSession(svc, mwSessionRequest("Bearer validtoken", ""))
+		rec, nextCalls, gotSession := mwRunSession(svc, mwSessionRequest("Bearer validtoken", ""))
 
-		if !nextCalled {
-			t.Fatal("expected next to be called")
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1", nextCalls)
 		}
 		if gotSession == nil || gotSession.UserID != "u1" {
 			t.Errorf("expected session in context, got %+v", gotSession)
@@ -409,11 +431,11 @@ func TestSessionMiddleware(t *testing.T) {
 	})
 
 	t.Run("MW-17_ReadJWTErrorRejected", func(t *testing.T) {
-		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*auth.Session, error) { return nil, errors.New("bad token") }}
-		rec, nextCalled, _ := mwRunSession(svc, mwSessionRequest("Bearer sometoken", ""))
+		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*auth.Session, error) { return nil, testerrors.ErrBoom }}
+		rec, nextCalls, _ := mwRunSession(svc, mwSessionRequest("Bearer sometoken", ""))
 
-		if nextCalled {
-			t.Error("expected next NOT to be called")
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
 		}
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401, got %d", rec.Code)
@@ -426,9 +448,9 @@ func TestSessionMiddleware(t *testing.T) {
 		svc := &mwFakeSessionSvc{readJWTFunc: func(token string) (*auth.Session, error) {
 			tokenSeen = true
 			gotToken = token
-			return nil, errors.New("invalid token")
+			return nil, testerrors.ErrBoom
 		}}
-		rec, nextCalled, _ := mwRunSession(svc, mwSessionRequest("Bearer ", ""))
+		rec, nextCalls, _ := mwRunSession(svc, mwSessionRequest("Bearer ", ""))
 
 		if !tokenSeen {
 			t.Fatal("expected ReadJWT to be called for a bare 'Bearer ' prefix")
@@ -436,8 +458,8 @@ func TestSessionMiddleware(t *testing.T) {
 		if gotToken != "" {
 			t.Errorf("expected ReadJWT to be called with an empty token, got %q", gotToken)
 		}
-		if nextCalled {
-			t.Error("expected next NOT to be called")
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
 		}
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401, got %d", rec.Code)
@@ -447,10 +469,10 @@ func TestSessionMiddleware(t *testing.T) {
 	t.Run("MW-18_ExpiredSessionRejectedAndDeleted", func(t *testing.T) {
 		session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
 		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*auth.Session, error) { return session, nil }}
-		rec, nextCalled, _ := mwRunSession(svc, mwSessionRequest("Bearer expiredtoken", ""))
+		rec, nextCalls, _ := mwRunSession(svc, mwSessionRequest("Bearer expiredtoken", ""))
 
-		if nextCalled {
-			t.Error("expected next NOT to be called")
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
 		}
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401, got %d", rec.Code)
@@ -461,28 +483,32 @@ func TestSessionMiddleware(t *testing.T) {
 	})
 
 	t.Run("MW-19_ExpiredSessionDeleteErrorStillUnauthorized", func(t *testing.T) {
+		readLog := mwCaptureLog(t)
 		session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
 		svc := &mwFakeSessionSvc{
 			readJWTFunc: func(string) (*auth.Session, error) { return session, nil },
-			deleteFunc:  func(string) error { return errors.New("cache down") },
+			deleteFunc:  func(string) error { return testerrors.ErrCacheDown },
 		}
-		rec, nextCalled, _ := mwRunSession(svc, mwSessionRequest("Bearer expiredtoken", ""))
+		rec, nextCalls, _ := mwRunSession(svc, mwSessionRequest("Bearer expiredtoken", ""))
 
-		if nextCalled {
-			t.Error("expected next NOT to be called")
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
 		}
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401 regardless of the DeleteSession error, got %d", rec.Code)
+		}
+		if got := strings.Count(readLog(), logErrorDeletingSession); got != 1 {
+			t.Errorf("log contains %q %d times, want 1", logErrorDeletingSession, got)
 		}
 	})
 
 	t.Run("MW-20_ValidCookieSessionSetsContextAndCallsNext", func(t *testing.T) {
 		session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
 		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*auth.Session, error) { return session, nil }}
-		rec, nextCalled, gotSession := mwRunSession(svc, mwSessionRequest("", "cookietoken"))
+		rec, nextCalls, gotSession := mwRunSession(svc, mwSessionRequest("", "cookietoken"))
 
-		if !nextCalled {
-			t.Fatal("expected next to be called")
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1", nextCalls)
 		}
 		if gotSession == nil || gotSession.UserID != "u1" {
 			t.Errorf("expected session in context, got %+v", gotSession)
@@ -493,11 +519,12 @@ func TestSessionMiddleware(t *testing.T) {
 	})
 
 	t.Run("MW-21_CookieReadJWTErrorFailsOpen", func(t *testing.T) {
-		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*auth.Session, error) { return nil, errors.New("bad cookie") }}
-		rec, nextCalled, gotSession := mwRunSession(svc, mwSessionRequest("", "badtoken"))
+		readLog := mwCaptureLog(t)
+		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*auth.Session, error) { return nil, testerrors.ErrBoom }}
+		rec, nextCalls, gotSession := mwRunSession(svc, mwSessionRequest("", "badtoken"))
 
-		if !nextCalled {
-			t.Fatal("expected the request to fail open and reach next")
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1", nextCalls)
 		}
 		if gotSession != nil {
 			t.Errorf("expected no session in context, got %+v", gotSession)
@@ -505,15 +532,18 @@ func TestSessionMiddleware(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Errorf("expected status 200 (fail open), got %d", rec.Code)
 		}
+		if got := strings.Count(readLog(), logErrorReadingJWTFromCookie); got != 1 {
+			t.Errorf("log contains %q %d times, want 1", logErrorReadingJWTFromCookie, got)
+		}
 	})
 
 	t.Run("MW-22_CookieExpiredSessionFailsOpenAndDeletes", func(t *testing.T) {
 		session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
 		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*auth.Session, error) { return session, nil }}
-		rec, nextCalled, gotSession := mwRunSession(svc, mwSessionRequest("", "expiredtoken"))
+		rec, nextCalls, gotSession := mwRunSession(svc, mwSessionRequest("", "expiredtoken"))
 
-		if !nextCalled {
-			t.Fatal("expected the request to fail open and reach next")
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1", nextCalls)
 		}
 		if gotSession != nil {
 			t.Errorf("expected no session in context, got %+v", gotSession)
@@ -527,15 +557,16 @@ func TestSessionMiddleware(t *testing.T) {
 	})
 
 	t.Run("MW-23_CookieExpiredSessionDeleteErrorStillFailsOpen", func(t *testing.T) {
+		readLog := mwCaptureLog(t)
 		session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
 		svc := &mwFakeSessionSvc{
 			readJWTFunc: func(string) (*auth.Session, error) { return session, nil },
-			deleteFunc:  func(string) error { return errors.New("cache down") },
+			deleteFunc:  func(string) error { return testerrors.ErrCacheDown },
 		}
-		rec, nextCalled, gotSession := mwRunSession(svc, mwSessionRequest("", "expiredtoken"))
+		rec, nextCalls, gotSession := mwRunSession(svc, mwSessionRequest("", "expiredtoken"))
 
-		if !nextCalled {
-			t.Fatal("expected the request to fail open and reach next")
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1", nextCalls)
 		}
 		if gotSession != nil {
 			t.Errorf("expected no session in context, got %+v", gotSession)
@@ -543,16 +574,30 @@ func TestSessionMiddleware(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Errorf("expected status 200 (fail open), got %d", rec.Code)
 		}
+		if got := strings.Count(readLog(), logErrorDeletingSession); got != 1 {
+			t.Errorf("log contains %q %d times, want 1", logErrorDeletingSession, got)
+		}
 	})
 }
 
-func mwRunRateLimit(svc auth.RateLimitService, prefix string, sessionLimit, ipLimit int, r *http.Request) (rec *httptest.ResponseRecorder, nextCalled bool) {
+func mwRunRateLimit(svc auth.RateLimitService, prefix string, sessionLimit, ipLimit int, r *http.Request) (rec *httptest.ResponseRecorder, nextCalls int) {
 	rec = httptest.NewRecorder()
 	next := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
-		nextCalled = true
+		nextCalls++
 	})
 	RateLimitMiddleware(svc, prefix, sessionLimit, ipLimit)(next).ServeHTTP(rec, r)
-	return rec, nextCalled
+	return rec, nextCalls
+}
+
+func mwRequireDetail(t *testing.T, rec *httptest.ResponseRecorder, want string) {
+	t.Helper()
+	var p responses.Problem
+	if err := json.Unmarshal(rec.Body.Bytes(), &p); err != nil {
+		t.Fatalf("failed to decode problem body %q: %v", rec.Body.String(), err)
+	}
+	if p.Detail != want {
+		t.Fatalf("detail = %q, want %q", p.Detail, want)
+	}
 }
 
 func mwRateLimitRequest(session *auth.Session, remoteAddr string) *http.Request {
@@ -570,10 +615,10 @@ func TestRateLimitMiddleware(t *testing.T) {
 		svc := &mwFakeRateLimitSvc{getLimit: 3}
 		r := mwRateLimitRequest(&auth.Session{ID: "s1", UserID: "u1"}, "1.2.3.4:5678")
 
-		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
+		rec, nextCalls := mwRunRateLimit(svc, "rl", 5, 5, r)
 
-		if !nextCalled {
-			t.Error("expected next to be called when under the session limit")
+		if nextCalls != 1 {
+			t.Errorf("next called %d times, want 1 (when under the session limit)", nextCalls)
 		}
 		if rec.Code != http.StatusOK {
 			t.Errorf("expected status 200, got %d", rec.Code)
@@ -587,47 +632,59 @@ func TestRateLimitMiddleware(t *testing.T) {
 		svc := &mwFakeRateLimitSvc{getLimit: 10}
 		r := mwRateLimitRequest(&auth.Session{ID: "s1", UserID: "u1"}, "1.2.3.4:5678")
 
-		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
+		rec, nextCalls := mwRunRateLimit(svc, "rl", 5, 5, r)
 
-		if nextCalled {
-			t.Error("expected next NOT to be called when over the session limit")
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0 (when over the session limit)", nextCalls)
 		}
 		if rec.Code != http.StatusTooManyRequests {
 			t.Errorf("expected status 429, got %d", rec.Code)
 		}
+		mwRequireDetail(t, rec, msgRateLimited)
 		if rec.Header().Get("Retry-After") == "" {
 			t.Error("expected a Retry-After header on a 429 response")
 		}
 	})
 
 	t.Run("MW-26_SessionIncrErrorFailsOpen", func(t *testing.T) {
-		svc := &mwFakeRateLimitSvc{incrErr: errors.New("redis down"), getLimit: 1}
+		readLog := mwCaptureLog(t)
+		svc := &mwFakeRateLimitSvc{incrErr: testerrors.ErrRedisDown, getLimit: 10}
 		r := mwRateLimitRequest(&auth.Session{ID: "s1", UserID: "u1"}, "1.2.3.4:5678")
 
-		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
+		rec, nextCalls := mwRunRateLimit(svc, "rl", 5, 5, r)
 
-		if !nextCalled {
-			t.Error("expected the session branch to still call next after an IncrRateLimit error")
+		if nextCalls != 1 {
+			t.Errorf("next called %d times, want 1", nextCalls)
 		}
-		if rec.Code != http.StatusOK {
-			t.Errorf("expected status 200, got %d", rec.Code)
+		if rec.Code != http.StatusOK || rec.Body.Len() != 0 {
+			t.Errorf("expected the middleware to write nothing, got status %d body %q", rec.Code, rec.Body.String())
 		}
-		if len(svc.getCalls) != 1 {
-			t.Errorf("expected GetRateLimit to still be called after the Incr error, got %v", svc.getCalls)
+		if len(svc.getCalls) != 0 {
+			t.Errorf("GetRateLimit calls = %v, want 0", svc.getCalls)
+		}
+		if !strings.Contains(readLog(), logErrorIncrementingRateLimit) {
+			t.Errorf("expected the log to contain %q", logErrorIncrementingRateLimit)
 		}
 	})
 
 	t.Run("MW-27_SessionGetErrorFailsOpen", func(t *testing.T) {
-		svc := &mwFakeRateLimitSvc{getErr: errors.New("redis down")}
+		readLog := mwCaptureLog(t)
+		svc := &mwFakeRateLimitSvc{getErr: testerrors.ErrRedisDown, getErrLimit: 10}
 		r := mwRateLimitRequest(&auth.Session{ID: "s1", UserID: "u1"}, "1.2.3.4:5678")
 
-		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
+		rec, nextCalls := mwRunRateLimit(svc, "rl", 5, 5, r)
 
-		if !nextCalled {
-			t.Error("expected the session branch to still call next after a GetRateLimit error")
+		if nextCalls != 1 {
+			t.Errorf("next called %d times, want 1", nextCalls)
 		}
-		if rec.Code != http.StatusOK {
-			t.Errorf("expected status 200, got %d", rec.Code)
+		if rec.Code != http.StatusOK || rec.Body.Len() != 0 {
+			t.Errorf("expected the middleware to write nothing, got status %d body %q", rec.Code, rec.Body.String())
+		}
+		if len(svc.getCalls) != 1 {
+			t.Errorf("GetRateLimit calls = %v, want 1", svc.getCalls)
+		}
+		if !strings.Contains(readLog(), logErrorGettingRateLimit) {
+			t.Errorf("expected the log to contain %q", logErrorGettingRateLimit)
 		}
 	})
 
@@ -635,10 +692,10 @@ func TestRateLimitMiddleware(t *testing.T) {
 		svc := &mwFakeRateLimitSvc{getLimit: 1}
 		r := mwRateLimitRequest(nil, "9.8.7.6:1234")
 
-		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
+		rec, nextCalls := mwRunRateLimit(svc, "rl", 5, 5, r)
 
-		if !nextCalled {
-			t.Error("expected next to be called when under the IP limit")
+		if nextCalls != 1 {
+			t.Errorf("next called %d times, want 1 (when under the IP limit)", nextCalls)
 		}
 		if rec.Code != http.StatusOK {
 			t.Errorf("expected status 200, got %d", rec.Code)
@@ -652,58 +709,91 @@ func TestRateLimitMiddleware(t *testing.T) {
 		svc := &mwFakeRateLimitSvc{getLimit: 10}
 		r := mwRateLimitRequest(nil, "9.8.7.6:1234")
 
-		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
+		rec, nextCalls := mwRunRateLimit(svc, "rl", 5, 5, r)
 
-		if nextCalled {
-			t.Error("expected next NOT to be called when over the IP limit")
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0 (when over the IP limit)", nextCalls)
 		}
 		if rec.Code != http.StatusTooManyRequests {
 			t.Errorf("expected status 429, got %d", rec.Code)
 		}
+		mwRequireDetail(t, rec, msgRateLimited)
 	})
 
 	t.Run("MW-30_NoSessionRemoteAddrWithoutPortUsesRawValue", func(t *testing.T) {
 		svc := &mwFakeRateLimitSvc{getLimit: 1}
 		r := mwRateLimitRequest(nil, "9.8.7.6")
 
-		_, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
+		_, nextCalls := mwRunRateLimit(svc, "rl", 5, 5, r)
 
-		if !nextCalled {
-			t.Error("expected next to be called when under the IP limit")
+		if nextCalls != 1 {
+			t.Errorf("next called %d times, want 1 (when under the IP limit)", nextCalls)
 		}
 		if len(svc.incrCalls) != 1 || svc.incrCalls[0] != "rl:9.8.7.6" {
 			t.Errorf("expected the raw RemoteAddr to be used as the key, got %v", svc.incrCalls)
 		}
 	})
 
-	t.Run("MW-31_NoSessionIncrErrorReturnsEarlyWithoutCallingNext", func(t *testing.T) {
-		svc := &mwFakeRateLimitSvc{incrErr: errors.New("redis down"), getLimit: 1}
+	t.Run("MW-31_NoSessionIncrErrorFailsOpen", func(t *testing.T) {
+		readLog := mwCaptureLog(t)
+		svc := &mwFakeRateLimitSvc{incrErr: testerrors.ErrRedisDown, getLimit: 1}
 		r := mwRateLimitRequest(nil, "9.8.7.6:1234")
 
-		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
+		rec, nextCalls := mwRunRateLimit(svc, "rl", 5, 5, r)
 
-		if nextCalled {
-			t.Error("expected the IP branch to return early (not call next) on an IncrRateLimit error")
+		if nextCalls != 1 {
+			t.Errorf("next called %d times, want 1", nextCalls)
 		}
-		if rec.Code != http.StatusOK {
-			t.Errorf("expected the default 200 status since nothing is explicitly written, got %d", rec.Code)
+		if rec.Code != http.StatusOK || rec.Body.Len() != 0 {
+			t.Errorf("expected the middleware to write nothing, got status %d body %q", rec.Code, rec.Body.String())
 		}
 		if len(svc.getCalls) != 0 {
-			t.Error("expected GetRateLimit not to be called after the IncrRateLimit error on the IP branch")
+			t.Errorf("GetRateLimit calls = %v, want 0", svc.getCalls)
+		}
+		if !strings.Contains(readLog(), logErrorIncrementingRateLimit) {
+			t.Errorf("expected the log to contain %q", logErrorIncrementingRateLimit)
 		}
 	})
 
-	t.Run("MW-32_NoSessionGetErrorReturnsEarlyWithoutCallingNext", func(t *testing.T) {
-		svc := &mwFakeRateLimitSvc{getErr: errors.New("redis down")}
+	t.Run("MW-54_NoSessionIncrErrorFailsOpenEvenOverLimit", func(t *testing.T) {
+		readLog := mwCaptureLog(t)
+		svc := &mwFakeRateLimitSvc{incrErr: testerrors.ErrRedisDown, getLimit: 10}
 		r := mwRateLimitRequest(nil, "9.8.7.6:1234")
 
-		rec, nextCalled := mwRunRateLimit(svc, "rl", 5, 5, r)
+		rec, nextCalls := mwRunRateLimit(svc, "rl", 5, 5, r)
 
-		if nextCalled {
-			t.Error("expected the IP branch to return early (not call next) on a GetRateLimit error")
+		if nextCalls != 1 {
+			t.Errorf("next called %d times, want 1", nextCalls)
 		}
-		if rec.Code != http.StatusOK {
-			t.Errorf("expected the default 200 status since nothing is explicitly written, got %d", rec.Code)
+		if rec.Code != http.StatusOK || rec.Body.Len() != 0 {
+			t.Errorf("expected the middleware to write nothing, got status %d body %q", rec.Code, rec.Body.String())
+		}
+		if len(svc.getCalls) != 0 {
+			t.Errorf("GetRateLimit calls = %v, want 0", svc.getCalls)
+		}
+		if !strings.Contains(readLog(), logErrorIncrementingRateLimit) {
+			t.Errorf("expected the log to contain %q", logErrorIncrementingRateLimit)
+		}
+	})
+
+	t.Run("MW-32_NoSessionGetErrorFailsOpen", func(t *testing.T) {
+		readLog := mwCaptureLog(t)
+		svc := &mwFakeRateLimitSvc{getErr: testerrors.ErrRedisDown, getErrLimit: 10}
+		r := mwRateLimitRequest(nil, "9.8.7.6:1234")
+
+		rec, nextCalls := mwRunRateLimit(svc, "rl", 5, 5, r)
+
+		if nextCalls != 1 {
+			t.Errorf("next called %d times, want 1", nextCalls)
+		}
+		if rec.Code != http.StatusOK || rec.Body.Len() != 0 {
+			t.Errorf("expected the middleware to write nothing, got status %d body %q", rec.Code, rec.Body.String())
+		}
+		if len(svc.getCalls) != 1 {
+			t.Errorf("GetRateLimit calls = %v, want 1", svc.getCalls)
+		}
+		if !strings.Contains(readLog(), logErrorGettingRateLimit) {
+			t.Errorf("expected the log to contain %q", logErrorGettingRateLimit)
 		}
 	})
 
@@ -726,8 +816,11 @@ func TestRateLimitMiddleware(t *testing.T) {
 					defer wg.Done()
 					<-start
 					r := mwRateLimitRequest(session, "1.2.3.4:5678")
-					_, nextCalled := mwRunRateLimit(svc, "rl-concurrent", limit, limit, r)
-					if nextCalled {
+					_, nextCalls := mwRunRateLimit(svc, "rl-concurrent", limit, limit, r)
+					if nextCalls > 1 {
+						t.Errorf("next called %d times for one request, want at most 1", nextCalls)
+					}
+					if nextCalls > 0 {
 						atomic.AddInt32(&passed, 1)
 					}
 				}()
@@ -742,20 +835,23 @@ func TestRateLimitMiddleware(t *testing.T) {
 	})
 }
 
-func mwRunRequestID(r *http.Request) *http.Request {
-	var got *http.Request
+func mwRunRequestID(r *http.Request) (got *http.Request, nextCalls int) {
 	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		nextCalls++
 		got = r
 	})
 	RequestIDMiddleware(next).ServeHTTP(httptest.NewRecorder(), r)
-	return got
+	return got, nextCalls
 }
 
 func TestRequestIDMiddleware(t *testing.T) {
 	t.Run("MW-33_NoHeaderGeneratesIDFromTime", func(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 
-		got := mwRunRequestID(r)
+		got, nextCalls := mwRunRequestID(r)
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1", nextCalls)
+		}
 
 		id, ok := got.Context().Value(RequestIDKey).(int)
 		if !ok || id == 0 {
@@ -770,7 +866,10 @@ func TestRequestIDMiddleware(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		r.Header.Set(XRequestIDHeader, "42")
 
-		got := mwRunRequestID(r)
+		got, nextCalls := mwRunRequestID(r)
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1", nextCalls)
+		}
 
 		id, ok := got.Context().Value(RequestIDKey).(int)
 		if !ok || id != 42 {
@@ -782,7 +881,10 @@ func TestRequestIDMiddleware(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		r.Header.Set(XRequestIDHeader, "not-a-number")
 
-		got := mwRunRequestID(r)
+		got, nextCalls := mwRunRequestID(r)
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1", nextCalls)
+		}
 
 		id, ok := got.Context().Value(RequestIDKey).(int)
 		if !ok || id != 0 {
@@ -794,13 +896,19 @@ func TestRequestIDMiddleware(t *testing.T) {
 func TestRequestLoggerMiddleware(t *testing.T) {
 	t.Run("MW-36_LogsStatusMethodAndPath", func(t *testing.T) {
 		getLog := mwCaptureLog(t)
+		nextCalls := 0
 		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			nextCalls++
 			w.WriteHeader(http.StatusCreated)
 		})
 		handler := RequestLoggerMiddleware(next)
 
 		r := httptest.NewRequest(http.MethodPost, "/things", nil).WithContext(mwBaseCtx())
 		handler.ServeHTTP(httptest.NewRecorder(), r)
+
+		if nextCalls != 1 {
+			t.Errorf("next called %d times, want 1", nextCalls)
+		}
 
 		out := getLog()
 		wantFragment := fmt.Sprintf("%d %s %s", http.StatusCreated, http.MethodPost, "/things")
@@ -811,13 +919,19 @@ func TestRequestLoggerMiddleware(t *testing.T) {
 
 	t.Run("MW-37_NoExplicitWriteHeaderLogsDefaultOK", func(t *testing.T) {
 		getLog := mwCaptureLog(t)
+		nextCalls := 0
 		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			nextCalls++
 			_, _ = w.Write([]byte("body without an explicit status"))
 		})
 		handler := RequestLoggerMiddleware(next)
 
 		r := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(mwBaseCtx())
 		handler.ServeHTTP(httptest.NewRecorder(), r)
+
+		if nextCalls != 1 {
+			t.Errorf("next called %d times, want 1", nextCalls)
+		}
 
 		out := getLog()
 		wantFragment := fmt.Sprintf("%d %s", http.StatusOK, http.MethodGet)
@@ -827,13 +941,13 @@ func TestRequestLoggerMiddleware(t *testing.T) {
 	})
 }
 
-func mwRunAuth(svc auth.SessionService, r *http.Request) (rec *httptest.ResponseRecorder, nextCalled bool) {
+func mwRunAuth(svc auth.SessionService, r *http.Request) (rec *httptest.ResponseRecorder, nextCalls int) {
 	rec = httptest.NewRecorder()
 	next := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
-		nextCalled = true
+		nextCalls++
 	})
 	Auth(svc)(next).ServeHTTP(rec, r)
-	return rec, nextCalled
+	return rec, nextCalls
 }
 
 func TestAuth(t *testing.T) {
@@ -841,10 +955,10 @@ func TestAuth(t *testing.T) {
 		svc := &mwFakeSessionSvc{}
 		r := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(mwBaseCtx())
 
-		rec, nextCalled := mwRunAuth(svc, r)
+		rec, nextCalls := mwRunAuth(svc, r)
 
-		if nextCalled {
-			t.Error("expected next NOT to be called")
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
 		}
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401, got %d", rec.Code)
@@ -856,10 +970,10 @@ func TestAuth(t *testing.T) {
 		ctx := context.WithValue(mwBaseCtx(), SessionKey, (*auth.Session)(nil))
 		r := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
 
-		rec, nextCalled := mwRunAuth(svc, r)
+		rec, nextCalls := mwRunAuth(svc, r)
 
-		if nextCalled {
-			t.Error("expected next NOT to be called")
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
 		}
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401, got %d", rec.Code)
@@ -872,10 +986,10 @@ func TestAuth(t *testing.T) {
 		ctx := context.WithValue(mwBaseCtx(), SessionKey, session)
 		r := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
 
-		rec, nextCalled := mwRunAuth(svc, r)
+		rec, nextCalls := mwRunAuth(svc, r)
 
-		if nextCalled {
-			t.Error("expected next NOT to be called")
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
 		}
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401, got %d", rec.Code)
@@ -886,18 +1000,22 @@ func TestAuth(t *testing.T) {
 	})
 
 	t.Run("MW-41_ExpiredSessionDeleteErrorStillUnauthorized", func(t *testing.T) {
-		svc := &mwFakeSessionSvc{deleteFunc: func(string) error { return errors.New("cache down") }}
+		readLog := mwCaptureLog(t)
+		svc := &mwFakeSessionSvc{deleteFunc: func(string) error { return testerrors.ErrCacheDown }}
 		session := &auth.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
 		ctx := context.WithValue(mwBaseCtx(), SessionKey, session)
 		r := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
 
-		rec, nextCalled := mwRunAuth(svc, r)
+		rec, nextCalls := mwRunAuth(svc, r)
 
-		if nextCalled {
-			t.Error("expected next NOT to be called")
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
 		}
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401 regardless of the DeleteSession error, got %d", rec.Code)
+		}
+		if got := strings.Count(readLog(), logErrorDeletingSession); got != 1 {
+			t.Errorf("log contains %q %d times, want 1", logErrorDeletingSession, got)
 		}
 	})
 
@@ -907,10 +1025,10 @@ func TestAuth(t *testing.T) {
 		ctx := context.WithValue(mwBaseCtx(), SessionKey, session)
 		r := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
 
-		rec, nextCalled := mwRunAuth(svc, r)
+		rec, nextCalls := mwRunAuth(svc, r)
 
-		if !nextCalled {
-			t.Error("expected next to be called for a valid session")
+		if nextCalls != 1 {
+			t.Errorf("next called %d times, want 1 (for a valid session)", nextCalls)
 		}
 		if rec.Code != http.StatusOK {
 			t.Errorf("expected status 200, got %d", rec.Code)
@@ -918,24 +1036,24 @@ func TestAuth(t *testing.T) {
 	})
 }
 
-func mwRunSelfUserID(r *http.Request) (rec *httptest.ResponseRecorder, nextCalled bool, gotUserID string) {
+func mwRunSelfUserID(r *http.Request) (rec *httptest.ResponseRecorder, nextCalls int, gotUserID string) {
 	rec = httptest.NewRecorder()
 	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-		nextCalled = true
+		nextCalls++
 		gotUserID = r.PathValue("user_id")
 	})
 	SelfUserID(next).ServeHTTP(rec, r)
-	return rec, nextCalled, gotUserID
+	return rec, nextCalls, gotUserID
 }
 
 func TestSelfUserID(t *testing.T) {
 	t.Run("MW-43_NoSessionInContextRejected", func(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/users/me", nil)
 
-		rec, nextCalled, gotUserID := mwRunSelfUserID(r)
+		rec, nextCalls, gotUserID := mwRunSelfUserID(r)
 
-		if nextCalled {
-			t.Error("expected next NOT to be called")
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
 		}
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401, got %d", rec.Code)
@@ -949,10 +1067,10 @@ func TestSelfUserID(t *testing.T) {
 		ctx := context.WithValue(context.Background(), SessionKey, (*auth.Session)(nil))
 		r := httptest.NewRequest(http.MethodGet, "/users/me", nil).WithContext(ctx)
 
-		rec, nextCalled, _ := mwRunSelfUserID(r)
+		rec, nextCalls, _ := mwRunSelfUserID(r)
 
-		if nextCalled {
-			t.Error("expected next NOT to be called")
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
 		}
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401, got %d", rec.Code)
@@ -963,10 +1081,10 @@ func TestSelfUserID(t *testing.T) {
 		ctx := context.WithValue(context.Background(), SessionKey, &auth.Session{ID: "s1", UserID: "u1"})
 		r := httptest.NewRequest(http.MethodGet, "/users/me", nil).WithContext(ctx)
 
-		rec, nextCalled, gotUserID := mwRunSelfUserID(r)
+		rec, nextCalls, gotUserID := mwRunSelfUserID(r)
 
-		if !nextCalled {
-			t.Fatal("expected next to be called")
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1", nextCalls)
 		}
 		if gotUserID != "u1" {
 			t.Errorf("expected user_id path value %q, got %q", "u1", gotUserID)
@@ -979,7 +1097,7 @@ func TestSelfUserID(t *testing.T) {
 
 type mwErrReader struct{}
 
-func (mwErrReader) Read([]byte) (int, error) { return 0, errors.New("boom") }
+func (mwErrReader) Read([]byte) (int, error) { return 0, testerrors.ErrBoom }
 func (mwErrReader) Close() error             { return nil }
 
 func mwEd25519Request(t *testing.T, priv ed25519.PrivateKey, timestamp, body string, corruptSig bool) *http.Request {
@@ -1004,50 +1122,52 @@ func TestVerifyEd25519Middleware(t *testing.T) {
 		t.Fatalf("failed to generate ed25519 key: %v", err)
 	}
 
-	run := func(r *http.Request) (rec *httptest.ResponseRecorder, nextCalled bool, bodyInNext []byte) {
+	run := func(r *http.Request) (rec *httptest.ResponseRecorder, nextCalls int, bodyInNext []byte) {
 		rec = httptest.NewRecorder()
 		next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-			nextCalled = true
+			nextCalls++
 			bodyInNext, _ = io.ReadAll(r.Body)
 		})
 		VerifyEd25519Middleware(pub)(next).ServeHTTP(rec, r)
-		return rec, nextCalled, bodyInNext
+		return rec, nextCalls, bodyInNext
 	}
 
 	t.Run("MW-46_MissingSignatureHeaderRejected", func(t *testing.T) {
 		r := mwEd25519Request(t, nil, "1234567890", "{}", false)
 
-		rec, nextCalled, _ := run(r)
+		rec, nextCalls, _ := run(r)
 
-		if nextCalled {
-			t.Error("expected next NOT to be called")
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
 		}
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401, got %d", rec.Code)
 		}
+		mwRequireDetail(t, rec, msgInvalidSignature)
 	})
 
 	t.Run("MW-47_MissingTimestampHeaderRejected", func(t *testing.T) {
 		r := mwEd25519Request(t, priv, "", "{}", false)
 
-		rec, nextCalled, _ := run(r)
+		rec, nextCalls, _ := run(r)
 
-		if nextCalled {
-			t.Error("expected next NOT to be called")
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
 		}
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401, got %d", rec.Code)
 		}
+		mwRequireDetail(t, rec, msgInvalidSignature)
 	})
 
 	t.Run("MW-48_ValidSignatureCallsNextWithReadableBody", func(t *testing.T) {
 		body := `{"type":1}`
 		r := mwEd25519Request(t, priv, "1700000000", body, false)
 
-		rec, nextCalled, bodyInNext := run(r)
+		rec, nextCalls, bodyInNext := run(r)
 
-		if !nextCalled {
-			t.Fatal("expected next to be called for a valid signature")
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1 (for a valid signature)", nextCalls)
 		}
 		if rec.Code != http.StatusOK {
 			t.Errorf("expected status 200, got %d", rec.Code)
@@ -1060,14 +1180,15 @@ func TestVerifyEd25519Middleware(t *testing.T) {
 	t.Run("MW-49_TamperedSignatureRejected", func(t *testing.T) {
 		r := mwEd25519Request(t, priv, "1700000000", "{}", true)
 
-		rec, nextCalled, _ := run(r)
+		rec, nextCalls, _ := run(r)
 
-		if nextCalled {
-			t.Error("expected next NOT to be called")
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
 		}
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401, got %d", rec.Code)
 		}
+		mwRequireDetail(t, rec, msgInvalidSignature)
 	})
 
 	t.Run("MW-50_NonHexSignatureWithTimestampRejected", func(t *testing.T) {
@@ -1075,10 +1196,10 @@ func TestVerifyEd25519Middleware(t *testing.T) {
 		r.Header.Set(XSignatureEd25519, "not-hex!!")
 		r.Header.Set(XSignatureTimestamp, "1700000000")
 
-		rec, nextCalled, _ := run(r)
+		rec, nextCalls, _ := run(r)
 
-		if nextCalled {
-			t.Error("expected next NOT to be called")
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
 		}
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401, got %d", rec.Code)
@@ -1092,13 +1213,14 @@ func TestVerifyEd25519Middleware(t *testing.T) {
 		r.Header.Set(XSignatureEd25519, fmt.Sprintf("%x", sig))
 		r.Header.Set(XSignatureTimestamp, "1700000000")
 
-		rec, nextCalled, _ := run(r)
+		rec, nextCalls, _ := run(r)
 
-		if nextCalled {
-			t.Error("expected next NOT to be called")
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
 		}
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401, got %d", rec.Code)
 		}
+		mwRequireDetail(t, rec, msgInvalidSignature)
 	})
 }

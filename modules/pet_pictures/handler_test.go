@@ -3,15 +3,16 @@ package petpictures
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
+	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
 type hdMockStore struct {
@@ -85,11 +86,8 @@ func (m *hdMockStore) DeletePetPicture(id string) (*PetPicture, error) {
 	return m.deletePetPictureResult, m.deletePetPictureErr
 }
 
-// hdCtxWithSession returns a context carrying the given session under
-// mw.SessionKey as a value, matching the exact type handler.go's
-// `r.Context().Value(mw.SessionKey).(auth.Session)` assertion expects.
 func hdCtxWithSession(session auth.Session) context.Context {
-	return context.WithValue(context.Background(), mw.SessionKey, session)
+	return context.WithValue(context.Background(), mw.SessionKey, &session)
 }
 
 // hdSessionWithPermissions builds a session whose Permissions grant exactly
@@ -111,6 +109,17 @@ func hdDecodeJSON(t *testing.T, body []byte) map[string]interface{} {
 	return m
 }
 
+func hdRequireDetail(t *testing.T, w *httptest.ResponseRecorder, want string) {
+	t.Helper()
+	var p responses.Problem
+	if err := json.Unmarshal(w.Body.Bytes(), &p); err != nil {
+		t.Fatalf("failed to decode problem body %q: %v", w.Body.String(), err)
+	}
+	if p.Detail != want {
+		t.Fatalf("detail = %q, want %q", p.Detail, want)
+	}
+}
+
 func TestHD01to05_CreatePetHandler(t *testing.T) {
 	t.Run("HD-01_NoPermissionForbidden", func(t *testing.T) {
 		mock := &hdMockStore{createPetResult: &Pet{ID: 1, Name: "Rex"}}
@@ -125,6 +134,7 @@ func TestHD01to05_CreatePetHandler(t *testing.T) {
 		if w.Code != http.StatusForbidden {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusForbidden)
 		}
+		hdRequireDetail(t, w, msgNoPermissionToCreatePet)
 		if len(mock.createPetCalls) != 0 {
 			t.Errorf("CreatePet called %d times, want 0", len(mock.createPetCalls))
 		}
@@ -181,13 +191,14 @@ func TestHD01to05_CreatePetHandler(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
 		}
+		hdRequireDetail(t, w, msgPetNameIsRequired)
 		if len(mock.createPetCalls) != 0 {
 			t.Errorf("CreatePet called %d times, want 0", len(mock.createPetCalls))
 		}
 	})
 
 	t.Run("HD-05_StoreErrorInternalServerError", func(t *testing.T) {
-		mock := &hdMockStore{createPetErr: errors.New("db down")}
+		mock := &hdMockStore{createPetErr: testerrors.ErrDBDown}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPost, "/pets/Rex", nil)
 		req.SetPathValue("name", "Rex")
@@ -199,6 +210,7 @@ func TestHD01to05_CreatePetHandler(t *testing.T) {
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
 		}
+		hdRequireDetail(t, w, msgUnableToCreatePet)
 	})
 }
 
@@ -247,6 +259,7 @@ func TestHD06to10_GetPetHandler(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
 		}
+		hdRequireDetail(t, w, msgPetIDIsRequired)
 		if len(mock.getPetCalls) != 0 {
 			t.Errorf("GetPet called %d times, want 0", len(mock.getPetCalls))
 		}
@@ -264,13 +277,14 @@ func TestHD06to10_GetPetHandler(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
 		}
+		hdRequireDetail(t, w, msgPetIDIsRequired)
 		if len(mock.getPetCalls) != 0 {
 			t.Errorf("GetPet called %d times, want 0", len(mock.getPetCalls))
 		}
 	})
 
 	t.Run("HD-10_StoreErrorNotFound", func(t *testing.T) {
-		mock := &hdMockStore{getPetErr: errors.New("no such pet")}
+		mock := &hdMockStore{getPetErr: ErrPetNotFound}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodGet, "/pets/7", nil)
 		req.SetPathValue("id", "7")
@@ -281,10 +295,11 @@ func TestHD06to10_GetPetHandler(t *testing.T) {
 		if w.Code != http.StatusNotFound {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
 		}
+		hdRequireDetail(t, w, msgPetNotFound)
 	})
 }
 
-func TestHD11to14_UpdatePetHandler(t *testing.T) {
+func TestHD11to14and35_UpdatePetHandler(t *testing.T) {
 	t.Run("HD-11_InvalidBodyBadRequest", func(t *testing.T) {
 		mock := &hdMockStore{}
 		svc := NewService(mock)
@@ -296,6 +311,7 @@ func TestHD11to14_UpdatePetHandler(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
 		}
+		hdRequireDetail(t, w, msgUnableToParseBody)
 		if len(mock.updatePetCalls) != 0 {
 			t.Errorf("UpdatePet called %d times, want 0", len(mock.updatePetCalls))
 		}
@@ -313,6 +329,7 @@ func TestHD11to14_UpdatePetHandler(t *testing.T) {
 		if w.Code != http.StatusForbidden {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusForbidden)
 		}
+		hdRequireDetail(t, w, msgNoPermissionToUpdatePet)
 		if len(mock.updatePetCalls) != 0 {
 			t.Errorf("UpdatePet called %d times, want 0", len(mock.updatePetCalls))
 		}
@@ -336,7 +353,7 @@ func TestHD11to14_UpdatePetHandler(t *testing.T) {
 	})
 
 	t.Run("HD-14_StoreErrorInternalServerError", func(t *testing.T) {
-		mock := &hdMockStore{updatePetErr: errors.New("db down")}
+		mock := &hdMockStore{updatePetErr: testerrors.ErrDBDown}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPut, "/pets", strings.NewReader(`{"id":1,"name":"Rex"}`))
 		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions(perms.ScopePetPictures("Rex"))))
@@ -347,6 +364,22 @@ func TestHD11to14_UpdatePetHandler(t *testing.T) {
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
 		}
+		hdRequireDetail(t, w, msgUnableToUpdatePet)
+	})
+
+	t.Run("HD-35_StoreNoRowsNotFound", func(t *testing.T) {
+		mock := &hdMockStore{updatePetErr: ErrPetNotFound}
+		svc := NewService(mock)
+		req := httptest.NewRequest(http.MethodPut, "/pets", strings.NewReader(`{"id":1,"name":"Rex"}`))
+		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions(perms.ScopePetPictures("Rex"))))
+		w := httptest.NewRecorder()
+
+		UpdatePetHandler(svc)(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
+		}
+		hdRequireDetail(t, w, msgPetNotFound)
 	})
 }
 
@@ -395,10 +428,11 @@ func TestHD15to18_GetRandPetPictureByNameHandler(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
 		}
+		hdRequireDetail(t, w, msgPetNameIsRequired)
 	})
 
 	t.Run("HD-18_StoreErrorNotFound", func(t *testing.T) {
-		mock := &hdMockStore{getRandPetPictureByNameErr: errors.New("no pictures")}
+		mock := &hdMockStore{getRandPetPictureByNameErr: ErrPetPictureNotFound}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodGet, "/pets/Rex/picture", nil)
 		req.SetPathValue("name", "Rex")
@@ -409,6 +443,7 @@ func TestHD15to18_GetRandPetPictureByNameHandler(t *testing.T) {
 		if w.Code != http.StatusNotFound {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
 		}
+		hdRequireDetail(t, w, msgPetPictureNotFound)
 	})
 }
 
@@ -457,10 +492,11 @@ func TestHD19to22_GetPetPictureHandler(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
 		}
+		hdRequireDetail(t, w, msgPetPictureIDIsRequired)
 	})
 
 	t.Run("HD-22_StoreErrorNotFound", func(t *testing.T) {
-		mock := &hdMockStore{getPetPictureErr: errors.New("not found")}
+		mock := &hdMockStore{getPetPictureErr: ErrPetPictureNotFound}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodGet, "/pictures/abc123", nil)
 		req.SetPathValue("id", "abc123")
@@ -471,10 +507,11 @@ func TestHD19to22_GetPetPictureHandler(t *testing.T) {
 		if w.Code != http.StatusNotFound {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
 		}
+		hdRequireDetail(t, w, msgPetPictureNotFound)
 	})
 }
 
-func TestHD23to27_UpdatePetPictureHandler(t *testing.T) {
+func TestHD23to27and36_UpdatePetPictureHandler(t *testing.T) {
 	t.Run("HD-23_InvalidBodyBadRequest", func(t *testing.T) {
 		mock := &hdMockStore{}
 		svc := NewService(mock)
@@ -486,13 +523,14 @@ func TestHD23to27_UpdatePetPictureHandler(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
 		}
+		hdRequireDetail(t, w, msgUnableToParseBody)
 		if len(mock.getPetCalls) != 0 || len(mock.updatePetPictureCalls) != 0 {
 			t.Errorf("expected no store calls, got GetPet=%v UpdatePetPicture=%v", mock.getPetCalls, mock.updatePetPictureCalls)
 		}
 	})
 
 	t.Run("HD-24_PetNotFoundNotFound", func(t *testing.T) {
-		mock := &hdMockStore{getPetErr: errors.New("no such pet")}
+		mock := &hdMockStore{getPetErr: ErrPetNotFound}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPut, "/pictures", strings.NewReader(`{"id":"abc123","prime_subj":1}`))
 		w := httptest.NewRecorder()
@@ -502,6 +540,7 @@ func TestHD23to27_UpdatePetPictureHandler(t *testing.T) {
 		if w.Code != http.StatusNotFound {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
 		}
+		hdRequireDetail(t, w, msgPetNotFound)
 		if len(mock.updatePetPictureCalls) != 0 {
 			t.Errorf("UpdatePetPicture called %d times, want 0", len(mock.updatePetPictureCalls))
 		}
@@ -519,6 +558,7 @@ func TestHD23to27_UpdatePetPictureHandler(t *testing.T) {
 		if w.Code != http.StatusForbidden {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusForbidden)
 		}
+		hdRequireDetail(t, w, msgNoPermissionToUpdatePet)
 		if len(mock.updatePetPictureCalls) != 0 {
 			t.Errorf("UpdatePetPicture called %d times, want 0", len(mock.updatePetPictureCalls))
 		}
@@ -547,7 +587,7 @@ func TestHD23to27_UpdatePetPictureHandler(t *testing.T) {
 	t.Run("HD-27_StoreErrorInternalServerError", func(t *testing.T) {
 		mock := &hdMockStore{
 			getPetResult:        &Pet{ID: 1, Name: "Rex"},
-			updatePetPictureErr: errors.New("db down"),
+			updatePetPictureErr: testerrors.ErrDBDown,
 		}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPut, "/pictures", strings.NewReader(`{"id":"abc123","prime_subj":1}`))
@@ -559,6 +599,25 @@ func TestHD23to27_UpdatePetPictureHandler(t *testing.T) {
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
 		}
+		hdRequireDetail(t, w, msgUnableToUpdatePetPicture)
+	})
+
+	t.Run("HD-36_StoreNoRowsNotFound", func(t *testing.T) {
+		mock := &hdMockStore{
+			getPetResult:        &Pet{ID: 1, Name: "Rex"},
+			updatePetPictureErr: ErrPetPictureNotFound,
+		}
+		svc := NewService(mock)
+		req := httptest.NewRequest(http.MethodPut, "/pictures", strings.NewReader(`{"id":"abc123","prime_subj":1}`))
+		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions(perms.ScopePetPictures("Rex"))))
+		w := httptest.NewRecorder()
+
+		UpdatePetPictureHandler(svc)(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
+		}
+		hdRequireDetail(t, w, msgPetPictureNotFound)
 	})
 }
 
@@ -615,10 +674,11 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
 		}
+		hdRequireDetail(t, w, msgPetPictureIDIsRequired)
 	})
 
 	t.Run("HD-31_GetPetPictureErrorNotFound", func(t *testing.T) {
-		mock := &hdMockStore{getPetPictureErr: errors.New("not found")}
+		mock := &hdMockStore{getPetPictureErr: ErrPetPictureNotFound}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodDelete, "/pictures/abc123", nil)
 		req.SetPathValue("id", "abc123")
@@ -629,6 +689,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 		if w.Code != http.StatusNotFound {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
 		}
+		hdRequireDetail(t, w, msgPetPictureNotFound)
 		if len(mock.deletePetPictureCalls) != 0 {
 			t.Errorf("DeletePetPicture called %d times, want 0", len(mock.deletePetPictureCalls))
 		}
@@ -637,7 +698,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 	t.Run("HD-32_GetPetErrorNotFound", func(t *testing.T) {
 		mock := &hdMockStore{
 			getPetPictureResult: &PetPicture{ID: "abc123", PrimarySubject: 1},
-			getPetErr:           errors.New("no such pet"),
+			getPetErr:           ErrPetNotFound,
 		}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodDelete, "/pictures/abc123", nil)
@@ -649,6 +710,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 		if w.Code != http.StatusNotFound {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
 		}
+		hdRequireDetail(t, w, msgPetNotFound)
 		if len(mock.deletePetPictureCalls) != 0 {
 			t.Errorf("DeletePetPicture called %d times, want 0", len(mock.deletePetPictureCalls))
 		}
@@ -670,6 +732,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 		if w.Code != http.StatusForbidden {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusForbidden)
 		}
+		hdRequireDetail(t, w, msgNoPermissionToUpdatePet)
 		if len(mock.deletePetPictureCalls) != 0 {
 			t.Errorf("DeletePetPicture called %d times, want 0", len(mock.deletePetPictureCalls))
 		}
@@ -679,7 +742,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 		mock := &hdMockStore{
 			getPetPictureResult: &PetPicture{ID: "abc123", PrimarySubject: 1},
 			getPetResult:        &Pet{ID: 1, Name: "Rex"},
-			deletePetPictureErr: errors.New("db down"),
+			deletePetPictureErr: testerrors.ErrDBDown,
 		}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodDelete, "/pictures/abc123", nil)
@@ -691,6 +754,156 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
+		}
+		hdRequireDetail(t, w, msgUnableToDeletePetPicture)
+	})
+}
+
+func TestHD37to44_StoreFailureMapping(t *testing.T) {
+	t.Run("HD-37_CreatePetNameEmptyBadRequest", func(t *testing.T) {
+		mock := &hdMockStore{createPetErr: ErrPetNameEmpty}
+		svc := NewService(mock)
+		req := httptest.NewRequest(http.MethodPost, "/pets/Rex", nil)
+		req.SetPathValue("name", "Rex")
+		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions(perms.ScopeAdminPetPictures)))
+		w := httptest.NewRecorder()
+
+		CreatePetHandler(svc)(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
+		}
+		hdRequireDetail(t, w, msgPetNameMustNotBeEmpty)
+	})
+
+	t.Run("HD-38_UpdatePetNameEmptyBadRequest", func(t *testing.T) {
+		mock := &hdMockStore{updatePetErr: ErrPetNameEmpty}
+		svc := NewService(mock)
+		req := httptest.NewRequest(http.MethodPut, "/pets", strings.NewReader(`{"id":1,"name":"Rex"}`))
+		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions(perms.ScopePetPictures("Rex"))))
+		w := httptest.NewRecorder()
+
+		UpdatePetHandler(svc)(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
+		}
+		hdRequireDetail(t, w, msgPetNameMustNotBeEmpty)
+	})
+
+	t.Run("HD-39_GetPetStoreFailureInternalServerError", func(t *testing.T) {
+		mock := &hdMockStore{getPetErr: testerrors.ErrDBDown}
+		svc := NewService(mock)
+		req := httptest.NewRequest(http.MethodGet, "/pets/7", nil)
+		req.SetPathValue("id", "7")
+		w := httptest.NewRecorder()
+
+		GetPetHandler(svc)(w, req)
+
+		if w.Code != http.StatusInternalServerError {
+			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
+		}
+		hdRequireDetail(t, w, msgUnableToGetPet)
+	})
+
+	t.Run("HD-45_GetRandPetPicturePetNotFound", func(t *testing.T) {
+		mock := &hdMockStore{getRandPetPictureByNameErr: ErrPetNotFound}
+		svc := NewService(mock)
+		req := httptest.NewRequest(http.MethodGet, "/pets/Rex/picture", nil)
+		req.SetPathValue("name", "Rex")
+		w := httptest.NewRecorder()
+
+		GetRandPetPictureByNameHandler(svc)(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
+		}
+		hdRequireDetail(t, w, msgPetNotFound)
+	})
+
+	t.Run("HD-40_GetRandPetPictureStoreFailureInternalServerError", func(t *testing.T) {
+		mock := &hdMockStore{getRandPetPictureByNameErr: testerrors.ErrDBDown}
+		svc := NewService(mock)
+		req := httptest.NewRequest(http.MethodGet, "/pets/Rex/picture", nil)
+		req.SetPathValue("name", "Rex")
+		w := httptest.NewRecorder()
+
+		GetRandPetPictureByNameHandler(svc)(w, req)
+
+		if w.Code != http.StatusInternalServerError {
+			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
+		}
+		hdRequireDetail(t, w, msgUnableToGetRandomPetPicture)
+	})
+
+	t.Run("HD-41_GetPetPictureStoreFailureInternalServerError", func(t *testing.T) {
+		mock := &hdMockStore{getPetPictureErr: testerrors.ErrDBDown}
+		svc := NewService(mock)
+		req := httptest.NewRequest(http.MethodGet, "/pictures/abc123", nil)
+		req.SetPathValue("id", "abc123")
+		w := httptest.NewRecorder()
+
+		GetPetPictureHandler(svc)(w, req)
+
+		if w.Code != http.StatusInternalServerError {
+			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
+		}
+		hdRequireDetail(t, w, msgUnableToGetPetPicture)
+	})
+
+	t.Run("HD-42_UpdatePetPictureGetPetFailureInternalServerError", func(t *testing.T) {
+		mock := &hdMockStore{getPetErr: testerrors.ErrDBDown}
+		svc := NewService(mock)
+		req := httptest.NewRequest(http.MethodPut, "/pictures", strings.NewReader(`{"id":"abc123","prime_subj":1}`))
+		w := httptest.NewRecorder()
+
+		UpdatePetPictureHandler(svc)(w, req)
+
+		if w.Code != http.StatusInternalServerError {
+			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
+		}
+		hdRequireDetail(t, w, msgUnableToGetPet)
+		if len(mock.updatePetPictureCalls) != 0 {
+			t.Errorf("UpdatePetPicture called %d times, want 0", len(mock.updatePetPictureCalls))
+		}
+	})
+
+	t.Run("HD-43_DeletePetPictureGetPetPictureFailureInternalServerError", func(t *testing.T) {
+		mock := &hdMockStore{getPetPictureErr: testerrors.ErrDBDown}
+		svc := NewService(mock)
+		req := httptest.NewRequest(http.MethodDelete, "/pictures/abc123", nil)
+		req.SetPathValue("id", "abc123")
+		w := httptest.NewRecorder()
+
+		DeletePetPictureHandler(svc)(w, req)
+
+		if w.Code != http.StatusInternalServerError {
+			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
+		}
+		hdRequireDetail(t, w, msgUnableToGetPetPicture)
+		if len(mock.deletePetPictureCalls) != 0 {
+			t.Errorf("DeletePetPicture called %d times, want 0", len(mock.deletePetPictureCalls))
+		}
+	})
+
+	t.Run("HD-44_DeletePetPictureGetPetFailureInternalServerError", func(t *testing.T) {
+		mock := &hdMockStore{
+			getPetPictureResult: &PetPicture{ID: "abc123", PrimarySubject: 1},
+			getPetErr:           testerrors.ErrDBDown,
+		}
+		svc := NewService(mock)
+		req := httptest.NewRequest(http.MethodDelete, "/pictures/abc123", nil)
+		req.SetPathValue("id", "abc123")
+		w := httptest.NewRecorder()
+
+		DeletePetPictureHandler(svc)(w, req)
+
+		if w.Code != http.StatusInternalServerError {
+			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
+		}
+		hdRequireDetail(t, w, msgUnableToGetPet)
+		if len(mock.deletePetPictureCalls) != 0 {
+			t.Errorf("DeletePetPicture called %d times, want 0", len(mock.deletePetPictureCalls))
 		}
 	})
 }

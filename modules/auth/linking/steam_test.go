@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"github.com/goccy/go-json"
@@ -278,8 +279,8 @@ func TestST06to12VerifySteamOpenIDCallback(t *testing.T) {
 		defer restore()
 
 		_, err := VerifySteamOpenIDCallback(validSteamQuery("76500000000000001"))
-		if err == nil {
-			t.Fatal("expected an error")
+		if !errors.Is(err, ErrSteamOpenIDCheck) {
+			t.Fatalf("error = %v, want %v", err, ErrSteamOpenIDCheck)
 		}
 		if errors.Is(err, ErrInvalidAssertion) {
 			t.Errorf("non-OK status should not be classified as ErrInvalidAssertion, got %v", err)
@@ -359,8 +360,8 @@ func TestST16to22GetSteamUser(t *testing.T) {
 		defer restoreKey()
 
 		_, err := GetSteamUser("76500000000000001")
-		if err == nil || err.Error() != "STEAM_API_KEY is not set" {
-			t.Fatalf("GetSteamUser() error = %v, want \"STEAM_API_KEY is not set\"", err)
+		if !errors.Is(err, ErrSteamAPIKeyUnset) {
+			t.Fatalf("GetSteamUser() error = %v, want %v", err, ErrSteamAPIKeyUnset)
 		}
 	})
 
@@ -387,8 +388,8 @@ func TestST16to22GetSteamUser(t *testing.T) {
 		defer restoreKey()
 
 		_, err := GetSteamUser("76500000000000001")
-		if err == nil {
-			t.Fatal("expected an error")
+		if !errors.Is(err, ErrSteamPlayerSummaryLookup) {
+			t.Fatalf("error = %v, want %v", err, ErrSteamPlayerSummaryLookup)
 		}
 	})
 
@@ -419,8 +420,8 @@ func TestST16to22GetSteamUser(t *testing.T) {
 		defer restoreKey()
 
 		_, err := GetSteamUser("76500000000000001")
-		if err == nil || err.Error() != "steam player summary response contained no players" {
-			t.Fatalf("GetSteamUser() error = %v, want \"steam player summary response contained no players\"", err)
+		if !errors.Is(err, ErrSteamNoPlayers) {
+			t.Fatalf("GetSteamUser() error = %v, want %v", err, ErrSteamNoPlayers)
 		}
 	})
 
@@ -435,8 +436,8 @@ func TestST16to22GetSteamUser(t *testing.T) {
 		defer restoreKey()
 
 		_, err := GetSteamUser("76500000000000001")
-		if err == nil {
-			t.Fatal("expected a steamid-mismatch error")
+		if !errors.Is(err, ErrSteamIDMismatch) {
+			t.Fatalf("error = %v, want %v", err, ErrSteamIDMismatch)
 		}
 	})
 }
@@ -475,7 +476,7 @@ func TestST23to25ProcessSteamLogin(t *testing.T) {
 
 	t.Run("ST-24_AccountResolutionFails", func(t *testing.T) {
 		as := newSTMockAccountService()
-		as.addAccountErr = errors.New("db down")
+		as.addAccountErr = testerrors.ErrDBDown
 		las := newSTMockLinkAccountStore()
 		ss := &stMockSessionService{}
 
@@ -488,7 +489,7 @@ func TestST23to25ProcessSteamLogin(t *testing.T) {
 	t.Run("ST-25_AddSessionFails", func(t *testing.T) {
 		as := newSTMockAccountService()
 		las := newSTMockLinkAccountStore()
-		ss := &stMockSessionService{addSessionErr: errors.New("session store down")}
+		ss := &stMockSessionService{addSessionErr: testerrors.ErrDBDown}
 
 		_, err := ProcessSteamLogin(as, las, ss, user)
 		if err == nil {
@@ -522,8 +523,8 @@ func TestST26to29ProcessSteamLink(t *testing.T) {
 		req := stRequestWithSession(nil)
 
 		_, err := ProcessSteamLink(req, las, user)
-		if err == nil || err.Error() != "session not found" {
-			t.Fatalf("ProcessSteamLink() error = %v, want \"session not found\"", err)
+		if !errors.Is(err, ErrSessionNotFound) {
+			t.Fatalf("ProcessSteamLink() error = %v, want %v", err, ErrSessionNotFound)
 		}
 	})
 
@@ -533,8 +534,8 @@ func TestST26to29ProcessSteamLink(t *testing.T) {
 		req := stRequestWithSession(session)
 
 		_, err := ProcessSteamLink(req, las, user)
-		if err == nil || err.Error() != "session expired" {
-			t.Fatalf("ProcessSteamLink() error = %v, want \"session expired\"", err)
+		if !errors.Is(err, ErrSessionExpired) {
+			t.Fatalf("ProcessSteamLink() error = %v, want %v", err, ErrSessionExpired)
 		}
 	})
 
@@ -547,8 +548,8 @@ func TestST26to29ProcessSteamLink(t *testing.T) {
 		req := stRequestWithSession(session)
 
 		_, err := ProcessSteamLink(req, las, user)
-		if !errors.Is(err, errPlatformAlreadyLinkedToDifferentAccount) {
-			t.Fatalf("ProcessSteamLink() error = %v, want errPlatformAlreadyLinkedToDifferentAccount", err)
+		if !errors.Is(err, ErrPlatformAlreadyLinkedToDifferentAccount) {
+			t.Fatalf("ProcessSteamLink() error = %v, want ErrPlatformAlreadyLinkedToDifferentAccount", err)
 		}
 	})
 }

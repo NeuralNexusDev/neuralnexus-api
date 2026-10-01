@@ -3,6 +3,8 @@ package auth
 import (
 	"errors"
 	"testing"
+
+	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 )
 
 type rlFakeRateLimitStore struct {
@@ -70,7 +72,7 @@ func TestRL02to03GetRateLimit(t *testing.T) {
 	})
 
 	t.Run("RL-03_StoreError", func(t *testing.T) {
-		wantErr := errors.New("boom")
+		wantErr := testerrors.ErrBoom
 		rl := &rlFakeRateLimitStore{getErr: wantErr}
 		svc := NewRateLimitService(&rlFakeStore{rl: rl})
 
@@ -95,7 +97,7 @@ func TestRL04to05SetRateLimit(t *testing.T) {
 	})
 
 	t.Run("RL-05_StoreError", func(t *testing.T) {
-		wantErr := errors.New("boom")
+		wantErr := testerrors.ErrBoom
 		rl := &rlFakeRateLimitStore{setErr: wantErr}
 		svc := NewRateLimitService(&rlFakeStore{rl: rl})
 
@@ -120,7 +122,7 @@ func TestRL06to07IncrRateLimit(t *testing.T) {
 	})
 
 	t.Run("RL-07_StoreError", func(t *testing.T) {
-		wantErr := errors.New("boom")
+		wantErr := testerrors.ErrBoom
 		rl := &rlFakeRateLimitStore{incrErr: wantErr}
 		svc := NewRateLimitService(&rlFakeStore{rl: rl})
 

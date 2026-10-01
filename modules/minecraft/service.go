@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/goccy/go-json"
-	"github.com/redis/go-redis/v9"
 )
 
 // Alternatives:
@@ -104,7 +103,7 @@ func (s *service) GetMojangPlayerByName(name string) (*Player, error) {
 	if err == nil {
 		return cached, nil
 	}
-	if !errors.Is(err, redis.Nil) {
+	if !errors.Is(err, ErrCacheMiss) {
 		return nil, err
 	}
 
@@ -128,7 +127,7 @@ func (s *service) GetMojangPlayerByName(name string) (*Player, error) {
 		return nil, ErrPlayerNotFound
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New("mojang API error: " + resp.Status)
+		return nil, fmt.Errorf("%w: %s", ErrMojangAPI, resp.Status)
 	}
 
 	var player Player
@@ -151,7 +150,7 @@ func (s *service) GetMojangPlayerByUUID(id string) (*Player, error) {
 	if err == nil {
 		return cached, nil
 	}
-	if !errors.Is(err, redis.Nil) {
+	if !errors.Is(err, ErrCacheMiss) {
 		return nil, err
 	}
 
@@ -175,7 +174,7 @@ func (s *service) GetMojangPlayerByUUID(id string) (*Player, error) {
 		return nil, ErrPlayerNotFound
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New("mojang API error: " + resp.Status)
+		return nil, fmt.Errorf("%w: %s", ErrMojangAPI, resp.Status)
 	}
 
 	var player Player
@@ -196,10 +195,10 @@ func (s *service) GetMojangPlayerByUUID(id string) (*Player, error) {
 // Mojang batch endpoint is capped at 10 names per request
 func (s *service) GetMojangPlayersByNames(names []string) ([]*Player, error) {
 	if len(names) == 0 {
-		return nil, errors.New("no names provided")
+		return nil, ErrNoNamesProvided
 	}
 	if len(names) > 10 {
-		return nil, errors.New("batch lookup is limited to 10 names")
+		return nil, ErrBatchLimit
 	}
 
 	// Check cache first, collect misses
@@ -243,7 +242,7 @@ func (s *service) GetMojangPlayersByNames(names []string) ([]*Player, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New("mojang API error: " + resp.Status)
+		return nil, fmt.Errorf("%w: %s", ErrMojangAPI, resp.Status)
 	}
 
 	var fetched []Player
@@ -271,7 +270,7 @@ func (s *service) GetMojangProfile(id string, signed bool) (*Player, error) {
 		if err == nil {
 			return cached, nil
 		}
-		if !errors.Is(err, redis.Nil) {
+		if !errors.Is(err, ErrCacheMiss) {
 			return nil, err
 		}
 		player, _, err := s.fetchProfileFromMojang(id, true)
@@ -320,7 +319,7 @@ func (s *service) resolveProfile(id string) (*Profile, error) {
 	if err == nil {
 		return cached, nil
 	}
-	if !errors.Is(err, redis.Nil) {
+	if !errors.Is(err, ErrCacheMiss) {
 		return nil, err
 	}
 
@@ -361,7 +360,7 @@ func (s *service) fetchProfileFromMojang(id string, signed bool) (*Player, *Prof
 		return nil, nil, ErrPlayerNotFound
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, nil, errors.New("mojang API error: " + resp.Status)
+		return nil, nil, fmt.Errorf("%w: %s", ErrMojangAPI, resp.Status)
 	}
 
 	var player Player
@@ -429,7 +428,7 @@ func (s *service) GetGeyserXUID(gamertag string) (*GeyserPlayer, error) {
 	}
 	// Geyser has no 404 here: an unknown gamertag is 200 with an empty object.
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New("geyser API error: " + resp.Status)
+		return nil, fmt.Errorf("%w: %s", ErrGeyserAPI, resp.Status)
 	}
 
 	var result struct {
@@ -471,7 +470,7 @@ func (s *service) GetGeyserSkin(xuid int64) (*GeyserSkin, error) {
 		return nil, ErrInvalidGeyserRequest
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New("geyser API error: " + resp.Status)
+		return nil, fmt.Errorf("%w: %s", ErrGeyserAPI, resp.Status)
 	}
 
 	var skin GeyserSkin
@@ -506,7 +505,7 @@ func (s *service) resolveGeyserPlayerByXUID(xuid int64) (*GeyserPlayer, error) {
 		return nil, ErrInvalidGeyserRequest
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New("geyser API error: " + resp.Status)
+		return nil, fmt.Errorf("%w: %s", ErrGeyserAPI, resp.Status)
 	}
 
 	var result struct {
@@ -526,6 +525,15 @@ func (s *service) resolveGeyserPlayerByXUID(xuid int64) (*GeyserPlayer, error) {
 	return player, nil
 }
 
+// skinStepFailure reports a skin-lookup failure for an xuid that was already
+// resolved. It must not wrap ErrInvalidGeyserRequest, which the handlers map to 400.
+func skinStepFailure(err error) error {
+	if errors.Is(err, ErrInvalidGeyserRequest) {
+		return fmt.Errorf("%w: skin lookup rejected a resolved xuid", ErrGeyserAPI)
+	}
+	return err
+}
+
 // GetGeyserProfile gets a Bedrock player's full profile (identity + skin) by
 // XUID. A missing skin leaves Skin nil.
 func (s *service) GetGeyserProfile(xuid int64) (*GeyserProfile, error) {
@@ -535,7 +543,7 @@ func (s *service) GetGeyserProfile(xuid int64) (*GeyserProfile, error) {
 	}
 	skin, err := s.GetGeyserSkin(xuid)
 	if err != nil && !errors.Is(err, ErrSkinNotFound) {
-		return nil, err
+		return nil, skinStepFailure(err)
 	}
 	return &GeyserProfile{UUID: player.UUID, XUID: player.XUID, Gamertag: player.Gamertag, Skin: skin}, nil
 }
@@ -548,7 +556,7 @@ func (s *service) GetGeyserProfileByGamertag(gamertag string) (*GeyserProfile, e
 	}
 	skin, err := s.GetGeyserSkin(player.XUID)
 	if err != nil && !errors.Is(err, ErrSkinNotFound) {
-		return nil, err
+		return nil, skinStepFailure(err)
 	}
 	return &GeyserProfile{UUID: player.UUID, XUID: player.XUID, Gamertag: player.Gamertag, Skin: skin}, nil
 }
@@ -580,7 +588,7 @@ func (s *service) serveFromS3(hash string) (*TextureResult, error) {
 	}
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
-		return nil, fmt.Errorf("bad status code from S3: %d", resp.StatusCode)
+		return nil, fmt.Errorf("%w: %d", ErrBadStatusS3, resp.StatusCode)
 	}
 
 	contentType := resp.Header.Get("Content-Type")
@@ -613,7 +621,7 @@ func (s *service) fetchAndArchive(hash string) (*TextureResult, error) {
 		return nil, ErrTextureNotFound
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("bad status code from remote URL: %d", resp.StatusCode)
+		return nil, fmt.Errorf("%w: %d", ErrBadStatusRemote, resp.StatusCode)
 	}
 
 	data, err := io.ReadAll(resp.Body)
@@ -663,7 +671,7 @@ func (s *service) serveGeyserFromS3(hash string) (*TextureResult, error) {
 	}
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
-		return nil, fmt.Errorf("bad status code from S3: %d", resp.StatusCode)
+		return nil, fmt.Errorf("%w: %d", ErrBadStatusS3, resp.StatusCode)
 	}
 
 	contentType := resp.Header.Get("Content-Type")
@@ -700,7 +708,7 @@ func (s *service) fetchAndArchiveGeyserTexture(hash string) (*TextureResult, err
 		return nil, ErrTextureNotFound
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("bad status code from remote URL: %d", resp.StatusCode)
+		return nil, fmt.Errorf("%w: %d", ErrBadStatusRemote, resp.StatusCode)
 	}
 
 	data, err := io.ReadAll(resp.Body)

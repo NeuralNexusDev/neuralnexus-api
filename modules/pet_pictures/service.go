@@ -8,6 +8,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -50,7 +51,7 @@ func (s *service) UploadPetPicture(file *os.File, primarySubject int, othersSubj
 	}
 	sha := hex.EncodeToString(hash.Sum(nil))
 
-	splitName := strings.Split(file.Name(), ".")
+	splitName := strings.Split(filepath.Base(file.Name()), ".")
 	fileExt := splitName[len(splitName)-1]
 
 	petPicture, err := s.db.CreatePetPicture(sha, fileExt, primarySubject, othersSubjects, aliases)
