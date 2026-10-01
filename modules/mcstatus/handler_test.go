@@ -469,6 +469,21 @@ func TestIconHandler(t *testing.T) {
 			t.Fatalf("call = %+v, want host mc.example.com, port 25570", call)
 		}
 	})
+
+	t.Run("HD-31_NoIconReturnsNotFound", func(t *testing.T) {
+		mock := &hdMockService{javaStatus: hdValidStatus(nil)}
+		req := hdRequest(t, "example.com:25565", "")
+		w := httptest.NewRecorder()
+
+		IconHandler(mock)(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("expected 404, got %d", w.Code)
+		}
+		if p := hdDecodeProblem(t, w.Body.Bytes()); p.Detail != msgServerNoIcon {
+			t.Fatalf("detail = %q, want %q", p.Detail, msgServerNoIcon)
+		}
+	})
 }
 
 func TestSimpleStatusHandler(t *testing.T) {

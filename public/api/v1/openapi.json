@@ -632,7 +632,7 @@
             },
             "delete": {
                 "summary": "Delete a number record",
-                "description": "Requires a valid session, but \u2014 unlike create/update \u2014 the handler does not check the admin:numberstore scope; any authenticated user can delete any record.",
+                "description": "Requires a valid session, but — unlike create/update — the handler does not check the admin:numberstore scope; any authenticated user can delete any record.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -1272,7 +1272,7 @@
         "/mcstatus/icon/{host}": {
             "get": {
                 "summary": "Get Minecraft server icon",
-                "description": "Bedrock servers have no icon: bedrock=true is refused with 400.",
+                "description": "Bedrock servers have no icon: bedrock=true is refused with 400. A Java server that has no icon is answered with 404.",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/HostSlug"
@@ -1298,6 +1298,9 @@
                     },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
                     },
                     "429": {
                         "$ref": "#/components/responses/429TooManyRequests"

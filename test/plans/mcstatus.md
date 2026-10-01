@@ -34,6 +34,7 @@
 | HD-28 | ServerStatusHandler | Edge Case | `bedrock=true` and host has a non-numeric `:` suffix | host = `"mc.example.com:abc"` | The whole string is forwarded as the host and the port defaults to 19132 | P2 |  |
 | HD-29 | SimpleStatusHandler | Edge Case | java host has a non-numeric `:` suffix | host = `"mc.example.com:abc"` | The whole string is forwarded as the host and the port defaults to 25565 | P2 |  |
 | HD-30 | SimpleStatusHandler | Edge Case | `bedrock=true` and host has a non-numeric `:` suffix | host = `"mc.example.com:abc"` | The whole string is forwarded as the host and the port defaults to 19132 | P2 |  |
+| HD-31 | IconHandler | Error Path | `GetJavaServerStatus` succeeds but the status has a nil `Icon` | mock returns a status with no icon | Response is 404 via `responses.NotFound`, body `detail` is `msgServerNoIcon`; no PNG is written and the handler does not panic | P1 |  |
 
 ## service.go
 

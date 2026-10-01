@@ -23,6 +23,7 @@ const (
 	msgBedrockStatusFailed     = "failed to get bedrock server status"
 	msgFailedToGetServerStatus = "Failed to get server status"
 	msgBedrockNoIcons          = "Bedrock servers do not have icons."
+	msgServerNoIcon            = "Server has no icon."
 )
 
 type failureMapping struct {
@@ -103,6 +104,10 @@ func IconHandler(s MCStatusService) http.HandlerFunc {
 		status, err := s.GetJavaServerStatus(host, port, false, 0)
 		if err != nil {
 			respondStatusFailure(w, r, err)
+			return
+		}
+		if status.Icon == nil {
+			responses.NotFound(w, r, msgServerNoIcon)
 			return
 		}
 
