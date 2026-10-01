@@ -1272,7 +1272,7 @@
         "/mcstatus/icon/{host}": {
             "get": {
                 "summary": "Get Minecraft server icon",
-                "description": "Returns a PNG. Which image you get depends on the server:\n- The server's own icon, when it reports one.\n- default.png, when a Java server reports no icon.\n- legacy.png, when a Java server only answers a pre-1.7 status ping, which carries no icon.\n- bedrock.png, for bedrock=true. Bedrock servers have no icon, so the server is not contacted.",
+                "description": "Returns a PNG. Which image you get depends on the server:\n- The server's own icon, when it reports one.\n- default.png, when a Java server reports no icon or cannot be reached.\n- legacy.png, when a Java server only answers a pre-1.7 status ping, which carries no icon.\n- bedrock.png, for bedrock=true. Bedrock servers have no icon, so the server is not contacted.",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/HostSlug"
@@ -1295,9 +1295,6 @@
                     },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/404NotFound"
                     },
                     "429": {
                         "$ref": "#/components/responses/429TooManyRequests"
