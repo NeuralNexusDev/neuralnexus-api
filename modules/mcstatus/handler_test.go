@@ -17,6 +17,7 @@ import (
 
 	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
+	"github.com/dreamscached/minequery/v2"
 )
 
 type hdJavaCallArgs struct {
@@ -97,13 +98,14 @@ func hdValidStatus(raw interface{}) *MCServerStatus {
 var (
 	hdBedrockIconColor = color.RGBA{R: 255, A: 255}
 	hdDefaultIconColor = color.RGBA{B: 255, A: 255}
+	hdLegacyIconColor  = color.RGBA{G: 255, A: 255}
 )
 
 func hdUseIconDir(t *testing.T, withIcons bool) {
 	t.Helper()
 	dir := t.TempDir()
 	if withIcons {
-		for name, c := range map[string]color.RGBA{bedrockIconFile: hdBedrockIconColor, defaultIconFile: hdDefaultIconColor} {
+		for name, c := range map[string]color.RGBA{bedrockIconFile: hdBedrockIconColor, defaultIconFile: hdDefaultIconColor, legacyIconFile: hdLegacyIconColor} {
 			img := image.NewRGBA(image.Rect(0, 0, 1, 1))
 			img.Set(0, 0, c)
 			var buf bytes.Buffer
@@ -525,6 +527,22 @@ func TestIconHandler(t *testing.T) {
 		}
 		if got := hdDecodePixel(t, w.Body.Bytes()); got != hdDefaultIconColor {
 			t.Fatalf("pixel = %v, want the default icon %v", got, hdDefaultIconColor)
+		}
+	})
+
+	t.Run("HD-34_LegacyNoIconServesLegacyIcon", func(t *testing.T) {
+		hdUseIconDir(t, true)
+		mock := &hdMockService{javaStatus: GetPing16Status(&minequery.Status16{})}
+		req := hdRequest(t, "example.com:25565", "")
+		w := httptest.NewRecorder()
+
+		IconHandler(mock)(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", w.Code)
+		}
+		if got := hdDecodePixel(t, w.Body.Bytes()); got != hdLegacyIconColor {
+			t.Fatalf("pixel = %v, want the legacy icon %v", got, hdLegacyIconColor)
 		}
 	})
 

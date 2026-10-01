@@ -276,6 +276,9 @@ func TestGetPing17Status(t *testing.T) {
 		if result.ServerType != ServerTypeJava {
 			t.Errorf("ServerType: expected %q, got %q", ServerTypeJava, result.ServerType)
 		}
+		if result.Legacy {
+			t.Errorf("Legacy: expected false")
+		}
 		if result.Raw != s {
 			t.Errorf("Raw: expected the original *Status17 pointer")
 		}
@@ -341,6 +344,9 @@ func TestGetPing16Status(t *testing.T) {
 		if result.Icon != nil {
 			t.Errorf("Icon: expected nil, got %v", result.Icon)
 		}
+		if !result.Legacy {
+			t.Errorf("Legacy: expected true")
+		}
 		if result.Raw != s {
 			t.Errorf("Raw: expected the original *Status16 pointer")
 		}
@@ -372,6 +378,9 @@ func TestGetPing14Status(t *testing.T) {
 		if result.Version != "1.4-1.5" {
 			t.Errorf("Version: expected %q, got %q", "1.4-1.5", result.Version)
 		}
+		if !result.Legacy {
+			t.Errorf("Legacy: expected true")
+		}
 		if result.Raw != s {
 			t.Errorf("Raw: expected the original *Status14 pointer")
 		}
@@ -402,6 +411,9 @@ func TestGetBeta18Status(t *testing.T) {
 		}
 		if result.Version != "b1.8-1.3" {
 			t.Errorf("Version: expected %q, got %q", "b1.8-1.3", result.Version)
+		}
+		if !result.Legacy {
+			t.Errorf("Legacy: expected true")
 		}
 		if result.Raw != s {
 			t.Errorf("Raw: expected the original *StatusBeta18 pointer")
@@ -444,6 +456,9 @@ func TestGetQueryStatus(t *testing.T) {
 		}
 		if result.ServerType != ServerTypeJava {
 			t.Errorf("ServerType: expected %q, got %q", ServerTypeJava, result.ServerType)
+		}
+		if result.Legacy {
+			t.Errorf("Legacy: expected false")
 		}
 		if result.Raw != s {
 			t.Errorf("Raw: expected the original *FullQueryStatus pointer")

@@ -30,6 +30,7 @@ const (
 const (
 	bedrockIconFile = "bedrock.png"
 	defaultIconFile = "default.png"
+	legacyIconFile  = "legacy.png"
 )
 
 var iconDir = filepath.Join("public", "mcstatus", "icons")
@@ -130,7 +131,11 @@ func IconHandler(s MCStatusService) http.HandlerFunc {
 			return
 		}
 		if status.Icon == nil {
-			writeStockIcon(w, r, defaultIconFile)
+			name := defaultIconFile
+			if status.Legacy {
+				name = legacyIconFile
+			}
+			writeStockIcon(w, r, name)
 			return
 		}
 

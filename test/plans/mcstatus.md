@@ -37,6 +37,7 @@
 | HD-31 | IconHandler | Edge Case | `GetJavaServerStatus` succeeds but the status has a nil `Icon` | mock returns a status with no icon | Response 200, `Content-Type: image/png`, body is the `defaultIconFile` image from `iconDir`; the handler does not panic | P1 |  |
 | HD-32 | IconHandler | Error Path | the status has a nil `Icon` and `defaultIconFile` is missing from `iconDir` | empty icon directory | Response is 500 via `responses.InternalServerError`, body `detail` is `msgIconUnavailable` | P2 |  |
 | HD-33 | IconHandler | Error Path | `bedrock=true` and `bedrockIconFile` is missing from `iconDir` | empty icon directory | Response is 500 via `responses.InternalServerError`, body `detail` is `msgIconUnavailable` | P2 |  |
+| HD-34 | IconHandler | Edge Case | the status has a nil `Icon` and `Legacy` set (from `GetPing16Status`) | mock returns a legacy status | Response 200, `Content-Type: image/png`, body is the `legacyIconFile` image from `iconDir` | P1 |  |
 
 ## service.go
 
@@ -73,12 +74,12 @@
 | TY-13 | LoadImgFromFile | Happy Path | valid PNG file on disk | temp file with an encoded PNG | Returns the decoded `image.Image`, nil error | P1 |  |
 | TY-14 | LoadImgFromFile | Error Path | file does not exist | nonexistent path | Returns `nil`, a non-nil `os.Open` error | P2 |  |
 | TY-15 | LoadImgFromFile | Error Path | file exists but is not a valid image | temp file with garbage bytes | Returns `nil`, a non-nil decode error | P2 |  |
-| TY-16 | GetPing17Status | Happy Path | full `Status17` with sample players, icon, description | `Description` implements `Stringer`, `Icon` set | All fields mapped correctly; input `s.Icon` is cleared (nilled) as a side effect | P1 |  |
+| TY-16 | GetPing17Status | Happy Path | full `Status17` with sample players, icon, description | `Description` implements `Stringer`, `Icon` set | All fields mapped correctly; input `s.Icon` is cleared (nilled) as a side effect ; `Legacy` is false | P1 |  |
 | TY-17 | GetPing17Status | Edge Case | `SamplePlayers` empty | — | `Players` is a non-nil empty slice | P3 |  |
-| TY-18 | GetPing16Status | Happy Path | full `Status16` | `MOTD` contains a real newline | All fields mapped; `Version` hardcoded `"1.6"`, `Favicon` `""`, `Icon` `nil` | P1 |  |
-| TY-19 | GetPing14Status | Happy Path | full `Status14` | `MOTD` contains a real newline | All fields mapped; `Version` hardcoded `"1.4-1.5"` | P1 |  |
-| TY-20 | GetBeta18Status | Happy Path | full `StatusBeta18` | `MOTD` contains a real newline | All fields mapped; `Version` hardcoded `"b1.8-1.3"` | P1 |  |
-| TY-21 | GetQueryStatus | Happy Path | full `FullQueryStatus` with sample player names | — | All fields mapped; `Players` built from plain name strings with empty `Uuid` | P1 |  |
+| TY-18 | GetPing16Status | Happy Path | full `Status16` | `MOTD` contains a real newline | All fields mapped; `Version` hardcoded `"1.6"`, `Favicon` `""`, `Icon` `nil` ; `Legacy` is true | P1 |  |
+| TY-19 | GetPing14Status | Happy Path | full `Status14` | `MOTD` contains a real newline | All fields mapped; `Version` hardcoded `"1.4-1.5"` ; `Legacy` is true | P1 |  |
+| TY-20 | GetBeta18Status | Happy Path | full `StatusBeta18` | `MOTD` contains a real newline | All fields mapped; `Version` hardcoded `"b1.8-1.3"` ; `Legacy` is true | P1 |  |
+| TY-21 | GetQueryStatus | Happy Path | full `FullQueryStatus` with sample player names | — | All fields mapped; `Players` built from plain name strings with empty `Uuid` ; `Legacy` is false | P1 |  |
 | TY-22 | GetQueryStatus | Edge Case | `SamplePlayers` empty | — | `Players` is a non-nil empty slice | P3 |  |
 | TY-23 | GetBedrockStatus | Happy Path | `Extra` has a MOTD second line and a map name (len 3) | `Extra = [_, line1, mapName]` | `Motd` includes `ServerName + "\n" + Extra[1]` (escaped), `Map = Extra[2]`, other fields mapped; `ServerType`/proto enum and `Name` not asserted | P1 |  |
 | TY-24 | GetBedrockStatus | Edge Case | `Extra` is empty/nil | — | `Motd == Name == ServerName`, `Map == ""` | P2 |  |

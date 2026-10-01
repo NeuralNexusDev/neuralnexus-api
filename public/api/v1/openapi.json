@@ -1272,7 +1272,7 @@
         "/mcstatus/icon/{host}": {
             "get": {
                 "summary": "Get Minecraft server icon",
-                "description": "Returns the server's own icon. A Java server with no icon gets the default icon, and bedrock=true returns the bedrock icon without contacting the server.",
+                "description": "Returns the server's own icon. bedrock=true returns the bedrock icon without contacting the server. A Java server with no icon gets the default icon, or the legacy icon when it answered a pre-1.7 status ping.",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/HostSlug"
