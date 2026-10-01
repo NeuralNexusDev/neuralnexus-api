@@ -34,10 +34,10 @@
 | HD-28 | ServerStatusHandler | Edge Case | `bedrock=true` and host has a non-numeric `:` suffix | host = `"mc.example.com:abc"` | The whole string is forwarded as the host and the port defaults to 19132 | P2 |  |
 | HD-29 | SimpleStatusHandler | Edge Case | java host has a non-numeric `:` suffix | host = `"mc.example.com:abc"` | The whole string is forwarded as the host and the port defaults to 25565 | P2 |  |
 | HD-30 | SimpleStatusHandler | Edge Case | `bedrock=true` and host has a non-numeric `:` suffix | host = `"mc.example.com:abc"` | The whole string is forwarded as the host and the port defaults to 19132 | P2 |  |
-| HD-31 | IconHandler | Edge Case | `GetJavaServerStatus` succeeds but the status has a nil `Icon` | mock returns a status with no icon | Response 200, `Content-Type: image/png`, body is the `defaultIconFile` image from `iconDir`; the handler does not panic | P1 |  |
+| HD-31 | IconHandler | Edge Case | `GetJavaServerStatus` succeeds but the status has a nil `Icon` | mock returns a status with no icon | Response 200, body is the `defaultIconFile` image from `iconDir`; the handler does not panic | P1 |  |
 | HD-32 | IconHandler | Error Path | the status has a nil `Icon` and `defaultIconFile` is missing from `iconDir` | empty icon directory | Response is 500 via `responses.InternalServerError`, body `detail` is `msgIconUnavailable` | P2 |  |
 | HD-33 | IconHandler | Error Path | `bedrock=true` and `bedrockIconFile` is missing from `iconDir` | empty icon directory | Response is 500 via `responses.InternalServerError`, body `detail` is `msgIconUnavailable` | P2 |  |
-| HD-34 | IconHandler | Edge Case | the status has a nil `Icon` and `Legacy` set (from `GetPing16Status`) | mock returns a legacy status | Response 200, `Content-Type: image/png`, body is the `legacyIconFile` image from `iconDir` | P1 |  |
+| HD-34 | IconHandler | Edge Case | the status has a nil `Icon` and `Legacy` set (from `GetPing16Status`) | mock returns a legacy status | Response 200, body is the `legacyIconFile` image from `iconDir` | P1 |  |
 
 ## service.go
 
@@ -52,10 +52,13 @@
 | SV-11 | GetJavaServerStatus | Edge Case | Query is enabled and `queryPort` differs from `port` | local UDP recorders on two distinct ports (one as `port`, one as `queryPort`), `queryEnabled=true` | The recorder on `queryPort` receives a query handshake packet (prefix `FE FD 09`); the recorder on `port` receives nothing; returns `ErrJavaStatus` | P1 |  |
 | SV-12 | GetJavaServerStatus | Edge Case | Query is enabled and `queryPort` equals `port` | local UDP recorder on `port`, `queryEnabled=true`, `queryPort == port` | The recorder receives a query handshake packet; returns `ErrJavaStatus` | P1 |  |
 | SV-13 | GetJavaServerStatus | Edge Case | Query is disabled | local UDP recorders on `port` and `queryPort`, `queryEnabled=false` | Neither recorder receives a packet; returns `ErrJavaStatus` | P2 |  |
-| SV-14 | GetJavaServerStatus | Happy Path | the server answers both the 1.7 ping and the legacy 1.6 ping | local TCP server answering both | The 1.7 status is returned (`Version` from the 1.7 reply, `Legacy` false) and no legacy ping connection is made | P1 |  |
-| SV-15 | GetJavaServerStatus | Edge Case | the server refuses the 1.7 ping but answers the legacy 1.6 ping | local TCP server answering only the 1.6 ping | The 1.6 status is returned (`Version` `"1.6"`, `Legacy` true) after exactly one legacy ping connection | P1 |  |
+| SV-14 | GetJavaServerStatus | Happy Path | the server answers the 1.7, 1.6, 1.4 and beta pings | local TCP server answering all four | The 1.7 status is returned (`Version` from the 1.7 reply, `Legacy` false) and no 1.6, 1.4 or beta ping connection is made | P1 |  |
+| SV-15 | GetJavaServerStatus | Edge Case | the server refuses the 1.7 ping but answers the 1.6, 1.4 and beta pings | local TCP server answering all but 1.7 | The 1.6 status is returned (`Version` `"1.6"`, `Legacy` true) and no 1.4 or beta ping connection is made | P1 |  |
 | SV-16 | mergeQueryStatus | Edge Case | a ping status with an icon, a favicon and `Legacy` set is merged with a query status | ping status with `Icon`, `Favicon` and `Legacy` set | The query status is returned carrying the ping's `Icon`, `Favicon` and `Legacy` | P2 |  |
 | SV-17 | mergeQueryStatus | Edge Case | the ping status has an empty favicon and the query status has one | ping `Favicon` empty, query `Favicon` set | The query status keeps its own `Favicon` | P3 |  |
+| SV-18 | GetJavaServerStatus | Edge Case | the server refuses the 1.7 and 1.6 pings but answers the 1.4 and beta pings | local TCP server answering 1.4 and beta | The 1.4 status is returned (`Version` `"1.4-1.5"`, `Legacy` true) and no beta ping connection is made | P2 |  |
+| SV-19 | GetJavaServerStatus | Edge Case | the server answers only the beta ping | local TCP server answering only beta | The beta status is returned (`Version` `"b1.8-1.3"`, `Legacy` true) after exactly one 1.6, one 1.4 and one beta ping connection | P2 |  |
+| SV-20 | GetJavaServerStatus | Happy Path | `queryEnabled` is true, the server answers the 1.7 ping with a favicon and the query port answers a full query | local TCP and UDP servers | The returned status is the query status (`Version` from the query reply) carrying the ping's `Icon` and a non-empty `Favicon` | P1 |  |
 | SV-07 | GetServerStatus | Happy Path | `isBedrock=false` | unreachable host | Delegates to `GetJavaServerStatus`; returns its distinct error `ErrJavaStatus` | P1 |  |
 | SV-08 | GetServerStatus | Happy Path | `isBedrock=true` | unreachable host | Delegates to `GetBedrockServerStatus`; returns its distinct error `ErrBedrockStatus` | P1 |  |
 
@@ -78,12 +81,12 @@
 | TY-13 | LoadImgFromFile | Happy Path | valid PNG file on disk | temp file with an encoded PNG | Returns the decoded `image.Image`, nil error | P1 |  |
 | TY-14 | LoadImgFromFile | Error Path | file does not exist | nonexistent path | Returns `nil`, a non-nil `os.Open` error | P2 |  |
 | TY-15 | LoadImgFromFile | Error Path | file exists but is not a valid image | temp file with garbage bytes | Returns `nil`, a non-nil decode error | P2 |  |
-| TY-16 | GetPing17Status | Happy Path | full `Status17` with sample players, icon, description | `Description` implements `Stringer`, `Icon` set | All fields mapped correctly; input `s.Icon` is cleared (nilled) as a side effect ; `Legacy` is false | P1 |  |
+| TY-16 | GetPing17Status | Happy Path | full `Status17` with sample players, icon, description | `Description` implements `Stringer`, `Icon` set | All fields mapped correctly; input `s.Icon` is cleared (nilled) as a side effect; `Legacy` is false | P1 |  |
 | TY-17 | GetPing17Status | Edge Case | `SamplePlayers` empty | — | `Players` is a non-nil empty slice | P3 |  |
-| TY-18 | GetPing16Status | Happy Path | full `Status16` | `MOTD` contains a real newline | All fields mapped; `Version` hardcoded `"1.6"`, `Favicon` `""`, `Icon` `nil` ; `Legacy` is true | P1 |  |
-| TY-19 | GetPing14Status | Happy Path | full `Status14` | `MOTD` contains a real newline | All fields mapped; `Version` hardcoded `"1.4-1.5"` ; `Legacy` is true | P1 |  |
-| TY-20 | GetBeta18Status | Happy Path | full `StatusBeta18` | `MOTD` contains a real newline | All fields mapped; `Version` hardcoded `"b1.8-1.3"` ; `Legacy` is true | P1 |  |
-| TY-21 | GetQueryStatus | Happy Path | full `FullQueryStatus` with sample player names | — | All fields mapped; `Players` built from plain name strings with empty `Uuid` ; `Legacy` is false | P1 |  |
+| TY-18 | GetPing16Status | Happy Path | full `Status16` | `MOTD` contains a real newline | All fields mapped; `Version` hardcoded `"1.6"`, `Favicon` `""`, `Icon` `nil`; `Legacy` is true | P1 |  |
+| TY-19 | GetPing14Status | Happy Path | full `Status14` | `MOTD` contains a real newline | All fields mapped; `Version` hardcoded `"1.4-1.5"`; `Legacy` is true | P1 |  |
+| TY-20 | GetBeta18Status | Happy Path | full `StatusBeta18` | `MOTD` contains a real newline | All fields mapped; `Version` hardcoded `"b1.8-1.3"`; `Legacy` is true | P1 |  |
+| TY-21 | GetQueryStatus | Happy Path | full `FullQueryStatus` with sample player names | — | All fields mapped; `Players` built from plain name strings with empty `Uuid`; `Legacy` is false | P1 |  |
 | TY-22 | GetQueryStatus | Edge Case | `SamplePlayers` empty | — | `Players` is a non-nil empty slice | P3 |  |
 | TY-23 | GetBedrockStatus | Happy Path | `Extra` has a MOTD second line and a map name (len 3) | `Extra = [_, line1, mapName]` | `Motd` includes `ServerName + "\n" + Extra[1]` (escaped), `Map = Extra[2]`, other fields mapped; `ServerType`/proto enum and `Name` not asserted | P1 |  |
 | TY-24 | GetBedrockStatus | Edge Case | `Extra` is empty/nil | — | `Motd == Name == ServerName`, `Map == ""` | P2 |  |
