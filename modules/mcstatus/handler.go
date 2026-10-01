@@ -69,11 +69,11 @@ func splitHostPort(address string, isBedrock bool) (string, int) {
 				return host, port
 			}
 		} else if strings.HasSuffix(address, "]") {
-			return strings.Trim(address, "[]"), defaultPort
+			return address[1 : len(address)-1], defaultPort
 		}
 		return address, defaultPort
 	}
-	if ip, err := netip.ParseAddr(address); err == nil && ip.Is6() {
+	if _, err := netip.ParseAddr(address); err == nil {
 		return address, defaultPort
 	}
 	if i := strings.LastIndex(address, ":"); i >= 0 {

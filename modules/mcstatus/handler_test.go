@@ -445,6 +445,62 @@ func TestServerStatusHandler(t *testing.T) {
 			t.Fatalf("call = %+v, want host [2001:db8::1]:abc, port 25565, bedrock false", call)
 		}
 	})
+
+	t.Run("HD-41_Ipv6BracketedWithPortBedrock", func(t *testing.T) {
+		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
+		req := hdRequest(t, "[2001:db8::1]:19133", "bedrock=true")
+
+		ServerStatusHandler(mock)(httptest.NewRecorder(), req)
+
+		if len(mock.serverCalls) != 1 {
+			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
+		}
+		if call := mock.serverCalls[0]; call.host != "2001:db8::1" || call.port != 19133 || !call.isBedrock {
+			t.Fatalf("call = %+v, want host 2001:db8::1, port 19133, bedrock true", call)
+		}
+	})
+
+	t.Run("HD-42_Ipv6BracketedNoPortJava", func(t *testing.T) {
+		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
+		req := hdRequest(t, "[2001:db8::1]", "")
+
+		ServerStatusHandler(mock)(httptest.NewRecorder(), req)
+
+		if len(mock.serverCalls) != 1 {
+			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
+		}
+		if call := mock.serverCalls[0]; call.host != "2001:db8::1" || call.port != 25565 || call.isBedrock {
+			t.Fatalf("call = %+v, want host 2001:db8::1, port 25565, bedrock false", call)
+		}
+	})
+
+	t.Run("HD-43_Ipv6BareLiteralBedrock", func(t *testing.T) {
+		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
+		req := hdRequest(t, "2001:db8::1", "bedrock=true")
+
+		ServerStatusHandler(mock)(httptest.NewRecorder(), req)
+
+		if len(mock.serverCalls) != 1 {
+			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
+		}
+		if call := mock.serverCalls[0]; call.host != "2001:db8::1" || call.port != 19132 || !call.isBedrock {
+			t.Fatalf("call = %+v, want host 2001:db8::1, port 19132, bedrock true", call)
+		}
+	})
+
+	t.Run("HD-44_DoubleBracketedKeepsInnerBrackets", func(t *testing.T) {
+		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
+		req := hdRequest(t, "[[2001:db8::1]]", "")
+
+		ServerStatusHandler(mock)(httptest.NewRecorder(), req)
+
+		if len(mock.serverCalls) != 1 {
+			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
+		}
+		if call := mock.serverCalls[0]; call.host != "[2001:db8::1]" || call.port != 25565 || call.isBedrock {
+			t.Fatalf("call = %+v, want host [2001:db8::1], port 25565, bedrock false", call)
+		}
+	})
 }
 
 func TestIconHandler(t *testing.T) {

@@ -3584,7 +3584,7 @@
                 "schema": {
                     "type": "string"
                 },
-                "description": "Server hostname or address, optionally followed by :port. An IPv6 address is written in brackets, as in [2001:db8::1] or [2001:db8::1]:25565, or bare as 2001:db8::1."
+                "description": "Server hostname or address, optionally followed by :port. An IPv6 address with a port must be written in brackets, as in [2001:db8::1]:25565. A bare or bracketed IPv6 address without a port uses the default port: 25565 for Java, 19132 for Bedrock."
             },
             "MCStatusBedrockQuery": {
                 "name": "bedrock",

@@ -44,6 +44,10 @@
 | HD-38 | ServerStatusHandler | Edge Case | java host is a bracketed IPv6 literal with a non-numeric port | host = `"[2001:db8::1]:abc"` | The whole string is forwarded as the host and the port defaults to 25565 | P2 |  |
 | HD-39 | SimpleStatusHandler | Happy Path | java host is a bracketed IPv6 literal with a `:port` suffix | host = `"[2001:db8::1]:25570"` | `GetServerStatus` receives host `"2001:db8::1"` and port 25570 | P1 |  |
 | HD-40 | IconHandler | Happy Path | host is a bracketed IPv6 literal with a `:port` suffix | host = `"[2001:db8::1]:25570"` | `GetJavaServerStatus` receives host `"2001:db8::1"` and port 25570 | P1 |  |
+| HD-41 | ServerStatusHandler | Happy Path | `bedrock=true` and host is a bracketed IPv6 literal with a `:port` suffix | host = `"[2001:db8::1]:19133"` | `GetServerStatus` receives host `"2001:db8::1"`, port 19133 and `isBedrock` true | P1 |  |
+| HD-42 | ServerStatusHandler | Edge Case | java host is a bracketed IPv6 literal with no port | host = `"[2001:db8::1]"` | `GetServerStatus` receives host `"2001:db8::1"` and port 25565 | P1 |  |
+| HD-43 | ServerStatusHandler | Edge Case | `bedrock=true` and host is a bare IPv6 literal | host = `"2001:db8::1"` | The whole string is forwarded as the host and the port defaults to 19132 | P1 |  |
+| HD-44 | ServerStatusHandler | Edge Case | java host is a doubly bracketed IPv6 literal with no port | host = `"[[2001:db8::1]]"` | Exactly one pair of brackets is removed: `GetServerStatus` receives host `"[2001:db8::1]"` and port 25565 | P2 |  |
 
 ## service.go
 
