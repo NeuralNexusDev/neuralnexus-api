@@ -29,6 +29,29 @@ func NewService() MCStatusService {
 	return &service{}
 }
 
+func pingJavaStatus(pinger *minequery.Pinger, host string, port int) *MCServerStatus {
+	if s17, err := pinger.Ping17(host, port); err == nil {
+		return GetPing17Status(s17)
+	}
+	if s16, err := pinger.Ping16(host, port); err == nil {
+		return GetPing16Status(s16)
+	}
+	if s14, err := pinger.Ping14(host, port); err == nil {
+		return GetPing14Status(s14)
+	}
+	if sb18, err := pinger.PingBeta18(host, port); err == nil {
+		return GetBeta18Status(sb18)
+	}
+	return nil
+}
+
+func mergeQueryStatus(ping, query *MCServerStatus) *MCServerStatus {
+	query.Icon = ping.Icon
+	query.Legacy = ping.Legacy
+	query.Favicon = ping.Favicon
+	return query
+}
+
 // GetJavaServerStatus - Get Java server status
 func (s *service) GetJavaServerStatus(host string, port int, queryEnabled bool, queryPort int) (*MCServerStatus, error) {
 	pinger := minequery.NewPinger(
@@ -37,40 +60,31 @@ func (s *service) GetJavaServerStatus(host string, port int, queryEnabled bool, 
 		minequery.WithProtocolVersion17(minequery.Ping17ProtocolVersion119),
 	)
 
-	var status *MCServerStatus = nil
-	s17, err := pinger.Ping17(host, port)
-	if err == nil {
-		status = GetPing17Status(s17)
-	}
-	s16, err := pinger.Ping16(host, port)
-	if err == nil {
-		status = GetPing16Status(s16)
-	}
-	s14, err := pinger.Ping14(host, port)
-	if err == nil {
-		status = GetPing14Status(s14)
-	}
-	sb18, err := pinger.PingBeta18(host, port)
-	if err == nil {
-		status = GetBeta18Status(sb18)
+	var queryResult chan *minequery.FullQueryStatus
+	if queryEnabled {
+		queryResult = make(chan *minequery.FullQueryStatus)
+		go func() {
+			query, _ := pinger.QueryFull(host, queryPort)
+			queryResult <- query
+		}()
 	}
 
-	if queryEnabled {
-		query, err := pinger.QueryFull(host, queryPort)
-		if err == nil {
-			queryStatus := GetQueryStatus(query)
-			if status != nil {
-				queryStatus.Icon = status.Icon
-				status = queryStatus
-			}
-		}
+	status := pingJavaStatus(pinger, host, port)
+	var query *minequery.FullQueryStatus
+	if queryResult != nil {
+		query = <-queryResult
 	}
-	if status != nil {
-		status.Host = host
-		status.Port = int32(port)
-		return status, nil
+	switch {
+	case status != nil && query != nil:
+		status = mergeQueryStatus(status, GetQueryStatus(query))
+	case query != nil:
+		status = GetQueryStatus(query)
+	case status == nil:
+		return nil, ErrJavaStatus
 	}
-	return nil, ErrJavaStatus
+	status.Host = host
+	status.Port = int32(port)
+	return status, nil
 }
 
 // GetBedrockServerStatus - Get Bedrock server status

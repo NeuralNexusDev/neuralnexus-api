@@ -20,6 +20,7 @@ type MCServerStatus struct {
 	ServerType ServerType  `json:"server_type" xml:"server_type"`
 	Raw        interface{} `json:"raw,omitempty" xml:"raw,omitempty"`
 	Icon       image.Image `json:"-" xml:"-"`
+	Legacy     bool        `json:"-" xml:"-"`
 }
 
 // ServerType - Server type enum
@@ -121,10 +122,15 @@ func GetPing17Status(s *minequery.Status17) *MCServerStatus {
 	)
 }
 
+func markLegacy(s *MCServerStatus) *MCServerStatus {
+	s.Legacy = true
+	return s
+}
+
 // GetPing16Status - Get the Java server status
 func GetPing16Status(s *minequery.Status16) *MCServerStatus {
 	motd := s.MOTD
-	return NewServerStatus(
+	return markLegacy(NewServerStatus(
 		"", 0,
 		MOTDToName(motd),
 		strings.ReplaceAll(motd, "\n", "\\n"),
@@ -137,13 +143,13 @@ func GetPing16Status(s *minequery.Status16) *MCServerStatus {
 		ServerTypeJava,
 		s,
 		nil,
-	)
+	))
 }
 
 // GetPing14Status - Get the Java server status
 func GetPing14Status(s *minequery.Status14) *MCServerStatus {
 	motd := s.MOTD
-	return NewServerStatus(
+	return markLegacy(NewServerStatus(
 		"", 0,
 		MOTDToName(motd),
 		strings.ReplaceAll(motd, "\n", "\\n"),
@@ -156,13 +162,13 @@ func GetPing14Status(s *minequery.Status14) *MCServerStatus {
 		ServerTypeJava,
 		s,
 		nil,
-	)
+	))
 }
 
 // GetBeta18Status - Get the Java server status
 func GetBeta18Status(s *minequery.StatusBeta18) *MCServerStatus {
 	motd := s.MOTD
-	return NewServerStatus(
+	return markLegacy(NewServerStatus(
 		"", 0,
 		MOTDToName(motd),
 		strings.ReplaceAll(motd, "\n", "\\n"),
@@ -175,7 +181,7 @@ func GetBeta18Status(s *minequery.StatusBeta18) *MCServerStatus {
 		ServerTypeJava,
 		s,
 		nil,
-	)
+	))
 }
 
 // GetQueryStatus - Get the Java server status

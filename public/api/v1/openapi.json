@@ -1272,7 +1272,7 @@
         "/mcstatus/icon/{host}": {
             "get": {
                 "summary": "Get Minecraft server icon",
-                "description": "Bedrock servers have no icon: bedrock=true is refused with 400.",
+                "description": "Returns a PNG. Which image you get depends on the server:\n- The server's own icon, when it reports one.\n- default.png, when a Java server reports no icon.\n- legacy.png, when a Java server only answers a pre-1.7 status ping, which carries no icon.\n- bedrock.png, for bedrock=true. Bedrock servers have no icon, so the server is not contacted.",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/HostSlug"
@@ -1293,20 +1293,17 @@
                             }
                         }
                     },
-                    "400": {
-                        "$ref": "#/components/responses/400BadRequest"
-                    },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
                     },
                     "429": {
                         "$ref": "#/components/responses/429TooManyRequests"
                     },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
-                    },
-                    "502": {
-                        "$ref": "#/components/responses/502BadGateway"
                     }
                 }
             }
@@ -1348,7 +1345,7 @@
         "/mcstatus/{host}": {
             "get": {
                 "summary": "Get Minecraft server status",
-                "description": "Get Minecraft server status",
+                "description": "Get Minecraft server status. For Java servers with query enabled, the query reply is merged over the ping status, and a server that answers only the query is still reported.",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/HostSlug"
@@ -1390,14 +1387,14 @@
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
                     },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
                     "429": {
                         "$ref": "#/components/responses/429TooManyRequests"
                     },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
-                    },
-                    "502": {
-                        "$ref": "#/components/responses/502BadGateway"
                     }
                 }
             }

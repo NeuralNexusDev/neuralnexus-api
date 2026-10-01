@@ -2,9 +2,11 @@ package mcstatus
 
 import (
 	"errors"
+	"image"
 	"image/png"
 	"log"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -22,25 +24,32 @@ const (
 	msgJavaStatusFailed        = "failed to get java server status"
 	msgBedrockStatusFailed     = "failed to get bedrock server status"
 	msgFailedToGetServerStatus = "Failed to get server status"
-	msgBedrockNoIcons          = "Bedrock servers do not have icons."
+	msgIconUnavailable         = "Failed to load server icon"
 )
 
+const (
+	bedrockIconFile = "bedrock.png"
+	defaultIconFile = "default.png"
+	legacyIconFile  = "legacy.png"
+)
+
+var iconDir = filepath.Join("public", "mcstatus", "icons")
+
 type failureMapping struct {
-	err     error
-	respond func(http.ResponseWriter, *http.Request, string)
-	msg     string
+	err error
+	msg string
 }
 
 var statusFailures = []failureMapping{
-	{ErrJavaStatus, responses.BadGateway, msgJavaStatusFailed},
-	{ErrBedrockStatus, responses.BadGateway, msgBedrockStatusFailed},
+	{ErrJavaStatus, msgJavaStatusFailed},
+	{ErrBedrockStatus, msgBedrockStatusFailed},
 }
 
 func respondStatusFailure(w http.ResponseWriter, r *http.Request, err error) {
 	log.Println("[Error]: Unable to get server status:\n\t", err)
 	for _, m := range statusFailures {
 		if errors.Is(err, m.err) {
-			m.respond(w, r, m.msg)
+			responses.NotFound(w, r, m.msg)
 			return
 		}
 	}
@@ -89,13 +98,29 @@ func ServerStatusHandler(s MCStatusService) http.HandlerFunc {
 	}
 }
 
+func writeIcon(w http.ResponseWriter, img image.Image) {
+	w.Header().Set("Content-Type", "image/png")
+	w.WriteHeader(http.StatusOK)
+	png.Encode(w, img)
+}
+
+func writeStockIcon(w http.ResponseWriter, r *http.Request, name string) {
+	img, err := LoadImgFromFile(filepath.Join(iconDir, name))
+	if err != nil {
+		log.Println("[Error]: Unable to load stock icon:\n\t", err)
+		responses.InternalServerError(w, r, msgIconUnavailable)
+		return
+	}
+	writeIcon(w, img)
+}
+
 // IconHandler - Route that returns the server icon as a PNG
 func IconHandler(s MCStatusService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		host := r.PathValue("host")
 		isBedrock := r.URL.Query().Get("bedrock") == "true"
 		if isBedrock {
-			responses.BadRequest(w, r, msgBedrockNoIcons)
+			writeStockIcon(w, r, bedrockIconFile)
 			return
 		}
 		host, port := splitHostPort(host, false)
@@ -105,10 +130,16 @@ func IconHandler(s MCStatusService) http.HandlerFunc {
 			respondStatusFailure(w, r, err)
 			return
 		}
+		if status.Icon == nil {
+			name := defaultIconFile
+			if status.Legacy {
+				name = legacyIconFile
+			}
+			writeStockIcon(w, r, name)
+			return
+		}
 
-		w.Header().Set("Content-Type", "image/png")
-		w.WriteHeader(http.StatusOK)
-		png.Encode(w, status.Icon)
+		writeIcon(w, status.Icon)
 	}
 }
 
