@@ -422,19 +422,22 @@ func TestIconHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-09_ErrorReturnsNotFound", func(t *testing.T) {
+	t.Run("HD-09_LookupFailureServesDefaultIcon", func(t *testing.T) {
+		hdUseIconDir(t, true)
 		mock := &hdMockService{javaErr: ErrJavaStatus}
 		req := hdRequest(t, "example.com:25565", "")
 		w := httptest.NewRecorder()
 
 		IconHandler(mock)(w, req)
 
-		if w.Code != http.StatusNotFound {
-			t.Fatalf("expected 404, got %d", w.Code)
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", w.Code)
 		}
-		p := hdDecodeProblem(t, w.Body.Bytes())
-		if p.Detail != msgJavaStatusFailed {
-			t.Fatalf("expected detail %q, got %q", msgJavaStatusFailed, p.Detail)
+		if ct := w.Header().Get("Content-Type"); ct != "image/png" {
+			t.Fatalf("expected Content-Type image/png, got %q", ct)
+		}
+		if got := hdDecodePixel(t, w.Body.Bytes()); got != hdDefaultIconColor {
+			t.Fatalf("pixel = %v, want the default icon %v", got, hdDefaultIconColor)
 		}
 		if len(mock.javaCalls) != 1 {
 			t.Fatalf("expected exactly 1 call, got %d", len(mock.javaCalls))

@@ -126,6 +126,10 @@ func IconHandler(s MCStatusService) http.HandlerFunc {
 		host, port := splitHostPort(host, false)
 
 		status, err := s.GetJavaServerStatus(host, port, false, 0)
+		if errors.Is(err, ErrJavaStatus) {
+			writeStockIcon(w, r, defaultIconFile)
+			return
+		}
 		if err != nil {
 			respondStatusFailure(w, r, err)
 			return
