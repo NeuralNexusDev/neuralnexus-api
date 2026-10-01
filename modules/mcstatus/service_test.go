@@ -464,6 +464,9 @@ func TestService_GetJavaServerStatusProbeOrder(t *testing.T) {
 		if status.Legacy || status.Version != "1.20" {
 			t.Fatalf("status = legacy %v, version %q; want the modern status", status.Legacy, status.Version)
 		}
+		if status.Host != "127.0.0.1" || status.Port != int32(port) {
+			t.Fatalf("host %q, port %d; want the pinged host and port", status.Host, status.Port)
+		}
 		if got := srv.conns16.Load() + srv.conns14.Load() + srv.connsBeta.Load(); got != 0 {
 			t.Fatalf("legacy pings = %d, want 0 once the modern ping succeeded", got)
 		}
@@ -554,6 +557,43 @@ func TestService_GetJavaServerStatusQueryConcurrency(t *testing.T) {
 		}
 	})
 
+	t.Run("SV-22_QueryRunsWhilePingChainRuns", func(t *testing.T) {
+		delay := time.Second
+		_, port := svNewJavaServer(t, svJavaAnswers{modern: true, delay: delay})
+		queryPort := svNewQueryServer(t, delay)
+
+		start := time.Now()
+		status, err := NewService().GetJavaServerStatus("127.0.0.1", port, true, queryPort)
+		elapsed := time.Since(start)
+
+		if err != nil {
+			t.Fatalf("expected nil error, got %v", err)
+		}
+		if status.Version != "query-version" {
+			t.Fatalf("Version = %q, want the query status", status.Version)
+		}
+		if elapsed >= 2*delay {
+			t.Fatalf("took %v, want less than the %v a sequential ping then query would need", elapsed, 2*delay)
+		}
+	})
+
+	t.Run("SV-23_QueryAnswersWhenEveryPingFails", func(t *testing.T) {
+		port := svUnusedPort(t)
+		queryPort := svNewQueryServer(t, 0)
+
+		status, err := NewService().GetJavaServerStatus("127.0.0.1", port, true, queryPort)
+
+		if err != nil {
+			t.Fatalf("expected nil error, got %v", err)
+		}
+		if status.Version != "query-version" || status.Host != "127.0.0.1" || status.Port != int32(port) {
+			t.Fatalf("status = version %q, host %q, port %d; want the query status for the pinged host and port", status.Version, status.Host, status.Port)
+		}
+		if status.Icon != nil || status.Legacy {
+			t.Fatalf("icon %v, legacy %v; want no icon and not legacy", status.Icon, status.Legacy)
+		}
+	})
+
 	t.Run("SV-24_PingStatusWaitsForSlowQuery", func(t *testing.T) {
 		_, port := svNewJavaServer(t, svJavaAnswers{modern: true})
 		queryPort := svNewQueryServer(t, 500*time.Millisecond)
@@ -579,43 +619,6 @@ func TestService_GetJavaServerStatusQueryConcurrency(t *testing.T) {
 		}
 		if status.Version != "query-version" {
 			t.Fatalf("Version = %q, want the query status once the slow query answered", status.Version)
-		}
-	})
-
-	t.Run("SV-23_QueryAnswersWhenEveryPingFails", func(t *testing.T) {
-		port := svUnusedPort(t)
-		queryPort := svNewQueryServer(t, 0)
-
-		status, err := NewService().GetJavaServerStatus("127.0.0.1", port, true, queryPort)
-
-		if err != nil {
-			t.Fatalf("expected nil error, got %v", err)
-		}
-		if status.Version != "query-version" || status.Host != "127.0.0.1" || status.Port != int32(port) {
-			t.Fatalf("status = version %q, host %q, port %d; want the query status for the pinged host and port", status.Version, status.Host, status.Port)
-		}
-		if status.Icon != nil || status.Legacy {
-			t.Fatalf("icon %v, legacy %v; want no icon and not legacy", status.Icon, status.Legacy)
-		}
-	})
-
-	t.Run("SV-22_QueryRunsWhilePingChainRuns", func(t *testing.T) {
-		delay := time.Second
-		_, port := svNewJavaServer(t, svJavaAnswers{modern: true, delay: delay})
-		queryPort := svNewQueryServer(t, delay)
-
-		start := time.Now()
-		status, err := NewService().GetJavaServerStatus("127.0.0.1", port, true, queryPort)
-		elapsed := time.Since(start)
-
-		if err != nil {
-			t.Fatalf("expected nil error, got %v", err)
-		}
-		if status.Version != "query-version" {
-			t.Fatalf("Version = %q, want the query status", status.Version)
-		}
-		if elapsed >= 2*delay {
-			t.Fatalf("took %v, want less than the %v a sequential ping then query would need", elapsed, 2*delay)
 		}
 	})
 }
