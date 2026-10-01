@@ -197,14 +197,10 @@ func (s *sessionService) ReadJWT(tokenStr string) (*Session, error) {
 		return nil, err
 	}
 
-	// Validate audience: an empty/missing aud claim must fail closed rather
-	// than vacuously pass the loop below with no entries to check.
 	if len(claims.Audience) == 0 {
 		return nil, ErrMissingAudience
 	}
 	for _, aud := range claims.Audience {
-		// An empty entry must never validate, even if validAudiences itself
-		// were ever misconfigured to contain one (e.g. an unset URL env var).
 		if aud == "" {
 			return nil, ErrEmptyAudienceEntry
 		}
