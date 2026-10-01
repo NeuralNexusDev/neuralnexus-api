@@ -386,10 +386,11 @@ func TestService_GetJavaServerStatusProbeOrder(t *testing.T) {
 }
 
 func TestMergeQueryStatus(t *testing.T) {
-	t.Run("SV-16_QueryStatusKeepsPingIconAndLegacy", func(t *testing.T) {
+	t.Run("SV-16_QueryStatusKeepsPingIconFaviconAndLegacy", func(t *testing.T) {
 		icon := image.NewRGBA(image.Rect(0, 0, 1, 1))
-		ping := &MCServerStatus{Icon: icon, Legacy: true}
-		query := &MCServerStatus{}
+		ping := NewServerStatus("", 0, "", "", "", 0, 0, nil, "", "ping-favicon", ServerTypeJava, nil, icon)
+		ping.Legacy = true
+		query := NewServerStatus("", 0, "", "", "", 0, 0, nil, "", "", ServerTypeJava, nil, nil)
 
 		got := mergeQueryStatus(ping, query)
 
@@ -398,6 +399,20 @@ func TestMergeQueryStatus(t *testing.T) {
 		}
 		if got.Icon != icon || !got.Legacy {
 			t.Fatalf("status = icon %v, legacy %v; want the ping's icon and legacy flag", got.Icon, got.Legacy)
+		}
+		if got.Favicon != "ping-favicon" {
+			t.Fatalf("Favicon = %q, want the ping's favicon", got.Favicon)
+		}
+	})
+
+	t.Run("SV-17_EmptyPingFaviconKeepsQueryFavicon", func(t *testing.T) {
+		ping := NewServerStatus("", 0, "", "", "", 0, 0, nil, "", "", ServerTypeJava, nil, nil)
+		query := NewServerStatus("", 0, "", "", "", 0, 0, nil, "", "query-favicon", ServerTypeJava, nil, nil)
+
+		got := mergeQueryStatus(ping, query)
+
+		if got.Favicon != "query-favicon" {
+			t.Fatalf("Favicon = %q, want the query's own favicon kept", got.Favicon)
 		}
 	})
 }

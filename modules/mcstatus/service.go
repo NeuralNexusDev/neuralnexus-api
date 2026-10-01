@@ -48,6 +48,9 @@ func pingJavaStatus(pinger *minequery.Pinger, host string, port int) *MCServerSt
 func mergeQueryStatus(ping, query *MCServerStatus) *MCServerStatus {
 	query.Icon = ping.Icon
 	query.Legacy = ping.Legacy
+	if ping.Favicon != "" {
+		query.Favicon = ping.Favicon
+	}
 	return query
 }
 
