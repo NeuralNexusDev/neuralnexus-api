@@ -35,21 +35,20 @@ const (
 var iconDir = filepath.Join("public", "mcstatus", "icons")
 
 type failureMapping struct {
-	err     error
-	respond func(http.ResponseWriter, *http.Request, string)
-	msg     string
+	err error
+	msg string
 }
 
 var statusFailures = []failureMapping{
-	{ErrJavaStatus, responses.BadGateway, msgJavaStatusFailed},
-	{ErrBedrockStatus, responses.BadGateway, msgBedrockStatusFailed},
+	{ErrJavaStatus, msgJavaStatusFailed},
+	{ErrBedrockStatus, msgBedrockStatusFailed},
 }
 
 func respondStatusFailure(w http.ResponseWriter, r *http.Request, err error) {
 	log.Println("[Error]: Unable to get server status:\n\t", err)
 	for _, m := range statusFailures {
 		if errors.Is(err, m.err) {
-			m.respond(w, r, m.msg)
+			responses.InternalServerError(w, r, m.msg)
 			return
 		}
 	}
@@ -127,8 +126,7 @@ func IconHandler(s MCStatusService) http.HandlerFunc {
 
 		status, err := s.GetJavaServerStatus(host, port, false, 0)
 		if err != nil {
-			log.Println("[Error]: Unable to get server icon:\n\t", err)
-			responses.InternalServerError(w, r, msgFailedToGetServerStatus)
+			respondStatusFailure(w, r, err)
 			return
 		}
 		if status.Icon == nil {

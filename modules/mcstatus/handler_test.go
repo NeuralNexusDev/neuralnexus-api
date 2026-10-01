@@ -165,15 +165,15 @@ func TestServerStatusHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-03_ErrorReturnsBadGateway", func(t *testing.T) {
+	t.Run("HD-03_ErrorReturnsInternalServerError", func(t *testing.T) {
 		mock := &hdMockService{serverErr: ErrJavaStatus}
 		req := hdRequest(t, "mc.example.com:25565", "")
 		w := httptest.NewRecorder()
 
 		ServerStatusHandler(mock)(w, req)
 
-		if w.Code != http.StatusBadGateway {
-			t.Fatalf("expected 502, got %d", w.Code)
+		if w.Code != http.StatusInternalServerError {
+			t.Fatalf("expected 500, got %d", w.Code)
 		}
 		p := hdDecodeProblem(t, w.Body.Bytes())
 		if p.Detail != msgJavaStatusFailed {
@@ -273,9 +273,9 @@ func TestServerStatusHandler(t *testing.T) {
 		wantStatus int
 		want       string
 	}{
-		{"JavaStatus", ErrJavaStatus, http.StatusBadGateway, msgJavaStatusFailed},
-		{"BedrockStatus", ErrBedrockStatus, http.StatusBadGateway, msgBedrockStatusFailed},
-		{"BedrockStatusWithCause", fmt.Errorf("%w: %w", ErrBedrockStatus, testerrors.ErrTransportFailed), http.StatusBadGateway, msgBedrockStatusFailed},
+		{"JavaStatus", ErrJavaStatus, http.StatusInternalServerError, msgJavaStatusFailed},
+		{"BedrockStatus", ErrBedrockStatus, http.StatusInternalServerError, msgBedrockStatusFailed},
+		{"BedrockStatusWithCause", fmt.Errorf("%w: %w", ErrBedrockStatus, testerrors.ErrTransportFailed), http.StatusInternalServerError, msgBedrockStatusFailed},
 		{"Unrecognized", testerrors.ErrBoom, http.StatusInternalServerError, msgFailedToGetServerStatus},
 	} {
 		t.Run("HD-16_"+tc.name, func(t *testing.T) {
@@ -431,8 +431,8 @@ func TestIconHandler(t *testing.T) {
 			t.Fatalf("expected 500, got %d", w.Code)
 		}
 		p := hdDecodeProblem(t, w.Body.Bytes())
-		if p.Detail != msgFailedToGetServerStatus {
-			t.Fatalf("expected detail %q, got %q", msgFailedToGetServerStatus, p.Detail)
+		if p.Detail != msgJavaStatusFailed {
+			t.Fatalf("expected detail %q, got %q", msgJavaStatusFailed, p.Detail)
 		}
 		if len(mock.javaCalls) != 1 {
 			t.Fatalf("expected exactly 1 call, got %d", len(mock.javaCalls))

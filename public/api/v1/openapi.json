@@ -1389,9 +1389,6 @@
                     },
                     "500": {
                         "$ref": "#/components/responses/500InternalServerError"
-                    },
-                    "502": {
-                        "$ref": "#/components/responses/502BadGateway"
                     }
                 }
             }
