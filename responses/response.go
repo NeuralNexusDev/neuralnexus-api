@@ -133,16 +133,7 @@ func Forbidden(w http.ResponseWriter, r *http.Request, message string) {
 
 // NotFound -- Send a NotFoundResponse as JSON or XML
 func NotFound(w http.ResponseWriter, r *http.Request, message string) {
-	if message == "" {
-		message = "The requested resource could not be found."
-	}
-	NewProblem(
-		"about:blank",
-		http.StatusNotFound,
-		"Not Found",
-		message,
-		"https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404",
-	).SendProblem(w, r)
+	NewNotFoundProblem(message).SendProblem(w, r)
 }
 
 // Conflict -- Send a ConflictResponse as JSON or XML

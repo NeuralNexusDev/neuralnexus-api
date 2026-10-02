@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -64,7 +65,7 @@ func (m *hdMockService) GetServerStatus(host string, port int, isBedrock bool, q
 
 func hdRequest(t *testing.T, host string, rawQuery string) *http.Request {
 	t.Helper()
-	target := "/mcstatus/" + host
+	target := "/mcstatus/" + url.PathEscape(host)
 	if rawQuery != "" {
 		target += "?" + rawQuery
 	}
@@ -362,34 +363,6 @@ func TestServerStatusHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-27_NonNumericSuffixKeptJava", func(t *testing.T) {
-		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
-		req := hdRequest(t, "mc.example.com:abc", "")
-
-		ServerStatusHandler(mock)(httptest.NewRecorder(), req)
-
-		if len(mock.serverCalls) != 1 {
-			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
-		}
-		if call := mock.serverCalls[0]; call.host != "mc.example.com:abc" || call.port != 25565 || call.isBedrock {
-			t.Fatalf("call = %+v, want host mc.example.com:abc, port 25565, bedrock false", call)
-		}
-	})
-
-	t.Run("HD-28_NonNumericSuffixKeptBedrock", func(t *testing.T) {
-		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
-		req := hdRequest(t, "mc.example.com:abc", "bedrock=true")
-
-		ServerStatusHandler(mock)(httptest.NewRecorder(), req)
-
-		if len(mock.serverCalls) != 1 {
-			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
-		}
-		if call := mock.serverCalls[0]; call.host != "mc.example.com:abc" || call.port != 19132 || !call.isBedrock {
-			t.Fatalf("call = %+v, want host mc.example.com:abc, port 19132, bedrock true", call)
-		}
-	})
-
 	t.Run("HD-35_Ipv6BracketedWithPort", func(t *testing.T) {
 		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 		req := hdRequest(t, "[2001:db8::1]:25570", "")
@@ -429,20 +402,6 @@ func TestServerStatusHandler(t *testing.T) {
 		}
 		if call := mock.serverCalls[0]; call.host != "2001:db8::1" || call.port != 25565 || call.isBedrock {
 			t.Fatalf("call = %+v, want host 2001:db8::1, port 25565, bedrock false", call)
-		}
-	})
-
-	t.Run("HD-38_Ipv6BracketedBadPortKeptWhole", func(t *testing.T) {
-		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
-		req := hdRequest(t, "[2001:db8::1]:abc", "")
-
-		ServerStatusHandler(mock)(httptest.NewRecorder(), req)
-
-		if len(mock.serverCalls) != 1 {
-			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
-		}
-		if call := mock.serverCalls[0]; call.host != "[2001:db8::1]:abc" || call.port != 25565 || call.isBedrock {
-			t.Fatalf("call = %+v, want host [2001:db8::1]:abc, port 25565, bedrock false", call)
 		}
 	})
 
@@ -488,17 +447,152 @@ func TestServerStatusHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-44_DoubleBracketedKeepsInnerBrackets", func(t *testing.T) {
-		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
-		req := hdRequest(t, "[[2001:db8::1]]", "")
+	for _, tc := range []struct {
+		name     string
+		input    string
+		query    string
+		wantHost string
+		wantPort int
+	}{
+		{"Domain", "example.com", "", "example.com", 25565},
+		{"DomainWithPort", "example.com:25570", "", "example.com", 25570},
+		{"DomainBedrockDefault", "example.com", "bedrock=true", "example.com", 19132},
+		{"DomainUppercaseLowered", "Example.COM:25570", "", "example.com", 25570},
+		{"DomainUnderscore", "a_b.example.com", "", "a_b.example.com", 25565},
+		{"DomainHyphen", "my-server.example.com", "", "my-server.example.com", 25565},
+		{"DomainNumericLabel", "123.example.com", "", "123.example.com", 25565},
+		{"DomainLabelAtLimit", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.example.com", "", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.example.com", 25565},
+		{"DomainAtLengthLimit", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc.ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc.ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", 25565},
+		{"Ipv4", "192.168.1.1", "", "192.168.1.1", 25565},
+		{"Ipv4WithPort", "192.168.1.1:25570", "", "192.168.1.1", 25570},
+		{"Ipv4BedrockDefault", "192.168.1.1", "bedrock=true", "192.168.1.1", 19132},
+		{"Ipv6BareCanonicalised", "2001:DB8:0:0:0:0:0:1", "", "2001:db8::1", 25565},
+		{"Ipv6BareBedrockDefault", "2001:db8::1", "bedrock=true", "2001:db8::1", 19132},
+		{"Ipv6BracketedWithPort", "[2001:db8::1]:25570", "", "2001:db8::1", 25570},
+		{"Ipv6BracketedNoPort", "[2001:db8::1]", "", "2001:db8::1", 25565},
+		{"Ipv6BracketedBedrockWithPort", "[2001:db8::1]:19133", "bedrock=true", "2001:db8::1", 19133},
+		{"Ipv6BracketedBedrockNoPort", "[2001:db8::1]", "bedrock=true", "2001:db8::1", 19132},
+		{"Ipv6Loopback", "::1", "", "::1", 25565},
+		{"Ipv6MappedIpv4", "::ffff:1.2.3.4", "", "::ffff:1.2.3.4", 25565},
+		{"Ipv6Ipv4Tail", "::1.2.3.4", "", "::102:304", 25565},
+	} {
+		t.Run("HD-45_AcceptedHost_"+tc.name, func(t *testing.T) {
+			mock := &hdMockService{serverStatus: hdValidStatus(nil)}
+			req := hdRequest(t, tc.input, tc.query)
 
-		ServerStatusHandler(mock)(httptest.NewRecorder(), req)
+			ServerStatusHandler(mock)(httptest.NewRecorder(), req)
 
-		if len(mock.serverCalls) != 1 {
-			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
+			if len(mock.serverCalls) != 1 {
+				t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
+			}
+			if call := mock.serverCalls[0]; call.host != tc.wantHost || call.port != tc.wantPort {
+				t.Fatalf("call = %+v, want host %s, port %d", call, tc.wantHost, tc.wantPort)
+			}
+		})
+	}
+
+	for _, tc := range []struct {
+		name  string
+		input string
+	}{
+		{"Localhost", "localhost"},
+		{"Empty", ""},
+		{"PortNotNumeric", "example.com:abc"},
+		{"PortEmpty", "example.com:"},
+		{"PortZero", "example.com:0"},
+		{"PortTooLarge", "example.com:65536"},
+		{"PortTooLong", "example.com:123456"},
+		{"PortOnly", ":25565"},
+		{"LabelLeadingHyphen", "-bad.example.com"},
+		{"LabelTrailingHyphen", "bad-.example.com"},
+		{"EmptyLabel", "a..example.com"},
+		{"TrailingDot", "example.com."},
+		{"LeadingDot", ".example.com"},
+		{"LabelTooLong", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.example.com"},
+		{"NameTooLong", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc.ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddde"},
+		{"InvalidCharacter", "exa$mple.com"},
+		{"NonAscii", "bücher.example.com"},
+		{"Ipv4OctetTooLarge", "256.1.1.1"},
+		{"Ipv4LeadingZero", "01.2.3.4"},
+		{"Ipv4ThreeOctets", "1.2.3"},
+		{"Ipv4FiveOctets", "1.2.3.4.5"},
+		{"Ipv4Bracketed", "[1.2.3.4]"},
+		{"NameBracketed", "[example.com]"},
+		{"Ipv6Unclosed", "[::1"},
+		{"Ipv6EmptyBrackets", "[]"},
+		{"Ipv6TextAfterBracket", "[::1]x"},
+		{"Ipv6BracketedBadPort", "[::1]:abc"},
+		{"Ipv6BracketedPortZero", "[::1]:0"},
+		{"Ipv6DoubleBracketed", "[[::1]]"},
+		{"Ipv6BareZone", "fe80::1%eth0"},
+		{"Ipv6BracketedZone", "[fe80::1%eth0]"},
+		{"Ipv6MappedLeadingZero", "::ffff:01.2.3.4"},
+		{"Ipv6BareWithPortDigits", "2001:db8::1:25565"},
+		{"Ipv6NotHex", "g::1"},
+		{"Ipv6TooManyGroups", "1:2:3:4:5:6:7:8:9"},
+		{"MultipleColonsNotIpv6", "a:b:c"},
+	} {
+		t.Run("HD-46_RejectedHost_"+tc.name, func(t *testing.T) {
+			mock := &hdMockService{serverStatus: hdValidStatus(nil)}
+			req := hdRequest(t, tc.input, "")
+			w := httptest.NewRecorder()
+
+			ServerStatusHandler(mock)(w, req)
+
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400, got %d", w.Code)
+			}
+			if p := hdDecodeProblem(t, w.Body.Bytes()); p.Detail != msgInvalidHost {
+				t.Fatalf("expected detail %q, got %q", msgInvalidHost, p.Detail)
+			}
+			if len(mock.serverCalls) != 0 {
+				t.Fatalf("expected no lookup, got %d", len(mock.serverCalls))
+			}
+		})
+	}
+
+	t.Run("HD-47_OfflineProblemCarriesCanonicalHostAndPort", func(t *testing.T) {
+		mock := &hdMockService{serverErr: ErrJavaStatus}
+		req := hdRequest(t, "Example.COM:25570", "")
+		w := httptest.NewRecorder()
+
+		ServerStatusHandler(mock)(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("expected 404, got %d", w.Code)
 		}
-		if call := mock.serverCalls[0]; call.host != "[2001:db8::1]" || call.port != 25565 || call.isBedrock {
-			t.Fatalf("call = %+v, want host [2001:db8::1], port 25565, bedrock false", call)
+		if ct := w.Header().Get("Content-Type"); ct != "application/problem+json" {
+			t.Fatalf("expected Content-Type application/problem+json, got %q", ct)
+		}
+		var body struct {
+			Detail string `json:"detail"`
+			Host   string `json:"host"`
+			Port   int    `json:"port"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatalf("body is not JSON: %v", err)
+		}
+		if body.Detail != msgJavaStatusFailed || body.Host != "example.com" || body.Port != 25570 {
+			t.Fatalf("body = %+v, want detail %q, host example.com, port 25570", body, msgJavaStatusFailed)
+		}
+	})
+
+	t.Run("HD-48_UnrecognizedErrorProblemHasNoHostOrPort", func(t *testing.T) {
+		mock := &hdMockService{serverErr: testerrors.ErrBoom}
+		req := hdRequest(t, "example.com:25570", "")
+		w := httptest.NewRecorder()
+
+		ServerStatusHandler(mock)(w, req)
+
+		var body map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatalf("body is not JSON: %v", err)
+		}
+		if _, ok := body["host"]; ok {
+			t.Fatalf("body = %v, want no host member on an internal error", body)
+		}
+		if _, ok := body["port"]; ok {
+			t.Fatalf("body = %v, want no port member on an internal error", body)
 		}
 	})
 }
@@ -706,6 +800,36 @@ func TestIconHandler(t *testing.T) {
 			t.Fatalf("call = %+v, want host 2001:db8::1, port 25570", call)
 		}
 	})
+
+	t.Run("HD-50_MalformedHostIsRefused", func(t *testing.T) {
+		mock := &hdMockService{}
+		req := hdRequest(t, "localhost", "")
+		w := httptest.NewRecorder()
+
+		IconHandler(mock)(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d", w.Code)
+		}
+		if p := hdDecodeProblem(t, w.Body.Bytes()); p.Detail != msgInvalidHost {
+			t.Fatalf("expected detail %q, got %q", msgInvalidHost, p.Detail)
+		}
+		if len(mock.javaCalls) != 0 {
+			t.Fatalf("expected no lookup, got %d", len(mock.javaCalls))
+		}
+	})
+
+	t.Run("HD-51_MalformedHostIsRefusedForBedrock", func(t *testing.T) {
+		mock := &hdMockService{}
+		req := hdRequest(t, "localhost", "bedrock=true")
+		w := httptest.NewRecorder()
+
+		IconHandler(mock)(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d", w.Code)
+		}
+	})
 }
 
 func TestSimpleStatusHandler(t *testing.T) {
@@ -874,34 +998,6 @@ func TestSimpleStatusHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-29_NonNumericSuffixKeptJava", func(t *testing.T) {
-		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
-		req := hdRequest(t, "mc.example.com:abc", "")
-
-		SimpleStatusHandler(mock)(httptest.NewRecorder(), req)
-
-		if len(mock.serverCalls) != 1 {
-			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
-		}
-		if call := mock.serverCalls[0]; call.host != "mc.example.com:abc" || call.port != 25565 || call.isBedrock {
-			t.Fatalf("call = %+v, want host mc.example.com:abc, port 25565, bedrock false", call)
-		}
-	})
-
-	t.Run("HD-30_NonNumericSuffixKeptBedrock", func(t *testing.T) {
-		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
-		req := hdRequest(t, "mc.example.com:abc", "bedrock=true")
-
-		SimpleStatusHandler(mock)(httptest.NewRecorder(), req)
-
-		if len(mock.serverCalls) != 1 {
-			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
-		}
-		if call := mock.serverCalls[0]; call.host != "mc.example.com:abc" || call.port != 19132 || !call.isBedrock {
-			t.Fatalf("call = %+v, want host mc.example.com:abc, port 19132, bedrock true", call)
-		}
-	})
-
 	t.Run("HD-39_Ipv6BracketedWithPort", func(t *testing.T) {
 		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 		req := hdRequest(t, "[2001:db8::1]:25570", "")
@@ -913,6 +1009,24 @@ func TestSimpleStatusHandler(t *testing.T) {
 		}
 		if call := mock.serverCalls[0]; call.host != "2001:db8::1" || call.port != 25570 || call.isBedrock {
 			t.Fatalf("call = %+v, want host 2001:db8::1, port 25570, bedrock false", call)
+		}
+	})
+
+	t.Run("HD-49_MalformedHostIsRefused", func(t *testing.T) {
+		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
+		req := hdRequest(t, "localhost", "")
+		w := httptest.NewRecorder()
+
+		SimpleStatusHandler(mock)(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d", w.Code)
+		}
+		if p := hdDecodeProblem(t, w.Body.Bytes()); p.Detail != msgInvalidHost {
+			t.Fatalf("expected detail %q, got %q", msgInvalidHost, p.Detail)
+		}
+		if len(mock.serverCalls) != 0 {
+			t.Fatalf("expected no lookup, got %d", len(mock.serverCalls))
 		}
 	})
 }
