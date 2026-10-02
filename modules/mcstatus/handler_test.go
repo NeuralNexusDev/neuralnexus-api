@@ -527,6 +527,7 @@ func TestServerStatusHandler(t *testing.T) {
 		{"Ipv6HextetTooLarge", "[12345::1]"},
 		{"NumericLastLabelAfterName", "example.123"},
 		{"PortWithLeadingZerosTooLong", "a.com:0000080"},
+		{"PortWithSixDigits", "a.com:000080"},
 		{"Ipv6BracketedBadPort", "[::1]:abc"},
 		{"Ipv6BracketedPortZero", "[::1]:0"},
 		{"Ipv6DoubleBracketed", "[[::1]]"},
@@ -580,6 +581,13 @@ func TestServerStatusHandler(t *testing.T) {
 		}
 		if body.Detail != msgJavaStatusFailed || body.Host != "example.com" || body.Port != 25570 {
 			t.Fatalf("body = %+v, want detail %q, host example.com, port 25570", body, msgJavaStatusFailed)
+		}
+		var members map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &members); err != nil {
+			t.Fatalf("body is not JSON: %v", err)
+		}
+		if _, ok := members["XMLName"]; ok {
+			t.Fatalf("body = %v, want no XMLName member", members)
 		}
 	})
 
