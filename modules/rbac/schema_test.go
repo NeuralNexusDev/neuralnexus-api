@@ -171,3 +171,46 @@ func TestEM01EmptyTables(t *testing.T) {
 		}
 	})
 }
+
+func TestMG04MigrationGuard(t *testing.T) {
+	ctx := context.Background()
+	schema, _ := os.ReadFile("../../docker/rbac.sql")
+	migration, _ := os.ReadFile("../../docker/rbac_migration.sql")
+
+	for _, c := range []struct{ id, setup string }{
+		{"MG-04_UnseededRolesStopTheMigration", "DELETE FROM role_permissions; DELETE FROM roles"},
+		{"MG-05_AMissingBuiltinStopsTheMigration", "DELETE FROM roles WHERE name = 'system'"},
+	} {
+		t.Run(c.id, func(t *testing.T) {
+			conn := rbScratch(t)
+			for _, q := range []string{
+				string(schema),
+				c.setup,
+				`CREATE TABLE accounts (user_id BIGINT PRIMARY KEY, roles TEXT[] NOT NULL DEFAULT '{}')`,
+				`CREATE TABLE sessions (session_id BIGINT PRIMARY KEY)`,
+				`INSERT INTO accounts (user_id, roles) VALUES (1, '{system}'), (2, '{bee_admin}')`,
+				`INSERT INTO sessions (session_id) VALUES (10)`,
+			} {
+				if _, err := conn.Exec(ctx, q); err != nil {
+					t.Fatalf("failed to set up the pre-migration state: %v", err)
+				}
+			}
+
+			if _, err := conn.Exec(ctx, string(migration)); err == nil {
+				t.Fatal("the migration succeeded with a built-in role missing")
+			}
+			if _, err := conn.Exec(ctx, "ROLLBACK"); err != nil {
+				t.Fatalf("failed to end the aborted transaction: %v", err)
+			}
+
+			var roles int
+			if err := conn.QueryRow(ctx, `SELECT count(*) FROM accounts WHERE roles <> '{}'`).Scan(&roles); err != nil || roles != 2 {
+				t.Errorf("accounts keeping their role names = %d, err %v, want 2 (nothing converted)", roles, err)
+			}
+			var sessions int
+			if err := conn.QueryRow(ctx, `SELECT count(*) FROM sessions`).Scan(&sessions); err != nil || sessions != 1 {
+				t.Errorf("sessions left = %d, err %v, want 1", sessions, err)
+			}
+		})
+	}
+}

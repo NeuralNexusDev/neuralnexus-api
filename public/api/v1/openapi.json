@@ -2815,7 +2815,7 @@
         "/roles": {
             "get": {
                 "summary": "List roles",
-                "description": "Requires the admin:roles scope. Every role with its permissions.",
+                "description": "Requires the roles:* permission. Every role with its permissions.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -2851,7 +2851,7 @@
             },
             "post": {
                 "summary": "Create a role",
-                "description": "Requires the admin:roles scope. The ID is generated. Names start with a lower-case letter and use lower-case letters, digits and underscores, up to 63 characters; descriptions are valid text of at most 256 characters.",
+                "description": "Requires the roles:* permission. The ID is generated. Names start with a lower-case letter and use lower-case letters, digits and underscores, up to 63 characters; descriptions are valid text of at most 256 characters.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -2907,7 +2907,7 @@
         "/roles/{id}": {
             "get": {
                 "summary": "Get a role by ID",
-                "description": "Requires the admin:roles scope.",
+                "description": "Requires the roles:* permission.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -2951,7 +2951,7 @@
             },
             "patch": {
                 "summary": "Update a role",
-                "description": "Requires the admin:roles scope. Omitted fields keep their value. Renaming changes what the name lookup returns; accounts hold role IDs and are unaffected. Refused with 409 when renaming a built-in role (system, owner, bee_admin).",
+                "description": "Requires the roles:* permission. Omitted fields keep their value. Renaming changes what the name lookup returns; accounts hold role IDs and are unaffected. Refused with 409 when renaming a built-in role (system, owner, bee_admin).",
                 "security": [
                     {
                         "bearerAuth": []
@@ -3013,7 +3013,7 @@
             },
             "delete": {
                 "summary": "Delete a role",
-                "description": "Requires the admin:roles scope. Refused with 409 while an account holds the role. Its permission grants are removed with it; the permissions remain. Built-in roles (system, owner, bee_admin) cannot be deleted.",
+                "description": "Requires the roles:* permission. Refused with 409 while an account holds the role. Its permission grants are removed with it; the permissions remain. Built-in roles (system, owner, bee_admin) cannot be deleted.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -3055,7 +3055,7 @@
         "/roles/name/{name}": {
             "get": {
                 "summary": "Get a role by name",
-                "description": "Requires the admin:roles scope.",
+                "description": "Requires the roles:* permission.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -3098,7 +3098,7 @@
         "/roles/{id}/permissions/{permission_id}": {
             "put": {
                 "summary": "Grant a permission to a role",
-                "description": "Requires the admin:roles scope. Granting an already granted permission succeeds.",
+                "description": "Requires the roles:* permission. Granting an already granted permission succeeds.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -3138,7 +3138,7 @@
             },
             "delete": {
                 "summary": "Remove a permission from a role",
-                "description": "Requires the admin:roles scope. Removing a permission the role does not hold succeeds. Refused with 409 for the roles:* permission on the system and owner roles.",
+                "description": "Requires the roles:* permission. Removing a permission the role does not hold succeeds. Refused with 409 for the roles:* permission on the system and owner roles.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -3183,7 +3183,7 @@
         "/permissions": {
             "get": {
                 "summary": "List permissions",
-                "description": "Requires the admin:roles scope.",
+                "description": "Requires the roles:* permission.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -3219,7 +3219,7 @@
             },
             "post": {
                 "summary": "Create a permission",
-                "description": "Requires the admin:roles scope. The ID is generated. Scope names and values are required valid text without control characters or surrounding spaces, names must not contain a colon, and they are at most 64 and 128 characters.",
+                "description": "Requires the roles:* permission. The ID is generated. Scope names and values are required valid text without control characters or surrounding spaces, names must not contain a colon, and they are at most 64 and 128 characters.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -3275,7 +3275,7 @@
         "/permissions/{id}": {
             "get": {
                 "summary": "Get a permission by ID",
-                "description": "Requires the admin:roles scope.",
+                "description": "Requires the roles:* permission.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -3319,7 +3319,7 @@
             },
             "delete": {
                 "summary": "Delete a permission",
-                "description": "Requires the admin:roles scope. Refused with 409 while a role grants the permission.",
+                "description": "Requires the roles:* permission. Refused with 409 while a role grants the permission.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -3361,7 +3361,7 @@
         "/permissions/scope/{scope_name}/{scope_value}": {
             "get": {
                 "summary": "Get a permission by scope",
-                "description": "Requires the admin:roles scope.",
+                "description": "Requires the roles:* permission.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -4058,7 +4058,7 @@
                 "properties": {
                     "id": {
                         "type": "string",
-                        "description": "Snowflake ID"
+                        "description": "ID"
                     },
                     "scope_name": {
                         "type": "string"
@@ -4080,7 +4080,7 @@
                 "properties": {
                     "id": {
                         "type": "string",
-                        "description": "Snowflake ID"
+                        "description": "ID"
                     },
                     "name": {
                         "type": "string"

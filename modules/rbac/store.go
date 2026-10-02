@@ -255,8 +255,6 @@ func (s *store) GetPermissionsForRoles(roleIDs []string) ([]string, error) {
 	return permissions, rows.Err()
 }
 
-// The constraint names matched here are those in docker/rbac.sql: roles_name_key,
-// permissions_scope_unique, role_permissions_role_id_fkey and role_permissions_permission_id_fkey.
 func translateConstraintErr(err error) error {
 	var pgErr *pgconn.PgError
 	if !errors.As(err, &pgErr) {

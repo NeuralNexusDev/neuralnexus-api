@@ -52,7 +52,7 @@
 | SV-09 | Service | Error Path | the store fails | fake store returns an error | Every method returns that error | P1 |  |
 | SV-10 | UpdateRole | Edge Case | one field is omitted | stored role with a name and description | The omitted field keeps its value; an empty description clears it | P1 |  |
 | SV-12 | CreatePermission | Edge Case | a scope value contains a colon | fake store | Created with the value unchanged at the store | P2 |  |
-| SV-13 | CreatePermission / CreateRole | Error Path | NUL, invalid UTF-8, control characters, surrounding spaces, and limits counted in characters | scopes and descriptions of multi-byte characters | The bad inputs give `ErrInvalidScope` or `ErrInvalidDescription` before the store; inputs of exactly the limit in characters are created | P1 |  |
+| SV-13 | CreatePermission / CreateRole | Error Path | NUL, U+FFFD, invalid UTF-8, control and format characters in scopes, surrounding spaces, and limits counted in characters | scopes and descriptions of multi-byte characters | The bad inputs give `ErrInvalidScope` or `ErrInvalidDescription` before the store; inputs of exactly the limit in characters, and a description with a newline and a joined emoji, are created | P1 |  |
 | SV-14 | GetRoleByName / GetPermissionByScope | Edge Case | names that cannot exist | NUL in the name, upper case, a leading digit, empty, a colon in a scope name | `ErrRoleNotFound` or `ErrPermissionNotFound` and the store is never called | P1 |  |
 | SV-15 | DeleteRole | Error Path | deleting a built-in role | roles `system`, `owner` and `bee_admin`; and an ordinary role | `ErrBuiltinRole` for the built-ins without a store delete; the ordinary role is deleted | P1 |  |
 | SV-16 | UpdateRole | Error Path | renaming a built-in role | role `owner` | `ErrBuiltinRole`; repeating the name while changing the description succeeds | P1 |  |
@@ -85,6 +85,8 @@
 | MG-01 | rbac_migration.sql | Happy Path | accounts hold role names | accounts with known, unknown and no role names | `role_ids` holds the ids of the known roles only | P1 |  |
 | MG-02 | rbac_migration.sql | Edge Case | the migration finishes | accounts and sessions | the old `roles` column is gone and the sessions table is empty | P1 |  |
 | MG-03 | docker/rbac.sql | Happy Path | built-in roles are seeded by the schema file | fresh schema | `system` and `owner` grant all seven scopes and `bee_admin` grants the bee name generator scope | P1 |  |
+| MG-04 | docker/rbac_migration.sql | Error Path | the built-in roles are not seeded | roles table emptied, accounts holding `system` and `bee_admin` | The migration fails, and after the rollback no account is converted and the sessions remain | P1 |  |
+| MG-05 | docker/rbac_migration.sql | Error Path | one built-in role is missing | `system` deleted from roles | The migration fails, and after the rollback no account is converted and the sessions remain | P1 |  |
 
 ## empty tables
 

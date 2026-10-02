@@ -168,6 +168,7 @@ func TestSV05to06ScopeValidation(t *testing.T) {
 	t.Run("SV-13_TextRulesApplyToScopesAndDescriptions", func(t *testing.T) {
 		badScopes := [][2]string{
 			{"a\x00b", "v"}, {"n", "a\x00b"}, {"\xff", "v"}, {"n", "\xff"}, {"n\t", "v"}, {"n", "a\nb"},
+			{"n\ufffd", "v"}, {"n", "a\ufffdb"}, {"n", "a\u200bb"}, {"n", "a\u202eb"}, {"n\u200d", "v"},
 			{" n", "v"}, {"n ", "v"}, {"n", " v"}, {"n", "v "},
 			{strings.Repeat("é", maxScopeNameLength+1), "v"}, {"n", strings.Repeat("é", maxScopeValueLength+1)},
 		}
@@ -181,11 +182,14 @@ func TestSV05to06ScopeValidation(t *testing.T) {
 		if _, err := NewService(f).CreatePermission(strings.Repeat("é", maxScopeNameLength), strings.Repeat("é", maxScopeValueLength)); err != nil {
 			t.Fatalf("scope parts of exactly the limit in characters were refused: %v", err)
 		}
-		for _, d := range []string{"a\x00b", "\xff", strings.Repeat("é", maxDescriptionLen+1)} {
+		for _, d := range []string{"a\x00b", "\xff", "a\ufffdb", strings.Repeat("é", maxDescriptionLen+1)} {
 			f := &fakeStore{}
 			if _, err := NewService(f).CreateRole("a", d); !errors.Is(err, ErrInvalidDescription) || len(f.calls) != 0 {
 				t.Fatalf("description %q: got %v with calls %v, want ErrInvalidDescription before the store", d, err, f.calls)
 			}
+		}
+		if _, err := NewService(&fakeStore{}).CreateRole("a", "line one\nline two \U0001F468\u200d\U0001F4BB"); err != nil {
+			t.Fatalf("a description with a newline and a joined emoji was refused: %v", err)
 		}
 		if _, err := NewService(&fakeStore{}).CreateRole("a", strings.Repeat("é", maxDescriptionLen)); err != nil {
 			t.Fatalf("a description of exactly the limit in characters was refused: %v", err)

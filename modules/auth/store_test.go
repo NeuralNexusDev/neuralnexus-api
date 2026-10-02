@@ -1503,14 +1503,19 @@ func TestST85to95AccountRoleIDs(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-94_RepeatedRoleIDCountsOnce", func(t *testing.T) {
+	t.Run("ST-94_RepeatedRoleIDIsStoredOnce", func(t *testing.T) {
 		const userID = "910000000000000048"
 		stSeedBareAccount(t, as, userID)
 		a, _ := as.GetAccountByID(userID)
 		a.Roles = []string{"910000000000000301", "910000000000000301"}
 
 		if err := as.UpdateAccountInDB(a); err != nil {
-			t.Errorf("UpdateAccountInDB() err = %v, want nil", err)
+			t.Fatalf("UpdateAccountInDB() err = %v, want nil", err)
+		}
+
+		got, err := as.GetAccountByID(userID)
+		if err != nil || len(got.Roles) != 1 || got.Roles[0] != "910000000000000301" {
+			t.Errorf("GetAccountByID() = (%v, %v), want the role ID once", got, err)
 		}
 	})
 }

@@ -131,9 +131,10 @@ func (s *store) AddAccountToDB(account *Account) error {
 	if !validRoleIDs(account.Roles) {
 		return ErrInvalidRoleID
 	}
-	err := s.writeWithRoles(account.Roles,
+	roles := uniqueRoleIDs(account.Roles)
+	err := s.writeWithRoles(roles,
 		"INSERT INTO accounts (user_id, username, email, hashed_secret, salt, role_ids) VALUES ($1, NULLIF($2, ''), $3, $4, $5, COALESCE($6::text[], '{}')::bigint[])",
-		account.UserID, account.Username, account.Email, account.HashedSecret, account.Salt, account.Roles,
+		account.UserID, account.Username, account.Email, account.HashedSecret, account.Salt, roles,
 	)
 	return translateAccountConstraintErr(err)
 }
@@ -194,9 +195,10 @@ func (s *store) UpdateAccountInDB(account *Account) error {
 	if !validRoleIDs(account.Roles) {
 		return ErrInvalidRoleID
 	}
-	err := s.writeWithRoles(account.Roles,
+	roles := uniqueRoleIDs(account.Roles)
+	err := s.writeWithRoles(roles,
 		"UPDATE accounts SET username = NULLIF($2, ''), email = $3, hashed_secret = $4, salt = $5, role_ids = COALESCE($6::text[], '{}')::bigint[] WHERE user_id = $1",
-		account.UserID, account.Username, account.Email, account.HashedSecret, account.Salt, account.Roles,
+		account.UserID, account.Username, account.Email, account.HashedSecret, account.Salt, roles,
 	)
 	return translateAccountConstraintErr(err)
 }
@@ -814,8 +816,8 @@ func validRoleIDs(ids []string) bool {
 	return true
 }
 
-// writeWithRoles runs an account write once the roles it assigns are locked
-// against deletion, failing with ErrUnknownRoleID if any of them is missing.
+// writeWithRoles share-locks the roles so rbac.DeleteRole, which takes FOR UPDATE
+// and then checks accounts.role_ids, cannot remove one before the write commits.
 func (s *store) writeWithRoles(roleIDs []string, query string, args ...any) error {
 	ctx := context.Background()
 	tx, err := s.db.Begin(ctx)
@@ -825,15 +827,11 @@ func (s *store) writeWithRoles(roleIDs []string, query string, args ...any) erro
 	defer tx.Rollback(ctx)
 
 	if len(roleIDs) > 0 {
-		unique := make(map[string]struct{}, len(roleIDs))
-		for _, id := range roleIDs {
-			unique[id] = struct{}{}
-		}
 		var found int
 		if err := tx.QueryRow(ctx, "SELECT count(*) FROM (SELECT id FROM roles WHERE id = ANY($1::text[]::bigint[]) FOR SHARE) locked", roleIDs).Scan(&found); err != nil {
 			return err
 		}
-		if found != len(unique) {
+		if found != len(roleIDs) {
 			return ErrUnknownRoleID
 		}
 	}
@@ -841,4 +839,16 @@ func (s *store) writeWithRoles(roleIDs []string, query string, args ...any) erro
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+func uniqueRoleIDs(ids []string) []string {
+	seen := make(map[string]struct{}, len(ids))
+	unique := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if _, dup := seen[id]; !dup {
+			seen[id] = struct{}{}
+			unique = append(unique, id)
+		}
+	}
+	return unique
 }

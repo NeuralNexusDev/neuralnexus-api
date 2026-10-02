@@ -940,13 +940,12 @@ func TestUS67UpdateAccountSettingsHandlerNotFoundMapsTo404(t *testing.T) {
 
 func TestUS68to71UpdateUserRoleIDFailures(t *testing.T) {
 	cases := []struct {
-		id   string
-		name string
-		err  error
-		msg  string
+		id  string
+		err error
+		msg string
 	}{
-		{"US-68_UpdateUserInvalidRoleIDMapsTo400", "invalid", auth.ErrInvalidRoleID, msgInvalidRoleID},
-		{"US-69_UpdateUserUnknownRoleIDMapsTo400", "unknown", auth.ErrUnknownRoleID, msgUnknownRoleID},
+		{"US-68_UpdateUserInvalidRoleIDMapsTo400", auth.ErrInvalidRoleID, msgInvalidRoleID},
+		{"US-69_UpdateUserUnknownRoleIDMapsTo400", auth.ErrUnknownRoleID, msgUnknownRoleID},
 	}
 	for _, c := range cases {
 		t.Run(c.id, func(t *testing.T) {

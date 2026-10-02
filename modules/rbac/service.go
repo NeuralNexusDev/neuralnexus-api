@@ -19,7 +19,7 @@ const (
 )
 
 var (
-	// ErrInvalidID is returned when an ID is not a positive integer.
+	// ErrInvalidID is returned when an ID is not a canonical positive integer.
 	ErrInvalidID = errors.New("invalid id")
 	// ErrInvalidRoleName is returned when a role name breaks the naming rules.
 	ErrInvalidRoleName = errors.New("invalid role name")
@@ -82,7 +82,7 @@ func validRoleName(name string) bool {
 }
 
 func validText(s string) bool {
-	return utf8.ValidString(s) && !strings.ContainsRune(s, 0)
+	return !strings.ContainsFunc(s, func(r rune) bool { return r == 0 || r == utf8.RuneError })
 }
 
 func validDescription(description string) bool {
@@ -92,7 +92,7 @@ func validDescription(description string) bool {
 func validScopePart(s string, maxLength int) bool {
 	n := utf8.RuneCountInString(s)
 	return n > 0 && n <= maxLength && validText(s) && strings.TrimSpace(s) == s &&
-		!strings.ContainsFunc(s, unicode.IsControl)
+		!strings.ContainsFunc(s, func(r rune) bool { return unicode.IsControl(r) || unicode.Is(unicode.Cf, r) })
 }
 
 func validScope(scopeName, scopeValue string) bool {

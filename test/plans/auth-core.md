@@ -174,7 +174,7 @@
 | ST-91 | AddAccountToDB | Error Path (live) | one of the role ids has no role | Real Postgres | `ErrUnknownRoleID` and nothing is stored (`ErrNotFound` on read) | P1 |   |
 | ST-92 | UpdateAccountInDB | Error Path (live) | the role id has no role | Real Postgres | `ErrUnknownRoleID` and no role ids are stored | P1 |   |
 | ST-93 | UpdateAccountInDB | Error Path (live) | role ids with a leading zero, a plus sign or a space | Real Postgres | `ErrInvalidRoleID` for each | P2 |   |
-| ST-94 | UpdateAccountInDB | Edge Case (live) | the same existing role id is given twice | Real Postgres | nil error | P2 |   |
+| ST-94 | UpdateAccountInDB | Edge Case (live) | the same existing role id is given twice | Real Postgres | nil error and the stored account holds the id once | P2 |   |
 | ST-95 | AddAccountToDB | Concurrency Invariant (live) | a delete of the role is in flight, uncommitted, when the account is added | transaction deleting the role | The add waits for the commit and then returns `ErrUnknownRoleID`; nothing is stored | P1 |   |
 
 ## types.go
