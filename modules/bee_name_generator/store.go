@@ -9,6 +9,8 @@ import (
 )
 
 var ErrBeeNameNotFound = errors.New("no bee names found")
+var ErrBeeNameExists = errors.New("bee name already exists")
+var ErrBeeNameSuggestionExists = errors.New("bee name suggestion already exists")
 
 // BNGStore - Bee Name Generator Store
 type BNGStore interface {
@@ -48,6 +50,10 @@ func (s *store) GetBeeName() (string, error) {
 func (s *store) UploadBeeName(beeName string) (string, error) {
 	_, err := s.db.Exec(context.Background(), "INSERT INTO bee_name (name) VALUES ($1)", beeName)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return "", ErrBeeNameExists
+		}
 		return "", err
 	}
 	return beeName, nil
@@ -66,6 +72,10 @@ func (s *store) DeleteBeeName(beeName string) (string, error) {
 func (s *store) SubmitBeeName(beeName string) (string, error) {
 	_, err := s.db.Exec(context.Background(), "INSERT INTO bee_name_suggestion (name) VALUES ($1)", beeName)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return "", ErrBeeNameSuggestionExists
+		}
 		return "", err
 	}
 	return beeName, nil
@@ -103,6 +113,10 @@ func (s *store) GetBeeNameSuggestions(amount int64) ([]string, error) {
 func (s *store) AcceptBeeNameSuggestion(beeName string) (string, error) {
 	_, err := s.db.Exec(context.Background(), "INSERT INTO bee_name (name) VALUES ($1)", beeName)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return "", ErrBeeNameExists
+		}
 		return "", err
 	}
 
