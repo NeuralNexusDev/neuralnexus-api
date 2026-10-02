@@ -15,8 +15,6 @@ import (
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 )
 
-// stubService returns the configured error from every method and records the
-// last arguments the handler passed.
 type stubService struct {
 	err  error
 	args []string
@@ -97,6 +95,12 @@ var handlerCases = []handlerCase{
 	{"DetachPermission", DetachPermissionHandler, "", map[string]string{"id": "7", "permission_id": "8"}, http.StatusNoContent, []string{"7", "8"}},
 }
 
+var handlerBodies = map[string]string{
+	"ListRoles": `[{"id":"1"`, "GetRole": `"id":"7"`, "GetRoleByName": `"name":"mod"`, "CreateRole": `"name":"mod"`,
+	"UpdateRole": `"id":"7"`, "ListPermissions": `[{"id":"1"`, "GetPermission": `"id":"8"`,
+	"GetPermissionByScope": `"scope_name":"sn","scope_value":"sv"`, "CreatePermission": `"scope_name":"sn","scope_value":"sv"`,
+}
+
 func rbSession(permissions ...string) *auth.Session {
 	return &auth.Session{UserID: "u1", Permissions: permissions}
 }
@@ -153,6 +157,9 @@ func TestRH01to03Handlers(t *testing.T) {
 			if fmt.Sprint(svc.args) != fmt.Sprint(c.args) {
 				t.Fatalf("%s: service got %v, want %v", c.name, svc.args, c.args)
 			}
+			if want := handlerBodies[c.name]; !strings.Contains(w.Body.String(), want) || (want == "" && w.Body.Len() != 0) {
+				t.Fatalf("%s: body %q, want it to contain %q", c.name, w.Body.String(), want)
+			}
 		}
 	})
 	t.Run("RH-03_BodyHandlersRejectUnparseableBodies", func(t *testing.T) {
@@ -189,6 +196,7 @@ func TestRH04ServiceFailureMapping(t *testing.T) {
 		{ErrPermissionExists, http.StatusConflict, msgPermissionExists},
 		{ErrRoleInUse, http.StatusConflict, msgRoleInUse},
 		{ErrPermissionInUse, http.StatusConflict, msgPermissionInUse},
+		{ErrBuiltinRole, http.StatusConflict, msgBuiltinRole},
 		{fmt.Errorf("wrapped: %w", ErrRoleNotFound), http.StatusNotFound, msgRoleNotFound},
 		{errors.New("boom"), http.StatusInternalServerError, msgFailedToHandleRbac},
 	}

@@ -14,13 +14,17 @@ import (
 )
 
 const (
-	sessionKeyPrefix   = "session:"
+	sessionKeyPrefix   = "session:v2:"
 	rateLimitKeyPrefix = "rl:"
 )
 
 var (
-	ErrNotFound      = errors.New("not found")
+	// ErrNotFound is returned when a store lookup finds nothing.
+	ErrNotFound = errors.New("not found")
+	// ErrInvalidRoleID is returned when an account is written with a role ID that is not a canonical positive integer.
 	ErrInvalidRoleID = errors.New("invalid role id")
+	// ErrUnknownRoleID is returned when an account is written with a role ID that has no role.
+	ErrUnknownRoleID = errors.New("unknown role id")
 )
 
 // Store interface
@@ -127,14 +131,11 @@ func (s *store) AddAccountToDB(account *Account) error {
 	if !validRoleIDs(account.Roles) {
 		return ErrInvalidRoleID
 	}
-	_, err := s.db.Exec(context.Background(),
+	err := s.writeWithRoles(account.Roles,
 		"INSERT INTO accounts (user_id, username, email, hashed_secret, salt, role_ids) VALUES ($1, NULLIF($2, ''), $3, $4, $5, COALESCE($6::text[], '{}')::bigint[])",
 		account.UserID, account.Username, account.Email, account.HashedSecret, account.Salt, account.Roles,
 	)
-	if err != nil {
-		return translateAccountConstraintErr(err)
-	}
-	return nil
+	return translateAccountConstraintErr(err)
 }
 
 // GetAccountByID gets an account by ID
@@ -193,14 +194,11 @@ func (s *store) UpdateAccountInDB(account *Account) error {
 	if !validRoleIDs(account.Roles) {
 		return ErrInvalidRoleID
 	}
-	_, err := s.db.Exec(context.Background(),
+	err := s.writeWithRoles(account.Roles,
 		"UPDATE accounts SET username = NULLIF($2, ''), email = $3, hashed_secret = $4, salt = $5, role_ids = COALESCE($6::text[], '{}')::bigint[] WHERE user_id = $1",
 		account.UserID, account.Username, account.Email, account.HashedSecret, account.Salt, account.Roles,
 	)
-	if err != nil {
-		return translateAccountConstraintErr(err)
-	}
-	return nil
+	return translateAccountConstraintErr(err)
 }
 
 // DeleteAccountFromDB deletes an account from the database
@@ -809,9 +807,38 @@ func (s *store) DeleteOAuthToken(userID string, platform Platform) error {
 
 func validRoleIDs(ids []string) bool {
 	for _, id := range ids {
-		if n, err := strconv.ParseInt(id, 10, 64); err != nil || n < 1 {
+		if n, err := strconv.ParseInt(id, 10, 64); err != nil || n < 1 || strconv.FormatInt(n, 10) != id {
 			return false
 		}
 	}
 	return true
+}
+
+// writeWithRoles runs an account write once the roles it assigns are locked
+// against deletion, failing with ErrUnknownRoleID if any of them is missing.
+func (s *store) writeWithRoles(roleIDs []string, query string, args ...any) error {
+	ctx := context.Background()
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	if len(roleIDs) > 0 {
+		unique := make(map[string]struct{}, len(roleIDs))
+		for _, id := range roleIDs {
+			unique[id] = struct{}{}
+		}
+		var found int
+		if err := tx.QueryRow(ctx, "SELECT count(*) FROM (SELECT id FROM roles WHERE id = ANY($1::text[]::bigint[]) FOR SHARE) locked", roleIDs).Scan(&found); err != nil {
+			return err
+		}
+		if found != len(unique) {
+			return ErrUnknownRoleID
+		}
+	}
+	if _, err := tx.Exec(ctx, query, args...); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }

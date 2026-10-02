@@ -2469,7 +2469,7 @@
             },
             "put": {
                 "summary": "Update a user",
-                "description": "Requires the admin:users scope.",
+                "description": "Requires the admin:users scope. Roles, when given, must be the IDs of existing roles.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -2851,7 +2851,7 @@
             },
             "post": {
                 "summary": "Create a role",
-                "description": "Requires the admin:roles scope. The ID is generated. Names start with a lower-case letter and use lower-case letters, digits and underscores, up to 63 characters; descriptions are at most 256 characters.",
+                "description": "Requires the admin:roles scope. The ID is generated. Names start with a lower-case letter and use lower-case letters, digits and underscores, up to 63 characters; descriptions are valid text of at most 256 characters.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -2951,7 +2951,7 @@
             },
             "patch": {
                 "summary": "Update a role",
-                "description": "Requires the admin:roles scope. Omitted fields keep their value. Renaming changes what the name lookup returns; accounts hold role IDs and are unaffected.",
+                "description": "Requires the admin:roles scope. Omitted fields keep their value. Renaming changes what the name lookup returns; accounts hold role IDs and are unaffected. Refused with 409 when renaming a built-in role (system, owner, bee_admin).",
                 "security": [
                     {
                         "bearerAuth": []
@@ -3013,7 +3013,7 @@
             },
             "delete": {
                 "summary": "Delete a role",
-                "description": "Requires the admin:roles scope. Refused with 409 while an account holds the role. Its permission grants are removed with it; the permissions remain.",
+                "description": "Requires the admin:roles scope. Refused with 409 while an account holds the role. Its permission grants are removed with it; the permissions remain. Built-in roles (system, owner, bee_admin) cannot be deleted.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -3109,7 +3109,7 @@
                         "$ref": "#/components/parameters/RoleIdSlug"
                     },
                     {
-                        "$ref": "#/components/parameters/PermissionIdSlug"
+                        "$ref": "#/components/parameters/RolePermissionIdSlug"
                     }
                 ],
                 "responses": {
@@ -3138,7 +3138,7 @@
             },
             "delete": {
                 "summary": "Remove a permission from a role",
-                "description": "Requires the admin:roles scope. Removing a permission the role does not hold succeeds.",
+                "description": "Requires the admin:roles scope. Removing a permission the role does not hold succeeds. Refused with 409 for the roles:* permission on the system and owner roles.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -3149,7 +3149,7 @@
                         "$ref": "#/components/parameters/RoleIdSlug"
                     },
                     {
-                        "$ref": "#/components/parameters/PermissionIdSlug"
+                        "$ref": "#/components/parameters/RolePermissionIdSlug"
                     }
                 ],
                 "responses": {
@@ -3167,6 +3167,9 @@
                     },
                     "404": {
                         "$ref": "#/components/responses/404NotFound"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/409Conflict"
                     },
                     "429": {
                         "$ref": "#/components/responses/429TooManyRequests"
@@ -3216,7 +3219,7 @@
             },
             "post": {
                 "summary": "Create a permission",
-                "description": "Requires the admin:roles scope. The ID is generated. Scope names and values are required, names must not contain a colon, and they are at most 64 and 128 characters.",
+                "description": "Requires the admin:roles scope. The ID is generated. Scope names and values are required valid text without control characters or surrounding spaces, names must not contain a colon, and they are at most 64 and 128 characters.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -4402,7 +4405,7 @@
                 }
             },
             "PermissionIdSlug": {
-                "name": "permission_id",
+                "name": "id",
                 "in": "path",
                 "required": true,
                 "description": "Permission ID",
@@ -4424,6 +4427,15 @@
                 "in": "path",
                 "required": true,
                 "description": "Permission scope value",
+                "schema": {
+                    "type": "string"
+                }
+            },
+            "RolePermissionIdSlug": {
+                "name": "permission_id",
+                "in": "path",
+                "required": true,
+                "description": "Permission ID",
                 "schema": {
                     "type": "string"
                 }

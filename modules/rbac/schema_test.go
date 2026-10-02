@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func TestSC01InitSqlCarriesTheRbacSchema(t *testing.T) {
@@ -25,8 +26,6 @@ func TestSC01InitSqlCarriesTheRbacSchema(t *testing.T) {
 	})
 }
 
-// rbScratch opens a connection whose search_path is a throwaway schema, so the
-// migration can be run against the pre-migration account shape.
 func rbScratch(t *testing.T) *pgx.Conn {
 	t.Helper()
 	pgURL := os.Getenv("TEST_POSTGRES_URL")
@@ -125,6 +124,50 @@ func TestMG01Migration(t *testing.T) {
 			if got := grants(role); got != want {
 				t.Fatalf("%s: got %q, want %q", role, got, want)
 			}
+		}
+	})
+}
+
+func TestEM01EmptyTables(t *testing.T) {
+	pgURL := os.Getenv("TEST_POSTGRES_URL")
+	if pgURL == "" {
+		t.Skip("TEST_POSTGRES_URL must be set to run the empty table test")
+	}
+	ctx := context.Background()
+	admin, err := pgx.Connect(ctx, pgURL)
+	if err != nil {
+		t.Fatalf("failed to connect to postgres: %v", err)
+	}
+	t.Cleanup(func() {
+		admin.Exec(ctx, "DROP SCHEMA IF EXISTS rbempty CASCADE")
+		admin.Close(ctx)
+	})
+	schema, _ := os.ReadFile("../../docker/rbac.sql")
+	for _, q := range []string{"DROP SCHEMA IF EXISTS rbempty CASCADE", "CREATE SCHEMA rbempty", "SET search_path TO rbempty", string(schema), "DELETE FROM role_permissions", "DELETE FROM roles", "DELETE FROM permissions"} {
+		if _, err := admin.Exec(ctx, q); err != nil {
+			t.Fatalf("failed to prepare the empty schema: %v", err)
+		}
+	}
+	cfg, err := pgxpool.ParseConfig(pgURL)
+	if err != nil {
+		t.Fatalf("failed to parse the url: %v", err)
+	}
+	cfg.ConnConfig.RuntimeParams["search_path"] = "rbempty"
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		t.Fatalf("failed to create the pool: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	st := NewStore(pool)
+
+	t.Run("EM-01_EmptyListsAreNonNil", func(t *testing.T) {
+		roles, err := st.ListRoles()
+		if err != nil || roles == nil || len(roles) != 0 {
+			t.Errorf("ListRoles() = (%#v, %v), want (empty non-nil, nil)", roles, err)
+		}
+		permissions, err := st.ListPermissions()
+		if err != nil || permissions == nil || len(permissions) != 0 {
+			t.Errorf("ListPermissions() = (%#v, %v), want (empty non-nil, nil)", permissions, err)
 		}
 	})
 }

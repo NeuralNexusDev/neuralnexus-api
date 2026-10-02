@@ -10,35 +10,19 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// CREATE TABLE roles (
-// 	id BIGINT PRIMARY KEY,
-// 	name TEXT NOT NULL UNIQUE,
-// 	description TEXT NOT NULL DEFAULT '',
-// 	CONSTRAINT roles_name_not_empty CHECK (name <> '')
-// );
-//
-// CREATE TABLE permissions (
-// 	id BIGINT PRIMARY KEY,
-// 	scope_name TEXT NOT NULL,
-// 	scope_value TEXT NOT NULL,
-// 	CONSTRAINT permissions_scope_unique UNIQUE (scope_name, scope_value),
-// 	CONSTRAINT permissions_scope_name_not_empty CHECK (scope_name <> ''),
-// 	CONSTRAINT permissions_scope_name_no_colon CHECK (scope_name NOT LIKE '%:%')
-// );
-//
-// CREATE TABLE role_permissions (
-// 	role_id BIGINT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
-// 	permission_id BIGINT NOT NULL REFERENCES permissions(id),
-// 	PRIMARY KEY (role_id, permission_id)
-// );
-
 var (
-	ErrRoleNotFound       = errors.New("role not found")
+	// ErrRoleNotFound is returned when no role matches.
+	ErrRoleNotFound = errors.New("role not found")
+	// ErrPermissionNotFound is returned when no permission matches.
 	ErrPermissionNotFound = errors.New("permission not found")
-	ErrRoleNameTaken      = errors.New("role name already exists")
-	ErrPermissionExists   = errors.New("permission already exists")
-	ErrRoleInUse          = errors.New("role is assigned to an account")
-	ErrPermissionInUse    = errors.New("permission is granted by a role")
+	// ErrRoleNameTaken is returned when a role name already belongs to another role.
+	ErrRoleNameTaken = errors.New("role name already exists")
+	// ErrPermissionExists is returned when a permission with the same scope already exists.
+	ErrPermissionExists = errors.New("permission already exists")
+	// ErrRoleInUse is returned when deleting a role an account holds.
+	ErrRoleInUse = errors.New("role is assigned to an account")
+	// ErrPermissionInUse is returned when deleting a permission a role grants.
+	ErrPermissionInUse = errors.New("permission is granted by a role")
 )
 
 // Store is the database access for roles and permissions
@@ -142,21 +126,31 @@ func (s *store) UpdateRole(id int64, name, description string) error {
 }
 
 func (s *store) DeleteRole(id int64) error {
-	tag, err := s.db.Exec(context.Background(), "DELETE FROM roles WHERE id = $1 AND NOT EXISTS (SELECT 1 FROM accounts WHERE $1::text = ANY(role_ids::text[]))", id)
+	ctx := context.Background()
+	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return err
 	}
-	if tag.RowsAffected() > 0 {
-		return nil
-	}
-	var exists bool
-	if err := s.db.QueryRow(context.Background(), "SELECT EXISTS (SELECT 1 FROM roles WHERE id = $1)", id).Scan(&exists); err != nil {
+	defer tx.Rollback(ctx)
+
+	var locked int64
+	if err := tx.QueryRow(ctx, "SELECT id FROM roles WHERE id = $1 FOR UPDATE", id).Scan(&locked); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrRoleNotFound
+		}
 		return err
 	}
-	if !exists {
-		return ErrRoleNotFound
+	var held bool
+	if err := tx.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM accounts WHERE $1::bigint = ANY(role_ids))", id).Scan(&held); err != nil {
+		return err
 	}
-	return ErrRoleInUse
+	if held {
+		return ErrRoleInUse
+	}
+	if _, err := tx.Exec(ctx, "DELETE FROM roles WHERE id = $1", id); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func (s *store) CreatePermission(id int64, scopeName, scopeValue string) error {
@@ -250,7 +244,7 @@ func (s *store) GetPermissionsForRoles(roleIDs []string) ([]string, error) {
 	}
 	defer rows.Close()
 
-	var permissions []string
+	permissions := []string{}
 	for rows.Next() {
 		var name, value string
 		if err := rows.Scan(&name, &value); err != nil {
@@ -261,6 +255,8 @@ func (s *store) GetPermissionsForRoles(roleIDs []string) ([]string, error) {
 	return permissions, rows.Err()
 }
 
+// The constraint names matched here are those in docker/rbac.sql: roles_name_key,
+// permissions_scope_unique, role_permissions_role_id_fkey and role_permissions_permission_id_fkey.
 func translateConstraintErr(err error) error {
 	var pgErr *pgconn.PgError
 	if !errors.As(err, &pgErr) {
@@ -281,5 +277,5 @@ func translateConstraintErr(err error) error {
 
 func parseID(id string) (int64, bool) {
 	n, err := strconv.ParseInt(id, 10, 64)
-	return n, err == nil && n >= 1
+	return n, err == nil && n >= 1 && strconv.FormatInt(n, 10) == id
 }

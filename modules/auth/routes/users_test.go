@@ -937,3 +937,44 @@ func TestUS67UpdateAccountSettingsHandlerNotFoundMapsTo404(t *testing.T) {
 		expectDetail(t, w, msgUserNotFound)
 	})
 }
+
+func TestUS68to71UpdateUserRoleIDFailures(t *testing.T) {
+	cases := []struct {
+		id   string
+		name string
+		err  error
+		msg  string
+	}{
+		{"US-68_UpdateUserInvalidRoleIDMapsTo400", "invalid", auth.ErrInvalidRoleID, msgInvalidRoleID},
+		{"US-69_UpdateUserUnknownRoleIDMapsTo400", "unknown", auth.ErrUnknownRoleID, msgUnknownRoleID},
+	}
+	for _, c := range cases {
+		t.Run(c.id, func(t *testing.T) {
+			svc := &stubUserService{updateUserErr: c.err}
+			r := newSessionRequest(http.MethodPatch, adminUsersSession("admin1"), "u1", "", `{"roles":["x"]}`)
+			w := httptest.NewRecorder()
+			UpdateUserHandler(svc)(w, r)
+			expectStatus(t, w, http.StatusBadRequest)
+			expectDetail(t, w, c.msg)
+		})
+	}
+	platformCases := []struct {
+		id  string
+		err error
+		msg string
+	}{
+		{"US-70_UpdateUserFromPlatformInvalidRoleIDMapsTo400", auth.ErrInvalidRoleID, msgInvalidRoleID},
+		{"US-71_UpdateUserFromPlatformUnknownRoleIDMapsTo400", auth.ErrUnknownRoleID, msgUnknownRoleID},
+	}
+	for _, c := range platformCases {
+		t.Run(c.id, func(t *testing.T) {
+			svc := &stubUserService{updateFromPlatformErr: c.err}
+			r := newSessionRequest(http.MethodPut, adminUsersSession("admin1"), "", "discord", `{"id":"1"}`)
+			r.SetPathValue("platform_id", "12345")
+			w := httptest.NewRecorder()
+			UpdateUserFromPlatformHandler(svc)(w, r)
+			expectStatus(t, w, http.StatusBadRequest)
+			expectDetail(t, w, c.msg)
+		})
+	}
+}

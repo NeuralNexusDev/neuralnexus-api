@@ -275,7 +275,7 @@ func TestAC14to16IsPasswordAuthEnabled(t *testing.T) {
 	})
 }
 
-func TestAC17to20NewSession(t *testing.T) {
+func TestAC17to21NewSession(t *testing.T) {
 	newService := func(rs RoleStore) AccountService {
 		return NewAccountService(&acFakeStore{as: &acFakeAccountStore{}, ass: &acFakeAccountSettingsStore{}}, rs)
 	}
@@ -332,8 +332,21 @@ func TestAC17to20NewSession(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(s.Permissions) != 0 || len(rs.calls) != 0 {
-			t.Errorf("Permissions = %v, calls = %v, want neither", s.Permissions, rs.calls)
+		if s.Permissions == nil || len(s.Permissions) != 0 || len(rs.calls) != 0 {
+			t.Errorf("Permissions = %#v, calls = %v, want empty non-nil permissions and no role lookup", s.Permissions, rs.calls)
+		}
+	})
+
+	t.Run("AC-21_RolesWithoutPermissionsGiveEmptyNonNilPermissions", func(t *testing.T) {
+		svc := newService(rsDefaultRoleStore())
+
+		s, err := svc.NewSession(&Account{UserID: "u1", Roles: []string{"99"}}, 1)
+
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if s.Permissions == nil || len(s.Permissions) != 0 {
+			t.Errorf("Permissions = %#v, want empty and non-nil", s.Permissions)
 		}
 	})
 

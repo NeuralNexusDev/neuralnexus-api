@@ -22,7 +22,6 @@ const (
 	msgPlatformNotLinked                        = "This platform isn't linked to this user"
 	msgNoPermissionToGetUser                    = "You do not have permission to get this user"
 	msgNoPermissionToGetUsers                   = "You do not have permission to get users"
-	msgInvalidRoleID                            = "Roles must be role IDs"
 	msgNoPermissionToGetUserPermissions         = "You do not have permission to get user permissions"
 	msgUnsupportedPlatform                      = "Unsupported platform"
 	msgNoPermissionToDeleteUsers                = "You do not have permission to delete users"
@@ -48,6 +47,8 @@ const (
 	logFailedToUpdateUser                       = "Failed to update user:\n\t"
 	msgEmailAlreadyExists                       = "An account with this email already exists"
 	msgUsernameAlreadyExists                    = "An account with this username already exists"
+	msgInvalidRoleID                            = "Roles must be role IDs"
+	msgUnknownRoleID                            = "Roles must be existing roles"
 )
 
 func respondUpdateUserFailure(w http.ResponseWriter, r *http.Request, err error) {
@@ -60,6 +61,8 @@ func respondUpdateUserFailure(w http.ResponseWriter, r *http.Request, err error)
 		responses.Conflict(w, r, msgUsernameAlreadyExists)
 	case errors.Is(err, auth.ErrInvalidRoleID):
 		responses.BadRequest(w, r, msgInvalidRoleID)
+	case errors.Is(err, auth.ErrUnknownRoleID):
+		responses.BadRequest(w, r, msgUnknownRoleID)
 	default:
 		log.Println(logFailedToUpdateUser, err)
 		responses.InternalServerError(w, r, msgFailedToUpdateUser)

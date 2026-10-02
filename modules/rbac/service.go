@@ -4,7 +4,10 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
+	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 )
 
@@ -16,11 +19,19 @@ const (
 )
 
 var (
-	ErrInvalidID          = errors.New("invalid id")
-	ErrInvalidRoleName    = errors.New("invalid role name")
+	// ErrInvalidID is returned when an ID is not a positive integer.
+	ErrInvalidID = errors.New("invalid id")
+	// ErrInvalidRoleName is returned when a role name breaks the naming rules.
+	ErrInvalidRoleName = errors.New("invalid role name")
+	// ErrInvalidDescription is returned when a role description is too long or not valid text.
 	ErrInvalidDescription = errors.New("invalid description")
-	ErrInvalidScope       = errors.New("invalid scope")
+	// ErrBuiltinRole is returned when deleting or renaming a built-in role, or removing the roles permission from system or owner.
+	ErrBuiltinRole = errors.New("built-in role is protected")
+	// ErrInvalidScope is returned when a permission's scope name or value breaks the scope rules.
+	ErrInvalidScope = errors.New("invalid scope")
 )
+
+var builtinRoles = map[string]bool{"system": true, "owner": true, "bee_admin": true}
 
 // Service is the role and permission management
 type Service interface {
@@ -70,9 +81,22 @@ func validRoleName(name string) bool {
 	return true
 }
 
+func validText(s string) bool {
+	return utf8.ValidString(s) && !strings.ContainsRune(s, 0)
+}
+
+func validDescription(description string) bool {
+	return validText(description) && utf8.RuneCountInString(description) <= maxDescriptionLen
+}
+
+func validScopePart(s string, maxLength int) bool {
+	n := utf8.RuneCountInString(s)
+	return n > 0 && n <= maxLength && validText(s) && strings.TrimSpace(s) == s &&
+		!strings.ContainsFunc(s, unicode.IsControl)
+}
+
 func validScope(scopeName, scopeValue string) bool {
-	return len(scopeName) > 0 && len(scopeName) <= maxScopeNameLength &&
-		len(scopeValue) > 0 && len(scopeValue) <= maxScopeValueLength &&
+	return validScopePart(scopeName, maxScopeNameLength) && validScopePart(scopeValue, maxScopeValueLength) &&
 		!strings.Contains(scopeName, ":")
 }
 
@@ -80,7 +104,7 @@ func (s *service) CreateRole(name, description string) (*Role, error) {
 	if !validRoleName(name) {
 		return nil, ErrInvalidRoleName
 	}
-	if len(description) > maxDescriptionLen {
+	if !validDescription(description) {
 		return nil, ErrInvalidDescription
 	}
 	id, err := newID()
@@ -102,6 +126,9 @@ func (s *service) GetRole(id string) (*Role, error) {
 }
 
 func (s *service) GetRoleByName(name string) (*Role, error) {
+	if !validRoleName(name) {
+		return nil, ErrRoleNotFound
+	}
 	return s.store.GetRoleByName(name)
 }
 
@@ -118,10 +145,13 @@ func (s *service) UpdateRole(id string, name, description *string) (*Role, error
 		if !validRoleName(*name) {
 			return nil, ErrInvalidRoleName
 		}
+		if *name != role.Name && builtinRoles[role.Name] {
+			return nil, ErrBuiltinRole
+		}
 		role.Name = *name
 	}
 	if description != nil {
-		if len(*description) > maxDescriptionLen {
+		if !validDescription(*description) {
 			return nil, ErrInvalidDescription
 		}
 		role.Description = *description
@@ -134,10 +164,14 @@ func (s *service) UpdateRole(id string, name, description *string) (*Role, error
 }
 
 func (s *service) DeleteRole(id string) error {
-	n, ok := parseID(id)
-	if !ok {
-		return ErrInvalidID
+	role, err := s.GetRole(id)
+	if err != nil {
+		return err
 	}
+	if builtinRoles[role.Name] {
+		return ErrBuiltinRole
+	}
+	n, _ := parseID(id)
 	return s.store.DeleteRole(n)
 }
 
@@ -164,6 +198,9 @@ func (s *service) GetPermission(id string) (*Permission, error) {
 }
 
 func (s *service) GetPermissionByScope(scopeName, scopeValue string) (*Permission, error) {
+	if !validScope(scopeName, scopeValue) {
+		return nil, ErrPermissionNotFound
+	}
 	return s.store.GetPermissionByScope(scopeName, scopeValue)
 }
 
@@ -193,6 +230,19 @@ func (s *service) DetachPermission(roleID, permissionID string) error {
 	p, pOK := parseID(permissionID)
 	if !rOK || !pOK {
 		return ErrInvalidID
+	}
+	role, err := s.store.GetRole(r)
+	if err != nil {
+		return err
+	}
+	if role.Name == "system" || role.Name == "owner" {
+		permission, err := s.store.GetPermission(p)
+		if err != nil {
+			return err
+		}
+		if permission.ScopeName == perms.ScopeAdminRoles.Name && permission.ScopeValue == perms.ScopeAdminRoles.Value {
+			return ErrBuiltinRole
+		}
 	}
 	return s.store.DetachPermission(r, p)
 }

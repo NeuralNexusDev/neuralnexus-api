@@ -267,8 +267,8 @@ func TestTY23to24AccountNewSession(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(s.Permissions) != 0 {
-			t.Errorf("Permissions = %v, want empty", s.Permissions)
+		if s.Permissions == nil || len(s.Permissions) != 0 {
+			t.Errorf("Permissions = %#v, want empty and non-nil so it is stored as an empty array", s.Permissions)
 		}
 	})
 }

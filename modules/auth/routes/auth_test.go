@@ -61,8 +61,10 @@ func (s *stubAccountService) IsPasswordAuthEnabled(string) (bool, error) {
 	return !s.passwordAuthDisabled, s.passwordAuthErr
 }
 
+const stubSessionPermission = "stub:perm"
+
 func (s *stubAccountService) NewSession(a *auth.Account, expiresAt int64) (*auth.Session, error) {
-	return a.NewSession(expiresAt, nil)
+	return a.NewSession(expiresAt, []string{stubSessionPermission})
 }
 
 type stubLinkAccountStore struct {
@@ -98,11 +100,15 @@ type stubSessionService struct {
 	addSessionErr    error
 	deleteSessionErr error
 	deletedIDs       []string
+	added            []*auth.Session
 }
 
 var _ auth.SessionService = (*stubSessionService)(nil)
 
-func (s *stubSessionService) AddSession(*auth.Session) error           { return s.addSessionErr }
+func (s *stubSessionService) AddSession(session *auth.Session) error {
+	s.added = append(s.added, session)
+	return s.addSessionErr
+}
 func (s *stubSessionService) GetSession(string) (*auth.Session, error) { return nil, auth.ErrNotFound }
 func (s *stubSessionService) UpdateSession(*auth.Session) error        { return nil }
 func (s *stubSessionService) DeleteSession(id string) error {
@@ -205,6 +211,9 @@ func TestAU01LoginHandlerUsernameHappyPath(t *testing.T) {
 		cookie := findCookie(w, mw.SessionCookieName)
 		if cookie == nil || cookie.Value != "test-jwt" {
 			t.Errorf("expected session cookie with value %q, got %+v", "test-jwt", cookie)
+		}
+		if len(ss.added) != 1 || len(ss.added[0].Permissions) != 1 || ss.added[0].Permissions[0] != stubSessionPermission {
+			t.Errorf("stored sessions = %+v, want one session carrying the permissions the account service built", ss.added)
 		}
 	})
 }

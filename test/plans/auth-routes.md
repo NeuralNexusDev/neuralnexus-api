@@ -4,7 +4,7 @@
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| AU-01 | LoginHandler | Happy Path | Login with username+password | Account exists for username, password matches, password auth enabled | 204 No Content, session cookie set | P1 |  |
+| AU-01 | LoginHandler | Happy Path | Login with username+password | Account exists for username, password matches, password auth enabled | 204 No Content, session cookie set, and the stored session carries the permissions the account service built | P1 |  |
 | AU-02 | LoginHandler | Happy Path | Login with email+password (username field empty) | Account exists for email, password matches, password auth enabled | 204 No Content, session cookie set | P1 |  |
 | AU-03 | LoginHandler | Error Path | Malformed request body | Body is not valid JSON | 400 Bad Request `msgInvalidUsernameOrPassword` | P2 |  |
 | AU-04 | LoginHandler | Error Path | Account lookup finds no account | AccountService.GetAccountByUsername/GetAccountByEmail returns `auth.ErrNotFound` | 400 Bad Request `msgInvalidUsernameOrPassword` | P2 |  |
@@ -147,3 +147,7 @@
 | US-65 | UpdateUserFromPlatformHandler | Error Path | UserService.UpdateUserFromPlatform returns a duplicate username | Admin session, valid body, service returns `auth.ErrUsernameAlreadyExists` | 409 Conflict `msgUsernameAlreadyExists` | P2 |  |
 | US-66 | GetAccountSettingsHandler | Error Path | UserService.GetAccountSettings returns not found | Permission check passes, service returns `auth.ErrNotFound` | 404 Not Found `msgUserNotFound` | P2 |  |
 | US-67 | UpdateAccountSettingsHandler | Error Path | UserService.SetPasswordAuthEnabled returns not found | Permission check passes, valid body, service returns `auth.ErrNotFound` | 404 Not Found `msgUserNotFound` | P2 |  |
+| US-68 | UpdateUserHandler | Error Path | UserService.UpdateUser returns an invalid role id | Admin session, valid body, service returns `auth.ErrInvalidRoleID` | 400 Bad Request `msgInvalidRoleID` | P1 |  |
+| US-69 | UpdateUserHandler | Error Path | UserService.UpdateUser returns an unknown role id | Admin session, valid body, service returns `auth.ErrUnknownRoleID` | 400 Bad Request `msgUnknownRoleID` | P1 |  |
+| US-70 | UpdateUserFromPlatformHandler | Error Path | UserService.UpdateUserFromPlatform returns an invalid role id | Admin session, valid body, service returns `auth.ErrInvalidRoleID` | 400 Bad Request `msgInvalidRoleID` | P2 |  |
+| US-71 | UpdateUserFromPlatformHandler | Error Path | UserService.UpdateUserFromPlatform returns an unknown role id | Admin session, valid body, service returns `auth.ErrUnknownRoleID` | 400 Bad Request `msgUnknownRoleID` | P2 |  |

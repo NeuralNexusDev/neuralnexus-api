@@ -62,9 +62,16 @@ func (s *userService) GetUserPermissions(userID string) ([]string, error) {
 		return nil, err
 	}
 	if len(a.Roles) == 0 {
-		return nil, nil
+		return []string{}, nil
 	}
-	return s.rs.GetPermissionsForRoles(a.Roles)
+	permissions, err := s.rs.GetPermissionsForRoles(a.Roles)
+	if err != nil {
+		return nil, err
+	}
+	if permissions == nil {
+		permissions = []string{}
+	}
+	return permissions, nil
 }
 
 // UpdateUser - Update a user

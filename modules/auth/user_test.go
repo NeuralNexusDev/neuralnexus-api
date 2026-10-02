@@ -303,8 +303,19 @@ func TestUS07to10GetUserPermissions(t *testing.T) {
 		svc := NewUserService(&usFakeStore{as: as, als: &usFakeLinkAccountStore{}, ass: &usFakeAccountSettingsStore{}}, rs)
 
 		got, err := svc.GetUserPermissions("u1")
-		if err != nil || len(got) != 0 || len(rs.calls) != 0 {
-			t.Errorf("GetUserPermissions() = (%v, %v) with calls %v, want (empty, nil) and no role lookup", got, err, rs.calls)
+		if err != nil || got == nil || len(got) != 0 || len(rs.calls) != 0 {
+			t.Errorf("GetUserPermissions() = (%#v, %v) with calls %v, want (empty non-nil, nil) and no role lookup", got, err, rs.calls)
+		}
+	})
+
+	t.Run("US-42_RolesWithoutPermissionsGiveEmptyNonNil", func(t *testing.T) {
+		as := &usFakeAccountStore{getByIDAccount: &Account{UserID: "u1", Roles: []string{"99"}}}
+		svc := NewUserService(&usFakeStore{as: as, als: &usFakeLinkAccountStore{}, ass: &usFakeAccountSettingsStore{}}, rsDefaultRoleStore())
+
+		got, err := svc.GetUserPermissions("u1")
+
+		if err != nil || got == nil || len(got) != 0 {
+			t.Errorf("GetUserPermissions() = (%#v, %v), want (empty non-nil, nil)", got, err)
 		}
 	})
 }

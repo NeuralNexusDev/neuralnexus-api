@@ -9,7 +9,6 @@ import (
 
 var errSvcStore = errors.New("store failure")
 
-// fakeStore records the calls reaching it and returns the configured values.
 type fakeStore struct {
 	calls      []string
 	err        error
@@ -17,10 +16,12 @@ type fakeStore struct {
 	permission *Permission
 	createdID  int64
 	attached   [2]int64
+	created    []string
 }
 
 func (f *fakeStore) CreateRole(id int64, name, description string) error {
 	f.calls = append(f.calls, "CreateRole")
+	f.created = []string{name, description}
 	f.createdID = id
 	return f.err
 }
@@ -46,6 +47,7 @@ func (f *fakeStore) DeleteRole(id int64) error {
 }
 func (f *fakeStore) CreatePermission(id int64, scopeName, scopeValue string) error {
 	f.calls = append(f.calls, "CreatePermission")
+	f.created = []string{scopeName, scopeValue}
 	f.createdID = id
 	return f.err
 }
@@ -82,14 +84,14 @@ func (f *fakeStore) GetPermissionsForRoles(roleIDs []string) ([]string, error) {
 
 func TestSV01to04RoleValidation(t *testing.T) {
 	valid := []string{"a", "admin", "r2_d2", "a09", strings.Repeat("a", maxRoleNameLength)}
-	invalid := []string{"", "Admin", "1abc", "_a", "a-b", "a b", "a:b", strings.Repeat("a", maxRoleNameLength+1)}
+	invalid := []string{"", "Admin", "1abc", "_a", "a-b", "a b", "a:b", "aB", "a\x00", strings.Repeat("a", maxRoleNameLength+1)}
 
 	t.Run("SV-01_ValidNamesAreCreated", func(t *testing.T) {
 		for _, name := range valid {
 			f := &fakeStore{}
 			role, err := NewService(f).CreateRole(name, "")
-			if err != nil || role.Name != name {
-				t.Fatalf("name %q: got %v, %v", name, role, err)
+			if err != nil || role.Name != name || f.created[0] != name {
+				t.Fatalf("name %q: got %v, %v, store got %v", name, role, err, f.created)
 			}
 		}
 	})
@@ -152,21 +154,67 @@ func TestSV05to06ScopeValidation(t *testing.T) {
 	t.Run("SV-06_ScopesAtTheLimitAreCreated", func(t *testing.T) {
 		f := &fakeStore{}
 		p, err := NewService(f).CreatePermission(strings.Repeat("n", maxScopeNameLength), strings.Repeat("v", maxScopeValueLength))
-		if err != nil || p.ID != strconv.FormatInt(f.createdID, 10) {
-			t.Fatalf("got %v, %v", p, err)
+		if err != nil || p.ID != strconv.FormatInt(f.createdID, 10) || f.created[0] != strings.Repeat("n", maxScopeNameLength) || f.created[1] != strings.Repeat("v", maxScopeValueLength) {
+			t.Fatalf("got %v, %v, store got %v lengths", p, err, len(f.created))
 		}
 	})
 	t.Run("SV-12_ValuesMayContainAColon", func(t *testing.T) {
 		f := &fakeStore{}
 		p, err := NewService(f).CreatePermission("n", "a:b:c")
-		if err != nil || p.ScopeValue != "a:b:c" {
-			t.Fatalf("got %v, %v", p, err)
+		if err != nil || p.ScopeValue != "a:b:c" || f.created[1] != "a:b:c" {
+			t.Fatalf("got %v, %v, store got %v", p, err, f.created)
+		}
+	})
+	t.Run("SV-13_TextRulesApplyToScopesAndDescriptions", func(t *testing.T) {
+		badScopes := [][2]string{
+			{"a\x00b", "v"}, {"n", "a\x00b"}, {"\xff", "v"}, {"n", "\xff"}, {"n\t", "v"}, {"n", "a\nb"},
+			{" n", "v"}, {"n ", "v"}, {"n", " v"}, {"n", "v "},
+			{strings.Repeat("é", maxScopeNameLength+1), "v"}, {"n", strings.Repeat("é", maxScopeValueLength+1)},
+		}
+		for _, c := range badScopes {
+			f := &fakeStore{}
+			if _, err := NewService(f).CreatePermission(c[0], c[1]); !errors.Is(err, ErrInvalidScope) || len(f.calls) != 0 {
+				t.Fatalf("scope %q/%q: got %v with calls %v, want ErrInvalidScope before the store", c[0], c[1], err, f.calls)
+			}
+		}
+		f := &fakeStore{}
+		if _, err := NewService(f).CreatePermission(strings.Repeat("é", maxScopeNameLength), strings.Repeat("é", maxScopeValueLength)); err != nil {
+			t.Fatalf("scope parts of exactly the limit in characters were refused: %v", err)
+		}
+		for _, d := range []string{"a\x00b", "\xff", strings.Repeat("é", maxDescriptionLen+1)} {
+			f := &fakeStore{}
+			if _, err := NewService(f).CreateRole("a", d); !errors.Is(err, ErrInvalidDescription) || len(f.calls) != 0 {
+				t.Fatalf("description %q: got %v with calls %v, want ErrInvalidDescription before the store", d, err, f.calls)
+			}
+		}
+		if _, err := NewService(&fakeStore{}).CreateRole("a", strings.Repeat("é", maxDescriptionLen)); err != nil {
+			t.Fatalf("a description of exactly the limit in characters was refused: %v", err)
+		}
+	})
+	t.Run("SV-14_LookupsOfNamesThatCannotExistNeverReachTheStore", func(t *testing.T) {
+		f := &fakeStore{role: &Role{}, permission: &Permission{}}
+		s := NewService(f)
+		for _, name := range []string{"own\x00er", "Owner", "123", ""} {
+			if _, err := s.GetRoleByName(name); !errors.Is(err, ErrRoleNotFound) {
+				t.Fatalf("GetRoleByName(%q) err = %v, want ErrRoleNotFound", name, err)
+			}
+		}
+		for _, c := range [][2]string{{"a\x00", "v"}, {"n:x", "v"}, {"n", ""}} {
+			if _, err := s.GetPermissionByScope(c[0], c[1]); !errors.Is(err, ErrPermissionNotFound) {
+				t.Fatalf("GetPermissionByScope(%q, %q) err = %v, want ErrPermissionNotFound", c[0], c[1], err)
+			}
+		}
+		if len(f.calls) != 0 {
+			t.Fatalf("lookups reached the store: %v", f.calls)
+		}
+		if _, err := s.GetRoleByName("owner"); err != nil {
+			t.Fatalf("GetRoleByName() of a valid name err = %v", err)
 		}
 	})
 }
 
 func TestSV07to09IDs(t *testing.T) {
-	bad := []string{"", "abc", "0", "-5", "1.5", "99999999999999999999"}
+	bad := []string{"", "abc", "0", "-5", "1.5", "99999999999999999999", "007", "+8", " 8"}
 
 	t.Run("SV-07_BadIDsAreRejectedBeforeTheStoreByEveryIDMethod", func(t *testing.T) {
 		for _, id := range bad {
@@ -198,7 +246,7 @@ func TestSV07to09IDs(t *testing.T) {
 		}
 	})
 	t.Run("SV-08_AttachAndDetachPassTheParsedIDsInOrder", func(t *testing.T) {
-		f := &fakeStore{}
+		f := &fakeStore{role: &Role{Name: "mod"}, permission: &Permission{}}
 		s := NewService(f)
 		if err := s.AttachPermission("11", "22"); err != nil || f.attached != [2]int64{11, 22} {
 			t.Fatalf("attach: %v %v", err, f.attached)
@@ -282,6 +330,64 @@ func TestSV10UpdateRoleMerge(t *testing.T) {
 				if strings.HasPrefix(call, "UpdateRole") {
 					t.Fatalf("an invalid update was written: %v", f.calls)
 				}
+			}
+		}
+	})
+}
+
+func TestSV15to18BuiltinRoles(t *testing.T) {
+	str := func(s string) *string { return &s }
+
+	t.Run("SV-15_BuiltinRolesCannotBeDeleted", func(t *testing.T) {
+		for _, name := range []string{"system", "owner", "bee_admin"} {
+			f := &fakeStore{role: &Role{ID: "5", Name: name}}
+			if err := NewService(f).DeleteRole("5"); !errors.Is(err, ErrBuiltinRole) {
+				t.Fatalf("DeleteRole(%s) err = %v, want ErrBuiltinRole", name, err)
+			}
+			for _, call := range f.calls {
+				if call == "DeleteRole" {
+					t.Fatalf("DeleteRole(%s) reached the store", name)
+				}
+			}
+		}
+		f := &fakeStore{role: &Role{ID: "5", Name: "mod"}}
+		if err := NewService(f).DeleteRole("5"); err != nil || f.calls[len(f.calls)-1] != "DeleteRole" {
+			t.Fatalf("DeleteRole(mod) err = %v, calls %v", err, f.calls)
+		}
+	})
+	t.Run("SV-16_BuiltinRolesCannotBeRenamedButCanBeDescribed", func(t *testing.T) {
+		f := &fakeStore{role: &Role{ID: "5", Name: "owner", Description: "d"}}
+		if _, err := NewService(f).UpdateRole("5", str("boss"), nil); !errors.Is(err, ErrBuiltinRole) {
+			t.Fatalf("rename err = %v, want ErrBuiltinRole", err)
+		}
+		f = &fakeStore{role: &Role{ID: "5", Name: "owner", Description: "d"}}
+		if _, err := NewService(f).UpdateRole("5", str("owner"), str("new")); err != nil {
+			t.Fatalf("a description change that repeats the name err = %v", err)
+		}
+		if f.calls[len(f.calls)-1] != "UpdateRole:owner:new" {
+			t.Fatalf("store got %v", f.calls)
+		}
+	})
+	t.Run("SV-17_RolesPermissionStaysOnSystemAndOwner", func(t *testing.T) {
+		for _, name := range []string{"system", "owner"} {
+			f := &fakeStore{role: &Role{ID: "5", Name: name}, permission: &Permission{ID: "6", ScopeName: "roles", ScopeValue: "*"}}
+			if err := NewService(f).DetachPermission("5", "6"); !errors.Is(err, ErrBuiltinRole) {
+				t.Fatalf("detach from %s err = %v, want ErrBuiltinRole", name, err)
+			}
+			for _, call := range f.calls {
+				if call == "DetachPermission" {
+					t.Fatalf("detach from %s reached the store", name)
+				}
+			}
+		}
+	})
+	t.Run("SV-18_OtherDetachesAreAllowed", func(t *testing.T) {
+		for _, c := range []struct{ role, name, value string }{
+			{"owner", "users", "*"}, {"owner", "roles", "read"}, {"mod", "roles", "*"}, {"bee_admin", "roles", "*"},
+		} {
+			f := &fakeStore{role: &Role{Name: c.role}, permission: &Permission{ScopeName: c.name, ScopeValue: c.value}}
+			if err := NewService(f).DetachPermission("5", "6"); err != nil || f.calls[len(f.calls)-1] != "DetachPermission" {
+				t.Fatalf("detach %s:%s from %s err = %v, calls %v", c.name, c.value, c.role, err, f.calls)
 			}
 		}
 	})

@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -17,8 +19,6 @@ import (
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 )
 
-// rbUnusedPort returns a port unlikely to be reused, so a later connection to
-// it fails fast with "connection refused" instead of hanging.
 func rbUnusedPort(t *testing.T) int {
 	t.Helper()
 	l, err := net.Listen("tcp", "127.0.0.1:0")
@@ -32,7 +32,10 @@ func rbUnusedPort(t *testing.T) int {
 	return port
 }
 
-const rbAccountIDBase = 920000000000000000
+const (
+	rbAccountIDBase = 920000000000000000
+	rbMissingID     = "900000000000000009"
+)
 
 func rbLive(t *testing.T) (Service, *pgxpool.Pool) {
 	t.Helper()
@@ -139,7 +142,7 @@ func TestST01to04Roles(t *testing.T) {
 	})
 
 	t.Run("ST-03_UnknownRoleIsNotFound", func(t *testing.T) {
-		if _, err := svc.GetRole("1"); !errors.Is(err, ErrRoleNotFound) {
+		if _, err := svc.GetRole(rbMissingID); !errors.Is(err, ErrRoleNotFound) {
 			t.Errorf("GetRole() err = %v, want %v", err, ErrRoleNotFound)
 		}
 		if _, err := svc.GetRoleByName("rbtest_missing"); !errors.Is(err, ErrRoleNotFound) {
@@ -237,14 +240,14 @@ func TestST05to08UpdateAndDeleteRole(t *testing.T) {
 	})
 
 	t.Run("ST-09_DeleteOfAnUnknownRoleIsNotFound", func(t *testing.T) {
-		if err := svc.DeleteRole("1"); !errors.Is(err, ErrRoleNotFound) {
+		if err := svc.DeleteRole(rbMissingID); !errors.Is(err, ErrRoleNotFound) {
 			t.Errorf("DeleteRole() err = %v, want %v", err, ErrRoleNotFound)
 		}
 	})
 
 	t.Run("ST-10_UpdateOfAnUnknownRoleIsNotFound", func(t *testing.T) {
 		name := "rbtest_x"
-		if _, err := svc.UpdateRole("1", &name, nil); !errors.Is(err, ErrRoleNotFound) {
+		if _, err := svc.UpdateRole(rbMissingID, &name, nil); !errors.Is(err, ErrRoleNotFound) {
 			t.Errorf("UpdateRole() err = %v, want %v", err, ErrRoleNotFound)
 		}
 	})
@@ -282,7 +285,7 @@ func TestST11to14Permissions(t *testing.T) {
 	})
 
 	t.Run("ST-13_UnknownPermissionIsNotFound", func(t *testing.T) {
-		if _, err := svc.GetPermission("1"); !errors.Is(err, ErrPermissionNotFound) {
+		if _, err := svc.GetPermission(rbMissingID); !errors.Is(err, ErrPermissionNotFound) {
 			t.Errorf("GetPermission() err = %v, want %v", err, ErrPermissionNotFound)
 		}
 		if _, err := svc.GetPermissionByScope("rbtest", "missing"); !errors.Is(err, ErrPermissionNotFound) {
@@ -339,7 +342,7 @@ func TestST15to16DeletePermission(t *testing.T) {
 	})
 
 	t.Run("ST-17_DeleteOfAnUnknownPermissionIsNotFound", func(t *testing.T) {
-		if err := svc.DeletePermission("1"); !errors.Is(err, ErrPermissionNotFound) {
+		if err := svc.DeletePermission(rbMissingID); !errors.Is(err, ErrPermissionNotFound) {
 			t.Errorf("DeletePermission() err = %v, want %v", err, ErrPermissionNotFound)
 		}
 	})
@@ -366,10 +369,10 @@ func TestST18to19AttachAndDetach(t *testing.T) {
 		role := rbRole(t, svc, "attach_missing")
 		permission := rbPermission(t, svc, "attach_missing")
 
-		if err := svc.AttachPermission("1", permission.ID); !errors.Is(err, ErrRoleNotFound) {
+		if err := svc.AttachPermission(rbMissingID, permission.ID); !errors.Is(err, ErrRoleNotFound) {
 			t.Errorf("AttachPermission() with an unknown role err = %v, want %v", err, ErrRoleNotFound)
 		}
-		if err := svc.AttachPermission(role.ID, "1"); !errors.Is(err, ErrPermissionNotFound) {
+		if err := svc.AttachPermission(role.ID, rbMissingID); !errors.Is(err, ErrPermissionNotFound) {
 			t.Errorf("AttachPermission() with an unknown permission err = %v, want %v", err, ErrPermissionNotFound)
 		}
 	})
@@ -400,10 +403,10 @@ func TestST18to19AttachAndDetach(t *testing.T) {
 		role := rbRole(t, svc, "detach_missing")
 		permission := rbPermission(t, svc, "detach_missing")
 
-		if err := svc.DetachPermission("1", permission.ID); !errors.Is(err, ErrRoleNotFound) {
+		if err := svc.DetachPermission(rbMissingID, permission.ID); !errors.Is(err, ErrRoleNotFound) {
 			t.Errorf("DetachPermission() with an unknown role err = %v, want %v", err, ErrRoleNotFound)
 		}
-		if err := svc.DetachPermission(role.ID, "1"); !errors.Is(err, ErrPermissionNotFound) {
+		if err := svc.DetachPermission(role.ID, rbMissingID); !errors.Is(err, ErrPermissionNotFound) {
 			t.Errorf("DetachPermission() with an unknown permission err = %v, want %v", err, ErrPermissionNotFound)
 		}
 	})
@@ -433,10 +436,10 @@ func TestST22to26GetPermissionsForRoles(t *testing.T) {
 	})
 
 	t.Run("ST-23_UnknownAndNoRolesGrantNothing", func(t *testing.T) {
-		for _, ids := range [][]string{nil, {"1"}} {
+		for _, ids := range [][]string{nil, {rbMissingID}} {
 			got, err := svc.GetPermissionsForRoles(ids)
-			if err != nil || len(got) != 0 {
-				t.Errorf("GetPermissionsForRoles(%v) = (%v, %v), want (empty, nil)", ids, got, err)
+			if err != nil || got == nil || len(got) != 0 {
+				t.Errorf("GetPermissionsForRoles(%v) = (%#v, %v), want (empty non-nil, nil)", ids, got, err)
 			}
 		}
 	})
@@ -450,7 +453,7 @@ func TestST22to26GetPermissionsForRoles(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-26_ValueWithAColonIsJoinedAndSplitsOnTheFirstColon", func(t *testing.T) {
+	t.Run("ST-26_ValueWithAColonIsJoinedAndMatchesTheSessionScope", func(t *testing.T) {
 		role := rbRole(t, svc, "colon_value")
 		permission, err := svc.CreatePermission("rbtest", "a:b")
 		if err != nil {
@@ -474,7 +477,7 @@ func TestST22to26GetPermissionsForRoles(t *testing.T) {
 }
 
 func TestST24ConnectionErrors(t *testing.T) {
-	t.Run("ST-24_UnreachableDatabasePassesTheErrorThrough", func(t *testing.T) {
+	t.Run("ST-24_UnreachableDatabasePassesTheErrorThroughEveryStoreMethod", func(t *testing.T) {
 		cfg, err := pgxpool.ParseConfig(fmt.Sprintf("postgres://user:pass@127.0.0.1:%d/db?sslmode=disable&connect_timeout=2", rbUnusedPort(t)))
 		if err != nil {
 			t.Fatalf("failed to parse pool config: %v", err)
@@ -484,15 +487,164 @@ func TestST24ConnectionErrors(t *testing.T) {
 			t.Fatalf("failed to create pool: %v", err)
 		}
 		t.Cleanup(pool.Close)
-		svc := NewService(NewStore(pool))
+		st := NewStore(pool)
 
-		_, getErr := svc.GetRole("1")
-		_, createErr := svc.CreateRole("rbtest_down", "")
+		var errs []error
+		collect := func(_ any, err error) { errs = append(errs, err) }
+		errs = append(errs,
+			st.CreateRole(1, "a", ""), st.UpdateRole(1, "a", ""), st.DeleteRole(1),
+			st.CreatePermission(1, "a", "b"), st.DeletePermission(1),
+			st.AttachPermission(1, 1), st.DetachPermission(1, 1))
+		collect(st.GetRole(1))
+		collect(st.GetRoleByName("a"))
+		collect(st.ListRoles())
+		collect(st.GetPermission(1))
+		collect(st.GetPermissionByScope("a", "b"))
+		collect(st.ListPermissions())
+		collect(st.GetPermissionsForRoles([]string{"1"}))
 
-		for _, err := range []error{getErr, createErr} {
-			if err == nil || errors.Is(err, ErrRoleNotFound) || errors.Is(err, ErrRoleNameTaken) {
-				t.Errorf("err = %v, want the raw connection error", err)
+		if len(errs) != 14 {
+			t.Fatalf("checked %d store methods, want all 14", len(errs))
+		}
+		sentinels := []error{ErrRoleNotFound, ErrPermissionNotFound, ErrRoleNameTaken, ErrPermissionExists, ErrRoleInUse, ErrPermissionInUse}
+		for i, err := range errs {
+			if err == nil {
+				t.Errorf("method %d returned no error", i)
+			}
+			for _, sentinel := range sentinels {
+				if errors.Is(err, sentinel) {
+					t.Errorf("method %d err = %v, want the raw connection error", i, err)
+				}
 			}
 		}
 	})
+}
+
+func TestST27to33RoleIntegrity(t *testing.T) {
+	svc, db := rbLive(t)
+	st := NewStore(db)
+	ctx := context.Background()
+
+	t.Run("ST-27_DeleteWaitsForAnInFlightAssignmentAndThenRefuses", func(t *testing.T) {
+		role := rbRole(t, svc, "race")
+		id, _ := strconv.ParseInt(role.ID, 10, 64)
+		tx, err := db.Begin(ctx)
+		if err != nil {
+			t.Fatalf("failed to begin: %v", err)
+		}
+		defer tx.Rollback(ctx)
+		if _, err := tx.Exec(ctx, "SELECT id FROM roles WHERE id = $1 FOR SHARE", id); err != nil {
+			t.Fatalf("failed to lock the role: %v", err)
+		}
+		if _, err := tx.Exec(ctx, "INSERT INTO accounts (user_id, role_ids) VALUES ($1, $2)", int64(rbAccountIDBase)+50, []int64{id}); err != nil {
+			t.Fatalf("failed to assign the role: %v", err)
+		}
+
+		done := make(chan error, 1)
+		go func() { done <- svc.DeleteRole(role.ID) }()
+		select {
+		case err := <-done:
+			t.Fatalf("DeleteRole() returned %v before the assignment committed", err)
+		case <-time.After(300 * time.Millisecond):
+		}
+		if err := tx.Commit(ctx); err != nil {
+			t.Fatalf("failed to commit: %v", err)
+		}
+
+		if err := <-done; !errors.Is(err, ErrRoleInUse) {
+			t.Errorf("DeleteRole() err = %v, want %v", err, ErrRoleInUse)
+		}
+		if _, err := svc.GetRole(role.ID); err != nil {
+			t.Errorf("the assigned role is gone: %v", err)
+		}
+	})
+
+	t.Run("ST-28_BuiltinRolesAreSeededWithTheirPermissions", func(t *testing.T) {
+		all := []string{"beenamegenerator:*", "datastore:*", "numberstore:*", "petpictures:*", "ratelimit:1000", "roles:*", "users:*"}
+		for name, want := range map[string][]string{"system": all, "owner": all, "bee_admin": {"beenamegenerator:*"}} {
+			role, err := svc.GetRoleByName(name)
+			if err != nil {
+				t.Fatalf("GetRoleByName(%s) err = %v", name, err)
+			}
+			got := rbScopes(role)
+			sort.Strings(got)
+			rbAssertStrings(t, got, want)
+		}
+	})
+
+	t.Run("ST-29_NameLookupIgnoresIDs", func(t *testing.T) {
+		role := rbRole(t, svc, "byid")
+
+		if _, err := st.GetRoleByName(role.ID); !errors.Is(err, ErrRoleNotFound) {
+			t.Errorf("GetRoleByName(id) err = %v, want %v", err, ErrRoleNotFound)
+		}
+	})
+
+	t.Run("ST-30_UpdateOfAnUnknownRoleIsNotFoundAtTheStore", func(t *testing.T) {
+		if err := st.UpdateRole(900000000000000009, "rbtest_ghost", ""); !errors.Is(err, ErrRoleNotFound) {
+			t.Errorf("UpdateRole() err = %v, want %v", err, ErrRoleNotFound)
+		}
+	})
+
+	t.Run("ST-31_RolesAndPermissionsListInIDOrder", func(t *testing.T) {
+		role := rbRole(t, svc, "order")
+		first := rbPermission(t, svc, "order_1")
+		second := rbPermission(t, svc, "order_2")
+		third := rbPermission(t, svc, "order_3")
+		for _, p := range []*Permission{third, first, second} {
+			if err := svc.AttachPermission(role.ID, p.ID); err != nil {
+				t.Fatalf("AttachPermission() err = %v", err)
+			}
+		}
+
+		cfg, err := pgxpool.ParseConfig(os.Getenv("TEST_POSTGRES_URL"))
+		if err != nil {
+			t.Fatalf("failed to parse the url: %v", err)
+		}
+		for _, setting := range []string{"enable_nestloop", "enable_mergejoin", "enable_indexscan", "enable_indexonlyscan", "enable_bitmapscan"} {
+			cfg.ConnConfig.RuntimeParams[setting] = "off"
+		}
+		hashed, err := pgxpool.NewWithConfig(ctx, cfg)
+		if err != nil {
+			t.Fatalf("failed to create the pool: %v", err)
+		}
+		t.Cleanup(hashed.Close)
+
+		got, err := NewStore(hashed).GetRole(mustParse(t, role.ID))
+
+		if err != nil {
+			t.Fatalf("GetRole() err = %v", err)
+		}
+		byID := []*Permission{first, second, third}
+		sort.Slice(byID, func(i, j int) bool {
+			x, _ := strconv.ParseInt(byID[i].ID, 10, 64)
+			y, _ := strconv.ParseInt(byID[j].ID, 10, 64)
+			return x < y
+		})
+		want := make([]string, len(byID))
+		for i, p := range byID {
+			want[i] = p.ScopeName + ":" + p.ScopeValue
+		}
+		rbAssertStrings(t, rbScopes(got), want)
+		roles, err := svc.ListRoles()
+		if err != nil {
+			t.Fatalf("ListRoles() err = %v", err)
+		}
+		for i := 1; i < len(roles); i++ {
+			a, _ := strconv.ParseInt(roles[i-1].ID, 10, 64)
+			b, _ := strconv.ParseInt(roles[i].ID, 10, 64)
+			if a >= b {
+				t.Fatalf("ListRoles() is not in ID order at %d: %s then %s", i, roles[i-1].ID, roles[i].ID)
+			}
+		}
+	})
+}
+
+func mustParse(t *testing.T, id string) int64 {
+	t.Helper()
+	n, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		t.Fatalf("failed to parse id %q: %v", id, err)
+	}
+	return n
 }

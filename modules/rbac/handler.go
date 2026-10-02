@@ -16,14 +16,15 @@ const (
 	msgUnableToParseBody  = "Invalid input, unable to parse body"
 	msgInvalidID          = "The ID is not a valid ID"
 	msgInvalidRoleName    = "Role names start with a lower-case letter and use only lower-case letters, digits and underscores, up to 63 characters"
-	msgInvalidDescription = "Descriptions are at most 256 characters"
-	msgInvalidScope       = "Scope names and values are required, names must not contain a colon, and they are at most 64 and 128 characters"
+	msgInvalidDescription = "Descriptions are valid text of at most 256 characters"
+	msgInvalidScope       = "Scope names and values are required valid text without control characters or surrounding spaces, names must not contain a colon, and they are at most 64 and 128 characters"
 	msgRoleNotFound       = "Role not found"
 	msgPermissionNotFound = "Permission not found"
 	msgRoleNameTaken      = "A role with that name already exists"
 	msgPermissionExists   = "That permission already exists"
 	msgRoleInUse          = "The role is assigned to an account"
 	msgPermissionInUse    = "The permission is granted by a role"
+	msgBuiltinRole        = "Built-in roles cannot be deleted or renamed, and system and owner keep the roles permission"
 	msgFailedToHandleRbac = "Failed to process the request"
 	logFailedToHandleRbac = "[Error]: Unable to process roles and permissions request:\n\t"
 )
@@ -60,6 +61,7 @@ var failures = []failureMapping{
 	{ErrPermissionExists, responses.Conflict, msgPermissionExists},
 	{ErrRoleInUse, responses.Conflict, msgRoleInUse},
 	{ErrPermissionInUse, responses.Conflict, msgPermissionInUse},
+	{ErrBuiltinRole, responses.Conflict, msgBuiltinRole},
 }
 
 func respondFailure(w http.ResponseWriter, r *http.Request, err error) {

@@ -170,6 +170,9 @@ func (user *Account) NewSession(expiresAt int64, permissions []string) (*Session
 	if err != nil {
 		return nil, err
 	}
+	if permissions == nil {
+		permissions = []string{}
+	}
 	return &Session{
 		ID:          id,
 		UserID:      user.UserID,

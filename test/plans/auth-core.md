@@ -22,8 +22,9 @@
 | AC-16 | IsPasswordAuthEnabled | Error Path | `ass.GetAccountSettings` fails | | Returns `(false, err)` | P2 |  |
 | AC-17 | NewSession (service) | Happy Path | the account holds role ids | fake role store returns three scopes | Returns a `*Session` with `UserID`, `ExpiresAt` as given and `Permissions` exactly as the role store returned them; the role store is called once with the account's role ids | P1 |   |
 | AC-18 | NewSession (service) | Edge Case | the account holds two role ids | fake role store | The role store is called once with both ids and the permissions of both roles are returned | P1 |   |
-| AC-19 | NewSession (service) | Edge Case | the account has no roles |  | `Permissions` is empty, the error is nil and the role store is never called | P2 |   |
+| AC-19 | NewSession (service) | Edge Case | the account has no roles |  | `Permissions` is empty and non-nil, the error is nil and the role store is never called | P2 |   |
 | AC-20 | NewSession (service) | Error Path | the role store fails | role store returns `testerrors.ErrBoom` | Returns a nil session and an error matching the store error, so no session is issued with missing permissions | P1 |   |
+| AC-21 | NewSession (service) | Edge Case | the account's role grants nothing | role store returns no permissions | `Permissions` is empty and non-nil | P1 |   |
 
 ## ratelimit.go
 
@@ -164,11 +165,17 @@
 | ST-82 | SetPasswordAuthEnabled | Error Path (live) | Enable for a user ID with no account | Real Postgres, unknown user ID | Returns `ErrNotFound` | P1 |  |
 | ST-83 | SetPasswordAuthEnabled | Error Path (live) | Disable for a user ID with no account | Real Postgres, unknown user ID | Returns `ErrNotFound` | P1 |  |
 | ST-84 | SetPasswordAuthEnabled | Concurrency Invariant (live) | The account is deleted while the enable call waits on its row | Real Postgres; a separate transaction has deleted the account but not committed; the call is running and blocked on the account row | After the delete commits the call returns `ErrNotFound` | P1 |  |
-| ST-85 | AddAccountToDB | Happy Path (live) | an account is added with two role ids | Real Postgres | `GetAccountByID` and `GetAccountByUsername` return the same two ids in order | P1 |   |
-| ST-86 | UpdateAccountInDB | Happy Path (live) | the role ids of a stored account are replaced | Real Postgres; account without roles | The next read returns only the new ids | P1 |   |
+| ST-85 | AddAccountToDB | Happy Path (live) | an account is added with two existing role ids | Real Postgres; the two roles exist | `GetAccountByID`, `GetAccountByUsername` and `GetAccountByEmail` return the same two ids in order | P1 |   |
+| ST-86 | UpdateAccountInDB | Happy Path (live) | the role ids of a stored account are replaced | Real Postgres; account without roles, an existing role | The next read returns only the new ids | P1 |   |
 | ST-87 | AddAccountToDB | Edge Case (live) | an account is added with nil roles | Real Postgres | The stored account has no role ids | P2 |   |
 | ST-88 | AddAccountToDB | Error Path (live) | a role id is not numeric | Real Postgres; roles `7` and `admin` | `ErrInvalidRoleID` and nothing is stored (`ErrNotFound` on read) | P1 |   |
 | ST-89 | UpdateAccountInDB | Error Path (live) | a role id is below one | Real Postgres; role id `0` | `ErrInvalidRoleID` | P2 |   |
+| ST-90 | AddSessionToCache / GetSessionFromCache | Edge Case (live) | a session sits in Redis under the legacy `session:` key | live Redis | The lookup is a miss; a session cached through the store is read back | P1 |   |
+| ST-91 | AddAccountToDB | Error Path (live) | one of the role ids has no role | Real Postgres | `ErrUnknownRoleID` and nothing is stored (`ErrNotFound` on read) | P1 |   |
+| ST-92 | UpdateAccountInDB | Error Path (live) | the role id has no role | Real Postgres | `ErrUnknownRoleID` and no role ids are stored | P1 |   |
+| ST-93 | UpdateAccountInDB | Error Path (live) | role ids with a leading zero, a plus sign or a space | Real Postgres | `ErrInvalidRoleID` for each | P2 |   |
+| ST-94 | UpdateAccountInDB | Edge Case (live) | the same existing role id is given twice | Real Postgres | nil error | P2 |   |
+| ST-95 | AddAccountToDB | Concurrency Invariant (live) | a delete of the role is in flight, uncommitted, when the account is added | transaction deleting the role | The add waits for the commit and then returns `ErrUnknownRoleID`; nothing is stored | P1 |   |
 
 ## types.go
 
@@ -194,7 +201,7 @@
 | TY-21 | RemoveRole | Edge Case | `Roles` empty | `RemoveRole("z")` | No panic, `Roles` remains empty | P3 |  |
 | TY-22 | DefaultAccountSettings | Accessor | `userID = "u1"` | | Returns `&AccountSettings{UserID:"u1", PasswordAuthEnabled:true}` | P2 |  |
 | TY-23 | NewSession (Account) | Happy Path | called with an expiry and a permissions list | `Account{UserID: "u1"}`, permissions `["users:*", "ratelimit:1000"]` | Returns a `*Session` with `UserID` `"u1"`, `ExpiresAt` as given and `Permissions` equal to the list passed in, whatever `Account.Roles` holds | P1 |  |
-| TY-24 | NewSession (Account) | Edge Case | called with nil permissions | | `Session.Permissions` is empty and the error is nil | P1 |  |
+| TY-24 | NewSession (Account) | Edge Case | called with nil permissions | | `Session.Permissions` is empty and non-nil, and the error is nil | P1 |  |
 | TY-26 | NewLinkedAccount | Happy Path | userID, platform, username, platformID, data given | | Returns `*LinkedAccount` with all fields copied, `Verified == true`, `LoginEnabled == true` | P2 |  |
 | TY-27 | init | Happy Path | Package loads under the required `PEPPER` env (the precondition every other test in this file already runs under) | | `pepper` is populated from env without `log.Fatal` firing | P2 | Asserts init's already-established postcondition rather than re-invoking it |
 | TY-28 | init | Error Path | `PEPPER` unset | Test binary re-exec'd as a subprocess with `PEPPER=""` | Subprocess exits non-zero via `log.Fatal(msgPepperUnset)` | P1 | Re-exec/TestCrasher pattern (see `os/exec` docs) |
@@ -212,7 +219,7 @@
 | US-07 | GetUserPermissions | Happy Path | `as.GetAccountByID` returns an account holding one role id | fake role store returns scopes | Returns the role store's `"name:value"` permissions | P1 |  |
 | US-08 | GetUserPermissions | Error Path | `as.GetAccountByID` fails | | Returns nil, error | P2 |  |
 | US-09 | GetUserPermissions | Edge Case | `Account.Roles` holds two role ids | fake role store | The role store is called once with both ids and the permissions of both are returned | P1 |  |
-| US-10 | GetUserPermissions | Edge Case | `Account.Roles` empty | | Returns nil permissions, nil error | P2 |  |
+| US-10 | GetUserPermissions | Edge Case | `Account.Roles` empty | | Returns empty non-nil permissions, nil error, without a role lookup | P2 |  |
 | US-11 | UpdateUser | Happy Path | `as.GetAccountByID` succeeds; `user` has `Username`/`Email`/`Roles` set | | Merges those fields onto the fetched account and calls `as.UpdateAccountInDB` once with the merged result | P1 |  |
 | US-12 | UpdateUser | Edge Case | `user.Username == ""`, `user.Email == nil`, `user.Roles == nil` | | Existing account's `Username`/`Email`/`Roles` are preserved unchanged (only non-zero fields overwrite) | P0 |  |
 | US-13 | UpdateUser | Error Path | `as.GetAccountByID` fails | | Returns error; `UpdateAccountInDB` never called | P2 |  |
@@ -244,3 +251,4 @@
 | US-39 | GetAccountSettings | Error Path | `ass.GetAccountSettings` returns `ErrNotFound` | fake settings store returns `ErrNotFound` | Returns an error matching `ErrNotFound` | P2 |  |
 | US-40 | SetPasswordAuthEnabled | Error Path | `ass.SetPasswordAuthEnabled` returns `ErrNotFound` | fake settings store returns `ErrNotFound` | Returns an error matching `ErrNotFound` | P2 |  |
 | US-41 | GetUserPermissions | Error Path | the role store fails | role store returns `testerrors.ErrBoom` | Returns nil permissions and an error matching the store error | P1 |   |
+| US-42 | GetUserPermissions | Edge Case | the account's role grants nothing | role store returns no permissions | Returns empty non-nil permissions, nil error | P1 |  |

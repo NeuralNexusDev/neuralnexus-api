@@ -68,7 +68,7 @@ func (m *stMockAccountService) DeleteAccount(userID string) error {
 }
 func (m *stMockAccountService) IsPasswordAuthEnabled(string) (bool, error) { return false, nil }
 func (m *stMockAccountService) NewSession(a *auth.Account, expiresAt int64) (*auth.Session, error) {
-	return a.NewSession(expiresAt, nil)
+	return a.NewSession(expiresAt, []string{"stub:perm"})
 }
 
 type stMockLinkAccountStore struct {
@@ -468,6 +468,9 @@ func TestST23to25ProcessSteamLogin(t *testing.T) {
 		}
 		if session == nil {
 			t.Fatal("expected a non-nil session")
+		}
+		if len(session.Permissions) != 1 || session.Permissions[0] != "stub:perm" {
+			t.Errorf("Permissions = %v, want those the account service built", session.Permissions)
 		}
 		if len(ss.added) != 1 {
 			t.Errorf("ss.AddSession called %d times, want 1", len(ss.added))

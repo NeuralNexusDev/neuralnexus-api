@@ -100,7 +100,6 @@ func ApplyRoutes(
 	mux.Handle("PATCH /api/v1/users/me/settings", mwAuth(mw.SelfUserID(authroutes.UpdateAccountSettingsHandler(user))))
 	// mux.HandleFunc("DELETE /api/v1/users/{user_id}", mwAuth(authroutes.DeleteUserHandler(gssService)))
 
-	// --------------- Roles and Permissions ---------------
 	mux.Handle("GET /api/v1/roles", mwAuth(rbac.ListRolesHandler(rbacService)))
 	mux.Handle("POST /api/v1/roles", mwAuth(rbac.CreateRoleHandler(rbacService)))
 	mux.Handle("GET /api/v1/roles/{id}", mwAuth(rbac.GetRoleHandler(rbacService)))
