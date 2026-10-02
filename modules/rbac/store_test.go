@@ -48,13 +48,6 @@ func rbLive(t *testing.T) (Service, *pgxpool.Pool) {
 	if err != nil {
 		t.Fatalf("failed to connect to postgres: %v", err)
 	}
-	schema, err := os.ReadFile("../../docker/rbac.sql")
-	if err != nil {
-		t.Fatalf("failed to read the rbac schema: %v", err)
-	}
-	if _, err := db.Exec(context.Background(), string(schema)); err != nil {
-		t.Fatalf("failed to apply the rbac schema: %v", err)
-	}
 	t.Cleanup(func() {
 		ctx := context.Background()
 		db.Exec(ctx, "DELETE FROM accounts WHERE user_id >= $1 AND user_id < $2", int64(rbAccountIDBase), int64(rbAccountIDBase)+1000)

@@ -71,23 +71,8 @@
 | RH-04 | all handlers | Error Path | the service returns each sentinel, a wrapped one and an unknown error | stub service | 400, 404 and 409 with the matching `msg*` detail (`msgBuiltinRole` for `ErrBuiltinRole`); an unknown error is 500 with `msgFailedToHandleRbac` | P1 |  |
 
 
-## docker/testdb/init.sql
-
-| ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
-|----|----------|---------------|----------|---------------|------------------|----------|-------|
-| SC-01 | init.sql | Edge Case | the test database init is compared with the schema file | both files | `docker/testdb/init.sql` contains `docker/rbac.sql` verbatim | P2 |  |
-
-
-## docker/rbac_migration.sql
-
-| ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
-|----|----------|---------------|----------|---------------|------------------|----------|-------|
-| MG-01 | rbac_migration.sql | Happy Path | accounts hold role names | accounts with known, unknown and no role names | `role_ids` holds the ids of the known roles only | P1 |  |
-| MG-02 | rbac_migration.sql | Edge Case | the migration finishes | accounts and sessions | the old `roles` column is gone and the sessions table is empty | P1 |  |
-| MG-03 | docker/rbac.sql | Happy Path | built-in roles are seeded by the schema file | fresh schema | `system` and `owner` grant all seven scopes and `bee_admin` grants the bee name generator scope | P1 |  |
-
 ## empty tables
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| EM-01 | ListRoles / ListPermissions | Edge Case | no rows exist | scratch schema from `docker/rbac.sql` with every table emptied | Both return empty non-nil slices and nil errors | P2 |  |
+| EM-01 | ListRoles / ListPermissions | Edge Case | no rows exist | scratch schema with empty copies of the three tables | Both return empty non-nil slices and nil errors | P2 |  |
