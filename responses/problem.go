@@ -29,6 +29,42 @@ func NewProblem(Type string, Status int, Title string, Detail string, Instance s
 	}
 }
 
+// NewNotFoundProblem -- Create the Problem that NotFound sends
+func NewNotFoundProblem(message string) *Problem {
+	if message == "" {
+		message = "The requested resource could not be found."
+	}
+	return NewProblem(
+		"about:blank",
+		http.StatusNotFound,
+		"Not Found",
+		message,
+		"https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404",
+	)
+}
+
+// SendProblemStruct -- Send data, a struct that embeds the Problem and adds extension members, as JSON or XML; Protobuf output carries the Problem members only
+func SendProblemStruct[T any](w http.ResponseWriter, r *http.Request, problem *Problem, data T) {
+	accept := r.Header.Get("Accept")
+	if accept == "application/x-protobuf" {
+		problem.SendProblem(w, r)
+		return
+	}
+	var content string = "application/problem+"
+	var structBytes []byte
+	if accept == "application/xml" {
+		content += "xml"
+		structBytes, _ = xml.Marshal(data)
+	}
+	if structBytes == nil {
+		content += "json"
+		structBytes, _ = json.Marshal(data)
+	}
+	w.Header().Set("Content-Type", content)
+	w.WriteHeader(int(problem.Status))
+	w.Write(structBytes)
+}
+
 // SendProblem -- Send a Problem as JSON, XML or Protobuf
 func (problem *Problem) SendProblem(w http.ResponseWriter, r *http.Request) {
 	var content string = "application/problem+"

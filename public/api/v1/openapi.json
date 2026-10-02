@@ -1293,6 +1293,9 @@
                             }
                         }
                     },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
                     },
@@ -1326,6 +1329,9 @@
                 "responses": {
                     "200": {
                         "$ref": "#/components/responses/SimpleOnlineResponse"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
                     },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
@@ -1381,11 +1387,31 @@
                             }
                         }
                     },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
                     },
                     "404": {
-                        "$ref": "#/components/responses/404NotFound"
+                        "description": "The server could not be reached. The JSON and XML bodies carry the canonical host and port; the protobuf body is the plain Problem.",
+                        "content": {
+                            "application/problem+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MCStatusOfflineProblem"
+                                }
+                            },
+                            "application/problem+xml": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MCStatusOfflineProblem"
+                                }
+                            },
+                            "application/problem+x-protobuf": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Problem"
+                                }
+                            }
+                        }
                     },
                     "429": {
                         "$ref": "#/components/responses/429TooManyRequests"
@@ -3399,6 +3425,34 @@
                         "$ref": "#/components/schemas/GeyserSkin"
                     }
                 }
+            },
+            "MCStatusOfflineProblem": {
+                "description": "A Problem for a Java or Bedrock server that could not be reached, with the canonical form of the requested address.",
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/Problem"
+                    },
+                    {
+                        "type": "object",
+                        "required": [
+                            "host",
+                            "port"
+                        ],
+                        "properties": {
+                            "host": {
+                                "type": "string",
+                                "description": "The canonical host: lower-case, IPv6 in its shortest form and without brackets."
+                            },
+                            "port": {
+                                "type": "integer",
+                                "description": "The port that was used, the default for the edition when the request carried none."
+                            }
+                        }
+                    }
+                ],
+                "xml": {
+                    "name": "Problem"
+                }
             }
         },
         "parameters": {
@@ -3583,7 +3637,8 @@
                 "required": true,
                 "schema": {
                     "type": "string"
-                }
+                },
+                "description": "The server address, optionally followed by :port. It must be a domain name (letters, digits, hyphens and underscores, with a period), an IPv4 address or an IPv6 address; a single-label name such as localhost is refused. An IPv6 address with a port must be bracketed, as in [2001:db8::1]:25565; without brackets an IPv6 address takes the default port. The default port is 25565 for Java and 19132 for Bedrock. A malformed address is refused with 400."
             },
             "MCStatusBedrockQuery": {
                 "name": "bedrock",

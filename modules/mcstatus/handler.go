@@ -1,11 +1,13 @@
 package mcstatus
 
 import (
+	"encoding/xml"
 	"errors"
 	"image"
 	"image/png"
 	"log"
 	"net/http"
+	"net/netip"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -18,6 +20,8 @@ const (
 	maxPort            = 65535
 	defaultJavaPort    = 25565
 	defaultBedrockPort = 19132
+	maxHostLength      = 253
+	maxLabelLength     = 63
 )
 
 const (
@@ -25,6 +29,7 @@ const (
 	msgBedrockStatusFailed     = "failed to get bedrock server status"
 	msgFailedToGetServerStatus = "Failed to get server status"
 	msgIconUnavailable         = "Failed to load server icon"
+	msgInvalidHost             = "The host must be a domain name, an IPv4 address or an IPv6 address, optionally followed by a port."
 )
 
 const (
@@ -45,27 +50,140 @@ var statusFailures = []failureMapping{
 	{ErrBedrockStatus, msgBedrockStatusFailed},
 }
 
-func respondStatusFailure(w http.ResponseWriter, r *http.Request, err error) {
+type offlineProblem struct {
+	XMLName xml.Name `json:"-" xml:"Problem"`
+	*responses.Problem
+	Host string `json:"host" xml:"host"`
+	Port int    `json:"port" xml:"port"`
+}
+
+func respondStatusFailure(w http.ResponseWriter, r *http.Request, err error, host string, port int) {
 	log.Println("[Error]: Unable to get server status:\n\t", err)
 	for _, m := range statusFailures {
 		if errors.Is(err, m.err) {
-			responses.NotFound(w, r, m.msg)
+			problem := responses.NewNotFoundProblem(m.msg)
+			responses.SendProblemStruct(w, r, problem, offlineProblem{Problem: problem, Host: host, Port: port})
 			return
 		}
 	}
 	responses.InternalServerError(w, r, msgFailedToGetServerStatus)
 }
 
-func splitHostPort(address string, isBedrock bool) (string, int) {
-	if i := strings.LastIndex(address, ":"); i >= 0 {
-		if port, err := strconv.Atoi(address[i+1:]); err == nil {
-			return address[:i], port
+func parsePort(raw string) (int, bool) {
+	if len(raw) == 0 || len(raw) > 5 {
+		return 0, false
+	}
+	port := 0
+	for i := 0; i < len(raw); i++ {
+		if raw[i] < '0' || raw[i] > '9' {
+			return 0, false
+		}
+		port = port*10 + int(raw[i]-'0')
+	}
+	return port, port >= minPort && port <= maxPort
+}
+
+func parseIPv6Host(raw string) (string, bool) {
+	for i := 0; i < len(raw); i++ {
+		c := raw[i]
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') && c != ':' && c != '.' {
+			return "", false
 		}
 	}
-	if isBedrock {
-		return address, defaultBedrockPort
+	ip, err := netip.ParseAddr(raw)
+	if err != nil || !ip.Is6() {
+		return "", false
 	}
-	return address, defaultJavaPort
+	return ip.String(), true
+}
+
+func parseHost(address string, isBedrock bool) (string, int, bool) {
+	port := defaultJavaPort
+	if isBedrock {
+		port = defaultBedrockPort
+	}
+	if address == "" {
+		return "", 0, false
+	}
+
+	if address[0] == '[' {
+		end := strings.IndexByte(address, ']')
+		if end < 0 {
+			return "", 0, false
+		}
+		host, ok := parseIPv6Host(address[1:end])
+		if !ok {
+			return "", 0, false
+		}
+		if rest := address[end+1:]; rest != "" {
+			if rest[0] != ':' {
+				return "", 0, false
+			}
+			if port, ok = parsePort(rest[1:]); !ok {
+				return "", 0, false
+			}
+		}
+		return host, port, true
+	}
+
+	colons := strings.Count(address, ":")
+	if colons >= 2 {
+		host, ok := parseIPv6Host(address)
+		return host, port, ok
+	}
+
+	name := address
+	if colons == 1 {
+		i := strings.IndexByte(address, ':')
+		name = address[:i]
+		var ok bool
+		if port, ok = parsePort(address[i+1:]); !ok {
+			return "", 0, false
+		}
+	}
+	if len(name) == 0 || len(name) > maxHostLength {
+		return "", 0, false
+	}
+	dots := 0
+	upper := false
+	labelStart := 0
+	lastLabelNumeric := true
+	for i := 0; i <= len(name); i++ {
+		if i == len(name) || name[i] == '.' {
+			if i-labelStart < 1 || i-labelStart > maxLabelLength || name[labelStart] == '-' || name[i-1] == '-' {
+				return "", 0, false
+			}
+			if i < len(name) {
+				dots++
+				labelStart = i + 1
+				lastLabelNumeric = true
+			}
+			continue
+		}
+		switch c := name[i]; {
+		case c >= '0' && c <= '9':
+		case c >= 'a' && c <= 'z' || c == '-' || c == '_':
+			lastLabelNumeric = false
+		case c >= 'A' && c <= 'Z':
+			upper = true
+			lastLabelNumeric = false
+		default:
+			return "", 0, false
+		}
+	}
+	if dots == 0 {
+		return "", 0, false
+	}
+	if lastLabelNumeric {
+		if _, err := netip.ParseAddr(name); err != nil {
+			return "", 0, false
+		}
+		return name, port, true
+	}
+	if upper {
+		name = strings.ToLower(name)
+	}
+	return name, port, true
 }
 
 func queryPortOrDefault(raw string, port int) int {
@@ -83,12 +201,16 @@ func ServerStatusHandler(s MCStatusService) http.HandlerFunc {
 		isBedrock := r.URL.Query().Get("bedrock") == "true"
 		queryEnabled := r.URL.Query().Get("query") == "true"
 		raw := r.URL.Query().Get("raw") == "true"
-		host, port := splitHostPort(host, isBedrock)
+		host, port, ok := parseHost(host, isBedrock)
+		if !ok {
+			responses.BadRequest(w, r, msgInvalidHost)
+			return
+		}
 		queryPort := queryPortOrDefault(r.URL.Query().Get("query_port"), port)
 
 		status, err := s.GetServerStatus(host, port, isBedrock, queryEnabled, queryPort)
 		if err != nil {
-			respondStatusFailure(w, r, err)
+			respondStatusFailure(w, r, err, host, port)
 			return
 		}
 		if !raw {
@@ -119,11 +241,15 @@ func IconHandler(s MCStatusService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		host := r.PathValue("host")
 		isBedrock := r.URL.Query().Get("bedrock") == "true"
+		host, port, ok := parseHost(host, isBedrock)
+		if !ok {
+			responses.BadRequest(w, r, msgInvalidHost)
+			return
+		}
 		if isBedrock {
 			writeStockIcon(w, r, bedrockIconFile)
 			return
 		}
-		host, port := splitHostPort(host, false)
 
 		status, err := s.GetJavaServerStatus(host, port, false, 0)
 		if errors.Is(err, ErrJavaStatus) {
@@ -131,7 +257,7 @@ func IconHandler(s MCStatusService) http.HandlerFunc {
 			return
 		}
 		if err != nil {
-			respondStatusFailure(w, r, err)
+			respondStatusFailure(w, r, err, host, port)
 			return
 		}
 		if status.Icon == nil {
@@ -153,7 +279,11 @@ func SimpleStatusHandler(s MCStatusService) http.HandlerFunc {
 		host := r.PathValue("host")
 		isBedrock := r.URL.Query().Get("bedrock") == "true"
 		queryEnabled := r.URL.Query().Get("query") == "true"
-		host, port := splitHostPort(host, isBedrock)
+		host, port, ok := parseHost(host, isBedrock)
+		if !ok {
+			responses.BadRequest(w, r, msgInvalidHost)
+			return
+		}
 		queryPort := queryPortOrDefault(r.URL.Query().Get("query_port"), port)
 
 		status := "Online"

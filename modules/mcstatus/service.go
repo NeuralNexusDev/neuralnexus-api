@@ -3,6 +3,8 @@ package mcstatus
 import (
 	"errors"
 	"fmt"
+	"net"
+	"strconv"
 	"time"
 
 	"github.com/ZeroErrors/go-bedrockping"
@@ -87,14 +89,20 @@ func (s *service) GetJavaServerStatus(host string, port int, queryEnabled bool, 
 	return status, nil
 }
 
+func bedrockAddress(host string, port int) string {
+	return net.JoinHostPort(host, strconv.Itoa(port))
+}
+
 // GetBedrockServerStatus - Get Bedrock server status
 func (s *service) GetBedrockServerStatus(host string, port int) (*MCServerStatus, error) {
-	connect := host + ":" + fmt.Sprint(port)
-	status, err := bedrockping.Query(connect, 5*time.Second, 150*time.Millisecond)
+	status, err := bedrockping.Query(bedrockAddress(host, port), 5*time.Second, 150*time.Millisecond)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrBedrockStatus, err)
 	}
-	return GetBedrockStatus(status), nil
+	bedrockStatus := GetBedrockStatus(status)
+	bedrockStatus.Host = host
+	bedrockStatus.Port = int32(port)
+	return bedrockStatus, nil
 }
 
 // GetServerStatus - Get server status
