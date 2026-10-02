@@ -67,7 +67,7 @@ func (s *Session) ToProto() proto.Message {
 // HasPermission checks if a session has a permission
 func (s *Session) HasPermission(permission perms.Scope) bool {
 	for _, p := range s.Permissions {
-		if p == permission.Name+"|"+permission.Value {
+		if p == permission.Name+":"+permission.Value {
 			return true
 		}
 	}

@@ -88,7 +88,7 @@ func TestSE01ToProto(t *testing.T) {
 		s := &Session{
 			ID:          "s1",
 			UserID:      "u1",
-			Permissions: []string{"a|b"},
+			Permissions: []string{"a:b"},
 			IssuedAt:    100,
 			LastUsedAt:  200,
 			ExpiresAt:   300,
@@ -109,8 +109,8 @@ func TestSE01ToProto(t *testing.T) {
 			pb.GetLastUsedAt() != s.LastUsedAt || pb.GetExpiresAt() != s.ExpiresAt {
 			t.Errorf("ToProto() did not copy scalar fields correctly: %+v", got)
 		}
-		if len(pb.GetPermissions()) != 1 || pb.GetPermissions()[0] != "a|b" {
-			t.Errorf("ToProto() Permissions = %v, want [a|b]", pb.GetPermissions())
+		if len(pb.GetPermissions()) != 1 || pb.GetPermissions()[0] != "a:b" {
+			t.Errorf("ToProto() Permissions = %v, want [a:b]", pb.GetPermissions())
 		}
 	})
 }
@@ -119,7 +119,7 @@ func TestSE02to03HasPermission(t *testing.T) {
 	scope := perms.Scope{Name: "perm", Value: "value"}
 
 	t.Run("SE-02_Match", func(t *testing.T) {
-		s := &Session{Permissions: []string{"perm|value"}}
+		s := &Session{Permissions: []string{"perm:value"}}
 		if !s.HasPermission(scope) {
 			t.Error("HasPermission() = false, want true")
 		}
@@ -130,7 +130,7 @@ func TestSE02to03HasPermission(t *testing.T) {
 		if s.HasPermission(scope) {
 			t.Error("HasPermission() = true, want false")
 		}
-		s2 := &Session{Permissions: []string{"other|thing"}}
+		s2 := &Session{Permissions: []string{"other:thing"}}
 		if s2.HasPermission(scope) {
 			t.Error("HasPermission() = true for a non-matching entry, want false")
 		}
@@ -334,7 +334,7 @@ func TestSE21to22CreateJWT(t *testing.T) {
 	svc := NewSessionService(&seFakeStore{ss: &seFakeSessionStore{}})
 
 	t.Run("SE-21_Success", func(t *testing.T) {
-		s := &Session{ID: "s1", UserID: "u1", Permissions: []string{"a|b"}, IssuedAt: time.Now().Unix(), ExpiresAt: time.Now().Add(time.Hour).Unix()}
+		s := &Session{ID: "s1", UserID: "u1", Permissions: []string{"a:b"}, IssuedAt: time.Now().Unix(), ExpiresAt: time.Now().Add(time.Hour).Unix()}
 		tok, err := svc.CreateJWT(s)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)

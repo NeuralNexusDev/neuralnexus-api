@@ -103,7 +103,7 @@ func selfSession(userID string) *auth.Session {
 }
 
 func adminUsersSession(userID string) *auth.Session {
-	return &auth.Session{UserID: userID, Permissions: []string{perms.ScopeAdminUsers.Name + "|" + perms.ScopeAdminUsers.Value}}
+	return &auth.Session{UserID: userID, Permissions: []string{perms.ScopeAdminUsers.Name + ":" + perms.ScopeAdminUsers.Value}}
 }
 
 func expectStatus(t *testing.T, w *httptest.ResponseRecorder, want int) {
@@ -209,7 +209,7 @@ func TestUS07GetUserFromPlatformHandlerServiceErrorMapsTo404(t *testing.T) {
 }
 
 func TestUS08GetUserPermissionsHandlerSelfHappyPath(t *testing.T) {
-	svc := &stubUserService{permissions: []string{"users|*"}}
+	svc := &stubUserService{permissions: []string{"users:*"}}
 	r := newSessionRequest(http.MethodGet, selfSession("u1"), "u1", "", "")
 	w := httptest.NewRecorder()
 
@@ -220,7 +220,7 @@ func TestUS08GetUserPermissionsHandlerSelfHappyPath(t *testing.T) {
 }
 
 func TestUS09GetUserPermissionsHandlerAdminHappyPath(t *testing.T) {
-	svc := &stubUserService{permissions: []string{"users|*"}}
+	svc := &stubUserService{permissions: []string{"users:*"}}
 	r := newSessionRequest(http.MethodGet, adminUsersSession("admin1"), "someone-else", "", "")
 	w := httptest.NewRecorder()
 

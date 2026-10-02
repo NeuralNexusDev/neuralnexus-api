@@ -73,7 +73,7 @@ func validRoleName(name string) bool {
 func validScope(scopeName, scopeValue string) bool {
 	return len(scopeName) > 0 && len(scopeName) <= maxScopeNameLength &&
 		len(scopeValue) > 0 && len(scopeValue) <= maxScopeValueLength &&
-		!strings.Contains(scopeName, "|") && !strings.Contains(scopeValue, "|")
+		!strings.Contains(scopeName, ":")
 }
 
 func (s *service) CreateRole(name, description string) (*Role, error) {

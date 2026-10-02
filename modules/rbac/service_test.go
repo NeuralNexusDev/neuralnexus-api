@@ -77,12 +77,12 @@ func (f *fakeStore) DetachPermission(roleID, permissionID int64) error {
 }
 func (f *fakeStore) GetPermissionsForRoles(roleIDs []string) ([]string, error) {
 	f.calls = append(f.calls, "GetPermissionsForRoles")
-	return []string{"a|b"}, f.err
+	return []string{"a:b"}, f.err
 }
 
 func TestSV01to04RoleValidation(t *testing.T) {
 	valid := []string{"a", "admin", "r2_d2", "a09", strings.Repeat("a", maxRoleNameLength)}
-	invalid := []string{"", "Admin", "1abc", "_a", "a-b", "a b", "a|b", strings.Repeat("a", maxRoleNameLength+1)}
+	invalid := []string{"", "Admin", "1abc", "_a", "a-b", "a b", "a:b", strings.Repeat("a", maxRoleNameLength+1)}
 
 	t.Run("SV-01_ValidNamesAreCreated", func(t *testing.T) {
 		for _, name := range valid {
@@ -135,7 +135,7 @@ func TestSV01to04RoleValidation(t *testing.T) {
 func TestSV05to06ScopeValidation(t *testing.T) {
 	t.Run("SV-05_InvalidScopesAreRejectedBeforeTheStore", func(t *testing.T) {
 		cases := [][2]string{
-			{"", "v"}, {"n", ""}, {"a|b", "v"}, {"n", "a|b"},
+			{"", "v"}, {"n", ""}, {"a:b", "v"},
 			{strings.Repeat("n", maxScopeNameLength+1), "v"},
 			{"n", strings.Repeat("v", maxScopeValueLength+1)},
 		}
@@ -153,6 +153,13 @@ func TestSV05to06ScopeValidation(t *testing.T) {
 		f := &fakeStore{}
 		p, err := NewService(f).CreatePermission(strings.Repeat("n", maxScopeNameLength), strings.Repeat("v", maxScopeValueLength))
 		if err != nil || p.ID != strconv.FormatInt(f.createdID, 10) {
+			t.Fatalf("got %v, %v", p, err)
+		}
+	})
+	t.Run("SV-12_ValuesMayContainAColon", func(t *testing.T) {
+		f := &fakeStore{}
+		p, err := NewService(f).CreatePermission("n", "a:b:c")
+		if err != nil || p.ScopeValue != "a:b:c" {
 			t.Fatalf("got %v, %v", p, err)
 		}
 	})

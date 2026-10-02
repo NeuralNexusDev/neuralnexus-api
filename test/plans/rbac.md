@@ -25,9 +25,11 @@
 | ST-19 | AttachPermission | Error Path | the role or the permission does not exist | one of each missing | `ErrRoleNotFound` for a missing role, `ErrPermissionNotFound` for a missing permission | P1 |  |
 | ST-20 | DetachPermission | Happy Path | a grant is removed, then removed again | attached permission | The role no longer lists it and the second call succeeds | P1 |  |
 | ST-21 | DetachPermission | Error Path | the role or the permission does not exist | one of each missing | `ErrRoleNotFound` / `ErrPermissionNotFound` | P2 |  |
-| ST-22 | GetPermissionsForRoles | Happy Path | several roles share and differ in permissions | roles with overlapping grants | Distinct `name\|value` strings for all roles | P1 |  |
+| ST-22 | GetPermissionsForRoles | Happy Path | several roles share and differ in permissions | roles with overlapping grants | Distinct `name:value` strings for all roles | P1 |  |
 | ST-23 | GetPermissionsForRoles | Edge Case | unknown role ids and no ids | no matching roles | An empty result and a nil error | P2 |  |
 | ST-24 | Store | Error Path | the database is unreachable | pool pointing at a closed port | Each store call returns an error that is neither `ErrRoleNameTaken` nor `ErrRoleNotFound` | P2 |  |
+| ST-25 | permissions table | Error Path | a scope name containing a colon is inserted directly | live database | the `permissions_scope_name_no_colon` constraint is violated | P1 |  |
+| ST-26 | GetPermissionsForRoles | Edge Case | a scope value contains a colon | permission `rbtest` / `a:b` attached | the result is `rbtest:a:b` and a session holding it matches the scope | P1 |  |
 
 
 ## service.go
@@ -38,12 +40,13 @@
 | SV-02 | CreateRole | Error Path | invalid role names | empty, upper-case, leading digit or underscore, other characters, over the length limit | `ErrInvalidRoleName` and the store is never called | P1 |  |
 | SV-03 | CreateRole | Edge Case | description at and over the limit | fake store | At the limit succeeds; over it is `ErrInvalidDescription` without a store call | P2 |  |
 | SV-04 | CreateRole | Happy Path | a role is created | fake store | The role id is the snowflake handed to the store and the permission list is empty and non-nil | P1 |  |
-| SV-05 | CreatePermission | Error Path | invalid scopes | empty or piped name or value, over either limit | `ErrInvalidScope` and the store is never called | P1 |  |
+| SV-05 | CreatePermission | Error Path | invalid scopes | empty name or value, a colon in the name, over either limit | `ErrInvalidScope` and the store is never called | P1 |  |
 | SV-06 | CreatePermission | Edge Case | scope at both limits | fake store | Created with the snowflake id given to the store | P2 |  |
 | SV-07 | Service | Error Path | a bad id | empty, non-numeric, zero, negative, fractional, overflowing | `ErrInvalidID` from every method taking an id and the store is never called | P1 |  |
 | SV-08 | AttachPermission / DetachPermission | Happy Path | ids are parsed | fake store | The store receives the role id then the permission id | P1 |  |
 | SV-09 | Service | Error Path | the store fails | fake store returns an error | Every method returns that error | P1 |  |
 | SV-10 | UpdateRole | Edge Case | one field is omitted | stored role with a name and description | The omitted field keeps its value; an empty description clears it | P1 |  |
+| SV-12 | CreatePermission | Edge Case | a scope value contains a colon | fake store | Created with the value unchanged | P2 |  |
 | SV-11 | UpdateRole | Error Path | an invalid name or description | stored role | `ErrInvalidRoleName` or `ErrInvalidDescription` and no write reaches the store | P1 |  |
 
 

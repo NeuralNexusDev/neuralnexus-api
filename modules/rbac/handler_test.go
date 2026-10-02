@@ -112,7 +112,7 @@ func rbRequest(c handlerCase, session *auth.Session, body string) *http.Request 
 }
 
 func rbAdmin() *auth.Session {
-	return rbSession(perms.ScopeAdminRoles.Name + "|" + perms.ScopeAdminRoles.Value)
+	return rbSession(perms.ScopeAdminRoles.Name + ":" + perms.ScopeAdminRoles.Value)
 }
 
 func rbDetail(t *testing.T, w *httptest.ResponseRecorder) string {
@@ -129,7 +129,7 @@ func rbDetail(t *testing.T, w *httptest.ResponseRecorder) string {
 func TestRH01to03Handlers(t *testing.T) {
 	t.Run("RH-01_EveryHandlerRejectsASessionWithoutTheRolesScope", func(t *testing.T) {
 		for _, c := range handlerCases {
-			for _, session := range []*auth.Session{rbSession(), rbSession("roles|other"), rbSession("other|*")} {
+			for _, session := range []*auth.Session{rbSession(), rbSession("roles:other"), rbSession("other:*")} {
 				svc := &stubService{}
 				w := httptest.NewRecorder()
 				c.handler(svc)(w, rbRequest(c, session, c.body))

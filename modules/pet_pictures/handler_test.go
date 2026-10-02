@@ -91,11 +91,11 @@ func hdCtxWithSession(session auth.Session) context.Context {
 }
 
 // hdSessionWithPermissions builds a session whose Permissions grant exactly
-// the given scopes, matching auth.Session.HasPermission's "name|value" check.
+// the given scopes, matching auth.Session.HasPermission's "name:value" check.
 func hdSessionWithPermissions(scopes ...perms.Scope) auth.Session {
 	names := make([]string, len(scopes))
 	for i, s := range scopes {
-		names[i] = s.Name + "|" + s.Value
+		names[i] = s.Name + ":" + s.Value
 	}
 	return auth.Session{Permissions: names}
 }

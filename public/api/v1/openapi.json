@@ -3216,7 +3216,7 @@
             },
             "post": {
                 "summary": "Create a permission",
-                "description": "Requires the admin:roles scope. The ID is generated. Scope names and values are required, must not contain a pipe, and are at most 64 and 128 characters.",
+                "description": "Requires the admin:roles scope. The ID is generated. Scope names and values are required, names must not contain a colon, and they are at most 64 and 128 characters.",
                 "security": [
                     {
                         "bearerAuth": []

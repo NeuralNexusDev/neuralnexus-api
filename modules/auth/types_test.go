@@ -240,7 +240,7 @@ func TestTY22DefaultAccountSettings(t *testing.T) {
 func TestTY23to24AccountNewSession(t *testing.T) {
 	t.Run("TY-23_UsesGivenPermissions", func(t *testing.T) {
 		a := &Account{UserID: "u1", Roles: []string{"ignored-role"}}
-		want := []string{"users|*", "ratelimit|1000"}
+		want := []string{"users:*", "ratelimit:1000"}
 		s, err := a.NewSession(12345, want)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)

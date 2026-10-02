@@ -113,15 +113,15 @@ func TestMG01Migration(t *testing.T) {
 	t.Run("MG-03_BuiltInRolesGrantTheirPermissions", func(t *testing.T) {
 		grants := func(role string) string {
 			var out string
-			err := conn.QueryRow(ctx, `SELECT COALESCE(string_agg(p.scope_name || '|' || p.scope_value, ',' ORDER BY p.scope_name), '')
+			err := conn.QueryRow(ctx, `SELECT COALESCE(string_agg(p.scope_name || ':' || p.scope_value, ',' ORDER BY p.scope_name), '')
 				FROM roles r JOIN role_permissions rp ON rp.role_id = r.id JOIN permissions p ON p.id = rp.permission_id WHERE r.name = $1`, role).Scan(&out)
 			if err != nil {
 				t.Fatalf("query failed: %v", err)
 			}
 			return out
 		}
-		all := "beenamegenerator|*,datastore|*,numberstore|*,petpictures|*,ratelimit|1000,roles|*,users|*"
-		for role, want := range map[string]string{"system": all, "owner": all, "bee_admin": "beenamegenerator|*"} {
+		all := "beenamegenerator:*,datastore:*,numberstore:*,petpictures:*,ratelimit:1000,roles:*,users:*"
+		for role, want := range map[string]string{"system": all, "owner": all, "bee_admin": "beenamegenerator:*"} {
 			if got := grants(role); got != want {
 				t.Fatalf("%s: got %q, want %q", role, got, want)
 			}

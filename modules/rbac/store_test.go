@@ -10,7 +10,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
+	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 )
 
 // rbUnusedPort returns a port unlikely to be reused, so a later connection to
@@ -91,7 +95,7 @@ func rbAssign(t *testing.T, db *pgxpool.Pool, accountOffset int, roleIDs ...stri
 func rbScopes(role *Role) []string {
 	out := make([]string, 0, len(role.Permissions))
 	for _, p := range role.Permissions {
-		out = append(out, p.ScopeName+"|"+p.ScopeValue)
+		out = append(out, p.ScopeName+":"+p.ScopeValue)
 	}
 	return out
 }
@@ -355,7 +359,7 @@ func TestST18to19AttachAndDetach(t *testing.T) {
 		}
 
 		got, _ := svc.GetRole(role.ID)
-		rbAssertStrings(t, rbScopes(got), []string{"rbtest|attach"})
+		rbAssertStrings(t, rbScopes(got), []string{"rbtest:attach"})
 	})
 
 	t.Run("ST-19_AttachNeedsBothToExist", func(t *testing.T) {
@@ -405,8 +409,8 @@ func TestST18to19AttachAndDetach(t *testing.T) {
 	})
 }
 
-func TestST22to23GetPermissionsForRoles(t *testing.T) {
-	svc, _ := rbLive(t)
+func TestST22to26GetPermissionsForRoles(t *testing.T) {
+	svc, db := rbLive(t)
 
 	t.Run("ST-22_ReturnsTheDistinctPermissionsOfAllTheRoles", func(t *testing.T) {
 		a := rbRole(t, svc, "perms_a")
@@ -425,7 +429,7 @@ func TestST22to23GetPermissionsForRoles(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetPermissionsForRoles() err = %v", err)
 		}
-		rbAssertStrings(t, got, []string{"rbtest|only_b", "rbtest|shared"})
+		rbAssertStrings(t, got, []string{"rbtest:only_b", "rbtest:shared"})
 	})
 
 	t.Run("ST-23_UnknownAndNoRolesGrantNothing", func(t *testing.T) {
@@ -434,6 +438,37 @@ func TestST22to23GetPermissionsForRoles(t *testing.T) {
 			if err != nil || len(got) != 0 {
 				t.Errorf("GetPermissionsForRoles(%v) = (%v, %v), want (empty, nil)", ids, got, err)
 			}
+		}
+	})
+
+	t.Run("ST-25_ColonInAScopeNameIsRefusedByTheDatabase", func(t *testing.T) {
+		_, err := db.Exec(context.Background(), "INSERT INTO permissions (id, scope_name, scope_value) VALUES ($1, 'rbtest:x', 'v')", int64(rbAccountIDBase))
+
+		var pgErr *pgconn.PgError
+		if !errors.As(err, &pgErr) || pgErr.ConstraintName != "permissions_scope_name_no_colon" {
+			t.Errorf("insert err = %v, want a violation of permissions_scope_name_no_colon", err)
+		}
+	})
+
+	t.Run("ST-26_ValueWithAColonIsJoinedAndSplitsOnTheFirstColon", func(t *testing.T) {
+		role := rbRole(t, svc, "colon_value")
+		permission, err := svc.CreatePermission("rbtest", "a:b")
+		if err != nil {
+			t.Fatalf("CreatePermission() err = %v", err)
+		}
+		if err := svc.AttachPermission(role.ID, permission.ID); err != nil {
+			t.Fatalf("AttachPermission() err = %v", err)
+		}
+
+		got, err := svc.GetPermissionsForRoles([]string{role.ID})
+
+		if err != nil {
+			t.Fatalf("GetPermissionsForRoles() err = %v", err)
+		}
+		rbAssertStrings(t, got, []string{"rbtest:a:b"})
+		s := &auth.Session{Permissions: got}
+		if !s.HasPermission(perms.Scope{Name: "rbtest", Value: "a:b"}) {
+			t.Errorf("a session holding %v does not match the scope rbtest / a:b", got)
 		}
 	})
 }

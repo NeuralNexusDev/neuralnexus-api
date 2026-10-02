@@ -22,7 +22,8 @@ import (
 // 	scope_name TEXT NOT NULL,
 // 	scope_value TEXT NOT NULL,
 // 	CONSTRAINT permissions_scope_unique UNIQUE (scope_name, scope_value),
-// 	CONSTRAINT permissions_scope_name_not_empty CHECK (scope_name <> '')
+// 	CONSTRAINT permissions_scope_name_not_empty CHECK (scope_name <> ''),
+// 	CONSTRAINT permissions_scope_name_no_colon CHECK (scope_name NOT LIKE '%:%')
 // );
 //
 // CREATE TABLE role_permissions (
@@ -255,7 +256,7 @@ func (s *store) GetPermissionsForRoles(roleIDs []string) ([]string, error) {
 		if err := rows.Scan(&name, &value); err != nil {
 			return nil, err
 		}
-		permissions = append(permissions, name+"|"+value)
+		permissions = append(permissions, name+":"+value)
 	}
 	return permissions, rows.Err()
 }
