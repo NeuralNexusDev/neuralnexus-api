@@ -250,7 +250,7 @@ func TestUS07to10GetUserPermissions(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		want := []string{"beenamegenerator:*", "petpictures:*", "ratelimit:1000"}
+		want := []string{"beenamegenerator.admin", "petpictures.admin", "ratelimit:1000"}
 		if len(got) != len(want) {
 			t.Fatalf("GetUserPermissions() = %v, want %v", got, want)
 		}

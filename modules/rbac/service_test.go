@@ -1,7 +1,9 @@
 package rbac
 
 import (
+	"encoding/json"
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -10,13 +12,14 @@ import (
 var errSvcStore = errors.New("store failure")
 
 type fakeStore struct {
-	calls      []string
-	err        error
-	role       *Role
-	permission *Permission
-	createdID  int64
-	attached   [2]int64
-	created    []string
+	calls         []string
+	err           error
+	role          *Role
+	permission    *Permission
+	createdID     int64
+	attached      [2]int64
+	attachedValue []byte
+	created       []string
 }
 
 func (f *fakeStore) CreateRole(id int64, name, description string) error {
@@ -45,9 +48,9 @@ func (f *fakeStore) DeleteRole(id int64) error {
 	f.calls = append(f.calls, "DeleteRole")
 	return f.err
 }
-func (f *fakeStore) CreatePermission(id int64, scopeName, scopeValue string) error {
+func (f *fakeStore) CreatePermission(id int64, node, description, valueType, merge string) error {
 	f.calls = append(f.calls, "CreatePermission")
-	f.created = []string{scopeName, scopeValue}
+	f.created = []string{node, description, valueType, merge}
 	f.createdID = id
 	return f.err
 }
@@ -55,8 +58,8 @@ func (f *fakeStore) GetPermission(id int64) (*Permission, error) {
 	f.calls = append(f.calls, "GetPermission")
 	return f.permission, f.err
 }
-func (f *fakeStore) GetPermissionByScope(scopeName, scopeValue string) (*Permission, error) {
-	f.calls = append(f.calls, "GetPermissionByScope")
+func (f *fakeStore) GetPermissionByNode(node string) (*Permission, error) {
+	f.calls = append(f.calls, "GetPermissionByNode")
 	return f.permission, f.err
 }
 func (f *fakeStore) ListPermissions() ([]*Permission, error) {
@@ -67,9 +70,10 @@ func (f *fakeStore) DeletePermission(id int64) error {
 	f.calls = append(f.calls, "DeletePermission")
 	return f.err
 }
-func (f *fakeStore) AttachPermission(roleID, permissionID int64) error {
+func (f *fakeStore) AttachPermission(roleID, permissionID int64, value []byte) error {
 	f.calls = append(f.calls, "AttachPermission")
 	f.attached = [2]int64{roleID, permissionID}
+	f.attachedValue = value
 	return f.err
 }
 func (f *fakeStore) DetachPermission(roleID, permissionID int64) error {
@@ -134,58 +138,57 @@ func TestSV01to04RoleValidation(t *testing.T) {
 	})
 }
 
-func TestSV05to06ScopeValidation(t *testing.T) {
-	t.Run("SV-05_InvalidScopesAreRejectedBeforeTheStore", func(t *testing.T) {
-		cases := [][2]string{
-			{"", "v"}, {"n", ""}, {"a:b", "v"},
-			{strings.Repeat("n", maxScopeNameLength+1), "v"},
-			{"n", strings.Repeat("v", maxScopeValueLength+1)},
-		}
-		for _, c := range cases {
+func TestSV05to06NodeValidation(t *testing.T) {
+	t.Run("SV-05_InvalidNodesAreRejectedBeforeTheStore", func(t *testing.T) {
+		bad := []string{"", "A", "aB", "1a", "a.1b", "a._b", "_a", "a..b", ".a", "a.", "a-b", "a:b", "a b", "a|b", "a\x00", "é", "a.é", strings.Repeat("a", maxNodeLength+1)}
+		for _, node := range bad {
 			f := &fakeStore{}
-			if _, err := NewService(f).CreatePermission(c[0], c[1]); !errors.Is(err, ErrInvalidScope) {
-				t.Fatalf("scope %q/%q: got %v, want ErrInvalidScope", c[0], c[1], err)
+			if _, err := NewService(f).CreatePermission(node, "", "", ""); !errors.Is(err, ErrInvalidNode) {
+				t.Fatalf("node %q: got %v, want ErrInvalidNode", node, err)
 			}
 			if len(f.calls) != 0 {
-				t.Fatalf("scope %q/%q reached the store", c[0], c[1])
+				t.Fatalf("node %q reached the store", node)
 			}
 		}
 	})
-	t.Run("SV-06_ScopesAtTheLimitAreCreated", func(t *testing.T) {
-		f := &fakeStore{}
-		p, err := NewService(f).CreatePermission(strings.Repeat("n", maxScopeNameLength), strings.Repeat("v", maxScopeValueLength))
-		if err != nil || p.ID != strconv.FormatInt(f.createdID, 10) || f.created[0] != strings.Repeat("n", maxScopeNameLength) || f.created[1] != strings.Repeat("v", maxScopeValueLength) {
-			t.Fatalf("got %v, %v, store got %v lengths", p, err, len(f.created))
-		}
-	})
-	t.Run("SV-12_ValuesMayContainAColon", func(t *testing.T) {
-		f := &fakeStore{}
-		p, err := NewService(f).CreatePermission("n", "a:b:c")
-		if err != nil || p.ScopeValue != "a:b:c" || f.created[1] != "a:b:c" {
-			t.Fatalf("got %v, %v, store got %v", p, err, f.created)
-		}
-	})
-	t.Run("SV-13_TextRulesApplyToScopesAndDescriptions", func(t *testing.T) {
-		badScopes := [][2]string{
-			{"a\x00b", "v"}, {"n", "a\x00b"}, {"\xff", "v"}, {"n", "\xff"}, {"n\t", "v"}, {"n", "a\nb"},
-			{"n\ufffd", "v"}, {"n", "a\ufffdb"}, {"n", "a\u200bb"}, {"n", "a\u202eb"}, {"n\u200d", "v"},
-			{" n", "v"}, {"n ", "v"}, {"n", " v"}, {"n", "v "},
-			{strings.Repeat("é", maxScopeNameLength+1), "v"}, {"n", strings.Repeat("é", maxScopeValueLength+1)},
-		}
-		for _, c := range badScopes {
+	t.Run("SV-06_ValidNodesAreCreatedUnchanged", func(t *testing.T) {
+		for _, node := range []string{"a", "roles.admin", "a_b.c2.d_3", "a0", strings.Repeat("a", maxNodeLength)} {
 			f := &fakeStore{}
-			if _, err := NewService(f).CreatePermission(c[0], c[1]); !errors.Is(err, ErrInvalidScope) || len(f.calls) != 0 {
-				t.Fatalf("scope %q/%q: got %v with calls %v, want ErrInvalidScope before the store", c[0], c[1], err, f.calls)
+			p, err := NewService(f).CreatePermission(node, "d", "", "")
+			if err != nil || p.Node != node || p.ID != strconv.FormatInt(f.createdID, 10) || f.created[0] != node || f.created[1] != "d" {
+				t.Fatalf("node %q: got %v, %v, store got %v", node, p, err, f.created)
 			}
 		}
-		f := &fakeStore{}
-		if _, err := NewService(f).CreatePermission(strings.Repeat("é", maxScopeNameLength), strings.Repeat("é", maxScopeValueLength)); err != nil {
-			t.Fatalf("scope parts of exactly the limit in characters were refused: %v", err)
+	})
+	t.Run("SV-12_ValueTypesAndMergeRulesMustPair", func(t *testing.T) {
+		valid := [][3]string{
+			{"", "", ""}, {"int", "max", "max"}, {"int", "min", "min"},
+			{"string", "", "first"}, {"string", "first", "first"},
+			{"string_list", "", "union"}, {"string_list", "union", "union"},
 		}
+		for _, c := range valid {
+			f := &fakeStore{}
+			p, err := NewService(f).CreatePermission("a.b", "", c[0], c[1])
+			if err != nil || p.ValueType != c[0] || p.Merge != c[2] || f.created[2] != c[0] || f.created[3] != c[2] {
+				t.Fatalf("%v: got %v, %v, store got %v, want merge %q", c, p, err, f.created, c[2])
+			}
+		}
+		for _, c := range [][2]string{{"int", ""}, {"int", "first"}, {"int", "union"}, {"string", "max"}, {"string_list", "min"}, {"bool", ""}, {"", "max"}} {
+			f := &fakeStore{}
+			if _, err := NewService(f).CreatePermission("a.b", "", c[0], c[1]); !errors.Is(err, ErrInvalidValueType) || len(f.calls) != 0 {
+				t.Fatalf("%v: got %v with calls %v, want ErrInvalidValueType before the store", c, err, f.calls)
+			}
+		}
+	})
+	t.Run("SV-13_TextRulesApplyToDescriptions", func(t *testing.T) {
 		for _, d := range []string{"a\x00b", "\xff", "a\ufffdb", strings.Repeat("é", maxDescriptionLen+1)} {
 			f := &fakeStore{}
 			if _, err := NewService(f).CreateRole("a", d); !errors.Is(err, ErrInvalidDescription) || len(f.calls) != 0 {
 				t.Fatalf("description %q: got %v with calls %v, want ErrInvalidDescription before the store", d, err, f.calls)
+			}
+			f = &fakeStore{}
+			if _, err := NewService(f).CreatePermission("a.b", d, "", ""); !errors.Is(err, ErrInvalidDescription) || len(f.calls) != 0 {
+				t.Fatalf("permission description %q: got %v with calls %v, want ErrInvalidDescription before the store", d, err, f.calls)
 			}
 		}
 		if _, err := NewService(&fakeStore{}).CreateRole("a", "line one\nline two \U0001F468\u200d\U0001F4BB"); err != nil {
@@ -203,9 +206,9 @@ func TestSV05to06ScopeValidation(t *testing.T) {
 				t.Fatalf("GetRoleByName(%q) err = %v, want ErrRoleNotFound", name, err)
 			}
 		}
-		for _, c := range [][2]string{{"a\x00", "v"}, {"n:x", "v"}, {"n", ""}} {
-			if _, err := s.GetPermissionByScope(c[0], c[1]); !errors.Is(err, ErrPermissionNotFound) {
-				t.Fatalf("GetPermissionByScope(%q, %q) err = %v, want ErrPermissionNotFound", c[0], c[1], err)
+		for _, node := range []string{"a\x00", "n:x", "N", "a..b", ""} {
+			if _, err := s.GetPermissionByNode(node); !errors.Is(err, ErrPermissionNotFound) {
+				t.Fatalf("GetPermissionByNode(%q) err = %v, want ErrPermissionNotFound", node, err)
 			}
 		}
 		if len(f.calls) != 0 {
@@ -213,6 +216,9 @@ func TestSV05to06ScopeValidation(t *testing.T) {
 		}
 		if _, err := s.GetRoleByName("owner"); err != nil {
 			t.Fatalf("GetRoleByName() of a valid name err = %v", err)
+		}
+		if _, err := s.GetPermissionByNode("roles.admin"); err != nil {
+			t.Fatalf("GetPermissionByNode() of a valid node err = %v", err)
 		}
 	})
 }
@@ -228,8 +234,8 @@ func TestSV07to09IDs(t *testing.T) {
 			errs := []error{
 				s.DeleteRole(id),
 				s.DeletePermission(id),
-				s.AttachPermission(id, "1"),
-				s.AttachPermission("1", id),
+				s.AttachPermission(id, "1", nil),
+				s.AttachPermission("1", id, nil),
 				s.DetachPermission(id, "1"),
 				s.DetachPermission("1", id),
 			}
@@ -252,7 +258,7 @@ func TestSV07to09IDs(t *testing.T) {
 	t.Run("SV-08_AttachAndDetachPassTheParsedIDsInOrder", func(t *testing.T) {
 		f := &fakeStore{role: &Role{Name: "mod"}, permission: &Permission{}}
 		s := NewService(f)
-		if err := s.AttachPermission("11", "22"); err != nil || f.attached != [2]int64{11, 22} {
+		if err := s.AttachPermission("11", "22", nil); err != nil || f.attached != [2]int64{11, 22} {
 			t.Fatalf("attach: %v %v", err, f.attached)
 		}
 		f.attached = [2]int64{}
@@ -265,12 +271,12 @@ func TestSV07to09IDs(t *testing.T) {
 		s := NewService(f)
 		name := "x"
 		errs := []error{
-			s.DeleteRole("1"), s.DeletePermission("1"), s.AttachPermission("1", "1"), s.DetachPermission("1", "1"),
+			s.DeleteRole("1"), s.DeletePermission("1"), s.AttachPermission("1", "1", nil), s.DetachPermission("1", "1"),
 		}
 		var e error
 		_, e = s.CreateRole("a", "")
 		errs = append(errs, e)
-		_, e = s.CreatePermission("n", "v")
+		_, e = s.CreatePermission("n", "", "", "")
 		errs = append(errs, e)
 		_, e = s.GetRole("1")
 		errs = append(errs, e)
@@ -282,7 +288,7 @@ func TestSV07to09IDs(t *testing.T) {
 		errs = append(errs, e)
 		_, e = s.GetPermission("1")
 		errs = append(errs, e)
-		_, e = s.GetPermissionByScope("n", "v")
+		_, e = s.GetPermissionByNode("n")
 		errs = append(errs, e)
 		_, e = s.ListPermissions()
 		errs = append(errs, e)
@@ -374,7 +380,7 @@ func TestSV15to18BuiltinRoles(t *testing.T) {
 	})
 	t.Run("SV-17_RolesPermissionStaysOnSystemAndOwner", func(t *testing.T) {
 		for _, name := range []string{"system", "owner"} {
-			f := &fakeStore{role: &Role{ID: "5", Name: name}, permission: &Permission{ID: "6", ScopeName: "roles", ScopeValue: "*"}}
+			f := &fakeStore{role: &Role{ID: "5", Name: name}, permission: &Permission{ID: "6", Node: "roles.admin"}}
 			if err := NewService(f).DetachPermission("5", "6"); !errors.Is(err, ErrBuiltinRole) {
 				t.Fatalf("detach from %s err = %v, want ErrBuiltinRole", name, err)
 			}
@@ -386,13 +392,91 @@ func TestSV15to18BuiltinRoles(t *testing.T) {
 		}
 	})
 	t.Run("SV-18_OtherDetachesAreAllowed", func(t *testing.T) {
-		for _, c := range []struct{ role, name, value string }{
-			{"owner", "users", "*"}, {"owner", "roles", "read"}, {"mod", "roles", "*"}, {"bee_admin", "roles", "*"},
+		for _, c := range []struct{ role, node string }{
+			{"owner", "users.admin"}, {"owner", "roles"}, {"owner", "roles.administrator"}, {"mod", "roles.admin"}, {"bee_admin", "roles.admin"},
 		} {
-			f := &fakeStore{role: &Role{Name: c.role}, permission: &Permission{ScopeName: c.name, ScopeValue: c.value}}
+			f := &fakeStore{role: &Role{Name: c.role}, permission: &Permission{Node: c.node}}
 			if err := NewService(f).DetachPermission("5", "6"); err != nil || f.calls[len(f.calls)-1] != "DetachPermission" {
-				t.Fatalf("detach %s:%s from %s err = %v, calls %v", c.name, c.value, c.role, err, f.calls)
+				t.Fatalf("detach %s from %s err = %v, calls %v", c.node, c.role, err, f.calls)
 			}
+		}
+	})
+}
+
+func TestSV19to23GrantedValues(t *testing.T) {
+	attach := func(valueType string, value any) (*fakeStore, error) {
+		f := &fakeStore{role: &Role{Name: "mod"}, permission: &Permission{ID: "6", Node: "a.b", ValueType: valueType}}
+		return f, NewService(f).AttachPermission("5", "6", value)
+	}
+	longText := strings.Repeat("v", maxScopeValueLength+1)
+
+	t.Run("SV-19_PermissionsWithoutATypeTakeNoValue", func(t *testing.T) {
+		f, err := attach("", nil)
+		if err != nil || f.attachedValue != nil || f.calls[len(f.calls)-1] != "AttachPermission" {
+			t.Fatalf("no value: err %v, stored %q", err, f.attachedValue)
+		}
+		for _, v := range []any{"x", 5, []string{"a"}, false} {
+			f, err := attach("", v)
+			if !errors.Is(err, ErrInvalidValue) || slices.Contains(f.calls, "AttachPermission") {
+				t.Fatalf("value %v: err %v, calls %v, want ErrInvalidValue before the store", v, err, f.calls)
+			}
+		}
+	})
+	t.Run("SV-20_IntValuesMustBeSafeWholeNumbers", func(t *testing.T) {
+		for _, v := range []any{json.Number("1000"), float64(1000), 1000, int64(1000)} {
+			f, err := attach("int", v)
+			if err != nil || string(f.attachedValue) != "1000" {
+				t.Fatalf("value %#v: err %v, stored %q", v, err, f.attachedValue)
+			}
+		}
+		for _, v := range []any{nil, "5", 1.5, json.Number("1.5"), float64(1e300), int64(1<<53 + 1), true, []any{1}} {
+			f, err := attach("int", v)
+			if !errors.Is(err, ErrInvalidValue) || slices.Contains(f.calls, "AttachPermission") {
+				t.Fatalf("value %#v: err %v, calls %v, want ErrInvalidValue before the store", v, err, f.calls)
+			}
+		}
+	})
+	t.Run("SV-21_StringValuesFollowTheTextRules", func(t *testing.T) {
+		f, err := attach("string", "abc:d")
+		if err != nil || string(f.attachedValue) != `"abc:d"` {
+			t.Fatalf("err %v, stored %q", err, f.attachedValue)
+		}
+		for _, v := range []any{nil, "", " a", "a ", "a\x00", "a\u200bb", "a\nb", "\xff", longText, 5, []string{"a"}} {
+			f, err := attach("string", v)
+			if !errors.Is(err, ErrInvalidValue) || slices.Contains(f.calls, "AttachPermission") {
+				t.Fatalf("value %#v: err %v, calls %v, want ErrInvalidValue before the store", v, err, f.calls)
+			}
+		}
+	})
+	t.Run("SV-22_ListValuesAreSortedAndDeduplicated", func(t *testing.T) {
+		for _, v := range []any{[]any{"b", "a", "a"}, []string{"b", "a", "a"}} {
+			f, err := attach("string_list", v)
+			if err != nil || string(f.attachedValue) != `["a","b"]` {
+				t.Fatalf("value %#v: err %v, stored %q", v, err, f.attachedValue)
+			}
+		}
+		tooMany := make([]string, maxListValues+1)
+		for i := range tooMany {
+			tooMany[i] = strconv.Itoa(i)
+		}
+		for _, v := range []any{nil, "a", []any{}, []string{}, tooMany, []any{"a", 5}, []any{"a", ""}, []string{"a", longText}, []string{"a\x00"}} {
+			f, err := attach("string_list", v)
+			if !errors.Is(err, ErrInvalidValue) || slices.Contains(f.calls, "AttachPermission") {
+				t.Fatalf("value %#v: err %v, calls %v, want ErrInvalidValue before the store", v, err, f.calls)
+			}
+		}
+		atLimit := make([]string, maxListValues)
+		for i := range atLimit {
+			atLimit[i] = strconv.Itoa(i)
+		}
+		if _, err := attach("string_list", atLimit); err != nil {
+			t.Fatalf("a list of exactly the limit was refused: %v", err)
+		}
+	})
+	t.Run("SV-23_UnknownPermissionsFailBeforeTheValueIsChecked", func(t *testing.T) {
+		f := &fakeStore{err: ErrPermissionNotFound}
+		if err := NewService(f).AttachPermission("5", "6", "x"); !errors.Is(err, ErrPermissionNotFound) || slices.Contains(f.calls, "AttachPermission") {
+			t.Fatalf("err %v, calls %v, want ErrPermissionNotFound without an attach", err, f.calls)
 		}
 	})
 }

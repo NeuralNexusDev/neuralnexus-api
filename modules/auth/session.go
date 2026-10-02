@@ -6,6 +6,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"log"
 	"os"
+	"slices"
+	"strings"
 	"time"
 
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
@@ -64,14 +66,19 @@ func (s *Session) ToProto() proto.Message {
 	}
 }
 
-// HasPermission checks if a session has a permission
+// HasPermission checks if a session holds a node, bare or with any value
 func (s *Session) HasPermission(permission perms.Scope) bool {
 	for _, p := range s.Permissions {
-		if p == permission.Name+":"+permission.Value {
+		if p == permission.Node || strings.HasPrefix(p, permission.Node+":") {
 			return true
 		}
 	}
 	return false
+}
+
+// HasPermissionValue checks if a session holds a node with a given value
+func (s *Session) HasPermissionValue(permission perms.Scope, value string) bool {
+	return slices.Contains(s.Permissions, permission.Node+":"+value)
 }
 
 // IsValid checks if a session is expired

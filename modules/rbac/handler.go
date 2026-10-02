@@ -1,7 +1,9 @@
 package rbac
 
 import (
+	"encoding/json"
 	"errors"
+	"io"
 	"log"
 	"net/http"
 
@@ -17,7 +19,9 @@ const (
 	msgInvalidID          = "The ID is not a valid ID"
 	msgInvalidRoleName    = "Role names start with a lower-case letter and use only lower-case letters, digits and underscores, up to 63 characters"
 	msgInvalidDescription = "Descriptions are valid text of at most 256 characters"
-	msgInvalidScope       = "Scope names and values are required valid text without control or format characters or surrounding spaces, names must not contain a colon, and they are at most 64 and 128 characters"
+	msgInvalidNode        = "Nodes are lower-case words of letters, digits and underscores, starting with a letter and joined by dots, up to 128 characters"
+	msgInvalidValueType   = "Value types are int with merge max or min, string with merge first, and string_list with merge union"
+	msgInvalidValue       = "The value must match the permission's type and be valid text without control or format characters or surrounding spaces, and permissions without a type take no value"
 	msgRoleNotFound       = "Role not found"
 	msgPermissionNotFound = "Permission not found"
 	msgRoleNameTaken      = "A role with that name already exists"
@@ -40,8 +44,14 @@ type updateRoleRequest struct {
 }
 
 type createPermissionRequest struct {
-	ScopeName  string `json:"scope_name" xml:"scope_name"`
-	ScopeValue string `json:"scope_value" xml:"scope_value"`
+	Node        string `json:"node" xml:"node"`
+	Description string `json:"description" xml:"description"`
+	ValueType   string `json:"value_type" xml:"value_type"`
+	Merge       string `json:"merge" xml:"merge"`
+}
+
+type attachPermissionRequest struct {
+	Value any `json:"value"`
 }
 
 type failureMapping struct {
@@ -54,7 +64,9 @@ var failures = []failureMapping{
 	{ErrInvalidID, responses.BadRequest, msgInvalidID},
 	{ErrInvalidRoleName, responses.BadRequest, msgInvalidRoleName},
 	{ErrInvalidDescription, responses.BadRequest, msgInvalidDescription},
-	{ErrInvalidScope, responses.BadRequest, msgInvalidScope},
+	{ErrInvalidNode, responses.BadRequest, msgInvalidNode},
+	{ErrInvalidValueType, responses.BadRequest, msgInvalidValueType},
+	{ErrInvalidValue, responses.BadRequest, msgInvalidValue},
 	{ErrRoleNotFound, responses.NotFound, msgRoleNotFound},
 	{ErrPermissionNotFound, responses.NotFound, msgPermissionNotFound},
 	{ErrRoleNameTaken, responses.Conflict, msgRoleNameTaken},
@@ -213,13 +225,13 @@ func GetPermissionHandler(s Service) http.HandlerFunc {
 	}
 }
 
-// GetPermissionByScopeHandler gets a permission by its scope name and value
-func GetPermissionByScopeHandler(s Service) http.HandlerFunc {
+// GetPermissionByNodeHandler gets a permission by its node
+func GetPermissionByNodeHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !authorized(w, r) {
 			return
 		}
-		permission, err := s.GetPermissionByScope(r.PathValue("scope_name"), r.PathValue("scope_value"))
+		permission, err := s.GetPermissionByNode(r.PathValue("node"))
 		if err != nil {
 			respondFailure(w, r, err)
 			return
@@ -239,7 +251,7 @@ func CreatePermissionHandler(s Service) http.HandlerFunc {
 			responses.BadRequest(w, r, msgUnableToParseBody)
 			return
 		}
-		permission, err := s.CreatePermission(body.ScopeName, body.ScopeValue)
+		permission, err := s.CreatePermission(body.Node, body.Description, body.ValueType, body.Merge)
 		if err != nil {
 			respondFailure(w, r, err)
 			return
@@ -262,13 +274,22 @@ func DeletePermissionHandler(s Service) http.HandlerFunc {
 	}
 }
 
-// AttachPermissionHandler grants a permission to a role
+// AttachPermissionHandler grants a permission to a role, with a value if the permission takes one
 func AttachPermissionHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !authorized(w, r) {
 			return
 		}
-		if err := s.AttachPermission(r.PathValue("id"), r.PathValue("permission_id")); err != nil {
+		var body attachPermissionRequest
+		if r.ContentLength != 0 {
+			dec := json.NewDecoder(r.Body)
+			dec.UseNumber()
+			if err := dec.Decode(&body); err != nil && !errors.Is(err, io.EOF) {
+				responses.BadRequest(w, r, msgUnableToParseBody)
+				return
+			}
+		}
+		if err := s.AttachPermission(r.PathValue("id"), r.PathValue("permission_id"), body.Value); err != nil {
 			respondFailure(w, r, err)
 			return
 		}

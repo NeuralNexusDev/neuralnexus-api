@@ -111,7 +111,7 @@ func ApplyRoutes(
 	mux.Handle("GET /api/v1/permissions", mwAuth(rbac.ListPermissionsHandler(rbacService)))
 	mux.Handle("POST /api/v1/permissions", mwAuth(rbac.CreatePermissionHandler(rbacService)))
 	mux.Handle("GET /api/v1/permissions/{id}", mwAuth(rbac.GetPermissionHandler(rbacService)))
-	mux.Handle("GET /api/v1/permissions/scope/{scope_name}/{scope_value}", mwAuth(rbac.GetPermissionByScopeHandler(rbacService)))
+	mux.Handle("GET /api/v1/permissions/node/{node}", mwAuth(rbac.GetPermissionByNodeHandler(rbacService)))
 	mux.Handle("DELETE /api/v1/permissions/{id}", mwAuth(rbac.DeletePermissionHandler(rbacService)))
 
 	// --------------- Bee Name Generator ---------------

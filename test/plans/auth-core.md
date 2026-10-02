@@ -43,8 +43,8 @@
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
 | SE-01 | ToProto | Happy Path | Populated `*Session` | | Returns `*sessionpb.Session` with Id/UserId/Permissions/IssuedAt/LastUsedAt/ExpiresAt copied 1:1 | P2 |  |
-| SE-02 | HasPermission | Happy Path | `Permissions` contains `"name:value"` for the checked scope | | Returns true | P1 |
-| SE-03 | HasPermission | Edge Case | `Permissions` empty, or contains only non-matching entries | | Returns false | P2 |  |
+| SE-02 | HasPermission | Happy Path | `Permissions` holds the node bare, with a value, or with a value containing a colon | | Returns true | P1 |  |
+| SE-03 | HasPermission | Error Path | no permissions, or only look-alike entries | entries such as `perm.nodes`, `perm.node.sub`, `perm.nod`, `perm.node2:value` and `x:perm.node` | Returns false | P1 |  |
 | SE-04 | IsValid | Happy Path | `ExpiresAt` in the future | | Returns true | P1 |  |
 | SE-05 | IsValid | Edge Case | `ExpiresAt == 0` (never expires) | | Returns true | P1 |  |
 | SE-06 | IsValid | Edge Case | `ExpiresAt` in the past | | Returns false | P0 |  |
@@ -76,6 +76,8 @@
 | SE-32 | init | Happy Path | Package loads under the required `JWT_SECRET`/`NN_SITE_URL`/`NN_API_URL` env (the precondition every other test in this file already runs under) | | `JWT_SECRET` and `validAudiences` are populated from env without `log.Fatal` firing; `validAudiences == []string{NN_SITE_URL, NN_API_URL}` | P2 | Asserts init's already-established postcondition rather than re-invoking it |
 | SE-33 | init | Error Path | `JWT_SECRET` unset | Test binary re-exec'd as a subprocess with `JWT_SECRET=""`, other required env vars inherited unchanged | Subprocess exits non-zero via `log.Fatal(msgJWTSecretUnset)` | P1 | Re-exec/TestCrasher pattern (see `os/exec` docs) — init() runs unconditionally at process start, before any `-test.run` filtering |
 | SE-34 | init | Error Path | `NN_SITE_URL` or `NN_API_URL` unset (`JWT_SECRET` set) | Test binary re-exec'd as a subprocess with each cleared in turn | Subprocess exits non-zero via `log.Fatal(msgSiteAPIURLUnset)` | P1 | Same re-exec pattern; exercises both var slots of the OR condition |
+| SE-35 | HasPermissionValue | Happy Path | the session holds `node:a` and `node:b:c` | | true for `a` and `b:c` | P1 |  |
+| SE-36 | HasPermissionValue | Error Path | the value is absent, empty, a prefix of a held value, or the node itself | | false | P1 |  |
 
 ## store.go
 
@@ -199,7 +201,7 @@
 | TY-20 | RemoveRole | Edge Case | Role not present | `RemoveRole("z")` | `Roles` unchanged, no panic | P2 |  |
 | TY-21 | RemoveRole | Edge Case | `Roles` empty | `RemoveRole("z")` | No panic, `Roles` remains empty | P3 |  |
 | TY-22 | DefaultAccountSettings | Accessor | `userID = "u1"` | | Returns `&AccountSettings{UserID:"u1", PasswordAuthEnabled:true}` | P2 |  |
-| TY-23 | NewSession (Account) | Happy Path | called with an expiry and a permissions list | `Account{UserID: "u1"}`, permissions `["users:*", "ratelimit:1000"]` | Returns a `*Session` with `UserID` `"u1"`, `ExpiresAt` as given and `Permissions` equal to the list passed in, whatever `Account.Roles` holds | P1 |  |
+| TY-23 | NewSession (Account) | Happy Path | called with an expiry and a permissions list | `Account{UserID: "u1"}`, permissions `["users.admin", "ratelimit:1000"]` | Returns a `*Session` with `UserID` `"u1"`, `ExpiresAt` as given and `Permissions` equal to the list passed in, whatever `Account.Roles` holds | P1 |  |
 | TY-24 | NewSession (Account) | Edge Case | called with nil permissions | | `Session.Permissions` is empty and non-nil, and the error is nil | P1 |  |
 | TY-26 | NewLinkedAccount | Happy Path | userID, platform, username, platformID, data given | | Returns `*LinkedAccount` with all fields copied, `Verified == true`, `LoginEnabled == true` | P2 |  |
 | TY-27 | init | Happy Path | Package loads under the required `PEPPER` env (the precondition every other test in this file already runs under) | | `pepper` is populated from env without `log.Fatal` firing | P2 | Asserts init's already-established postcondition rather than re-invoking it |
@@ -215,7 +217,7 @@
 | US-04 | GetUserFromPlatform | Happy Path | `als.GetLinkedAccountByPlatformID` then `as.GetAccountByID` both succeed | | Returns the resolved account, nil | P1 |  |
 | US-05 | GetUserFromPlatform | Error Path | `als` lookup fails (e.g. `ErrNotFound`) | | Returns nil, error; `as.GetAccountByID` never called | P2 |  |
 | US-06 | GetUserFromPlatform | Error Path | `als` lookup succeeds but `as.GetAccountByID` fails | | Error propagated unchanged | P2 |  |
-| US-07 | GetUserPermissions | Happy Path | `as.GetAccountByID` returns an account holding one role id | fake role store returns scopes | Returns the role store's `"name:value"` permissions | P1 |  |
+| US-07 | GetUserPermissions | Happy Path | `as.GetAccountByID` returns an account holding one role id | fake role store returns scopes | Returns the role store's node permissions | P1 |  |
 | US-08 | GetUserPermissions | Error Path | `as.GetAccountByID` fails | | Returns nil, error | P2 |  |
 | US-09 | GetUserPermissions | Edge Case | `Account.Roles` holds two role ids | fake role store | The role store is called once with both ids and the permissions of both are returned | P1 |  |
 | US-10 | GetUserPermissions | Edge Case | `Account.Roles` empty | | Returns empty non-nil permissions, nil error, without a role lookup | P2 |  |

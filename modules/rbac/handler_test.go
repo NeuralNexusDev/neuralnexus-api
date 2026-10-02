@@ -44,24 +44,24 @@ func (s *stubService) UpdateRole(id string, name, description *string) (*Role, e
 	return &Role{ID: id}, s.err
 }
 func (s *stubService) DeleteRole(id string) error { s.args = []string{id}; return s.err }
-func (s *stubService) CreatePermission(scopeName, scopeValue string) (*Permission, error) {
-	s.args = []string{scopeName, scopeValue}
-	return &Permission{ID: "1", ScopeName: scopeName, ScopeValue: scopeValue}, s.err
+func (s *stubService) CreatePermission(node, description, valueType, merge string) (*Permission, error) {
+	s.args = []string{node, description, valueType, merge}
+	return &Permission{ID: "1", Node: node, Description: description, ValueType: valueType, Merge: merge}, s.err
 }
 func (s *stubService) GetPermission(id string) (*Permission, error) {
 	s.args = []string{id}
 	return &Permission{ID: id}, s.err
 }
-func (s *stubService) GetPermissionByScope(scopeName, scopeValue string) (*Permission, error) {
-	s.args = []string{scopeName, scopeValue}
-	return &Permission{ScopeName: scopeName, ScopeValue: scopeValue}, s.err
+func (s *stubService) GetPermissionByNode(node string) (*Permission, error) {
+	s.args = []string{node}
+	return &Permission{Node: node}, s.err
 }
 func (s *stubService) ListPermissions() ([]*Permission, error) {
 	return []*Permission{{ID: "1"}}, s.err
 }
 func (s *stubService) DeletePermission(id string) error { s.args = []string{id}; return s.err }
-func (s *stubService) AttachPermission(roleID, permissionID string) error {
-	s.args = []string{roleID, permissionID}
+func (s *stubService) AttachPermission(roleID, permissionID string, value any) error {
+	s.args = []string{roleID, permissionID, fmt.Sprint(value)}
 	return s.err
 }
 func (s *stubService) DetachPermission(roleID, permissionID string) error {
@@ -88,17 +88,19 @@ var handlerCases = []handlerCase{
 	{"DeleteRole", DeleteRoleHandler, "", map[string]string{"id": "7"}, http.StatusNoContent, []string{"7"}},
 	{"ListPermissions", ListPermissionsHandler, "", nil, http.StatusOK, nil},
 	{"GetPermission", GetPermissionHandler, "", map[string]string{"id": "8"}, http.StatusOK, []string{"8"}},
-	{"GetPermissionByScope", GetPermissionByScopeHandler, "", map[string]string{"scope_name": "sn", "scope_value": "sv"}, http.StatusOK, []string{"sn", "sv"}},
-	{"CreatePermission", CreatePermissionHandler, `{"scope_name":"sn","scope_value":"sv"}`, nil, http.StatusCreated, []string{"sn", "sv"}},
+	{"GetPermissionByNode", GetPermissionByNodeHandler, "", map[string]string{"node": "a.b"}, http.StatusOK, []string{"a.b"}},
+	{"CreatePermission", CreatePermissionHandler, `{"node":"a.b","description":"d","value_type":"int","merge":"max"}`, nil, http.StatusCreated, []string{"a.b", "d", "int", "max"}},
 	{"DeletePermission", DeletePermissionHandler, "", map[string]string{"id": "8"}, http.StatusNoContent, []string{"8"}},
-	{"AttachPermission", AttachPermissionHandler, "", map[string]string{"id": "7", "permission_id": "8"}, http.StatusNoContent, []string{"7", "8"}},
+	{"AttachPermission", AttachPermissionHandler, "", map[string]string{"id": "7", "permission_id": "8"}, http.StatusNoContent, []string{"7", "8", "<nil>"}},
+	{"AttachPermissionWithValue", AttachPermissionHandler, `{"value":["a","b"]}`, map[string]string{"id": "7", "permission_id": "8"}, http.StatusNoContent, []string{"7", "8", "[a b]"}},
+	{"AttachPermissionWithNumber", AttachPermissionHandler, `{"value":1000}`, map[string]string{"id": "7", "permission_id": "8"}, http.StatusNoContent, []string{"7", "8", "1000"}},
 	{"DetachPermission", DetachPermissionHandler, "", map[string]string{"id": "7", "permission_id": "8"}, http.StatusNoContent, []string{"7", "8"}},
 }
 
 var handlerBodies = map[string]string{
 	"ListRoles": `[{"id":"1"`, "GetRole": `"id":"7"`, "GetRoleByName": `"name":"mod"`, "CreateRole": `"name":"mod"`,
 	"UpdateRole": `"id":"7"`, "ListPermissions": `[{"id":"1"`, "GetPermission": `"id":"8"`,
-	"GetPermissionByScope": `"scope_name":"sn","scope_value":"sv"`, "CreatePermission": `"scope_name":"sn","scope_value":"sv"`,
+	"GetPermissionByNode": `"node":"a.b"`, "CreatePermission": `"node":"a.b","description":"d","value_type":"int","merge":"max"`,
 }
 
 func rbSession(permissions ...string) *auth.Session {
@@ -116,7 +118,7 @@ func rbRequest(c handlerCase, session *auth.Session, body string) *http.Request 
 }
 
 func rbAdmin() *auth.Session {
-	return rbSession(perms.ScopeAdminRoles.Name + ":" + perms.ScopeAdminRoles.Value)
+	return rbSession(perms.ScopeAdminRoles.Node)
 }
 
 func rbDetail(t *testing.T, w *httptest.ResponseRecorder) string {
@@ -133,7 +135,7 @@ func rbDetail(t *testing.T, w *httptest.ResponseRecorder) string {
 func TestRH01to03Handlers(t *testing.T) {
 	t.Run("RH-01_EveryHandlerRejectsASessionWithoutTheRolesScope", func(t *testing.T) {
 		for _, c := range handlerCases {
-			for _, session := range []*auth.Session{rbSession(), rbSession("roles:other"), rbSession("other:*")} {
+			for _, session := range []*auth.Session{rbSession(), rbSession("roles.other"), rbSession("roles.admins"), rbSession("other.admin"), rbSession("roles")} {
 				svc := &stubService{}
 				w := httptest.NewRecorder()
 				c.handler(svc)(w, rbRequest(c, session, c.body))
@@ -189,7 +191,9 @@ func TestRH04ServiceFailureMapping(t *testing.T) {
 		{ErrInvalidID, http.StatusBadRequest, msgInvalidID},
 		{ErrInvalidRoleName, http.StatusBadRequest, msgInvalidRoleName},
 		{ErrInvalidDescription, http.StatusBadRequest, msgInvalidDescription},
-		{ErrInvalidScope, http.StatusBadRequest, msgInvalidScope},
+		{ErrInvalidNode, http.StatusBadRequest, msgInvalidNode},
+		{ErrInvalidValueType, http.StatusBadRequest, msgInvalidValueType},
+		{ErrInvalidValue, http.StatusBadRequest, msgInvalidValue},
 		{ErrRoleNotFound, http.StatusNotFound, msgRoleNotFound},
 		{ErrPermissionNotFound, http.StatusNotFound, msgPermissionNotFound},
 		{ErrRoleNameTaken, http.StatusConflict, msgRoleNameTaken},

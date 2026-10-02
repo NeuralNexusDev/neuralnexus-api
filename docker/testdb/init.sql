@@ -74,16 +74,24 @@ CREATE TABLE IF NOT EXISTS roles (
 
 CREATE TABLE IF NOT EXISTS permissions (
     id BIGINT PRIMARY KEY,
-    scope_name TEXT NOT NULL,
-    scope_value TEXT NOT NULL,
-    CONSTRAINT permissions_scope_unique UNIQUE (scope_name, scope_value),
-    CONSTRAINT permissions_scope_name_not_empty CHECK (scope_name <> ''),
-    CONSTRAINT permissions_scope_name_no_colon CHECK (scope_name NOT LIKE '%:%')
+    node TEXT NOT NULL UNIQUE,
+    description TEXT NOT NULL DEFAULT '',
+    value_type TEXT,
+    merge TEXT,
+    CONSTRAINT permissions_node_format CHECK (node ~ '^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$'),
+    CONSTRAINT permissions_merge_matches_type CHECK (COALESCE(
+        (value_type IS NULL AND merge IS NULL)
+        OR (value_type = 'int' AND merge IN ('max', 'min'))
+        OR (value_type = 'string' AND merge = 'first')
+        OR (value_type = 'string_list' AND merge = 'union'),
+        FALSE
+    ))
 );
 
 CREATE TABLE IF NOT EXISTS role_permissions (
     role_id BIGINT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
     permission_id BIGINT NOT NULL REFERENCES permissions(id),
+    value JSONB,
     PRIMARY KEY (role_id, permission_id)
 );
 
@@ -93,20 +101,21 @@ INSERT INTO roles (id, name, description) VALUES
     (3, 'bee_admin', 'Bee Name Generator Admin')
 ON CONFLICT DO NOTHING;
 
-INSERT INTO permissions (id, scope_name, scope_value) VALUES
-    (1, 'beenamegenerator', '*'),
-    (2, 'petpictures', '*'),
-    (3, 'ratelimit', '1000'),
-    (4, 'datastore', '*'),
-    (5, 'numberstore', '*'),
-    (6, 'users', '*'),
-    (7, 'roles', '*')
+INSERT INTO permissions (id, node, description, value_type, merge) VALUES
+    (1, 'beenamegenerator.admin', 'Bee name generator', NULL, NULL),
+    (2, 'petpictures.admin', 'Pet pictures', NULL, NULL),
+    (3, 'ratelimit', 'Rate limit', 'int', 'max'),
+    (4, 'datastore.admin', 'Data store', NULL, NULL),
+    (5, 'numberstore.admin', 'Number store', NULL, NULL),
+    (6, 'users.admin', 'Users', NULL, NULL),
+    (7, 'roles.admin', 'Roles and permissions', NULL, NULL),
+    (8, 'petpictures.pets', 'Pet pictures', 'string_list', 'union')
 ON CONFLICT DO NOTHING;
 
-INSERT INTO role_permissions (role_id, permission_id)
-SELECT r.id, p.id FROM roles r JOIN permissions p ON
-    (r.name IN ('system', 'owner') AND (p.scope_name, p.scope_value) IN (('beenamegenerator', '*'), ('petpictures', '*'), ('ratelimit', '1000'), ('datastore', '*'), ('numberstore', '*'), ('users', '*'), ('roles', '*')))
-    OR (r.name = 'bee_admin' AND (p.scope_name, p.scope_value) = ('beenamegenerator', '*'))
+INSERT INTO role_permissions (role_id, permission_id, value)
+SELECT r.id, p.id, CASE WHEN p.node = 'ratelimit' THEN '1000'::jsonb END FROM roles r JOIN permissions p ON
+    (r.name IN ('system', 'owner') AND p.node IN ('beenamegenerator.admin', 'petpictures.admin', 'ratelimit', 'datastore.admin', 'numberstore.admin', 'users.admin', 'roles.admin'))
+    OR (r.name = 'bee_admin' AND p.node = 'beenamegenerator.admin')
 ON CONFLICT DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS accounts (

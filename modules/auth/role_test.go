@@ -20,7 +20,7 @@ func (f *rsFakeRoleStore) GetPermissionsForRoles(roleIDs []string) ([]string, er
 
 func rsDefaultRoleStore() *rsFakeRoleStore {
 	return &rsFakeRoleStore{permissions: map[string][]string{
-		"1": {"beenamegenerator:*", "petpictures:*", "ratelimit:1000"},
-		"2": {"users:*", "datastore:*"},
+		"1": {"beenamegenerator.admin", "petpictures.admin", "ratelimit:1000"},
+		"2": {"users.admin", "datastore.admin"},
 	}}
 }

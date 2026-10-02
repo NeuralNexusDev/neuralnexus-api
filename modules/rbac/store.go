@@ -1,7 +1,9 @@
 package rbac
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"strconv"
 
@@ -33,12 +35,12 @@ type Store interface {
 	ListRoles() ([]*Role, error)
 	UpdateRole(id int64, name, description string) error
 	DeleteRole(id int64) error
-	CreatePermission(id int64, scopeName, scopeValue string) error
+	CreatePermission(id int64, node, description, valueType, merge string) error
 	GetPermission(id int64) (*Permission, error)
-	GetPermissionByScope(scopeName, scopeValue string) (*Permission, error)
+	GetPermissionByNode(node string) (*Permission, error)
 	ListPermissions() ([]*Permission, error)
 	DeletePermission(id int64) error
-	AttachPermission(roleID, permissionID int64) error
+	AttachPermission(roleID, permissionID int64, value []byte) error
 	DetachPermission(roleID, permissionID int64) error
 	GetPermissionsForRoles(roleIDs []string) ([]string, error)
 }
@@ -52,7 +54,7 @@ func NewStore(db *pgxpool.Pool) Store {
 	return &store{db: db}
 }
 
-const roleSelect = "SELECT r.id::text, r.name, r.description, p.id::text, p.scope_name, p.scope_value FROM roles r LEFT JOIN role_permissions rp ON rp.role_id = r.id LEFT JOIN permissions p ON p.id = rp.permission_id"
+const roleSelect = "SELECT r.id::text, r.name, r.description, p.id::text, p.node, p.description, p.value_type, p.merge, rp.value FROM roles r LEFT JOIN role_permissions rp ON rp.role_id = r.id LEFT JOIN permissions p ON p.id = rp.permission_id"
 
 func (s *store) queryRoles(where string, args ...any) ([]*Role, error) {
 	rows, err := s.db.Query(context.Background(), roleSelect+where+" ORDER BY r.id, p.id", args...)
@@ -64,16 +66,25 @@ func (s *store) queryRoles(where string, args ...any) ([]*Role, error) {
 	var roles []*Role
 	for rows.Next() {
 		var id, name, description string
-		var permissionID, scopeName, scopeValue *string
-		if err := rows.Scan(&id, &name, &description, &permissionID, &scopeName, &scopeValue); err != nil {
+		var permissionID, node, permissionDescription, valueType, merge *string
+		var value []byte
+		if err := rows.Scan(&id, &name, &description, &permissionID, &node, &permissionDescription, &valueType, &merge, &value); err != nil {
 			return nil, err
 		}
 		if len(roles) == 0 || roles[len(roles)-1].ID != id {
-			roles = append(roles, &Role{ID: id, Name: name, Description: description, Permissions: []Permission{}})
+			roles = append(roles, &Role{ID: id, Name: name, Description: description, Permissions: []RolePermission{}})
 		}
 		if permissionID != nil {
+			granted := RolePermission{Permission: Permission{ID: *permissionID, Node: *node, Description: *permissionDescription, ValueType: deref(valueType), Merge: deref(merge)}}
+			if value != nil {
+				dec := json.NewDecoder(bytes.NewReader(value))
+				dec.UseNumber()
+				if err := dec.Decode(&granted.Value); err != nil {
+					return nil, err
+				}
+			}
 			role := roles[len(roles)-1]
-			role.Permissions = append(role.Permissions, Permission{ID: *permissionID, ScopeName: *scopeName, ScopeValue: *scopeValue})
+			role.Permissions = append(role.Permissions, granted)
 		}
 	}
 	return roles, rows.Err()
@@ -153,13 +164,20 @@ func (s *store) DeleteRole(id int64) error {
 	return tx.Commit(ctx)
 }
 
-func (s *store) CreatePermission(id int64, scopeName, scopeValue string) error {
-	_, err := s.db.Exec(context.Background(), "INSERT INTO permissions (id, scope_name, scope_value) VALUES ($1, $2, $3)", id, scopeName, scopeValue)
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+func (s *store) CreatePermission(id int64, node, description, valueType, merge string) error {
+	_, err := s.db.Exec(context.Background(), "INSERT INTO permissions (id, node, description, value_type, merge) VALUES ($1, $2, $3, NULLIF($4, ''), NULLIF($5, ''))", id, node, description, valueType, merge)
 	return translateConstraintErr(err)
 }
 
 func (s *store) queryPermissions(where string, args ...any) ([]*Permission, error) {
-	rows, err := s.db.Query(context.Background(), "SELECT id::text, scope_name, scope_value FROM permissions"+where+" ORDER BY id", args...)
+	rows, err := s.db.Query(context.Background(), "SELECT id::text, node, description, COALESCE(value_type, ''), COALESCE(merge, '') FROM permissions"+where+" ORDER BY id", args...)
 	if err != nil {
 		return nil, err
 	}
@@ -177,8 +195,8 @@ func (s *store) GetPermission(id int64) (*Permission, error) {
 	return permissions[0], nil
 }
 
-func (s *store) GetPermissionByScope(scopeName, scopeValue string) (*Permission, error) {
-	permissions, err := s.queryPermissions(" WHERE scope_name = $1 AND scope_value = $2", scopeName, scopeValue)
+func (s *store) GetPermissionByNode(node string) (*Permission, error) {
+	permissions, err := s.queryPermissions(" WHERE node = $1", node)
 	if err != nil {
 		return nil, err
 	}
@@ -211,8 +229,8 @@ func (s *store) DeletePermission(id int64) error {
 	return nil
 }
 
-func (s *store) AttachPermission(roleID, permissionID int64) error {
-	_, err := s.db.Exec(context.Background(), "INSERT INTO role_permissions (role_id, permission_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", roleID, permissionID)
+func (s *store) AttachPermission(roleID, permissionID int64, value []byte) error {
+	_, err := s.db.Exec(context.Background(), "INSERT INTO role_permissions (role_id, permission_id, value) VALUES ($1, $2, $3::jsonb) ON CONFLICT (role_id, permission_id) DO UPDATE SET value = EXCLUDED.value", roleID, permissionID, value)
 	return translateConstraintErr(err)
 }
 
@@ -238,21 +256,26 @@ func (s *store) DetachPermission(roleID, permissionID int64) error {
 }
 
 func (s *store) GetPermissionsForRoles(roleIDs []string) ([]string, error) {
-	rows, err := s.db.Query(context.Background(), "SELECT DISTINCT p.scope_name, p.scope_value FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id WHERE rp.role_id = ANY($1::text[]::bigint[]) ORDER BY p.scope_name, p.scope_value", roleIDs)
+	rows, err := s.db.Query(context.Background(), "SELECT p.node, p.value_type, p.merge, rp.value FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id WHERE rp.role_id = ANY($1::text[]::bigint[]) ORDER BY p.node, rp.role_id", roleIDs)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	permissions := []string{}
+	var grants []grant
 	for rows.Next() {
-		var name, value string
-		if err := rows.Scan(&name, &value); err != nil {
+		var g grant
+		var valueType, merge *string
+		if err := rows.Scan(&g.node, &valueType, &merge, &g.value); err != nil {
 			return nil, err
 		}
-		permissions = append(permissions, name+":"+value)
+		g.valueType, g.merge = deref(valueType), deref(merge)
+		grants = append(grants, g)
 	}
-	return permissions, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return flattenGrants(grants)
 }
 
 func translateConstraintErr(err error) error {
@@ -263,7 +286,7 @@ func translateConstraintErr(err error) error {
 	switch {
 	case pgErr.Code == "23505" && pgErr.ConstraintName == "roles_name_key":
 		return ErrRoleNameTaken
-	case pgErr.Code == "23505" && pgErr.ConstraintName == "permissions_scope_unique":
+	case pgErr.Code == "23505" && pgErr.ConstraintName == "permissions_node_key":
 		return ErrPermissionExists
 	case pgErr.Code == "23503" && pgErr.ConstraintName == "role_permissions_role_id_fkey":
 		return ErrRoleNotFound

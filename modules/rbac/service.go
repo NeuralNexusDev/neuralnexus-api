@@ -1,7 +1,10 @@
 package rbac
 
 import (
+	"encoding/json"
 	"errors"
+	"math"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -14,8 +17,9 @@ import (
 const (
 	maxRoleNameLength   = 63
 	maxDescriptionLen   = 256
-	maxScopeNameLength  = 64
+	maxNodeLength       = 128
 	maxScopeValueLength = 128
+	maxListValues       = 64
 )
 
 var (
@@ -27,8 +31,12 @@ var (
 	ErrInvalidDescription = errors.New("invalid description")
 	// ErrBuiltinRole is returned when deleting or renaming a built-in role, or removing the roles permission from system or owner.
 	ErrBuiltinRole = errors.New("built-in role is protected")
-	// ErrInvalidScope is returned when a permission's scope name or value breaks the scope rules.
-	ErrInvalidScope = errors.New("invalid scope")
+	// ErrInvalidNode is returned when a permission node breaks the node rules.
+	ErrInvalidNode = errors.New("invalid node")
+	// ErrInvalidValueType is returned when a permission's value type and merge rule do not form a valid pair.
+	ErrInvalidValueType = errors.New("invalid value type")
+	// ErrInvalidValue is returned when a granted value does not match its permission's type, or a permission without a type is given one.
+	ErrInvalidValue = errors.New("invalid value")
 )
 
 var builtinRoles = map[string]bool{"system": true, "owner": true, "bee_admin": true}
@@ -41,12 +49,12 @@ type Service interface {
 	ListRoles() ([]*Role, error)
 	UpdateRole(id string, name, description *string) (*Role, error)
 	DeleteRole(id string) error
-	CreatePermission(scopeName, scopeValue string) (*Permission, error)
+	CreatePermission(node, description, valueType, merge string) (*Permission, error)
 	GetPermission(id string) (*Permission, error)
-	GetPermissionByScope(scopeName, scopeValue string) (*Permission, error)
+	GetPermissionByNode(node string) (*Permission, error)
 	ListPermissions() ([]*Permission, error)
 	DeletePermission(id string) error
-	AttachPermission(roleID, permissionID string) error
+	AttachPermission(roleID, permissionID string, value any) error
 	DetachPermission(roleID, permissionID string) error
 	GetPermissionsForRoles(roleIDs []string) ([]string, error)
 }
@@ -89,15 +97,124 @@ func validDescription(description string) bool {
 	return validText(description) && utf8.RuneCountInString(description) <= maxDescriptionLen
 }
 
-func validScopePart(s string, maxLength int) bool {
+func validNode(node string) bool {
+	if len(node) == 0 || len(node) > maxNodeLength {
+		return false
+	}
+	segmentStart := true
+	for i := 0; i < len(node); i++ {
+		c := node[i]
+		switch {
+		case c >= 'a' && c <= 'z':
+		case (c >= '0' && c <= '9') || c == '_':
+			if segmentStart {
+				return false
+			}
+		case c == '.':
+			if segmentStart {
+				return false
+			}
+			segmentStart = true
+			continue
+		default:
+			return false
+		}
+		segmentStart = false
+	}
+	return !segmentStart
+}
+
+func validValueText(s string) bool {
 	n := utf8.RuneCountInString(s)
-	return n > 0 && n <= maxLength && validText(s) && strings.TrimSpace(s) == s &&
+	return n > 0 && n <= maxScopeValueLength && validText(s) && strings.TrimSpace(s) == s &&
 		!strings.ContainsFunc(s, func(r rune) bool { return unicode.IsControl(r) || unicode.Is(unicode.Cf, r) })
 }
 
-func validScope(scopeName, scopeValue string) bool {
-	return validScopePart(scopeName, maxScopeNameLength) && validScopePart(scopeValue, maxScopeValueLength) &&
-		!strings.Contains(scopeName, ":")
+func normalizeTypes(valueType, merge string) (string, bool) {
+	switch valueType {
+	case "":
+		return "", merge == ""
+	case ValueTypeInt:
+		return merge, merge == MergeMax || merge == MergeMin
+	case ValueTypeString:
+		if merge == "" {
+			return MergeFirst, true
+		}
+		return merge, merge == MergeFirst
+	case ValueTypeStringList:
+		if merge == "" {
+			return MergeUnion, true
+		}
+		return merge, merge == MergeUnion
+	}
+	return "", false
+}
+
+// encodeValue checks a granted value against its permission's type and returns it as JSON
+func encodeValue(permission *Permission, value any) ([]byte, error) {
+	if permission.ValueType == "" {
+		if value != nil {
+			return nil, ErrInvalidValue
+		}
+		return nil, nil
+	}
+	switch permission.ValueType {
+	case ValueTypeInt:
+		n, ok := toInt(value)
+		if !ok {
+			return nil, ErrInvalidValue
+		}
+		return json.Marshal(n)
+	case ValueTypeString:
+		text, ok := value.(string)
+		if !ok || !validValueText(text) {
+			return nil, ErrInvalidValue
+		}
+		return json.Marshal(text)
+	case ValueTypeStringList:
+		var items []string
+		switch list := value.(type) {
+		case []string:
+			items = list
+		case []any:
+			for _, item := range list {
+				text, ok := item.(string)
+				if !ok {
+					return nil, ErrInvalidValue
+				}
+				items = append(items, text)
+			}
+		default:
+			return nil, ErrInvalidValue
+		}
+		if len(items) == 0 || len(items) > maxListValues {
+			return nil, ErrInvalidValue
+		}
+		for _, item := range items {
+			if !validValueText(item) {
+				return nil, ErrInvalidValue
+			}
+		}
+		items = slices.Compact(slices.Sorted(slices.Values(items)))
+		return json.Marshal(items)
+	}
+	return nil, ErrInvalidValue
+}
+
+func toInt(value any) (int64, bool) {
+	const maxSafe = 1 << 53
+	switch n := value.(type) {
+	case int:
+		return int64(n), n >= -maxSafe && n <= maxSafe
+	case int64:
+		return n, n >= -maxSafe && n <= maxSafe
+	case float64:
+		return int64(n), n == math.Trunc(n) && n >= -maxSafe && n <= maxSafe
+	case json.Number:
+		parsed, err := n.Int64()
+		return parsed, err == nil && parsed >= -maxSafe && parsed <= maxSafe
+	}
+	return 0, false
 }
 
 func (s *service) CreateRole(name, description string) (*Role, error) {
@@ -114,7 +231,7 @@ func (s *service) CreateRole(name, description string) (*Role, error) {
 	if err := s.store.CreateRole(id, name, description); err != nil {
 		return nil, err
 	}
-	return &Role{ID: strconv.FormatInt(id, 10), Name: name, Description: description, Permissions: []Permission{}}, nil
+	return &Role{ID: strconv.FormatInt(id, 10), Name: name, Description: description, Permissions: []RolePermission{}}, nil
 }
 
 func (s *service) GetRole(id string) (*Role, error) {
@@ -175,18 +292,25 @@ func (s *service) DeleteRole(id string) error {
 	return s.store.DeleteRole(n)
 }
 
-func (s *service) CreatePermission(scopeName, scopeValue string) (*Permission, error) {
-	if !validScope(scopeName, scopeValue) {
-		return nil, ErrInvalidScope
+func (s *service) CreatePermission(node, description, valueType, merge string) (*Permission, error) {
+	if !validNode(node) {
+		return nil, ErrInvalidNode
+	}
+	if !validDescription(description) {
+		return nil, ErrInvalidDescription
+	}
+	merge, ok := normalizeTypes(valueType, merge)
+	if !ok {
+		return nil, ErrInvalidValueType
 	}
 	id, err := newID()
 	if err != nil {
 		return nil, err
 	}
-	if err := s.store.CreatePermission(id, scopeName, scopeValue); err != nil {
+	if err := s.store.CreatePermission(id, node, description, valueType, merge); err != nil {
 		return nil, err
 	}
-	return &Permission{ID: strconv.FormatInt(id, 10), ScopeName: scopeName, ScopeValue: scopeValue}, nil
+	return &Permission{ID: strconv.FormatInt(id, 10), Node: node, Description: description, ValueType: valueType, Merge: merge}, nil
 }
 
 func (s *service) GetPermission(id string) (*Permission, error) {
@@ -197,11 +321,11 @@ func (s *service) GetPermission(id string) (*Permission, error) {
 	return s.store.GetPermission(n)
 }
 
-func (s *service) GetPermissionByScope(scopeName, scopeValue string) (*Permission, error) {
-	if !validScope(scopeName, scopeValue) {
+func (s *service) GetPermissionByNode(node string) (*Permission, error) {
+	if !validNode(node) {
 		return nil, ErrPermissionNotFound
 	}
-	return s.store.GetPermissionByScope(scopeName, scopeValue)
+	return s.store.GetPermissionByNode(node)
 }
 
 func (s *service) ListPermissions() ([]*Permission, error) {
@@ -216,13 +340,21 @@ func (s *service) DeletePermission(id string) error {
 	return s.store.DeletePermission(n)
 }
 
-func (s *service) AttachPermission(roleID, permissionID string) error {
+func (s *service) AttachPermission(roleID, permissionID string, value any) error {
 	r, rOK := parseID(roleID)
 	p, pOK := parseID(permissionID)
 	if !rOK || !pOK {
 		return ErrInvalidID
 	}
-	return s.store.AttachPermission(r, p)
+	permission, err := s.store.GetPermission(p)
+	if err != nil {
+		return err
+	}
+	encoded, err := encodeValue(permission, value)
+	if err != nil {
+		return err
+	}
+	return s.store.AttachPermission(r, p, encoded)
 }
 
 func (s *service) DetachPermission(roleID, permissionID string) error {
@@ -240,7 +372,7 @@ func (s *service) DetachPermission(roleID, permissionID string) error {
 		if err != nil {
 			return err
 		}
-		if permission.ScopeName == perms.ScopeAdminRoles.Name && permission.ScopeValue == perms.ScopeAdminRoles.Value {
+		if permission.Node == perms.ScopeAdminRoles.Node {
 			return ErrBuiltinRole
 		}
 	}

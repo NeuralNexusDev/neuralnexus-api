@@ -292,7 +292,7 @@ func TestAC17to21NewSession(t *testing.T) {
 		if s.UserID != "u1" || s.ExpiresAt != 12345 {
 			t.Errorf("session = %+v, want UserID u1 and ExpiresAt 12345", s)
 		}
-		want := []string{"beenamegenerator:*", "petpictures:*", "ratelimit:1000"}
+		want := []string{"beenamegenerator.admin", "petpictures.admin", "ratelimit:1000"}
 		if len(s.Permissions) != len(want) {
 			t.Fatalf("Permissions = %v, want %v", s.Permissions, want)
 		}

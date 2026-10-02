@@ -52,7 +52,7 @@ func rbLive(t *testing.T) (Service, *pgxpool.Pool) {
 		ctx := context.Background()
 		db.Exec(ctx, "DELETE FROM accounts WHERE user_id >= $1 AND user_id < $2", int64(rbAccountIDBase), int64(rbAccountIDBase)+1000)
 		db.Exec(ctx, "DELETE FROM roles WHERE name LIKE 'rbtest_%'")
-		db.Exec(ctx, "DELETE FROM permissions WHERE scope_name = 'rbtest'")
+		db.Exec(ctx, "DELETE FROM permissions WHERE node LIKE 'rbtest.%'")
 		db.Close()
 	})
 	return NewService(NewStore(db)), db
@@ -69,7 +69,7 @@ func rbRole(t *testing.T, svc Service, name string) *Role {
 
 func rbPermission(t *testing.T, svc Service, value string) *Permission {
 	t.Helper()
-	permission, err := svc.CreatePermission("rbtest", value)
+	permission, err := svc.CreatePermission("rbtest."+value, "", "", "")
 	if err != nil {
 		t.Fatalf("failed to create permission %s: %v", value, err)
 	}
@@ -91,7 +91,11 @@ func rbAssign(t *testing.T, db *pgxpool.Pool, accountOffset int, roleIDs ...stri
 func rbScopes(role *Role) []string {
 	out := make([]string, 0, len(role.Permissions))
 	for _, p := range role.Permissions {
-		out = append(out, p.ScopeName+":"+p.ScopeValue)
+		entry := p.Node
+		if p.Value != nil {
+			entry += ":" + fmt.Sprint(p.Value)
+		}
+		out = append(out, entry)
 	}
 	return out
 }
@@ -147,7 +151,7 @@ func TestST01to04Roles(t *testing.T) {
 		first := rbRole(t, svc, "list_a")
 		second := rbRole(t, svc, "list_b")
 		permission := rbPermission(t, svc, "list")
-		if err := svc.AttachPermission(second.ID, permission.ID); err != nil {
+		if err := svc.AttachPermission(second.ID, permission.ID, nil); err != nil {
 			t.Fatalf("AttachPermission() err = %v", err)
 		}
 
@@ -202,7 +206,7 @@ func TestST05to08UpdateAndDeleteRole(t *testing.T) {
 	t.Run("ST-07_DeleteRemovesTheRoleAndItsGrantsOnly", func(t *testing.T) {
 		role := rbRole(t, svc, "del")
 		permission := rbPermission(t, svc, "del")
-		if err := svc.AttachPermission(role.ID, permission.ID); err != nil {
+		if err := svc.AttachPermission(role.ID, permission.ID, nil); err != nil {
 			t.Fatalf("AttachPermission() err = %v", err)
 		}
 
@@ -256,9 +260,9 @@ func TestST11to14Permissions(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetPermission() err = %v", err)
 		}
-		byScope, err := svc.GetPermissionByScope("rbtest", "a")
+		byScope, err := svc.GetPermissionByNode("rbtest.a")
 		if err != nil {
-			t.Fatalf("GetPermissionByScope() err = %v", err)
+			t.Fatalf("GetPermissionByNode() err = %v", err)
 		}
 		for _, got := range []*Permission{byID, byScope} {
 			if *got != *created {
@@ -270,7 +274,7 @@ func TestST11to14Permissions(t *testing.T) {
 	t.Run("ST-12_DuplicateScopeIsRefused", func(t *testing.T) {
 		rbPermission(t, svc, "dup")
 
-		_, err := svc.CreatePermission("rbtest", "dup")
+		_, err := svc.CreatePermission("rbtest.dup", "", "", "")
 
 		if !errors.Is(err, ErrPermissionExists) {
 			t.Errorf("CreatePermission() err = %v, want %v", err, ErrPermissionExists)
@@ -281,8 +285,8 @@ func TestST11to14Permissions(t *testing.T) {
 		if _, err := svc.GetPermission(rbMissingID); !errors.Is(err, ErrPermissionNotFound) {
 			t.Errorf("GetPermission() err = %v, want %v", err, ErrPermissionNotFound)
 		}
-		if _, err := svc.GetPermissionByScope("rbtest", "missing"); !errors.Is(err, ErrPermissionNotFound) {
-			t.Errorf("GetPermissionByScope() err = %v, want %v", err, ErrPermissionNotFound)
+		if _, err := svc.GetPermissionByNode("rbtest.missing"); !errors.Is(err, ErrPermissionNotFound) {
+			t.Errorf("GetPermissionByNode() err = %v, want %v", err, ErrPermissionNotFound)
 		}
 	})
 
@@ -323,7 +327,7 @@ func TestST15to16DeletePermission(t *testing.T) {
 	t.Run("ST-16_DeleteOfAGrantedPermissionIsRefused", func(t *testing.T) {
 		role := rbRole(t, svc, "grants")
 		permission := rbPermission(t, svc, "granted")
-		if err := svc.AttachPermission(role.ID, permission.ID); err != nil {
+		if err := svc.AttachPermission(role.ID, permission.ID, nil); err != nil {
 			t.Fatalf("AttachPermission() err = %v", err)
 		}
 
@@ -349,23 +353,23 @@ func TestST18to19AttachAndDetach(t *testing.T) {
 		permission := rbPermission(t, svc, "attach")
 
 		for i := 0; i < 2; i++ {
-			if err := svc.AttachPermission(role.ID, permission.ID); err != nil {
+			if err := svc.AttachPermission(role.ID, permission.ID, nil); err != nil {
 				t.Fatalf("AttachPermission() call %d err = %v", i+1, err)
 			}
 		}
 
 		got, _ := svc.GetRole(role.ID)
-		rbAssertStrings(t, rbScopes(got), []string{"rbtest:attach"})
+		rbAssertStrings(t, rbScopes(got), []string{"rbtest.attach"})
 	})
 
 	t.Run("ST-19_AttachNeedsBothToExist", func(t *testing.T) {
 		role := rbRole(t, svc, "attach_missing")
 		permission := rbPermission(t, svc, "attach_missing")
 
-		if err := svc.AttachPermission(rbMissingID, permission.ID); !errors.Is(err, ErrRoleNotFound) {
+		if err := svc.AttachPermission(rbMissingID, permission.ID, nil); !errors.Is(err, ErrRoleNotFound) {
 			t.Errorf("AttachPermission() with an unknown role err = %v, want %v", err, ErrRoleNotFound)
 		}
-		if err := svc.AttachPermission(role.ID, rbMissingID); !errors.Is(err, ErrPermissionNotFound) {
+		if err := svc.AttachPermission(role.ID, rbMissingID, nil); !errors.Is(err, ErrPermissionNotFound) {
 			t.Errorf("AttachPermission() with an unknown permission err = %v, want %v", err, ErrPermissionNotFound)
 		}
 	})
@@ -373,7 +377,7 @@ func TestST18to19AttachAndDetach(t *testing.T) {
 	t.Run("ST-20_DetachRemovesTheGrantAndIsIdempotent", func(t *testing.T) {
 		role := rbRole(t, svc, "detach")
 		permission := rbPermission(t, svc, "detach")
-		if err := svc.AttachPermission(role.ID, permission.ID); err != nil {
+		if err := svc.AttachPermission(role.ID, permission.ID, nil); err != nil {
 			t.Fatalf("AttachPermission() err = %v", err)
 		}
 
@@ -415,7 +419,7 @@ func TestST22to26GetPermissionsForRoles(t *testing.T) {
 		shared := rbPermission(t, svc, "shared")
 		only := rbPermission(t, svc, "only_b")
 		for _, pair := range [][2]string{{a.ID, shared.ID}, {b.ID, shared.ID}, {b.ID, only.ID}} {
-			if err := svc.AttachPermission(pair[0], pair[1]); err != nil {
+			if err := svc.AttachPermission(pair[0], pair[1], nil); err != nil {
 				t.Fatalf("AttachPermission() err = %v", err)
 			}
 		}
@@ -425,7 +429,7 @@ func TestST22to26GetPermissionsForRoles(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetPermissionsForRoles() err = %v", err)
 		}
-		rbAssertStrings(t, got, []string{"rbtest:only_b", "rbtest:shared"})
+		rbAssertStrings(t, got, []string{"rbtest.only_b", "rbtest.shared"})
 	})
 
 	t.Run("ST-23_UnknownAndNoRolesGrantNothing", func(t *testing.T) {
@@ -437,22 +441,32 @@ func TestST22to26GetPermissionsForRoles(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-25_ColonInAScopeNameIsRefusedByTheDatabase", func(t *testing.T) {
-		_, err := db.Exec(context.Background(), "INSERT INTO permissions (id, scope_name, scope_value) VALUES ($1, 'rbtest:x', 'v')", int64(rbAccountIDBase))
+	t.Run("ST-25_DatabaseRejectsBadNodesAndMismatchedMergeRules", func(t *testing.T) {
+		for _, c := range []struct{ node, valueType, merge, constraint string }{
+			{"Rbtest.x", "", "", "permissions_node_format"},
+			{"rbtest:x", "", "", "permissions_node_format"},
+			{"rbtest..x", "", "", "permissions_node_format"},
+			{"rbtest.x", "float", "max", "permissions_merge_matches_type"},
+			{"rbtest.x", "", "max", "permissions_merge_matches_type"},
+			{"rbtest.x", "int", "union", "permissions_merge_matches_type"},
+			{"rbtest.x", "string_list", "max", "permissions_merge_matches_type"},
+		} {
+			_, err := db.Exec(context.Background(), "INSERT INTO permissions (id, node, value_type, merge) VALUES ($1, $2, NULLIF($3, ''), NULLIF($4, ''))", int64(rbAccountIDBase), c.node, c.valueType, c.merge)
 
-		var pgErr *pgconn.PgError
-		if !errors.As(err, &pgErr) || pgErr.ConstraintName != "permissions_scope_name_no_colon" {
-			t.Errorf("insert err = %v, want a violation of permissions_scope_name_no_colon", err)
+			var pgErr *pgconn.PgError
+			if !errors.As(err, &pgErr) || pgErr.ConstraintName != c.constraint {
+				t.Errorf("insert %+v err = %v, want a violation of %s", c, err, c.constraint)
+			}
 		}
 	})
 
-	t.Run("ST-26_ValueWithAColonIsJoinedAndMatchesTheSessionScope", func(t *testing.T) {
-		role := rbRole(t, svc, "colon_value")
-		permission, err := svc.CreatePermission("rbtest", "a:b")
+	t.Run("ST-26_ListValuesAreFlattenedAndMatchTheSession", func(t *testing.T) {
+		role := rbRole(t, svc, "list_value")
+		permission, err := svc.CreatePermission("rbtest.pets", "", ValueTypeStringList, "")
 		if err != nil {
 			t.Fatalf("CreatePermission() err = %v", err)
 		}
-		if err := svc.AttachPermission(role.ID, permission.ID); err != nil {
+		if err := svc.AttachPermission(role.ID, permission.ID, []string{"b:c", "a"}); err != nil {
 			t.Fatalf("AttachPermission() err = %v", err)
 		}
 
@@ -461,11 +475,73 @@ func TestST22to26GetPermissionsForRoles(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetPermissionsForRoles() err = %v", err)
 		}
-		rbAssertStrings(t, got, []string{"rbtest:a:b"})
+		rbAssertStrings(t, got, []string{"rbtest.pets:a", "rbtest.pets:b:c"})
 		s := &auth.Session{Permissions: got}
-		if !s.HasPermission(perms.Scope{Name: "rbtest", Value: "a:b"}) {
-			t.Errorf("a session holding %v does not match the scope rbtest / a:b", got)
+		scope := perms.Scope{Node: "rbtest.pets"}
+		if !s.HasPermission(scope) || !s.HasPermissionValue(scope, "b:c") || s.HasPermissionValue(scope, "c") {
+			t.Errorf("a session holding %v does not match as expected", got)
 		}
+	})
+
+	t.Run("ST-32_GrantingAgainReplacesTheValue", func(t *testing.T) {
+		role := rbRole(t, svc, "regrant")
+		permission, err := svc.CreatePermission("rbtest.limit", "", ValueTypeInt, MergeMax)
+		if err != nil {
+			t.Fatalf("CreatePermission() err = %v", err)
+		}
+		bare := rbPermission(t, svc, "bare_grant")
+		for _, v := range []int{5, 9} {
+			if err := svc.AttachPermission(role.ID, permission.ID, v); err != nil {
+				t.Fatalf("AttachPermission(%d) err = %v", v, err)
+			}
+		}
+		if err := svc.AttachPermission(role.ID, bare.ID, nil); err != nil {
+			t.Fatalf("AttachPermission() err = %v", err)
+		}
+
+		got, err := svc.GetRole(role.ID)
+
+		if err != nil {
+			t.Fatalf("GetRole() err = %v", err)
+		}
+		granted := rbScopes(got)
+		sort.Strings(granted)
+		rbAssertStrings(t, granted, []string{"rbtest.bare_grant", "rbtest.limit:9"})
+		for _, p := range got.Permissions {
+			if (p.Node == "rbtest.limit") != (p.Value != nil) {
+				t.Errorf("permission %s has value %v", p.Node, p.Value)
+			}
+		}
+	})
+
+	t.Run("ST-33_ValuesMergeAcrossRoles", func(t *testing.T) {
+		limit, err := svc.CreatePermission("rbtest.merge_limit", "", ValueTypeInt, MergeMin)
+		if err != nil {
+			t.Fatalf("CreatePermission() err = %v", err)
+		}
+		pets, err := svc.CreatePermission("rbtest.merge_pets", "", ValueTypeStringList, "")
+		if err != nil {
+			t.Fatalf("CreatePermission() err = %v", err)
+		}
+		first, second := rbRole(t, svc, "merge_a"), rbRole(t, svc, "merge_b")
+		for _, g := range []struct {
+			role, permission *string
+			value            any
+		}{
+			{&first.ID, &limit.ID, 100}, {&second.ID, &limit.ID, 1000},
+			{&first.ID, &pets.ID, []string{"x", "y"}}, {&second.ID, &pets.ID, []string{"y", "z"}},
+		} {
+			if err := svc.AttachPermission(*g.role, *g.permission, g.value); err != nil {
+				t.Fatalf("AttachPermission() err = %v", err)
+			}
+		}
+
+		got, err := svc.GetPermissionsForRoles([]string{first.ID, second.ID})
+
+		if err != nil {
+			t.Fatalf("GetPermissionsForRoles() err = %v", err)
+		}
+		rbAssertStrings(t, got, []string{"rbtest.merge_limit:100", "rbtest.merge_pets:x", "rbtest.merge_pets:y", "rbtest.merge_pets:z"})
 	})
 }
 
@@ -486,13 +562,13 @@ func TestST24ConnectionErrors(t *testing.T) {
 		collect := func(_ any, err error) { errs = append(errs, err) }
 		errs = append(errs,
 			st.CreateRole(1, "a", ""), st.UpdateRole(1, "a", ""), st.DeleteRole(1),
-			st.CreatePermission(1, "a", "b"), st.DeletePermission(1),
-			st.AttachPermission(1, 1), st.DetachPermission(1, 1))
+			st.CreatePermission(1, "a", "", "", ""), st.DeletePermission(1),
+			st.AttachPermission(1, 1, nil), st.DetachPermission(1, 1))
 		collect(st.GetRole(1))
 		collect(st.GetRoleByName("a"))
 		collect(st.ListRoles())
 		collect(st.GetPermission(1))
-		collect(st.GetPermissionByScope("a", "b"))
+		collect(st.GetPermissionByNode("a"))
 		collect(st.ListPermissions())
 		collect(st.GetPermissionsForRoles([]string{"1"}))
 
@@ -553,8 +629,8 @@ func TestST27to33RoleIntegrity(t *testing.T) {
 	})
 
 	t.Run("ST-28_BuiltinRolesAreSeededWithTheirPermissions", func(t *testing.T) {
-		all := []string{"beenamegenerator:*", "datastore:*", "numberstore:*", "petpictures:*", "ratelimit:1000", "roles:*", "users:*"}
-		for name, want := range map[string][]string{"system": all, "owner": all, "bee_admin": {"beenamegenerator:*"}} {
+		all := []string{"beenamegenerator.admin", "datastore.admin", "numberstore.admin", "petpictures.admin", "ratelimit:1000", "roles.admin", "users.admin"}
+		for name, want := range map[string][]string{"system": all, "owner": all, "bee_admin": {"beenamegenerator.admin"}} {
 			role, err := svc.GetRoleByName(name)
 			if err != nil {
 				t.Fatalf("GetRoleByName(%s) err = %v", name, err)
@@ -585,7 +661,7 @@ func TestST27to33RoleIntegrity(t *testing.T) {
 		second := rbPermission(t, svc, "order_2")
 		third := rbPermission(t, svc, "order_3")
 		for _, p := range []*Permission{third, first, second} {
-			if err := svc.AttachPermission(role.ID, p.ID); err != nil {
+			if err := svc.AttachPermission(role.ID, p.ID, nil); err != nil {
 				t.Fatalf("AttachPermission() err = %v", err)
 			}
 		}
@@ -616,7 +692,7 @@ func TestST27to33RoleIntegrity(t *testing.T) {
 		})
 		want := make([]string, len(byID))
 		for i, p := range byID {
-			want[i] = p.ScopeName + ":" + p.ScopeValue
+			want[i] = p.Node
 		}
 		rbAssertStrings(t, rbScopes(got), want)
 		roles, err := svc.ListRoles()

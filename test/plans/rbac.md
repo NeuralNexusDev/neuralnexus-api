@@ -14,9 +14,9 @@
 | ST-08 | DeleteRole | Error Path | an account holds the role | account whose `role_ids` has the role | `ErrRoleInUse`; the role remains | P1 |  |
 | ST-09 | DeleteRole | Error Path | the role does not exist | no such role | `ErrRoleNotFound` | P2 |  |
 | ST-10 | UpdateRole | Error Path | the role does not exist | no such role | `ErrRoleNotFound` | P2 |  |
-| ST-11 | CreatePermission / GetPermission / GetPermissionByScope | Happy Path | a created permission is read back | live database | Both reads return the created id and scope | P1 |  |
-| ST-12 | CreatePermission | Error Path | a scope is created twice | permission with the scope exists | `ErrPermissionExists` | P1 |  |
-| ST-13 | GetPermission / GetPermissionByScope | Error Path | an unknown id and an unknown scope | no such permission | `ErrPermissionNotFound` for both | P1 |  |
+| ST-11 | CreatePermission / GetPermission / GetPermissionByNode | Happy Path | a created permission is read back | live database | Both reads return the created id, node, description, value type and merge rule | P1 |  |
+| ST-12 | CreatePermission | Error Path | a node is created twice | permission with the node exists | `ErrPermissionExists` | P1 |  |
+| ST-13 | GetPermission / GetPermissionByNode | Error Path | an unknown id and an unknown node | no such permission | `ErrPermissionNotFound` for both | P1 |  |
 | ST-14 | ListPermissions | Happy Path | permissions exist | two permissions created | Both listed | P2 |  |
 | ST-15 | DeletePermission | Happy Path | an unused permission is deleted | permission with no grants | It is gone (`ErrPermissionNotFound` on read) | P1 |  |
 | ST-16 | DeletePermission | Error Path | a role grants the permission | permission attached to a role | `ErrPermissionInUse`; the permission and the grant remain | P1 |  |
@@ -25,16 +25,18 @@
 | ST-19 | AttachPermission | Error Path | the role or the permission does not exist | one of each missing | `ErrRoleNotFound` for a missing role, `ErrPermissionNotFound` for a missing permission | P1 |  |
 | ST-20 | DetachPermission | Happy Path | a grant is removed, then removed again | attached permission | The role no longer lists it and the second call succeeds | P1 |  |
 | ST-21 | DetachPermission | Error Path | the role or the permission does not exist | one of each missing | `ErrRoleNotFound` / `ErrPermissionNotFound` | P2 |  |
-| ST-22 | GetPermissionsForRoles | Happy Path | several roles share and differ in permissions | roles with overlapping grants | Distinct `name:value` strings for all roles | P1 |  |
+| ST-22 | GetPermissionsForRoles | Happy Path | several roles share and differ in permissions | roles with overlapping grants | Distinct node strings for all the roles | P1 |  |
 | ST-23 | GetPermissionsForRoles | Edge Case | unknown role ids and no ids | no matching roles | An empty non-nil result and a nil error | P2 |  |
 | ST-24 | Store | Error Path | the database is unreachable | pool pointing at a closed port; all 14 store methods | Each returns an error that is none of `ErrRoleNotFound`, `ErrPermissionNotFound`, `ErrRoleNameTaken`, `ErrPermissionExists`, `ErrRoleInUse` or `ErrPermissionInUse` | P2 |  |
-| ST-25 | permissions table | Error Path | a scope name containing a colon is inserted directly | live database | the `permissions_scope_name_no_colon` constraint is violated | P1 |  |
-| ST-26 | GetPermissionsForRoles | Edge Case | a scope value contains a colon | permission `rbtest` / `a:b` attached | the result is `rbtest:a:b` and a session holding it matches the scope | P1 |  |
+| ST-25 | permissions table | Error Path | nodes in the wrong format and merge rules that do not fit the value type are inserted directly | live database; upper case, colon, double dot, unknown type, merge without a type | the `permissions_node_format` or `permissions_merge_matches_type` constraint is violated for each | P1 |  |
+| ST-26 | GetPermissionsForRoles | Edge Case | a list-valued permission is granted with a value containing a colon | permission `rbtest.pets` of type `string_list` granted `b:c` and `a` | the result is `rbtest.pets:a` and `rbtest.pets:b:c`, and a session holding them matches the node and each value | P1 |  |
 | ST-27 | DeleteRole | Concurrency Invariant (live) | an assignment of the role is in flight, uncommitted, when the delete runs | transaction holding a share lock on the role and an account row naming it | The delete waits for the commit and then returns `ErrRoleInUse`; the role remains | P1 |  |
-| ST-28 | seed | Happy Path (live) | the built-in roles | database created from `docker/testdb/init.sql` | `system` and `owner` grant all seven scopes and `bee_admin` grants the bee name generator scope | P1 |  |
+| ST-28 | seed | Happy Path (live) | the built-in roles | database created from `docker/testdb/init.sql` | `system` and `owner` grant every admin node and `ratelimit:1000`, and `bee_admin` grants `beenamegenerator.admin` | P1 |  |
 | ST-29 | GetRoleByName | Edge Case (live) | the name given is a role's ID | store called directly | `ErrRoleNotFound` | P1 |  |
 | ST-30 | UpdateRole | Error Path (live) | the role does not exist | store called directly | `ErrRoleNotFound` | P2 |  |
 | ST-31 | GetRole / ListRoles | Edge Case (live) | permissions attached out of ID order | role with three permissions attached in a different order | With hash joins forced, permissions are returned in ID order; the roles list is in ID order | P2 |  |
+| ST-32 | AttachPermission / GetRole | Edge Case (live) | a valued permission is granted twice with different values and a bare one once | role, an `int` permission and a bare permission | the role lists the last value for the valued permission and no value for the bare one | P1 |  |
+| ST-33 | GetPermissionsForRoles | Happy Path (live) | two roles grant the same valued permissions | an `int` permission with merge min (100 and 1000) and a `string_list` permission with overlapping lists | the lowest int and the sorted union of the lists | P1 |  |
 
 
 ## service.go
@@ -45,19 +47,24 @@
 | SV-02 | CreateRole | Error Path | invalid role names | empty, upper-case, leading digit or underscore, other characters, over the length limit | `ErrInvalidRoleName` and the store is never called | P1 |  |
 | SV-03 | CreateRole | Edge Case | description at and over the limit | fake store | At the limit succeeds; over it is `ErrInvalidDescription` without a store call | P2 |  |
 | SV-04 | CreateRole | Happy Path | a role is created | fake store | The role id is the snowflake handed to the store and the permission list is empty and non-nil | P1 |  |
-| SV-05 | CreatePermission | Error Path | invalid scopes | empty name or value, a colon in the name, over either limit | `ErrInvalidScope` and the store is never called | P1 |  |
-| SV-06 | CreatePermission | Edge Case | scope at both limits | fake store | Created with the snowflake id given to the store and the scope reaching the store unchanged | P2 |  |
+| SV-05 | CreatePermission | Error Path | invalid nodes | empty, upper case, leading digit or underscore in a word, empty word, a leading or trailing dot, other characters, a colon, non-ASCII, over the length limit | `ErrInvalidNode` and the store is never called | P1 |  |
+| SV-06 | CreatePermission | Happy Path | valid nodes | a single word, dotted words, digits and underscores, the length limit | created with the snowflake id and the node and description reaching the store unchanged | P1 |  |
 | SV-07 | Service | Error Path | a bad id | empty, non-numeric, zero, negative, fractional, overflowing | `ErrInvalidID` from every method taking an id and the store is never called | P1 |  |
 | SV-08 | AttachPermission / DetachPermission | Happy Path | ids are parsed | fake store | The store receives the role id then the permission id | P1 |  |
 | SV-09 | Service | Error Path | the store fails | fake store returns an error | Every method returns that error | P1 |  |
 | SV-10 | UpdateRole | Edge Case | one field is omitted | stored role with a name and description | The omitted field keeps its value; an empty description clears it | P1 |  |
-| SV-12 | CreatePermission | Edge Case | a scope value contains a colon | fake store | Created with the value unchanged at the store | P2 |  |
-| SV-13 | CreatePermission / CreateRole | Error Path | NUL, U+FFFD, invalid UTF-8, control and format characters in scopes, surrounding spaces, and limits counted in characters | scopes and descriptions of multi-byte characters | The bad inputs give `ErrInvalidScope` or `ErrInvalidDescription` before the store; inputs of exactly the limit in characters, and a description with a newline and a joined emoji, are created | P1 |  |
-| SV-14 | GetRoleByName / GetPermissionByScope | Edge Case | names that cannot exist | NUL in the name, upper case, a leading digit, empty, a colon in a scope name | `ErrRoleNotFound` or `ErrPermissionNotFound` and the store is never called | P1 |  |
+| SV-12 | CreatePermission | Edge Case | value types and merge rules | valid pairs, defaults for string and string_list, and invalid pairs | valid pairs are stored with the merge rule filled in; invalid pairs give `ErrInvalidValueType` before the store | P1 |  |
+| SV-13 | CreatePermission / CreateRole | Error Path | NUL, U+FFFD, invalid UTF-8 and over-long descriptions | role and permission descriptions of multi-byte characters | `ErrInvalidDescription` before the store; a newline, a joined emoji and the exact limit in characters are accepted | P1 |  |
+| SV-14 | GetRoleByName / GetPermissionByNode | Edge Case | names that cannot exist | NUL in the name, upper case, a leading digit, empty, a colon or double dot in a node | `ErrRoleNotFound` or `ErrPermissionNotFound` and the store is never called; valid names reach the store | P1 |  |
 | SV-15 | DeleteRole | Error Path | deleting a built-in role | roles `system`, `owner` and `bee_admin`; and an ordinary role | `ErrBuiltinRole` for the built-ins without a store delete; the ordinary role is deleted | P1 |  |
 | SV-16 | UpdateRole | Error Path | renaming a built-in role | role `owner` | `ErrBuiltinRole`; repeating the name while changing the description succeeds | P1 |  |
-| SV-17 | DetachPermission | Error Path | removing `roles:*` from `system` or `owner` | fake store | `ErrBuiltinRole` without a store detach | P1 |  |
-| SV-18 | DetachPermission | Edge Case | other detaches | other scope from `owner`, `roles:read` from `owner`, `roles:*` from other roles | The detach reaches the store | P2 |  |
+| SV-17 | DetachPermission | Error Path | removing `roles.admin` from `system` or `owner` | fake store | `ErrBuiltinRole` without a store detach | P1 |  |
+| SV-18 | DetachPermission | Edge Case | other detaches | other nodes from `owner`, `roles` and `roles.administrator` from `owner`, `roles.admin` from other roles | The detach reaches the store | P2 |  |
+| SV-19 | AttachPermission | Error Path | a permission without a value type is given a value, or none is given | fake store | no value is stored as NULL; any value gives `ErrInvalidValue` without an attach | P1 |  |
+| SV-20 | AttachPermission | Edge Case | int values | permission of type `int`; whole numbers in several Go and JSON number forms; fractions, strings, nil, out-of-range numbers and lists | whole numbers are stored as JSON integers; the others give `ErrInvalidValue` without an attach | P1 |  |
+| SV-21 | AttachPermission | Edge Case | string values | permission of type `string`; text with colons; empty, padded, NUL, format, control, over-long and non-string values | valid text is stored as a JSON string; the others give `ErrInvalidValue` without an attach | P1 |  |
+| SV-22 | AttachPermission | Edge Case | list values | permission of type `string_list`; unsorted lists with duplicates; empty, over-long, non-string and bad-text lists; a list of exactly the limit | lists are stored sorted and deduplicated; the others give `ErrInvalidValue` without an attach | P1 |  |
+| SV-23 | AttachPermission | Error Path | the permission does not exist | store returns `ErrPermissionNotFound` | `ErrPermissionNotFound` and no attach | P2 |  |
 | SV-11 | UpdateRole | Error Path | an invalid name or description | stored role | `ErrInvalidRoleName` or `ErrInvalidDescription` and no write reaches the store | P1 |  |
 
 
@@ -65,11 +72,24 @@
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| RH-01 | all handlers | Error Path | a session without the roles scope | sessions with no permissions, `roles` with another value, another scope | 403 with `msgNoPermission` and the service is never called | P1 |  |
-| RH-02 | all handlers | Happy Path | a session with the roles scope | stub service | The documented status code, the path and body values reaching the service, and the response body carrying the service's result (empty for 204) | P1 |  |
+| RH-01 | all handlers | Error Path | a session without the roles.admin node | sessions with no permissions, `roles.other`, `roles.admins`, `other.admin` and bare `roles` | 403 with `msgNoPermission` and the service is never called | P1 |  |
+| RH-02 | all handlers | Happy Path | a session with the roles.admin node | stub service | The documented status code, the path and body values reaching the service, and the response body carrying the service's result (empty for 204) | P1 |  |
 | RH-03 | body handlers | Error Path | an unparseable body | create and update handlers | 400 with `msgUnableToParseBody` and the service is never called | P1 |  |
 | RH-04 | all handlers | Error Path | the service returns each sentinel, a wrapped one and an unknown error | stub service | 400, 404 and 409 with the matching `msg*` detail (`msgBuiltinRole` for `ErrBuiltinRole`); an unknown error is 500 with `msgFailedToHandleRbac` | P1 |  |
 
+
+## grants.go
+
+| ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
+|----|----------|---------------|----------|---------------|------------------|----------|-------|
+| GR-01 | flattenGrants | Edge Case | no grants | none | an empty non-nil list | P2 |  |
+| GR-02 | flattenGrants | Happy Path | bare grants of the same node from several roles | duplicate and distinct nodes | each node once, in node order | P1 |  |
+| GR-03 | flattenGrants | Happy Path | int values with merge max and min | several values including negatives | the highest for max and the lowest for min | P1 |  |
+| GR-04 | flattenGrants | Happy Path | string values | two roles | the first value in role order | P1 |  |
+| GR-05 | flattenGrants | Happy Path | list values | overlapping lists | one `node:value` entry per distinct element, sorted | P1 |  |
+| GR-06 | flattenGrants | Edge Case | values containing colons | list element `a:b` and string `x:y:z` | the value is kept whole after the first colon | P1 |  |
+| GR-07 | flattenGrants | Edge Case | valued nodes without a value | nil value, empty list, unknown type, and a nil value beside a real one | a bare node, except the real value wins | P2 |  |
+| GR-08 | flattenGrants | Error Path | stored values of the wrong shape | text for an int, a fraction for an int, a number for a string, a string or broken JSON for a list | an error and no result | P2 |  |
 
 ## empty tables
 
