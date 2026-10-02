@@ -11,7 +11,6 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
-	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
@@ -140,7 +139,7 @@ func TestHD01to05_CreatePetHandler(t *testing.T) {
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPost, "/pets/Rex", nil)
 		req.SetPathValue("name", "Rex")
-		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions(perms.ScopeAdminPetPictures.Node)))
+		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.admin")))
 		w := httptest.NewRecorder()
 
 		CreatePetHandler(svc)(w, req)
@@ -161,7 +160,7 @@ func TestHD01to05_CreatePetHandler(t *testing.T) {
 		mock := &hdMockStore{createPetResult: &Pet{ID: 2, Name: "Fido"}}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPost, "/pets", strings.NewReader(`{"name":"Fido"}`))
-		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions(perms.ScopeAdminPetPictures.Node)))
+		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.admin")))
 		w := httptest.NewRecorder()
 
 		CreatePetHandler(svc)(w, req)
@@ -178,7 +177,7 @@ func TestHD01to05_CreatePetHandler(t *testing.T) {
 		mock := &hdMockStore{}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPost, "/pets", nil)
-		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions(perms.ScopeAdminPetPictures.Node)))
+		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.admin")))
 		w := httptest.NewRecorder()
 
 		CreatePetHandler(svc)(w, req)
@@ -197,7 +196,7 @@ func TestHD01to05_CreatePetHandler(t *testing.T) {
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPost, "/pets/Rex", nil)
 		req.SetPathValue("name", "Rex")
-		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions(perms.ScopeAdminPetPictures.Node)))
+		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.admin")))
 		w := httptest.NewRecorder()
 
 		CreatePetHandler(svc)(w, req)
@@ -316,7 +315,7 @@ func TestHD11to14and35_UpdatePetHandler(t *testing.T) {
 		mock := &hdMockStore{}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPut, "/pets", strings.NewReader(`{"id":1,"name":"Rex"}`))
-		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions(perms.ScopePetPictures.Node + ":SomeoneElsesPet")))
+		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.pets:SomeoneElsesPet")))
 		w := httptest.NewRecorder()
 
 		UpdatePetHandler(svc)(w, req)
@@ -334,7 +333,7 @@ func TestHD11to14and35_UpdatePetHandler(t *testing.T) {
 		mock := &hdMockStore{updatePetResult: &Pet{ID: 1, Name: "Rex"}}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPut, "/pets", strings.NewReader(`{"id":1,"name":"Rex"}`))
-		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions(perms.ScopePetPictures.Node + ":Rex")))
+		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.pets:Rex")))
 		w := httptest.NewRecorder()
 
 		UpdatePetHandler(svc)(w, req)
@@ -351,7 +350,7 @@ func TestHD11to14and35_UpdatePetHandler(t *testing.T) {
 		mock := &hdMockStore{updatePetErr: testerrors.ErrDBDown}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPut, "/pets", strings.NewReader(`{"id":1,"name":"Rex"}`))
-		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions(perms.ScopePetPictures.Node + ":Rex")))
+		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.pets:Rex")))
 		w := httptest.NewRecorder()
 
 		UpdatePetHandler(svc)(w, req)
@@ -366,7 +365,7 @@ func TestHD11to14and35_UpdatePetHandler(t *testing.T) {
 		mock := &hdMockStore{updatePetErr: ErrPetNotFound}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPut, "/pets", strings.NewReader(`{"id":1,"name":"Rex"}`))
-		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions(perms.ScopePetPictures.Node + ":Rex")))
+		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.pets:Rex")))
 		w := httptest.NewRecorder()
 
 		UpdatePetHandler(svc)(w, req)
@@ -545,7 +544,7 @@ func TestHD23to27and36_UpdatePetPictureHandler(t *testing.T) {
 		mock := &hdMockStore{getPetResult: &Pet{ID: 1, Name: "Rex"}}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPut, "/pictures", strings.NewReader(`{"id":"abc123","prime_subj":1}`))
-		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions(perms.ScopePetPictures.Node + ":SomeoneElse")))
+		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.pets:SomeoneElse")))
 		w := httptest.NewRecorder()
 
 		UpdatePetPictureHandler(svc)(w, req)
@@ -566,7 +565,7 @@ func TestHD23to27and36_UpdatePetPictureHandler(t *testing.T) {
 		}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPut, "/pictures", strings.NewReader(`{"id":"abc123","prime_subj":1}`))
-		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions(perms.ScopePetPictures.Node + ":Rex")))
+		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.pets:Rex")))
 		w := httptest.NewRecorder()
 
 		UpdatePetPictureHandler(svc)(w, req)
@@ -586,7 +585,7 @@ func TestHD23to27and36_UpdatePetPictureHandler(t *testing.T) {
 		}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPut, "/pictures", strings.NewReader(`{"id":"abc123","prime_subj":1}`))
-		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions(perms.ScopePetPictures.Node + ":Rex")))
+		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.pets:Rex")))
 		w := httptest.NewRecorder()
 
 		UpdatePetPictureHandler(svc)(w, req)
@@ -604,7 +603,7 @@ func TestHD23to27and36_UpdatePetPictureHandler(t *testing.T) {
 		}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPut, "/pictures", strings.NewReader(`{"id":"abc123","prime_subj":1}`))
-		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions(perms.ScopePetPictures.Node + ":Rex")))
+		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.pets:Rex")))
 		w := httptest.NewRecorder()
 
 		UpdatePetPictureHandler(svc)(w, req)
@@ -625,7 +624,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodDelete, "/pictures/abc123", nil)
 		req.SetPathValue("id", "abc123")
-		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions(perms.ScopePetPictures.Node + ":Rex")))
+		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.pets:Rex")))
 		w := httptest.NewRecorder()
 
 		DeletePetPictureHandler(svc)(w, req)
@@ -645,7 +644,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 		}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodDelete, "/pictures", strings.NewReader(`{"id":"abc123"}`))
-		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions(perms.ScopePetPictures.Node + ":Rex")))
+		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.pets:Rex")))
 		w := httptest.NewRecorder()
 
 		DeletePetPictureHandler(svc)(w, req)
@@ -719,7 +718,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodDelete, "/pictures/abc123", nil)
 		req.SetPathValue("id", "abc123")
-		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions(perms.ScopePetPictures.Node + ":SomeoneElse")))
+		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.pets:SomeoneElse")))
 		w := httptest.NewRecorder()
 
 		DeletePetPictureHandler(svc)(w, req)
@@ -742,7 +741,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodDelete, "/pictures/abc123", nil)
 		req.SetPathValue("id", "abc123")
-		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions(perms.ScopePetPictures.Node + ":Rex")))
+		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.pets:Rex")))
 		w := httptest.NewRecorder()
 
 		DeletePetPictureHandler(svc)(w, req)
@@ -760,7 +759,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPost, "/pets/Rex", nil)
 		req.SetPathValue("name", "Rex")
-		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions(perms.ScopeAdminPetPictures.Node)))
+		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.admin")))
 		w := httptest.NewRecorder()
 
 		CreatePetHandler(svc)(w, req)
@@ -775,7 +774,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 		mock := &hdMockStore{updatePetErr: ErrPetNameEmpty}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPut, "/pets", strings.NewReader(`{"id":1,"name":"Rex"}`))
-		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions(perms.ScopePetPictures.Node + ":Rex")))
+		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.pets:Rex")))
 		w := httptest.NewRecorder()
 
 		UpdatePetHandler(svc)(w, req)

@@ -150,7 +150,6 @@ func normalizeTypes(valueType, merge string) (string, bool) {
 	return "", false
 }
 
-// encodeValue checks a granted value against its permission's type and returns it as JSON
 func encodeValue(permission *Permission, value any) ([]byte, error) {
 	if permission.ValueType == "" {
 		if value != nil {

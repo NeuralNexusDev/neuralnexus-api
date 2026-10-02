@@ -13,8 +13,7 @@ type grant struct {
 	value     []byte
 }
 
-// flattenGrants merges the grants of an account's roles into session permission
-// strings: a bare node, or node:value with one entry per list element.
+// flattenGrants expects grants ordered by node, then role ID, so the first value of a string node is the lowest role ID's.
 func flattenGrants(grants []grant) ([]string, error) {
 	permissions := []string{}
 	for i := 0; i < len(grants); {

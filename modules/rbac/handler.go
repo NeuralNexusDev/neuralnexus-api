@@ -28,7 +28,7 @@ const (
 	msgPermissionExists   = "That permission already exists"
 	msgRoleInUse          = "The role is assigned to an account"
 	msgPermissionInUse    = "The permission is granted by a role"
-	msgBuiltinRole        = "Built-in roles cannot be deleted or renamed, and system and owner keep the roles permission"
+	msgBuiltinRole        = "Built-in roles cannot be deleted or renamed, and system and owner keep roles.admin"
 	msgFailedToHandleRbac = "Failed to process the request"
 	logFailedToHandleRbac = "[Error]: Unable to process roles and permissions request:\n\t"
 )

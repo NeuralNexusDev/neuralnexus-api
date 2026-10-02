@@ -19,7 +19,7 @@ var (
 	ErrPermissionNotFound = errors.New("permission not found")
 	// ErrRoleNameTaken is returned when a role name already belongs to another role.
 	ErrRoleNameTaken = errors.New("role name already exists")
-	// ErrPermissionExists is returned when a permission with the same scope already exists.
+	// ErrPermissionExists is returned when a permission with the same node already exists.
 	ErrPermissionExists = errors.New("permission already exists")
 	// ErrRoleInUse is returned when deleting a role an account holds.
 	ErrRoleInUse = errors.New("role is assigned to an account")

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -212,6 +213,29 @@ func TestRH04ServiceFailureMapping(t *testing.T) {
 				if w.Code != m.status || rbDetail(t, w) != m.msg {
 					t.Fatalf("%s with %v: got %d %s, want %d %s", c.name, m.err, w.Code, w.Body.String(), m.status, m.msg)
 				}
+			}
+		}
+	})
+}
+
+func TestRH05AttachValueNumbers(t *testing.T) {
+	attach := func(body string) (*httptest.ResponseRecorder, *fakeStore) {
+		f := &fakeStore{role: &Role{Name: "mod"}, permission: &Permission{ID: "8", Node: "a.b", ValueType: ValueTypeInt, Merge: MergeMax}}
+		c := handlerCase{paths: map[string]string{"id": "7", "permission_id": "8"}}
+		w := httptest.NewRecorder()
+		AttachPermissionHandler(NewService(f))(w, rbRequest(c, rbAdmin(), body))
+		return w, f
+	}
+
+	t.Run("RH-05_IntValuesAreReadAsExactNumbers", func(t *testing.T) {
+		w, f := attach(`{"value":1000}`)
+		if w.Code != http.StatusNoContent || string(f.attachedValue) != "1000" {
+			t.Fatalf("got %d, stored %q", w.Code, f.attachedValue)
+		}
+		for _, body := range []string{`{"value":9007199254740993}`, `{"value":1e2}`, `{"value":5.0}`, `{"value":1.5}`, `{"value":"5"}`, `{}`} {
+			w, f := attach(body)
+			if w.Code != http.StatusBadRequest || rbDetail(t, w) != msgInvalidValue || slices.Contains(f.calls, "AttachPermission") {
+				t.Fatalf("body %s: got %d %s with calls %v, want 400 and no attach", body, w.Code, w.Body.String(), f.calls)
 			}
 		}
 	})

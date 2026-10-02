@@ -161,7 +161,7 @@
         "/bee-name-generator/suggestion/{amount}": {
             "get": {
                 "summary": "Get bee name suggestions",
-                "description": "Requires the admin:bee-name-generator scope.",
+                "description": "Requires the beenamegenerator.admin permission.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -226,7 +226,7 @@
             },
             "put": {
                 "summary": "Accept a bee name suggestion",
-                "description": "Requires the admin:bee-name-generator scope.",
+                "description": "Requires the beenamegenerator.admin permission.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -257,7 +257,7 @@
             },
             "delete": {
                 "summary": "Reject a bee name suggestion",
-                "description": "Requires the admin:bee-name-generator scope.",
+                "description": "Requires the beenamegenerator.admin permission.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -290,7 +290,7 @@
         "/datastore": {
             "post": {
                 "summary": "Create a data store",
-                "description": "Requires the admin:datastore scope. The store is created for the caller; no request body is read.",
+                "description": "Requires the datastore.admin permission. The store is created for the caller; no request body is read.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -370,7 +370,7 @@
             },
             "put": {
                 "summary": "Update a data store",
-                "description": "Requires the admin:datastore scope.",
+                "description": "Requires the datastore.admin permission.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -425,7 +425,7 @@
             },
             "delete": {
                 "summary": "Delete a data store",
-                "description": "Requires the admin:datastore scope.",
+                "description": "Requires the datastore.admin permission.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -475,7 +475,7 @@
         "/datastore/number": {
             "post": {
                 "summary": "Create a number record",
-                "description": "Requires the admin:numberstore scope.",
+                "description": "Requires the numberstore.admin permission.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -577,7 +577,7 @@
             },
             "put": {
                 "summary": "Update a number record",
-                "description": "Requires the admin:numberstore scope.",
+                "description": "Requires the numberstore.admin permission.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -632,7 +632,7 @@
             },
             "delete": {
                 "summary": "Delete a number record",
-                "description": "Requires a valid session, but \u2014 unlike create/update \u2014 the handler does not check the admin:numberstore scope; any authenticated user can delete any record.",
+                "description": "Requires a valid session, but \u2014 unlike create/update \u2014 the handler does not check the numberstore.admin permission; any authenticated user can delete any record.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -1425,7 +1425,7 @@
         "/pet-pictures/pets": {
             "post": {
                 "summary": "Create a pet",
-                "description": "Requires the admin:pet-pictures scope. The pet name comes from the request body when no {name} path segment is used.",
+                "description": "Requires the petpictures.admin permission. The pet name comes from the request body when no {name} path segment is used.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -1530,7 +1530,7 @@
             },
             "put": {
                 "summary": "Update a pet",
-                "description": "Requires the pet-pictures scope for this pet's name.",
+                "description": "Requires the petpictures.pets list to contain this pet's name.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -1627,7 +1627,7 @@
         "/pet-pictures/pets/{name}": {
             "post": {
                 "summary": "Create a pet",
-                "description": "Requires the admin:pet-pictures scope.",
+                "description": "Requires the petpictures.admin permission.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -1717,7 +1717,7 @@
             },
             "put": {
                 "summary": "Update a pet picture",
-                "description": "Requires the pet-pictures scope for the picture's primary subject's pet name.",
+                "description": "Requires the petpictures.pets list to contain the picture's primary subject's pet name.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -1775,7 +1775,7 @@
             },
             "delete": {
                 "summary": "Delete a pet picture",
-                "description": "Requires the pet-pictures scope for the picture's primary subject's pet name. The picture ID comes from the request body when no {id} path segment is used.",
+                "description": "Requires the petpictures.pets list to contain the picture's primary subject's pet name. The picture ID comes from the request body when no {id} path segment is used.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -1929,7 +1929,7 @@
             },
             "delete": {
                 "summary": "Delete a pet picture",
-                "description": "Requires the pet-pictures scope for the picture's primary subject's pet name.",
+                "description": "Requires the petpictures.pets list to contain the picture's primary subject's pet name.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -2313,7 +2313,7 @@
         "/users/{platform}/{platform_id}": {
             "get": {
                 "summary": "Get a user by their linked-platform identity",
-                "description": "Requires the admin:users scope.",
+                "description": "Requires the users.admin permission.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -2357,7 +2357,7 @@
             },
             "put": {
                 "summary": "Update a user's linked-platform data",
-                "description": "Requires the admin:users scope.",
+                "description": "Requires the users.admin permission.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -2469,7 +2469,7 @@
             },
             "put": {
                 "summary": "Update a user",
-                "description": "Requires the admin:users scope. Roles, when given, must be the IDs of existing roles.",
+                "description": "Requires the users.admin permission. Roles, when given, must be the IDs of existing roles.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -2537,7 +2537,7 @@
         "/users/{user_id}/link/{platform}": {
             "delete": {
                 "summary": "Unlink a platform from a user",
-                "description": "Requires the admin:users scope, unless the caller is unlinking their own account. Refused with 400 if this is the account's last usable login method (no password and no other verified, login-enabled linked platform).",
+                "description": "Requires the users.admin permission, unless the caller is unlinking their own account. Refused with 400 if this is the account's last usable login method (no password and no other verified, login-enabled linked platform).",
                 "security": [
                     {
                         "bearerAuth": []
@@ -2577,7 +2577,7 @@
             },
             "patch": {
                 "summary": "Enable or disable a linked platform for login",
-                "description": "Requires the admin:users scope, unless the caller is updating their own account. Disabling is refused with 400 under the same last-usable-login-method guard as DELETE on this resource. Enabling is refused with 400 if the linked account isn't verified.",
+                "description": "Requires the users.admin permission, unless the caller is updating their own account. Disabling is refused with 400 under the same last-usable-login-method guard as DELETE on this resource. Enabling is refused with 400 if the linked account isn't verified.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -2636,7 +2636,7 @@
         "/users/{user_id}/links": {
             "get": {
                 "summary": "List a user's linked platforms",
-                "description": "Requires the admin:users scope, unless the caller is requesting their own linked accounts.",
+                "description": "Requires the users.admin permission, unless the caller is requesting their own linked accounts.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -2679,7 +2679,7 @@
         "/users/{user_id}/permissions": {
             "get": {
                 "summary": "Get a user's permissions",
-                "description": "Requires the admin:users scope, unless the caller is requesting their own permissions.",
+                "description": "Requires the users.admin permission, unless the caller is requesting their own permissions.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -2725,7 +2725,7 @@
         "/users/{user_id}/settings": {
             "get": {
                 "summary": "Get a user's account settings",
-                "description": "Requires the admin:users scope, unless the caller is requesting their own settings.",
+                "description": "Requires the users.admin permission, unless the caller is requesting their own settings.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -2766,7 +2766,7 @@
             },
             "patch": {
                 "summary": "Update a user's account settings",
-                "description": "Requires the admin:users scope, unless the caller is updating their own account. Disabling password login is refused with 400 unless another verified, login-enabled platform is linked; enabling it is refused with 400 if no password is set.",
+                "description": "Requires the users.admin permission, unless the caller is updating their own account. Disabling password login is refused with 400 unless another verified, login-enabled platform is linked; enabling it is refused with 400 if no password is set.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -3098,7 +3098,7 @@
         "/roles/{id}/permissions/{permission_id}": {
             "put": {
                 "summary": "Grant a permission to a role",
-                "description": "Requires the roles.admin permission. Granting an already granted permission succeeds and replaces its value. The body is optional JSON: permissions with a value_type need a value and permissions without one take none.",
+                "description": "Requires the roles.admin permission. Granting an already granted permission succeeds and replaces its value. The body is optional JSON: permissions with a value_type need a value and permissions without one take none. int values must be whole numbers within plus or minus 2^53. string values and list items must be at most 128 characters, with no surrounding spaces and no control or format characters; lists hold 1 to 64 items. For merge, first means the value of the lowest role ID.",
                 "security": [
                     {
                         "bearerAuth": []

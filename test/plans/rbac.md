@@ -7,7 +7,7 @@
 | ST-01 | CreateRole / GetRole / GetRoleByName | Happy Path | a created role is read back by id and by name | live database; role created through the service | Both reads return the created id, name and description, with an empty non-nil permission list | P1 |  |
 | ST-02 | CreateRole | Error Path | a role name is created twice | a role already holds the name | `ErrRoleNameTaken` | P1 |  |
 | ST-03 | GetRole / GetRoleByName | Error Path | an unknown id and an unknown name | no such role | `ErrRoleNotFound` for both | P1 |  |
-| ST-04 | ListRoles | Happy Path | roles with and without permissions exist | two roles, one with attached permissions | Both listed; the permissions of each are its own scopes | P1 |  |
+| ST-04 | ListRoles | Happy Path | roles with and without permissions exist | two roles, one with attached permissions | Both listed, each with only its own permissions | P1 |  |
 | ST-05 | UpdateRole | Happy Path | name and description are changed | existing role | Reads return the new name and description | P1 |  |
 | ST-06 | UpdateRole | Error Path | the new name belongs to another role | two roles | `ErrRoleNameTaken` | P2 |  |
 | ST-07 | DeleteRole | Happy Path | a role with grants is deleted | role with an attached permission | The role is gone (`ErrRoleNotFound` on read), its grants are gone and the permission still exists | P1 |  |
@@ -37,6 +37,8 @@
 | ST-31 | GetRole / ListRoles | Edge Case (live) | permissions attached out of ID order | role with three permissions attached in a different order | With hash joins forced, permissions are returned in ID order; the roles list is in ID order | P2 |  |
 | ST-32 | AttachPermission / GetRole | Edge Case (live) | a valued permission is granted twice with different values and a bare one once | role, an `int` permission and a bare permission | the role lists the last value for the valued permission and no value for the bare one | P1 |  |
 | ST-33 | GetPermissionsForRoles | Happy Path (live) | two roles grant the same valued permissions | an `int` permission with merge min (100 and 1000) and a `string_list` permission with overlapping lists | the lowest int and the sorted union of the lists | P1 |  |
+| ST-34 | GetPermissionsForRoles | Edge Case (live) | a string permission with merge first is granted by two roles | hash joins forced; the higher role ID is granted first; the account lists its roles in either order | the value of the lower role ID in both orders | P1 |  |
+| ST-35 | GetRole | Edge Case (live) | an int value of 2^53 is granted | live database | the role reads the value back as the exact number 9007199254740992 | P2 |  |
 
 
 ## service.go
@@ -76,6 +78,7 @@
 | RH-02 | all handlers | Happy Path | a session with the roles.admin node | stub service | The documented status code, the path and body values reaching the service, and the response body carrying the service's result (empty for 204) | P1 |  |
 | RH-03 | body handlers | Error Path | an unparseable body | create and update handlers | 400 with `msgUnableToParseBody` and the service is never called | P1 |  |
 | RH-04 | all handlers | Error Path | the service returns each sentinel, a wrapped one and an unknown error | stub service | 400, 404 and 409 with the matching `msg*` detail (`msgBuiltinRole` for `ErrBuiltinRole`); an unknown error is 500 with `msgFailedToHandleRbac` | P1 |  |
+| RH-05 | AttachPermissionHandler | Edge Case | int values in the body, with the real service | permission of type int | `1000` is stored as 1000; a number above 2^53, `1e2`, `5.0`, `1.5`, a string and a missing value give 400 `msgInvalidValue` and no attach | P1 |  |
 
 
 ## grants.go
@@ -83,7 +86,7 @@
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
 | GR-01 | flattenGrants | Edge Case | no grants | none | an empty non-nil list | P2 |  |
-| GR-02 | flattenGrants | Happy Path | bare grants of the same node from several roles | duplicate and distinct nodes | each node once, in node order | P1 |  |
+| GR-02 | flattenGrants | Happy Path | bare grants of the same node from several roles | duplicate and distinct nodes | each node once, in the order given | P1 |  |
 | GR-03 | flattenGrants | Happy Path | int values with merge max and min | several values including negatives | the highest for max and the lowest for min | P1 |  |
 | GR-04 | flattenGrants | Happy Path | string values | two roles | the first value in role order | P1 |  |
 | GR-05 | flattenGrants | Happy Path | list values | overlapping lists | one `node:value` entry per distinct element, sorted | P1 |  |

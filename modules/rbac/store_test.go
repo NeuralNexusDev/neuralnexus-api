@@ -2,6 +2,7 @@ package rbac
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -514,6 +515,51 @@ func TestST22to26GetPermissionsForRoles(t *testing.T) {
 		}
 	})
 
+	t.Run("ST-34_FirstMeansTheLowestRoleIDWhateverTheOrder", func(t *testing.T) {
+		permission, err := svc.CreatePermission("rbtest.first_wins", "", ValueTypeString, "")
+		if err != nil {
+			t.Fatalf("CreatePermission() err = %v", err)
+		}
+		one, two := rbRole(t, svc, "first_a"), rbRole(t, svc, "first_b")
+		low, high := one, two
+		if mustParse(t, low.ID) > mustParse(t, high.ID) {
+			low, high = high, low
+		}
+		for _, g := range []struct {
+			role  *Role
+			value string
+		}{{high, "high"}, {low, "low"}} {
+			if err := svc.AttachPermission(g.role.ID, permission.ID, g.value); err != nil {
+				t.Fatalf("AttachPermission() err = %v", err)
+			}
+		}
+
+		for _, ids := range [][]string{{low.ID, high.ID}, {high.ID, low.ID}} {
+			got, err := rbHashJoinStore(t).GetPermissionsForRoles(ids)
+			if err != nil {
+				t.Fatalf("GetPermissionsForRoles() err = %v", err)
+			}
+			rbAssertStrings(t, got, []string{"rbtest.first_wins:low"})
+		}
+	})
+
+	t.Run("ST-35_LargeIntValuesAreReadBackExactly", func(t *testing.T) {
+		role := rbRole(t, svc, "big_int")
+		permission, err := svc.CreatePermission("rbtest.big_int", "", ValueTypeInt, MergeMax)
+		if err != nil {
+			t.Fatalf("CreatePermission() err = %v", err)
+		}
+		if err := svc.AttachPermission(role.ID, permission.ID, int64(1<<53)); err != nil {
+			t.Fatalf("AttachPermission() err = %v", err)
+		}
+
+		got, err := svc.GetRole(role.ID)
+
+		if err != nil || len(got.Permissions) != 1 || got.Permissions[0].Value != json.Number("9007199254740992") {
+			t.Errorf("GetRole() = (%+v, %v), want the value as the exact number 9007199254740992", got, err)
+		}
+	})
+
 	t.Run("ST-33_ValuesMergeAcrossRoles", func(t *testing.T) {
 		limit, err := svc.CreatePermission("rbtest.merge_limit", "", ValueTypeInt, MergeMin)
 		if err != nil {
@@ -666,20 +712,7 @@ func TestST27to33RoleIntegrity(t *testing.T) {
 			}
 		}
 
-		cfg, err := pgxpool.ParseConfig(os.Getenv("TEST_POSTGRES_URL"))
-		if err != nil {
-			t.Fatalf("failed to parse the url: %v", err)
-		}
-		for _, setting := range []string{"enable_nestloop", "enable_mergejoin", "enable_indexscan", "enable_indexonlyscan", "enable_bitmapscan"} {
-			cfg.ConnConfig.RuntimeParams[setting] = "off"
-		}
-		hashed, err := pgxpool.NewWithConfig(ctx, cfg)
-		if err != nil {
-			t.Fatalf("failed to create the pool: %v", err)
-		}
-		t.Cleanup(hashed.Close)
-
-		got, err := NewStore(hashed).GetRole(mustParse(t, role.ID))
+		got, err := rbHashJoinStore(t).GetRole(mustParse(t, role.ID))
 
 		if err != nil {
 			t.Fatalf("GetRole() err = %v", err)
@@ -716,4 +749,21 @@ func mustParse(t *testing.T, id string) int64 {
 		t.Fatalf("failed to parse id %q: %v", id, err)
 	}
 	return n
+}
+
+func rbHashJoinStore(t *testing.T) Store {
+	t.Helper()
+	cfg, err := pgxpool.ParseConfig(os.Getenv("TEST_POSTGRES_URL"))
+	if err != nil {
+		t.Fatalf("failed to parse the url: %v", err)
+	}
+	for _, setting := range []string{"enable_nestloop", "enable_mergejoin", "enable_indexscan", "enable_indexonlyscan", "enable_bitmapscan"} {
+		cfg.ConnConfig.RuntimeParams[setting] = "off"
+	}
+	pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("failed to create the pool: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	return NewStore(pool)
 }
