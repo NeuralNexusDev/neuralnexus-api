@@ -1,6 +1,7 @@
 package beenamegenerator
 
 import (
+	"errors"
 	"log"
 	"net/http"
 	"strconv"
