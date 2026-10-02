@@ -57,6 +57,10 @@ func UploadBeeNameHandler(s BNGStore) http.HandlerFunc {
 		}
 
 		_, err := s.UploadBeeName(beeName)
+        if errors.Is(err, ErrBeeNameExists) {
+	        responses.Conflict(w, r, "That bee name already exists")
+	        return
+        }
 		if err != nil {
 			log.Println("Failed to upload bee name:\n\t", err)
 			responses.InternalServerError(w, r, msgFailedToUploadBeeName)
@@ -101,6 +105,10 @@ func SubmitBeeNameHandler(s BNGStore) http.HandlerFunc {
 		}
 
 		_, err := s.SubmitBeeName(beeName)
+		if errors.Is(err, ErrBeeNameSuggestionExists) {
+			responses.Conflict(w, r, "That bee name has already been suggested")
+			return
+		}
 		if err != nil {
 			log.Println("Failed to submit bee name:\n\t", err)
 			responses.InternalServerError(w, r, msgFailedToSubmitBeeName)
@@ -155,6 +163,10 @@ func AcceptBeeNameSuggestionHandler(s BNGStore) http.HandlerFunc {
 		}
 
 		_, err := s.AcceptBeeNameSuggestion(beeName)
+		if errors.Is(err, ErrBeeNameExists) {
+            responses.Conflict(w, r, "That bee name already exists")
+            return
+        }
 		if err != nil {
 			log.Println("Failed to accept bee name suggestion:\n\t", err)
 			responses.InternalServerError(w, r, msgFailedToAcceptBeeNameSuggestion)
