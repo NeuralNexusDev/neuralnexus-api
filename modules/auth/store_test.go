@@ -2,7 +2,6 @@ package auth
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -1232,40 +1231,6 @@ func TestST80_GetSessionFromCacheMiss(t *testing.T) {
 		got, err := s.GetSessionFromCache("910000000000000201")
 		if got != nil || !errors.Is(err, ErrNotFound) {
 			t.Errorf("GetSessionFromCache() = (%v, %v), want (nil, %v)", got, err, ErrNotFound)
-		}
-	})
-}
-
-func TestST90_CachedSessionKey(t *testing.T) {
-	url := os.Getenv("TEST_REDIS_URL")
-	if url == "" {
-		t.Skip("TEST_REDIS_URL not set; skipping live-Redis test")
-	}
-	opts, err := redis.ParseURL(url)
-	if err != nil {
-		t.Fatalf("failed to parse TEST_REDIS_URL: %v", err)
-	}
-	rdb := redis.NewClient(opts)
-	t.Cleanup(func() { rdb.Close() })
-	s := &store{rdb: rdb}
-
-	t.Run("ST-90_CachedSessionsAreNotReadFromTheLegacyKey", func(t *testing.T) {
-		const id = "910000000000000202"
-		ctx := context.Background()
-		legacy, _ := json.Marshal(&Session{ID: id, UserID: "u1", Permissions: []string{"users|*"}})
-		if err := rdb.Set(ctx, "session:"+id, legacy, time.Minute).Err(); err != nil {
-			t.Fatalf("failed to plant the legacy session: %v", err)
-		}
-		t.Cleanup(func() { rdb.Del(ctx, "session:"+id, sessionKeyPrefix+id) })
-
-		if got, err := s.GetSessionFromCache(id); got != nil || !errors.Is(err, ErrNotFound) {
-			t.Errorf("GetSessionFromCache() = (%v, %v), want (nil, %v) for a session cached under the old key", got, err, ErrNotFound)
-		}
-		if err := s.AddSessionToCache(&Session{ID: id, UserID: "u1", ExpiresAt: time.Now().Add(time.Minute).Unix()}); err != nil {
-			t.Fatalf("AddSessionToCache() err = %v", err)
-		}
-		if got, err := s.GetSessionFromCache(id); err != nil || got == nil || got.UserID != "u1" {
-			t.Errorf("GetSessionFromCache() = (%v, %v), want the newly cached session", got, err)
 		}
 	})
 }

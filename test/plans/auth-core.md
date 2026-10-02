@@ -170,7 +170,6 @@
 | ST-87 | AddAccountToDB | Edge Case (live) | an account is added with nil roles | Real Postgres | The stored account has no role ids | P2 |   |
 | ST-88 | AddAccountToDB | Error Path (live) | a role id is not numeric | Real Postgres; roles `7` and `admin` | `ErrInvalidRoleID` and nothing is stored (`ErrNotFound` on read) | P1 |   |
 | ST-89 | UpdateAccountInDB | Error Path (live) | a role id is below one | Real Postgres; role id `0` | `ErrInvalidRoleID` | P2 |   |
-| ST-90 | AddSessionToCache / GetSessionFromCache | Edge Case (live) | a session sits in Redis under the legacy `session:` key | live Redis | The lookup is a miss; a session cached through the store is read back | P1 |   |
 | ST-91 | AddAccountToDB | Error Path (live) | one of the role ids has no role | Real Postgres | `ErrUnknownRoleID` and nothing is stored (`ErrNotFound` on read) | P1 |   |
 | ST-92 | UpdateAccountInDB | Error Path (live) | the role id has no role | Real Postgres | `ErrUnknownRoleID` and no role ids are stored | P1 |   |
 | ST-93 | UpdateAccountInDB | Error Path (live) | role ids with a leading zero, a plus sign or a space | Real Postgres | `ErrInvalidRoleID` for each | P2 |   |

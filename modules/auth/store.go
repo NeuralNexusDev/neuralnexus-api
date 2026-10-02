@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	sessionKeyPrefix   = "session:v2:"
+	sessionKeyPrefix   = "session:"
 	rateLimitKeyPrefix = "rl:"
 )
 
