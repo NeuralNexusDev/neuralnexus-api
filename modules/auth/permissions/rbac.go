@@ -97,6 +97,13 @@ var (
 			ScopeAdminNumberStore,
 			ScopeAdminUsers,
 		},
+	},
+	RoleBeeAdmin = Role{
+		Name:        "bee_admin",
+		Description: "Bee Name Generator Admin",
+		Permissions: []Scope{
+			ScopeAdminBeeNameGenerator,
+		},
 	}
 )
 
