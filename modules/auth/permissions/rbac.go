@@ -119,6 +119,8 @@ func GetRoleByName(name string) (Role, error) {
 		return RoleSystem, nil
 	case RoleOwner.Name:
 		return RoleOwner, nil
+	case RoleBeeAdmin.Name:
+		return RoleBeeAdmin, nil
 	default:
 		return Role{}, ErrRoleNotFound
 	}
