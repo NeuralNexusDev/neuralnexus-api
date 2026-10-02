@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
@@ -464,6 +465,7 @@ func TestServerStatusHandler(t *testing.T) {
 		{"DomainLabelAtLimit", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.example.com", "", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.example.com", 25565},
 		{"DomainAtLengthLimit", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc.ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc.ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", 25565},
 		{"Ipv4", "192.168.1.1", "", "192.168.1.1", 25565},
+		{"PortWithLeadingZeros", "a.com:00080", "", "a.com", 80},
 		{"Ipv4WithPort", "192.168.1.1:25570", "", "192.168.1.1", 25570},
 		{"Ipv4BedrockDefault", "192.168.1.1", "bedrock=true", "192.168.1.1", 19132},
 		{"Ipv6BareCanonicalised", "2001:DB8:0:0:0:0:0:1", "", "2001:db8::1", 25565},
@@ -521,6 +523,10 @@ func TestServerStatusHandler(t *testing.T) {
 		{"Ipv6Unclosed", "[::1"},
 		{"Ipv6EmptyBrackets", "[]"},
 		{"Ipv6TextAfterBracket", "[::1]x"},
+		{"Ipv6TextAfterBracketThenPort", "[::1]x80"},
+		{"Ipv6HextetTooLarge", "[12345::1]"},
+		{"NumericLastLabelAfterName", "example.123"},
+		{"PortWithLeadingZerosTooLong", "a.com:0000080"},
 		{"Ipv6BracketedBadPort", "[::1]:abc"},
 		{"Ipv6BracketedPortZero", "[::1]:0"},
 		{"Ipv6DoubleBracketed", "[[::1]]"},
@@ -593,6 +599,62 @@ func TestServerStatusHandler(t *testing.T) {
 		}
 		if _, ok := body["port"]; ok {
 			t.Fatalf("body = %v, want no port member on an internal error", body)
+		}
+	})
+
+	t.Run("HD-52_OfflineProblemXmlHasProblemRoot", func(t *testing.T) {
+		mock := &hdMockService{serverErr: ErrJavaStatus}
+		req := hdRequest(t, "example.com:25570", "")
+		req.Header.Set("Accept", "application/xml")
+		w := httptest.NewRecorder()
+
+		ServerStatusHandler(mock)(w, req)
+
+		if ct := w.Header().Get("Content-Type"); ct != "application/problem+xml" {
+			t.Fatalf("expected Content-Type application/problem+xml, got %q", ct)
+		}
+		body := w.Body.String()
+		if !strings.HasPrefix(body, "<Problem>") || !strings.Contains(body, "<host>example.com</host>") || !strings.Contains(body, "<port>25570</port>") {
+			t.Fatalf("body = %q, want a Problem root with the host and port elements", body)
+		}
+	})
+
+	t.Run("HD-53_OfflineProblemProtobufIsThePlainProblem", func(t *testing.T) {
+		mock := &hdMockService{serverErr: ErrJavaStatus}
+		req := hdRequest(t, "example.com:25570", "")
+		req.Header.Set("Accept", "application/x-protobuf")
+		w := httptest.NewRecorder()
+
+		ServerStatusHandler(mock)(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("expected 404, got %d", w.Code)
+		}
+		if ct := w.Header().Get("Content-Type"); ct != "application/problem+x-protobuf" {
+			t.Fatalf("expected Content-Type application/problem+x-protobuf, got %q", ct)
+		}
+	})
+
+	t.Run("HD-54_BedrockOfflineProblemCarriesDefaultPort", func(t *testing.T) {
+		mock := &hdMockService{serverErr: ErrBedrockStatus}
+		req := hdRequest(t, "Example.COM", "bedrock=true")
+		w := httptest.NewRecorder()
+
+		ServerStatusHandler(mock)(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("expected 404, got %d", w.Code)
+		}
+		var body struct {
+			Detail string `json:"detail"`
+			Host   string `json:"host"`
+			Port   int    `json:"port"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatalf("body is not JSON: %v", err)
+		}
+		if body.Detail != msgBedrockStatusFailed || body.Host != "example.com" || body.Port != 19132 {
+			t.Fatalf("body = %+v, want detail %q, host example.com, port 19132", body, msgBedrockStatusFailed)
 		}
 	})
 }

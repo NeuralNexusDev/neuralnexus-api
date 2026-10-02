@@ -657,3 +657,45 @@ func TestBedrockAddress(t *testing.T) {
 		}
 	})
 }
+
+func svNewBedrockServer(t *testing.T) int {
+	t.Helper()
+	conn, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen udp: %v", err)
+	}
+	t.Cleanup(func() { conn.Close() })
+	go func() {
+		buf := make([]byte, 64)
+		for {
+			_, addr, err := conn.ReadFrom(buf)
+			if err != nil {
+				return
+			}
+			payload := "MCPE;bedrock motd;589;1.20.0;1;20;12345;sub motd;Survival"
+			out := []byte{0x1c}
+			out = binary.BigEndian.AppendUint64(out, 0)
+			out = binary.BigEndian.AppendUint64(out, 1)
+			out = append(out, 0x00, 0xff, 0xff, 0x00, 0xfe, 0xfe, 0xfe, 0xfe, 0xfd, 0xfd, 0xfd, 0xfd, 0x12, 0x34, 0x56, 0x78)
+			out = binary.BigEndian.AppendUint16(out, uint16(len(payload)))
+			out = append(out, payload...)
+			conn.WriteTo(out, addr)
+		}
+	}()
+	return conn.LocalAddr().(*net.UDPAddr).Port
+}
+
+func TestService_GetBedrockServerStatusHostAndPort(t *testing.T) {
+	t.Run("SV-28_StatusCarriesHostAndPort", func(t *testing.T) {
+		port := svNewBedrockServer(t)
+
+		status, err := NewService().GetBedrockServerStatus("127.0.0.1", port)
+
+		if err != nil {
+			t.Fatalf("expected nil error, got %v", err)
+		}
+		if status.Host != "127.0.0.1" || status.Port != int32(port) {
+			t.Fatalf("host %q, port %d; want the queried host and port", status.Host, status.Port)
+		}
+	})
+}

@@ -43,11 +43,16 @@ func NewNotFoundProblem(message string) *Problem {
 	)
 }
 
-// SendProblemStruct -- Send a struct that embeds a Problem and adds extension members, as JSON or XML
-func SendProblemStruct[T any](w http.ResponseWriter, r *http.Request, statusCode int, data T) {
+// SendProblemStruct -- Send data, a struct that embeds the Problem and adds extension members, as JSON or XML; Protobuf output carries the Problem members only
+func SendProblemStruct[T any](w http.ResponseWriter, r *http.Request, problem *Problem, data T) {
+	accept := r.Header.Get("Accept")
+	if accept == "application/x-protobuf" {
+		problem.SendProblem(w, r)
+		return
+	}
 	var content string = "application/problem+"
 	var structBytes []byte
-	if r.Header.Get("Accept") == "application/xml" {
+	if accept == "application/xml" {
 		content += "xml"
 		structBytes, _ = xml.Marshal(data)
 	}
@@ -56,7 +61,7 @@ func SendProblemStruct[T any](w http.ResponseWriter, r *http.Request, statusCode
 		structBytes, _ = json.Marshal(data)
 	}
 	w.Header().Set("Content-Type", content)
-	w.WriteHeader(statusCode)
+	w.WriteHeader(int(problem.Status))
 	w.Write(structBytes)
 }
 

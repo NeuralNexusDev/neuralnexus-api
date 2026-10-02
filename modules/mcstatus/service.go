@@ -99,7 +99,10 @@ func (s *service) GetBedrockServerStatus(host string, port int) (*MCServerStatus
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrBedrockStatus, err)
 	}
-	return GetBedrockStatus(status), nil
+	bedrockStatus := GetBedrockStatus(status)
+	bedrockStatus.Host = host
+	bedrockStatus.Port = int32(port)
+	return bedrockStatus, nil
 }
 
 // GetServerStatus - Get server status

@@ -2,11 +2,15 @@ package responses
 
 import (
 	"encoding/json"
+	"encoding/xml"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/proto/problempb"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestRR01_TooManyRequestsRetryAfterIsHTTPDate(t *testing.T) {
@@ -39,6 +43,7 @@ func TestRR01_TooManyRequestsRetryAfterIsHTTPDate(t *testing.T) {
 }
 
 type rrExtendedProblem struct {
+	XMLName xml.Name `json:"-" xml:"Problem"`
 	*Problem
 	Host string `json:"host" xml:"host"`
 	Port int    `json:"port" xml:"port"`
@@ -49,7 +54,8 @@ func TestSendProblemStruct(t *testing.T) {
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 
-		SendProblemStruct(w, r, http.StatusNotFound, rrExtendedProblem{NewNotFoundProblem("gone"), "example.com", 25565})
+		problem := NewNotFoundProblem("gone")
+		SendProblemStruct(w, r, problem, rrExtendedProblem{Problem: problem, Host: "example.com", Port: 25565})
 
 		if w.Code != http.StatusNotFound {
 			t.Fatalf("status = %d, want %d", w.Code, http.StatusNotFound)
@@ -74,13 +80,41 @@ func TestSendProblemStruct(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		r.Header.Set("Accept", "application/xml")
 
-		SendProblemStruct(w, r, http.StatusNotFound, rrExtendedProblem{NewNotFoundProblem("gone"), "example.com", 25565})
+		problem := NewNotFoundProblem("gone")
+		SendProblemStruct(w, r, problem, rrExtendedProblem{Problem: problem, Host: "example.com", Port: 25565})
 
 		if ct := w.Header().Get("Content-Type"); ct != "application/problem+xml" {
 			t.Fatalf("Content-Type = %q, want application/problem+xml", ct)
 		}
-		if body := w.Body.String(); !strings.Contains(body, "<host>example.com</host>") || !strings.Contains(body, "<port>25565</port>") {
+		body := w.Body.String()
+		if !strings.HasPrefix(body, "<Problem>") || !strings.HasSuffix(body, "</Problem>") {
+			t.Errorf("body = %q, want a Problem root element", body)
+		}
+		if !strings.Contains(body, "<host>example.com</host>") || !strings.Contains(body, "<port>25565</port>") {
 			t.Errorf("body = %q, want the host and port extension members", body)
+		}
+	})
+
+	t.Run("RR-04_ProtobufAcceptSendsThePlainProblem", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		r.Header.Set("Accept", "application/x-protobuf")
+		problem := NewNotFoundProblem("gone")
+
+		SendProblemStruct(w, r, problem, rrExtendedProblem{Problem: problem, Host: "example.com", Port: 25565})
+
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("status = %d, want %d", w.Code, http.StatusNotFound)
+		}
+		if ct := w.Header().Get("Content-Type"); ct != "application/problem+x-protobuf" {
+			t.Fatalf("Content-Type = %q, want application/problem+x-protobuf", ct)
+		}
+		var got problempb.Problem
+		if err := proto.Unmarshal(w.Body.Bytes(), &got); err != nil {
+			t.Fatalf("body is not a Problem message: %v", err)
+		}
+		if got.Status != 404 || got.Detail != "gone" {
+			t.Errorf("problem = %v, want status 404 and detail gone", &got)
 		}
 	})
 }

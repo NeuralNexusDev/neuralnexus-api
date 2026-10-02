@@ -1,6 +1,7 @@
 package mcstatus
 
 import (
+	"encoding/xml"
 	"errors"
 	"image"
 	"image/png"
@@ -50,6 +51,7 @@ var statusFailures = []failureMapping{
 }
 
 type offlineProblem struct {
+	XMLName xml.Name `json:"-" xml:"Problem"`
 	*responses.Problem
 	Host string `json:"host" xml:"host"`
 	Port int    `json:"port" xml:"port"`
@@ -59,7 +61,8 @@ func respondStatusFailure(w http.ResponseWriter, r *http.Request, err error, hos
 	log.Println("[Error]: Unable to get server status:\n\t", err)
 	for _, m := range statusFailures {
 		if errors.Is(err, m.err) {
-			responses.SendProblemStruct(w, r, http.StatusNotFound, offlineProblem{responses.NewNotFoundProblem(m.msg), host, port})
+			problem := responses.NewNotFoundProblem(m.msg)
+			responses.SendProblemStruct(w, r, problem, offlineProblem{Problem: problem, Host: host, Port: port})
 			return
 		}
 	}
@@ -172,11 +175,10 @@ func parseHost(address string, isBedrock bool) (string, int, bool) {
 		return "", 0, false
 	}
 	if lastLabelNumeric {
-		ip, err := netip.ParseAddr(name)
-		if err != nil || !ip.Is4() {
+		if _, err := netip.ParseAddr(name); err != nil {
 			return "", 0, false
 		}
-		return ip.String(), port, true
+		return name, port, true
 	}
 	if upper {
 		name = strings.ToLower(name)

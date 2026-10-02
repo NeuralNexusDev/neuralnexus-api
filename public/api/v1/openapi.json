@@ -1394,7 +1394,7 @@
                         "$ref": "#/components/responses/401Unauthorized"
                     },
                     "404": {
-                        "description": "The server could not be reached.",
+                        "description": "The server could not be reached. The JSON and XML bodies carry the canonical host and port; the protobuf body is the plain Problem.",
                         "content": {
                             "application/problem+json": {
                                 "schema": {
@@ -1404,6 +1404,11 @@
                             "application/problem+xml": {
                                 "schema": {
                                     "$ref": "#/components/schemas/MCStatusOfflineProblem"
+                                }
+                            },
+                            "application/problem+x-protobuf": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Problem"
                                 }
                             }
                         }
@@ -3444,7 +3449,10 @@
                             }
                         }
                     }
-                ]
+                ],
+                "xml": {
+                    "name": "Problem"
+                }
             }
         },
         "parameters": {
