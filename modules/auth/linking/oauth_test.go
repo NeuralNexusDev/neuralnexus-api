@@ -78,6 +78,9 @@ func (m *oaMockAccountService) DeleteAccount(userID string) error {
 	return nil
 }
 func (m *oaMockAccountService) IsPasswordAuthEnabled(string) (bool, error) { return false, nil }
+func (m *oaMockAccountService) NewSession(a *auth.Account, expiresAt int64) (*auth.Session, error) {
+	return a.NewSession(expiresAt, nil)
+}
 
 type oaMockLinkAccountStore struct {
 	GetLinkedAccountByPlatformIDFunc func(auth.Platform, string) (*auth.LinkedAccount, error)
@@ -1802,6 +1805,9 @@ func (m *oaConcurrentAccountService) DeleteAccount(userID string) error {
 	return nil
 }
 func (m *oaConcurrentAccountService) IsPasswordAuthEnabled(string) (bool, error) { return false, nil }
+func (m *oaConcurrentAccountService) NewSession(a *auth.Account, expiresAt int64) (*auth.Session, error) {
+	return a.NewSession(expiresAt, nil)
+}
 
 func (m *oaConcurrentAccountService) count() int {
 	m.mu.Lock()

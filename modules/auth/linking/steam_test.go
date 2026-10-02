@@ -67,6 +67,9 @@ func (m *stMockAccountService) DeleteAccount(userID string) error {
 	return nil
 }
 func (m *stMockAccountService) IsPasswordAuthEnabled(string) (bool, error) { return false, nil }
+func (m *stMockAccountService) NewSession(a *auth.Account, expiresAt int64) (*auth.Session, error) {
+	return a.NewSession(expiresAt, nil)
+}
 
 type stMockLinkAccountStore struct {
 	byPlatformID map[auth.Platform]map[string]*auth.LinkedAccount

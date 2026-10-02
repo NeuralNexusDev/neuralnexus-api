@@ -2811,6 +2811,595 @@
                     }
                 }
             }
+        },
+        "/roles": {
+            "get": {
+                "summary": "List roles",
+                "description": "Requires the admin:roles scope. Every role with its permissions.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/Role"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            },
+            "post": {
+                "summary": "Create a role",
+                "description": "Requires the admin:roles scope. The ID is generated. Names start with a lower-case letter and use lower-case letters, digits and underscores, up to 63 characters; descriptions are at most 256 characters.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateRoleRequest"
+                            }
+                        },
+                        "application/xml": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateRoleRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Role"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/409Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/roles/{id}": {
+            "get": {
+                "summary": "Get a role by ID",
+                "description": "Requires the admin:roles scope.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/RoleIdSlug"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Role"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            },
+            "patch": {
+                "summary": "Update a role",
+                "description": "Requires the admin:roles scope. Omitted fields keep their value. Renaming changes what the name lookup returns; accounts hold role IDs and are unaffected.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/RoleIdSlug"
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateRoleRequest"
+                            }
+                        },
+                        "application/xml": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateRoleRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Role"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/409Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            },
+            "delete": {
+                "summary": "Delete a role",
+                "description": "Requires the admin:roles scope. Refused with 409 while an account holds the role. Its permission grants are removed with it; the permissions remain.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/RoleIdSlug"
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "$ref": "#/components/responses/204NoContent"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/409Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/roles/name/{name}": {
+            "get": {
+                "summary": "Get a role by name",
+                "description": "Requires the admin:roles scope.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/RoleNameSlug"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Role"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/roles/{id}/permissions/{permission_id}": {
+            "put": {
+                "summary": "Grant a permission to a role",
+                "description": "Requires the admin:roles scope. Granting an already granted permission succeeds.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/RoleIdSlug"
+                    },
+                    {
+                        "$ref": "#/components/parameters/PermissionIdSlug"
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "$ref": "#/components/responses/204NoContent"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            },
+            "delete": {
+                "summary": "Remove a permission from a role",
+                "description": "Requires the admin:roles scope. Removing a permission the role does not hold succeeds.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/RoleIdSlug"
+                    },
+                    {
+                        "$ref": "#/components/parameters/PermissionIdSlug"
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "$ref": "#/components/responses/204NoContent"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/permissions": {
+            "get": {
+                "summary": "List permissions",
+                "description": "Requires the admin:roles scope.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/Permission"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            },
+            "post": {
+                "summary": "Create a permission",
+                "description": "Requires the admin:roles scope. The ID is generated. Scope names and values are required, must not contain a pipe, and are at most 64 and 128 characters.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreatePermissionRequest"
+                            }
+                        },
+                        "application/xml": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreatePermissionRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Permission"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/409Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/permissions/{id}": {
+            "get": {
+                "summary": "Get a permission by ID",
+                "description": "Requires the admin:roles scope.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/PermissionIdSlug"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Permission"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            },
+            "delete": {
+                "summary": "Delete a permission",
+                "description": "Requires the admin:roles scope. Refused with 409 while a role grants the permission.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/PermissionIdSlug"
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "$ref": "#/components/responses/204NoContent"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/409Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/permissions/scope/{scope_name}/{scope_value}": {
+            "get": {
+                "summary": "Get a permission by scope",
+                "description": "Requires the admin:roles scope.",
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/ScopeNameSlug"
+                    },
+                    {
+                        "$ref": "#/components/parameters/ScopeValueSlug"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Permission"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
         }
     },
     "components": {
@@ -3012,6 +3601,7 @@
                     },
                     "roles": {
                         "type": "array",
+                        "description": "Role IDs. Resolve them through the roles endpoints.",
                         "items": {
                             "type": "string"
                         }
@@ -3453,6 +4043,95 @@
                 "xml": {
                     "name": "Problem"
                 }
+            },
+            "Permission": {
+                "type": "object",
+                "description": "A scope name and value that roles can grant.",
+                "required": [
+                    "id",
+                    "scope_name",
+                    "scope_value"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "Snowflake ID"
+                    },
+                    "scope_name": {
+                        "type": "string"
+                    },
+                    "scope_value": {
+                        "type": "string"
+                    }
+                }
+            },
+            "Role": {
+                "type": "object",
+                "description": "A named set of permissions. Accounts reference roles by ID.",
+                "required": [
+                    "id",
+                    "name",
+                    "description",
+                    "permissions"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "Snowflake ID"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "permissions": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Permission"
+                        }
+                    }
+                }
+            },
+            "CreateRoleRequest": {
+                "type": "object",
+                "required": [
+                    "name"
+                ],
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    }
+                }
+            },
+            "UpdateRoleRequest": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    }
+                }
+            },
+            "CreatePermissionRequest": {
+                "type": "object",
+                "required": [
+                    "scope_name",
+                    "scope_value"
+                ],
+                "properties": {
+                    "scope_name": {
+                        "type": "string"
+                    },
+                    "scope_value": {
+                        "type": "string"
+                    }
+                }
             }
         },
         "parameters": {
@@ -3703,6 +4382,51 @@
                     "type": "string"
                 },
                 "description": "Xbox gamertag of a Geyser Bedrock player. Named 'name' for path symmetry with /mc/profile/name/{name}."
+            },
+            "RoleIdSlug": {
+                "name": "id",
+                "in": "path",
+                "required": true,
+                "description": "Role ID",
+                "schema": {
+                    "type": "string"
+                }
+            },
+            "RoleNameSlug": {
+                "name": "name",
+                "in": "path",
+                "required": true,
+                "description": "Role name",
+                "schema": {
+                    "type": "string"
+                }
+            },
+            "PermissionIdSlug": {
+                "name": "permission_id",
+                "in": "path",
+                "required": true,
+                "description": "Permission ID",
+                "schema": {
+                    "type": "string"
+                }
+            },
+            "ScopeNameSlug": {
+                "name": "scope_name",
+                "in": "path",
+                "required": true,
+                "description": "Permission scope name",
+                "schema": {
+                    "type": "string"
+                }
+            },
+            "ScopeValueSlug": {
+                "name": "scope_value",
+                "in": "path",
+                "required": true,
+                "description": "Permission scope value",
+                "schema": {
+                    "type": "string"
+                }
             }
         },
         "securitySchemes": {

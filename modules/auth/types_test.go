@@ -7,8 +7,6 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
-
-	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 )
 
 type tyFakePlatformData struct {
@@ -239,10 +237,11 @@ func TestTY22DefaultAccountSettings(t *testing.T) {
 	})
 }
 
-func TestTY23to25AccountNewSession(t *testing.T) {
-	t.Run("TY-23_ExpandsRolePermissions", func(t *testing.T) {
-		a := &Account{UserID: "u1", Roles: []string{perms.RoleSystem.Name}}
-		s, err := a.NewSession(12345)
+func TestTY23to24AccountNewSession(t *testing.T) {
+	t.Run("TY-23_UsesGivenPermissions", func(t *testing.T) {
+		a := &Account{UserID: "u1", Roles: []string{"ignored-role"}}
+		want := []string{"users|*", "ratelimit|1000"}
+		s, err := a.NewSession(12345, want)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -251,10 +250,6 @@ func TestTY23to25AccountNewSession(t *testing.T) {
 		}
 		if s.ExpiresAt != 12345 {
 			t.Errorf("ExpiresAt = %d, want 12345", s.ExpiresAt)
-		}
-		want := make([]string, 0, len(perms.RoleSystem.Permissions))
-		for _, p := range perms.RoleSystem.Permissions {
-			want = append(want, p.Name+"|"+p.Value)
 		}
 		if len(s.Permissions) != len(want) {
 			t.Fatalf("Permissions = %v, want %v", s.Permissions, want)
@@ -266,20 +261,9 @@ func TestTY23to25AccountNewSession(t *testing.T) {
 		}
 	})
 
-	t.Run("TY-24_SkipsUnknownRole", func(t *testing.T) {
-		a := &Account{UserID: "u1", Roles: []string{"not-a-real-role"}}
-		s, err := a.NewSession(1)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if len(s.Permissions) != 0 {
-			t.Errorf("Permissions = %v, want empty (unknown role silently skipped)", s.Permissions)
-		}
-	})
-
-	t.Run("TY-25_NoRoles", func(t *testing.T) {
+	t.Run("TY-24_NoPermissions", func(t *testing.T) {
 		a := &Account{UserID: "u1"}
-		s, err := a.NewSession(1)
+		s, err := a.NewSession(1, nil)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

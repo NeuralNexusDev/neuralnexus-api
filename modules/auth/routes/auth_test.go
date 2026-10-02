@@ -61,6 +61,10 @@ func (s *stubAccountService) IsPasswordAuthEnabled(string) (bool, error) {
 	return !s.passwordAuthDisabled, s.passwordAuthErr
 }
 
+func (s *stubAccountService) NewSession(a *auth.Account, expiresAt int64) (*auth.Session, error) {
+	return a.NewSession(expiresAt, nil)
+}
+
 type stubLinkAccountStore struct {
 	existing *auth.LinkedAccount
 }

@@ -1,7 +1,5 @@
 package perms
 
-import "errors"
-
 // -------------- Structs --------------
 
 type Scope struct {
@@ -28,6 +26,7 @@ var (
 	ScopeAdminDataStore   = ScopeDataStore("*")
 	ScopeAdminNumberStore = ScopeNumberStore("*")
 	ScopeAdminUsers       = ScopeUsers("*")
+	ScopeAdminRoles       = ScopeRoles("*")
 )
 
 // ScopePetPictures -- Pet pictures
@@ -66,62 +65,11 @@ func ScopeUsers(value string) Scope {
 	}
 }
 
-type Role struct {
-	Name        string
-	Description string
-	Permissions []Scope
-}
-
-var (
-	RoleSystem = Role{
-		Name:        "system",
-		Description: "System",
-		Permissions: []Scope{
-			ScopeAdminBeeNameGenerator,
-			ScopeAdminPetPictures,
-			ScopeAdminRateLimit,
-			ScopeAdminDataStore,
-			ScopeAdminNumberStore,
-			ScopeAdminUsers,
-		},
-	}
-
-	RoleOwner = Role{
-		Name:        "owner",
-		Description: "Owner",
-		Permissions: []Scope{
-			ScopeAdminBeeNameGenerator,
-			ScopeAdminPetPictures,
-			ScopeAdminRateLimit,
-			ScopeAdminDataStore,
-			ScopeAdminNumberStore,
-			ScopeAdminUsers,
-		},
-	}
-
-	RoleBeeAdmin = Role{
-		Name:        "bee_admin",
-		Description: "Bee Name Generator Admin",
-		Permissions: []Scope{
-			ScopeAdminBeeNameGenerator,
-		},
-	}
-)
-
-// -------------- Functions --------------
-
-var ErrRoleNotFound = errors.New("role not found")
-
-// GetRoleByName gets a role by name
-func GetRoleByName(name string) (Role, error) {
-	switch name {
-	case RoleSystem.Name:
-		return RoleSystem, nil
-	case RoleOwner.Name:
-		return RoleOwner, nil
-	case RoleBeeAdmin.Name:
-		return RoleBeeAdmin, nil
-	default:
-		return Role{}, ErrRoleNotFound
+// ScopeRoles -- Roles and permissions
+func ScopeRoles(value string) Scope {
+	return Scope{
+		Name:        "roles",
+		Description: "Roles",
+		Value:       value,
 	}
 }

@@ -116,7 +116,7 @@ func LoginHandler(as auth.AccountService, ss auth.SessionService) http.HandlerFu
 			return
 		}
 
-		session, err := account.NewSession(time.Now().Add(time.Hour * 24).Unix())
+		session, err := as.NewSession(account, time.Now().Add(time.Hour*24).Unix())
 		if err != nil {
 			log.Println("Failed to create session:\n\t", err)
 			responses.InternalServerError(w, r, msgAuthenticationFailed)

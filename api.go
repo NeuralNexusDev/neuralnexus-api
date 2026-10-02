@@ -28,6 +28,7 @@ import (
 	mc "github.com/NeuralNexusDev/neuralnexus-api/modules/minecraft"
 	petpics "github.com/NeuralNexusDev/neuralnexus-api/modules/pet_pictures"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/projects"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/rbac"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/switchboard"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/teapot"
 )
@@ -68,8 +69,9 @@ func ApplyRoutes(
 	}
 
 	// --------------- Auth ---------------
-	account := auth.NewAccountService(authStore)
-	user := auth.NewUserService(authStore)
+	rbacService := rbac.NewService(rbac.NewStore(nndb))
+	account := auth.NewAccountService(authStore, rbacService)
+	user := auth.NewUserService(authStore, rbacService)
 
 	loginRateLimit := mw.RateLimitMiddleware(rateLimit, "login", 5, 5)
 
@@ -97,6 +99,21 @@ func ApplyRoutes(
 	mux.Handle("PATCH /api/v1/users/{user_id}/settings", mwAuth(authroutes.UpdateAccountSettingsHandler(user)))
 	mux.Handle("PATCH /api/v1/users/me/settings", mwAuth(mw.SelfUserID(authroutes.UpdateAccountSettingsHandler(user))))
 	// mux.HandleFunc("DELETE /api/v1/users/{user_id}", mwAuth(authroutes.DeleteUserHandler(gssService)))
+
+	// --------------- Roles and Permissions ---------------
+	mux.Handle("GET /api/v1/roles", mwAuth(rbac.ListRolesHandler(rbacService)))
+	mux.Handle("POST /api/v1/roles", mwAuth(rbac.CreateRoleHandler(rbacService)))
+	mux.Handle("GET /api/v1/roles/{id}", mwAuth(rbac.GetRoleHandler(rbacService)))
+	mux.Handle("GET /api/v1/roles/name/{name}", mwAuth(rbac.GetRoleByNameHandler(rbacService)))
+	mux.Handle("PATCH /api/v1/roles/{id}", mwAuth(rbac.UpdateRoleHandler(rbacService)))
+	mux.Handle("DELETE /api/v1/roles/{id}", mwAuth(rbac.DeleteRoleHandler(rbacService)))
+	mux.Handle("PUT /api/v1/roles/{id}/permissions/{permission_id}", mwAuth(rbac.AttachPermissionHandler(rbacService)))
+	mux.Handle("DELETE /api/v1/roles/{id}/permissions/{permission_id}", mwAuth(rbac.DetachPermissionHandler(rbacService)))
+	mux.Handle("GET /api/v1/permissions", mwAuth(rbac.ListPermissionsHandler(rbacService)))
+	mux.Handle("POST /api/v1/permissions", mwAuth(rbac.CreatePermissionHandler(rbacService)))
+	mux.Handle("GET /api/v1/permissions/{id}", mwAuth(rbac.GetPermissionHandler(rbacService)))
+	mux.Handle("GET /api/v1/permissions/scope/{scope_name}/{scope_value}", mwAuth(rbac.GetPermissionByScopeHandler(rbacService)))
+	mux.Handle("DELETE /api/v1/permissions/{id}", mwAuth(rbac.DeletePermissionHandler(rbacService)))
 
 	// --------------- Bee Name Generator ---------------
 	bngStore := bng.NewStore(database.GetDB(dbUrl + "/bee_name_generator"))

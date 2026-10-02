@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"log"
+	"strconv"
 	"time"
 )
 
@@ -17,7 +18,10 @@ const (
 	rateLimitKeyPrefix = "rl:"
 )
 
-var ErrNotFound = errors.New("not found")
+var (
+	ErrNotFound      = errors.New("not found")
+	ErrInvalidRoleID = errors.New("invalid role id")
+)
 
 // Store interface
 type Store interface {
@@ -84,7 +88,7 @@ func (s *store) OAuthToken() OAuthTokenStore {
 // 	email TEXT UNIQUE,
 // 	hashed_secret BYTEA,
 // 	salt BYTEA,
-// 	roles TEXT[],
+// 	role_ids BIGINT[] NOT NULL DEFAULT '{}',
 //  updated_at timestamp with time zone default current_timestamp
 // );
 
@@ -120,8 +124,11 @@ func translateAccountConstraintErr(err error) error {
 
 // AddAccountToDB creates an account in the database
 func (s *store) AddAccountToDB(account *Account) error {
+	if !validRoleIDs(account.Roles) {
+		return ErrInvalidRoleID
+	}
 	_, err := s.db.Exec(context.Background(),
-		"INSERT INTO accounts (user_id, username, email, hashed_secret, salt, roles) VALUES ($1, NULLIF($2, ''), $3, $4, $5, $6)",
+		"INSERT INTO accounts (user_id, username, email, hashed_secret, salt, role_ids) VALUES ($1, NULLIF($2, ''), $3, $4, $5, COALESCE($6::text[], '{}')::bigint[])",
 		account.UserID, account.Username, account.Email, account.HashedSecret, account.Salt, account.Roles,
 	)
 	if err != nil {
@@ -132,7 +139,7 @@ func (s *store) AddAccountToDB(account *Account) error {
 
 // GetAccountByID gets an account by ID
 func (s *store) GetAccountByID(userID string) (*Account, error) {
-	rows, err := s.db.Query(context.Background(), "SELECT user_id, COALESCE(username, '') AS username, email, hashed_secret, salt, roles, updated_at FROM accounts WHERE user_id = $1", userID)
+	rows, err := s.db.Query(context.Background(), "SELECT user_id, COALESCE(username, '') AS username, email, hashed_secret, salt, role_ids::text[] AS role_ids, updated_at FROM accounts WHERE user_id = $1", userID)
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +156,7 @@ func (s *store) GetAccountByID(userID string) (*Account, error) {
 
 // GetAccountByUsername gets an account by username
 func (s *store) GetAccountByUsername(username string) (*Account, error) {
-	rows, err := s.db.Query(context.Background(), "SELECT user_id, COALESCE(username, '') AS username, email, hashed_secret, salt, roles, updated_at FROM accounts WHERE username = $1", username)
+	rows, err := s.db.Query(context.Background(), "SELECT user_id, COALESCE(username, '') AS username, email, hashed_secret, salt, role_ids::text[] AS role_ids, updated_at FROM accounts WHERE username = $1", username)
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +173,7 @@ func (s *store) GetAccountByUsername(username string) (*Account, error) {
 
 // GetAccountByEmail gets an account by email
 func (s *store) GetAccountByEmail(email string) (*Account, error) {
-	rows, err := s.db.Query(context.Background(), "SELECT user_id, COALESCE(username, '') AS username, email, hashed_secret, salt, roles, updated_at FROM accounts WHERE email = $1", email)
+	rows, err := s.db.Query(context.Background(), "SELECT user_id, COALESCE(username, '') AS username, email, hashed_secret, salt, role_ids::text[] AS role_ids, updated_at FROM accounts WHERE email = $1", email)
 	if err != nil {
 		return nil, err
 	}
@@ -183,8 +190,11 @@ func (s *store) GetAccountByEmail(email string) (*Account, error) {
 
 // UpdateAccountInDB updates an account in the database
 func (s *store) UpdateAccountInDB(account *Account) error {
+	if !validRoleIDs(account.Roles) {
+		return ErrInvalidRoleID
+	}
 	_, err := s.db.Exec(context.Background(),
-		"UPDATE accounts SET username = NULLIF($2, ''), email = $3, hashed_secret = $4, salt = $5, roles = $6 WHERE user_id = $1",
+		"UPDATE accounts SET username = NULLIF($2, ''), email = $3, hashed_secret = $4, salt = $5, role_ids = COALESCE($6::text[], '{}')::bigint[] WHERE user_id = $1",
 		account.UserID, account.Username, account.Email, account.HashedSecret, account.Salt, account.Roles,
 	)
 	if err != nil {
@@ -795,4 +805,13 @@ func (s *store) DeleteOAuthToken(userID string, platform Platform) error {
 		return err
 	}
 	return nil
+}
+
+func validRoleIDs(ids []string) bool {
+	for _, id := range ids {
+		if n, err := strconv.ParseInt(id, 10, 64); err != nil || n < 1 {
+			return false
+		}
+	}
+	return true
 }

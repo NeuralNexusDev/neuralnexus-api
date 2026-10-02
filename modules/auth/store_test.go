@@ -472,7 +472,7 @@ func stLiveFullStore(t *testing.T) Store {
 			email TEXT UNIQUE,
 			hashed_secret BYTEA,
 			salt BYTEA,
-			roles TEXT[],
+			role_ids BIGINT[] NOT NULL DEFAULT '{}',
 			updated_at timestamp with time zone default current_timestamp
 		)`,
 		`CREATE TABLE IF NOT EXISTS linked_accounts (
@@ -1289,6 +1289,86 @@ func TestST84_SetPasswordAuthEnabledAccountDeletedConcurrently(t *testing.T) {
 
 		if err := <-done; !errors.Is(err, ErrNotFound) {
 			t.Errorf("SetPasswordAuthEnabled() err = %v, want %v", err, ErrNotFound)
+		}
+	})
+}
+
+func TestST85to89AccountRoleIDs(t *testing.T) {
+	as, _, _ := stLiveStore(t)
+
+	t.Run("ST-85_RoleIDsRoundTrip", func(t *testing.T) {
+		const userID = "910000000000000040"
+		a := &Account{UserID: userID, Username: "sttest-" + userID, Roles: []string{"7", "900000000000000001"}}
+		if err := as.AddAccountToDB(a); err != nil {
+			t.Fatalf("AddAccountToDB() err = %v", err)
+		}
+
+		got, err := as.GetAccountByID(userID)
+		if err != nil {
+			t.Fatalf("GetAccountByID() err = %v", err)
+		}
+		if len(got.Roles) != 2 || got.Roles[0] != "7" || got.Roles[1] != "900000000000000001" {
+			t.Errorf("Roles = %v, want [7 900000000000000001]", got.Roles)
+		}
+		byName, err := as.GetAccountByUsername("sttest-" + userID)
+		if err != nil || len(byName.Roles) != 2 {
+			t.Errorf("GetAccountByUsername() = (%v, %v), want the same two role IDs", byName, err)
+		}
+	})
+
+	t.Run("ST-86_UpdateReplacesRoleIDs", func(t *testing.T) {
+		const userID = "910000000000000041"
+		stSeedBareAccount(t, as, userID)
+		a, err := as.GetAccountByID(userID)
+		if err != nil {
+			t.Fatalf("GetAccountByID() err = %v", err)
+		}
+		a.Roles = []string{"3"}
+
+		if err := as.UpdateAccountInDB(a); err != nil {
+			t.Fatalf("UpdateAccountInDB() err = %v", err)
+		}
+
+		got, err := as.GetAccountByID(userID)
+		if err != nil || len(got.Roles) != 1 || got.Roles[0] != "3" {
+			t.Errorf("GetAccountByID() = (%v, %v), want role IDs [3]", got, err)
+		}
+	})
+
+	t.Run("ST-87_NilRolesAreStoredAsEmpty", func(t *testing.T) {
+		const userID = "910000000000000042"
+		stSeedBareAccount(t, as, userID)
+
+		got, err := as.GetAccountByID(userID)
+
+		if err != nil || len(got.Roles) != 0 {
+			t.Errorf("GetAccountByID() = (%v, %v), want no role IDs", got, err)
+		}
+	})
+
+	t.Run("ST-88_NonNumericRoleIDRefusedOnAdd", func(t *testing.T) {
+		const userID = "910000000000000043"
+
+		err := as.AddAccountToDB(&Account{UserID: userID, Username: "sttest-" + userID, Roles: []string{"7", "admin"}})
+
+		if !errors.Is(err, ErrInvalidRoleID) {
+			t.Errorf("AddAccountToDB() err = %v, want %v", err, ErrInvalidRoleID)
+		}
+		if _, err := as.GetAccountByID(userID); !errors.Is(err, ErrNotFound) {
+			t.Errorf("GetAccountByID() err = %v, want %v (nothing stored)", err, ErrNotFound)
+		}
+	})
+
+	t.Run("ST-89_NonNumericRoleIDRefusedOnUpdate", func(t *testing.T) {
+		const userID = "910000000000000044"
+		stSeedBareAccount(t, as, userID)
+		a, _ := as.GetAccountByID(userID)
+		a.Roles = []string{"0"}
+
+		err := as.UpdateAccountInDB(a)
+
+		if !errors.Is(err, ErrInvalidRoleID) {
+			t.Errorf("UpdateAccountInDB() err = %v, want %v", err, ErrInvalidRoleID)
 		}
 	})
 }
