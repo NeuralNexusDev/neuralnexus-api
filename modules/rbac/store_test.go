@@ -89,7 +89,7 @@ func rbAssign(t *testing.T, db *pgxpool.Pool, accountOffset int, roleIDs ...stri
 	}
 }
 
-func rbScopes(role *Role) []string {
+func rbNodes(role *Role) []string {
 	out := make([]string, 0, len(role.Permissions))
 	for _, p := range role.Permissions {
 		entry := p.Node
@@ -254,25 +254,25 @@ func TestST05to08UpdateAndDeleteRole(t *testing.T) {
 func TestST11to14Permissions(t *testing.T) {
 	svc, _ := rbLive(t)
 
-	t.Run("ST-11_CreatedPermissionIsReadBackByIDAndScope", func(t *testing.T) {
+	t.Run("ST-11_CreatedPermissionIsReadBackByIDAndNode", func(t *testing.T) {
 		created := rbPermission(t, svc, "a")
 
 		byID, err := svc.GetPermission(created.ID)
 		if err != nil {
 			t.Fatalf("GetPermission() err = %v", err)
 		}
-		byScope, err := svc.GetPermissionByNode("rbtest.a")
+		byNode, err := svc.GetPermissionByNode("rbtest.a")
 		if err != nil {
 			t.Fatalf("GetPermissionByNode() err = %v", err)
 		}
-		for _, got := range []*Permission{byID, byScope} {
+		for _, got := range []*Permission{byID, byNode} {
 			if *got != *created {
 				t.Errorf("permission = %+v, want %+v", got, created)
 			}
 		}
 	})
 
-	t.Run("ST-12_DuplicateScopeIsRefused", func(t *testing.T) {
+	t.Run("ST-12_DuplicateNodeIsRefused", func(t *testing.T) {
 		rbPermission(t, svc, "dup")
 
 		_, err := svc.CreatePermission("rbtest.dup", "", "", "")
@@ -360,7 +360,7 @@ func TestST18to19AttachAndDetach(t *testing.T) {
 		}
 
 		got, _ := svc.GetRole(role.ID)
-		rbAssertStrings(t, rbScopes(got), []string{"rbtest.attach"})
+		rbAssertStrings(t, rbNodes(got), []string{"rbtest.attach"})
 	})
 
 	t.Run("ST-19_AttachNeedsBothToExist", func(t *testing.T) {
@@ -505,7 +505,7 @@ func TestST22to26GetPermissionsForRoles(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetRole() err = %v", err)
 		}
-		granted := rbScopes(got)
+		granted := rbNodes(got)
 		sort.Strings(granted)
 		rbAssertStrings(t, granted, []string{"rbtest.bare_grant", "rbtest.limit:9"})
 		for _, p := range got.Permissions {
@@ -686,7 +686,7 @@ func TestST27to33RoleIntegrity(t *testing.T) {
 			if err != nil {
 				t.Fatalf("GetRoleByName(%s) err = %v", name, err)
 			}
-			got := rbScopes(role)
+			got := rbNodes(role)
 			sort.Strings(got)
 			rbAssertStrings(t, got, want)
 		}
@@ -732,7 +732,7 @@ func TestST27to33RoleIntegrity(t *testing.T) {
 		for i, p := range byID {
 			want[i] = p.Node
 		}
-		rbAssertStrings(t, rbScopes(got), want)
+		rbAssertStrings(t, rbNodes(got), want)
 		roles, err := svc.ListRoles()
 		if err != nil {
 			t.Fatalf("ListRoles() err = %v", err)
