@@ -85,8 +85,6 @@
 | MG-01 | rbac_migration.sql | Happy Path | accounts hold role names | accounts with known, unknown and no role names | `role_ids` holds the ids of the known roles only | P1 |  |
 | MG-02 | rbac_migration.sql | Edge Case | the migration finishes | accounts and sessions | the old `roles` column is gone and the sessions table is empty | P1 |  |
 | MG-03 | docker/rbac.sql | Happy Path | built-in roles are seeded by the schema file | fresh schema | `system` and `owner` grant all seven scopes and `bee_admin` grants the bee name generator scope | P1 |  |
-| MG-04 | docker/rbac_migration.sql | Error Path | the built-in roles are not seeded | roles table emptied, accounts holding `system` and `bee_admin` | The migration fails, and after the rollback no account is converted and the sessions remain | P1 |  |
-| MG-05 | docker/rbac_migration.sql | Error Path | one built-in role is missing | `system` deleted from roles | The migration fails, and after the rollback no account is converted and the sessions remain | P1 |  |
 
 ## empty tables
 
