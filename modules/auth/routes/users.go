@@ -164,7 +164,12 @@ func UpdateUserHandler(service auth.UserService) http.HandlerFunc {
 			respondUpdateUserFailure(w, r, err)
 			return
 		}
-		responses.StructOK(w, r, user)
+		stored, err := service.GetUser(userID)
+		if err != nil {
+			respondUpdateUserFailure(w, r, err)
+			return
+		}
+		responses.StructOK(w, r, stored)
 	}
 }
 

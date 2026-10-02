@@ -17,7 +17,7 @@ const (
 	msgInvalidID          = "The ID is not a valid ID"
 	msgInvalidRoleName    = "Role names start with a lower-case letter and use only lower-case letters, digits and underscores, up to 63 characters"
 	msgInvalidDescription = "Descriptions are valid text of at most 256 characters"
-	msgInvalidScope       = "Scope names and values are required valid text without control characters or surrounding spaces, names must not contain a colon, and they are at most 64 and 128 characters"
+	msgInvalidScope       = "Scope names and values are required valid text without control or format characters or surrounding spaces, names must not contain a colon, and they are at most 64 and 128 characters"
 	msgRoleNotFound       = "Role not found"
 	msgPermissionNotFound = "Permission not found"
 	msgRoleNameTaken      = "A role with that name already exists"

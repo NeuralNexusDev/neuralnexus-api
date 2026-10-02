@@ -22,7 +22,8 @@ type stubUserService struct {
 	permissions    []string
 	permissionsErr error
 
-	updateUserErr error
+	updateUserErr  error
+	updatedAccount *auth.Account
 
 	updatedUser              *auth.Account
 	updateFromPlatformErr    error
@@ -55,7 +56,10 @@ func (s *stubUserService) GetUserFromPlatform(auth.Platform, string) (*auth.Acco
 func (s *stubUserService) GetUserPermissions(string) ([]string, error) {
 	return s.permissions, s.permissionsErr
 }
-func (s *stubUserService) UpdateUser(user *auth.Account) error { return s.updateUserErr }
+func (s *stubUserService) UpdateUser(user *auth.Account) error {
+	s.updatedAccount = user
+	return s.updateUserErr
+}
 func (s *stubUserService) UpdateUserFromPlatform(auth.Platform, string, auth.PlatformData) (*auth.Account, error) {
 	s.updateFromPlatformCalled = true
 	return s.updatedUser, s.updateFromPlatformErr
@@ -255,15 +259,18 @@ func TestUS11GetUserPermissionsHandlerServiceErrorMapsTo500(t *testing.T) {
 }
 
 func TestUS12UpdateUserHandlerHappyPath(t *testing.T) {
-	svc := &stubUserService{}
+	svc := &stubUserService{user: &auth.Account{UserID: "u1", Username: "stored-name"}}
 	r := newSessionRequest(http.MethodPatch, adminUsersSession("admin1"), "u1", "", `{"user_id":"someone-else","username":"newname"}`)
 	w := httptest.NewRecorder()
 
 	t.Run("US-12_UpdateUserHappyPath", func(t *testing.T) {
 		UpdateUserHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusOK)
-		if !strings.Contains(w.Body.String(), `"user_id":"u1"`) {
-			t.Errorf("expected the response user_id to be overridden with the path value, got %s", w.Body.String())
+		if svc.updatedAccount == nil || svc.updatedAccount.UserID != "u1" {
+			t.Errorf("UpdateUser got %+v, want the path user_id u1", svc.updatedAccount)
+		}
+		if !strings.Contains(w.Body.String(), `"user_id":"u1"`) || !strings.Contains(w.Body.String(), `"username":"stored-name"`) {
+			t.Errorf("expected the response to be the stored account for the path user, got %s", w.Body.String())
 		}
 	})
 }
@@ -976,4 +983,33 @@ func TestUS68to71UpdateUserRoleIDFailures(t *testing.T) {
 			expectDetail(t, w, c.msg)
 		})
 	}
+}
+
+func TestUS72to73UpdateUserRespondsWithTheStoredAccount(t *testing.T) {
+	t.Run("US-72_UpdateUserResponseRolesAreTheStoredRoles", func(t *testing.T) {
+		svc := &stubUserService{user: &auth.Account{UserID: "u1", Roles: []string{"1", "3"}}}
+		r := newSessionRequest(http.MethodPatch, adminUsersSession("admin1"), "u1", "", `{"roles":["1","1","3"]}`)
+		w := httptest.NewRecorder()
+
+		UpdateUserHandler(svc)(w, r)
+
+		expectStatus(t, w, http.StatusOK)
+		if !strings.Contains(w.Body.String(), `"roles":["1","3"]`) || strings.Contains(w.Body.String(), `"1","1"`) {
+			t.Errorf("response = %s, want the stored roles without the duplicate", w.Body.String())
+		}
+	})
+
+	t.Run("US-73_UpdateUserReadBackFailureMapsTo500", func(t *testing.T) {
+		svc := &stubUserService{userErr: testerrors.ErrDBDown}
+		r := newSessionRequest(http.MethodPatch, adminUsersSession("admin1"), "u1", "", `{"username":"newname"}`)
+		w := httptest.NewRecorder()
+
+		UpdateUserHandler(svc)(w, r)
+
+		expectStatus(t, w, http.StatusInternalServerError)
+		expectDetail(t, w, msgFailedToUpdateUser)
+		if svc.updatedAccount == nil {
+			t.Error("UpdateUser was not called before the read-back")
+		}
+	})
 }

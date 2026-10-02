@@ -91,7 +91,7 @@
 | US-09 | GetUserPermissionsHandler | Happy Path | Admin looks up another user's permissions | session.UserID != path user_id, session has ScopeAdminUsers | 200 OK with the permissions list | P2 |  |
 | US-10 | GetUserPermissionsHandler | Error Path | No permission | session.UserID != path user_id, no ScopeAdminUsers | 403 Forbidden `msgNoPermissionToGetUserPermissions` | P2 |  |
 | US-11 | GetUserPermissionsHandler | Error Path | UserService.GetUserPermissions fails with a non-not-found error | Permission check passes, service returns `testerrors.ErrDBDown` | 500 Internal Server Error `msgFailedToGetUser` | P2 |  |
-| US-12 | UpdateUserHandler | Happy Path | Admin updates a user | session has ScopeAdminUsers, valid JSON body, service.UpdateUser succeeds | 200 OK with the user struct; response UserID equals the path user_id (overridden after decode) | P1 |  |
+| US-12 | UpdateUserHandler | Happy Path | Admin updates a user | session has ScopeAdminUsers, valid JSON body, service.UpdateUser succeeds | 200 OK with the account the service reads back; `UpdateUser` receives the path user_id (overriding the body's) | P1 |  |
 | US-13 | UpdateUserHandler | Error Path | No permission | session lacks ScopeAdminUsers | 403 Forbidden `msgNoPermissionToUpdateUsers` | P2 |  |
 | US-14 | UpdateUserHandler | Error Path | Malformed body | Admin session, body is not valid JSON | 400 Bad Request `msgInvalidRequestBody` | P2 |  |
 | US-15 | UpdateUserHandler | Error Path | UserService.UpdateUser fails with an unclassified error | Admin session, valid body, service returns `testerrors.ErrDBDown` | 500 Internal Server Error `msgFailedToUpdateUser` | P2 |  |
@@ -151,3 +151,5 @@
 | US-69 | UpdateUserHandler | Error Path | UserService.UpdateUser returns an unknown role id | Admin session, valid body, service returns `auth.ErrUnknownRoleID` | 400 Bad Request `msgUnknownRoleID` | P1 |  |
 | US-70 | UpdateUserFromPlatformHandler | Error Path | UserService.UpdateUserFromPlatform returns an invalid role id | Admin session, valid body, service returns `auth.ErrInvalidRoleID` | 400 Bad Request `msgInvalidRoleID` | P2 |  |
 | US-71 | UpdateUserFromPlatformHandler | Error Path | UserService.UpdateUserFromPlatform returns an unknown role id | Admin session, valid body, service returns `auth.ErrUnknownRoleID` | 400 Bad Request `msgUnknownRoleID` | P2 |  |
+| US-72 | UpdateUserHandler | Edge Case | the body repeats a role id | Admin session, body roles `["1","1","3"]`, the service reads back roles `["1","3"]` | 200 OK whose roles are the stored roles, without the duplicate | P1 |  |
+| US-73 | UpdateUserHandler | Error Path | reading the account back fails after the update | Admin session, `UpdateUser` succeeds, `GetUser` returns `testerrors.ErrDBDown` | 500 `msgFailedToUpdateUser` after `UpdateUser` was called | P2 |  |

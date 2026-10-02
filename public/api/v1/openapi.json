@@ -3219,7 +3219,7 @@
             },
             "post": {
                 "summary": "Create a permission",
-                "description": "Requires the roles:* permission. The ID is generated. Scope names and values are required valid text without control characters or surrounding spaces, names must not contain a colon, and they are at most 64 and 128 characters.",
+                "description": "Requires the roles:* permission. The ID is generated. Scope names and values are required valid text without control or format characters or surrounding spaces, names must not contain a colon, and they are at most 64 and 128 characters.",
                 "security": [
                     {
                         "bearerAuth": []
