@@ -20,7 +20,7 @@
 | AC-14 | IsPasswordAuthEnabled | Happy Path | `ass.GetAccountSettings` returns `{PasswordAuthEnabled: true}` | | Returns `(true, nil)` | P1 |  |
 | AC-15 | IsPasswordAuthEnabled | Edge Case | `ass.GetAccountSettings` returns `{PasswordAuthEnabled: false}` | | Returns `(false, nil)` | P2 |  |
 | AC-16 | IsPasswordAuthEnabled | Error Path | `ass.GetAccountSettings` fails | | Returns `(false, err)` | P2 |  |
-| AC-17 | NewSession (service) | Happy Path | the account holds role ids | fake role store returns three scopes | Returns a `*Session` with `UserID`, `ExpiresAt` as given and `Permissions` exactly as the role store returned them; the role store is called once with the account's role ids | P1 |   |
+| AC-17 | NewSession (service) | Happy Path | the account holds role ids | fake role store returns three permissions | Returns a `*Session` with `UserID`, `ExpiresAt` as given and `Permissions` exactly as the role store returned them; the role store is called once with the account's role ids | P1 |   |
 | AC-18 | NewSession (service) | Edge Case | the account holds two role ids | fake role store | The role store is called once with both ids and the permissions of both roles are returned | P1 |   |
 | AC-19 | NewSession (service) | Edge Case | the account has no roles |  | `Permissions` is empty and non-nil, the error is nil and the role store is never called | P2 |   |
 | AC-20 | NewSession (service) | Error Path | the role store fails | role store returns `testerrors.ErrBoom` | Returns a nil session and an error matching the store error, so no session is issued with missing permissions | P1 |   |

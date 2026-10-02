@@ -134,7 +134,7 @@ func rbDetail(t *testing.T, w *httptest.ResponseRecorder) string {
 }
 
 func TestRH01to03Handlers(t *testing.T) {
-	t.Run("RH-01_EveryHandlerRejectsASessionWithoutTheRolesScope", func(t *testing.T) {
+	t.Run("RH-01_EveryHandlerRejectsASessionWithoutTheRolesAdminNode", func(t *testing.T) {
 		for _, c := range handlerCases {
 			for _, session := range []*auth.Session{rbSession(), rbSession("roles.other"), rbSession("roles.admins"), rbSession("other.admin"), rbSession("roles")} {
 				svc := &stubService{}
@@ -149,7 +149,7 @@ func TestRH01to03Handlers(t *testing.T) {
 			}
 		}
 	})
-	t.Run("RH-02_EveryHandlerSucceedsForTheRolesScopeAndPassesItsInputs", func(t *testing.T) {
+	t.Run("RH-02_EveryHandlerSucceedsForTheRolesAdminNodeAndPassesItsInputs", func(t *testing.T) {
 		for _, c := range handlerCases {
 			svc := &stubService{}
 			w := httptest.NewRecorder()
@@ -232,7 +232,13 @@ func TestRH05AttachValueNumbers(t *testing.T) {
 		if w.Code != http.StatusNoContent || string(f.attachedValue) != "1000" {
 			t.Fatalf("got %d, stored %q", w.Code, f.attachedValue)
 		}
-		for _, body := range []string{`{"value":9007199254740993}`, `{"value":1e2}`, `{"value":5.0}`, `{"value":1.5}`, `{"value":"5"}`, `{}`} {
+		for _, body := range []string{`{"value":9007199254740992}`, `{"value":-9007199254740992}`} {
+			w, f := attach(body)
+			if w.Code != http.StatusNoContent || len(f.attachedValue) == 0 {
+				t.Fatalf("body %s: got %d %s, want the boundary accepted", body, w.Code, w.Body.String())
+			}
+		}
+		for _, body := range []string{`{"value":9007199254740993}`, `{"value":-9007199254740993}`, `{"value":1e2}`, `{"value":5.0}`, `{"value":1.5}`, `{"value":"5"}`, `{}`} {
 			w, f := attach(body)
 			if w.Code != http.StatusBadRequest || rbDetail(t, w) != msgInvalidValue || slices.Contains(f.calls, "AttachPermission") {
 				t.Fatalf("body %s: got %d %s with calls %v, want 400 and no attach", body, w.Code, w.Body.String(), f.calls)

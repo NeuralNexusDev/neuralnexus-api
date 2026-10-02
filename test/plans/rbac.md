@@ -37,7 +37,7 @@
 | ST-31 | GetRole / ListRoles | Edge Case (live) | permissions attached out of ID order | role with three permissions attached in a different order | With hash joins forced, permissions are returned in ID order; the roles list is in ID order | P2 |  |
 | ST-32 | AttachPermission / GetRole | Edge Case (live) | a valued permission is granted twice with different values and a bare one once | role, an `int` permission and a bare permission | the role lists the last value for the valued permission and no value for the bare one | P1 |  |
 | ST-33 | GetPermissionsForRoles | Happy Path (live) | two roles grant the same valued permissions | an `int` permission with merge min (100 and 1000) and a `string_list` permission with overlapping lists | the lowest int and the sorted union of the lists | P1 |  |
-| ST-34 | GetPermissionsForRoles | Edge Case (live) | a string permission with merge first is granted by two roles | hash joins forced; the higher role ID is granted first; the account lists its roles in either order | the value of the lower role ID in both orders | P1 |  |
+| ST-34 | GetPermissionsForRoles | Edge Case (live) | a string permission with merge first is granted by two roles | hash joins forced; a second `string`/`first` permission granted in the opposite order (low role first); the account lists its roles in either order | the lower role ID's value for both permissions in both orders | P1 |  |
 | ST-35 | GetRole | Edge Case (live) | an int value of 2^53 is granted | live database | the role reads the value back as the exact number 9007199254740992 | P2 |  |
 
 
@@ -63,7 +63,7 @@
 | SV-17 | DetachPermission | Error Path | removing `roles.admin` from `system` or `owner` | fake store | `ErrBuiltinRole` without a store detach | P1 |  |
 | SV-18 | DetachPermission | Edge Case | other detaches | other nodes from `owner`, `roles` and `roles.administrator` from `owner`, `roles.admin` from other roles | The detach reaches the store | P2 |  |
 | SV-19 | AttachPermission | Error Path | a permission without a value type is given a value, or none is given | fake store | no value is stored as NULL; any value gives `ErrInvalidValue` without an attach | P1 |  |
-| SV-20 | AttachPermission | Edge Case | int values | permission of type `int`; whole numbers in several Go and JSON number forms; fractions, strings, nil, out-of-range numbers and lists | whole numbers are stored as JSON integers; the others give `ErrInvalidValue` without an attach | P1 |  |
+| SV-20 | AttachPermission | Edge Case | int values | permission of type `int`; whole numbers in several Go and JSON number forms, including plus and minus 2^53 in every form; fractions, strings, nil, lists, and numbers beyond plus or minus 2^53 in every form | whole numbers are stored as JSON integers; the others give `ErrInvalidValue` without an attach | P1 |  |
 | SV-21 | AttachPermission | Edge Case | string values | permission of type `string`; text with colons; empty, padded, NUL, format, control, over-long and non-string values | valid text is stored as a JSON string; the others give `ErrInvalidValue` without an attach | P1 |  |
 | SV-22 | AttachPermission | Edge Case | list values | permission of type `string_list`; unsorted lists with duplicates; empty, over-long, non-string and bad-text lists; a list of exactly the limit | lists are stored sorted and deduplicated; the others give `ErrInvalidValue` without an attach | P1 |  |
 | SV-23 | AttachPermission | Error Path | the permission does not exist | store returns `ErrPermissionNotFound` | `ErrPermissionNotFound` and no attach | P2 |  |
@@ -78,7 +78,7 @@
 | RH-02 | all handlers | Happy Path | a session with the roles.admin node | stub service | The documented status code, the path and body values reaching the service, and the response body carrying the service's result (empty for 204) | P1 |  |
 | RH-03 | body handlers | Error Path | an unparseable body | create and update handlers | 400 with `msgUnableToParseBody` and the service is never called | P1 |  |
 | RH-04 | all handlers | Error Path | the service returns each sentinel, a wrapped one and an unknown error | stub service | 400, 404 and 409 with the matching `msg*` detail (`msgBuiltinRole` for `ErrBuiltinRole`); an unknown error is 500 with `msgFailedToHandleRbac` | P1 |  |
-| RH-05 | AttachPermissionHandler | Edge Case | int values in the body, with the real service | permission of type int | `1000` is stored as 1000; a number above 2^53, `1e2`, `5.0`, `1.5`, a string and a missing value give 400 `msgInvalidValue` and no attach | P1 |  |
+| RH-05 | AttachPermissionHandler | Edge Case | int values in the body, with the real service | permission of type int | `1000`, 2^53 and -2^53 are stored as given; a number beyond plus or minus 2^53, `1e2`, `5.0`, `1.5`, a string and a missing value give 400 `msgInvalidValue` and no attach | P1 |  |
 
 
 ## grants.go

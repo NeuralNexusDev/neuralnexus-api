@@ -429,7 +429,23 @@ func TestSV19to23GrantedValues(t *testing.T) {
 				t.Fatalf("value %#v: err %v, stored %q", v, err, f.attachedValue)
 			}
 		}
-		for _, v := range []any{nil, "5", 1.5, json.Number("1.5"), float64(1e300), int64(1<<53 + 1), true, []any{1}} {
+		for _, c := range []struct {
+			value any
+			want  string
+		}{
+			{json.Number("9007199254740992"), "9007199254740992"}, {json.Number("-9007199254740992"), "-9007199254740992"},
+			{int64(1 << 53), "9007199254740992"}, {int64(-(1 << 53)), "-9007199254740992"},
+			{1 << 53, "9007199254740992"}, {-(1 << 53), "-9007199254740992"},
+			{float64(1 << 53), "9007199254740992"}, {float64(-(1 << 53)), "-9007199254740992"},
+		} {
+			f, err := attach("int", c.value)
+			if err != nil || string(f.attachedValue) != c.want {
+				t.Fatalf("boundary value %#v: err %v, stored %q, want %s", c.value, err, f.attachedValue, c.want)
+			}
+		}
+		for _, v := range []any{nil, "5", 1.5, json.Number("1.5"), float64(1e300), int64(1<<53 + 1), true, []any{1},
+			json.Number("9007199254740993"), json.Number("-9007199254740993"), int64(-(1<<53 + 1)), 1<<53 + 1, -(1<<53 + 1),
+			float64(1<<53 + 2), float64(-(1<<53 + 2))} {
 			f, err := attach("int", v)
 			if !errors.Is(err, ErrInvalidValue) || slices.Contains(f.calls, "AttachPermission") {
 				t.Fatalf("value %#v: err %v, calls %v, want ErrInvalidValue before the store", v, err, f.calls)

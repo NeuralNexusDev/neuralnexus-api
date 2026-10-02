@@ -2428,7 +2428,7 @@
         "/users/{user_id}": {
             "get": {
                 "summary": "Get a user by ID",
-                "description": "Requires a valid session; any authenticated user may look up any other user by ID.",
+                "description": "Requires a valid session. Callers may look up themselves; looking up another user requires the users.admin permission.",
                 "security": [
                     {
                         "bearerAuth": []

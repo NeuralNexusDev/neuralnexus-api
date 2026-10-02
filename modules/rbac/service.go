@@ -29,7 +29,7 @@ var (
 	ErrInvalidRoleName = errors.New("invalid role name")
 	// ErrInvalidDescription is returned when a role description is too long or not valid text.
 	ErrInvalidDescription = errors.New("invalid description")
-	// ErrBuiltinRole is returned when deleting or renaming a built-in role, or removing the roles permission from system or owner.
+	// ErrBuiltinRole is returned when deleting or renaming a built-in role, or removing roles.admin from system or owner.
 	ErrBuiltinRole = errors.New("built-in role is protected")
 	// ErrInvalidNode is returned when a permission node breaks the node rules.
 	ErrInvalidNode = errors.New("invalid node")

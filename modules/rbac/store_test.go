@@ -520,16 +520,21 @@ func TestST22to26GetPermissionsForRoles(t *testing.T) {
 		if err != nil {
 			t.Fatalf("CreatePermission() err = %v", err)
 		}
+		reversed, err := svc.CreatePermission("rbtest.first_wins_reversed", "", ValueTypeString, "")
+		if err != nil {
+			t.Fatalf("CreatePermission() err = %v", err)
+		}
 		one, two := rbRole(t, svc, "first_a"), rbRole(t, svc, "first_b")
 		low, high := one, two
 		if mustParse(t, low.ID) > mustParse(t, high.ID) {
 			low, high = high, low
 		}
 		for _, g := range []struct {
-			role  *Role
-			value string
-		}{{high, "high"}, {low, "low"}} {
-			if err := svc.AttachPermission(g.role.ID, permission.ID, g.value); err != nil {
+			role       *Role
+			permission *Permission
+			value      string
+		}{{high, permission, "high"}, {low, permission, "low"}, {low, reversed, "low"}, {high, reversed, "high"}} {
+			if err := svc.AttachPermission(g.role.ID, g.permission.ID, g.value); err != nil {
 				t.Fatalf("AttachPermission() err = %v", err)
 			}
 		}
@@ -539,7 +544,7 @@ func TestST22to26GetPermissionsForRoles(t *testing.T) {
 			if err != nil {
 				t.Fatalf("GetPermissionsForRoles() err = %v", err)
 			}
-			rbAssertStrings(t, got, []string{"rbtest.first_wins:low"})
+			rbAssertStrings(t, got, []string{"rbtest.first_wins:low", "rbtest.first_wins_reversed:low"})
 		}
 	})
 
