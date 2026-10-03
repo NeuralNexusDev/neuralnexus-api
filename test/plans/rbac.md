@@ -77,7 +77,7 @@
 | RH-01 | all handlers | Error Path | a session without the roles.admin node | sessions with no permissions, `roles.other`, `roles.admins`, `other.admin` and bare `roles` | 403 with `msgNoPermission` and the service is never called | P1 |  |
 | RH-02 | all handlers | Happy Path | a session with the roles.admin node | stub service | The documented status code, the path and body values reaching the service, and the response body carrying the service's result (empty for 204) | P1 |  |
 | RH-03 | body handlers | Error Path | an unparseable body | create and update handlers | 400 with `msgUnableToParseBody` and the service is never called | P1 |  |
-| RH-04 | all handlers | Error Path | the service returns each sentinel, a wrapped one and an unknown error | stub service | 400, 404 and 409 with the matching `msg*` detail (`msgBuiltinRole` for `ErrBuiltinRole`); an unknown error is 500 with `msgFailedToHandleRbac` | P1 |  |
+| RH-04 | all handlers | Error Path | the service returns each sentinel, a wrapped one and an unknown error | stub service; the sentinels each handler handles are listed per handler | each handled sentinel gives its 400, 404 or 409 with the matching `msg*` detail, a wrapped one the same, and every other sentinel and an unknown error give 500 `msgFailedToHandleRbac` | P1 |  |
 | RH-05 | AttachPermissionHandler | Edge Case | int values in the body, with the real service | permission of type int | `1000`, 2^53 and -2^53 are stored as given; a number beyond plus or minus 2^53, `1e2`, `5.0`, `1.5`, a string and a missing value give 400 `msgInvalidValue` and no attach | P1 |  |
 
 

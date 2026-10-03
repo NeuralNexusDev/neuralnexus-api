@@ -183,36 +183,72 @@ func TestRH01to03Handlers(t *testing.T) {
 	})
 }
 
+var handlerErrors = map[string][]error{
+	"ListRoles":                  {},
+	"GetRole":                    {ErrInvalidID, ErrRoleNotFound},
+	"GetRoleByName":              {ErrRoleNotFound},
+	"CreateRole":                 {ErrInvalidRoleName, ErrInvalidDescription, ErrRoleNameTaken},
+	"UpdateRole":                 {ErrInvalidID, ErrInvalidRoleName, ErrInvalidDescription, ErrRoleNotFound, ErrRoleNameTaken, ErrBuiltinRole},
+	"DeleteRole":                 {ErrInvalidID, ErrRoleNotFound, ErrRoleInUse, ErrBuiltinRole},
+	"ListPermissions":            {},
+	"GetPermission":              {ErrInvalidID, ErrPermissionNotFound},
+	"GetPermissionByNode":        {ErrPermissionNotFound},
+	"CreatePermission":           {ErrInvalidNode, ErrInvalidDescription, ErrInvalidValueType, ErrPermissionExists},
+	"DeletePermission":           {ErrInvalidID, ErrPermissionNotFound, ErrPermissionInUse},
+	"AttachPermission":           {ErrInvalidID, ErrInvalidValue, ErrRoleNotFound, ErrPermissionNotFound},
+	"AttachPermissionWithValue":  {ErrInvalidID, ErrInvalidValue, ErrRoleNotFound, ErrPermissionNotFound},
+	"AttachPermissionWithNumber": {ErrInvalidID, ErrInvalidValue, ErrRoleNotFound, ErrPermissionNotFound},
+	"DetachPermission":           {ErrInvalidID, ErrRoleNotFound, ErrPermissionNotFound, ErrBuiltinRole},
+}
+
 func TestRH04ServiceFailureMapping(t *testing.T) {
-	cases := []struct {
-		err    error
+	type outcome struct {
 		status int
 		msg    string
-	}{
-		{ErrInvalidID, http.StatusBadRequest, msgInvalidID},
-		{ErrInvalidRoleName, http.StatusBadRequest, msgInvalidRoleName},
-		{ErrInvalidDescription, http.StatusBadRequest, msgInvalidDescription},
-		{ErrInvalidNode, http.StatusBadRequest, msgInvalidNode},
-		{ErrInvalidValueType, http.StatusBadRequest, msgInvalidValueType},
-		{ErrInvalidValue, http.StatusBadRequest, msgInvalidValue},
-		{ErrRoleNotFound, http.StatusNotFound, msgRoleNotFound},
-		{ErrPermissionNotFound, http.StatusNotFound, msgPermissionNotFound},
-		{ErrRoleNameTaken, http.StatusConflict, msgRoleNameTaken},
-		{ErrPermissionExists, http.StatusConflict, msgPermissionExists},
-		{ErrRoleInUse, http.StatusConflict, msgRoleInUse},
-		{ErrPermissionInUse, http.StatusConflict, msgPermissionInUse},
-		{ErrBuiltinRole, http.StatusConflict, msgBuiltinRole},
-		{fmt.Errorf("wrapped: %w", ErrRoleNotFound), http.StatusNotFound, msgRoleNotFound},
-		{errors.New("boom"), http.StatusInternalServerError, msgFailedToHandleRbac},
 	}
-	t.Run("RH-04_EveryHandlerMapsServiceFailuresToTheirProblemResponse", func(t *testing.T) {
-		for _, m := range cases {
-			for _, c := range handlerCases {
-				w := httptest.NewRecorder()
-				c.handler(&stubService{err: m.err})(w, rbRequest(c, rbAdmin(), c.body))
-				if w.Code != m.status || rbDetail(t, w) != m.msg {
-					t.Fatalf("%s with %v: got %d %s, want %d %s", c.name, m.err, w.Code, w.Body.String(), m.status, m.msg)
+	outcomes := map[error]outcome{
+		ErrInvalidID:          {http.StatusBadRequest, msgInvalidID},
+		ErrInvalidRoleName:    {http.StatusBadRequest, msgInvalidRoleName},
+		ErrInvalidDescription: {http.StatusBadRequest, msgInvalidDescription},
+		ErrInvalidNode:        {http.StatusBadRequest, msgInvalidNode},
+		ErrInvalidValueType:   {http.StatusBadRequest, msgInvalidValueType},
+		ErrInvalidValue:       {http.StatusBadRequest, msgInvalidValue},
+		ErrRoleNotFound:       {http.StatusNotFound, msgRoleNotFound},
+		ErrPermissionNotFound: {http.StatusNotFound, msgPermissionNotFound},
+		ErrRoleNameTaken:      {http.StatusConflict, msgRoleNameTaken},
+		ErrPermissionExists:   {http.StatusConflict, msgPermissionExists},
+		ErrRoleInUse:          {http.StatusConflict, msgRoleInUse},
+		ErrPermissionInUse:    {http.StatusConflict, msgPermissionInUse},
+		ErrBuiltinRole:        {http.StatusConflict, msgBuiltinRole},
+	}
+	internal := outcome{http.StatusInternalServerError, msgFailedToHandleRbac}
+	respond := func(c handlerCase, err error) (outcome, *httptest.ResponseRecorder) {
+		w := httptest.NewRecorder()
+		c.handler(&stubService{err: err})(w, rbRequest(c, rbAdmin(), c.body))
+		return outcome{w.Code, rbDetail(t, w)}, w
+	}
+
+	t.Run("RH-04_EachHandlerMapsItsOwnServiceErrorsAndTheRestTo500", func(t *testing.T) {
+		for _, c := range handlerCases {
+			handled, ok := handlerErrors[c.name]
+			if !ok {
+				t.Fatalf("%s has no entry in handlerErrors", c.name)
+			}
+			for sentinel, want := range outcomes {
+				if !slices.Contains(handled, sentinel) {
+					want = internal
 				}
+				if got, w := respond(c, sentinel); got != want {
+					t.Fatalf("%s with %v: got %d %s, want %d %s", c.name, sentinel, w.Code, w.Body.String(), want.status, want.msg)
+				}
+			}
+			for _, sentinel := range handled {
+				if got, w := respond(c, fmt.Errorf("wrapped: %w", sentinel)); got != outcomes[sentinel] {
+					t.Fatalf("%s with a wrapped %v: got %d %s", c.name, sentinel, w.Code, w.Body.String())
+				}
+			}
+			if got, w := respond(c, errors.New("boom")); got != internal {
+				t.Fatalf("%s with an unknown error: got %d %s, want 500", c.name, w.Code, w.Body.String())
 			}
 		}
 	})
