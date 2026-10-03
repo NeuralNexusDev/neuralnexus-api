@@ -94,7 +94,7 @@ func TestSV01to04RoleValidation(t *testing.T) {
 		for _, name := range valid {
 			f := &fakeStore{}
 			role, err := NewService(f).CreateRole(name, "")
-			if err != nil || role.Name != name || f.created[0] != name {
+			if err != nil || len(f.created) != 2 || role.Name != name || f.created[0] != name {
 				t.Fatalf("name %q: got %v, %v, store got %v", name, role, err, f.created)
 			}
 		}
@@ -115,6 +115,9 @@ func TestSV01to04RoleValidation(t *testing.T) {
 		long := strings.Repeat("d", 10000)
 		if _, err := NewService(f).CreateRole("a", long); err != nil {
 			t.Fatalf("a long description: err %v", err)
+		}
+		if len(f.created) != 2 {
+			t.Fatalf("store recorded %v, want a name and a description", f.created)
 		}
 		if f.created[1] != long {
 			t.Fatalf("store got %d characters, want %d", len(f.created[1]), len(long))
