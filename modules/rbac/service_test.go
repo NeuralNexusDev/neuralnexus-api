@@ -349,7 +349,7 @@ func TestSV15to18BuiltinRoles(t *testing.T) {
 	str := func(s string) *string { return &s }
 
 	t.Run("SV-15_BuiltinRolesCannotBeDeleted", func(t *testing.T) {
-		for _, name := range []string{"system", "owner", "bee_admin"} {
+		for _, name := range []string{"system", "owner"} {
 			f := &fakeStore{role: &Role{ID: "5", Name: name}}
 			if err := NewService(f).DeleteRole("5"); !errors.Is(err, ErrBuiltinRole) {
 				t.Fatalf("DeleteRole(%s) err = %v, want ErrBuiltinRole", name, err)
@@ -360,15 +360,21 @@ func TestSV15to18BuiltinRoles(t *testing.T) {
 				}
 			}
 		}
-		f := &fakeStore{role: &Role{ID: "5", Name: "mod"}}
-		if err := NewService(f).DeleteRole("5"); err != nil || f.calls[len(f.calls)-1] != "DeleteRole" {
-			t.Fatalf("DeleteRole(mod) err = %v, calls %v", err, f.calls)
+		for _, name := range []string{"mod", "bee_admin"} {
+			f := &fakeStore{role: &Role{ID: "5", Name: name}}
+			if err := NewService(f).DeleteRole("5"); err != nil || f.calls[len(f.calls)-1] != "DeleteRole" {
+				t.Fatalf("DeleteRole(%s) err = %v, calls %v", name, err, f.calls)
+			}
 		}
 	})
 	t.Run("SV-16_BuiltinRolesCannotBeRenamedButCanBeDescribed", func(t *testing.T) {
 		f := &fakeStore{role: &Role{ID: "5", Name: "owner", Description: "d"}}
 		if _, err := NewService(f).UpdateRole("5", str("boss"), nil); !errors.Is(err, ErrBuiltinRole) {
 			t.Fatalf("rename err = %v, want ErrBuiltinRole", err)
+		}
+		f = &fakeStore{role: &Role{ID: "5", Name: "bee_admin"}}
+		if _, err := NewService(f).UpdateRole("5", str("bee_manager"), nil); err != nil || f.calls[len(f.calls)-1] != "UpdateRole:bee_manager:" {
+			t.Fatalf("renaming bee_admin err = %v, calls %v", err, f.calls)
 		}
 		f = &fakeStore{role: &Role{ID: "5", Name: "owner", Description: "d"}}
 		if _, err := NewService(f).UpdateRole("5", str("owner"), str("new")); err != nil {

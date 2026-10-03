@@ -39,7 +39,14 @@ var (
 	ErrInvalidValue = errors.New("invalid value")
 )
 
-var builtinRoles = map[string]bool{"system": true, "owner": true, "bee_admin": true}
+const (
+	// RoleSystem is the built-in role the service protects from deletion and renaming.
+	RoleSystem = "system"
+	// RoleOwner is the built-in role the service protects from deletion and renaming.
+	RoleOwner = "owner"
+)
+
+var builtinRoles = map[string]bool{RoleSystem: true, RoleOwner: true}
 
 // Service is the role and permission management
 type Service interface {
@@ -381,7 +388,7 @@ func (s *service) DetachPermission(roleID, permissionID string) error {
 	if err != nil {
 		return err
 	}
-	if role.Name == "system" || role.Name == "owner" {
+	if role.Name == RoleSystem || role.Name == RoleOwner {
 		permission, err := s.store.GetPermission(p)
 		if err != nil {
 			return err
