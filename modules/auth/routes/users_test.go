@@ -19,6 +19,12 @@ type stubUserService struct {
 	user    *auth.Account
 	userErr error
 
+	listed     []*auth.Account
+	listErr    error
+	listCalls  int
+	listLimit  int
+	listOffset int
+
 	permissions    []string
 	permissionsErr error
 
@@ -52,6 +58,11 @@ var _ auth.UserService = (*stubUserService)(nil)
 func (s *stubUserService) GetUser(string) (*auth.Account, error) { return s.user, s.userErr }
 func (s *stubUserService) GetUserFromPlatform(auth.Platform, string) (*auth.Account, error) {
 	return s.user, s.userErr
+}
+func (s *stubUserService) ListUsers(limit, offset int) ([]*auth.Account, error) {
+	s.listCalls++
+	s.listLimit, s.listOffset = limit, offset
+	return s.listed, s.listErr
 }
 func (s *stubUserService) GetUserPermissions(string) ([]string, error) {
 	return s.permissions, s.permissionsErr
@@ -1011,5 +1022,113 @@ func TestUS72to73UpdateUserRespondsWithTheStoredAccount(t *testing.T) {
 		if svc.updatedAccount == nil {
 			t.Error("UpdateUser was not called before the read-back")
 		}
+	})
+}
+
+func newListUsersRequest(session *auth.Session, query string) *http.Request {
+	ctx := context.WithValue(context.Background(), mw.SessionKey, session)
+	return httptest.NewRequest(http.MethodGet, "/api/v1/users"+query, nil).WithContext(ctx)
+}
+
+func TestUS74to80ListUsersHandler(t *testing.T) {
+	t.Run("US-74_ListsUsersWithTheDefaultPage", func(t *testing.T) {
+		svc := &stubUserService{listed: []*auth.Account{{UserID: "u1", Username: "one", Roles: []string{"7"}}, {UserID: "u2", Username: "two", Roles: []string{}}}}
+		w := httptest.NewRecorder()
+
+		ListUsersHandler(svc)(w, newListUsersRequest(adminUsersSession("admin1"), ""))
+
+		expectStatus(t, w, http.StatusOK)
+		if svc.listCalls != 1 || svc.listLimit != 50 || svc.listOffset != 0 {
+			t.Errorf("ListUsers called %d times with (%d, %d), want once with (50, 0)", svc.listCalls, svc.listLimit, svc.listOffset)
+		}
+		var got []map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+			t.Fatalf("failed to decode %q: %v", w.Body.String(), err)
+		}
+		if len(got) != 2 || got[0]["user_id"] != "u1" || got[0]["username"] != "one" || got[1]["user_id"] != "u2" {
+			t.Errorf("body = %s, want the two users in order", w.Body.String())
+		}
+		for _, field := range []string{"email", "hashed_secret", "salt"} {
+			if strings.Contains(w.Body.String(), field) {
+				t.Errorf("body = %s, must not contain %q", w.Body.String(), field)
+			}
+		}
+	})
+
+	t.Run("US-75_PassesTheLimitAndOffset", func(t *testing.T) {
+		svc := &stubUserService{}
+		w := httptest.NewRecorder()
+
+		ListUsersHandler(svc)(w, newListUsersRequest(adminUsersSession("admin1"), "?limit=200&offset=40"))
+
+		expectStatus(t, w, http.StatusOK)
+		if svc.listLimit != 200 || svc.listOffset != 40 {
+			t.Errorf("ListUsers called with (%d, %d), want (200, 40)", svc.listLimit, svc.listOffset)
+		}
+	})
+
+	t.Run("US-76_RefusesWithoutUsersAdmin", func(t *testing.T) {
+		svc := &stubUserService{listed: []*auth.Account{{UserID: "u1"}}}
+		w := httptest.NewRecorder()
+
+		ListUsersHandler(svc)(w, newListUsersRequest(selfSession("u1"), ""))
+
+		expectStatus(t, w, http.StatusForbidden)
+		expectDetail(t, w, msgNoPermissionToGetUsers)
+		if svc.listCalls != 0 {
+			t.Errorf("ListUsers was called %d times, want none", svc.listCalls)
+		}
+	})
+
+	t.Run("US-77_RefusesAnInvalidLimit", func(t *testing.T) {
+		for _, query := range []string{"?limit=0", "?limit=-1", "?limit=201", "?limit=abc", "?limit=1.5", "?limit=%20"} {
+			svc := &stubUserService{}
+			w := httptest.NewRecorder()
+
+			ListUsersHandler(svc)(w, newListUsersRequest(adminUsersSession("admin1"), query))
+
+			expectStatus(t, w, http.StatusBadRequest)
+			expectDetail(t, w, msgInvalidLimit)
+			if svc.listCalls != 0 {
+				t.Errorf("%s: ListUsers was called %d times, want none", query, svc.listCalls)
+			}
+		}
+	})
+
+	t.Run("US-78_RefusesAnInvalidOffset", func(t *testing.T) {
+		for _, query := range []string{"?offset=-1", "?offset=abc", "?offset=1.5", "?offset=%20"} {
+			svc := &stubUserService{}
+			w := httptest.NewRecorder()
+
+			ListUsersHandler(svc)(w, newListUsersRequest(adminUsersSession("admin1"), query))
+
+			expectStatus(t, w, http.StatusBadRequest)
+			expectDetail(t, w, msgInvalidOffset)
+			if svc.listCalls != 0 {
+				t.Errorf("%s: ListUsers was called %d times, want none", query, svc.listCalls)
+			}
+		}
+	})
+
+	t.Run("US-79_AnEmptyPageIsAnEmptyArray", func(t *testing.T) {
+		svc := &stubUserService{}
+		w := httptest.NewRecorder()
+
+		ListUsersHandler(svc)(w, newListUsersRequest(adminUsersSession("admin1"), "?offset=5000"))
+
+		expectStatus(t, w, http.StatusOK)
+		if strings.TrimSpace(w.Body.String()) != "[]" {
+			t.Errorf("body = %q, want []", w.Body.String())
+		}
+	})
+
+	t.Run("US-80_ServiceFailureMapsTo500", func(t *testing.T) {
+		svc := &stubUserService{listErr: testerrors.ErrDBDown}
+		w := httptest.NewRecorder()
+
+		ListUsersHandler(svc)(w, newListUsersRequest(adminUsersSession("admin1"), ""))
+
+		expectStatus(t, w, http.StatusInternalServerError)
+		expectDetail(t, w, msgFailedToListUsers)
 	})
 }

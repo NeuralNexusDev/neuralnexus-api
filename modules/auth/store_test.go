@@ -1484,3 +1484,67 @@ func TestST85to95AccountRoleIDs(t *testing.T) {
 		}
 	})
 }
+
+func TestST96to98ListAccounts(t *testing.T) {
+	full := stLiveFullStore(t)
+	as := full.Account()
+	db := full.(*store).db
+	const shortID = "95"
+	cleanShort := func() { _, _ = db.Exec(context.Background(), "DELETE FROM accounts WHERE user_id = 95") }
+	cleanShort()
+	t.Cleanup(cleanShort)
+	stSeedBareAccount(t, as, shortID)
+	stSeedBareAccount(t, as, "910000000000000602")
+	stSeedBareAccount(t, as, "910000000000000601")
+
+	indexOf := func(accounts []*Account, userID string) int {
+		for i, a := range accounts {
+			if a.UserID == userID {
+				return i
+			}
+		}
+		return -1
+	}
+
+	t.Run("ST-96_OrdersByNumericID", func(t *testing.T) {
+		all, err := as.ListAccounts(100000, 0)
+		if err != nil {
+			t.Fatalf("ListAccounts() err = %v", err)
+		}
+		short, first, second := indexOf(all, shortID), indexOf(all, "910000000000000601"), indexOf(all, "910000000000000602")
+		if short < 0 || first < 0 || second < 0 || !(short < first && first < second) {
+			t.Errorf("positions of 95, ...601, ...602 = %d, %d, %d, want ascending by number", short, first, second)
+		}
+		for _, a := range all {
+			if a.Roles == nil {
+				t.Fatalf("account %s has nil Roles, want an empty list", a.UserID)
+			}
+		}
+	})
+
+	t.Run("ST-97_LimitAndOffsetSelectAPage", func(t *testing.T) {
+		all, err := as.ListAccounts(100000, 0)
+		if err != nil {
+			t.Fatalf("ListAccounts() err = %v", err)
+		}
+		first := indexOf(all, "910000000000000601")
+		page, err := as.ListAccounts(2, first)
+		if err != nil {
+			t.Fatalf("ListAccounts() err = %v", err)
+		}
+		if len(page) != 2 || page[0].UserID != "910000000000000601" || page[1].UserID != "910000000000000602" {
+			t.Errorf("page = %v, want accounts ...601 and ...602", page)
+		}
+		one, err := as.ListAccounts(1, first+1)
+		if err != nil || len(one) != 1 || one[0].UserID != "910000000000000602" {
+			t.Errorf("ListAccounts(1, %d) = (%v, %v), want account ...602", first+1, one, err)
+		}
+	})
+
+	t.Run("ST-98_AnOffsetPastTheEndIsAnEmptyPage", func(t *testing.T) {
+		page, err := as.ListAccounts(10, 1000000)
+		if err != nil || len(page) != 0 {
+			t.Errorf("ListAccounts(10, 1000000) = (%v, %v), want an empty page and no error", page, err)
+		}
+	})
+}

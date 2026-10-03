@@ -45,6 +45,7 @@ func (f *acFakeAccountStore) GetAccountByEmail(_ string) (*Account, error) {
 	f.getByEmailCalls++
 	return f.getByEmailAccount, f.getByEmailErr
 }
+func (f *acFakeAccountStore) ListAccounts(_, _ int) ([]*Account, error) { return nil, nil }
 func (f *acFakeAccountStore) UpdateAccountInDB(_ *Account) error {
 	f.updateCalls++
 	return f.updateErr

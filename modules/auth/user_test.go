@@ -30,6 +30,12 @@ type usFakeAccountStore struct {
 	getByIDCalls      int
 	getByIDLastUserID string
 
+	listAccounts   []*Account
+	listErr        error
+	listCalls      int
+	listLastLimit  int
+	listLastOffset int
+
 	updateErr         error
 	updateCalls       int
 	updateLastAccount *Account
@@ -54,6 +60,11 @@ func (f *usFakeAccountStore) GetAccountByUsername(_ string) (*Account, error) {
 }
 func (f *usFakeAccountStore) GetAccountByEmail(_ string) (*Account, error) {
 	return nil, ErrNotFound
+}
+func (f *usFakeAccountStore) ListAccounts(limit, offset int) ([]*Account, error) {
+	f.listCalls++
+	f.listLastLimit, f.listLastOffset = limit, offset
+	return f.listAccounts, f.listErr
 }
 func (f *usFakeAccountStore) UpdateAccountInDB(a *Account) error {
 	f.updateCalls++
@@ -197,6 +208,32 @@ func TestUS02to03GetUser(t *testing.T) {
 		_, err := svc.GetUser("u1")
 		if !errors.Is(err, wantErr) {
 			t.Errorf("GetUser() err = %v, want %v", err, wantErr)
+		}
+	})
+}
+
+func TestUS43to44ListUsers(t *testing.T) {
+	t.Run("US-43_PassesThePageToTheStore", func(t *testing.T) {
+		want := []*Account{{UserID: "u1"}, {UserID: "u2"}}
+		as := &usFakeAccountStore{listAccounts: want}
+		svc := usNewService(as, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})
+
+		got, err := svc.ListUsers(25, 50)
+		if err != nil || len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
+			t.Errorf("ListUsers() = (%v, %v), want (%v, nil)", got, err, want)
+		}
+		if as.listCalls != 1 || as.listLastLimit != 25 || as.listLastOffset != 50 {
+			t.Errorf("store called %d times with (%d, %d), want once with (25, 50)", as.listCalls, as.listLastLimit, as.listLastOffset)
+		}
+	})
+
+	t.Run("US-44_StoreError", func(t *testing.T) {
+		wantErr := testerrors.ErrBoom
+		svc := usNewService(&usFakeAccountStore{listErr: wantErr}, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})
+
+		got, err := svc.ListUsers(10, 0)
+		if !errors.Is(err, wantErr) || got != nil {
+			t.Errorf("ListUsers() = (%v, %v), want (nil, %v)", got, err, wantErr)
 		}
 	})
 }
@@ -602,6 +639,7 @@ func (s *usConcurrentStore) GetAccountByID(userID string) (*Account, error) {
 }
 func (s *usConcurrentStore) GetAccountByUsername(_ string) (*Account, error) { return nil, ErrNotFound }
 func (s *usConcurrentStore) GetAccountByEmail(_ string) (*Account, error)    { return nil, ErrNotFound }
+func (s *usConcurrentStore) ListAccounts(_, _ int) ([]*Account, error)       { return nil, nil }
 func (s *usConcurrentStore) UpdateAccountInDB(_ *Account) error              { return nil }
 func (s *usConcurrentStore) DeleteAccountFromDB(userID string) error {
 	s.mu.Lock()
