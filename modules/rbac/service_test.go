@@ -16,19 +16,19 @@ type fakeStore struct {
 	err           error
 	role          *Role
 	permission    *Permission
-	createdID     int64
-	attached      [2]int64
+	createdID     string
+	attached      [2]string
 	attachedValue []byte
 	created       []string
 }
 
-func (f *fakeStore) CreateRole(id int64, name, description string) error {
+func (f *fakeStore) CreateRole(id string, name, description string) error {
 	f.calls = append(f.calls, "CreateRole")
 	f.created = []string{name, description}
 	f.createdID = id
 	return f.err
 }
-func (f *fakeStore) GetRole(id int64) (*Role, error) {
+func (f *fakeStore) GetRole(id string) (*Role, error) {
 	f.calls = append(f.calls, "GetRole")
 	return f.role, f.err
 }
@@ -40,21 +40,21 @@ func (f *fakeStore) ListRoles() ([]*Role, error) {
 	f.calls = append(f.calls, "ListRoles")
 	return []*Role{f.role}, f.err
 }
-func (f *fakeStore) UpdateRole(id int64, name, description string) error {
+func (f *fakeStore) UpdateRole(id string, name, description string) error {
 	f.calls = append(f.calls, "UpdateRole:"+name+":"+description)
 	return f.err
 }
-func (f *fakeStore) DeleteRole(id int64) error {
+func (f *fakeStore) DeleteRole(id string) error {
 	f.calls = append(f.calls, "DeleteRole")
 	return f.err
 }
-func (f *fakeStore) CreatePermission(id int64, node, description, valueType, merge string) error {
+func (f *fakeStore) CreatePermission(id string, node, description, valueType, merge string) error {
 	f.calls = append(f.calls, "CreatePermission")
 	f.created = []string{node, description, valueType, merge}
 	f.createdID = id
 	return f.err
 }
-func (f *fakeStore) GetPermission(id int64) (*Permission, error) {
+func (f *fakeStore) GetPermission(id string) (*Permission, error) {
 	f.calls = append(f.calls, "GetPermission")
 	return f.permission, f.err
 }
@@ -66,19 +66,19 @@ func (f *fakeStore) ListPermissions() ([]*Permission, error) {
 	f.calls = append(f.calls, "ListPermissions")
 	return []*Permission{f.permission}, f.err
 }
-func (f *fakeStore) DeletePermission(id int64) error {
+func (f *fakeStore) DeletePermission(id string) error {
 	f.calls = append(f.calls, "DeletePermission")
 	return f.err
 }
-func (f *fakeStore) AttachPermission(roleID, permissionID int64, value []byte) error {
+func (f *fakeStore) AttachPermission(roleID, permissionID string, value []byte) error {
 	f.calls = append(f.calls, "AttachPermission")
-	f.attached = [2]int64{roleID, permissionID}
+	f.attached = [2]string{roleID, permissionID}
 	f.attachedValue = value
 	return f.err
 }
-func (f *fakeStore) DetachPermission(roleID, permissionID int64) error {
+func (f *fakeStore) DetachPermission(roleID, permissionID string) error {
 	f.calls = append(f.calls, "DetachPermission")
-	f.attached = [2]int64{roleID, permissionID}
+	f.attached = [2]string{roleID, permissionID}
 	return f.err
 }
 func (f *fakeStore) GetPermissionsForRoles(roleIDs []string) ([]string, error) {
@@ -129,8 +129,8 @@ func TestSV01to04RoleValidation(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if role.ID != strconv.FormatInt(f.createdID, 10) || f.createdID < 1 {
-			t.Fatalf("role id %q does not match the id %d given to the store", role.ID, f.createdID)
+		if role.ID != f.createdID || !validID(f.createdID) {
+			t.Fatalf("role id %q does not match the id %q given to the store", role.ID, f.createdID)
 		}
 		if role.Permissions == nil || len(role.Permissions) != 0 {
 			t.Fatalf("a new role must list an empty, non-nil permission set, got %#v", role.Permissions)
@@ -155,7 +155,7 @@ func TestSV05to06NodeValidation(t *testing.T) {
 		for _, node := range []string{"a", "roles.admin", "a_b.c2.d_3", "a0", strings.Repeat("a", maxNodeLength)} {
 			f := &fakeStore{}
 			p, err := NewService(f).CreatePermission(node, "d", "", "")
-			if err != nil || p.Node != node || p.ID != strconv.FormatInt(f.createdID, 10) || f.created[0] != node || f.created[1] != "d" {
+			if err != nil || p.Node != node || p.ID != f.createdID || f.created[0] != node || f.created[1] != "d" {
 				t.Fatalf("node %q: got %v, %v, store got %v", node, p, err, f.created)
 			}
 		}
@@ -258,11 +258,11 @@ func TestSV07to09IDs(t *testing.T) {
 	t.Run("SV-08_AttachAndDetachPassTheParsedIDsInOrder", func(t *testing.T) {
 		f := &fakeStore{role: &Role{Name: "mod"}, permission: &Permission{}}
 		s := NewService(f)
-		if err := s.AttachPermission("11", "22", nil); err != nil || f.attached != [2]int64{11, 22} {
+		if err := s.AttachPermission("11", "22", nil); err != nil || f.attached != [2]string{"11", "22"} {
 			t.Fatalf("attach: %v %v", err, f.attached)
 		}
-		f.attached = [2]int64{}
-		if err := s.DetachPermission("33", "44"); err != nil || f.attached != [2]int64{33, 44} {
+		f.attached = [2]string{}
+		if err := s.DetachPermission("33", "44"); err != nil || f.attached != [2]string{"33", "44"} {
 			t.Fatalf("detach: %v %v", err, f.attached)
 		}
 	})

@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"strconv"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -29,19 +28,19 @@ var (
 
 // Store is the database access for roles and permissions
 type Store interface {
-	CreateRole(id int64, name, description string) error
-	GetRole(id int64) (*Role, error)
+	CreateRole(id string, name, description string) error
+	GetRole(id string) (*Role, error)
 	GetRoleByName(name string) (*Role, error)
 	ListRoles() ([]*Role, error)
-	UpdateRole(id int64, name, description string) error
-	DeleteRole(id int64) error
-	CreatePermission(id int64, node, description, valueType, merge string) error
-	GetPermission(id int64) (*Permission, error)
+	UpdateRole(id string, name, description string) error
+	DeleteRole(id string) error
+	CreatePermission(id string, node, description, valueType, merge string) error
+	GetPermission(id string) (*Permission, error)
 	GetPermissionByNode(node string) (*Permission, error)
 	ListPermissions() ([]*Permission, error)
-	DeletePermission(id int64) error
-	AttachPermission(roleID, permissionID int64, value []byte) error
-	DetachPermission(roleID, permissionID int64) error
+	DeletePermission(id string) error
+	AttachPermission(roleID, permissionID string, value []byte) error
+	DetachPermission(roleID, permissionID string) error
 	GetPermissionsForRoles(roleIDs []string) ([]string, error)
 }
 
@@ -90,12 +89,12 @@ func (s *store) queryRoles(where string, args ...any) ([]*Role, error) {
 	return roles, rows.Err()
 }
 
-func (s *store) CreateRole(id int64, name, description string) error {
+func (s *store) CreateRole(id string, name, description string) error {
 	_, err := s.db.Exec(context.Background(), "INSERT INTO roles (id, name, description) VALUES ($1, $2, $3)", id, name, description)
 	return translateConstraintErr(err)
 }
 
-func (s *store) GetRole(id int64) (*Role, error) {
+func (s *store) GetRole(id string) (*Role, error) {
 	roles, err := s.queryRoles(" WHERE r.id = $1", id)
 	if err != nil {
 		return nil, err
@@ -125,7 +124,7 @@ func (s *store) ListRoles() ([]*Role, error) {
 	return roles, err
 }
 
-func (s *store) UpdateRole(id int64, name, description string) error {
+func (s *store) UpdateRole(id string, name, description string) error {
 	tag, err := s.db.Exec(context.Background(), "UPDATE roles SET name = $2, description = $3 WHERE id = $1", id, name, description)
 	if err != nil {
 		return translateConstraintErr(err)
@@ -136,7 +135,7 @@ func (s *store) UpdateRole(id int64, name, description string) error {
 	return nil
 }
 
-func (s *store) DeleteRole(id int64) error {
+func (s *store) DeleteRole(id string) error {
 	ctx := context.Background()
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
@@ -144,8 +143,8 @@ func (s *store) DeleteRole(id int64) error {
 	}
 	defer tx.Rollback(ctx)
 
-	var locked int64
-	if err := tx.QueryRow(ctx, "SELECT id FROM roles WHERE id = $1 FOR UPDATE", id).Scan(&locked); err != nil {
+	var locked string
+	if err := tx.QueryRow(ctx, "SELECT id::text FROM roles WHERE id = $1 FOR UPDATE", id).Scan(&locked); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrRoleNotFound
 		}
@@ -171,7 +170,7 @@ func deref(s *string) string {
 	return *s
 }
 
-func (s *store) CreatePermission(id int64, node, description, valueType, merge string) error {
+func (s *store) CreatePermission(id string, node, description, valueType, merge string) error {
 	_, err := s.db.Exec(context.Background(), "INSERT INTO permissions (id, node, description, value_type, merge) VALUES ($1, $2, $3, NULLIF($4, ''), NULLIF($5, ''))", id, node, description, valueType, merge)
 	return translateConstraintErr(err)
 }
@@ -184,7 +183,7 @@ func (s *store) queryPermissions(where string, args ...any) ([]*Permission, erro
 	return pgx.CollectRows(rows, pgx.RowToAddrOfStructByPos[Permission])
 }
 
-func (s *store) GetPermission(id int64) (*Permission, error) {
+func (s *store) GetPermission(id string) (*Permission, error) {
 	permissions, err := s.queryPermissions(" WHERE id = $1", id)
 	if err != nil {
 		return nil, err
@@ -214,7 +213,7 @@ func (s *store) ListPermissions() ([]*Permission, error) {
 	return permissions, err
 }
 
-func (s *store) DeletePermission(id int64) error {
+func (s *store) DeletePermission(id string) error {
 	tag, err := s.db.Exec(context.Background(), "DELETE FROM permissions WHERE id = $1", id)
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == "23503" {
@@ -229,12 +228,12 @@ func (s *store) DeletePermission(id int64) error {
 	return nil
 }
 
-func (s *store) AttachPermission(roleID, permissionID int64, value []byte) error {
+func (s *store) AttachPermission(roleID, permissionID string, value []byte) error {
 	_, err := s.db.Exec(context.Background(), "INSERT INTO role_permissions (role_id, permission_id, value) VALUES ($1, $2, $3::jsonb) ON CONFLICT (role_id, permission_id) DO UPDATE SET value = EXCLUDED.value", roleID, permissionID, value)
 	return translateConstraintErr(err)
 }
 
-func (s *store) DetachPermission(roleID, permissionID int64) error {
+func (s *store) DetachPermission(roleID, permissionID string) error {
 	tag, err := s.db.Exec(context.Background(), "DELETE FROM role_permissions WHERE role_id = $1 AND permission_id = $2", roleID, permissionID)
 	if err != nil {
 		return err
@@ -294,9 +293,4 @@ func translateConstraintErr(err error) error {
 		return ErrPermissionNotFound
 	}
 	return err
-}
-
-func parseID(id string) (int64, bool) {
-	n, err := strconv.ParseInt(id, 10, 64)
-	return n, err == nil && n >= 1 && strconv.FormatInt(n, 10) == id
 }

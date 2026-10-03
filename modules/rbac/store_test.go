@@ -612,13 +612,13 @@ func TestST24ConnectionErrors(t *testing.T) {
 		var errs []error
 		collect := func(_ any, err error) { errs = append(errs, err) }
 		errs = append(errs,
-			st.CreateRole(1, "a", ""), st.UpdateRole(1, "a", ""), st.DeleteRole(1),
-			st.CreatePermission(1, "a", "", "", ""), st.DeletePermission(1),
-			st.AttachPermission(1, 1, nil), st.DetachPermission(1, 1))
-		collect(st.GetRole(1))
+			st.CreateRole("1", "a", ""), st.UpdateRole("1", "a", ""), st.DeleteRole("1"),
+			st.CreatePermission("1", "a", "", "", ""), st.DeletePermission("1"),
+			st.AttachPermission("1", "1", nil), st.DetachPermission("1", "1"))
+		collect(st.GetRole("1"))
 		collect(st.GetRoleByName("a"))
 		collect(st.ListRoles())
-		collect(st.GetPermission(1))
+		collect(st.GetPermission("1"))
 		collect(st.GetPermissionByNode("a"))
 		collect(st.ListPermissions())
 		collect(st.GetPermissionsForRoles([]string{"1"}))
@@ -701,7 +701,7 @@ func TestST27to33RoleIntegrity(t *testing.T) {
 	})
 
 	t.Run("ST-30_UpdateOfAnUnknownRoleIsNotFoundAtTheStore", func(t *testing.T) {
-		if err := st.UpdateRole(900000000000000009, "rbtest_ghost", ""); !errors.Is(err, ErrRoleNotFound) {
+		if err := st.UpdateRole(rbMissingID, "rbtest_ghost", ""); !errors.Is(err, ErrRoleNotFound) {
 			t.Errorf("UpdateRole() err = %v, want %v", err, ErrRoleNotFound)
 		}
 	})
@@ -717,7 +717,7 @@ func TestST27to33RoleIntegrity(t *testing.T) {
 			}
 		}
 
-		got, err := rbHashJoinStore(t).GetRole(mustParse(t, role.ID))
+		got, err := rbHashJoinStore(t).GetRole(role.ID)
 
 		if err != nil {
 			t.Fatalf("GetRole() err = %v", err)

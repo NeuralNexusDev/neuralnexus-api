@@ -75,12 +75,9 @@ func NewService(store Store) Service {
 	return &service{store: store}
 }
 
-func newID() (int64, error) {
-	id, err := database.GenSnowflake()
-	if err != nil {
-		return 0, err
-	}
-	return strconv.ParseInt(id, 10, 64)
+func validID(id string) bool {
+	n, err := strconv.ParseInt(id, 10, 64)
+	return err == nil && n >= 1 && strconv.FormatInt(n, 10) == id
 }
 
 func validRoleName(name string) bool {
@@ -149,22 +146,21 @@ func (s *service) CreateRole(name, description string) (*Role, error) {
 	if !validDescription(description) {
 		return nil, ErrInvalidDescription
 	}
-	id, err := newID()
+	id, err := database.GenSnowflake()
 	if err != nil {
 		return nil, err
 	}
 	if err := s.store.CreateRole(id, name, description); err != nil {
 		return nil, err
 	}
-	return &Role{ID: strconv.FormatInt(id, 10), Name: name, Description: description, Permissions: []RolePermission{}}, nil
+	return &Role{ID: id, Name: name, Description: description, Permissions: []RolePermission{}}, nil
 }
 
 func (s *service) GetRole(id string) (*Role, error) {
-	n, ok := parseID(id)
-	if !ok {
+	if !validID(id) {
 		return nil, ErrInvalidID
 	}
-	return s.store.GetRole(n)
+	return s.store.GetRole(id)
 }
 
 func (s *service) GetRoleByName(name string) (*Role, error) {
@@ -198,8 +194,7 @@ func (s *service) UpdateRole(id string, name, description *string) (*Role, error
 		}
 		role.Description = *description
 	}
-	n, _ := parseID(id)
-	if err := s.store.UpdateRole(n, role.Name, role.Description); err != nil {
+	if err := s.store.UpdateRole(id, role.Name, role.Description); err != nil {
 		return nil, err
 	}
 	return role, nil
@@ -213,8 +208,7 @@ func (s *service) DeleteRole(id string) error {
 	if builtinRoles[role.Name] {
 		return ErrBuiltinRole
 	}
-	n, _ := parseID(id)
-	return s.store.DeleteRole(n)
+	return s.store.DeleteRole(id)
 }
 
 func (s *service) CreatePermission(node, description, valueType, merge string) (*Permission, error) {
@@ -250,22 +244,21 @@ func (s *service) CreatePermission(node, description, valueType, merge string) (
 	default:
 		return nil, ErrInvalidValueType
 	}
-	id, err := newID()
+	id, err := database.GenSnowflake()
 	if err != nil {
 		return nil, err
 	}
 	if err := s.store.CreatePermission(id, node, description, valueType, merge); err != nil {
 		return nil, err
 	}
-	return &Permission{ID: strconv.FormatInt(id, 10), Node: node, Description: description, ValueType: valueType, Merge: merge}, nil
+	return &Permission{ID: id, Node: node, Description: description, ValueType: valueType, Merge: merge}, nil
 }
 
 func (s *service) GetPermission(id string) (*Permission, error) {
-	n, ok := parseID(id)
-	if !ok {
+	if !validID(id) {
 		return nil, ErrInvalidID
 	}
-	return s.store.GetPermission(n)
+	return s.store.GetPermission(id)
 }
 
 func (s *service) GetPermissionByNode(node string) (*Permission, error) {
@@ -280,20 +273,17 @@ func (s *service) ListPermissions() ([]*Permission, error) {
 }
 
 func (s *service) DeletePermission(id string) error {
-	n, ok := parseID(id)
-	if !ok {
+	if !validID(id) {
 		return ErrInvalidID
 	}
-	return s.store.DeletePermission(n)
+	return s.store.DeletePermission(id)
 }
 
 func (s *service) AttachPermission(roleID, permissionID string, value any) error {
-	r, rOK := parseID(roleID)
-	p, pOK := parseID(permissionID)
-	if !rOK || !pOK {
+	if !validID(roleID) || !validID(permissionID) {
 		return ErrInvalidID
 	}
-	permission, err := s.store.GetPermission(p)
+	permission, err := s.store.GetPermission(permissionID)
 	if err != nil {
 		return err
 	}
@@ -375,21 +365,19 @@ func (s *service) AttachPermission(roleID, permissionID string, value any) error
 	default:
 		return ErrInvalidValue
 	}
-	return s.store.AttachPermission(r, p, encoded)
+	return s.store.AttachPermission(roleID, permissionID, encoded)
 }
 
 func (s *service) DetachPermission(roleID, permissionID string) error {
-	r, rOK := parseID(roleID)
-	p, pOK := parseID(permissionID)
-	if !rOK || !pOK {
+	if !validID(roleID) || !validID(permissionID) {
 		return ErrInvalidID
 	}
-	role, err := s.store.GetRole(r)
+	role, err := s.store.GetRole(roleID)
 	if err != nil {
 		return err
 	}
 	if role.Name == RoleSystem || role.Name == RoleOwner {
-		permission, err := s.store.GetPermission(p)
+		permission, err := s.store.GetPermission(permissionID)
 		if err != nil {
 			return err
 		}
@@ -397,7 +385,7 @@ func (s *service) DetachPermission(roleID, permissionID string) error {
 			return ErrBuiltinRole
 		}
 	}
-	return s.store.DetachPermission(r, p)
+	return s.store.DetachPermission(roleID, permissionID)
 }
 
 func (s *service) GetPermissionsForRoles(roleIDs []string) ([]string, error) {
