@@ -47,6 +47,8 @@ const (
 	logFailedToUpdateUser                       = "Failed to update user:\n\t"
 	msgEmailAlreadyExists                       = "An account with this email already exists"
 	msgUsernameAlreadyExists                    = "An account with this username already exists"
+	msgInvalidRoleID                            = "Roles must be role IDs"
+	msgUnknownRoleID                            = "Roles must be existing roles"
 )
 
 func respondUpdateUserFailure(w http.ResponseWriter, r *http.Request, err error) {
@@ -57,6 +59,10 @@ func respondUpdateUserFailure(w http.ResponseWriter, r *http.Request, err error)
 		responses.Conflict(w, r, msgEmailAlreadyExists)
 	case errors.Is(err, auth.ErrUsernameAlreadyExists):
 		responses.Conflict(w, r, msgUsernameAlreadyExists)
+	case errors.Is(err, auth.ErrInvalidRoleID):
+		responses.BadRequest(w, r, msgInvalidRoleID)
+	case errors.Is(err, auth.ErrUnknownRoleID):
+		responses.BadRequest(w, r, msgUnknownRoleID)
 	default:
 		log.Println(logFailedToUpdateUser, err)
 		responses.InternalServerError(w, r, msgFailedToUpdateUser)
@@ -158,7 +164,12 @@ func UpdateUserHandler(service auth.UserService) http.HandlerFunc {
 			respondUpdateUserFailure(w, r, err)
 			return
 		}
-		responses.StructOK(w, r, user)
+		stored, err := service.GetUser(userID)
+		if err != nil {
+			respondUpdateUserFailure(w, r, err)
+			return
+		}
+		responses.StructOK(w, r, stored)
 	}
 }
 

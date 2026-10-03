@@ -157,7 +157,7 @@ func ProcessOAuthLogin(as auth.AccountService, las auth.LinkAccountStore, ss aut
 		}
 	}
 
-	session, err := a.NewSession(time.Now().Add(time.Hour * 24).Unix())
+	session, err := as.NewSession(a, time.Now().Add(time.Hour*24).Unix())
 	if err != nil {
 		return nil, err
 	}

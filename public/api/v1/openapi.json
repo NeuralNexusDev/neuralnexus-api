@@ -11,10 +11,19 @@
             "description": "Production server"
         }
     ],
+    "security": [
+        {
+            "bearerAuth": []
+        },
+        {
+            "cookieAuth": []
+        }
+    ],
     "paths": {
         "/auth/login": {
             "post": {
                 "summary": "Login to the API",
+                "security": [],
                 "requestBody": {
                     "content": {
                         "application/json": {
@@ -56,11 +65,6 @@
         "/auth/logout": {
             "post": {
                 "summary": "Logout of the API",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
                 "responses": {
                     "204": {
                         "$ref": "#/components/responses/204NoContent"
@@ -80,6 +84,7 @@
         "/bee-name-generator/name": {
             "get": {
                 "summary": "Get a random bee name",
+                "security": [],
                 "responses": {
                     "200": {
                         "$ref": "#/components/responses/BNGNameResponse"
@@ -99,11 +104,6 @@
         "/bee-name-generator/name/{name}": {
             "post": {
                 "summary": "Upload a bee name",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/BNGNameSlug"
@@ -129,11 +129,6 @@
             },
             "delete": {
                 "summary": "Delete a specific bee name",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/BNGNameSlug"
@@ -161,12 +156,7 @@
         "/bee-name-generator/suggestion/{amount}": {
             "get": {
                 "summary": "Get bee name suggestions",
-                "description": "Requires the admin:bee-name-generator scope.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
+                "description": "Requires the beenamegenerator.admin permission.",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/BeeSuggestionAmountSlug"
@@ -204,6 +194,7 @@
         "/bee-name-generator/suggestion/{name}": {
             "post": {
                 "summary": "Suggest a bee name",
+                "security": [],
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/BeeSuggestionNameSlug"
@@ -226,12 +217,7 @@
             },
             "put": {
                 "summary": "Accept a bee name suggestion",
-                "description": "Requires the admin:bee-name-generator scope.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
+                "description": "Requires the beenamegenerator.admin permission.",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/BeeSuggestionNameSlug"
@@ -257,12 +243,7 @@
             },
             "delete": {
                 "summary": "Reject a bee name suggestion",
-                "description": "Requires the admin:bee-name-generator scope.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
+                "description": "Requires the beenamegenerator.admin permission.",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/BeeSuggestionNameSlug"
@@ -290,12 +271,7 @@
         "/datastore": {
             "post": {
                 "summary": "Create a data store",
-                "description": "Requires the admin:datastore scope. The store is created for the caller; no request body is read.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
+                "description": "Requires the datastore.admin permission. The store is created for the caller; no request body is read.",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -324,6 +300,7 @@
             "get": {
                 "summary": "Read a data store",
                 "description": "Identifies the store via the request body rather than a path or query parameter.",
+                "security": [],
                 "requestBody": {
                     "content": {
                         "application/json": {
@@ -370,12 +347,7 @@
             },
             "put": {
                 "summary": "Update a data store",
-                "description": "Requires the admin:datastore scope.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
+                "description": "Requires the datastore.admin permission.",
                 "requestBody": {
                     "content": {
                         "application/json": {
@@ -425,12 +397,7 @@
             },
             "delete": {
                 "summary": "Delete a data store",
-                "description": "Requires the admin:datastore scope.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
+                "description": "Requires the datastore.admin permission.",
                 "requestBody": {
                     "content": {
                         "application/json": {
@@ -475,12 +442,7 @@
         "/datastore/number": {
             "post": {
                 "summary": "Create a number record",
-                "description": "Requires the admin:numberstore scope.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
+                "description": "Requires the numberstore.admin permission.",
                 "requestBody": {
                     "content": {
                         "application/json": {
@@ -531,6 +493,7 @@
             "get": {
                 "summary": "Read a number record",
                 "description": "Identifies the record via the request body rather than a path or query parameter.",
+                "security": [],
                 "requestBody": {
                     "content": {
                         "application/json": {
@@ -577,12 +540,7 @@
             },
             "put": {
                 "summary": "Update a number record",
-                "description": "Requires the admin:numberstore scope.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
+                "description": "Requires the numberstore.admin permission.",
                 "requestBody": {
                     "content": {
                         "application/json": {
@@ -632,12 +590,7 @@
             },
             "delete": {
                 "summary": "Delete a number record",
-                "description": "Requires a valid session, but \u2014 unlike create/update \u2014 the handler does not check the admin:numberstore scope; any authenticated user can delete any record.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
+                "description": "Requires a valid session, but \u2014 unlike create/update \u2014 the handler does not check the numberstore.admin permission; any authenticated user can delete any record.",
                 "requestBody": {
                     "content": {
                         "application/json": {
@@ -687,6 +640,7 @@
             "get": {
                 "summary": "Get game server simple status",
                 "description": "Get game server simple status",
+                "security": [],
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/GameSlug"
@@ -724,6 +678,7 @@
             "get": {
                 "summary": "Get game server status",
                 "description": "Get game server status",
+                "security": [],
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/GameSlug"
@@ -786,6 +741,7 @@
         "/health": {
             "get": {
                 "summary": "Health check",
+                "security": [],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -813,6 +769,7 @@
             "get": {
                 "summary": "Get a Bedrock player's most recently converted skin by XUID",
                 "description": "Looks up a Bedrock player's most recently converted skin, DB-cache-first (24h staleness) with a fallback to Geyser's skin API on a miss or stale entry. Returns 204 (not 404) when the player has no converted skin yet, matching Geyser's own API (200 with an empty object) rather than treating it as a client error.",
+                "security": [],
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/XUIDSlug"
@@ -851,6 +808,7 @@
             "get": {
                 "summary": "Look up a Bedrock player's XUID and derived UUID by gamertag",
                 "description": "Looks up a gamertag's Xbox XUID, DB-cache-first (24h staleness) with a fallback to Geyser's Xbox XUID lookup API on a miss or stale entry. The UUID is synthesized from the XUID's hex representation (left-padded to 32 hex digits and formatted as a standard UUID) and is never stored; it is not a real Mojang UUID, since Bedrock players have no Mojang profile.",
+                "security": [],
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/GamertagSlug"
@@ -889,6 +847,7 @@
             "post": {
                 "summary": "Look up players by name in batch",
                 "description": "Body must be a JSON array of 1 to 10 non-empty names; Content-Type must be application/json.",
+                "security": [],
                 "requestBody": {
                     "required": true,
                     "content": {
@@ -939,6 +898,7 @@
         "/mc/mojang/lookup/name/{name}": {
             "get": {
                 "summary": "Look up a player by name",
+                "security": [],
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/MCNameSlug"
@@ -973,6 +933,7 @@
         "/mc/mojang/lookup/{uuid}": {
             "get": {
                 "summary": "Look up a player by UUID",
+                "security": [],
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/MCUUIDSlug"
@@ -1011,6 +972,7 @@
             "get": {
                 "summary": "Get a player's full profile from Mojang",
                 "description": "Mirrors the Mojang API. Returns 204 (not 404) when the profile can't be found.",
+                "security": [],
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/MCUUIDSlug"
@@ -1052,6 +1014,7 @@
             "get": {
                 "summary": "Get a Bedrock player's full profile (identity + skin) by gamertag",
                 "description": "Looks up a Bedrock player by Xbox gamertag.",
+                "security": [],
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/BedrockGamertagNameSlug"
@@ -1090,6 +1053,7 @@
             "get": {
                 "summary": "Get a Bedrock player's full profile (identity + skin) by derived UUID",
                 "description": "Looks up a Bedrock player by their synthetic UUID, derived from an Xbox XUID (see GeyserPlayer.uuid). Returns 400 if the UUID isn't a validly-derived Bedrock UUID.",
+                "security": [],
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/BedrockUUIDSlug"
@@ -1128,6 +1092,7 @@
             "get": {
                 "summary": "Get a player's full profile by name",
                 "description": "Resolves the name to a UUID via Mojang, then returns the decoded profile. Returns 204 (not 404) when the profile can't be found.",
+                "security": [],
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/MCNameSlug"
@@ -1163,6 +1128,7 @@
             "get": {
                 "summary": "Get a player's full profile",
                 "description": "Returns 204 (not 404) when the profile can't be found.",
+                "security": [],
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/MCUUIDSlug"
@@ -1201,6 +1167,7 @@
             "get": {
                 "summary": "Get a Bedrock skin's raw image bytes",
                 "description": "Fetches from the URL embedded in the skin's Value on first request and archives to S3; served straight from S3/CDN thereafter.",
+                "security": [],
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/MCHashSlug"
@@ -1237,6 +1204,7 @@
             "get": {
                 "summary": "Get a texture's raw image bytes",
                 "description": "Fetches from Mojang on first request and archives to S3; served straight from S3/CDN thereafter.",
+                "security": [],
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/MCHashSlug"
@@ -1273,6 +1241,7 @@
             "get": {
                 "summary": "Get Minecraft server icon",
                 "description": "Returns a PNG. Which image you get depends on the server:\n- The server's own icon, when it reports one.\n- default.png, when a Java server reports no icon or cannot be reached.\n- legacy.png, when a Java server only answers a pre-1.7 status ping, which carries no icon.\n- bedrock.png, for bedrock=true. Bedrock servers have no icon, so the server is not contacted.",
+                "security": [],
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/HostSlug"
@@ -1312,6 +1281,7 @@
             "get": {
                 "summary": "Get Minecraft server simple status",
                 "description": "Get Minecraft server simple status",
+                "security": [],
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/HostSlug"
@@ -1349,6 +1319,7 @@
             "get": {
                 "summary": "Get Minecraft server status",
                 "description": "Get Minecraft server status. For Java servers with query enabled, the query reply is merged over the ping status, and a server that answers only the query is still reported.",
+                "security": [],
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/HostSlug"
@@ -1425,12 +1396,7 @@
         "/pet-pictures/pets": {
             "post": {
                 "summary": "Create a pet",
-                "description": "Requires the admin:pet-pictures scope. The pet name comes from the request body when no {name} path segment is used.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
+                "description": "Requires the petpictures.admin permission. The pet name comes from the request body when no {name} path segment is used.",
                 "requestBody": {
                     "content": {
                         "application/json": {
@@ -1481,6 +1447,7 @@
             "get": {
                 "summary": "Get a pet",
                 "description": "The pet ID comes from the request body when no {id} path segment is used.",
+                "security": [],
                 "requestBody": {
                     "content": {
                         "application/json": {
@@ -1530,12 +1497,7 @@
             },
             "put": {
                 "summary": "Update a pet",
-                "description": "Requires the pet-pictures scope for this pet's name.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
+                "description": "Requires the petpictures.pets list to contain this pet's name.",
                 "requestBody": {
                     "content": {
                         "application/json": {
@@ -1590,6 +1552,7 @@
         "/pet-pictures/pets/{id}": {
             "get": {
                 "summary": "Get a pet by ID",
+                "security": [],
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/PetIdSlug"
@@ -1627,12 +1590,7 @@
         "/pet-pictures/pets/{name}": {
             "post": {
                 "summary": "Create a pet",
-                "description": "Requires the admin:pet-pictures scope.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
+                "description": "Requires the petpictures.admin permission.",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/MCNameSlug"
@@ -1668,6 +1626,7 @@
             "get": {
                 "summary": "Get a pet picture",
                 "description": "The picture ID comes from the request body when no {id} path segment is used.",
+                "security": [],
                 "requestBody": {
                     "content": {
                         "application/json": {
@@ -1717,12 +1676,7 @@
             },
             "put": {
                 "summary": "Update a pet picture",
-                "description": "Requires the pet-pictures scope for the picture's primary subject's pet name.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
+                "description": "Requires the petpictures.pets list to contain the picture's primary subject's pet name.",
                 "requestBody": {
                     "content": {
                         "application/json": {
@@ -1775,12 +1729,7 @@
             },
             "delete": {
                 "summary": "Delete a pet picture",
-                "description": "Requires the pet-pictures scope for the picture's primary subject's pet name. The picture ID comes from the request body when no {id} path segment is used.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
+                "description": "Requires the petpictures.pets list to contain the picture's primary subject's pet name. The picture ID comes from the request body when no {id} path segment is used.",
                 "requestBody": {
                     "content": {
                         "application/json": {
@@ -1829,6 +1778,7 @@
             "get": {
                 "summary": "Get a random picture of a named pet",
                 "description": "The pet name comes from the request body (this route has no {name} path segment).",
+                "security": [],
                 "requestBody": {
                     "content": {
                         "application/json": {
@@ -1897,6 +1847,7 @@
         "/pet-pictures/pictures/{id}": {
             "get": {
                 "summary": "Get a pet picture by ID",
+                "security": [],
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/PetPictureIdSlug"
@@ -1929,12 +1880,7 @@
             },
             "delete": {
                 "summary": "Delete a pet picture",
-                "description": "Requires the pet-pictures scope for the picture's primary subject's pet name.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
+                "description": "Requires the petpictures.pets list to contain the picture's primary subject's pet name.",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/PetPictureIdSlug"
@@ -1966,6 +1912,7 @@
             "get": {
                 "summary": "Get a GitHub repo's releases",
                 "description": "Proxies the GitHub releases API. With format=fml, reshapes the response into Forge Mod Loader update-JSON format instead.",
+                "security": [],
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/GroupSlug"
@@ -2021,6 +1968,7 @@
         "/teapot": {
             "get": {
                 "summary": "I'm a teapot",
+                "security": [],
                 "responses": {
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
@@ -2045,11 +1993,6 @@
             "get": {
                 "summary": "Get the caller's own account",
                 "description": "Requires a valid session. Always resolves to the caller's own account - equivalent to GET /users/{user_id} with the caller's own ID.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -2080,11 +2023,6 @@
             "delete": {
                 "summary": "Unlink a platform from the caller's own account",
                 "description": "Requires a valid session. Always operates on the caller's own account. Refused with 400 if this is the account's last usable login method (no password and no other verified, login-enabled linked platform).",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/PlatformSlug"
@@ -2114,11 +2052,6 @@
             "patch": {
                 "summary": "Enable or disable a linked platform for login on the caller's own account",
                 "description": "Requires a valid session. Always operates on the caller's own account. Disabling is refused with 400 under the same last-usable-login-method guard as DELETE on this resource. Enabling is refused with 400 if the linked account isn't verified.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/PlatformSlug"
@@ -2167,11 +2100,6 @@
             "get": {
                 "summary": "List the caller's own linked platforms",
                 "description": "Requires a valid session. Always resolves to the caller's own linked accounts.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -2202,11 +2130,6 @@
             "get": {
                 "summary": "Get the caller's own permissions",
                 "description": "Requires a valid session. Always resolves to the caller's own permissions.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -2240,11 +2163,6 @@
             "get": {
                 "summary": "Get the caller's own account settings",
                 "description": "Requires a valid session. Always resolves to the caller's own settings.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -2273,11 +2191,6 @@
             "patch": {
                 "summary": "Update the caller's own account settings",
                 "description": "Requires a valid session. Always operates on the caller's own account. Disabling password login is refused with 400 unless another verified, login-enabled platform is linked; enabling it is refused with 400 if no password is set.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
                 "requestBody": {
                     "required": true,
                     "content": {
@@ -2313,12 +2226,7 @@
         "/users/{platform}/{platform_id}": {
             "get": {
                 "summary": "Get a user by their linked-platform identity",
-                "description": "Requires the admin:users scope.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
+                "description": "Requires the users.admin permission.",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/PlatformSlug"
@@ -2357,12 +2265,7 @@
             },
             "put": {
                 "summary": "Update a user's linked-platform data",
-                "description": "Requires the admin:users scope.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
+                "description": "Requires the users.admin permission.",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/PlatformSlug"
@@ -2428,12 +2331,7 @@
         "/users/{user_id}": {
             "get": {
                 "summary": "Get a user by ID",
-                "description": "Requires a valid session; any authenticated user may look up any other user by ID.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
+                "description": "Requires a valid session. Callers may look up themselves; looking up another user requires the users.admin permission.",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/UserIdSlug"
@@ -2469,12 +2367,7 @@
             },
             "put": {
                 "summary": "Update a user",
-                "description": "Requires the admin:users scope.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
+                "description": "Requires the users.admin permission. Roles, when given, must be the IDs of existing roles.",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/UserIdSlug"
@@ -2537,12 +2430,7 @@
         "/users/{user_id}/link/{platform}": {
             "delete": {
                 "summary": "Unlink a platform from a user",
-                "description": "Requires the admin:users scope, unless the caller is unlinking their own account. Refused with 400 if this is the account's last usable login method (no password and no other verified, login-enabled linked platform).",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
+                "description": "Requires the users.admin permission, unless the caller is unlinking their own account. Refused with 400 if this is the account's last usable login method (no password and no other verified, login-enabled linked platform).",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/UserIdSlug"
@@ -2577,12 +2465,7 @@
             },
             "patch": {
                 "summary": "Enable or disable a linked platform for login",
-                "description": "Requires the admin:users scope, unless the caller is updating their own account. Disabling is refused with 400 under the same last-usable-login-method guard as DELETE on this resource. Enabling is refused with 400 if the linked account isn't verified.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
+                "description": "Requires the users.admin permission, unless the caller is updating their own account. Disabling is refused with 400 under the same last-usable-login-method guard as DELETE on this resource. Enabling is refused with 400 if the linked account isn't verified.",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/UserIdSlug"
@@ -2636,12 +2519,7 @@
         "/users/{user_id}/links": {
             "get": {
                 "summary": "List a user's linked platforms",
-                "description": "Requires the admin:users scope, unless the caller is requesting their own linked accounts.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
+                "description": "Requires the users.admin permission, unless the caller is requesting their own linked accounts.",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/UserIdSlug"
@@ -2679,12 +2557,7 @@
         "/users/{user_id}/permissions": {
             "get": {
                 "summary": "Get a user's permissions",
-                "description": "Requires the admin:users scope, unless the caller is requesting their own permissions.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
+                "description": "Requires the users.admin permission, unless the caller is requesting their own permissions.",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/UserIdSlug"
@@ -2725,12 +2598,7 @@
         "/users/{user_id}/settings": {
             "get": {
                 "summary": "Get a user's account settings",
-                "description": "Requires the admin:users scope, unless the caller is requesting their own settings.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
+                "description": "Requires the users.admin permission, unless the caller is requesting their own settings.",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/UserIdSlug"
@@ -2766,12 +2634,7 @@
             },
             "patch": {
                 "summary": "Update a user's account settings",
-                "description": "Requires the admin:users scope, unless the caller is updating their own account. Disabling password login is refused with 400 unless another verified, login-enabled platform is linked; enabling it is refused with 400 if no password is set.",
-                "security": [
-                    {
-                        "bearerAuth": []
-                    }
-                ],
+                "description": "Requires the users.admin permission, unless the caller is updating their own account. Disabling password login is refused with 400 unless another verified, login-enabled platform is linked; enabling it is refused with 400 if no password is set.",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/UserIdSlug"
@@ -2793,6 +2656,540 @@
                     },
                     "400": {
                         "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/roles": {
+            "get": {
+                "summary": "List roles",
+                "description": "Requires the roles.admin permission. Every role with its permissions.",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/Role"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            },
+            "post": {
+                "summary": "Create a role",
+                "description": "Requires the roles.admin permission. The ID is generated. Names start with a lower-case letter and use lower-case letters, digits and underscores; descriptions are valid text.",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateRoleRequest"
+                            }
+                        },
+                        "application/xml": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateRoleRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Role"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/409Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/roles/{id}": {
+            "get": {
+                "summary": "Get a role by ID",
+                "description": "Requires the roles.admin permission.",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/RoleIdSlug"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Role"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            },
+            "patch": {
+                "summary": "Update a role",
+                "description": "Requires the roles.admin permission. Omitted fields keep their value. Renaming changes what the name lookup returns; accounts hold role IDs and are unaffected.",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/RoleIdSlug"
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateRoleRequest"
+                            }
+                        },
+                        "application/xml": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateRoleRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Role"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/409Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            },
+            "delete": {
+                "summary": "Delete a role",
+                "description": "Requires the roles.admin permission. Refused with 409 while an account holds the role. Its permission grants are removed with it; the permissions remain.",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/RoleIdSlug"
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "$ref": "#/components/responses/204NoContent"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/409Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/roles/name/{name}": {
+            "get": {
+                "summary": "Get a role by name",
+                "description": "Requires the roles.admin permission.",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/RoleNameSlug"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Role"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/roles/{id}/permissions/{permission_id}": {
+            "put": {
+                "summary": "Grant a permission to a role",
+                "description": "Requires the roles.admin permission. Granting an already granted permission succeeds and replaces its value. The body is optional JSON: permissions with a value_type need a value and permissions without one take none. int values must be whole numbers within plus or minus 2^53. string values and list items must be non-empty, with no surrounding spaces and no control or format characters; lists hold at least one item. For merge, first means the value of the lowest role ID.",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/RoleIdSlug"
+                    },
+                    {
+                        "$ref": "#/components/parameters/RolePermissionIdSlug"
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "$ref": "#/components/responses/204NoContent"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                },
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AttachPermissionRequest"
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "summary": "Remove a permission from a role",
+                "description": "Requires the roles.admin permission. Removing a permission the role does not hold succeeds.",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/RoleIdSlug"
+                    },
+                    {
+                        "$ref": "#/components/parameters/RolePermissionIdSlug"
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "$ref": "#/components/responses/204NoContent"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/409Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/permissions": {
+            "get": {
+                "summary": "List permissions",
+                "description": "Requires the roles.admin permission.",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/Permission"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            },
+            "post": {
+                "summary": "Create a permission",
+                "description": "Requires the roles.admin permission. The ID is generated. Nodes are lower-case words of letters, digits and underscores, starting with a letter and joined by dots. A permission without a value_type is granted bare; one with a value_type is granted with a value.",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreatePermissionRequest"
+                            }
+                        },
+                        "application/xml": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreatePermissionRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Permission"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/409Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/permissions/{id}": {
+            "get": {
+                "summary": "Get a permission by ID",
+                "description": "Requires the roles.admin permission.",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/PermissionIdSlug"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Permission"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            },
+            "delete": {
+                "summary": "Delete a permission",
+                "description": "Requires the roles.admin permission. Refused with 409 while a role grants the permission.",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/PermissionIdSlug"
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "$ref": "#/components/responses/204NoContent"
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/403Forbidden"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "409": {
+                        "$ref": "#/components/responses/409Conflict"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
+        "/permissions/node/{node}": {
+            "get": {
+                "summary": "Get a permission by node",
+                "description": "Requires the roles.admin permission.",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/NodeSlug"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Permission"
+                                }
+                            }
+                        }
                     },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
@@ -3012,6 +3409,7 @@
                     },
                     "roles": {
                         "type": "array",
+                        "description": "Role IDs. Resolve them through the roles endpoints.",
                         "items": {
                             "type": "string"
                         }
@@ -3453,6 +3851,156 @@
                 "xml": {
                     "name": "Problem"
                 }
+            },
+            "Permission": {
+                "type": "object",
+                "description": "A permission node roles can grant. Permissions with a value_type are granted with a value; the others are granted bare.",
+                "required": [
+                    "id",
+                    "node",
+                    "description"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "ID"
+                    },
+                    "node": {
+                        "type": "string",
+                        "description": "Lower-case words of letters, digits and underscores joined by dots"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "value_type": {
+                        "type": "string",
+                        "enum": [
+                            "int",
+                            "string",
+                            "string_list"
+                        ],
+                        "description": "Present when roles grant the permission with a value"
+                    },
+                    "merge": {
+                        "type": "string",
+                        "enum": [
+                            "max",
+                            "min",
+                            "first",
+                            "union"
+                        ],
+                        "description": "How values combine when an account holds the permission through several roles: max or min for int, first for string, union for string_list"
+                    }
+                }
+            },
+            "Role": {
+                "type": "object",
+                "description": "A named set of permissions. Accounts reference roles by ID.",
+                "required": [
+                    "id",
+                    "name",
+                    "description",
+                    "permissions"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "ID"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "permissions": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/RolePermission"
+                        }
+                    }
+                }
+            },
+            "CreateRoleRequest": {
+                "type": "object",
+                "required": [
+                    "name"
+                ],
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    }
+                }
+            },
+            "UpdateRoleRequest": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    }
+                }
+            },
+            "CreatePermissionRequest": {
+                "type": "object",
+                "required": [
+                    "node"
+                ],
+                "properties": {
+                    "node": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "value_type": {
+                        "type": "string",
+                        "enum": [
+                            "int",
+                            "string",
+                            "string_list"
+                        ]
+                    },
+                    "merge": {
+                        "type": "string",
+                        "enum": [
+                            "max",
+                            "min",
+                            "first",
+                            "union"
+                        ],
+                        "description": "Required for int (max or min). Defaults to first for string and union for string_list."
+                    }
+                }
+            },
+            "RolePermission": {
+                "description": "A permission as a role grants it",
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/Permission"
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "value": {
+                                "description": "The granted value: an integer, a string, or an array of strings, matching the permission's value_type. Absent for bare permissions."
+                            }
+                        }
+                    }
+                ]
+            },
+            "AttachPermissionRequest": {
+                "type": "object",
+                "properties": {
+                    "value": {
+                        "description": "Required for permissions with a value_type, and refused for permissions without one. An integer for int, a string for string, a non-empty array of strings for string_list."
+                    }
+                }
             }
         },
         "parameters": {
@@ -3703,13 +4251,65 @@
                     "type": "string"
                 },
                 "description": "Xbox gamertag of a Geyser Bedrock player. Named 'name' for path symmetry with /mc/profile/name/{name}."
+            },
+            "RoleIdSlug": {
+                "name": "id",
+                "in": "path",
+                "required": true,
+                "description": "Role ID",
+                "schema": {
+                    "type": "string"
+                }
+            },
+            "RoleNameSlug": {
+                "name": "name",
+                "in": "path",
+                "required": true,
+                "description": "Role name",
+                "schema": {
+                    "type": "string"
+                }
+            },
+            "PermissionIdSlug": {
+                "name": "id",
+                "in": "path",
+                "required": true,
+                "description": "Permission ID",
+                "schema": {
+                    "type": "string"
+                }
+            },
+            "RolePermissionIdSlug": {
+                "name": "permission_id",
+                "in": "path",
+                "required": true,
+                "description": "Permission ID",
+                "schema": {
+                    "type": "string"
+                }
+            },
+            "NodeSlug": {
+                "name": "node",
+                "in": "path",
+                "required": true,
+                "description": "Permission node",
+                "schema": {
+                    "type": "string"
+                }
             }
         },
         "securitySchemes": {
             "bearerAuth": {
                 "type": "http",
                 "scheme": "bearer",
-                "bearerFormat": "token"
+                "bearerFormat": "token",
+                "description": "Session token in the Authorization header as Bearer <token>"
+            },
+            "cookieAuth": {
+                "type": "apiKey",
+                "in": "cookie",
+                "name": "session",
+                "description": "Session token in the session cookie, used when no Authorization header is sent"
             }
         },
         "requestBodies": {},

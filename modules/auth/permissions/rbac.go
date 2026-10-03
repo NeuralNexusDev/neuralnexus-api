@@ -1,127 +1,21 @@
 package perms
 
-import "errors"
-
-// -------------- Structs --------------
-
+// Scope is a permission node. Valued nodes carry values on the roles that grant them.
 type Scope struct {
-	Name        string
+	Node        string
 	Description string
-	Value       string
 }
 
 var (
-	ScopeAdminBeeNameGenerator = Scope{
-		Name:        "beenamegenerator",
-		Description: "Bee name generator",
-		Value:       "*",
-	}
+	ScopeAdminBeeNameGenerator = Scope{Node: "beenamegenerator.admin", Description: "Bee name generator"}
+	ScopeAdminPetPictures      = Scope{Node: "petpictures.admin", Description: "Pet pictures"}
+	ScopeAdminDataStore        = Scope{Node: "datastore.admin", Description: "Data store"}
+	ScopeAdminNumberStore      = Scope{Node: "numberstore.admin", Description: "Number store"}
+	ScopeAdminUsers            = Scope{Node: "users.admin", Description: "Users"}
+	ScopeAdminRoles            = Scope{Node: "roles.admin", Description: "Roles and permissions"}
 
-	ScopeAdminPetPictures = ScopePetPictures("*")
-
-	ScopeAdminRateLimit = Scope{
-		Name:        "ratelimit",
-		Description: "Rate limit",
-		Value:       "1000",
-	}
-
-	ScopeAdminDataStore   = ScopeDataStore("*")
-	ScopeAdminNumberStore = ScopeNumberStore("*")
-	ScopeAdminUsers       = ScopeUsers("*")
+	// ScopePetPictures is valued with the names of the pets a role may change.
+	ScopePetPictures = Scope{Node: "petpictures.pets", Description: "Pet pictures"}
+	// ScopeRateLimit is valued with the requests allowed per period.
+	ScopeRateLimit = Scope{Node: "ratelimit", Description: "Rate limit"}
 )
-
-// ScopePetPictures -- Pet pictures
-func ScopePetPictures(value string) Scope {
-	return Scope{
-		Name:        "petpictures",
-		Description: "Pet pictures",
-		Value:       value,
-	}
-}
-
-// ScopeDataStore -- Data store
-func ScopeDataStore(value string) Scope {
-	return Scope{
-		Name:        "datastore",
-		Description: "Data store",
-		Value:       value,
-	}
-}
-
-// ScopeNumberStore -- Number store
-func ScopeNumberStore(value string) Scope {
-	return Scope{
-		Name:        "numberstore",
-		Description: "Number store",
-		Value:       value,
-	}
-}
-
-// ScopeUsers -- Admin users
-func ScopeUsers(value string) Scope {
-	return Scope{
-		Name:        "users",
-		Description: "Users",
-		Value:       value,
-	}
-}
-
-type Role struct {
-	Name        string
-	Description string
-	Permissions []Scope
-}
-
-var (
-	RoleSystem = Role{
-		Name:        "system",
-		Description: "System",
-		Permissions: []Scope{
-			ScopeAdminBeeNameGenerator,
-			ScopeAdminPetPictures,
-			ScopeAdminRateLimit,
-			ScopeAdminDataStore,
-			ScopeAdminNumberStore,
-			ScopeAdminUsers,
-		},
-	}
-
-	RoleOwner = Role{
-		Name:        "owner",
-		Description: "Owner",
-		Permissions: []Scope{
-			ScopeAdminBeeNameGenerator,
-			ScopeAdminPetPictures,
-			ScopeAdminRateLimit,
-			ScopeAdminDataStore,
-			ScopeAdminNumberStore,
-			ScopeAdminUsers,
-		},
-	}
-
-	RoleBeeAdmin = Role{
-		Name:        "bee_admin",
-		Description: "Bee Name Generator Admin",
-		Permissions: []Scope{
-			ScopeAdminBeeNameGenerator,
-		},
-	}
-)
-
-// -------------- Functions --------------
-
-var ErrRoleNotFound = errors.New("role not found")
-
-// GetRoleByName gets a role by name
-func GetRoleByName(name string) (Role, error) {
-	switch name {
-	case RoleSystem.Name:
-		return RoleSystem, nil
-	case RoleOwner.Name:
-		return RoleOwner, nil
-	case RoleBeeAdmin.Name:
-		return RoleBeeAdmin, nil
-	default:
-		return Role{}, ErrRoleNotFound
-	}
-}

@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"log"
+	"strconv"
 	"time"
 )
 
@@ -17,7 +18,14 @@ const (
 	rateLimitKeyPrefix = "rl:"
 )
 
-var ErrNotFound = errors.New("not found")
+var (
+	// ErrNotFound when a store lookup finds nothing.
+	ErrNotFound = errors.New("not found")
+	// ErrInvalidRoleID when an account role ID is not a canonical positive integer.
+	ErrInvalidRoleID = errors.New("invalid role id")
+	// ErrUnknownRoleID when an account role ID has no role.
+	ErrUnknownRoleID = errors.New("unknown role id")
+)
 
 // Store interface
 type Store interface {
@@ -84,7 +92,7 @@ func (s *store) OAuthToken() OAuthTokenStore {
 // 	email TEXT UNIQUE,
 // 	hashed_secret BYTEA,
 // 	salt BYTEA,
-// 	roles TEXT[],
+// 	role_ids BIGINT[] NOT NULL DEFAULT '{}',
 //  updated_at timestamp with time zone default current_timestamp
 // );
 
@@ -120,19 +128,13 @@ func translateAccountConstraintErr(err error) error {
 
 // AddAccountToDB creates an account in the database
 func (s *store) AddAccountToDB(account *Account) error {
-	_, err := s.db.Exec(context.Background(),
-		"INSERT INTO accounts (user_id, username, email, hashed_secret, salt, roles) VALUES ($1, NULLIF($2, ''), $3, $4, $5, $6)",
-		account.UserID, account.Username, account.Email, account.HashedSecret, account.Salt, account.Roles,
-	)
-	if err != nil {
-		return translateAccountConstraintErr(err)
-	}
-	return nil
+	return translateAccountConstraintErr(s.writeAccount(account,
+		"INSERT INTO accounts (user_id, username, email, hashed_secret, salt, role_ids) VALUES ($1, NULLIF($2, ''), $3, $4, $5, COALESCE($6::text[], '{}')::bigint[])"))
 }
 
 // GetAccountByID gets an account by ID
 func (s *store) GetAccountByID(userID string) (*Account, error) {
-	rows, err := s.db.Query(context.Background(), "SELECT user_id, COALESCE(username, '') AS username, email, hashed_secret, salt, roles, updated_at FROM accounts WHERE user_id = $1", userID)
+	rows, err := s.db.Query(context.Background(), "SELECT user_id, COALESCE(username, '') AS username, email, hashed_secret, salt, role_ids::text[] AS role_ids, updated_at FROM accounts WHERE user_id = $1", userID)
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +151,7 @@ func (s *store) GetAccountByID(userID string) (*Account, error) {
 
 // GetAccountByUsername gets an account by username
 func (s *store) GetAccountByUsername(username string) (*Account, error) {
-	rows, err := s.db.Query(context.Background(), "SELECT user_id, COALESCE(username, '') AS username, email, hashed_secret, salt, roles, updated_at FROM accounts WHERE username = $1", username)
+	rows, err := s.db.Query(context.Background(), "SELECT user_id, COALESCE(username, '') AS username, email, hashed_secret, salt, role_ids::text[] AS role_ids, updated_at FROM accounts WHERE username = $1", username)
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +168,7 @@ func (s *store) GetAccountByUsername(username string) (*Account, error) {
 
 // GetAccountByEmail gets an account by email
 func (s *store) GetAccountByEmail(email string) (*Account, error) {
-	rows, err := s.db.Query(context.Background(), "SELECT user_id, COALESCE(username, '') AS username, email, hashed_secret, salt, roles, updated_at FROM accounts WHERE email = $1", email)
+	rows, err := s.db.Query(context.Background(), "SELECT user_id, COALESCE(username, '') AS username, email, hashed_secret, salt, role_ids::text[] AS role_ids, updated_at FROM accounts WHERE email = $1", email)
 	if err != nil {
 		return nil, err
 	}
@@ -183,14 +185,8 @@ func (s *store) GetAccountByEmail(email string) (*Account, error) {
 
 // UpdateAccountInDB updates an account in the database
 func (s *store) UpdateAccountInDB(account *Account) error {
-	_, err := s.db.Exec(context.Background(),
-		"UPDATE accounts SET username = NULLIF($2, ''), email = $3, hashed_secret = $4, salt = $5, roles = $6 WHERE user_id = $1",
-		account.UserID, account.Username, account.Email, account.HashedSecret, account.Salt, account.Roles,
-	)
-	if err != nil {
-		return translateAccountConstraintErr(err)
-	}
-	return nil
+	return translateAccountConstraintErr(s.writeAccount(account,
+		"UPDATE accounts SET username = NULLIF($2, ''), email = $3, hashed_secret = $4, salt = $5, role_ids = COALESCE($6::text[], '{}')::bigint[] WHERE user_id = $1"))
 }
 
 // DeleteAccountFromDB deletes an account from the database
@@ -795,4 +791,41 @@ func (s *store) DeleteOAuthToken(userID string, platform Platform) error {
 		return err
 	}
 	return nil
+}
+
+// writeAccount share-locks the account's roles so rbac.DeleteRole, which takes FOR UPDATE
+// and then checks accounts.role_ids, cannot remove one before the write commits.
+func (s *store) writeAccount(account *Account, query string) error {
+	roleIDs := make([]string, 0, len(account.Roles))
+	seen := make(map[string]struct{}, len(account.Roles))
+	for _, id := range account.Roles {
+		if n, err := strconv.ParseInt(id, 10, 64); err != nil || n < 1 || strconv.FormatInt(n, 10) != id {
+			return ErrInvalidRoleID
+		}
+		if _, dup := seen[id]; !dup {
+			seen[id] = struct{}{}
+			roleIDs = append(roleIDs, id)
+		}
+	}
+
+	ctx := context.Background()
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	if len(roleIDs) > 0 {
+		var found int
+		if err := tx.QueryRow(ctx, "SELECT count(*) FROM (SELECT id FROM roles WHERE id = ANY($1::text[]::bigint[]) FOR SHARE) locked", roleIDs).Scan(&found); err != nil {
+			return err
+		}
+		if found != len(roleIDs) {
+			return ErrUnknownRoleID
+		}
+	}
+	if _, err := tx.Exec(ctx, query, account.UserID, account.Username, account.Email, account.HashedSecret, account.Salt, roleIDs); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }

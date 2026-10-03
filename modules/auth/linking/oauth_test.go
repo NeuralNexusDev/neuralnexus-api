@@ -78,6 +78,9 @@ func (m *oaMockAccountService) DeleteAccount(userID string) error {
 	return nil
 }
 func (m *oaMockAccountService) IsPasswordAuthEnabled(string) (bool, error) { return false, nil }
+func (m *oaMockAccountService) NewSession(a *auth.Account, expiresAt int64) (*auth.Session, error) {
+	return &auth.Session{ID: "stub-session", UserID: a.UserID, Permissions: []string{"stub:perm"}, ExpiresAt: expiresAt}, nil
+}
 
 type oaMockLinkAccountStore struct {
 	GetLinkedAccountByPlatformIDFunc func(auth.Platform, string) (*auth.LinkedAccount, error)
@@ -452,6 +455,9 @@ func TestOA09to16ProcessOAuthLogin(t *testing.T) {
 		if session == nil {
 			t.Fatal("expected a non-nil session")
 		}
+		if len(session.Permissions) != 1 || session.Permissions[0] != "stub:perm" {
+			t.Errorf("Permissions = %v, want those the account service built", session.Permissions)
+		}
 		if as.AddAccountCalls != 1 {
 			t.Errorf("AddAccount called %d times, want 1", as.AddAccountCalls)
 		}
@@ -602,6 +608,9 @@ func TestOA76to78ProcessOAuthLoginAdditionalPlatformDispatch(t *testing.T) {
 		if session == nil {
 			t.Fatal("expected a non-nil session")
 		}
+		if len(session.Permissions) != 1 || session.Permissions[0] != "stub:perm" {
+			t.Errorf("Permissions = %v, want those the account service built", session.Permissions)
+		}
 		if as.AddAccountCalls != 1 {
 			t.Errorf("AddAccount called %d times, want 1", as.AddAccountCalls)
 		}
@@ -628,6 +637,9 @@ func TestOA76to78ProcessOAuthLoginAdditionalPlatformDispatch(t *testing.T) {
 		}
 		if session == nil {
 			t.Fatal("expected a non-nil session")
+		}
+		if len(session.Permissions) != 1 || session.Permissions[0] != "stub:perm" {
+			t.Errorf("Permissions = %v, want those the account service built", session.Permissions)
 		}
 		if as.AddAccountCalls != 1 {
 			t.Errorf("AddAccount called %d times, want 1", as.AddAccountCalls)
@@ -1802,6 +1814,9 @@ func (m *oaConcurrentAccountService) DeleteAccount(userID string) error {
 	return nil
 }
 func (m *oaConcurrentAccountService) IsPasswordAuthEnabled(string) (bool, error) { return false, nil }
+func (m *oaConcurrentAccountService) NewSession(a *auth.Account, expiresAt int64) (*auth.Session, error) {
+	return &auth.Session{ID: "stub-session", UserID: a.UserID, Permissions: []string{"stub:perm"}, ExpiresAt: expiresAt}, nil
+}
 
 func (m *oaConcurrentAccountService) count() int {
 	m.mu.Lock()

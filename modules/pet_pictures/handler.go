@@ -118,7 +118,7 @@ func UpdatePetHandler(s PetPicService) http.HandlerFunc {
 		}
 
 		session := r.Context().Value(mw.SessionKey).(*auth.Session)
-		if !session.HasPermission(perms.ScopePetPictures(pet.Name)) {
+		if !session.HasPermissionValue(perms.ScopePetPictures, pet.Name) {
 			responses.Forbidden(w, r, msgNoPermissionToUpdatePet)
 			return
 		}
@@ -227,7 +227,7 @@ func UpdatePetPictureHandler(s PetPicService) http.HandlerFunc {
 		}
 
 		session := r.Context().Value(mw.SessionKey).(*auth.Session)
-		if !session.HasPermission(perms.ScopePetPictures(pet.Name)) {
+		if !session.HasPermissionValue(perms.ScopePetPictures, pet.Name) {
 			responses.Forbidden(w, r, msgNoPermissionToUpdatePet)
 			return
 		}
@@ -285,7 +285,7 @@ func DeletePetPictureHandler(s PetPicService) http.HandlerFunc {
 		}
 
 		session := r.Context().Value(mw.SessionKey).(*auth.Session)
-		if !session.HasPermission(perms.ScopePetPictures(pet.Name)) {
+		if !session.HasPermissionValue(perms.ScopePetPictures, pet.Name) {
 			responses.Forbidden(w, r, msgNoPermissionToUpdatePet)
 			return
 		}

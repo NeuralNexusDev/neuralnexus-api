@@ -3,10 +3,12 @@ package auth
 import (
 	"errors"
 	"fmt"
-	"log"
-
-	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 )
+
+// RoleStore - The source of the permissions that roles grant
+type RoleStore interface {
+	GetPermissionsForRoles(roleIDs []string) ([]string, error)
+}
 
 const LinkCleanupFailedFmt = "failed to link account (%w) and failed to clean up the orphaned placeholder account: %w"
 
@@ -31,11 +33,12 @@ type userService struct {
 	as  AccountStore
 	als LinkAccountStore
 	ass AccountSettingsStore
+	rs  RoleStore
 }
 
 // NewUserService - Create a new userService
-func NewUserService(store Store) UserService {
-	return &userService{store.Account(), store.LinkAccount(), store.AccountSettings()}
+func NewUserService(store Store, rs RoleStore) UserService {
+	return &userService{store.Account(), store.LinkAccount(), store.AccountSettings(), rs}
 }
 
 // GetUser - Get a user by their ID
@@ -58,16 +61,15 @@ func (s *userService) GetUserPermissions(userID string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	var permissions []string
-	for _, r := range a.Roles {
-		role, err := perms.GetRoleByName(r)
-		if err != nil {
-			log.Println(err)
-			continue
-		}
-		for _, p := range role.Permissions {
-			permissions = append(permissions, p.Name+"|"+p.Value)
-		}
+	if len(a.Roles) == 0 {
+		return []string{}, nil
+	}
+	permissions, err := s.rs.GetPermissionsForRoles(a.Roles)
+	if err != nil {
+		return nil, err
+	}
+	if permissions == nil {
+		permissions = []string{}
 	}
 	return permissions, nil
 }

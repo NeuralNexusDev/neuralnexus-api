@@ -4,7 +4,7 @@
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| AU-01 | LoginHandler | Happy Path | Login with username+password | Account exists for username, password matches, password auth enabled | 204 No Content, session cookie set | P1 |  |
+| AU-01 | LoginHandler | Happy Path | Login with username+password | Account exists for username, password matches, password auth enabled | 204 No Content, session cookie set, and the stored session carries the permissions the account service built | P1 |  |
 | AU-02 | LoginHandler | Happy Path | Login with email+password (username field empty) | Account exists for email, password matches, password auth enabled | 204 No Content, session cookie set | P1 |  |
 | AU-03 | LoginHandler | Error Path | Malformed request body | Body is not valid JSON | 400 Bad Request `msgInvalidUsernameOrPassword` | P2 |  |
 | AU-04 | LoginHandler | Error Path | Account lookup finds no account | AccountService.GetAccountByUsername/GetAccountByEmail returns `auth.ErrNotFound` | 400 Bad Request `msgInvalidUsernameOrPassword` | P2 |  |
@@ -31,7 +31,7 @@
 | AU-55 | OpenIDHandler | Error Path | Steam player summary lookup fails | check_authentication answers 200, GetPlayerSummaries answers 500 | 303 redirect to state.RedirectURI with a problem of 500 whose detail is `msgAuthenticationFailed` | P2 |  |
 | AU-56 | OpenIDHandler | Error Path | OpenID login fails while creating the session | Both Steam calls succeed; SessionService.AddSession returns testerrors.ErrDBDown | 303 redirect to state.RedirectURI with a problem of 500 whose detail is `msgAuthenticationFailed` | P2 |  |
 | AU-57 | OpenIDHandler | Error Path | OpenID login fails while signing the JWT | Both Steam calls succeed; SessionService.CreateJWT returns testerrors.ErrSigningFailed | 303 redirect to state.RedirectURI with a problem of 500 whose detail is `msgAuthenticationFailed` | P2 |  |
-| AU-58 | LoginHandler | Error Path | Account.NewSession fails | Account/password/enabled all valid; the test binary re-executes itself with SNOWFLAKE_NODE_ID above 31 so database.GenSnowflake fails | 500 Internal Server Error, `detail` is `msgAuthenticationFailed` | P2 | Re-exec because the snowflake settings are read from the environment at package init. |
+| AU-58 | LoginHandler | Error Path | the account service fails to build the session | Account/password/enabled all valid; `NewSession` returns `testerrors.ErrBoom` | 500 Internal Server Error, `detail` is `msgAuthenticationFailed`, and no session is stored | P2 |  |
 | AU-59 | LoginHandler | Error Path | Account lookup fails with a non-not-found error | AccountService.GetAccountByUsername returns `testerrors.ErrDBDown` | 500 Internal Server Error `msgAuthenticationFailed`; no session cookie | P2 |  |
 | AU-60 | oauthFailureResponse | Error Path | `linking.ErrInvalidPlatform` | err is the sentinel | 400 with `msgInvalidPlatform` | P2 |  |
 | AU-61 | oauthFailureResponse | Error Path | `linking.ErrNoScopeInToken` | err is the sentinel | 400 with `msgMissingOAuthScope` | P2 |  |
@@ -91,7 +91,7 @@
 | US-09 | GetUserPermissionsHandler | Happy Path | Admin looks up another user's permissions | session.UserID != path user_id, session has ScopeAdminUsers | 200 OK with the permissions list | P2 |  |
 | US-10 | GetUserPermissionsHandler | Error Path | No permission | session.UserID != path user_id, no ScopeAdminUsers | 403 Forbidden `msgNoPermissionToGetUserPermissions` | P2 |  |
 | US-11 | GetUserPermissionsHandler | Error Path | UserService.GetUserPermissions fails with a non-not-found error | Permission check passes, service returns `testerrors.ErrDBDown` | 500 Internal Server Error `msgFailedToGetUser` | P2 |  |
-| US-12 | UpdateUserHandler | Happy Path | Admin updates a user | session has ScopeAdminUsers, valid JSON body, service.UpdateUser succeeds | 200 OK with the user struct; response UserID equals the path user_id (overridden after decode) | P1 |  |
+| US-12 | UpdateUserHandler | Happy Path | Admin updates a user | session has ScopeAdminUsers, valid JSON body, service.UpdateUser succeeds | 200 OK with the account the service reads back; `UpdateUser` receives the path user_id (overriding the body's) | P1 |  |
 | US-13 | UpdateUserHandler | Error Path | No permission | session lacks ScopeAdminUsers | 403 Forbidden `msgNoPermissionToUpdateUsers` | P2 |  |
 | US-14 | UpdateUserHandler | Error Path | Malformed body | Admin session, body is not valid JSON | 400 Bad Request `msgInvalidRequestBody` | P2 |  |
 | US-15 | UpdateUserHandler | Error Path | UserService.UpdateUser fails with an unclassified error | Admin session, valid body, service returns `testerrors.ErrDBDown` | 500 Internal Server Error `msgFailedToUpdateUser` | P2 |  |
@@ -147,3 +147,9 @@
 | US-65 | UpdateUserFromPlatformHandler | Error Path | UserService.UpdateUserFromPlatform returns a duplicate username | Admin session, valid body, service returns `auth.ErrUsernameAlreadyExists` | 409 Conflict `msgUsernameAlreadyExists` | P2 |  |
 | US-66 | GetAccountSettingsHandler | Error Path | UserService.GetAccountSettings returns not found | Permission check passes, service returns `auth.ErrNotFound` | 404 Not Found `msgUserNotFound` | P2 |  |
 | US-67 | UpdateAccountSettingsHandler | Error Path | UserService.SetPasswordAuthEnabled returns not found | Permission check passes, valid body, service returns `auth.ErrNotFound` | 404 Not Found `msgUserNotFound` | P2 |  |
+| US-68 | UpdateUserHandler | Error Path | UserService.UpdateUser returns an invalid role id | Admin session, valid body, service returns `auth.ErrInvalidRoleID` | 400 Bad Request `msgInvalidRoleID` | P1 |  |
+| US-69 | UpdateUserHandler | Error Path | UserService.UpdateUser returns an unknown role id | Admin session, valid body, service returns `auth.ErrUnknownRoleID` | 400 Bad Request `msgUnknownRoleID` | P1 |  |
+| US-70 | UpdateUserFromPlatformHandler | Error Path | UserService.UpdateUserFromPlatform returns an invalid role id | Admin session, valid body, service returns `auth.ErrInvalidRoleID` | 400 Bad Request `msgInvalidRoleID` | P2 |  |
+| US-71 | UpdateUserFromPlatformHandler | Error Path | UserService.UpdateUserFromPlatform returns an unknown role id | Admin session, valid body, service returns `auth.ErrUnknownRoleID` | 400 Bad Request `msgUnknownRoleID` | P2 |  |
+| US-72 | UpdateUserHandler | Edge Case | the body repeats a role id | Admin session, body roles `["1","1","3"]`, the service reads back roles `["1","3"]` | 200 OK whose roles are the stored roles, without the duplicate | P1 |  |
+| US-73 | UpdateUserHandler | Error Path | reading the account back fails after the update | Admin session, `UpdateUser` succeeds, `GetUser` returns `testerrors.ErrDBDown` | 500 `msgFailedToUpdateUser` after `UpdateUser` was called | P2 |  |

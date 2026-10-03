@@ -48,7 +48,7 @@ func (m *bngMockStore) RejectBeeNameSuggestion(beeName string) (string, error) {
 }
 
 var (
-	bngAuthorizedSession   = &auth.Session{ID: "s1", UserID: "u1", Permissions: []string{"beenamegenerator|*"}}
+	bngAuthorizedSession   = &auth.Session{ID: "s1", UserID: "u1", Permissions: []string{"beenamegenerator.admin"}}
 	bngUnauthorizedSession = &auth.Session{ID: "s2", UserID: "u2", Permissions: []string{}}
 )
 

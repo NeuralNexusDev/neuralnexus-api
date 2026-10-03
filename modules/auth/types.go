@@ -3,7 +3,6 @@ package auth
 import (
 	"crypto/rand"
 	"crypto/subtle"
-	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 
 	"log"
@@ -32,7 +31,7 @@ type Account struct {
 	Email        *string   `db:"email" json:"-" xml:"-"`
 	HashedSecret []byte    `db:"hashed_secret" json:"-" xml:"-"`
 	Salt         []byte    `db:"salt" json:"-" xml:"-"`
-	Roles        []string  `db:"roles" json:"roles" xml:"roles"`
+	Roles        []string  `db:"role_ids" json:"roles" xml:"roles"`
 	UpdatedAt    time.Time `db:"updated_at" json:"updated_at" xml:"updated_at"`
 }
 
@@ -161,36 +160,6 @@ type AccountSettings struct {
 // account_settings row is ever created.
 func DefaultAccountSettings(userID string) *AccountSettings {
 	return &AccountSettings{UserID: userID, PasswordAuthEnabled: true}
-}
-
-// -------------- Session --------------
-
-// NewSession creates a new session
-func (user *Account) NewSession(expiresAt int64) (*Session, error) {
-	var permissions []string
-	for _, r := range user.Roles {
-		role, err := perms.GetRoleByName(r)
-		if err != nil {
-			log.Println(err)
-			continue
-		}
-		for _, p := range role.Permissions {
-			permissions = append(permissions, p.Name+"|"+p.Value)
-		}
-	}
-
-	id, err := database.GenSnowflake()
-	if err != nil {
-		return nil, err
-	}
-	return &Session{
-		ID:          id,
-		UserID:      user.UserID,
-		Permissions: permissions,
-		IssuedAt:    time.Now().Unix(),
-		LastUsedAt:  time.Now().Unix(),
-		ExpiresAt:   expiresAt,
-	}, nil
 }
 
 // -------------- Account Linking --------------

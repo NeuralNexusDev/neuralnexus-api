@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
-	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 )
 
 type usFakePlatformData struct {
@@ -161,7 +160,7 @@ func (f *usFakeStore) RateLimit() RateLimitStore             { panic("usFakeStor
 func (f *usFakeStore) OAuthToken() OAuthTokenStore           { panic("usFakeStore: OAuthToken not implemented") }
 
 func usNewService(as *usFakeAccountStore, als *usFakeLinkAccountStore, ass *usFakeAccountSettingsStore) UserService {
-	return NewUserService(&usFakeStore{as: as, als: als, ass: ass})
+	return NewUserService(&usFakeStore{as: as, als: als, ass: ass}, rsDefaultRoleStore())
 }
 
 func TestUS01NewUserService(t *testing.T) {
@@ -244,17 +243,14 @@ func TestUS04to06GetUserFromPlatform(t *testing.T) {
 
 func TestUS07to10GetUserPermissions(t *testing.T) {
 	t.Run("US-07_Success", func(t *testing.T) {
-		as := &usFakeAccountStore{getByIDAccount: &Account{UserID: "u1", Roles: []string{perms.RoleSystem.Name}}}
+		as := &usFakeAccountStore{getByIDAccount: &Account{UserID: "u1", Roles: []string{"1"}}}
 		svc := usNewService(as, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})
 
 		got, err := svc.GetUserPermissions("u1")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		want := make([]string, 0, len(perms.RoleSystem.Permissions))
-		for _, p := range perms.RoleSystem.Permissions {
-			want = append(want, p.Name+"|"+p.Value)
-		}
+		want := []string{"beenamegenerator.admin", "petpictures.admin", "ratelimit:1000"}
 		if len(got) != len(want) {
 			t.Fatalf("GetUserPermissions() = %v, want %v", got, want)
 		}
@@ -275,26 +271,51 @@ func TestUS07to10GetUserPermissions(t *testing.T) {
 		}
 	})
 
-	t.Run("US-09_SkipsUnknownRole", func(t *testing.T) {
-		as := &usFakeAccountStore{getByIDAccount: &Account{UserID: "u1", Roles: []string{"not-a-role", perms.RoleOwner.Name}}}
-		svc := usNewService(as, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})
+	t.Run("US-09_ResolvesAllRolesTogether", func(t *testing.T) {
+		as := &usFakeAccountStore{getByIDAccount: &Account{UserID: "u1", Roles: []string{"1", "2"}}}
+		rs := rsDefaultRoleStore()
+		svc := NewUserService(&usFakeStore{as: as, als: &usFakeLinkAccountStore{}, ass: &usFakeAccountSettingsStore{}}, rs)
 
 		got, err := svc.GetUserPermissions("u1")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(got) != len(perms.RoleOwner.Permissions) {
-			t.Errorf("GetUserPermissions() = %v, want just RoleOwner's %d permissions (unknown role skipped)", got, len(perms.RoleOwner.Permissions))
+		if len(got) != 5 || len(rs.calls) != 1 || len(rs.calls[0]) != 2 {
+			t.Errorf("GetUserPermissions() = %v with calls %v, want both roles' permissions from a single call", got, rs.calls)
+		}
+	})
+
+	t.Run("US-41_RoleStoreFailureFailsTheLookup", func(t *testing.T) {
+		wantErr := testerrors.ErrBoom
+		as := &usFakeAccountStore{getByIDAccount: &Account{UserID: "u1", Roles: []string{"1"}}}
+		svc := NewUserService(&usFakeStore{as: as, als: &usFakeLinkAccountStore{}, ass: &usFakeAccountSettingsStore{}}, &rsFakeRoleStore{err: wantErr})
+
+		got, err := svc.GetUserPermissions("u1")
+
+		if got != nil || !errors.Is(err, wantErr) {
+			t.Errorf("GetUserPermissions() = (%v, %v), want (nil, %v)", got, err, wantErr)
 		}
 	})
 
 	t.Run("US-10_NoRoles", func(t *testing.T) {
 		as := &usFakeAccountStore{getByIDAccount: &Account{UserID: "u1"}}
-		svc := usNewService(as, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})
+		rs := rsDefaultRoleStore()
+		svc := NewUserService(&usFakeStore{as: as, als: &usFakeLinkAccountStore{}, ass: &usFakeAccountSettingsStore{}}, rs)
 
 		got, err := svc.GetUserPermissions("u1")
-		if err != nil || len(got) != 0 {
-			t.Errorf("GetUserPermissions() = (%v, %v), want (empty, nil)", got, err)
+		if err != nil || got == nil || len(got) != 0 || len(rs.calls) != 0 {
+			t.Errorf("GetUserPermissions() = (%#v, %v) with calls %v, want (empty non-nil, nil) and no role lookup", got, err, rs.calls)
+		}
+	})
+
+	t.Run("US-42_RolesWithoutPermissionsGiveEmptyNonNil", func(t *testing.T) {
+		as := &usFakeAccountStore{getByIDAccount: &Account{UserID: "u1", Roles: []string{"99"}}}
+		svc := NewUserService(&usFakeStore{as: as, als: &usFakeLinkAccountStore{}, ass: &usFakeAccountSettingsStore{}}, rsDefaultRoleStore())
+
+		got, err := svc.GetUserPermissions("u1")
+
+		if err != nil || got == nil || len(got) != 0 {
+			t.Errorf("GetUserPermissions() = (%#v, %v), want (empty non-nil, nil)", got, err)
 		}
 	})
 }
@@ -671,7 +692,7 @@ func TestUS25UpdateUserFromPlatformConcurrentRace(t *testing.T) {
 		const n = 8
 		for trial := 0; trial < trials; trial++ {
 			cs := newUSConcurrentStore(n)
-			svc := NewUserService(&usConcurrentWrapperStore{cs: cs})
+			svc := NewUserService(&usConcurrentWrapperStore{cs: cs}, rsDefaultRoleStore())
 
 			var wg sync.WaitGroup
 			results := make([]*Account, n)
