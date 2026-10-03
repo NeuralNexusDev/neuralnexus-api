@@ -2951,7 +2951,7 @@
             },
             "patch": {
                 "summary": "Update a role",
-                "description": "Requires the roles.admin permission. Omitted fields keep their value. Renaming changes what the name lookup returns; accounts hold role IDs and are unaffected. Refused with 409 when renaming a built-in role (system, owner).",
+                "description": "Requires the roles.admin permission. Omitted fields keep their value. Renaming changes what the name lookup returns; accounts hold role IDs and are unaffected. Refused with 409 when renaming a built-in role.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -3013,7 +3013,7 @@
             },
             "delete": {
                 "summary": "Delete a role",
-                "description": "Requires the roles.admin permission. Refused with 409 while an account holds the role. Its permission grants are removed with it; the permissions remain. Built-in roles (system, owner) cannot be deleted.",
+                "description": "Requires the roles.admin permission. Refused with 409 while an account holds the role. Its permission grants are removed with it; the permissions remain. Built-in roles cannot be deleted.",
                 "security": [
                     {
                         "bearerAuth": []
@@ -3148,7 +3148,7 @@
             },
             "delete": {
                 "summary": "Remove a permission from a role",
-                "description": "Requires the roles.admin permission. Removing a permission the role does not hold succeeds. Refused with 409 for the roles.admin permission on the system and owner roles.",
+                "description": "Requires the roles.admin permission. Removing a permission the role does not hold succeeds. Refused with 409 when it would remove roles.admin from a built-in role that must keep it.",
                 "security": [
                     {
                         "bearerAuth": []
