@@ -201,4 +201,3 @@ func (s *service) ReplayEventById(id string) error {
 	}
 	return s.CreateEvent(replay)
 }
-
