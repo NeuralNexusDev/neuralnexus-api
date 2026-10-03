@@ -1030,7 +1030,7 @@ func newListUsersRequest(session *auth.Session, query string) *http.Request {
 	return httptest.NewRequest(http.MethodGet, "/api/v1/users"+query, nil).WithContext(ctx)
 }
 
-func TestUS74to80ListUsersHandler(t *testing.T) {
+func TestUS74to82ListUsersHandler(t *testing.T) {
 	t.Run("US-74_ListsUsersWithTheDefaultPage", func(t *testing.T) {
 		svc := &stubUserService{listed: []*auth.Account{{UserID: "u1", Username: "one", Roles: []string{"7"}}, {UserID: "u2", Username: "two", Roles: []string{}}}}
 		w := httptest.NewRecorder()
@@ -1130,5 +1130,27 @@ func TestUS74to80ListUsersHandler(t *testing.T) {
 
 		expectStatus(t, w, http.StatusInternalServerError)
 		expectDetail(t, w, msgFailedToListUsers)
+	})
+
+	t.Run("US-81_RefusesWithoutUsersAdminBeforeCheckingTheQuery", func(t *testing.T) {
+		svc := &stubUserService{}
+		w := httptest.NewRecorder()
+
+		ListUsersHandler(svc)(w, newListUsersRequest(selfSession("u1"), "?limit=0&offset=-1"))
+
+		expectStatus(t, w, http.StatusForbidden)
+		expectDetail(t, w, msgNoPermissionToGetUsers)
+	})
+
+	t.Run("US-82_AcceptsTheSmallestLimit", func(t *testing.T) {
+		svc := &stubUserService{}
+		w := httptest.NewRecorder()
+
+		ListUsersHandler(svc)(w, newListUsersRequest(adminUsersSession("admin1"), "?limit=1"))
+
+		expectStatus(t, w, http.StatusOK)
+		if svc.listCalls != 1 || svc.listLimit != 1 {
+			t.Errorf("ListUsers called %d times with limit %d, want once with limit 1", svc.listCalls, svc.listLimit)
+		}
 	})
 }

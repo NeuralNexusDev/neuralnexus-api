@@ -160,3 +160,5 @@
 | US-78 | ListUsersHandler | Error Path | invalid offset | Admin session, offset of -1, `abc`, `1.5` or a space | 400 Bad Request `msgInvalidOffset` and the service is not called | P2 |  |
 | US-79 | ListUsersHandler | Edge Case | the page is empty | Admin session, service returns no accounts | 200 OK with body `[]` | P2 |  |
 | US-80 | ListUsersHandler | Error Path | the service fails | Admin session, service returns `testerrors.ErrDBDown` | 500 Internal Server Error `msgFailedToListUsers` | P2 |  |
+| US-81 | ListUsersHandler | Error Path | no permission and an invalid query | Session without ScopeAdminUsers, `?limit=0&offset=-1` | 403 Forbidden `msgNoPermissionToGetUsers`, not 400 | P2 |  |
+| US-82 | ListUsersHandler | Edge Case | the smallest limit | Admin session, `?limit=1` | 200 OK and the service got limit 1 | P2 |  |

@@ -1496,6 +1496,9 @@ func TestST96to98ListAccounts(t *testing.T) {
 	stSeedBareAccount(t, as, shortID)
 	stSeedBareAccount(t, as, "910000000000000602")
 	stSeedBareAccount(t, as, "910000000000000601")
+	if err := as.AddAccountToDB(&Account{UserID: "910000000000000603"}); err != nil {
+		t.Fatalf("failed to seed the account without a username: %v", err)
+	}
 
 	indexOf := func(accounts []*Account, userID string) int {
 		for i, a := range accounts {
@@ -1520,6 +1523,13 @@ func TestST96to98ListAccounts(t *testing.T) {
 				t.Fatalf("account %s has nil Roles, want an empty list", a.UserID)
 			}
 		}
+		noName := indexOf(all, "910000000000000603")
+		if noName < 0 {
+			t.Fatalf("the account stored without a username is not listed")
+		}
+		if all[noName].Username != "" {
+			t.Errorf("Username = %q, want empty", all[noName].Username)
+		}
 	})
 
 	t.Run("ST-97_LimitAndOffsetSelectAPage", func(t *testing.T) {
@@ -1538,6 +1548,10 @@ func TestST96to98ListAccounts(t *testing.T) {
 		one, err := as.ListAccounts(1, first+1)
 		if err != nil || len(one) != 1 || one[0].UserID != "910000000000000602" {
 			t.Errorf("ListAccounts(1, %d) = (%v, %v), want account ...602", first+1, one, err)
+		}
+		only, err := as.ListAccounts(1, first)
+		if err != nil || len(only) != 1 || only[0].UserID != "910000000000000601" {
+			t.Errorf("ListAccounts(1, %d) = (%v, %v), want only account ...601", first, only, err)
 		}
 	})
 
