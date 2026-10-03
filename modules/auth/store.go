@@ -128,15 +128,8 @@ func translateAccountConstraintErr(err error) error {
 
 // AddAccountToDB creates an account in the database
 func (s *store) AddAccountToDB(account *Account) error {
-	if !validRoleIDs(account.Roles) {
-		return ErrInvalidRoleID
-	}
-	roles := uniqueRoleIDs(account.Roles)
-	err := s.writeWithRoles(roles,
-		"INSERT INTO accounts (user_id, username, email, hashed_secret, salt, role_ids) VALUES ($1, NULLIF($2, ''), $3, $4, $5, COALESCE($6::text[], '{}')::bigint[])",
-		account.UserID, account.Username, account.Email, account.HashedSecret, account.Salt, roles,
-	)
-	return translateAccountConstraintErr(err)
+	return translateAccountConstraintErr(s.writeAccount(account,
+		"INSERT INTO accounts (user_id, username, email, hashed_secret, salt, role_ids) VALUES ($1, NULLIF($2, ''), $3, $4, $5, COALESCE($6::text[], '{}')::bigint[])"))
 }
 
 // GetAccountByID gets an account by ID
@@ -192,15 +185,8 @@ func (s *store) GetAccountByEmail(email string) (*Account, error) {
 
 // UpdateAccountInDB updates an account in the database
 func (s *store) UpdateAccountInDB(account *Account) error {
-	if !validRoleIDs(account.Roles) {
-		return ErrInvalidRoleID
-	}
-	roles := uniqueRoleIDs(account.Roles)
-	err := s.writeWithRoles(roles,
-		"UPDATE accounts SET username = NULLIF($2, ''), email = $3, hashed_secret = $4, salt = $5, role_ids = COALESCE($6::text[], '{}')::bigint[] WHERE user_id = $1",
-		account.UserID, account.Username, account.Email, account.HashedSecret, account.Salt, roles,
-	)
-	return translateAccountConstraintErr(err)
+	return translateAccountConstraintErr(s.writeAccount(account,
+		"UPDATE accounts SET username = NULLIF($2, ''), email = $3, hashed_secret = $4, salt = $5, role_ids = COALESCE($6::text[], '{}')::bigint[] WHERE user_id = $1"))
 }
 
 // DeleteAccountFromDB deletes an account from the database
@@ -807,18 +793,21 @@ func (s *store) DeleteOAuthToken(userID string, platform Platform) error {
 	return nil
 }
 
-func validRoleIDs(ids []string) bool {
-	for _, id := range ids {
+// writeAccount share-locks the account's roles so rbac.DeleteRole, which takes FOR UPDATE
+// and then checks accounts.role_ids, cannot remove one before the write commits.
+func (s *store) writeAccount(account *Account, query string) error {
+	roleIDs := make([]string, 0, len(account.Roles))
+	seen := make(map[string]struct{}, len(account.Roles))
+	for _, id := range account.Roles {
 		if n, err := strconv.ParseInt(id, 10, 64); err != nil || n < 1 || strconv.FormatInt(n, 10) != id {
-			return false
+			return ErrInvalidRoleID
+		}
+		if _, dup := seen[id]; !dup {
+			seen[id] = struct{}{}
+			roleIDs = append(roleIDs, id)
 		}
 	}
-	return true
-}
 
-// writeWithRoles share-locks the roles so rbac.DeleteRole, which takes FOR UPDATE
-// and then checks accounts.role_ids, cannot remove one before the write commits.
-func (s *store) writeWithRoles(roleIDs []string, query string, args ...any) error {
 	ctx := context.Background()
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
@@ -835,20 +824,8 @@ func (s *store) writeWithRoles(roleIDs []string, query string, args ...any) erro
 			return ErrUnknownRoleID
 		}
 	}
-	if _, err := tx.Exec(ctx, query, args...); err != nil {
+	if _, err := tx.Exec(ctx, query, account.UserID, account.Username, account.Email, account.HashedSecret, account.Salt, roleIDs); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
-}
-
-func uniqueRoleIDs(ids []string) []string {
-	seen := make(map[string]struct{}, len(ids))
-	unique := make([]string, 0, len(ids))
-	for _, id := range ids {
-		if _, dup := seen[id]; !dup {
-			seen[id] = struct{}{}
-			unique = append(unique, id)
-		}
-	}
-	return unique
 }
