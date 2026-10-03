@@ -19,11 +19,11 @@ const (
 )
 
 var (
-	// ErrNotFound is returned when a store lookup finds nothing.
+	// ErrNotFound when a store lookup finds nothing.
 	ErrNotFound = errors.New("not found")
-	// ErrInvalidRoleID is returned when an account is written with a role ID that is not a canonical positive integer.
+	// ErrInvalidRoleID when an account role ID is not a canonical positive integer.
 	ErrInvalidRoleID = errors.New("invalid role id")
-	// ErrUnknownRoleID is returned when an account is written with a role ID that has no role.
+	// ErrUnknownRoleID when an account role ID has no role.
 	ErrUnknownRoleID = errors.New("unknown role id")
 )
 

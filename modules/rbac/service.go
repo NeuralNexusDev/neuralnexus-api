@@ -23,19 +23,19 @@ const (
 )
 
 var (
-	// ErrInvalidID is returned when an ID is not a canonical positive integer.
+	// ErrInvalidID when an ID is not a canonical positive integer.
 	ErrInvalidID = errors.New("invalid id")
-	// ErrInvalidRoleName is returned when a role name breaks the naming rules.
+	// ErrInvalidRoleName when a role name breaks the naming rules.
 	ErrInvalidRoleName = errors.New("invalid role name")
-	// ErrInvalidDescription is returned when a role description is too long or not valid text.
+	// ErrInvalidDescription when a description is too long or not valid text.
 	ErrInvalidDescription = errors.New("invalid description")
-	// ErrBuiltinRole is returned when deleting or renaming a built-in role, or removing roles.admin from system or owner.
+	// ErrBuiltinRole when a built-in role is deleted or renamed, or roles.admin is removed from system or owner.
 	ErrBuiltinRole = errors.New("built-in role is protected")
-	// ErrInvalidNode is returned when a permission node breaks the node rules.
+	// ErrInvalidNode when a permission node breaks the node rules.
 	ErrInvalidNode = errors.New("invalid node")
-	// ErrInvalidValueType is returned when a permission's value type and merge rule do not form a valid pair.
+	// ErrInvalidValueType when a value type and merge rule do not pair.
 	ErrInvalidValueType = errors.New("invalid value type")
-	// ErrInvalidValue is returned when a granted value does not match its permission's type, or a permission without a type is given one.
+	// ErrInvalidValue when a granted value does not match its permission's type.
 	ErrInvalidValue = errors.New("invalid value")
 )
 

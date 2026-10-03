@@ -12,17 +12,17 @@ import (
 )
 
 var (
-	// ErrRoleNotFound is returned when no role matches.
+	// ErrRoleNotFound when a lookup matches no role.
 	ErrRoleNotFound = errors.New("role not found")
-	// ErrPermissionNotFound is returned when no permission matches.
+	// ErrPermissionNotFound when a lookup matches no permission.
 	ErrPermissionNotFound = errors.New("permission not found")
-	// ErrRoleNameTaken is returned when a role name already belongs to another role.
+	// ErrRoleNameTaken when a role name already belongs to another role.
 	ErrRoleNameTaken = errors.New("role name already exists")
-	// ErrPermissionExists is returned when a permission with the same node already exists.
+	// ErrPermissionExists when a permission's node already exists.
 	ErrPermissionExists = errors.New("permission already exists")
-	// ErrRoleInUse is returned when deleting a role an account holds.
+	// ErrRoleInUse when a deleted role is held by an account.
 	ErrRoleInUse = errors.New("role is assigned to an account")
-	// ErrPermissionInUse is returned when deleting a permission a role grants.
+	// ErrPermissionInUse when a deleted permission is granted by a role.
 	ErrPermissionInUse = errors.New("permission is granted by a role")
 )
 
