@@ -1,5 +1,11 @@
 package auth
 
+import (
+	"time"
+
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
+)
+
 // AccountService - The userService interface
 type AccountService interface {
 	AddAccount(account *Account) error
@@ -65,12 +71,27 @@ func (s *accountService) IsPasswordAuthEnabled(userID string) (bool, error) {
 
 // NewSession - Create a session for an account with the permissions of its roles
 func (s *accountService) NewSession(account *Account, expiresAt int64) (*Session, error) {
-	var permissions []string
+	permissions := []string{}
 	if len(account.Roles) > 0 {
 		var err error
 		if permissions, err = s.rs.GetPermissionsForRoles(account.Roles); err != nil {
 			return nil, err
 		}
+		if permissions == nil {
+			permissions = []string{}
+		}
 	}
-	return account.NewSession(expiresAt, permissions)
+	id, err := database.GenSnowflake()
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now().Unix()
+	return &Session{
+		ID:          id,
+		UserID:      account.UserID,
+		Permissions: permissions,
+		IssuedAt:    now,
+		LastUsedAt:  now,
+		ExpiresAt:   expiresAt,
+	}, nil
 }

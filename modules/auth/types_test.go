@@ -237,42 +237,6 @@ func TestTY22DefaultAccountSettings(t *testing.T) {
 	})
 }
 
-func TestTY23to24AccountNewSession(t *testing.T) {
-	t.Run("TY-23_UsesGivenPermissions", func(t *testing.T) {
-		a := &Account{UserID: "u1", Roles: []string{"ignored-role"}}
-		want := []string{"users.admin", "ratelimit:1000"}
-		s, err := a.NewSession(12345, want)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if s.UserID != "u1" {
-			t.Errorf("UserID = %q, want %q", s.UserID, "u1")
-		}
-		if s.ExpiresAt != 12345 {
-			t.Errorf("ExpiresAt = %d, want 12345", s.ExpiresAt)
-		}
-		if len(s.Permissions) != len(want) {
-			t.Fatalf("Permissions = %v, want %v", s.Permissions, want)
-		}
-		for i := range want {
-			if s.Permissions[i] != want[i] {
-				t.Errorf("Permissions[%d] = %q, want %q", i, s.Permissions[i], want[i])
-			}
-		}
-	})
-
-	t.Run("TY-24_NoPermissions", func(t *testing.T) {
-		a := &Account{UserID: "u1"}
-		s, err := a.NewSession(1, nil)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if s.Permissions == nil || len(s.Permissions) != 0 {
-			t.Errorf("Permissions = %#v, want empty and non-nil so it is stored as an empty array", s.Permissions)
-		}
-	})
-}
-
 func TestTY26NewLinkedAccount(t *testing.T) {
 	t.Run("TY-26_BuildsVerifiedLoginEnabledLink", func(t *testing.T) {
 		data := tyFakePlatformData{id: "p1", username: "alice"}

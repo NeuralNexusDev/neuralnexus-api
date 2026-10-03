@@ -9,8 +9,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
-	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -29,6 +27,7 @@ type stubAccountService struct {
 	lookupErr            error
 	passwordAuthDisabled bool
 	passwordAuthErr      error
+	newSessionErr        error
 }
 
 var _ auth.AccountService = (*stubAccountService)(nil)
@@ -64,7 +63,10 @@ func (s *stubAccountService) IsPasswordAuthEnabled(string) (bool, error) {
 const stubSessionPermission = "stub:perm"
 
 func (s *stubAccountService) NewSession(a *auth.Account, expiresAt int64) (*auth.Session, error) {
-	return a.NewSession(expiresAt, []string{stubSessionPermission})
+	if s.newSessionErr != nil {
+		return nil, s.newSessionErr
+	}
+	return &auth.Session{ID: "stub-session", UserID: a.UserID, Permissions: []string{stubSessionPermission}, ExpiresAt: expiresAt}, nil
 }
 
 type stubLinkAccountStore struct {
@@ -745,23 +747,12 @@ func TestAU52to57OAuthAndOpenIDFailuresHideCause(t *testing.T) {
 	})
 }
 
-const snowflakeBrokenEnv = "AU58_BROKEN_SNOWFLAKE"
-
 func TestAU58LoginHandlerNewSessionFails(t *testing.T) {
-	if os.Getenv(snowflakeBrokenEnv) != "1" {
-		cmd := exec.Command(os.Args[0], "-test.run=^TestAU58LoginHandlerNewSessionFails$", "-test.v")
-		cmd.Env = append(os.Environ(), snowflakeBrokenEnv+"=1", "SNOWFLAKE_NODE_ID=99")
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("child test run failed: %v\n%s", err, out)
-		}
-		return
-	}
-
 	account := &auth.Account{UserID: "u1", Username: "testuser"}
 	if err := account.HashPassword("correct-password"); err != nil {
 		t.Fatalf("failed to hash password: %v", err)
 	}
-	as := &stubAccountService{account: account}
+	as := &stubAccountService{account: account, newSessionErr: testerrors.ErrBoom}
 	ss := &stubSessionService{createJWT: func(*auth.Session) (string, error) { return "test-jwt", nil }}
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
 	w := httptest.NewRecorder()
@@ -773,6 +764,9 @@ func TestAU58LoginHandlerNewSessionFails(t *testing.T) {
 			t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
 		}
 		requireProblemDetail(t, w, msgAuthenticationFailed)
+		if len(ss.added) != 0 {
+			t.Errorf("stored sessions = %v, want none", ss.added)
+		}
 	})
 }
 

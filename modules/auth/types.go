@@ -162,27 +162,6 @@ func DefaultAccountSettings(userID string) *AccountSettings {
 	return &AccountSettings{UserID: userID, PasswordAuthEnabled: true}
 }
 
-// -------------- Session --------------
-
-// NewSession creates a new session
-func (user *Account) NewSession(expiresAt int64, permissions []string) (*Session, error) {
-	id, err := database.GenSnowflake()
-	if err != nil {
-		return nil, err
-	}
-	if permissions == nil {
-		permissions = []string{}
-	}
-	return &Session{
-		ID:          id,
-		UserID:      user.UserID,
-		Permissions: permissions,
-		IssuedAt:    time.Now().Unix(),
-		LastUsedAt:  time.Now().Unix(),
-		ExpiresAt:   expiresAt,
-	}, nil
-}
-
 // -------------- Account Linking --------------
 
 // -------------- Structs --------------

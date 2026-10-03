@@ -2,7 +2,11 @@ package auth
 
 import (
 	"errors"
+	"os"
+	"os/exec"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 )
@@ -275,6 +279,29 @@ func TestAC14to16IsPasswordAuthEnabled(t *testing.T) {
 	})
 }
 
+const acBrokenSnowflakeEnv = "AC22_BROKEN_SNOWFLAKE"
+
+func TestAC22NewSessionSnowflakeFails(t *testing.T) {
+	if os.Getenv(acBrokenSnowflakeEnv) != "1" {
+		cmd := exec.Command(os.Args[0], "-test.run=^TestAC22NewSessionSnowflakeFails$", "-test.v")
+		cmd.Env = append(os.Environ(), acBrokenSnowflakeEnv+"=1", "SNOWFLAKE_NODE_ID=99")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("child test run failed: %v\n%s", err, out)
+		}
+		return
+	}
+
+	t.Run("AC-22_SnowflakeFailureFailsTheSession", func(t *testing.T) {
+		svc := NewAccountService(&acFakeStore{as: &acFakeAccountStore{}, ass: &acFakeAccountSettingsStore{}}, rsDefaultRoleStore())
+
+		s, err := svc.NewSession(&Account{UserID: "u1"}, 1)
+
+		if s != nil || err == nil {
+			t.Errorf("NewSession() = (%v, %v), want (nil, an error)", s, err)
+		}
+	})
+}
+
 func TestAC17to21NewSession(t *testing.T) {
 	newService := func(rs RoleStore) AccountService {
 		return NewAccountService(&acFakeStore{as: &acFakeAccountStore{}, ass: &acFakeAccountSettingsStore{}}, rs)
@@ -291,6 +318,12 @@ func TestAC17to21NewSession(t *testing.T) {
 		}
 		if s.UserID != "u1" || s.ExpiresAt != 12345 {
 			t.Errorf("session = %+v, want UserID u1 and ExpiresAt 12345", s)
+		}
+		if _, err := strconv.ParseInt(s.ID, 10, 64); err != nil {
+			t.Errorf("session ID %q is not a snowflake: %v", s.ID, err)
+		}
+		if now := time.Now().Unix(); s.IssuedAt < now-5 || s.IssuedAt > now+5 || s.LastUsedAt != s.IssuedAt {
+			t.Errorf("IssuedAt = %d and LastUsedAt = %d, want both set to now (%d)", s.IssuedAt, s.LastUsedAt, now)
 		}
 		want := []string{"beenamegenerator.admin", "petpictures.admin", "ratelimit:1000"}
 		if len(s.Permissions) != len(want) {

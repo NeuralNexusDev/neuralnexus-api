@@ -79,7 +79,7 @@ func (m *oaMockAccountService) DeleteAccount(userID string) error {
 }
 func (m *oaMockAccountService) IsPasswordAuthEnabled(string) (bool, error) { return false, nil }
 func (m *oaMockAccountService) NewSession(a *auth.Account, expiresAt int64) (*auth.Session, error) {
-	return a.NewSession(expiresAt, []string{"stub:perm"})
+	return &auth.Session{ID: "stub-session", UserID: a.UserID, Permissions: []string{"stub:perm"}, ExpiresAt: expiresAt}, nil
 }
 
 type oaMockLinkAccountStore struct {
@@ -1815,7 +1815,7 @@ func (m *oaConcurrentAccountService) DeleteAccount(userID string) error {
 }
 func (m *oaConcurrentAccountService) IsPasswordAuthEnabled(string) (bool, error) { return false, nil }
 func (m *oaConcurrentAccountService) NewSession(a *auth.Account, expiresAt int64) (*auth.Session, error) {
-	return a.NewSession(expiresAt, []string{"stub:perm"})
+	return &auth.Session{ID: "stub-session", UserID: a.UserID, Permissions: []string{"stub:perm"}, ExpiresAt: expiresAt}, nil
 }
 
 func (m *oaConcurrentAccountService) count() int {
