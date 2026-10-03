@@ -17,11 +17,11 @@ const (
 
 // Permission is a node roles can grant, with a value type when roles grant it with a value
 type Permission struct {
-	ID          string `json:"id" xml:"id"`
-	Node        string `json:"node" xml:"node"`
-	Description string `json:"description" xml:"description"`
-	ValueType   string `json:"value_type,omitempty" xml:"value_type,omitempty"`
-	Merge       string `json:"merge,omitempty" xml:"merge,omitempty"`
+	ID          string `db:"id" json:"id" xml:"id"`
+	Node        string `db:"node" json:"node" xml:"node"`
+	Description string `db:"description" json:"description" xml:"description"`
+	ValueType   string `db:"value_type" json:"value_type,omitempty" xml:"value_type,omitempty"`
+	Merge       string `db:"merge" json:"merge,omitempty" xml:"merge,omitempty"`
 }
 
 // RolePermission is a permission as a role grants it, with the granted value if the permission takes one

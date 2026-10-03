@@ -53,19 +53,19 @@ func NewStore(db *pgxpool.Pool) Store {
 	return &store{db: db}
 }
 
-const roleSelect = "SELECT r.id::text, r.name, r.description, p.id::text, p.node, p.description, p.value_type, p.merge, rp.value FROM roles r LEFT JOIN role_permissions rp ON rp.role_id = r.id LEFT JOIN permissions p ON p.id = rp.permission_id"
+const roleSelect = "SELECT r.id::text AS id, r.name, r.description, p.id::text AS permission_id, p.node, p.description AS permission_description, p.value_type, p.merge, rp.value FROM roles r LEFT JOIN role_permissions rp ON rp.role_id = r.id LEFT JOIN permissions p ON p.id = rp.permission_id"
 
 // roleRow is one row of roleSelect: a role with one of its permissions, or with NULL permission columns if it has none
 type roleRow struct {
-	ID                    string
-	Name                  string
-	Description           string
-	PermissionID          *string
-	Node                  *string
-	PermissionDescription *string
-	ValueType             *string
-	Merge                 *string
-	Value                 []byte
+	ID                    string  `db:"id"`
+	Name                  string  `db:"name"`
+	Description           string  `db:"description"`
+	PermissionID          *string `db:"permission_id"`
+	Node                  *string `db:"node"`
+	PermissionDescription *string `db:"permission_description"`
+	ValueType             *string `db:"value_type"`
+	Merge                 *string `db:"merge"`
+	Value                 []byte  `db:"value"`
 }
 
 func (s *store) queryRoles(where string, args ...any) ([]*Role, error) {
@@ -73,7 +73,7 @@ func (s *store) queryRoles(where string, args ...any) ([]*Role, error) {
 	if err != nil {
 		return nil, err
 	}
-	joined, err := pgx.CollectRows(rows, pgx.RowToStructByPos[roleRow])
+	joined, err := pgx.CollectRows(rows, pgx.RowToStructByName[roleRow])
 	if err != nil {
 		return nil, err
 	}
@@ -194,11 +194,11 @@ func (s *store) CreatePermission(id string, node, description, valueType, merge 
 }
 
 func (s *store) queryPermissions(where string, args ...any) ([]*Permission, error) {
-	rows, err := s.db.Query(context.Background(), "SELECT id::text, node, description, COALESCE(value_type, ''), COALESCE(merge, '') FROM permissions"+where+" ORDER BY id", args...)
+	rows, err := s.db.Query(context.Background(), "SELECT id::text AS id, node, description, COALESCE(value_type, '') AS value_type, COALESCE(merge, '') AS merge FROM permissions"+where+" ORDER BY id", args...)
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, pgx.RowToAddrOfStructByPos[Permission])
+	return pgx.CollectRows(rows, pgx.RowToAddrOfStructByName[Permission])
 }
 
 func (s *store) GetPermission(id string) (*Permission, error) {
