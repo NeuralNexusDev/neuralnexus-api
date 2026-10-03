@@ -126,94 +126,13 @@ func validNode(node string) bool {
 
 func validValueText(s string) bool {
 	n := utf8.RuneCountInString(s)
-	return n > 0 && n <= maxScopeValueLength && validText(s) && strings.TrimSpace(s) == s &&
-		!strings.ContainsFunc(s, func(r rune) bool { return unicode.IsControl(r) || unicode.Is(unicode.Cf, r) })
-}
-
-func normalizeTypes(valueType, merge string) (string, bool) {
-	switch valueType {
-	case "":
-		return "", merge == ""
-	case ValueTypeInt:
-		return merge, merge == MergeMax || merge == MergeMin
-	case ValueTypeString:
-		if merge == "" {
-			return MergeFirst, true
-		}
-		return merge, merge == MergeFirst
-	case ValueTypeStringList:
-		if merge == "" {
-			return MergeUnion, true
-		}
-		return merge, merge == MergeUnion
+	if n == 0 || n > maxScopeValueLength {
+		return false
 	}
-	return "", false
-}
-
-func encodeValue(permission *Permission, value any) ([]byte, error) {
-	if permission.ValueType == "" {
-		if value != nil {
-			return nil, ErrInvalidValue
-		}
-		return nil, nil
+	if !validText(s) || strings.TrimSpace(s) != s {
+		return false
 	}
-	switch permission.ValueType {
-	case ValueTypeInt:
-		n, ok := toInt(value)
-		if !ok {
-			return nil, ErrInvalidValue
-		}
-		return json.Marshal(n)
-	case ValueTypeString:
-		text, ok := value.(string)
-		if !ok || !validValueText(text) {
-			return nil, ErrInvalidValue
-		}
-		return json.Marshal(text)
-	case ValueTypeStringList:
-		var items []string
-		switch list := value.(type) {
-		case []string:
-			items = list
-		case []any:
-			for _, item := range list {
-				text, ok := item.(string)
-				if !ok {
-					return nil, ErrInvalidValue
-				}
-				items = append(items, text)
-			}
-		default:
-			return nil, ErrInvalidValue
-		}
-		if len(items) == 0 || len(items) > maxListValues {
-			return nil, ErrInvalidValue
-		}
-		for _, item := range items {
-			if !validValueText(item) {
-				return nil, ErrInvalidValue
-			}
-		}
-		items = slices.Compact(slices.Sorted(slices.Values(items)))
-		return json.Marshal(items)
-	}
-	return nil, ErrInvalidValue
-}
-
-func toInt(value any) (int64, bool) {
-	const maxSafe = 1 << 53
-	switch n := value.(type) {
-	case int:
-		return int64(n), n >= -maxSafe && n <= maxSafe
-	case int64:
-		return n, n >= -maxSafe && n <= maxSafe
-	case float64:
-		return int64(n), n == math.Trunc(n) && n >= -maxSafe && n <= maxSafe
-	case json.Number:
-		parsed, err := n.Int64()
-		return parsed, err == nil && parsed >= -maxSafe && parsed <= maxSafe
-	}
-	return 0, false
+	return !strings.ContainsFunc(s, func(r rune) bool { return unicode.IsControl(r) || unicode.Is(unicode.Cf, r) })
 }
 
 func (s *service) CreateRole(name, description string) (*Role, error) {
@@ -298,8 +217,30 @@ func (s *service) CreatePermission(node, description, valueType, merge string) (
 	if !validDescription(description) {
 		return nil, ErrInvalidDescription
 	}
-	merge, ok := normalizeTypes(valueType, merge)
-	if !ok {
+	switch valueType {
+	case "":
+		if merge != "" {
+			return nil, ErrInvalidValueType
+		}
+	case ValueTypeInt:
+		if merge != MergeMax && merge != MergeMin {
+			return nil, ErrInvalidValueType
+		}
+	case ValueTypeString:
+		if merge == "" {
+			merge = MergeFirst
+		}
+		if merge != MergeFirst {
+			return nil, ErrInvalidValueType
+		}
+	case ValueTypeStringList:
+		if merge == "" {
+			merge = MergeUnion
+		}
+		if merge != MergeUnion {
+			return nil, ErrInvalidValueType
+		}
+	default:
 		return nil, ErrInvalidValueType
 	}
 	id, err := newID()
@@ -349,9 +290,83 @@ func (s *service) AttachPermission(roleID, permissionID string, value any) error
 	if err != nil {
 		return err
 	}
-	encoded, err := encodeValue(permission, value)
-	if err != nil {
-		return err
+	var encoded []byte
+	switch permission.ValueType {
+	case "":
+		if value != nil {
+			return ErrInvalidValue
+		}
+	case ValueTypeInt:
+		const maxSafe = 1 << 53
+		var n int64
+		switch v := value.(type) {
+		case int:
+			if v < -maxSafe || v > maxSafe {
+				return ErrInvalidValue
+			}
+			n = int64(v)
+		case int64:
+			if v < -maxSafe || v > maxSafe {
+				return ErrInvalidValue
+			}
+			n = v
+		case float64:
+			if v != math.Trunc(v) || v < -maxSafe || v > maxSafe {
+				return ErrInvalidValue
+			}
+			n = int64(v)
+		case json.Number:
+			parsed, err := v.Int64()
+			if err != nil || parsed < -maxSafe || parsed > maxSafe {
+				return ErrInvalidValue
+			}
+			n = parsed
+		default:
+			return ErrInvalidValue
+		}
+		encoded, err = json.Marshal(n)
+		if err != nil {
+			return err
+		}
+	case ValueTypeString:
+		text, ok := value.(string)
+		if !ok || !validValueText(text) {
+			return ErrInvalidValue
+		}
+		encoded, err = json.Marshal(text)
+		if err != nil {
+			return err
+		}
+	case ValueTypeStringList:
+		var items []string
+		switch list := value.(type) {
+		case []string:
+			items = list
+		case []any:
+			for _, item := range list {
+				text, ok := item.(string)
+				if !ok {
+					return ErrInvalidValue
+				}
+				items = append(items, text)
+			}
+		default:
+			return ErrInvalidValue
+		}
+		if len(items) == 0 || len(items) > maxListValues {
+			return ErrInvalidValue
+		}
+		for _, item := range items {
+			if !validValueText(item) {
+				return ErrInvalidValue
+			}
+		}
+		encoded, err = json.Marshal(slices.Compact(slices.Sorted(slices.Values(items))))
+		if err != nil {
+			return err
+		}
+	default:
+		return ErrInvalidValue
 	}
 	return s.store.AttachPermission(r, p, encoded)
 }
