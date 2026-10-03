@@ -55,38 +55,56 @@ func NewStore(db *pgxpool.Pool) Store {
 
 const roleSelect = "SELECT r.id::text, r.name, r.description, p.id::text, p.node, p.description, p.value_type, p.merge, rp.value FROM roles r LEFT JOIN role_permissions rp ON rp.role_id = r.id LEFT JOIN permissions p ON p.id = rp.permission_id"
 
+// roleRow is one row of roleSelect: a role with one of its permissions, or with NULL permission columns if it has none
+type roleRow struct {
+	ID                    string
+	Name                  string
+	Description           string
+	PermissionID          *string
+	Node                  *string
+	PermissionDescription *string
+	ValueType             *string
+	Merge                 *string
+	Value                 []byte
+}
+
 func (s *store) queryRoles(where string, args ...any) ([]*Role, error) {
 	rows, err := s.db.Query(context.Background(), roleSelect+where+" ORDER BY r.id, p.id", args...)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	joined, err := pgx.CollectRows(rows, pgx.RowToStructByPos[roleRow])
+	if err != nil {
+		return nil, err
+	}
 
 	var roles []*Role
-	for rows.Next() {
-		var id, name, description string
-		var permissionID, node, permissionDescription, valueType, merge *string
-		var value []byte
-		if err := rows.Scan(&id, &name, &description, &permissionID, &node, &permissionDescription, &valueType, &merge, &value); err != nil {
-			return nil, err
+	for _, row := range joined {
+		if len(roles) == 0 || roles[len(roles)-1].ID != row.ID {
+			roles = append(roles, &Role{ID: row.ID, Name: row.Name, Description: row.Description, Permissions: []RolePermission{}})
 		}
-		if len(roles) == 0 || roles[len(roles)-1].ID != id {
-			roles = append(roles, &Role{ID: id, Name: name, Description: description, Permissions: []RolePermission{}})
+		if row.PermissionID == nil {
+			continue
 		}
-		if permissionID != nil {
-			granted := RolePermission{Permission: Permission{ID: *permissionID, Node: *node, Description: *permissionDescription, ValueType: deref(valueType), Merge: deref(merge)}}
-			if value != nil {
-				dec := json.NewDecoder(bytes.NewReader(value))
-				dec.UseNumber()
-				if err := dec.Decode(&granted.Value); err != nil {
-					return nil, err
-				}
+
+		granted := RolePermission{Permission: Permission{
+			ID:          *row.PermissionID,
+			Node:        *row.Node,
+			Description: *row.PermissionDescription,
+			ValueType:   deref(row.ValueType),
+			Merge:       deref(row.Merge),
+		}}
+		if row.Value != nil {
+			dec := json.NewDecoder(bytes.NewReader(row.Value))
+			dec.UseNumber()
+			if err := dec.Decode(&granted.Value); err != nil {
+				return nil, err
 			}
-			role := roles[len(roles)-1]
-			role.Permissions = append(role.Permissions, granted)
 		}
+		role := roles[len(roles)-1]
+		role.Permissions = append(role.Permissions, granted)
 	}
-	return roles, rows.Err()
+	return roles, nil
 }
 
 func (s *store) CreateRole(id string, name, description string) error {

@@ -512,6 +512,13 @@ func TestST22to26GetPermissionsForRoles(t *testing.T) {
 			if (p.Node == "rbtest.limit") != (p.Value != nil) {
 				t.Errorf("permission %s has value %v", p.Node, p.Value)
 			}
+			wantType, wantMerge := "", ""
+			if p.Node == "rbtest.limit" {
+				wantType, wantMerge = "int", "max"
+			}
+			if p.ValueType != wantType || p.Merge != wantMerge {
+				t.Errorf("permission %s has type %q and merge %q, want %q and %q", p.Node, p.ValueType, p.Merge, wantType, wantMerge)
+			}
 		}
 	})
 
