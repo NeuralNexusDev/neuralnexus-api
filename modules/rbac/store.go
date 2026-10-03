@@ -194,7 +194,7 @@ func (s *store) CreatePermission(id string, node, description, valueType, merge 
 }
 
 func (s *store) queryPermissions(where string, args ...any) ([]*Permission, error) {
-	rows, err := s.db.Query(context.Background(), "SELECT id::text AS id, node, description, COALESCE(value_type, '') AS value_type, COALESCE(merge, '') AS merge FROM permissions"+where+" ORDER BY id", args...)
+	rows, err := s.db.Query(context.Background(), "SELECT id::text AS id, node, description, COALESCE(value_type, '') AS value_type, COALESCE(merge, '') AS merge FROM permissions"+where+" ORDER BY permissions.id", args...)
 	if err != nil {
 		return nil, err
 	}

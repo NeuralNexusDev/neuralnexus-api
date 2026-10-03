@@ -113,8 +113,11 @@ func TestSV01to04RoleValidation(t *testing.T) {
 	t.Run("SV-03_LongDescriptionsAreAccepted", func(t *testing.T) {
 		f := &fakeStore{}
 		long := strings.Repeat("d", 10000)
-		if _, err := NewService(f).CreateRole("a", long); err != nil || f.created[1] != long {
-			t.Fatalf("a long description: err %v, store got %d characters", err, len(f.created[1]))
+		if _, err := NewService(f).CreateRole("a", long); err != nil {
+			t.Fatalf("a long description: err %v", err)
+		}
+		if f.created[1] != long {
+			t.Fatalf("store got %d characters, want %d", len(f.created[1]), len(long))
 		}
 	})
 	t.Run("SV-04_CreatedRoleCarriesTheGeneratedSnowflake", func(t *testing.T) {

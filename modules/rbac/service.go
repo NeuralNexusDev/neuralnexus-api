@@ -27,14 +27,14 @@ var (
 	ErrInvalidNode = errors.New("invalid node")
 	// ErrInvalidValueType when a value type and merge rule do not pair.
 	ErrInvalidValueType = errors.New("invalid value type")
-	// ErrInvalidValue when a granted value does not match its permission's type.
+	// ErrInvalidValue when a granted value does not match its permission's type, or a permission without a type is given one.
 	ErrInvalidValue = errors.New("invalid value")
 )
 
 const (
-	// RoleSystem is the built-in role the service protects from deletion and renaming.
+	// RoleSystem is a built-in role that cannot be deleted or renamed and keeps roles.admin.
 	RoleSystem = "system"
-	// RoleOwner is the built-in role the service protects from deletion and renaming.
+	// RoleOwner is a built-in role that cannot be deleted or renamed and keeps roles.admin.
 	RoleOwner = "owner"
 )
 

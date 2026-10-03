@@ -572,6 +572,64 @@ func TestST22to26GetPermissionsForRoles(t *testing.T) {
 		}
 	})
 
+	t.Run("ST-36_IDsOrderNumericallyWhateverTheirDigitCount", func(t *testing.T) {
+		st := NewStore(db)
+		first, err := svc.CreatePermission("rbtest.ord_first", "", ValueTypeString, "")
+		if err != nil {
+			t.Fatalf("CreatePermission() err = %v", err)
+		}
+		for _, id := range []string{"9", "10"} {
+			if err := st.CreateRole(id, "rbtest_ord_"+id, ""); err != nil {
+				t.Fatalf("CreateRole(%s) err = %v", id, err)
+			}
+			if err := st.CreatePermission(id, "rbtest.ord_"+id, "", "", ""); err != nil {
+				t.Fatalf("CreatePermission(%s) err = %v", id, err)
+			}
+		}
+		big := rbRole(t, svc, "ord_big")
+		for _, g := range []struct{ role, permission, value string }{{"10", first.ID, "ten"}, {"9", first.ID, "nine"}} {
+			if err := svc.AttachPermission(g.role, g.permission, g.value); err != nil {
+				t.Fatalf("AttachPermission() err = %v", err)
+			}
+		}
+		for _, id := range []string{"10", "9"} {
+			if err := svc.AttachPermission(big.ID, id, nil); err != nil {
+				t.Fatalf("AttachPermission() err = %v", err)
+			}
+		}
+
+		for _, ids := range [][]string{{"9", "10"}, {"10", "9"}} {
+			got, err := rbHashJoinStore(t).GetPermissionsForRoles(ids)
+			if err != nil {
+				t.Fatalf("GetPermissionsForRoles() err = %v", err)
+			}
+			rbAssertStrings(t, got, []string{"rbtest.ord_first:nine"})
+		}
+		role, err := rbHashJoinStore(t).GetRole(big.ID)
+		if err != nil {
+			t.Fatalf("GetRole() err = %v", err)
+		}
+		rbAssertStrings(t, rbNodes(role), []string{"rbtest.ord_9", "rbtest.ord_10"})
+		permissions, err := svc.ListPermissions()
+		if err != nil {
+			t.Fatalf("ListPermissions() err = %v", err)
+		}
+		for i := 1; i < len(permissions); i++ {
+			if mustParse(t, permissions[i-1].ID) >= mustParse(t, permissions[i].ID) {
+				t.Fatalf("ListPermissions() is not in numeric ID order at %d: %s then %s", i, permissions[i-1].ID, permissions[i].ID)
+			}
+		}
+		roles, err := svc.ListRoles()
+		if err != nil {
+			t.Fatalf("ListRoles() err = %v", err)
+		}
+		for i := 1; i < len(roles); i++ {
+			if mustParse(t, roles[i-1].ID) >= mustParse(t, roles[i].ID) {
+				t.Fatalf("ListRoles() is not in numeric ID order at %d: %s then %s", i, roles[i-1].ID, roles[i].ID)
+			}
+		}
+	})
+
 	t.Run("ST-33_ValuesMergeAcrossRoles", func(t *testing.T) {
 		limit, err := svc.CreatePermission("rbtest.merge_limit", "", ValueTypeInt, MergeMin)
 		if err != nil {

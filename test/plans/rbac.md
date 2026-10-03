@@ -39,6 +39,7 @@
 | ST-33 | GetPermissionsForRoles | Happy Path (live) | two roles grant the same valued permissions | an `int` permission with merge min (100 and 1000) and a `string_list` permission with overlapping lists | the lowest int and the sorted union of the lists | P1 |  |
 | ST-34 | GetPermissionsForRoles | Edge Case (live) | a string permission with merge first is granted by two roles | hash joins forced; a second `string`/`first` permission granted in the opposite order (low role first); the account lists its roles in either order | the lower role ID's value for both permissions in both orders | P1 |  |
 | ST-35 | GetRole | Edge Case (live) | an int value of 2^53 is granted | live database | the role reads the value back as the exact number 9007199254740992 | P2 |  |
+| ST-36 | ListPermissions / ListRoles / GetRole / GetPermissionsForRoles | Edge Case (live) | IDs of different digit counts: roles 9 and 10 and a snowflake role, permissions 9 and 10 and a snowflake permission | a `string`/`first` permission granted to roles 10 and 9; hash joins forced; the account lists its roles in either order | the value of role 9 wins in both orders; a role lists its permissions 9 then 10; both lists are in numeric ID order | P1 |  |
 
 
 ## service.go
