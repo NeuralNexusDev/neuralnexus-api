@@ -2709,7 +2709,7 @@
             },
             "post": {
                 "summary": "Create a role",
-                "description": "Requires the roles.admin permission. The ID is generated. Names start with a lower-case letter and use lower-case letters, digits and underscores, up to 63 characters; descriptions are valid text of at most 256 characters.",
+                "description": "Requires the roles.admin permission. The ID is generated. Names start with a lower-case letter and use lower-case letters, digits and underscores; descriptions are valid text.",
                 "requestBody": {
                     "required": true,
                     "content": {
@@ -2931,7 +2931,7 @@
         "/roles/{id}/permissions/{permission_id}": {
             "put": {
                 "summary": "Grant a permission to a role",
-                "description": "Requires the roles.admin permission. Granting an already granted permission succeeds and replaces its value. The body is optional JSON: permissions with a value_type need a value and permissions without one take none. int values must be whole numbers within plus or minus 2^53. string values and list items must be at most 128 characters, with no surrounding spaces and no control or format characters; lists hold 1 to 64 items. For merge, first means the value of the lowest role ID.",
+                "description": "Requires the roles.admin permission. Granting an already granted permission succeeds and replaces its value. The body is optional JSON: permissions with a value_type need a value and permissions without one take none. int values must be whole numbers within plus or minus 2^53. string values and list items must be non-empty, with no surrounding spaces and no control or format characters; lists hold at least one item. For merge, first means the value of the lowest role ID.",
                 "parameters": [
                     {
                         "$ref": "#/components/parameters/RoleIdSlug"
@@ -3047,7 +3047,7 @@
             },
             "post": {
                 "summary": "Create a permission",
-                "description": "Requires the roles.admin permission. The ID is generated. Nodes are lower-case words of letters, digits and underscores, starting with a letter and joined by dots, up to 128 characters. A permission without a value_type is granted bare; one with a value_type is granted with a value.",
+                "description": "Requires the roles.admin permission. The ID is generated. Nodes are lower-case words of letters, digits and underscores, starting with a letter and joined by dots. A permission without a value_type is granted bare; one with a value_type is granted with a value.",
                 "requestBody": {
                     "required": true,
                     "content": {
@@ -3998,7 +3998,7 @@
                 "type": "object",
                 "properties": {
                     "value": {
-                        "description": "Required for permissions with a value_type, and refused for permissions without one. An integer for int, a string for string, a non-empty array of at most 64 strings for string_list."
+                        "description": "Required for permissions with a value_type, and refused for permissions without one. An integer for int, a string for string, a non-empty array of strings for string_list."
                     }
                 }
             }

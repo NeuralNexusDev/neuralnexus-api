@@ -87,8 +87,8 @@ func (f *fakeStore) GetPermissionsForRoles(roleIDs []string) ([]string, error) {
 }
 
 func TestSV01to04RoleValidation(t *testing.T) {
-	valid := []string{"a", "admin", "r2_d2", "a09", strings.Repeat("a", maxRoleNameLength)}
-	invalid := []string{"", "Admin", "1abc", "_a", "a-b", "a b", "a:b", "aB", "a\x00", strings.Repeat("a", maxRoleNameLength+1)}
+	valid := []string{"a", "admin", "r2_d2", "a09", strings.Repeat("a", 200)}
+	invalid := []string{"", "Admin", "1abc", "_a", "a-b", "a b", "a:b", "aB", "a\x00"}
 
 	t.Run("SV-01_ValidNamesAreCreated", func(t *testing.T) {
 		for _, name := range valid {
@@ -110,17 +110,11 @@ func TestSV01to04RoleValidation(t *testing.T) {
 			}
 		}
 	})
-	t.Run("SV-03_DescriptionLengthBoundary", func(t *testing.T) {
+	t.Run("SV-03_LongDescriptionsAreAccepted", func(t *testing.T) {
 		f := &fakeStore{}
-		if _, err := NewService(f).CreateRole("a", strings.Repeat("d", maxDescriptionLen)); err != nil {
-			t.Fatalf("a description at the limit was rejected: %v", err)
-		}
-		f = &fakeStore{}
-		if _, err := NewService(f).CreateRole("a", strings.Repeat("d", maxDescriptionLen+1)); !errors.Is(err, ErrInvalidDescription) {
-			t.Fatalf("got %v, want ErrInvalidDescription", err)
-		}
-		if len(f.calls) != 0 {
-			t.Fatalf("an invalid description reached the store: %v", f.calls)
+		long := strings.Repeat("d", 10000)
+		if _, err := NewService(f).CreateRole("a", long); err != nil || f.created[1] != long {
+			t.Fatalf("a long description: err %v, store got %d characters", err, len(f.created[1]))
 		}
 	})
 	t.Run("SV-04_CreatedRoleCarriesTheGeneratedSnowflake", func(t *testing.T) {
@@ -140,7 +134,7 @@ func TestSV01to04RoleValidation(t *testing.T) {
 
 func TestSV05to06NodeValidation(t *testing.T) {
 	t.Run("SV-05_InvalidNodesAreRejectedBeforeTheStore", func(t *testing.T) {
-		bad := []string{"", "A", "aB", "1a", "a.1b", "a._b", "_a", "a..b", ".a", "a.", "a-b", "a:b", "a b", "a|b", "a\x00", "é", "a.é", strings.Repeat("a", maxNodeLength+1)}
+		bad := []string{"", "A", "aB", "1a", "a.1b", "a._b", "_a", "a..b", ".a", "a.", "a-b", "a:b", "a b", "a|b", "a\x00", "é", "a.é"}
 		for _, node := range bad {
 			f := &fakeStore{}
 			if _, err := NewService(f).CreatePermission(node, "", "", ""); !errors.Is(err, ErrInvalidNode) {
@@ -152,7 +146,7 @@ func TestSV05to06NodeValidation(t *testing.T) {
 		}
 	})
 	t.Run("SV-06_ValidNodesAreCreatedUnchanged", func(t *testing.T) {
-		for _, node := range []string{"a", "roles.admin", "a_b.c2.d_3", "a0", strings.Repeat("a", maxNodeLength)} {
+		for _, node := range []string{"a", "roles.admin", "a_b.c2.d_3", "a0", strings.Repeat("a", 300)} {
 			f := &fakeStore{}
 			p, err := NewService(f).CreatePermission(node, "d", "", "")
 			if err != nil || p.Node != node || p.ID != f.createdID || f.created[0] != node || f.created[1] != "d" {
@@ -181,7 +175,7 @@ func TestSV05to06NodeValidation(t *testing.T) {
 		}
 	})
 	t.Run("SV-13_TextRulesApplyToDescriptions", func(t *testing.T) {
-		for _, d := range []string{"a\x00b", "\xff", "a\ufffdb", strings.Repeat("é", maxDescriptionLen+1)} {
+		for _, d := range []string{"a\x00b", "\xff", "a\ufffdb"} {
 			f := &fakeStore{}
 			if _, err := NewService(f).CreateRole("a", d); !errors.Is(err, ErrInvalidDescription) || len(f.calls) != 0 {
 				t.Fatalf("description %q: got %v with calls %v, want ErrInvalidDescription before the store", d, err, f.calls)
@@ -193,9 +187,6 @@ func TestSV05to06NodeValidation(t *testing.T) {
 		}
 		if _, err := NewService(&fakeStore{}).CreateRole("a", "line one\nline two \U0001F468\u200d\U0001F4BB"); err != nil {
 			t.Fatalf("a description with a newline and a joined emoji was refused: %v", err)
-		}
-		if _, err := NewService(&fakeStore{}).CreateRole("a", strings.Repeat("é", maxDescriptionLen)); err != nil {
-			t.Fatalf("a description of exactly the limit in characters was refused: %v", err)
 		}
 	})
 	t.Run("SV-14_LookupsOfNamesThatCannotExistNeverReachTheStore", func(t *testing.T) {
@@ -330,7 +321,7 @@ func TestSV10UpdateRoleMerge(t *testing.T) {
 			want       error
 		}{
 			{str("Bad"), nil, ErrInvalidRoleName},
-			{nil, str(strings.Repeat("d", maxDescriptionLen+1)), ErrInvalidDescription},
+			{nil, str("a\x00b"), ErrInvalidDescription},
 		} {
 			f := newStore()
 			if _, err := NewService(f).UpdateRole("1", c.name, c.desc); !errors.Is(err, c.want) {
@@ -414,7 +405,6 @@ func TestSV19to23GrantedValues(t *testing.T) {
 		f := &fakeStore{role: &Role{Name: "mod"}, permission: &Permission{ID: "6", Node: "a.b", ValueType: valueType}}
 		return f, NewService(f).AttachPermission("5", "6", value)
 	}
-	longText := strings.Repeat("v", maxScopeValueLength+1)
 
 	t.Run("SV-19_PermissionsWithoutATypeTakeNoValue", func(t *testing.T) {
 		f, err := attach("", nil)
@@ -463,7 +453,10 @@ func TestSV19to23GrantedValues(t *testing.T) {
 		if err != nil || string(f.attachedValue) != `"abc:d"` {
 			t.Fatalf("err %v, stored %q", err, f.attachedValue)
 		}
-		for _, v := range []any{nil, "", " a", "a ", "a\x00", "a\u200bb", "a\nb", "\xff", longText, 5, []string{"a"}} {
+		if _, err := attach("string", strings.Repeat("v", 1000)); err != nil {
+			t.Fatalf("a long string was refused: %v", err)
+		}
+		for _, v := range []any{nil, "", " a", "a ", "a\x00", "a\u200bb", "a\nb", "\xff", 5, []string{"a"}} {
 			f, err := attach("string", v)
 			if !errors.Is(err, ErrInvalidValue) || slices.Contains(f.calls, "AttachPermission") {
 				t.Fatalf("value %#v: err %v, calls %v, want ErrInvalidValue before the store", v, err, f.calls)
@@ -477,22 +470,18 @@ func TestSV19to23GrantedValues(t *testing.T) {
 				t.Fatalf("value %#v: err %v, stored %q", v, err, f.attachedValue)
 			}
 		}
-		tooMany := make([]string, maxListValues+1)
-		for i := range tooMany {
-			tooMany[i] = strconv.Itoa(i)
-		}
-		for _, v := range []any{nil, "a", []any{}, []string{}, tooMany, []any{"a", 5}, []any{"a", ""}, []string{"a", longText}, []string{"a\x00"}} {
+		for _, v := range []any{nil, "a", []any{}, []string{}, []any{"a", 5}, []any{"a", ""}, []string{"a\x00"}} {
 			f, err := attach("string_list", v)
 			if !errors.Is(err, ErrInvalidValue) || slices.Contains(f.calls, "AttachPermission") {
 				t.Fatalf("value %#v: err %v, calls %v, want ErrInvalidValue before the store", v, err, f.calls)
 			}
 		}
-		atLimit := make([]string, maxListValues)
-		for i := range atLimit {
-			atLimit[i] = strconv.Itoa(i)
+		big := make([]string, 1000)
+		for i := range big {
+			big[i] = strconv.Itoa(i)
 		}
-		if _, err := attach("string_list", atLimit); err != nil {
-			t.Fatalf("a list of exactly the limit was refused: %v", err)
+		if _, err := attach("string_list", big); err != nil {
+			t.Fatalf("a list of 1000 items was refused: %v", err)
 		}
 	})
 	t.Run("SV-23_UnknownPermissionsFailBeforeTheValueIsChecked", func(t *testing.T) {

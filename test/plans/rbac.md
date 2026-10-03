@@ -45,18 +45,18 @@
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| SV-01 | CreateRole | Happy Path | valid role names | names from one letter to the length limit, with digits and underscores | Each is created with its name | P1 |  |
-| SV-02 | CreateRole | Error Path | invalid role names | empty, upper-case, leading digit or underscore, other characters, over the length limit | `ErrInvalidRoleName` and the store is never called | P1 |  |
-| SV-03 | CreateRole | Edge Case | description at and over the limit | fake store | At the limit succeeds; over it is `ErrInvalidDescription` without a store call | P2 |  |
+| SV-01 | CreateRole | Happy Path | valid role names | names from one letter to 200 characters, with digits and underscores | Each is created with its name | P1 |  |
+| SV-02 | CreateRole | Error Path | invalid role names | empty, upper-case, leading digit or underscore, other characters | `ErrInvalidRoleName` and the store is never called | P1 |  |
+| SV-03 | CreateRole | Edge Case | a very long description | fake store | A 10000-character description is accepted and reaches the store unchanged | P2 |  |
 | SV-04 | CreateRole | Happy Path | a role is created | fake store | The role id is the snowflake handed to the store and the permission list is empty and non-nil | P1 |  |
-| SV-05 | CreatePermission | Error Path | invalid nodes | empty, upper case, leading digit or underscore in a word, empty word, a leading or trailing dot, other characters, a colon, non-ASCII, over the length limit | `ErrInvalidNode` and the store is never called | P1 |  |
-| SV-06 | CreatePermission | Happy Path | valid nodes | a single word, dotted words, digits and underscores, the length limit | created with the snowflake id and the node and description reaching the store unchanged | P1 |  |
+| SV-05 | CreatePermission | Error Path | invalid nodes | empty, upper case, leading digit or underscore in a word, empty word, a leading or trailing dot, other characters, a colon, non-ASCII | `ErrInvalidNode` and the store is never called | P1 |  |
+| SV-06 | CreatePermission | Happy Path | valid nodes | a single word, dotted words, digits and underscores, a 300-character node | created with the snowflake id and the node and description reaching the store unchanged | P1 |  |
 | SV-07 | Service | Error Path | a bad id | empty, non-numeric, zero, negative, fractional, overflowing | `ErrInvalidID` from every method taking an id and the store is never called | P1 |  |
 | SV-08 | AttachPermission / DetachPermission | Happy Path | ids are parsed | fake store | The store receives the role id then the permission id | P1 |  |
 | SV-09 | Service | Error Path | the store fails | fake store returns an error | Every method returns that error | P1 |  |
 | SV-10 | UpdateRole | Edge Case | one field is omitted | stored role with a name and description | The omitted field keeps its value; an empty description clears it | P1 |  |
 | SV-12 | CreatePermission | Edge Case | value types and merge rules | valid pairs, defaults for string and string_list, and invalid pairs | valid pairs are stored with the merge rule filled in; invalid pairs give `ErrInvalidValueType` before the store | P1 |  |
-| SV-13 | CreatePermission / CreateRole | Error Path | NUL, U+FFFD, invalid UTF-8 and over-long descriptions | role and permission descriptions of multi-byte characters | `ErrInvalidDescription` before the store; a newline, a joined emoji and the exact limit in characters are accepted | P1 |  |
+| SV-13 | CreatePermission / CreateRole | Error Path | NUL, U+FFFD and invalid UTF-8 in descriptions | role and permission descriptions | `ErrInvalidDescription` before the store; a newline and a joined emoji are accepted | P1 |  |
 | SV-14 | GetRoleByName / GetPermissionByNode | Edge Case | names that cannot exist | NUL in the name, upper case, a leading digit, empty, a colon or double dot in a node | `ErrRoleNotFound` or `ErrPermissionNotFound` and the store is never called; valid names reach the store | P1 |  |
 | SV-15 | DeleteRole | Error Path | deleting a built-in role | roles `system` and `owner`; and `bee_admin` and an ordinary role | `ErrBuiltinRole` for `system` and `owner` without a store delete; `bee_admin` and the ordinary role are deleted | P1 |  |
 | SV-16 | UpdateRole | Error Path | renaming a built-in role | role `owner`, and `bee_admin` | `ErrBuiltinRole` for `owner`; repeating the name while changing the description succeeds; `bee_admin` can be renamed | P1 |  |
@@ -64,8 +64,8 @@
 | SV-18 | DetachPermission | Edge Case | other detaches | other nodes from `owner`, `roles` and `roles.administrator` from `owner`, `roles.admin` from other roles | The detach reaches the store | P2 |  |
 | SV-19 | AttachPermission | Error Path | a permission without a value type is given a value, or none is given | fake store | no value is stored as NULL; any value gives `ErrInvalidValue` without an attach | P1 |  |
 | SV-20 | AttachPermission | Edge Case | int values | permission of type `int`; whole numbers in several Go and JSON number forms, including plus and minus 2^53 in every form; fractions, strings, nil, lists, and numbers beyond plus or minus 2^53 in every form | whole numbers are stored as JSON integers; the others give `ErrInvalidValue` without an attach | P1 |  |
-| SV-21 | AttachPermission | Edge Case | string values | permission of type `string`; text with colons; empty, padded, NUL, format, control, over-long and non-string values | valid text is stored as a JSON string; the others give `ErrInvalidValue` without an attach | P1 |  |
-| SV-22 | AttachPermission | Edge Case | list values | permission of type `string_list`; unsorted lists with duplicates; empty, over-long, non-string and bad-text lists; a list of exactly the limit | lists are stored sorted and deduplicated; the others give `ErrInvalidValue` without an attach | P1 |  |
+| SV-21 | AttachPermission | Edge Case | string values | permission of type `string`; text with colons; empty, padded, NUL, format, control and non-string values; a 1000-character string | valid text, including a long string, is stored as a JSON string; the others give `ErrInvalidValue` without an attach | P1 |  |
+| SV-22 | AttachPermission | Edge Case | list values | permission of type `string_list`; unsorted lists with duplicates; empty, non-string and bad-text lists; a list of 1000 items | lists are stored sorted and deduplicated; the others give `ErrInvalidValue` without an attach | P1 |  |
 | SV-23 | AttachPermission | Error Path | the permission does not exist | store returns `ErrPermissionNotFound` | `ErrPermissionNotFound` and no attach | P2 |  |
 | SV-11 | UpdateRole | Error Path | an invalid name or description | stored role | `ErrInvalidRoleName` or `ErrInvalidDescription` and no write reaches the store | P1 |  |
 

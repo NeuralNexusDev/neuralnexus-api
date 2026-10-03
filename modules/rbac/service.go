@@ -14,20 +14,12 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 )
 
-const (
-	maxRoleNameLength   = 63
-	maxDescriptionLen   = 256
-	maxNodeLength       = 128
-	maxScopeValueLength = 128
-	maxListValues       = 64
-)
-
 var (
 	// ErrInvalidID when an ID is not a canonical positive integer.
 	ErrInvalidID = errors.New("invalid id")
 	// ErrInvalidRoleName when a role name breaks the naming rules.
 	ErrInvalidRoleName = errors.New("invalid role name")
-	// ErrInvalidDescription when a description is too long or not valid text.
+	// ErrInvalidDescription when a description is not valid text.
 	ErrInvalidDescription = errors.New("invalid description")
 	// ErrBuiltinRole when a built-in role is deleted or renamed, or roles.admin is removed from system or owner.
 	ErrBuiltinRole = errors.New("built-in role is protected")
@@ -81,7 +73,7 @@ func validID(id string) bool {
 }
 
 func validRoleName(name string) bool {
-	if len(name) == 0 || len(name) > maxRoleNameLength || name[0] < 'a' || name[0] > 'z' {
+	if len(name) == 0 || name[0] < 'a' || name[0] > 'z' {
 		return false
 	}
 	for i := 1; i < len(name); i++ {
@@ -98,11 +90,11 @@ func validText(s string) bool {
 }
 
 func validDescription(description string) bool {
-	return validText(description) && utf8.RuneCountInString(description) <= maxDescriptionLen
+	return validText(description)
 }
 
 func validNode(node string) bool {
-	if len(node) == 0 || len(node) > maxNodeLength {
+	if len(node) == 0 {
 		return false
 	}
 	segmentStart := true
@@ -129,8 +121,7 @@ func validNode(node string) bool {
 }
 
 func validValueText(s string) bool {
-	n := utf8.RuneCountInString(s)
-	if n == 0 || n > maxScopeValueLength {
+	if s == "" {
 		return false
 	}
 	if !validText(s) || strings.TrimSpace(s) != s {
@@ -350,7 +341,7 @@ func (s *service) AttachPermission(roleID, permissionID string, value any) error
 		default:
 			return ErrInvalidValue
 		}
-		if len(items) == 0 || len(items) > maxListValues {
+		if len(items) == 0 {
 			return ErrInvalidValue
 		}
 		for _, item := range items {
