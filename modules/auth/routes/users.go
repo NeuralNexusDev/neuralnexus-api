@@ -5,6 +5,7 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"log"
 	"net/http"
+	"strconv"
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
@@ -49,6 +50,15 @@ const (
 	msgUsernameAlreadyExists                    = "An account with this username already exists"
 	msgInvalidRoleID                            = "Roles must be role IDs"
 	msgUnknownRoleID                            = "Roles must be existing roles"
+	msgInvalidLimit                             = "The limit must be a whole number from 1 to 200"
+	msgInvalidOffset                            = "The offset must be a whole number of 0 or more"
+	msgFailedToListUsers                        = "Failed to list users"
+	logFailedToListUsers                        = "Failed to list users:\n\t"
+)
+
+const (
+	defaultListUsersLimit = 50
+	maxListUsersLimit     = 200
 )
 
 func respondUpdateUserFailure(w http.ResponseWriter, r *http.Request, err error) {
@@ -66,6 +76,45 @@ func respondUpdateUserFailure(w http.ResponseWriter, r *http.Request, err error)
 	default:
 		log.Println(logFailedToUpdateUser, err)
 		responses.InternalServerError(w, r, msgFailedToUpdateUser)
+	}
+}
+
+// ListUsersHandler - List a page of users
+func ListUsersHandler(service auth.UserService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		session := r.Context().Value(mw.SessionKey).(*auth.Session)
+		if !session.HasPermission(perms.ScopeAdminUsers) {
+			responses.Forbidden(w, r, msgNoPermissionToGetUsers)
+			return
+		}
+		limit := defaultListUsersLimit
+		if raw := r.URL.Query().Get("limit"); raw != "" {
+			n, err := strconv.Atoi(raw)
+			if err != nil || n < 1 || n > maxListUsersLimit {
+				responses.BadRequest(w, r, msgInvalidLimit)
+				return
+			}
+			limit = n
+		}
+		offset := 0
+		if raw := r.URL.Query().Get("offset"); raw != "" {
+			n, err := strconv.Atoi(raw)
+			if err != nil || n < 0 {
+				responses.BadRequest(w, r, msgInvalidOffset)
+				return
+			}
+			offset = n
+		}
+		users, err := service.ListUsers(limit, offset)
+		if err != nil {
+			log.Println(logFailedToListUsers, err)
+			responses.InternalServerError(w, r, msgFailedToListUsers)
+			return
+		}
+		if users == nil {
+			users = []*auth.Account{}
+		}
+		responses.StructOK(w, r, users)
 	}
 }
 

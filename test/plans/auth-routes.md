@@ -153,3 +153,12 @@
 | US-71 | UpdateUserFromPlatformHandler | Error Path | UserService.UpdateUserFromPlatform returns an unknown role id | Admin session, valid body, service returns `auth.ErrUnknownRoleID` | 400 Bad Request `msgUnknownRoleID` | P2 |  |
 | US-72 | UpdateUserHandler | Edge Case | the body repeats a role id | Admin session, body roles `["1","1","3"]`, the service reads back roles `["1","3"]` | 200 OK whose roles are the stored roles, without the duplicate | P1 |  |
 | US-73 | UpdateUserHandler | Error Path | reading the account back fails after the update | Admin session, `UpdateUser` succeeds, `GetUser` returns `testerrors.ErrDBDown` | 500 `msgFailedToUpdateUser` after `UpdateUser` was called | P2 |  |
+| US-74 | ListUsersHandler | Happy Path | list users with no query | Admin session, service returns two accounts | 200 OK with the two users in order and no email, hashed secret or salt; the service got limit 50 and offset 0 | P1 |  |
+| US-75 | ListUsersHandler | Happy Path | limit and offset in the query | Admin session, `?limit=200&offset=40` | 200 OK and the service got limit 200 and offset 40 | P1 |  |
+| US-76 | ListUsersHandler | Error Path | no permission | Session without ScopeAdminUsers | 403 Forbidden `msgNoPermissionToGetUsers` and the service is not called | P1 |  |
+| US-77 | ListUsersHandler | Error Path | invalid limit | Admin session, limit of 0, -1, 201, `abc`, `1.5` or a space | 400 Bad Request `msgInvalidLimit` and the service is not called | P2 |  |
+| US-78 | ListUsersHandler | Error Path | invalid offset | Admin session, offset of -1, `abc`, `1.5` or a space | 400 Bad Request `msgInvalidOffset` and the service is not called | P2 |  |
+| US-79 | ListUsersHandler | Edge Case | the page is empty | Admin session, service returns no accounts | 200 OK with body `[]` | P2 |  |
+| US-80 | ListUsersHandler | Error Path | the service fails | Admin session, service returns `testerrors.ErrDBDown` | 500 Internal Server Error `msgFailedToListUsers` | P2 |  |
+| US-81 | ListUsersHandler | Error Path | no permission and an invalid query | Session without ScopeAdminUsers, `?limit=0&offset=-1` | 403 Forbidden `msgNoPermissionToGetUsers`, not 400 | P2 |  |
+| US-82 | ListUsersHandler | Edge Case | the smallest limit | Admin session, `?limit=1` | 200 OK and the service got limit 1 | P2 |  |

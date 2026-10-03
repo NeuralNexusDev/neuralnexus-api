@@ -102,6 +102,7 @@ type AccountStore interface {
 	GetAccountByID(userID string) (*Account, error)
 	GetAccountByUsername(username string) (*Account, error)
 	GetAccountByEmail(email string) (*Account, error)
+	ListAccounts(limit, offset int) ([]*Account, error)
 	UpdateAccountInDB(account *Account) error
 	DeleteAccountFromDB(userID string) error
 }
@@ -181,6 +182,15 @@ func (s *store) GetAccountByEmail(email string) (*Account, error) {
 		return nil, err
 	}
 	return account, nil
+}
+
+// ListAccounts gets a page of accounts ordered by ID
+func (s *store) ListAccounts(limit, offset int) ([]*Account, error) {
+	rows, err := s.db.Query(context.Background(), "SELECT user_id, COALESCE(username, '') AS username, email, hashed_secret, salt, role_ids::text[] AS role_ids, updated_at FROM accounts ORDER BY user_id LIMIT $1 OFFSET $2", limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowToAddrOfStructByName[Account])
 }
 
 // UpdateAccountInDB updates an account in the database

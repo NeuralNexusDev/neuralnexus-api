@@ -17,6 +17,7 @@ const LinkCleanupFailedFmt = "failed to link account (%w) and failed to clean up
 type UserService interface {
 	GetUser(userID string) (*Account, error)
 	GetUserFromPlatform(platform Platform, platformID string) (*Account, error)
+	ListUsers(limit, offset int) ([]*Account, error)
 	GetUserPermissions(userID string) ([]string, error)
 	UpdateUser(user *Account) error
 	UpdateUserFromPlatform(platform Platform, platformID string, data PlatformData) (*Account, error)
@@ -53,6 +54,11 @@ func (s *userService) GetUserFromPlatform(platform Platform, platformID string) 
 		return nil, err
 	}
 	return s.as.GetAccountByID(la.UserID)
+}
+
+// ListUsers - List a page of users ordered by ID
+func (s *userService) ListUsers(limit, offset int) ([]*Account, error) {
+	return s.as.ListAccounts(limit, offset)
 }
 
 // GetUserPermissions - Get a user's permissions

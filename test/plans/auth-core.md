@@ -178,6 +178,9 @@
 | ST-93 | UpdateAccountInDB | Error Path (live) | role ids with a leading zero, a plus sign or a space | Real Postgres | `ErrInvalidRoleID` for each | P2 |   |
 | ST-94 | UpdateAccountInDB | Edge Case (live) | the same existing role id is given twice | Real Postgres | nil error and the stored account holds the id once | P2 |   |
 | ST-95 | AddAccountToDB | Concurrency Invariant (live) | a delete of the role is in flight, uncommitted, when the account is added | transaction deleting the role | The add waits for the commit and then returns `ErrUnknownRoleID`; nothing is stored | P1 |   |
+| ST-96 | ListAccounts | Happy Path (live) | accounts with a short ID and long IDs are stored, one without a username | accounts `95`, `...601`, `...602`, and `...603` stored without a username | The accounts come back ordered by number, so `95` is before the long IDs; every account lists its roles as a non-nil slice; the account without a username lists an empty username | P1 |  |
+| ST-97 | ListAccounts | Happy Path (live) | a limit and an offset select a page | the accounts above | `ListAccounts(2, i)` returns `...601` and `...602`, `ListAccounts(1, i+1)` returns only `...602` and `ListAccounts(1, i)` returns only `...601` | P1 |  |
+| ST-98 | ListAccounts | Edge Case (live) | the offset is past the last account | offset 1000000 | An empty page and a nil error | P2 |  |
 
 ## types.go
 
@@ -252,3 +255,5 @@
 | US-40 | SetPasswordAuthEnabled | Error Path | `ass.SetPasswordAuthEnabled` returns `ErrNotFound` | fake settings store returns `ErrNotFound` | Returns an error matching `ErrNotFound` | P2 |  |
 | US-41 | GetUserPermissions | Error Path | the role store fails | role store returns `testerrors.ErrBoom` | Returns nil permissions and an error matching the store error | P1 |   |
 | US-42 | GetUserPermissions | Edge Case | the account's role grants nothing | role store returns no permissions | Returns empty non-nil permissions, nil error | P1 |  |
+| US-43 | ListUsers | Happy Path | a page of users is listed | store returns two accounts | Returns the store's accounts in order and the store received the same limit and offset | P1 |  |
+| US-44 | ListUsers | Error Path | the store fails | store returns `testerrors.ErrBoom` | Returns nil accounts and the store's error | P2 |  |
