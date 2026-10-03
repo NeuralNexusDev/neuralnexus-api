@@ -5,7 +5,7 @@ ENV CGO_ENABLED=0
 
 RUN apk update && apk add --no-cache gcc make
 
-ENV PROTOC_VER=26.1
+ENV PROTOC_VER=36.2
 ENV PROTOC_ZIP=protoc-$PROTOC_VER-linux-x86_64.zip
 RUN wget https://github.com/protocolbuffers/protobuf/releases/download/v$PROTOC_VER/$PROTOC_ZIP && \
     unzip -o $PROTOC_ZIP -d /usr/local bin/protoc && \
