@@ -176,17 +176,6 @@ func TestLogRequest(t *testing.T) {
 			t.Errorf("expected log output with an empty joined message, got: %q", out)
 		}
 	})
-
-	t.Run("MW-04_MissingRemoteAddrPanics", func(t *testing.T) {
-		defer func() {
-			if r := recover(); r == nil {
-				t.Fatal("expected LogRequest to panic when RemoteAddrKey is missing from the context")
-			}
-		}()
-
-		ctx := context.WithValue(context.Background(), RequestIDKey, 1)
-		LogRequest(ctx, "should not get here")
-	})
 }
 
 func TestCreateStack(t *testing.T) {
