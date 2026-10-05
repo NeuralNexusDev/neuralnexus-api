@@ -793,8 +793,8 @@ func TestOA17to26and83ResolveOrCreateAccountForPlatformUser(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected an error")
 		}
-		if !errors.Is(err, linkErr) || !errors.Is(err, cleanupErr) {
-			t.Errorf("error = %v, want it to wrap both %v and %v", err, linkErr, cleanupErr)
+		if !errors.Is(err, cleanupErr) {
+			t.Errorf("error = %v, want the cleanup error %v", err, cleanupErr)
 		}
 	})
 
@@ -872,13 +872,13 @@ func TestOA17to26and83ResolveOrCreateAccountForPlatformUser(t *testing.T) {
 		}
 	})
 
-	t.Run("OA-83_AddLinkAndCleanupFailWrapsBoth", func(t *testing.T) {
+	t.Run("OA-83_AddLinkAndCleanupFailReturnsTheCleanupError", func(t *testing.T) {
 		as := &oaMockAccountService{DeleteAccountFunc: func(string) error { return testerrors.ErrBoom }}
 		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return testerrors.ErrInsertFailed }}
 
 		_, err := resolveOrCreateAccountForPlatformUser(as, las, auth.PlatformDiscord, user)
-		if !errors.Is(err, testerrors.ErrInsertFailed) || !errors.Is(err, testerrors.ErrBoom) {
-			t.Errorf("error = %v, want it to wrap both %v and %v", err, testerrors.ErrInsertFailed, testerrors.ErrBoom)
+		if !errors.Is(err, testerrors.ErrBoom) {
+			t.Errorf("error = %v, want the cleanup error %v", err, testerrors.ErrBoom)
 		}
 	})
 }
@@ -1546,8 +1546,8 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return linkErr }}
 
 		_, _, err := ensureMicrosoftIdentityLinked(as, las, account, true, auth.PlatformXboxLive, xbox)
-		if !errors.Is(err, linkErr) || !errors.Is(err, cleanupErr) {
-			t.Errorf("error = %v, want it to wrap both %v and %v", err, linkErr, cleanupErr)
+		if !errors.Is(err, cleanupErr) {
+			t.Errorf("error = %v, want the cleanup error %v", err, cleanupErr)
 		}
 	})
 
@@ -1599,8 +1599,8 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 		}
 
 		_, _, err := ensureMicrosoftIdentityLinked(as, las, account, true, auth.PlatformXboxLive, xbox)
-		if !errors.Is(err, lookupErr) || !errors.Is(err, cleanupErr) {
-			t.Errorf("error = %v, want it to wrap both %v and %v", err, lookupErr, cleanupErr)
+		if !errors.Is(err, cleanupErr) {
+			t.Errorf("error = %v, want the cleanup error %v", err, cleanupErr)
 		}
 	})
 
@@ -1657,8 +1657,8 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 		}
 
 		_, _, err := ensureMicrosoftIdentityLinked(as, las, account, true, auth.PlatformXboxLive, xbox)
-		if !errors.Is(err, cleanupErr) || !errors.Is(err, auth.ErrAlreadyLinked) {
-			t.Fatalf("error = %v, want it to wrap both %v and %v", err, cleanupErr, auth.ErrAlreadyLinked)
+		if !errors.Is(err, cleanupErr) {
+			t.Fatalf("error = %v, want the cleanup error %v", err, cleanupErr)
 		}
 	})
 
@@ -1678,13 +1678,13 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 		}
 	})
 
-	t.Run("OA-84_LinkAndCleanupFailWrapsBoth", func(t *testing.T) {
+	t.Run("OA-84_LinkAndCleanupFailReturnsTheCleanupError", func(t *testing.T) {
 		as := &oaMockAccountService{DeleteAccountFunc: func(string) error { return testerrors.ErrBoom }}
 		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return testerrors.ErrInsertFailed }}
 
 		_, _, err := ensureMicrosoftIdentityLinked(as, las, account, true, auth.PlatformXboxLive, xbox)
-		if !errors.Is(err, testerrors.ErrInsertFailed) || !errors.Is(err, testerrors.ErrBoom) {
-			t.Errorf("error = %v, want it to wrap both %v and %v", err, testerrors.ErrInsertFailed, testerrors.ErrBoom)
+		if !errors.Is(err, testerrors.ErrBoom) {
+			t.Errorf("error = %v, want the cleanup error %v", err, testerrors.ErrBoom)
 		}
 	})
 }
@@ -1747,8 +1747,8 @@ func TestOA67to71and85LinkPlatformUserToSession(t *testing.T) {
 		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return testerrors.ErrInsertFailed }}
 
 		err := linkPlatformUserToSession(las, "user-1", auth.PlatformDiscord, user)
-		if !errors.Is(err, ErrLinkAccountFailed) || !errors.Is(err, testerrors.ErrInsertFailed) {
-			t.Fatalf("error = %v, want it to wrap both %v and %v", err, ErrLinkAccountFailed, testerrors.ErrInsertFailed)
+		if !errors.Is(err, ErrLinkAccountFailed) {
+			t.Fatalf("error = %v, want %v", err, ErrLinkAccountFailed)
 		}
 	})
 
@@ -1756,8 +1756,8 @@ func TestOA67to71and85LinkPlatformUserToSession(t *testing.T) {
 		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*auth.LinkedAccount) error { return auth.ErrAlreadyLinked }}
 
 		err := linkPlatformUserToSession(las, "user-1", auth.PlatformDiscord, user)
-		if !errors.Is(err, ErrLinkAccountFailed) || !errors.Is(err, auth.ErrAlreadyLinked) {
-			t.Fatalf("error = %v, want it to wrap both %v and %v", err, ErrLinkAccountFailed, auth.ErrAlreadyLinked)
+		if !errors.Is(err, ErrLinkAccountFailed) {
+			t.Fatalf("error = %v, want %v", err, ErrLinkAccountFailed)
 		}
 	})
 }

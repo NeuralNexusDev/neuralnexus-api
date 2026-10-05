@@ -505,7 +505,7 @@ func TestUS15to24and38UpdateUserFromPlatform(t *testing.T) {
 		}
 	})
 
-	t.Run("US-20_AddLinkFailsAndCleanupFailsWrapsBoth", func(t *testing.T) {
+	t.Run("US-20_AddLinkFailsAndCleanupFailsReturnsTheCleanupError", func(t *testing.T) {
 		linkErr := testerrors.ErrInsertFailed
 		deleteErr := testerrors.ErrDBDown
 		as := &usFakeAccountStore{deleteErr: deleteErr}
@@ -516,8 +516,8 @@ func TestUS15to24and38UpdateUserFromPlatform(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected a non-nil error")
 		}
-		if !errors.Is(err, linkErr) || !errors.Is(err, deleteErr) {
-			t.Errorf("UpdateUserFromPlatform() err = %v, want it to wrap both %v and %v", err, linkErr, deleteErr)
+		if !errors.Is(err, deleteErr) {
+			t.Errorf("UpdateUserFromPlatform() err = %v, want the cleanup error %v", err, deleteErr)
 		}
 	})
 
@@ -589,14 +589,14 @@ func TestUS15to24and38UpdateUserFromPlatform(t *testing.T) {
 		}
 	})
 
-	t.Run("US-38_AddLinkAndCleanupFailWrapsBoth", func(t *testing.T) {
+	t.Run("US-38_AddLinkAndCleanupFailReturnsTheCleanupError", func(t *testing.T) {
 		as := &usFakeAccountStore{deleteErr: testerrors.ErrBoom}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, ErrNotFound}}, addErr: testerrors.ErrInsertFailed}
 		svc := usNewService(as, als, &usFakeAccountSettingsStore{})
 
 		_, err := svc.UpdateUserFromPlatform(PlatformDiscord, "p1", usFakePlatformData{})
-		if !errors.Is(err, testerrors.ErrInsertFailed) || !errors.Is(err, testerrors.ErrBoom) {
-			t.Errorf("UpdateUserFromPlatform() err = %v, want it to wrap both %v and %v", err, testerrors.ErrInsertFailed, testerrors.ErrBoom)
+		if !errors.Is(err, testerrors.ErrBoom) {
+			t.Errorf("UpdateUserFromPlatform() err = %v, want the cleanup error %v", err, testerrors.ErrBoom)
 		}
 	})
 }

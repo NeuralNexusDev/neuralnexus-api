@@ -2,8 +2,8 @@ package linking
 
 import (
 	"errors"
-	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -88,12 +88,14 @@ func (s *SteamData) CreateLinkedAccount(userID string) *auth.LinkedAccount {
 // back to Steam's own endpoint, returning the caller's SteamID64.
 func VerifySteamOpenIDCallback(query url.Values) (string, error) {
 	if query.Get("openid.mode") != "id_res" {
-		return "", fmt.Errorf("%w: unexpected openid.mode", ErrInvalidAssertion)
+		log.Println(ErrInvalidAssertion, "- unexpected openid.mode")
+		return "", ErrInvalidAssertion
 	}
 
 	matches := steamClaimedIDPattern.FindStringSubmatch(query.Get("openid.claimed_id"))
 	if matches == nil {
-		return "", fmt.Errorf("%w: invalid or missing openid.claimed_id", ErrInvalidAssertion)
+		log.Println(ErrInvalidAssertion, "- invalid or missing openid.claimed_id")
+		return "", ErrInvalidAssertion
 	}
 	steamID64 := matches[1]
 
@@ -101,7 +103,8 @@ func VerifySteamOpenIDCallback(query url.Values) (string, error) {
 	// whatever fields openid.signed lists - it says nothing about whether
 	// claimed_id was one of them, so that has to be checked separately.
 	if !slices.Contains(strings.Split(query.Get("openid.signed"), ","), "claimed_id") {
-		return "", fmt.Errorf("%w: openid.signed does not cover claimed_id", ErrInvalidAssertion)
+		log.Println(ErrInvalidAssertion, "- openid.signed does not cover claimed_id")
+		return "", ErrInvalidAssertion
 	}
 
 	checkValues := url.Values{}
@@ -123,7 +126,8 @@ func VerifySteamOpenIDCallback(query url.Values) (string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("%w: %s", ErrSteamOpenIDCheck, resp.Status)
+		log.Println(ErrSteamOpenIDCheck, resp.Status)
+		return "", ErrSteamOpenIDCheck
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -131,7 +135,8 @@ func VerifySteamOpenIDCallback(query url.Values) (string, error) {
 		return "", err
 	}
 	if !responseIsValid(body) {
-		return "", fmt.Errorf("%w: steam rejected the openid assertion", ErrInvalidAssertion)
+		log.Println(ErrInvalidAssertion, "- steam rejected the openid assertion")
+		return "", ErrInvalidAssertion
 	}
 
 	return steamID64, nil
@@ -170,7 +175,8 @@ func GetSteamUser(steamID64 string) (*SteamData, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("%w: %s", ErrSteamPlayerSummaryLookup, resp.Status)
+		log.Println(ErrSteamPlayerSummaryLookup, resp.Status)
+		return nil, ErrSteamPlayerSummaryLookup
 	}
 
 	var parsed struct {
@@ -186,7 +192,8 @@ func GetSteamUser(steamID64 string) (*SteamData, error) {
 	}
 	player := &parsed.Response.Players[0]
 	if player.SteamID64 != steamID64 {
-		return nil, fmt.Errorf("%w: got %q, want %q", ErrSteamIDMismatch, player.SteamID64, steamID64)
+		log.Printf("%v: got %q, want %q", ErrSteamIDMismatch, player.SteamID64, steamID64)
+		return nil, ErrSteamIDMismatch
 	}
 	return player, nil
 }

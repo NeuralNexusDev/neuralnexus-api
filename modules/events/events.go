@@ -3,12 +3,12 @@ package events
 import (
 	"context"
 	"errors"
-	"fmt"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/goccy/go-json"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"log"
 	"time"
 )
 
@@ -119,14 +119,16 @@ func (s *store) GetEvent(id string) (*Event, error) {
 func (s *store) GetEventsByPlatform(platform auth.Platform) ([]*Event, error) {
 	rows, err := s.db.Query(context.Background(), "SELECT * FROM event_log WHERE platform = $1", platform)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrEventsQueryFailed, err)
+		log.Println(ErrEventsQueryFailed, err)
+		return nil, ErrEventsQueryFailed
 	}
 	defer rows.Close()
 
 	var events []*Event
 	events, err = pgx.CollectRows(rows, pgx.RowToAddrOfStructByName[Event])
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrEventsQueryFailed, err)
+		log.Println(ErrEventsQueryFailed, err)
+		return nil, ErrEventsQueryFailed
 	}
 	return events, nil
 }

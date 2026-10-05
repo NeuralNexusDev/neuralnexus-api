@@ -3,7 +3,6 @@ package minecraft
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -127,7 +126,8 @@ func (s *service) GetMojangPlayerByName(name string) (*Player, error) {
 		return nil, ErrPlayerNotFound
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%w: %s", ErrMojangAPI, resp.Status)
+		log.Println(ErrMojangAPI, resp.Status)
+		return nil, ErrMojangAPI
 	}
 
 	var player Player
@@ -174,7 +174,8 @@ func (s *service) GetMojangPlayerByUUID(id string) (*Player, error) {
 		return nil, ErrPlayerNotFound
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%w: %s", ErrMojangAPI, resp.Status)
+		log.Println(ErrMojangAPI, resp.Status)
+		return nil, ErrMojangAPI
 	}
 
 	var player Player
@@ -242,7 +243,8 @@ func (s *service) GetMojangPlayersByNames(names []string) ([]*Player, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%w: %s", ErrMojangAPI, resp.Status)
+		log.Println(ErrMojangAPI, resp.Status)
+		return nil, ErrMojangAPI
 	}
 
 	var fetched []Player
@@ -360,7 +362,8 @@ func (s *service) fetchProfileFromMojang(id string, signed bool) (*Player, *Prof
 		return nil, nil, ErrPlayerNotFound
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, nil, fmt.Errorf("%w: %s", ErrMojangAPI, resp.Status)
+		log.Println(ErrMojangAPI, resp.Status)
+		return nil, nil, ErrMojangAPI
 	}
 
 	var player Player
@@ -428,7 +431,8 @@ func (s *service) GetGeyserXUID(gamertag string) (*GeyserPlayer, error) {
 	}
 	// Geyser has no 404 here: an unknown gamertag is 200 with an empty object.
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%w: %s", ErrGeyserAPI, resp.Status)
+		log.Println(ErrGeyserAPI, resp.Status)
+		return nil, ErrGeyserAPI
 	}
 
 	var result struct {
@@ -470,7 +474,8 @@ func (s *service) GetGeyserSkin(xuid int64) (*GeyserSkin, error) {
 		return nil, ErrInvalidGeyserRequest
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%w: %s", ErrGeyserAPI, resp.Status)
+		log.Println(ErrGeyserAPI, resp.Status)
+		return nil, ErrGeyserAPI
 	}
 
 	var skin GeyserSkin
@@ -505,7 +510,8 @@ func (s *service) resolveGeyserPlayerByXUID(xuid int64) (*GeyserPlayer, error) {
 		return nil, ErrInvalidGeyserRequest
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%w: %s", ErrGeyserAPI, resp.Status)
+		log.Println(ErrGeyserAPI, resp.Status)
+		return nil, ErrGeyserAPI
 	}
 
 	var result struct {
@@ -529,7 +535,8 @@ func (s *service) resolveGeyserPlayerByXUID(xuid int64) (*GeyserPlayer, error) {
 // resolved. It must not wrap ErrInvalidGeyserRequest, which the handlers map to 400.
 func skinStepFailure(err error) error {
 	if errors.Is(err, ErrInvalidGeyserRequest) {
-		return fmt.Errorf("%w: skin lookup rejected a resolved xuid", ErrGeyserAPI)
+		log.Println(ErrGeyserAPI, "- skin lookup rejected a resolved xuid")
+		return ErrGeyserAPI
 	}
 	return err
 }
@@ -588,7 +595,8 @@ func (s *service) serveFromS3(hash string) (*TextureResult, error) {
 	}
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
-		return nil, fmt.Errorf("%w: %d", ErrBadStatusS3, resp.StatusCode)
+		log.Println(ErrBadStatusS3, resp.StatusCode)
+		return nil, ErrBadStatusS3
 	}
 
 	contentType := resp.Header.Get("Content-Type")
@@ -621,7 +629,8 @@ func (s *service) fetchAndArchive(hash string) (*TextureResult, error) {
 		return nil, ErrTextureNotFound
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%w: %d", ErrBadStatusRemote, resp.StatusCode)
+		log.Println(ErrBadStatusRemote, resp.StatusCode)
+		return nil, ErrBadStatusRemote
 	}
 
 	data, err := io.ReadAll(resp.Body)
@@ -671,7 +680,8 @@ func (s *service) serveGeyserFromS3(hash string) (*TextureResult, error) {
 	}
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
-		return nil, fmt.Errorf("%w: %d", ErrBadStatusS3, resp.StatusCode)
+		log.Println(ErrBadStatusS3, resp.StatusCode)
+		return nil, ErrBadStatusS3
 	}
 
 	contentType := resp.Header.Get("Content-Type")
@@ -708,7 +718,8 @@ func (s *service) fetchAndArchiveGeyserTexture(hash string) (*TextureResult, err
 		return nil, ErrTextureNotFound
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%w: %d", ErrBadStatusRemote, resp.StatusCode)
+		log.Println(ErrBadStatusRemote, resp.StatusCode)
+		return nil, ErrBadStatusRemote
 	}
 
 	data, err := io.ReadAll(resp.Body)

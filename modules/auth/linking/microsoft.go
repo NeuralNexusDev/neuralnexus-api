@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/oauth2"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"time"
@@ -109,7 +110,8 @@ func xstsErrForCode(code int64) error {
 	case 2148916238:
 		return ErrAccountIsChild
 	default:
-		return fmt.Errorf("%w, code: %d", ErrXSTSAuthentication, code)
+		log.Println(ErrXSTSAuthentication, "code:", code)
+		return ErrXSTSAuthentication
 	}
 }
 
@@ -200,7 +202,8 @@ func GetMicrosoftUser(token *auth.OAuthToken) (*MicrosoftUserData, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%w: %s", ErrMicrosoftUserinfoLookup, resp.Status)
+		log.Println(ErrMicrosoftUserinfoLookup, resp.Status)
+		return nil, ErrMicrosoftUserinfoLookup
 	}
 
 	var user MicrosoftUserData
@@ -274,7 +277,8 @@ func xblAuthenticate(msAccessToken string) (string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("%w: %s", ErrXboxLiveAuthentication, resp.Status)
+		log.Println(ErrXboxLiveAuthentication, resp.Status)
+		return "", ErrXboxLiveAuthentication
 	}
 
 	var xblResp xblAuthResponse
@@ -346,7 +350,8 @@ func xstsAuthorize(xblToken, relyingParty string) (xstsToken, userHash, xuid, ga
 		return "", "", "", "", xstsErrForCode(xstsResp.XErr)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", "", "", "", fmt.Errorf("%w: %s", ErrXSTSAuthorization, resp.Status)
+		log.Println(ErrXSTSAuthorization, resp.Status)
+		return "", "", "", "", ErrXSTSAuthorization
 	}
 	if decodeErr != nil {
 		return "", "", "", "", decodeErr
@@ -396,7 +401,8 @@ func minecraftLoginWithXbox(userHash, xstsToken string) (string, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("%w: %s: %s", ErrMinecraftLoginWithXbox, resp.Status, respBody)
+		log.Println(ErrMinecraftLoginWithXbox, resp.Status, string(respBody))
+		return "", ErrMinecraftLoginWithXbox
 	}
 
 	var loginResp mcLoginWithXboxResponse
@@ -443,7 +449,8 @@ func getMinecraftProfile(mcAccessToken string) (*MinecraftData, error) {
 		return nil, nil
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%w: %s", ErrMinecraftProfileLookup, resp.Status)
+		log.Println(ErrMinecraftProfileLookup, resp.Status)
+		return nil, ErrMinecraftProfileLookup
 	}
 	if decodeErr != nil {
 		return nil, decodeErr
@@ -451,7 +458,8 @@ func getMinecraftProfile(mcAccessToken string) (*MinecraftData, error) {
 
 	id, err := uuid.Parse(profile.ID)
 	if err != nil {
-		return nil, fmt.Errorf("minecraft profile returned an invalid UUID %q: %w", profile.ID, err)
+		log.Println("Minecraft profile returned an invalid UUID:", profile.ID, err)
+		return nil, err
 	}
 	return &MinecraftData{
 		ID:       id,
