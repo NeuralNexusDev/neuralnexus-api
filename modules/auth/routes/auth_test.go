@@ -70,14 +70,19 @@ func (s *stubAccountService) NewSession(a *auth.Account, expiresAt int64) (*auth
 }
 
 type stubLinkAccountStore struct {
-	existing *auth.LinkedAccount
+	existing   *auth.LinkedAccount
+	byPlatform map[auth.Platform]*auth.LinkedAccount
+	addErr     error
 }
 
 var _ auth.LinkAccountStore = (*stubLinkAccountStore)(nil)
 
-func (s *stubLinkAccountStore) AddLinkedAccountToDB(*auth.LinkedAccount) error { return nil }
+func (s *stubLinkAccountStore) AddLinkedAccountToDB(*auth.LinkedAccount) error { return s.addErr }
 func (s *stubLinkAccountStore) UpdateLinkedAccount(*auth.LinkedAccount) error  { return nil }
-func (s *stubLinkAccountStore) GetLinkedAccountByPlatformID(auth.Platform, string) (*auth.LinkedAccount, error) {
+func (s *stubLinkAccountStore) GetLinkedAccountByPlatformID(platform auth.Platform, _ string) (*auth.LinkedAccount, error) {
+	if la, ok := s.byPlatform[platform]; ok {
+		return la, nil
+	}
 	if s.existing != nil {
 		return s.existing, nil
 	}
@@ -1228,34 +1233,146 @@ func TestAU59LoginHandlerAccountLookupInfraFails(t *testing.T) {
 	})
 }
 
-func TestAU60to71OAuthFailureResponse(t *testing.T) {
-	tests := []struct {
-		id         string
-		err        error
-		wantStatus int
-		wantMsg    string
-	}{
-		{"AU-60_InvalidPlatform", linking.ErrInvalidPlatform, http.StatusBadRequest, msgInvalidPlatform},
-		{"AU-61_NoScopeInToken", linking.ErrNoScopeInToken, http.StatusBadRequest, msgMissingOAuthScope},
-		{"AU-62_InvalidAssertion", linking.ErrInvalidAssertion, http.StatusBadRequest, msgInvalidState},
-		{"AU-63_SteamIDMismatch", linking.ErrSteamIDMismatch, http.StatusBadRequest, msgSteamAccountMismatch},
-		{"AU-64_SessionNotFound", linking.ErrSessionNotFound, http.StatusUnauthorized, msgLoginRequiredToLink},
-		{"AU-65_SessionExpired", linking.ErrSessionExpired, http.StatusUnauthorized, msgSessionExpired},
-		{"AU-66_PlatformLoginDisabled", linking.ErrPlatformLoginDisabled, http.StatusForbidden, msgPlatformLoginDisabled},
-		{"AU-67_SteamNoPlayers", linking.ErrSteamNoPlayers, http.StatusNotFound, msgSteamAccountNotFound},
-		{"AU-68_ConflictingMicrosoftIdentities", linking.ErrConflictingMicrosoftIdentities, http.StatusConflict, msgConflictingMicrosoftIdentities},
-		{"AU-69_PlatformAlreadyLinked", linking.ErrPlatformAlreadyLinkedToDifferentAccount, http.StatusConflict, msgPlatformAlreadyLinked},
-		{"AU-70_LinkAccountFailedStaysGeneral", fmt.Errorf("%w: %w", linking.ErrLinkAccountFailed, linking.ErrPlatformAlreadyLinkedToDifferentAccount), http.StatusInternalServerError, msgAuthenticationFailed},
-		{"AU-71_UnclassifiedStaysGeneral", testerrors.ErrDBDown, http.StatusInternalServerError, msgAuthenticationFailed},
-	}
-	for _, tc := range tests {
-		t.Run(tc.id, func(t *testing.T) {
-			gotStatus, gotMsg := oauthFailureResponse(tc.err)
-			if gotStatus != tc.wantStatus || gotMsg != tc.wantMsg {
-				t.Errorf("oauthFailureResponse() = (%d, %q), want (%d, %q)", gotStatus, gotMsg, tc.wantStatus, tc.wantMsg)
-			}
-		})
-	}
+func auWithSession(r *http.Request, userID string) *http.Request {
+	session := &auth.Session{ID: "link-session", UserID: userID}
+	return r.WithContext(context.WithValue(r.Context(), mw.SessionKey, session))
+}
+
+func auDiscordTransportWithoutScope(t *testing.T) {
+	t.Helper()
+	swapDefaultTransport(t, auRoundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		if req.Method == http.MethodPost && req.URL.Host == "discord.com" && req.URL.Path == "/api/oauth2/token" {
+			return auJSONResponse(http.StatusOK, `{"access_token":"disc-at","token_type":"Bearer","expires_in":3600}`), nil
+		}
+		return nil, fmt.Errorf("unexpected outbound request %s %s", req.Method, req.URL.String())
+	}))
+}
+
+func auMicrosoftTransport(t *testing.T) {
+	t.Helper()
+	swapDefaultTransport(t, auRoundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		switch {
+		case req.Method == http.MethodPost && req.URL.Host == "login.microsoftonline.com":
+			return auJSONResponse(http.StatusOK, `{"access_token":"ms-at","token_type":"Bearer","expires_in":3600,"scope":"XboxLive.signin offline_access"}`), nil
+		case req.Method == http.MethodPost && req.URL.Host == "user.auth.xboxlive.com":
+			return auJSONResponse(http.StatusOK, `{"Token":"xbl-t"}`), nil
+		case req.Method == http.MethodPost && req.URL.Host == "xsts.auth.xboxlive.com":
+			return auJSONResponse(http.StatusOK, `{"Token":"xsts-t","DisplayClaims":{"xui":[{"uhs":"hash1","xid":"xid1","gtg":"Tag"}]}}`), nil
+		case req.Method == http.MethodPost && req.URL.Host == "api.minecraftservices.com" && req.URL.Path == "/authentication/login_with_xbox":
+			return auJSONResponse(http.StatusOK, `{"access_token":"mc-at"}`), nil
+		case req.Method == http.MethodGet && req.URL.Host == "api.minecraftservices.com" && req.URL.Path == "/minecraft/profile":
+			return auJSONResponse(http.StatusOK, `{"id":"069a79f4-44e9-4726-a5be-fca90e38aaf5","name":"Steve"}`), nil
+		default:
+			return nil, fmt.Errorf("unexpected outbound request %s %s", req.Method, req.URL.String())
+		}
+	}))
+}
+
+func TestAU60to69OAuthAndOpenIDFailureMapping(t *testing.T) {
+	const redirect = "https://neuralnexus.test/done"
+	discordLogin := linking.OAuthState{Platform: auth.PlatformDiscord, Nonce: "test-nonce", RedirectURI: redirect, Mode: linking.ModeLogin}
+	discordLink := linking.OAuthState{Platform: auth.PlatformDiscord, Nonce: "test-nonce", RedirectURI: redirect, Mode: linking.ModeLink}
+	steamLogin := linking.OAuthState{Platform: auth.PlatformSteam, Nonce: "test-nonce", RedirectURI: redirect, Mode: linking.ModeLogin}
+	steamLink := linking.OAuthState{Platform: auth.PlatformSteam, Nonce: "test-nonce", RedirectURI: redirect, Mode: linking.ModeLink}
+	okJWT := func(*auth.Session) (string, error) { return "test-jwt", nil }
+	linkedElsewhere := &stubLinkAccountStore{existing: &auth.LinkedAccount{UserID: "u2", Verified: true, LoginEnabled: true}}
+	addFails := func(err error) *stubLinkAccountStore { return &stubLinkAccountStore{addErr: err} }
+	alreadyLinkedAndFailed := fmt.Errorf("%w: %w", linking.ErrPlatformAlreadyLinkedToDifferentAccount, testerrors.ErrDBDown)
+
+	t.Run("AU-60_OAuthInvalidPlatform", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		state := linking.OAuthState{Platform: "nonexistent", Nonce: "test-nonce", RedirectURI: redirect, Mode: linking.ModeLogin}
+
+		OAuthHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{createJWT: okJWT})(w, auOAuthRequest(t, state))
+
+		requireProblemRedirect(t, w, redirect, http.StatusBadRequest, msgInvalidPlatform)
+	})
+
+	t.Run("AU-61_OAuthTokenWithoutScope", func(t *testing.T) {
+		auDiscordTransportWithoutScope(t)
+		w := httptest.NewRecorder()
+
+		OAuthHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{createJWT: okJWT})(w, auOAuthRequest(t, discordLogin))
+
+		requireProblemRedirect(t, w, redirect, http.StatusBadRequest, msgMissingOAuthScope)
+	})
+
+	t.Run("AU-62_OpenIDSteamIDMismatch", func(t *testing.T) {
+		auSteamTransportBody(t, http.StatusOK, http.StatusOK, `{"response":{"players":[{"steamid":"76561198999999999","personaname":"someone"}]}}`)
+		w := httptest.NewRecorder()
+
+		OpenIDHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{createJWT: okJWT})(w, auOpenIDRequest(t, steamLogin))
+
+		requireProblemRedirect(t, w, redirect, http.StatusBadRequest, msgSteamAccountMismatch)
+	})
+
+	t.Run("AU-63_OAuthLinkedToDifferentAccount", func(t *testing.T) {
+		auDiscordTransport(t)
+		w := httptest.NewRecorder()
+
+		OAuthHandler(&stubAccountService{}, linkedElsewhere, &stubSessionService{createJWT: okJWT})(w, auWithSession(auOAuthRequest(t, discordLink), "u1"))
+
+		requireProblemRedirect(t, w, redirect, http.StatusConflict, msgPlatformAlreadyLinked)
+	})
+
+	t.Run("AU-64_OAuthConflictingMicrosoftIdentities", func(t *testing.T) {
+		auMicrosoftTransport(t)
+		w := httptest.NewRecorder()
+		las := &stubLinkAccountStore{byPlatform: map[auth.Platform]*auth.LinkedAccount{
+			auth.PlatformXboxLive:  {UserID: "u1", Verified: true, LoginEnabled: true},
+			auth.PlatformMinecraft: {UserID: "u2", Verified: true, LoginEnabled: true},
+		}}
+		state := linking.OAuthState{Platform: auth.PlatformMinecraft, Nonce: "test-nonce", RedirectURI: redirect, Mode: linking.ModeLogin}
+
+		OAuthHandler(&stubAccountService{}, las, &stubSessionService{createJWT: okJWT})(w, auOAuthRequest(t, state))
+
+		requireProblemRedirect(t, w, redirect, http.StatusConflict, msgConflictingMicrosoftIdentities)
+	})
+
+	t.Run("AU-65_OAuthLinkFails", func(t *testing.T) {
+		auDiscordTransport(t)
+		w := httptest.NewRecorder()
+
+		OAuthHandler(&stubAccountService{}, addFails(testerrors.ErrDBDown), &stubSessionService{createJWT: okJWT})(w, auWithSession(auOAuthRequest(t, discordLink), "u1"))
+
+		requireProblemRedirect(t, w, redirect, http.StatusInternalServerError, msgAuthenticationFailed)
+	})
+
+	t.Run("AU-66_OAuthLinkFailureWrappingAnotherErrorStaysGeneral", func(t *testing.T) {
+		auDiscordTransport(t)
+		w := httptest.NewRecorder()
+
+		OAuthHandler(&stubAccountService{}, addFails(alreadyLinkedAndFailed), &stubSessionService{createJWT: okJWT})(w, auWithSession(auOAuthRequest(t, discordLink), "u1"))
+
+		requireProblemRedirect(t, w, redirect, http.StatusInternalServerError, msgAuthenticationFailed)
+	})
+
+	t.Run("AU-67_OpenIDLinkedToDifferentAccount", func(t *testing.T) {
+		auSteamTransport(t, http.StatusOK, http.StatusOK)
+		w := httptest.NewRecorder()
+
+		OpenIDHandler(&stubAccountService{}, linkedElsewhere, &stubSessionService{createJWT: okJWT})(w, auWithSession(auOpenIDRequest(t, steamLink), "u1"))
+
+		requireProblemRedirect(t, w, redirect, http.StatusConflict, msgPlatformAlreadyLinked)
+	})
+
+	t.Run("AU-68_OpenIDLinkFails", func(t *testing.T) {
+		auSteamTransport(t, http.StatusOK, http.StatusOK)
+		w := httptest.NewRecorder()
+
+		OpenIDHandler(&stubAccountService{}, addFails(testerrors.ErrDBDown), &stubSessionService{createJWT: okJWT})(w, auWithSession(auOpenIDRequest(t, steamLink), "u1"))
+
+		requireProblemRedirect(t, w, redirect, http.StatusInternalServerError, msgAuthenticationFailed)
+	})
+
+	t.Run("AU-69_OpenIDLinkFailureWrappingAnotherErrorStaysGeneral", func(t *testing.T) {
+		auSteamTransport(t, http.StatusOK, http.StatusOK)
+		w := httptest.NewRecorder()
+
+		OpenIDHandler(&stubAccountService{}, addFails(alreadyLinkedAndFailed), &stubSessionService{createJWT: okJWT})(w, auWithSession(auOpenIDRequest(t, steamLink), "u1"))
+
+		requireProblemRedirect(t, w, redirect, http.StatusInternalServerError, msgAuthenticationFailed)
+	})
 }
 
 func TestAU72to74OAuthAndOpenIDFailuresUseMapping(t *testing.T) {

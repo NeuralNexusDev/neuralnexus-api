@@ -30,6 +30,7 @@ const (
 	msgFailedToGetServerStatus = "Failed to get server status"
 	msgIconUnavailable         = "Failed to load server icon"
 	msgInvalidHost             = "The host must be a domain name, an IPv4 address or an IPv6 address, optionally followed by a port."
+	logUnableToGetServerStatus = "[Error]: Unable to get server status:\n\t"
 )
 
 const (
@@ -40,33 +41,11 @@ const (
 
 var iconDir = filepath.Join("public", "mcstatus", "icons")
 
-type failureMapping struct {
-	err error
-	msg string
-}
-
-var statusFailures = []failureMapping{
-	{ErrJavaStatus, msgJavaStatusFailed},
-	{ErrBedrockStatus, msgBedrockStatusFailed},
-}
-
 type offlineProblem struct {
 	XMLName xml.Name `json:"-" xml:"Problem"`
 	*responses.Problem
 	Host string `json:"host" xml:"host"`
 	Port int    `json:"port" xml:"port"`
-}
-
-func respondStatusFailure(w http.ResponseWriter, r *http.Request, err error, host string, port int) {
-	log.Println("[Error]: Unable to get server status:\n\t", err)
-	for _, m := range statusFailures {
-		if errors.Is(err, m.err) {
-			problem := responses.NewNotFoundProblem(m.msg)
-			responses.SendProblemStruct(w, r, problem, offlineProblem{Problem: problem, Host: host, Port: port})
-			return
-		}
-	}
-	responses.InternalServerError(w, r, msgFailedToGetServerStatus)
 }
 
 func parsePort(raw string) (int, bool) {
@@ -210,7 +189,17 @@ func ServerStatusHandler(s MCStatusService) http.HandlerFunc {
 
 		status, err := s.GetServerStatus(host, port, isBedrock, queryEnabled, queryPort)
 		if err != nil {
-			respondStatusFailure(w, r, err, host, port)
+			log.Println(logUnableToGetServerStatus, err)
+			switch {
+			case errors.Is(err, ErrJavaStatus):
+				problem := responses.NewNotFoundProblem(msgJavaStatusFailed)
+				responses.SendProblemStruct(w, r, problem, offlineProblem{Problem: problem, Host: host, Port: port})
+			case errors.Is(err, ErrBedrockStatus):
+				problem := responses.NewNotFoundProblem(msgBedrockStatusFailed)
+				responses.SendProblemStruct(w, r, problem, offlineProblem{Problem: problem, Host: host, Port: port})
+			default:
+				responses.InternalServerError(w, r, msgFailedToGetServerStatus)
+			}
 			return
 		}
 		if !raw {
@@ -257,7 +246,8 @@ func IconHandler(s MCStatusService) http.HandlerFunc {
 			return
 		}
 		if err != nil {
-			respondStatusFailure(w, r, err, host, port)
+			log.Println(logUnableToGetServerStatus, err)
+			responses.InternalServerError(w, r, msgFailedToGetServerStatus)
 			return
 		}
 		if status.Icon == nil {
