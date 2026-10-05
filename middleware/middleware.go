@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -28,6 +29,7 @@ const (
 const (
 	msgRateLimited      = "You have been rate limited. Please try again later."
 	msgInvalidSignature = "Invalid signature"
+	msgInternalError    = "An internal server error occurred."
 )
 
 // Middleware - Middleware type
@@ -213,6 +215,58 @@ func RateLimitMiddleware(service auth.RateLimitService, prefix string, sessionLi
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// startedWriter - Wrapper for http.ResponseWriter that records whether the response has started
+type startedWriter struct {
+	http.ResponseWriter
+	started bool
+}
+
+// WriteHeader - Write the header
+func (w *startedWriter) WriteHeader(statusCode int) {
+	w.started = true
+	w.ResponseWriter.WriteHeader(statusCode)
+}
+
+// Write - Write the body
+func (w *startedWriter) Write(b []byte) (int, error) {
+	w.started = true
+	return w.ResponseWriter.Write(b)
+}
+
+// Unwrap - Let http.ResponseController reach the underlying writer
+func (w *startedWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}
+
+// RecoveryMiddleware - Log a panic from a handler and answer 500, unless the handler has already started the response
+func RecoveryMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tracked := &startedWriter{ResponseWriter: w}
+		defer func() {
+			recovered := recover()
+			if recovered == nil {
+				return
+			}
+			if recovered == http.ErrAbortHandler {
+				panic(recovered)
+			}
+			log.Printf("panic serving %s %s: request_id=%v %v\n%s", r.Method, r.URL.Path, r.Context().Value(RequestIDKey), recovered, debug.Stack())
+			if !tracked.started {
+				responses.InternalServerError(tracked, r, msgInternalError)
+			}
+		}()
+		next.ServeHTTP(tracked, r)
+	})
+}
+
+// NoSniffMiddleware - Stop browsers from guessing a response's content type
+func NoSniffMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		next.ServeHTTP(w, r)
+	})
 }
 
 // RequestIDMiddleware - Set the request ID in the context

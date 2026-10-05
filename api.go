@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/discord"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/twitch"
@@ -256,6 +257,7 @@ func (s *APIServer) Setup() http.Handler {
 	rateLimit := auth.NewRateLimitService(authStore)
 
 	middlewareStack := mw.CreateStack(
+		mw.NoSniffMiddleware,
 		cors.New(cors.Options{
 			AllowedOrigins:   []string{auth.NN_SITE_URL},
 			AllowedMethods:   []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete},
@@ -264,6 +266,7 @@ func (s *APIServer) Setup() http.Handler {
 		}).Handler,
 		mw.IPMiddleware,
 		mw.RequestIDMiddleware,
+		mw.RecoveryMiddleware,
 		mw.SessionMiddleware(session),
 		mw.RateLimitMiddleware(rateLimit, "default", 300, 60),
 		mw.RequestLoggerMiddleware,
@@ -279,8 +282,12 @@ func (s *APIServer) Setup() http.Handler {
 // Run - Start the API server
 func (s *APIServer) Run() error {
 	server := http.Server{
-		Addr:    s.Address,
-		Handler: s.Setup(),
+		Addr:              s.Address,
+		Handler:           s.Setup(),
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       2 * time.Minute,
 	}
 
 	if s.UsingUDS {

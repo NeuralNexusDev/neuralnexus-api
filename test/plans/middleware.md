@@ -58,3 +58,8 @@
 | MW-49 | VerifyEd25519Middleware | Error Path | Headers present but signature verification fails | Signature bytes don't match `timestamp+body` under the public key | `responses.Unauthorized` (401, ``msgInvalidSignature``); `next` not called | P1 |  |
 | MW-50 | VerifyEd25519Middleware | Edge Case | Signature header present but not valid hex; timestamp present | `X-Signature-Ed25519: not-hex!!` | `responses.Unauthorized` (401) sent; `next` not called | P2 |  |
 | MW-51 | VerifyEd25519Middleware | Error Path | `io.ReadAll(r.Body)` fails | Request body is a reader that always returns an error | `responses.Unauthorized` (401, ``msgInvalidSignature``); `next` not called | P2 |  |
+| MW-57 | NoSniffMiddleware | Happy Path | A response passes through | `next` writes status 418 | `X-Content-Type-Options: nosniff` is set, `next` is called once and its status is kept | P2 |  |
+| MW-58 | RecoveryMiddleware | Error Path | The handler panics before writing anything | `next` panics with a string; request ID 77 in context | 500 with `msgInternalError`; the log names the method, path, request ID and panic value | P1 |  |
+| MW-59 | RecoveryMiddleware | Edge Case | The handler panics after starting the response | `next` writes 202 and a body, then panics | The 202 and the body are kept; no 500 is appended | P1 |  |
+| MW-60 | RecoveryMiddleware | Edge Case | The handler panics with `http.ErrAbortHandler` | `next` panics with `http.ErrAbortHandler` | The panic is raised again so net/http aborts the connection | P2 |  |
+| MW-61 | RecoveryMiddleware | Happy Path | The handler does not panic | `next` writes 204 | The response passes through unchanged | P2 |  |
