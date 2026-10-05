@@ -921,7 +921,7 @@ func TestRecoveryMiddleware(t *testing.T) {
 		getLog := mwCaptureLog(t)
 		rec := httptest.NewRecorder()
 		r := httptest.NewRequest(http.MethodGet, "/boom", nil)
-		r = r.WithContext(context.WithValue(r.Context(), RequestIDKey, 77))
+		r = r.WithContext(context.WithValue(mwBaseCtx(), RequestIDKey, 77))
 		next := http.HandlerFunc(func(http.ResponseWriter, *http.Request) { panic("handler exploded") })
 
 		RecoveryMiddleware(next).ServeHTTP(rec, r)
@@ -930,7 +930,7 @@ func TestRecoveryMiddleware(t *testing.T) {
 			t.Fatalf("status = %d, want 500", rec.Code)
 		}
 		mwRequireDetail(t, rec, msgInternalError)
-		for _, want := range []string{"panic serving GET /boom", "request_id=77", "handler exploded"} {
+		for _, want := range []string{"77 N/A 127.0.0.1 panic serving GET /boom", "handler exploded"} {
 			if !strings.Contains(getLog(), want) {
 				t.Errorf("log = %q, want it to contain %q", getLog(), want)
 			}
@@ -946,7 +946,7 @@ func TestRecoveryMiddleware(t *testing.T) {
 			panic("late failure")
 		})
 
-		RecoveryMiddleware(next).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+		RecoveryMiddleware(next).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil).WithContext(mwBaseCtx()))
 
 		if rec.Code != http.StatusAccepted || rec.Body.String() != "partial" {
 			t.Errorf("response = %d %q, want the handler's 202 and body untouched", rec.Code, rec.Body.String())

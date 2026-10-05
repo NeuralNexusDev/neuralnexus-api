@@ -242,7 +242,7 @@ func RecoveryMiddleware(next http.Handler) http.Handler {
 			if recovered == http.ErrAbortHandler {
 				panic(recovered)
 			}
-			log.Printf("panic serving %s %s: request_id=%v %v\n%s", r.Method, r.URL.Path, r.Context().Value(RequestIDKey), recovered, debug.Stack())
+			LogRequest(r.Context(), fmt.Sprintf("panic serving %s %s: %v\n%s", r.Method, r.URL.Path, recovered, debug.Stack()))
 			if !tracked.started {
 				responses.InternalServerError(tracked, r, msgInternalError)
 			}
