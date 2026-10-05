@@ -92,12 +92,25 @@ func CreateStack(middlewares ...Middleware) Middleware {
 type WrappedWriter struct {
 	http.ResponseWriter
 	statusCode int
+	started    bool
 }
 
 // WriteHeader - Write the header
 func (w *WrappedWriter) WriteHeader(statusCode int) {
 	w.statusCode = statusCode
+	w.started = true
 	w.ResponseWriter.WriteHeader(statusCode)
+}
+
+// Write - Write the body
+func (w *WrappedWriter) Write(b []byte) (int, error) {
+	w.started = true
+	return w.ResponseWriter.Write(b)
+}
+
+// Unwrap - Let http.ResponseController reach the underlying writer
+func (w *WrappedWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
 }
 
 // IPMiddleware - Update the remote address based on headers
@@ -217,33 +230,10 @@ func RateLimitMiddleware(service auth.RateLimitService, prefix string, sessionLi
 	}
 }
 
-// startedWriter - Wrapper for http.ResponseWriter that records whether the response has started
-type startedWriter struct {
-	http.ResponseWriter
-	started bool
-}
-
-// WriteHeader - Write the header
-func (w *startedWriter) WriteHeader(statusCode int) {
-	w.started = true
-	w.ResponseWriter.WriteHeader(statusCode)
-}
-
-// Write - Write the body
-func (w *startedWriter) Write(b []byte) (int, error) {
-	w.started = true
-	return w.ResponseWriter.Write(b)
-}
-
-// Unwrap - Let http.ResponseController reach the underlying writer
-func (w *startedWriter) Unwrap() http.ResponseWriter {
-	return w.ResponseWriter
-}
-
 // RecoveryMiddleware - Log a panic from a handler and answer 500, unless the handler has already started the response
 func RecoveryMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tracked := &startedWriter{ResponseWriter: w}
+		tracked := &WrappedWriter{ResponseWriter: w, statusCode: http.StatusOK}
 		defer func() {
 			recovered := recover()
 			if recovered == nil {
@@ -292,7 +282,7 @@ func RequestIDMiddleware(next http.Handler) http.Handler {
 func RequestLoggerMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		wrapped := &WrappedWriter{w, http.StatusOK}
+		wrapped := &WrappedWriter{ResponseWriter: w, statusCode: http.StatusOK}
 
 		next.ServeHTTP(wrapped, r)
 
