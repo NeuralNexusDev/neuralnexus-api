@@ -2,7 +2,7 @@ package auth
 
 import (
 	"errors"
-	"fmt"
+	"log"
 )
 
 // RoleStore - The source of the permissions that roles grant
@@ -10,7 +10,7 @@ type RoleStore interface {
 	GetPermissionsForRoles(roleIDs []string) ([]string, error)
 }
 
-const LinkCleanupFailedFmt = "failed to link account (%w) and failed to clean up the orphaned placeholder account: %w"
+const LogLinkCleanupFailed = "Failed to link account, and failed to clean up the orphaned placeholder account:\n\t"
 
 // UserService - The userService interface
 // TODO: Convert to a user struct that cannot modify sensitive data
@@ -124,7 +124,8 @@ func (s *userService) UpdateUserFromPlatform(platform Platform, platformID strin
 			// Whatever went wrong, the placeholder account created above is
 			// now orphaned - clean it up before deciding how to handle err.
 			if delErr := s.as.DeleteAccountFromDB(a.UserID); delErr != nil {
-				return nil, fmt.Errorf(LinkCleanupFailedFmt, err, delErr)
+				log.Println(LogLinkCleanupFailed, err)
+				return nil, delErr
 			}
 			if !errors.Is(err, ErrAlreadyLinked) {
 				return nil, err

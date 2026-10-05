@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/google/uuid"
@@ -996,14 +995,10 @@ type mcSeekableReadCloser struct{ io.ReadSeeker }
 
 func (mcSeekableReadCloser) Close() error { return nil }
 
-func mcRequireUploadS3Chain(t *testing.T, err error) {
+func mcRequireUploadS3Error(t *testing.T, err error) {
 	t.Helper()
 	if !errors.Is(err, ErrUploadS3) {
-		t.Fatalf("error = %v, want it to wrap %v", err, ErrUploadS3)
-	}
-	var respErr *awshttp.ResponseError
-	if !errors.As(err, &respErr) || respErr.HTTPStatusCode() != http.StatusInternalServerError {
-		t.Errorf("error = %v, want it to chain the S3 500 response error", err)
+		t.Fatalf("error = %v, want %v", err, ErrUploadS3)
 	}
 }
 
@@ -1041,11 +1036,11 @@ func TestST68to70and77_PutTextureInS3(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-77_ServerErrorWrapsCause", func(t *testing.T) {
+	t.Run("ST-77_ServerErrorReturnsUploadError", func(t *testing.T) {
 		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusInternalServerError) })
 		s := &store{s3: s3c}
 		err := s.PutTextureInS3("hash", mcSeekableReadCloser{strings.NewReader("hello")})
-		mcRequireUploadS3Chain(t, err)
+		mcRequireUploadS3Error(t, err)
 	})
 }
 
@@ -1110,10 +1105,10 @@ func TestST74to75and78_PutGeyserTextureInS3(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-78_ServerErrorWrapsCause", func(t *testing.T) {
+	t.Run("ST-78_ServerErrorReturnsUploadError", func(t *testing.T) {
 		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusInternalServerError) })
 		s := &store{s3: s3c}
 		err := s.PutGeyserTextureInS3("hash", mcSeekableReadCloser{strings.NewReader("hello")})
-		mcRequireUploadS3Chain(t, err)
+		mcRequireUploadS3Error(t, err)
 	})
 }

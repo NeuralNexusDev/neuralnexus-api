@@ -3,8 +3,8 @@ package minecraft
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
+	"log"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -483,7 +483,8 @@ func (s *store) PutTextureInS3(hash string, body io.ReadCloser) error {
 
 	_, err := s.s3.PutObject(context.Background(), input)
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrUploadS3, err)
+		log.Println(ErrUploadS3, err)
+		return ErrUploadS3
 	}
 	return nil
 }
@@ -520,7 +521,8 @@ func (s *store) PutGeyserTextureInS3(hash string, body io.ReadCloser) error {
 
 	_, err := s.s3.PutObject(context.Background(), input)
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrUploadS3, err)
+		log.Println(ErrUploadS3, err)
+		return ErrUploadS3
 	}
 	return nil
 }

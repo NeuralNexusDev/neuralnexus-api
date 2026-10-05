@@ -2,7 +2,7 @@ package mcstatus
 
 import (
 	"errors"
-	"fmt"
+	"log"
 	"net"
 	"strconv"
 	"time"
@@ -97,7 +97,8 @@ func bedrockAddress(host string, port int) string {
 func (s *service) GetBedrockServerStatus(host string, port int) (*MCServerStatus, error) {
 	status, err := bedrockping.Query(bedrockAddress(host, port), 5*time.Second, 150*time.Millisecond)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrBedrockStatus, err)
+		log.Println(ErrBedrockStatus, err)
+		return nil, ErrBedrockStatus
 	}
 	bedrockStatus := GetBedrockStatus(status)
 	bedrockStatus.Host = host

@@ -43,13 +43,13 @@ func (s *service) QueryGameQ(game string, host string, port int) (*GameQResponse
 	resp, err := http.Get(url)
 	if err != nil {
 		log.Println(err)
-		return nil, fmt.Errorf("%w: %w", ErrGameQQuery, err)
+		return nil, ErrGameQQuery
 	}
 	if resp.StatusCode != http.StatusOK {
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			log.Println(err)
-			return nil, fmt.Errorf("%w: %w", ErrReadBody, err)
+			return nil, ErrReadBody
 		}
 		log.Println(string(body))
 		return nil, ErrGameQQuery
@@ -59,7 +59,7 @@ func (s *service) QueryGameQ(game string, host string, port int) (*GameQResponse
 	err = json.NewDecoder(resp.Body).Decode(&response)
 	if err != nil {
 		log.Println(err)
-		return nil, fmt.Errorf("%w: %w", ErrDecodeBody, err)
+		return nil, ErrDecodeBody
 	}
 
 	for _, v := range response {
@@ -75,13 +75,13 @@ func (s *service) QueryGameDig(game string, host string, port int) (*GameDigResp
 	resp, err := http.Get(url)
 	if err != nil {
 		log.Println(err)
-		return nil, fmt.Errorf("%w: %w", ErrGameDigQuery, err)
+		return nil, ErrGameDigQuery
 	}
 	if resp.StatusCode != http.StatusOK {
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			log.Println(err)
-			return nil, fmt.Errorf("%w: %w", ErrReadBody, err)
+			return nil, ErrReadBody
 		}
 		log.Println(string(body))
 		return nil, ErrGameDigQuery
@@ -91,7 +91,7 @@ func (s *service) QueryGameDig(game string, host string, port int) (*GameDigResp
 	err = json.NewDecoder(resp.Body).Decode(&response)
 	if err != nil {
 		log.Println(err)
-		return nil, fmt.Errorf("%w: %w", ErrDecodeBody, err)
+		return nil, ErrDecodeBody
 	}
 
 	return &response, nil

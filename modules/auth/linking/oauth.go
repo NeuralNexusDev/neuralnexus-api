@@ -3,11 +3,11 @@ package linking
 import (
 	"context"
 	"errors"
-	"fmt"
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/twitch"
 	"golang.org/x/oauth2"
+	"log"
 	"net/http"
 	"time"
 )
@@ -212,7 +212,8 @@ func resolveOrCreateAccountForPlatformUser(as auth.AccountService, las auth.Link
 		// Whatever went wrong, the account created above is now orphaned -
 		// clean it up before deciding how to handle err.
 		if delErr := as.DeleteAccount(a.UserID); delErr != nil {
-			return nil, fmt.Errorf(auth.LinkCleanupFailedFmt, err, delErr)
+			log.Println(auth.LogLinkCleanupFailed, err)
+			return nil, delErr
 		}
 		if !errors.Is(err, auth.ErrAlreadyLinked) {
 			return nil, err
@@ -430,7 +431,8 @@ func ensureMicrosoftIdentityLinked(as auth.AccountService, las auth.LinkAccountS
 	if !errors.Is(err, auth.ErrAlreadyLinked) {
 		if isNewAccount {
 			if delErr := as.DeleteAccount(a.UserID); delErr != nil {
-				return nil, false, fmt.Errorf(auth.LinkCleanupFailedFmt, err, delErr)
+				log.Println(auth.LogLinkCleanupFailed, err)
+				return nil, false, delErr
 			}
 		}
 		return nil, false, err
@@ -442,7 +444,8 @@ func ensureMicrosoftIdentityLinked(as auth.AccountService, las auth.LinkAccountS
 	if lookupErr != nil && !errors.Is(lookupErr, auth.ErrNotFound) {
 		if isNewAccount {
 			if delErr := as.DeleteAccount(a.UserID); delErr != nil {
-				return nil, false, fmt.Errorf(auth.LinkCleanupFailedFmt, lookupErr, delErr)
+				log.Println(auth.LogLinkCleanupFailed, lookupErr)
+				return nil, false, delErr
 			}
 		}
 		return nil, false, lookupErr
@@ -459,7 +462,8 @@ func ensureMicrosoftIdentityLinked(as auth.AccountService, las auth.LinkAccountS
 	}
 
 	if delErr := as.DeleteAccount(a.UserID); delErr != nil {
-		return nil, false, fmt.Errorf(auth.LinkCleanupFailedFmt, err, delErr)
+		log.Println(auth.LogLinkCleanupFailed, err)
+		return nil, false, delErr
 	}
 	winner, getErr := as.GetAccountByID(actualOwnerID)
 	if getErr != nil {
@@ -488,7 +492,8 @@ func linkPlatformUserToSession(las auth.LinkAccountStore, userID string, platfor
 	// Link account
 	la = auth.NewLinkedAccount(userID, platform, user.GetUsername(), user.GetID(), user)
 	if err := las.AddLinkedAccountToDB(la); err != nil {
-		return fmt.Errorf("%w: %w", ErrLinkAccountFailed, err)
+		log.Println(ErrLinkAccountFailed, err)
+		return ErrLinkAccountFailed
 	}
 
 	return nil

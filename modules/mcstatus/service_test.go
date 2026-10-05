@@ -153,9 +153,8 @@ func TestService_GetBedrockServerStatus(t *testing.T) {
 		if status != nil {
 			t.Fatalf("expected nil status, got %+v", status)
 		}
-		var netErr net.Error
-		if !errors.Is(err, ErrBedrockStatus) || !errors.As(err, &netErr) {
-			t.Fatalf("expected an error wrapping %v and a net.Error, got %v", ErrBedrockStatus, err)
+		if !errors.Is(err, ErrBedrockStatus) {
+			t.Fatalf("expected %v, got %v", ErrBedrockStatus, err)
 		}
 	})
 

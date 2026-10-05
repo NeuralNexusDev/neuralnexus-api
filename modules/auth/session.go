@@ -2,7 +2,6 @@ package auth
 
 import (
 	"errors"
-	"fmt"
 	"github.com/golang-jwt/jwt/v5"
 	"log"
 	"os"
@@ -160,7 +159,8 @@ func (s *sessionService) DeleteSession(id string) error {
 	}
 	// Unlike AddSessionToCache, this can't be fail-open: a stale cache entry would keep a revoked session valid until it expires.
 	if err := s.store.DeleteSessionFromCache(id); err != nil {
-		return fmt.Errorf("session deleted from db but failed to evict from cache: %w", err)
+		log.Println("Session deleted from DB but failed to evict from cache:\n\t", err)
+		return err
 	}
 	return nil
 }
@@ -219,7 +219,8 @@ func (s *sessionService) ReadJWT(tokenStr string) (*Session, error) {
 			}
 		}
 		if !valid {
-			return nil, fmt.Errorf("%w: %s", ErrInvalidAudience, aud)
+			log.Println(ErrInvalidAudience, aud)
+			return nil, ErrInvalidAudience
 		}
 	}
 
@@ -227,7 +228,7 @@ func (s *sessionService) ReadJWT(tokenStr string) (*Session, error) {
 	// session must not be revivable just because its JWT hasn't expired yet.
 	session, err := s.GetSession(claims.ID)
 	if err != nil {
-		return nil, fmt.Errorf("session not found: %w", err)
+		return nil, err
 	}
 	if session.UserID != claims.Subject {
 		return nil, ErrSessionSubjectMismatch

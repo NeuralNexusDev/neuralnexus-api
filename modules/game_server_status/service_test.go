@@ -12,7 +12,6 @@ import (
 	"testing/iotest"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
-	"github.com/goccy/go-json"
 )
 
 // fakeRoundTripper is swapped in for http.DefaultTransport: QueryGameQ and
@@ -120,8 +119,8 @@ func TestQueryGameQ(t *testing.T) {
 		if err == nil {
 			t.Fatal("QueryGameQ() error = nil, want non-nil")
 		}
-		if !errors.Is(err, ErrGameQQuery) || !errors.Is(err, testerrors.ErrTransportFailed) {
-			t.Errorf("error = %v, want it to wrap both %v and %v", err, ErrGameQQuery, testerrors.ErrTransportFailed)
+		if !errors.Is(err, ErrGameQQuery) {
+			t.Errorf("error = %v, want %v", err, ErrGameQQuery)
 		}
 		if resp != nil {
 			t.Errorf("QueryGameQ() response = %+v, want nil", resp)
@@ -153,10 +152,6 @@ func TestQueryGameQ(t *testing.T) {
 		if !errors.Is(err, ErrDecodeBody) {
 			t.Errorf("QueryGameQ() error = %v, want %v", err, ErrDecodeBody)
 		}
-		var syntaxErr *json.SyntaxError
-		if !errors.As(err, &syntaxErr) {
-			t.Errorf("QueryGameQ() error = %v, want wrapped *json.SyntaxError", err)
-		}
 		if resp != nil {
 			t.Errorf("QueryGameQ() response = %+v, want nil", resp)
 		}
@@ -182,8 +177,8 @@ func TestQueryGameQ(t *testing.T) {
 		swapTransport(t, &fakeRoundTripper{resp: resp})
 
 		got, err := svc.QueryGameQ("cs16", "1.2.3.4", 27015)
-		if !errors.Is(err, ErrReadBody) || !errors.Is(err, testerrors.ErrBodyRead) {
-			t.Errorf("error = %v, want it to wrap both %v and %v", err, ErrReadBody, testerrors.ErrBodyRead)
+		if !errors.Is(err, ErrReadBody) {
+			t.Errorf("error = %v, want %v", err, ErrReadBody)
 		}
 		if got != nil {
 			t.Errorf("QueryGameQ() response = %+v, want nil", got)
@@ -219,8 +214,8 @@ func TestQueryGameDig(t *testing.T) {
 		if err == nil {
 			t.Fatal("QueryGameDig() error = nil, want non-nil")
 		}
-		if !errors.Is(err, ErrGameDigQuery) || !errors.Is(err, testerrors.ErrTransportFailed) {
-			t.Errorf("error = %v, want it to wrap both %v and %v", err, ErrGameDigQuery, testerrors.ErrTransportFailed)
+		if !errors.Is(err, ErrGameDigQuery) {
+			t.Errorf("error = %v, want %v", err, ErrGameDigQuery)
 		}
 		if resp != nil {
 			t.Errorf("QueryGameDig() response = %+v, want nil", resp)
@@ -252,10 +247,6 @@ func TestQueryGameDig(t *testing.T) {
 		if !errors.Is(err, ErrDecodeBody) {
 			t.Errorf("QueryGameDig() error = %v, want %v", err, ErrDecodeBody)
 		}
-		var syntaxErr *json.SyntaxError
-		if !errors.As(err, &syntaxErr) {
-			t.Errorf("QueryGameDig() error = %v, want wrapped *json.SyntaxError", err)
-		}
 		if resp != nil {
 			t.Errorf("QueryGameDig() response = %+v, want nil", resp)
 		}
@@ -266,8 +257,8 @@ func TestQueryGameDig(t *testing.T) {
 		swapTransport(t, &fakeRoundTripper{resp: resp})
 
 		got, err := svc.QueryGameDig("valheim", "1.2.3.4", 27015)
-		if !errors.Is(err, ErrReadBody) || !errors.Is(err, testerrors.ErrBodyRead) {
-			t.Errorf("error = %v, want it to wrap both %v and %v", err, ErrReadBody, testerrors.ErrBodyRead)
+		if !errors.Is(err, ErrReadBody) {
+			t.Errorf("error = %v, want %v", err, ErrReadBody)
 		}
 		if got != nil {
 			t.Errorf("QueryGameDig() response = %+v, want nil", got)
