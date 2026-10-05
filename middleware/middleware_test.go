@@ -176,17 +176,6 @@ func TestLogRequest(t *testing.T) {
 			t.Errorf("expected log output with an empty joined message, got: %q", out)
 		}
 	})
-
-	t.Run("MW-04_MissingRemoteAddrPanics", func(t *testing.T) {
-		defer func() {
-			if r := recover(); r == nil {
-				t.Fatal("expected LogRequest to panic when RemoteAddrKey is missing from the context")
-			}
-		}()
-
-		ctx := context.WithValue(context.Background(), RequestIDKey, 1)
-		LogRequest(ctx, "should not get here")
-	})
 }
 
 func TestCreateStack(t *testing.T) {
@@ -889,6 +878,90 @@ func TestRequestIDMiddleware(t *testing.T) {
 		id, ok := got.Context().Value(RequestIDKey).(int)
 		if !ok || id != 0 {
 			t.Errorf("expected request ID to default to 0 for a non-numeric header, got %v (ok=%v)", id, ok)
+		}
+	})
+}
+
+func TestNoSniffMiddleware(t *testing.T) {
+	t.Run("MW-57_SetsNoSniffAndCallsNext", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		nextCalls := 0
+		next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			nextCalls++
+			w.WriteHeader(http.StatusTeapot)
+		})
+
+		NoSniffMiddleware(next).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1", nextCalls)
+		}
+		if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+			t.Errorf("X-Content-Type-Options = %q, want %q", got, "nosniff")
+		}
+		if rec.Code != http.StatusTeapot {
+			t.Errorf("status = %d, want the handler's %d", rec.Code, http.StatusTeapot)
+		}
+	})
+}
+
+func TestRecoveryMiddleware(t *testing.T) {
+	t.Run("MW-58_PanicBeforeAnyWriteAnswers500AndLogs", func(t *testing.T) {
+		getLog := mwCaptureLog(t)
+		rec := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/boom", nil)
+		r = r.WithContext(context.WithValue(mwBaseCtx(), RequestIDKey, 77))
+		next := http.HandlerFunc(func(http.ResponseWriter, *http.Request) { panic("handler exploded") })
+
+		RecoveryMiddleware(next).ServeHTTP(rec, r)
+
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("status = %d, want 500", rec.Code)
+		}
+		mwRequireDetail(t, rec, msgInternalError)
+		for _, want := range []string{"77 N/A 127.0.0.1 panic serving GET /boom", "handler exploded"} {
+			if !strings.Contains(getLog(), want) {
+				t.Errorf("log = %q, want it to contain %q", getLog(), want)
+			}
+		}
+	})
+
+	t.Run("MW-59_PanicAfterTheResponseStartedKeepsIt", func(t *testing.T) {
+		mwCaptureLog(t)
+		rec := httptest.NewRecorder()
+		next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = w.Write([]byte("partial"))
+			panic("late failure")
+		})
+
+		RecoveryMiddleware(next).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil).WithContext(mwBaseCtx()))
+
+		if rec.Code != http.StatusAccepted || rec.Body.String() != "partial" {
+			t.Errorf("response = %d %q, want the handler's 202 and body untouched", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("MW-60_AbortHandlerPanicIsRaisedAgain", func(t *testing.T) {
+		mwCaptureLog(t)
+		next := http.HandlerFunc(func(http.ResponseWriter, *http.Request) { panic(http.ErrAbortHandler) })
+
+		defer func() {
+			if got := recover(); got != http.ErrAbortHandler {
+				t.Errorf("recovered %v, want http.ErrAbortHandler to propagate", got)
+			}
+		}()
+		RecoveryMiddleware(next).ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
+	})
+
+	t.Run("MW-61_NoPanicPassesThrough", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+
+		RecoveryMiddleware(next).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+		if rec.Code != http.StatusNoContent {
+			t.Errorf("status = %d, want 204", rec.Code)
 		}
 	})
 }

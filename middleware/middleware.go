@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -28,6 +29,7 @@ const (
 const (
 	msgRateLimited      = "You have been rate limited. Please try again later."
 	msgInvalidSignature = "Invalid signature"
+	msgInternalError    = "An internal server error occurred."
 )
 
 // Middleware - Middleware type
@@ -90,12 +92,25 @@ func CreateStack(middlewares ...Middleware) Middleware {
 type WrappedWriter struct {
 	http.ResponseWriter
 	statusCode int
+	started    bool
 }
 
 // WriteHeader - Write the header
 func (w *WrappedWriter) WriteHeader(statusCode int) {
 	w.statusCode = statusCode
+	w.started = true
 	w.ResponseWriter.WriteHeader(statusCode)
+}
+
+// Write - Write the body
+func (w *WrappedWriter) Write(b []byte) (int, error) {
+	w.started = true
+	return w.ResponseWriter.Write(b)
+}
+
+// Unwrap - Let http.ResponseController reach the underlying writer
+func (w *WrappedWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
 }
 
 // IPMiddleware - Update the remote address based on headers
@@ -215,6 +230,35 @@ func RateLimitMiddleware(service auth.RateLimitService, prefix string, sessionLi
 	}
 }
 
+// RecoveryMiddleware - Log a panic from a handler and answer 500, unless the handler has already started the response
+func RecoveryMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tracked := &WrappedWriter{ResponseWriter: w, statusCode: http.StatusOK}
+		defer func() {
+			recovered := recover()
+			if recovered == nil {
+				return
+			}
+			if recovered == http.ErrAbortHandler {
+				panic(recovered)
+			}
+			LogRequest(r.Context(), fmt.Sprintf("panic serving %s %s: %v\n%s", r.Method, r.URL.Path, recovered, debug.Stack()))
+			if !tracked.started {
+				responses.InternalServerError(tracked, r, msgInternalError)
+			}
+		}()
+		next.ServeHTTP(tracked, r)
+	})
+}
+
+// NoSniffMiddleware - Stop browsers from guessing a response's content type
+func NoSniffMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		next.ServeHTTP(w, r)
+	})
+}
+
 // RequestIDMiddleware - Set the request ID in the context
 func RequestIDMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -238,7 +282,7 @@ func RequestIDMiddleware(next http.Handler) http.Handler {
 func RequestLoggerMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		wrapped := &WrappedWriter{w, http.StatusOK}
+		wrapped := &WrappedWriter{ResponseWriter: w, statusCode: http.StatusOK}
 
 		next.ServeHTTP(wrapped, r)
 
