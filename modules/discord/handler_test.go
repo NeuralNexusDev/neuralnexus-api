@@ -81,7 +81,7 @@ func TestHandleDiscordWebhook(t *testing.T) {
 	t.Run("HW-05_AuthorizedGuildInstall", func(t *testing.T) {
 		h := HandleDiscordWebhook()
 		w := httptest.NewRecorder()
-		body := `{"version":1,"type":1,"event":{"type":"APPLICATION_AUTHORIZED","timestamp":"2024-01-01T00:00:00Z","data":{"integration_type":0,"guild":{"id":"g1"}}}}`
+		body := `{"version":1,"type":1,"event":{"type":"APPLICATION_AUTHORIZED","timestamp":"2024-01-01T00:00:00.000000","data":{"integration_type":0,"guild":{"id":"g1"}}}}`
 		h(w, dcRequest(t, body, ApplicationJSON))
 		dcRequireStatus(t, w, http.StatusNoContent)
 	})
@@ -89,7 +89,7 @@ func TestHandleDiscordWebhook(t *testing.T) {
 	t.Run("HW-06_AuthorizedUserInstall", func(t *testing.T) {
 		h := HandleDiscordWebhook()
 		w := httptest.NewRecorder()
-		body := `{"version":1,"type":1,"event":{"type":"APPLICATION_AUTHORIZED","timestamp":"2024-01-01T00:00:00Z","data":{"integration_type":1,"user":{"id":"u1"}}}}`
+		body := `{"version":1,"type":1,"event":{"type":"APPLICATION_AUTHORIZED","timestamp":"2024-01-01T00:00:00.000000","data":{"integration_type":1,"user":{"id":"u1"}}}}`
 		h(w, dcRequest(t, body, ApplicationJSON))
 		dcRequireStatus(t, w, http.StatusNoContent)
 	})
@@ -97,7 +97,7 @@ func TestHandleDiscordWebhook(t *testing.T) {
 	t.Run("HW-07_AuthorizedMissingIntegrationType", func(t *testing.T) {
 		h := HandleDiscordWebhook()
 		w := httptest.NewRecorder()
-		body := `{"version":1,"type":1,"event":{"type":"APPLICATION_AUTHORIZED","timestamp":"2024-01-01T00:00:00Z","data":{"guild":{"id":"g1"}}}}`
+		body := `{"version":1,"type":1,"event":{"type":"APPLICATION_AUTHORIZED","timestamp":"2024-01-01T00:00:00.000000","data":{"guild":{"id":"g1"}}}}`
 		h(w, dcRequest(t, body, ApplicationJSON))
 		dcRequireStatus(t, w, http.StatusBadRequest)
 		dcRequireDetail(t, w, msgInvalidEventData)
@@ -106,7 +106,7 @@ func TestHandleDiscordWebhook(t *testing.T) {
 	t.Run("HW-08_AuthorizedOutOfRangeIntegrationType", func(t *testing.T) {
 		h := HandleDiscordWebhook()
 		w := httptest.NewRecorder()
-		body := `{"version":1,"type":1,"event":{"type":"APPLICATION_AUTHORIZED","timestamp":"2024-01-01T00:00:00Z","data":{"integration_type":2}}}`
+		body := `{"version":1,"type":1,"event":{"type":"APPLICATION_AUTHORIZED","timestamp":"2024-01-01T00:00:00.000000","data":{"integration_type":2}}}`
 		h(w, dcRequest(t, body, ApplicationJSON))
 		dcRequireStatus(t, w, http.StatusBadRequest)
 		dcRequireDetail(t, w, msgInvalidEventData)
@@ -115,7 +115,7 @@ func TestHandleDiscordWebhook(t *testing.T) {
 	t.Run("HW-09_Deauthorized", func(t *testing.T) {
 		h := HandleDiscordWebhook()
 		w := httptest.NewRecorder()
-		body := `{"version":1,"type":1,"event":{"type":"APPLICATION_DEAUTHORIZED","timestamp":"2024-01-01T00:00:00Z","data":{"user":{"id":"u2"}}}}`
+		body := `{"version":1,"type":1,"event":{"type":"APPLICATION_DEAUTHORIZED","timestamp":"2024-01-01T00:00:00.000000","data":{"user":{"id":"u2"}}}}`
 		h(w, dcRequest(t, body, ApplicationJSON))
 		dcRequireStatus(t, w, http.StatusNoContent)
 	})
@@ -123,7 +123,7 @@ func TestHandleDiscordWebhook(t *testing.T) {
 	t.Run("HW-10_GroupedUnhandledEventType", func(t *testing.T) {
 		h := HandleDiscordWebhook()
 		w := httptest.NewRecorder()
-		body := `{"version":1,"type":1,"event":{"type":"ENTITLEMENT_CREATE","timestamp":"2024-01-01T00:00:00Z"}}`
+		body := `{"version":1,"type":1,"event":{"type":"ENTITLEMENT_CREATE","timestamp":"2024-01-01T00:00:00.000000"}}`
 		h(w, dcRequest(t, body, ApplicationJSON))
 		dcRequireStatus(t, w, http.StatusNoContent)
 	})
@@ -131,7 +131,7 @@ func TestHandleDiscordWebhook(t *testing.T) {
 	t.Run("HW-11_UnrecognizedEventType", func(t *testing.T) {
 		h := HandleDiscordWebhook()
 		w := httptest.NewRecorder()
-		body := `{"version":1,"type":1,"event":{"type":"SOME_FUTURE_EVENT","timestamp":"2024-01-01T00:00:00Z"}}`
+		body := `{"version":1,"type":1,"event":{"type":"SOME_FUTURE_EVENT","timestamp":"2024-01-01T00:00:00.000000"}}`
 		h(w, dcRequest(t, body, ApplicationJSON))
 		dcRequireStatus(t, w, http.StatusNoContent)
 	})
@@ -139,7 +139,7 @@ func TestHandleDiscordWebhook(t *testing.T) {
 	t.Run("HW-12_NonNilEventZeroType", func(t *testing.T) {
 		h := HandleDiscordWebhook()
 		w := httptest.NewRecorder()
-		body := `{"version":1,"type":1,"event":{"type":"","timestamp":"2024-01-01T00:00:00Z"}}`
+		body := `{"version":1,"type":1,"event":{"type":"","timestamp":"2024-01-01T00:00:00.000000"}}`
 		h(w, dcRequest(t, body, ApplicationJSON))
 		dcRequireStatus(t, w, http.StatusNoContent)
 	})

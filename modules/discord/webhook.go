@@ -149,7 +149,8 @@ type webhookEvent WebhookEvent
 
 type rawWebhookEvent struct {
 	webhookEvent
-	Data json.RawMessage `json:"data"`
+	Timestamp string          `json:"timestamp"`
+	Data      json.RawMessage `json:"data"`
 }
 
 func (e *WebhookEvent) UnmarshalJSON(raw []byte) error {
@@ -160,6 +161,12 @@ func (e *WebhookEvent) UnmarshalJSON(raw []byte) error {
 	}
 
 	*e = WebhookEvent(tmp.webhookEvent)
+
+	t, err := time.ParseInLocation(time.RFC3339Nano, tmp.Timestamp+"Z", time.UTC)
+	if err != nil {
+		return err
+	}
+	e.Timestamp = t
 
 	switch tmp.Type {
 	case ApplicationAuthorized:

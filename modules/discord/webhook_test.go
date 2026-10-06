@@ -117,7 +117,7 @@ func TestApplicationDeauthorizedWebhookData_Type(t *testing.T) {
 
 func TestWebhookEvent_UnmarshalJSON(t *testing.T) {
 	t.Run("WEU-01_ApplicationAuthorized", func(t *testing.T) {
-		raw := `{"type":"APPLICATION_AUTHORIZED","timestamp":"2024-01-01T00:00:00Z","data":{"integration_type":0,"user":{"id":"u1"},"guild":{"id":"g1"}}}`
+		raw := `{"type":"APPLICATION_AUTHORIZED","timestamp":"2024-01-01T00:00:00.000000","data":{"integration_type":0,"user":{"id":"u1"},"guild":{"id":"g1"}}}`
 		var event WebhookEvent
 		if err := json.Unmarshal([]byte(raw), &event); err != nil {
 			t.Fatalf("UnmarshalJSON() error = %v", err)
@@ -125,7 +125,7 @@ func TestWebhookEvent_UnmarshalJSON(t *testing.T) {
 		if event.Type != ApplicationAuthorized {
 			t.Errorf("Type = %v, want %v", event.Type, ApplicationAuthorized)
 		}
-		wantTime, _ := time.Parse(time.RFC3339, "2024-01-01T00:00:00Z")
+		wantTime, _ := time.ParseInLocation(time.RFC3339Nano, "2024-01-01T00:00:00.000000Z", time.UTC)
 		if !event.Timestamp.Equal(wantTime) {
 			t.Errorf("Timestamp = %v, want %v", event.Timestamp, wantTime)
 		}
@@ -145,7 +145,7 @@ func TestWebhookEvent_UnmarshalJSON(t *testing.T) {
 	})
 
 	t.Run("WEU-02_ApplicationDeauthorized", func(t *testing.T) {
-		raw := `{"type":"APPLICATION_DEAUTHORIZED","timestamp":"2024-01-01T00:00:00Z","data":{"user":{"id":"u2"}}}`
+		raw := `{"type":"APPLICATION_DEAUTHORIZED","timestamp":"2024-01-01T00:00:00.000000","data":{"user":{"id":"u2"}}}`
 		var event WebhookEvent
 		if err := json.Unmarshal([]byte(raw), &event); err != nil {
 			t.Fatalf("UnmarshalJSON() error = %v", err)
@@ -160,7 +160,7 @@ func TestWebhookEvent_UnmarshalJSON(t *testing.T) {
 	})
 
 	t.Run("WEU-03_UnhandledEventTypeLeavesDataNil", func(t *testing.T) {
-		raw := `{"type":"ENTITLEMENT_CREATE","timestamp":"2024-01-01T00:00:00Z"}`
+		raw := `{"type":"ENTITLEMENT_CREATE","timestamp":"2024-01-01T00:00:00.000000"}`
 		var event WebhookEvent
 		if err := json.Unmarshal([]byte(raw), &event); err != nil {
 			t.Fatalf("UnmarshalJSON() error = %v", err)
@@ -178,7 +178,7 @@ func TestWebhookEvent_UnmarshalJSON(t *testing.T) {
 	})
 
 	t.Run("WEU-05_InnerDataTypeMismatch", func(t *testing.T) {
-		raw := `{"type":"APPLICATION_AUTHORIZED","timestamp":"2024-01-01T00:00:00Z","data":{"integration_type":"zero"}}`
+		raw := `{"type":"APPLICATION_AUTHORIZED","timestamp":"2024-01-01T00:00:00.000000","data":{"integration_type":"zero"}}`
 		var event WebhookEvent
 		if err := json.Unmarshal([]byte(raw), &event); err == nil {
 			t.Fatal("UnmarshalJSON() error = nil, want a decode error")
