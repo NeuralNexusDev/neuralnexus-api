@@ -45,13 +45,17 @@ func HandleDiscordWebhook() http.HandlerFunc {
 			switch event.Event.Type {
 			case ApplicationAuthorized:
 				data := event.Event.ApplicationAuthorizedData()
-				if data.IntegrationType == nil {
-					mw.LogRequest(ctx, "Received authorized event with nil integration type, assuming user login: %s", data.User.ID)
-				}
-				switch *data.IntegrationType {
-				case GuildInstall:
+				switch {
+				case data.IntegrationType == nil:
+					mw.LogRequest(ctx, "Received authorized event with nil integration type, assuming user login: ", data.User.ID)
+					jsonData, err := json.Marshal(data)
+					if err != nil {
+						fmt.Println(err)
+					}
+					fmt.Println(string(jsonData))
+				case *data.IntegrationType == GuildInstall:
 					mw.LogRequest(ctx, fmt.Sprintf("Received authorized event for Discord Guild: %s", data.Guild.ID))
-				case UserInstall:
+				case *data.IntegrationType == UserInstall:
 					mw.LogRequest(ctx, fmt.Sprintf("Received authorized event for Discord User: %s", data.User.ID))
 				default:
 					mw.LogRequest(ctx, "Invalid integration type")

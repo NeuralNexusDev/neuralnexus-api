@@ -99,8 +99,7 @@ func TestHandleDiscordWebhook(t *testing.T) {
 		w := httptest.NewRecorder()
 		body := `{"version":1,"type":1,"event":{"type":"APPLICATION_AUTHORIZED","timestamp":"2024-01-01T00:00:00.000000","data":{"guild":{"id":"g1"}}}}`
 		h(w, dcRequest(t, body, ApplicationJSON))
-		dcRequireStatus(t, w, http.StatusBadRequest)
-		dcRequireDetail(t, w, msgInvalidEventData)
+		dcRequireStatus(t, w, http.StatusNoContent)
 	})
 
 	t.Run("HW-08_AuthorizedOutOfRangeIntegrationType", func(t *testing.T) {
