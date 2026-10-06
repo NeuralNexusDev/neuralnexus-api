@@ -2,7 +2,6 @@ package mcstatus
 
 import (
 	"encoding/xml"
-	"errors"
 	"image"
 	"image/png"
 	"log"
@@ -190,11 +189,11 @@ func ServerStatusHandler(s MCStatusService) http.HandlerFunc {
 		status, err := s.GetServerStatus(host, port, isBedrock, queryEnabled, queryPort)
 		if err != nil {
 			log.Println(logUnableToGetServerStatus, err)
-			switch {
-			case errors.Is(err, ErrJavaStatus):
+			switch err {
+			case ErrJavaStatus:
 				problem := responses.NewNotFoundProblem(msgJavaStatusFailed)
 				responses.SendProblemStruct(w, r, problem, offlineProblem{Problem: problem, Host: host, Port: port})
-			case errors.Is(err, ErrBedrockStatus):
+			case ErrBedrockStatus:
 				problem := responses.NewNotFoundProblem(msgBedrockStatusFailed)
 				responses.SendProblemStruct(w, r, problem, offlineProblem{Problem: problem, Host: host, Port: port})
 			default:
@@ -241,7 +240,7 @@ func IconHandler(s MCStatusService) http.HandlerFunc {
 		}
 
 		status, err := s.GetJavaServerStatus(host, port, false, 0)
-		if errors.Is(err, ErrJavaStatus) {
+		if err == ErrJavaStatus {
 			writeStockIcon(w, r, defaultIconFile)
 			return
 		}

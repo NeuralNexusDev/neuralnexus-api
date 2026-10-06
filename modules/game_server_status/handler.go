@@ -1,7 +1,6 @@
 package gss
 
 import (
-	"errors"
 	"log"
 	"net/http"
 	"strconv"
@@ -45,24 +44,24 @@ func GameServerStatusHandler(s GSSService) http.HandlerFunc {
 		status, err := s.QueryGameServer(game, host, port, queryType)
 		if err != nil {
 			log.Println(logUnableToQueryGameServer, err)
-			switch {
-			case errors.Is(err, ErrServerOffline):
+			switch err {
+			case ErrServerOffline:
 				responses.NotFound(w, r, msgServerOffline)
-			case errors.Is(err, ErrGameUnsupported):
+			case ErrGameUnsupported:
 				responses.BadRequest(w, r, msgGameUnsupported)
-			case errors.Is(err, ErrGameQQuery):
+			case ErrGameQQuery:
 				responses.BadGateway(w, r, msgGameQQueryFailed)
-			case errors.Is(err, ErrGameDigQuery):
+			case ErrGameDigQuery:
 				responses.BadGateway(w, r, msgGameDigQueryFailed)
-			case errors.Is(err, ErrReadBody):
+			case ErrReadBody:
 				responses.BadGateway(w, r, msgReadBodyFailed)
-			case errors.Is(err, ErrDecodeBody):
+			case ErrDecodeBody:
 				responses.BadGateway(w, r, msgDecodeBodyFailed)
-			case errors.Is(err, ErrNoGameQResponse):
+			case ErrNoGameQResponse:
 				responses.BadGateway(w, r, msgNoGameQResponse)
-			case errors.Is(err, mcstatus.ErrJavaStatus):
+			case mcstatus.ErrJavaStatus:
 				responses.BadGateway(w, r, msgJavaStatusFailed)
-			case errors.Is(err, mcstatus.ErrBedrockStatus):
+			case mcstatus.ErrBedrockStatus:
 				responses.BadGateway(w, r, msgBedrockStatusFailed)
 			default:
 				responses.InternalServerError(w, r, msgQueryFailed)

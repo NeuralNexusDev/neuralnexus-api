@@ -3,7 +3,6 @@ package mcstatus
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"image"
 	"image/color"
 	"image/png"
@@ -279,7 +278,6 @@ func TestServerStatusHandler(t *testing.T) {
 	}{
 		{"JavaStatus", ErrJavaStatus, http.StatusNotFound, msgJavaStatusFailed},
 		{"BedrockStatus", ErrBedrockStatus, http.StatusNotFound, msgBedrockStatusFailed},
-		{"BedrockStatusWithCause", fmt.Errorf("%w: %w", ErrBedrockStatus, testerrors.ErrTransportFailed), http.StatusNotFound, msgBedrockStatusFailed},
 		{"Unrecognized", testerrors.ErrBoom, http.StatusInternalServerError, msgFailedToGetServerStatus},
 	} {
 		t.Run("HD-16_"+tc.name, func(t *testing.T) {

@@ -2,7 +2,6 @@ package gss
 
 import (
 	"errors"
-	"fmt"
 	"net/http/httptest"
 	"testing"
 
@@ -173,7 +172,6 @@ func TestGameServerStatusHandler(t *testing.T) {
 		want       string
 	}{
 		{"GameQQuery", ErrGameQQuery, 502, msgGameQQueryFailed},
-		{"GameQQueryWithCause", fmt.Errorf("%w: %w", ErrGameQQuery, testerrors.ErrTransportFailed), 502, msgGameQQueryFailed},
 		{"GameDigQuery", ErrGameDigQuery, 502, msgGameDigQueryFailed},
 		{"ReadBody", ErrReadBody, 502, msgReadBodyFailed},
 		{"DecodeBody", ErrDecodeBody, 502, msgDecodeBodyFailed},

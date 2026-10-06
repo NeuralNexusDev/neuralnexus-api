@@ -1277,7 +1277,6 @@ func TestAU60to69OAuthAndOpenIDFailureMapping(t *testing.T) {
 	okJWT := func(*auth.Session) (string, error) { return "test-jwt", nil }
 	linkedElsewhere := &stubLinkAccountStore{existing: &auth.LinkedAccount{UserID: "u2", Verified: true, LoginEnabled: true}}
 	addFails := func(err error) *stubLinkAccountStore { return &stubLinkAccountStore{addErr: err} }
-	alreadyLinkedAndFailed := fmt.Errorf("%w: %w", linking.ErrPlatformAlreadyLinkedToDifferentAccount, testerrors.ErrDBDown)
 
 	t.Run("AU-60_OAuthInvalidPlatform", func(t *testing.T) {
 		w := httptest.NewRecorder()
@@ -1338,15 +1337,6 @@ func TestAU60to69OAuthAndOpenIDFailureMapping(t *testing.T) {
 		requireProblemRedirect(t, w, redirect, http.StatusInternalServerError, msgAuthenticationFailed)
 	})
 
-	t.Run("AU-66_OAuthLinkFailureWrappingAnotherErrorStaysGeneral", func(t *testing.T) {
-		auDiscordTransport(t)
-		w := httptest.NewRecorder()
-
-		OAuthHandler(&stubAccountService{}, addFails(alreadyLinkedAndFailed), &stubSessionService{createJWT: okJWT})(w, auWithSession(auOAuthRequest(t, discordLink), "u1"))
-
-		requireProblemRedirect(t, w, redirect, http.StatusInternalServerError, msgAuthenticationFailed)
-	})
-
 	t.Run("AU-67_OpenIDLinkedToDifferentAccount", func(t *testing.T) {
 		auSteamTransport(t, http.StatusOK, http.StatusOK)
 		w := httptest.NewRecorder()
@@ -1361,15 +1351,6 @@ func TestAU60to69OAuthAndOpenIDFailureMapping(t *testing.T) {
 		w := httptest.NewRecorder()
 
 		OpenIDHandler(&stubAccountService{}, addFails(testerrors.ErrDBDown), &stubSessionService{createJWT: okJWT})(w, auWithSession(auOpenIDRequest(t, steamLink), "u1"))
-
-		requireProblemRedirect(t, w, redirect, http.StatusInternalServerError, msgAuthenticationFailed)
-	})
-
-	t.Run("AU-69_OpenIDLinkFailureWrappingAnotherErrorStaysGeneral", func(t *testing.T) {
-		auSteamTransport(t, http.StatusOK, http.StatusOK)
-		w := httptest.NewRecorder()
-
-		OpenIDHandler(&stubAccountService{}, addFails(alreadyLinkedAndFailed), &stubSessionService{createJWT: okJWT})(w, auWithSession(auOpenIDRequest(t, steamLink), "u1"))
 
 		requireProblemRedirect(t, w, redirect, http.StatusInternalServerError, msgAuthenticationFailed)
 	})

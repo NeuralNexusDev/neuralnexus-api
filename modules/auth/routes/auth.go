@@ -155,19 +155,16 @@ func OAuthHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Ses
 		}
 		if err != nil {
 			log.Println("Failed to process OAuth:\n\t", err)
-			switch {
-			// A link failure stays a 500 even when it wraps one of the errors below.
-			case errors.Is(err, linking.ErrLinkAccountFailed):
-				redirectInternalServerError(w, r, state.RedirectURI, msgAuthenticationFailed)
-			case errors.Is(err, linking.ErrInvalidPlatform):
+			switch err {
+			case linking.ErrInvalidPlatform:
 				redirectBadRequest(w, r, state.RedirectURI, msgInvalidPlatform)
-			case errors.Is(err, linking.ErrNoScopeInToken):
+			case linking.ErrNoScopeInToken:
 				redirectBadRequest(w, r, state.RedirectURI, msgMissingOAuthScope)
-			case errors.Is(err, linking.ErrPlatformLoginDisabled):
+			case linking.ErrPlatformLoginDisabled:
 				redirectProblem(w, r, state.RedirectURI, http.StatusForbidden, msgPlatformLoginDisabled)
-			case errors.Is(err, linking.ErrConflictingMicrosoftIdentities):
+			case linking.ErrConflictingMicrosoftIdentities:
 				redirectProblem(w, r, state.RedirectURI, http.StatusConflict, msgConflictingMicrosoftIdentities)
-			case errors.Is(err, linking.ErrPlatformAlreadyLinkedToDifferentAccount):
+			case linking.ErrPlatformAlreadyLinkedToDifferentAccount:
 				redirectProblem(w, r, state.RedirectURI, http.StatusConflict, msgPlatformAlreadyLinked)
 			default:
 				redirectInternalServerError(w, r, state.RedirectURI, msgAuthenticationFailed)
@@ -198,8 +195,8 @@ func OpenIDHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Se
 		steamID64, err := linking.VerifySteamOpenIDCallback(r.URL.Query())
 		if err != nil {
 			log.Println("Failed to verify Steam OpenID callback:\n\t", err)
-			switch {
-			case errors.Is(err, linking.ErrInvalidAssertion):
+			switch err {
+			case linking.ErrInvalidAssertion:
 				redirectBadRequest(w, r, state.RedirectURI, msgInvalidState)
 			default:
 				redirectInternalServerError(w, r, state.RedirectURI, msgAuthenticationFailed)
@@ -210,10 +207,10 @@ func OpenIDHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Se
 		user, err := linking.GetSteamUser(steamID64)
 		if err != nil {
 			log.Println("Failed to get Steam user:\n\t", err)
-			switch {
-			case errors.Is(err, linking.ErrSteamNoPlayers):
+			switch err {
+			case linking.ErrSteamNoPlayers:
 				redirectProblem(w, r, state.RedirectURI, http.StatusNotFound, msgSteamAccountNotFound)
-			case errors.Is(err, linking.ErrSteamIDMismatch):
+			case linking.ErrSteamIDMismatch:
 				redirectBadRequest(w, r, state.RedirectURI, msgSteamAccountMismatch)
 			default:
 				redirectInternalServerError(w, r, state.RedirectURI, msgAuthenticationFailed)
@@ -230,13 +227,10 @@ func OpenIDHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Se
 		}
 		if err != nil {
 			log.Println("Failed to process Steam OpenID:\n\t", err)
-			switch {
-			// A link failure stays a 500 even when it wraps one of the errors below.
-			case errors.Is(err, linking.ErrLinkAccountFailed):
-				redirectInternalServerError(w, r, state.RedirectURI, msgAuthenticationFailed)
-			case errors.Is(err, linking.ErrPlatformLoginDisabled):
+			switch err {
+			case linking.ErrPlatformLoginDisabled:
 				redirectProblem(w, r, state.RedirectURI, http.StatusForbidden, msgPlatformLoginDisabled)
-			case errors.Is(err, linking.ErrPlatformAlreadyLinkedToDifferentAccount):
+			case linking.ErrPlatformAlreadyLinkedToDifferentAccount:
 				redirectProblem(w, r, state.RedirectURI, http.StatusConflict, msgPlatformAlreadyLinked)
 			default:
 				redirectInternalServerError(w, r, state.RedirectURI, msgAuthenticationFailed)
