@@ -1,7 +1,6 @@
 package gss
 
 import (
-	"errors"
 	"log"
 	"net/http"
 	"strconv"
@@ -26,35 +25,6 @@ const (
 	logUnableToQueryGameServer = "[Error]: Unable to query game server:\n\t"
 )
 
-type failureMapping struct {
-	err     error
-	respond func(http.ResponseWriter, *http.Request, string)
-	msg     string
-}
-
-var queryFailures = []failureMapping{
-	{ErrServerOffline, responses.NotFound, msgServerOffline},
-	{ErrGameUnsupported, responses.BadRequest, msgGameUnsupported},
-	{ErrGameQQuery, responses.BadGateway, msgGameQQueryFailed},
-	{ErrGameDigQuery, responses.BadGateway, msgGameDigQueryFailed},
-	{ErrReadBody, responses.BadGateway, msgReadBodyFailed},
-	{ErrDecodeBody, responses.BadGateway, msgDecodeBodyFailed},
-	{ErrNoGameQResponse, responses.BadGateway, msgNoGameQResponse},
-	{mcstatus.ErrJavaStatus, responses.BadGateway, msgJavaStatusFailed},
-	{mcstatus.ErrBedrockStatus, responses.BadGateway, msgBedrockStatusFailed},
-}
-
-func respondQueryFailure(w http.ResponseWriter, r *http.Request, err error) {
-	log.Println(logUnableToQueryGameServer, err)
-	for _, m := range queryFailures {
-		if errors.Is(err, m.err) {
-			m.respond(w, r, m.msg)
-			return
-		}
-	}
-	responses.InternalServerError(w, r, msgQueryFailed)
-}
-
 // GameServerStatusHandler - Get the game server status
 func GameServerStatusHandler(s GSSService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -73,7 +43,29 @@ func GameServerStatusHandler(s GSSService) http.HandlerFunc {
 		queryType := ParseQueryType(r.URL.Query().Get("query_type"))
 		status, err := s.QueryGameServer(game, host, port, queryType)
 		if err != nil {
-			respondQueryFailure(w, r, err)
+			log.Println(logUnableToQueryGameServer, err)
+			switch err {
+			case ErrServerOffline:
+				responses.NotFound(w, r, msgServerOffline)
+			case ErrGameUnsupported:
+				responses.BadRequest(w, r, msgGameUnsupported)
+			case ErrGameQQuery:
+				responses.BadGateway(w, r, msgGameQQueryFailed)
+			case ErrGameDigQuery:
+				responses.BadGateway(w, r, msgGameDigQueryFailed)
+			case ErrReadBody:
+				responses.BadGateway(w, r, msgReadBodyFailed)
+			case ErrDecodeBody:
+				responses.BadGateway(w, r, msgDecodeBodyFailed)
+			case ErrNoGameQResponse:
+				responses.BadGateway(w, r, msgNoGameQResponse)
+			case mcstatus.ErrJavaStatus:
+				responses.BadGateway(w, r, msgJavaStatusFailed)
+			case mcstatus.ErrBedrockStatus:
+				responses.BadGateway(w, r, msgBedrockStatusFailed)
+			default:
+				responses.InternalServerError(w, r, msgQueryFailed)
+			}
 			return
 		}
 		returnRaw := r.URL.Query().Get("raw") == "true"

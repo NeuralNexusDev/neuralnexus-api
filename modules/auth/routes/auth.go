@@ -36,36 +36,6 @@ const (
 	msgSteamAccountMismatch           = "Steam account mismatch"
 )
 
-type failureMapping struct {
-	err    error
-	status int
-	msg    string
-}
-
-var oauthFailures = []failureMapping{
-	{linking.ErrInvalidPlatform, http.StatusBadRequest, msgInvalidPlatform},
-	{linking.ErrNoScopeInToken, http.StatusBadRequest, msgMissingOAuthScope},
-	{linking.ErrInvalidAssertion, http.StatusBadRequest, msgInvalidState},
-	{linking.ErrSteamIDMismatch, http.StatusBadRequest, msgSteamAccountMismatch},
-	{linking.ErrSessionNotFound, http.StatusUnauthorized, msgLoginRequiredToLink},
-	{linking.ErrSessionExpired, http.StatusUnauthorized, msgSessionExpired},
-	{linking.ErrPlatformLoginDisabled, http.StatusForbidden, msgPlatformLoginDisabled},
-	{linking.ErrSteamNoPlayers, http.StatusNotFound, msgSteamAccountNotFound},
-	{linking.ErrConflictingMicrosoftIdentities, http.StatusConflict, msgConflictingMicrosoftIdentities},
-	{linking.ErrPlatformAlreadyLinkedToDifferentAccount, http.StatusConflict, msgPlatformAlreadyLinked},
-}
-
-func oauthFailureResponse(err error) (int, string) {
-	if !errors.Is(err, linking.ErrLinkAccountFailed) {
-		for _, m := range oauthFailures {
-			if errors.Is(err, m.err) {
-				return m.status, m.msg
-			}
-		}
-	}
-	return http.StatusInternalServerError, msgAuthenticationFailed
-}
-
 // Login struct for login request
 type Login struct {
 	Username string `json:"username" xml:"username" validate:"required_without=GetEmail"`
@@ -185,8 +155,24 @@ func OAuthHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Ses
 		}
 		if err != nil {
 			log.Println("Failed to process OAuth:\n\t", err)
-			status, msg := oauthFailureResponse(err)
-			redirectProblem(w, r, state.RedirectURI, status, msg)
+			switch err {
+			case linking.ErrSessionNotFound:
+				redirectUnauthorized(w, r, state.RedirectURI, msgLoginRequiredToLink)
+			case linking.ErrSessionExpired:
+				redirectUnauthorized(w, r, state.RedirectURI, msgSessionExpired)
+			case linking.ErrInvalidPlatform:
+				redirectBadRequest(w, r, state.RedirectURI, msgInvalidPlatform)
+			case linking.ErrNoScopeInToken:
+				redirectBadRequest(w, r, state.RedirectURI, msgMissingOAuthScope)
+			case linking.ErrPlatformLoginDisabled:
+				redirectProblem(w, r, state.RedirectURI, http.StatusForbidden, msgPlatformLoginDisabled)
+			case linking.ErrConflictingMicrosoftIdentities:
+				redirectProblem(w, r, state.RedirectURI, http.StatusConflict, msgConflictingMicrosoftIdentities)
+			case linking.ErrPlatformAlreadyLinkedToDifferentAccount:
+				redirectProblem(w, r, state.RedirectURI, http.StatusConflict, msgPlatformAlreadyLinked)
+			default:
+				redirectInternalServerError(w, r, state.RedirectURI, msgAuthenticationFailed)
+			}
 			return
 		}
 
@@ -213,16 +199,26 @@ func OpenIDHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Se
 		steamID64, err := linking.VerifySteamOpenIDCallback(r.URL.Query())
 		if err != nil {
 			log.Println("Failed to verify Steam OpenID callback:\n\t", err)
-			status, msg := oauthFailureResponse(err)
-			redirectProblem(w, r, state.RedirectURI, status, msg)
+			switch err {
+			case linking.ErrInvalidAssertion:
+				redirectBadRequest(w, r, state.RedirectURI, msgInvalidState)
+			default:
+				redirectInternalServerError(w, r, state.RedirectURI, msgAuthenticationFailed)
+			}
 			return
 		}
 
 		user, err := linking.GetSteamUser(steamID64)
 		if err != nil {
 			log.Println("Failed to get Steam user:\n\t", err)
-			status, msg := oauthFailureResponse(err)
-			redirectProblem(w, r, state.RedirectURI, status, msg)
+			switch err {
+			case linking.ErrSteamNoPlayers:
+				redirectProblem(w, r, state.RedirectURI, http.StatusNotFound, msgSteamAccountNotFound)
+			case linking.ErrSteamIDMismatch:
+				redirectBadRequest(w, r, state.RedirectURI, msgSteamAccountMismatch)
+			default:
+				redirectInternalServerError(w, r, state.RedirectURI, msgAuthenticationFailed)
+			}
 			return
 		}
 
@@ -235,8 +231,18 @@ func OpenIDHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Se
 		}
 		if err != nil {
 			log.Println("Failed to process Steam OpenID:\n\t", err)
-			status, msg := oauthFailureResponse(err)
-			redirectProblem(w, r, state.RedirectURI, status, msg)
+			switch err {
+			case linking.ErrSessionNotFound:
+				redirectUnauthorized(w, r, state.RedirectURI, msgLoginRequiredToLink)
+			case linking.ErrSessionExpired:
+				redirectUnauthorized(w, r, state.RedirectURI, msgSessionExpired)
+			case linking.ErrPlatformLoginDisabled:
+				redirectProblem(w, r, state.RedirectURI, http.StatusForbidden, msgPlatformLoginDisabled)
+			case linking.ErrPlatformAlreadyLinkedToDifferentAccount:
+				redirectProblem(w, r, state.RedirectURI, http.StatusConflict, msgPlatformAlreadyLinked)
+			default:
+				redirectInternalServerError(w, r, state.RedirectURI, msgAuthenticationFailed)
+			}
 			return
 		}
 
