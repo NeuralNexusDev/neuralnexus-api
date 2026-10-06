@@ -1268,7 +1268,33 @@ func auMicrosoftTransport(t *testing.T) {
 	}))
 }
 
-func TestAU60to69OAuthAndOpenIDFailureMapping(t *testing.T) {
+// auSessionChangesContext serves first for the first read of the session and
+// second for every read after it, standing in for a session that disappears or
+// expires between the handler's check and the linking call.
+type auSessionChangesContext struct {
+	context.Context
+	reads  int
+	first  any
+	second any
+}
+
+func (c *auSessionChangesContext) Value(key any) any {
+	if key != mw.SessionKey {
+		return c.Context.Value(key)
+	}
+	c.reads++
+	if c.reads == 1 {
+		return c.first
+	}
+	return c.second
+}
+
+func auWithSessionChange(r *http.Request, second any) *http.Request {
+	first := &auth.Session{ID: "link-session", UserID: "u1"}
+	return r.WithContext(&auSessionChangesContext{Context: r.Context(), first: first, second: second})
+}
+
+func TestAU60to71OAuthAndOpenIDFailureMapping(t *testing.T) {
 	const redirect = "https://neuralnexus.test/done"
 	discordLogin := linking.OAuthState{Platform: auth.PlatformDiscord, Nonce: "test-nonce", RedirectURI: redirect, Mode: linking.ModeLogin}
 	discordLink := linking.OAuthState{Platform: auth.PlatformDiscord, Nonce: "test-nonce", RedirectURI: redirect, Mode: linking.ModeLink}
@@ -1353,6 +1379,42 @@ func TestAU60to69OAuthAndOpenIDFailureMapping(t *testing.T) {
 		OpenIDHandler(&stubAccountService{}, addFails(testerrors.ErrDBDown), &stubSessionService{createJWT: okJWT})(w, auWithSession(auOpenIDRequest(t, steamLink), "u1"))
 
 		requireProblemRedirect(t, w, redirect, http.StatusInternalServerError, msgAuthenticationFailed)
+	})
+
+	expired := &auth.Session{ID: "link-session", UserID: "u1", ExpiresAt: 1}
+
+	t.Run("AU-66_OAuthSessionGoneBeforeLinking", func(t *testing.T) {
+		w := httptest.NewRecorder()
+
+		OAuthHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{createJWT: okJWT})(w, auWithSessionChange(auOAuthRequest(t, discordLink), nil))
+
+		requireProblemRedirect(t, w, redirect, http.StatusUnauthorized, msgLoginRequiredToLink)
+	})
+
+	t.Run("AU-69_OAuthSessionExpiredBeforeLinking", func(t *testing.T) {
+		w := httptest.NewRecorder()
+
+		OAuthHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{createJWT: okJWT})(w, auWithSessionChange(auOAuthRequest(t, discordLink), expired))
+
+		requireProblemRedirect(t, w, redirect, http.StatusUnauthorized, msgSessionExpired)
+	})
+
+	t.Run("AU-70_OpenIDSessionGoneBeforeLinking", func(t *testing.T) {
+		auSteamTransport(t, http.StatusOK, http.StatusOK)
+		w := httptest.NewRecorder()
+
+		OpenIDHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{createJWT: okJWT})(w, auWithSessionChange(auOpenIDRequest(t, steamLink), nil))
+
+		requireProblemRedirect(t, w, redirect, http.StatusUnauthorized, msgLoginRequiredToLink)
+	})
+
+	t.Run("AU-71_OpenIDSessionExpiredBeforeLinking", func(t *testing.T) {
+		auSteamTransport(t, http.StatusOK, http.StatusOK)
+		w := httptest.NewRecorder()
+
+		OpenIDHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{createJWT: okJWT})(w, auWithSessionChange(auOpenIDRequest(t, steamLink), expired))
+
+		requireProblemRedirect(t, w, redirect, http.StatusUnauthorized, msgSessionExpired)
 	})
 }
 

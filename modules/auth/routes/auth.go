@@ -156,6 +156,10 @@ func OAuthHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Ses
 		if err != nil {
 			log.Println("Failed to process OAuth:\n\t", err)
 			switch err {
+			case linking.ErrSessionNotFound:
+				redirectUnauthorized(w, r, state.RedirectURI, msgLoginRequiredToLink)
+			case linking.ErrSessionExpired:
+				redirectUnauthorized(w, r, state.RedirectURI, msgSessionExpired)
 			case linking.ErrInvalidPlatform:
 				redirectBadRequest(w, r, state.RedirectURI, msgInvalidPlatform)
 			case linking.ErrNoScopeInToken:
@@ -228,6 +232,10 @@ func OpenIDHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Se
 		if err != nil {
 			log.Println("Failed to process Steam OpenID:\n\t", err)
 			switch err {
+			case linking.ErrSessionNotFound:
+				redirectUnauthorized(w, r, state.RedirectURI, msgLoginRequiredToLink)
+			case linking.ErrSessionExpired:
+				redirectUnauthorized(w, r, state.RedirectURI, msgSessionExpired)
 			case linking.ErrPlatformLoginDisabled:
 				redirectProblem(w, r, state.RedirectURI, http.StatusForbidden, msgPlatformLoginDisabled)
 			case linking.ErrPlatformAlreadyLinkedToDifferentAccount:
