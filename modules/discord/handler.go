@@ -46,9 +46,7 @@ func HandleDiscordWebhook() http.HandlerFunc {
 			case ApplicationAuthorized:
 				data := event.Event.ApplicationAuthorizedData()
 				if data.IntegrationType == nil {
-					mw.LogRequest(ctx, "Failed to deserialize Application Authorized event data")
-					responses.BadRequest(w, r, msgInvalidEventData)
-					return
+					mw.LogRequest(ctx, "Received authorized event with nil integration type, assuming user login: %s", data.User.ID)
 				}
 				switch *data.IntegrationType {
 				case GuildInstall:
