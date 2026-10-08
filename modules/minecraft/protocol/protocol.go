@@ -13,7 +13,9 @@ type PacketID int32
 const (
 	PacketIDIntention      = 0x00 // Handshake Serverbound `intention`
 	PacketIDStatusRequest  = 0x00 // Status Serverbound `status_request`
+	PacketIDPingRequest    = 0x01 // Status Serverbound `ping_request`
 	PacketIDStatusResponse = 0x00 // Status Clientbound `status_response`
+	PacketIDPongResponse   = 0x01 // Status Clientbound `pong_response`
 )
 
 type Packet interface {
@@ -61,8 +63,8 @@ var ErrPacketTooLarge = errors.New("packet too large")
 
 const MaxPacketSize = 2097151 // 2^21 - 1
 
-// Status performs a server list ping and returns the StatusResponse.
-func Status(addr, host string, port uint16, protocolVersion int32) (*StatusResponse, error) {
+// GetStatus performs a server list ping and returns the StatusResponse.
+func GetStatus(addr, host string, port uint16, protocolVersion int32) (*StatusResponse, error) {
 	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
 	if err != nil {
 		return nil, err
@@ -77,23 +79,22 @@ func Status(addr, host string, port uint16, protocolVersion int32) (*StatusRespo
 	if err != nil {
 		return nil, err
 	}
-	// The handshake gets no reply; the status request (length 1, packet ID 0) is what asks for one.
+
 	if _, err := conn.Write(append(handshake, StatusRequestPacket...)); err != nil {
 		return nil, err
 	}
 
 	r := bufio.NewReader(conn)
-	size, err := ReadVarInt(r) // packet length
+	size, err := ReadVarInt(r)
 	if err != nil {
 		return nil, err
 	}
-
 	if size > MaxPacketSize {
 		return nil, ErrPacketTooLarge
 	}
 
 	body := make([]byte, size)
-	lr := io.LimitReader(conn, int64(size))
+	lr := io.LimitReader(r, int64(size))
 	if _, err = io.ReadAtLeast(lr, body, int(size)); err != nil {
 		return nil, err
 	}
@@ -104,4 +105,52 @@ func Status(addr, host string, port uint16, protocolVersion int32) (*StatusRespo
 	}
 
 	return &response.StatusResponse, nil
+}
+
+func GetLatency(addr, host string, port uint16, protocolVersion int32) (time.Duration, error) {
+	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
+	if err != nil {
+		return 0, err
+	}
+	defer conn.Close()
+
+	if err := conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		return 0, err
+	}
+
+	handshake, err := NewIntentionPacket(protocolVersion, host, port, IntentStatus).MarshalBinary()
+	if err != nil {
+		return 0, err
+	}
+	ping, err := NewPingRequestPacket(time.Now().UnixMilli()).MarshalBinary()
+	if err != nil {
+		return 0, err
+	}
+
+	if _, err := conn.Write(append(handshake, ping...)); err != nil {
+		return 0, err
+	}
+
+	r := bufio.NewReader(conn)
+	size, err := ReadVarInt(r)
+	if err != nil {
+		return 0, err
+	}
+
+	if size > MaxPacketSize {
+		return 0, ErrPacketTooLarge
+	}
+
+	body := make([]byte, size)
+	lr := io.LimitReader(r, int64(size))
+	if _, err = io.ReadAtLeast(lr, body, int(size)); err != nil {
+		return 0, err
+	}
+
+	var response PongResponsePacket
+	if err := response.UnmarshalBinary(body); err != nil {
+		return 0, err
+	}
+
+	return time.Duration(time.Now().UnixMilli()-response.Timestamp) * time.Millisecond, nil
 }

@@ -21,8 +21,8 @@ type Intention struct {
 	Intent          Intent
 }
 
-func NewIntentionPacket(protocolVersion int32, serverAddress string, serverPort uint16, intent Intent) Intention {
-	return Intention{
+func NewIntentionPacket(protocolVersion int32, serverAddress string, serverPort uint16, intent Intent) *Intention {
+	return &Intention{
 		ProtocolVersion: protocolVersion,
 		ServerAddress:   serverAddress,
 		ServerPort:      serverPort,
@@ -30,7 +30,7 @@ func NewIntentionPacket(protocolVersion int32, serverAddress string, serverPort 
 	}
 }
 
-func (p Intention) ID() int32 {
+func (p *Intention) ID() int32 {
 	return PacketIDIntention
 }
 
@@ -39,7 +39,7 @@ var ErrServerAddressTooLong = errors.New("server address is longer than 255 byte
 const MaxServerAddressLength = 255
 
 // MarshalBinary returns the length-prefixed handshake packet.
-func (p Intention) MarshalBinary() ([]byte, error) {
+func (p *Intention) MarshalBinary() ([]byte, error) {
 	var body bytes.Buffer
 	if err := WriteVarInt(&body, p.ID()); err != nil {
 		return nil, err
