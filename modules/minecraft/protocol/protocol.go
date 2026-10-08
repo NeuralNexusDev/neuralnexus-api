@@ -61,10 +61,9 @@ func WriteVarInt(w io.ByteWriter, value int32) error {
 var ErrUnexpectedPacket = errors.New("unexpected packet")
 var ErrPacketTooLarge = errors.New("packet too large")
 
-const MaxPacketSize = 2097151 // 2^21 - 1
+const MaxPacketSize = 1<<21 - 1
 
-// GetStatus performs a server list ping and returns the StatusResponse.
-func GetStatus(addr, host string, port uint16, protocolVersion int32) (*StatusResponse, error) {
+func sendAndReceive(addr string, b []byte) ([]byte, error) {
 	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
 	if err != nil {
 		return nil, err
@@ -75,27 +74,36 @@ func GetStatus(addr, host string, port uint16, protocolVersion int32) (*StatusRe
 		return nil, err
 	}
 
+	if _, err := conn.Write(b); err != nil {
+		return nil, err
+	}
+
+	lr := io.LimitReader(conn, MaxPacketSize)
+	r := bufio.NewReader(lr)
+	size, err := ReadVarInt(r)
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil, ErrPacketTooLarge
+		}
+		return nil, err
+	}
+
+	body := make([]byte, size)
+	if _, err = io.ReadFull(r, body); err != nil {
+		return nil, err
+	}
+	return body, nil
+}
+
+// GetStatus performs a server list ping and returns the StatusResponse.
+func GetStatus(addr, host string, port uint16, protocolVersion int32) (*StatusResponse, error) {
 	handshake, err := NewIntentionPacket(protocolVersion, host, port, IntentStatus).MarshalBinary()
 	if err != nil {
 		return nil, err
 	}
 
-	if _, err := conn.Write(append(handshake, StatusRequestPacket...)); err != nil {
-		return nil, err
-	}
-
-	r := bufio.NewReader(conn)
-	size, err := ReadVarInt(r)
+	body, err := sendAndReceive(addr, append(handshake, StatusRequestPacket...))
 	if err != nil {
-		return nil, err
-	}
-	if size > MaxPacketSize {
-		return nil, ErrPacketTooLarge
-	}
-
-	body := make([]byte, size)
-	lr := io.LimitReader(r, int64(size))
-	if _, err = io.ReadAtLeast(lr, body, int(size)); err != nil {
 		return nil, err
 	}
 
@@ -107,17 +115,8 @@ func GetStatus(addr, host string, port uint16, protocolVersion int32) (*StatusRe
 	return &response.StatusResponse, nil
 }
 
+// GetLatency ping a server and get the round-trip latency
 func GetLatency(addr, host string, port uint16, protocolVersion int32) (time.Duration, error) {
-	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
-	if err != nil {
-		return 0, err
-	}
-	defer conn.Close()
-
-	if err := conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
-		return 0, err
-	}
-
 	handshake, err := NewIntentionPacket(protocolVersion, host, port, IntentStatus).MarshalBinary()
 	if err != nil {
 		return 0, err
@@ -127,23 +126,8 @@ func GetLatency(addr, host string, port uint16, protocolVersion int32) (time.Dur
 		return 0, err
 	}
 
-	if _, err := conn.Write(append(handshake, ping...)); err != nil {
-		return 0, err
-	}
-
-	r := bufio.NewReader(conn)
-	size, err := ReadVarInt(r)
+	body, err := sendAndReceive(addr, append(handshake, ping...))
 	if err != nil {
-		return 0, err
-	}
-
-	if size > MaxPacketSize {
-		return 0, ErrPacketTooLarge
-	}
-
-	body := make([]byte, size)
-	lr := io.LimitReader(r, int64(size))
-	if _, err = io.ReadAtLeast(lr, body, int(size)); err != nil {
 		return 0, err
 	}
 

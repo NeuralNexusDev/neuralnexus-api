@@ -21,7 +21,7 @@ func (p *StatusResponsePacket) ID() int32 {
 
 var ErrStatusJSONTooLong = errors.New("status response JSON too large")
 
-const MaxStatusJSONLength = 32767
+const MaxStatusJSONLength = 1<<15 - 1
 
 func (p *StatusResponsePacket) UnmarshalBinary(b []byte) error {
 	r := bytes.NewReader(b)
