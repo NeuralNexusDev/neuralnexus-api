@@ -138,26 +138,29 @@ func WriteUtf8(w StreamWriter, s string) error {
 	return WriteUtf8MaxSize(w, s, MaxStringLength)
 }
 
-func sendAndReceive(ctx context.Context, addr string, payloads ...[]byte) ([]byte, error) {
+func openConnection(ctx context.Context, addr string) (net.Conn, error) {
 	var d net.Dialer
 	conn, err := d.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
 
 	if deadline, ok := ctx.Deadline(); ok {
 		_ = conn.SetDeadline(deadline)
 	}
 
+	return conn, nil
+}
+
+func send(conn net.Conn, payloads ...[]byte) error {
 	buffers := net.Buffers(payloads)
 	if _, err := buffers.WriteTo(conn); err != nil {
-		return nil, err
+		return err
 	}
+	return nil
+}
 
-	lr := io.LimitReader(conn, MaxPacketSize)
-	r := bufio.NewReader(lr)
-
+func receive(r *bufio.Reader) ([]byte, error) {
 	size, err := ReadVarInt(r)
 	if err != nil {
 		return nil, err
@@ -176,24 +179,38 @@ func sendAndReceive(ctx context.Context, addr string, payloads ...[]byte) ([]byt
 	return body, nil
 }
 
-// GetStatus performs a server list ping and returns the StatusResponse.
-func GetStatus(ctx context.Context, addr, host string, port uint16, protocolVersion int32) (*StatusResponse, error) {
+func GetStatus(ctx context.Context, addr, host string, port uint16, protocolVersion int32) (*StatusResponse, time.Duration, error) {
 	handshake, err := NewIntentionPacket(protocolVersion, host, port, IntentStatus).MarshalBinary()
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	body, err := sendAndReceive(ctx, addr, handshake, StatusRequestPacket)
+	conn, err := openConnection(ctx, addr)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
+	}
+	defer conn.Close()
+
+	lr := io.LimitReader(conn, MaxPacketSize)
+	r := bufio.NewReader(lr)
+
+	start := time.Now()
+	if err := send(conn, handshake, StatusRequestPacket); err != nil {
+		return nil, 0, err
 	}
 
-	var response StatusResponsePacket
-	if err := response.UnmarshalBinary(body); err != nil {
-		return nil, err
+	body, err := receive(r)
+	if err != nil {
+		return nil, 0, err
+	}
+	delta := time.Since(start)
+
+	var statusResponse StatusResponsePacket
+	if err := statusResponse.UnmarshalBinary(body); err != nil {
+		return nil, 0, err
 	}
 
-	return &response.StatusResponse, nil
+	return &statusResponse.StatusResponse, delta, nil
 }
 
 // GetLatency ping a server and get the round-trip latency
@@ -203,17 +220,30 @@ func GetLatency(ctx context.Context, addr, host string, port uint16, protocolVer
 		return 0, err
 	}
 
+	conn, err := openConnection(ctx, addr)
+	if err != nil {
+		return 0, err
+	}
+	defer conn.Close()
+
+	lr := io.LimitReader(conn, MaxPacketSize)
+	r := bufio.NewReader(lr)
+
 	start := time.Now()
 	sentTimestamp := start.UnixMilli()
 	ping, err := NewPingRequestPacket(sentTimestamp).MarshalBinary()
 	if err != nil {
 		return 0, err
 	}
+	if err := send(conn, handshake, ping); err != nil {
+		return 0, err
+	}
 
-	body, err := sendAndReceive(ctx, addr, handshake, ping)
+	body, err := receive(r)
 	if err != nil {
 		return 0, err
 	}
+	delta := time.Since(start)
 
 	var response PongResponsePacket
 	if err := response.UnmarshalBinary(body); err != nil {
@@ -223,5 +253,5 @@ func GetLatency(ctx context.Context, addr, host string, port uint16, protocolVer
 		return 0, ErrTimestampMismatch
 	}
 
-	return time.Since(start), nil
+	return delta, nil
 }
