@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"io"
 	"net"
@@ -18,11 +19,37 @@ const (
 	PacketIDPongResponse   = 0x01 // Status Clientbound `pong_response`
 )
 
+const (
+	MaxPacketSize   = 1<<21 - 1
+	MaxStringLength = 1<<15 - 1
+)
+
+var (
+	ErrUnexpectedPacket     = errors.New("unexpected packet")
+	ErrNegativePacketSize   = errors.New("packet size cannot be negative")
+	ErrPacketTooLarge       = errors.New("packet too large")
+	ErrVarIntTooBig         = errors.New("VarInt too big")
+	ErrStringNegativeLength = errors.New("string length is negative")
+	ErrStringTooLong        = errors.New("string is too long")
+	ErrTimestampMismatch    = errors.New("mismatched pong timestamp payload")
+)
+
+// StreamReader is an interface that combines io.Reader and io.ByteReader.
+type StreamReader interface {
+	io.Reader
+	io.ByteReader
+}
+
+// StreamWriter is an interface that combines io.Writer and io.ByteWriter.
+type StreamWriter interface {
+	io.Writer
+	io.ByteWriter
+}
+
+// Packet represents a Minecraft packet
 type Packet interface {
 	ID() int32
 }
-
-var ErrVarIntTooBig = errors.New("VarInt too big")
 
 // ReadVarInt reads a Minecraft VarInt.
 func ReadVarInt(r io.ByteReader) (int32, error) {
@@ -58,51 +85,105 @@ func WriteVarInt(w io.ByteWriter, value int32) error {
 	return w.WriteByte(byte(v))
 }
 
-var ErrUnexpectedPacket = errors.New("unexpected packet")
-var ErrPacketTooLarge = errors.New("packet too large")
+// ReadUtf8MaxSize reads a Minecraft string, which is a VarInt length followed by UTF-8 bytes.
+func ReadUtf8MaxSize(r StreamReader, maxSize int32) (string, error) {
+	size, err := ReadVarInt(r)
+	if err != nil {
+		return "", err
+	}
+	if size < 0 {
+		return "", ErrStringNegativeLength
+	}
+	if size > maxSize {
+		return "", ErrStringTooLong
+	}
 
-const MaxPacketSize = 1<<21 - 1
+	// Exit early if the reader has a known length and is too small
+	if lr, ok := r.(interface{ Len() int }); ok {
+		if int(size) > lr.Len() {
+			return "", io.ErrUnexpectedEOF
+		}
+	}
 
-func sendAndReceive(addr string, b []byte) ([]byte, error) {
-	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
+	data, err := io.ReadAll(io.LimitReader(r, int64(size)))
+	if err != nil {
+		return "", err
+	}
+	if int32(len(data)) < size {
+		return "", io.ErrUnexpectedEOF
+	}
+
+	return string(data), nil
+}
+
+// ReadUtf8 reads a Minecraft string, which is a VarInt length followed by UTF-8 bytes.
+func ReadUtf8(r StreamReader) (string, error) {
+	return ReadUtf8MaxSize(r, MaxStringLength)
+}
+
+// WriteUtf8MaxSize writes a Minecraft string, which is a VarInt length followed by UTF-8 bytes.
+func WriteUtf8MaxSize(w StreamWriter, s string, maxSize int32) error {
+	if len(s) > int(maxSize) {
+		return ErrStringTooLong
+	}
+	if err := WriteVarInt(w, int32(len(s))); err != nil {
+		return err
+	}
+	_, err := io.WriteString(w, s)
+	return err
+}
+
+// WriteUtf8 writes a Minecraft string, which is a VarInt length followed by UTF-8 bytes.
+func WriteUtf8(w StreamWriter, s string) error {
+	return WriteUtf8MaxSize(w, s, MaxStringLength)
+}
+
+func sendAndReceive(ctx context.Context, addr string, payloads ...[]byte) ([]byte, error) {
+	var d net.Dialer
+	conn, err := d.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
 
-	if err := conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
-		return nil, err
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = conn.SetDeadline(deadline)
 	}
 
-	if _, err := conn.Write(b); err != nil {
+	buffers := net.Buffers(payloads)
+	if _, err := buffers.WriteTo(conn); err != nil {
 		return nil, err
 	}
 
 	lr := io.LimitReader(conn, MaxPacketSize)
 	r := bufio.NewReader(lr)
+
 	size, err := ReadVarInt(r)
 	if err != nil {
-		if errors.Is(err, io.EOF) {
-			return nil, ErrPacketTooLarge
-		}
 		return nil, err
+	}
+	if size < 0 {
+		return nil, ErrNegativePacketSize
+	}
+	if size > MaxPacketSize {
+		return nil, ErrPacketTooLarge
 	}
 
 	body := make([]byte, size)
-	if _, err = io.ReadFull(r, body); err != nil {
+	if _, err := io.ReadFull(r, body); err != nil {
 		return nil, err
 	}
 	return body, nil
 }
 
 // GetStatus performs a server list ping and returns the StatusResponse.
-func GetStatus(addr, host string, port uint16, protocolVersion int32) (*StatusResponse, error) {
+func GetStatus(ctx context.Context, addr, host string, port uint16, protocolVersion int32) (*StatusResponse, error) {
 	handshake, err := NewIntentionPacket(protocolVersion, host, port, IntentStatus).MarshalBinary()
 	if err != nil {
 		return nil, err
 	}
 
-	body, err := sendAndReceive(addr, append(handshake, StatusRequestPacket...))
+	body, err := sendAndReceive(ctx, addr, handshake, StatusRequestPacket)
 	if err != nil {
 		return nil, err
 	}
@@ -116,17 +197,20 @@ func GetStatus(addr, host string, port uint16, protocolVersion int32) (*StatusRe
 }
 
 // GetLatency ping a server and get the round-trip latency
-func GetLatency(addr, host string, port uint16, protocolVersion int32) (time.Duration, error) {
+func GetLatency(ctx context.Context, addr, host string, port uint16, protocolVersion int32) (time.Duration, error) {
 	handshake, err := NewIntentionPacket(protocolVersion, host, port, IntentStatus).MarshalBinary()
 	if err != nil {
 		return 0, err
 	}
-	ping, err := NewPingRequestPacket(time.Now().UnixMilli()).MarshalBinary()
+
+	start := time.Now()
+	sentTimestamp := start.UnixMilli()
+	ping, err := NewPingRequestPacket(sentTimestamp).MarshalBinary()
 	if err != nil {
 		return 0, err
 	}
 
-	body, err := sendAndReceive(addr, append(handshake, ping...))
+	body, err := sendAndReceive(ctx, addr, handshake, ping)
 	if err != nil {
 		return 0, err
 	}
@@ -135,6 +219,9 @@ func GetLatency(addr, host string, port uint16, protocolVersion int32) (time.Dur
 	if err := response.UnmarshalBinary(body); err != nil {
 		return 0, err
 	}
+	if response.Timestamp != sentTimestamp {
+		return 0, ErrTimestampMismatch
+	}
 
-	return time.Duration(time.Now().UnixMilli()-response.Timestamp) * time.Millisecond, nil
+	return time.Since(start), nil
 }
