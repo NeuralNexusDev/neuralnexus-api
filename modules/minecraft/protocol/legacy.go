@@ -375,15 +375,13 @@ func writeUTF16BEString(w io.Writer, s string) error {
 	runes := []rune(s)
 	charLen := len(runes)
 	if charLen > 65535 {
-		return errors.New("string too long for UTF-16BE prefix")
+		return ErrStringTooLong
 	}
 
-	var lenBytes [2]byte
-	binary.BigEndian.PutUint16(lenBytes[:], uint16(charLen))
-	if _, err := w.Write(lenBytes[:]); err != nil {
+	err := writeUint16(w, uint16(charLen))
+	if err != nil {
 		return err
 	}
-
 	if charLen == 0 {
 		return nil
 	}
