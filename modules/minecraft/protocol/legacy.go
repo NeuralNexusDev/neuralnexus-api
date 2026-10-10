@@ -7,6 +7,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"unicode/utf16"
 )
 
 var (
@@ -23,6 +24,8 @@ const (
 	LegacyPingPayload           = 0x01
 	LegacyIDPluginMessagePacket = 0xFA
 	LegacyIDDisconnectPacket    = 0xFF
+
+	MaxLegacyStringLength = 256 // UTF-16 code units
 
 	SectionHeader    = "§1"
 	NullDelimiter    = "\x00"
@@ -54,8 +57,14 @@ func (p *LegacyPingRequest) ID() int32 {
 
 // MarshalBinary marshals the legacy ping request packet into a byte slice.
 func (p *LegacyPingRequest) MarshalBinary() ([]byte, error) {
-	// Payload length = 1 (protocol version) + 2 (hostname char len) + hostname bytes + 4 (port int)
-	payloadLength := uint16(1 + 2 + len(p.Hostname)*2 + 4)
+	if p.Port > 65535 {
+		return nil, ErrInvalidPort
+	}
+	host := utf16.Encode([]rune(p.Hostname))
+	if len(host) > MaxServerAddressLength {
+		return nil, ErrStringTooLong
+	}
+	payloadLength := uint16(1 + 2 + len(host)*2 + 4)
 
 	var body bytes.Buffer
 	// 3 packet identifier, payload, plugin message id, 2 + 11*2 bytes for "MC|PingHost", 2 payload length
@@ -70,18 +79,13 @@ func (p *LegacyPingRequest) MarshalBinary() ([]byte, error) {
 
 	body.WriteByte(p.ProtocolVersion)
 
-	binary.BigEndian.PutUint16(buf2[:], uint16(len(p.Hostname)))
-	body.Write(buf2[:])
-
-	// hostname as a UTF-16BE string
-	for _, r := range p.Hostname {
-		binary.BigEndian.PutUint16(buf2[:], uint16(r))
-		body.Write(buf2[:])
+	if err := writeUTF16BEUnits(&body, host); err != nil {
+		return nil, err
 	}
 
-	var buf4 [4]byte
-	binary.BigEndian.PutUint32(buf4[:], p.Port)
-	body.Write(buf4[:])
+	if err := writeUint32(&body, p.Port); err != nil {
+		return nil, err
+	}
 
 	return body.Bytes(), nil
 }
@@ -116,7 +120,7 @@ func (p *LegacyPingRequest) UnmarshalBinary(data []byte) error {
 	p.ProtocolVersion = version
 
 	// Read hostname
-	hostname, err := readUTF16BEString(lr)
+	hostname, err := readUTF16BEString(lr, MaxServerAddressLength)
 	if err != nil {
 		return err
 	}
@@ -161,7 +165,7 @@ func (p *LegacyPingResponse) UnmarshalBinary(data []byte) error {
 		return ErrUnexpectedPacket
 	}
 
-	payload, err := readUTF16BEString(r)
+	payload, err := readUTF16BEString(r, MaxLegacyStringLength)
 	if err != nil {
 		return err
 	}
@@ -273,14 +277,16 @@ func (p *LegacyPingResponseV14) MarshalBinary() ([]byte, error) {
 
 // marshalLegacyPayload marshals a legacy payload string into a byte slice
 func marshalLegacyPayload(payload string) ([]byte, error) {
-	runes := []rune(payload)
+	units := utf16.Encode([]rune(payload))
+	if len(units) > MaxLegacyStringLength {
+		return nil, ErrStringTooLong
+	}
 	// 1 byte (packet ID) + 2 bytes (string length prefix) + (len * 2 bytes for UTF-16BE)
-	buf := bytes.NewBuffer(make([]byte, 0, 1+2+(len(runes)*2)))
-
+	buf := bytes.NewBuffer(make([]byte, 0, 1+2+(len(units)*2)))
 	if err := writeUint8(buf, LegacyIDDisconnectPacket); err != nil {
 		return nil, err
 	}
-	if err := writeUTF16BEString(buf, payload); err != nil {
+	if err := writeUTF16BEUnits(buf, units); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
@@ -347,9 +353,9 @@ func writeUint32(w io.Writer, v uint32) error {
 	return err
 }
 
-// readUTF16BEString reads a 2-byte character length followed by that many
-// UTF-16BE encoded characters from the reader, returning a Go string.
-func readUTF16BEString(r io.Reader) (string, error) {
+// readUTF16BEString reads a 2-byte length in UTF-16 code units followed by the UTF-16BE
+// code units from the reader, returning a Go string.
+func readUTF16BEString(r io.Reader, maxLen uint16) (string, error) {
 	charLen, err := readUint16(r)
 	if err != nil {
 		return "", err
@@ -357,39 +363,27 @@ func readUTF16BEString(r io.Reader) (string, error) {
 	if charLen == 0 {
 		return "", nil
 	}
+	if charLen > maxLen {
+		return "", ErrStringTooLong
+	}
 
-	buf := make([]byte, charLen*2)
-	if _, err := io.ReadFull(r, buf); err != nil {
+	units := make([]uint16, charLen)
+	if err := binary.Read(r, binary.BigEndian, units); err != nil {
 		return "", err
 	}
-
-	runes := make([]rune, charLen)
-	for i := range charLen {
-		runes[i] = rune(binary.BigEndian.Uint16(buf[i*2:]))
-	}
-	return string(runes), nil
+	return string(utf16.Decode(units)), nil
 }
 
-// writeUTF16BEString writes a Go string as a 2-byte character length followed by UTF-16BE encoded characters.
-func writeUTF16BEString(w io.Writer, s string) error {
-	runes := []rune(s)
-	charLen := len(runes)
-	if charLen > 65535 {
-		return ErrStringTooLong
-	}
-
-	err := writeUint16(w, uint16(charLen))
-	if err != nil {
+// writeUTF16BEUnits writes UTF-16 code units as a 2-byte length followed by the UTF-16BE code units.
+func writeUTF16BEUnits(w io.Writer, units []uint16) error {
+	if err := writeUint16(w, uint16(len(units))); err != nil {
 		return err
 	}
-	if charLen == 0 {
-		return nil
-	}
 
-	var charBytes [2]byte
-	for _, r := range runes {
-		binary.BigEndian.PutUint16(charBytes[:], uint16(r))
-		if _, err := w.Write(charBytes[:]); err != nil {
+	var unitBytes [2]byte
+	for _, u := range units {
+		binary.BigEndian.PutUint16(unitBytes[:], u)
+		if _, err := w.Write(unitBytes[:]); err != nil {
 			return err
 		}
 	}
