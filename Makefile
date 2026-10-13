@@ -1,3 +1,5 @@
+.PHONY: generate update test-env-up test-env-down test-env-logs vet test-go test
+
 generate:
 	protoc -I=./proto --go_out=./modules/proto ./proto/bng.proto
 	sed -i 's/json:"\(.*\),omitempty"/json:"\1,omitempty" xml:"\1,omitempty"/g' ./modules/proto/bngpb/bng.pb.go
@@ -38,10 +40,17 @@ test-env-logs:
 	docker compose -f docker-compose.test.yml logs -f
 
 vet:
+	@out=$$(gofmt -l .); if [ -n "$$out" ]; then echo "$$out"; exit 1; fi
 	go vet ./...
 
-_go-test:
-	go test ./...
+test-go: export TEST_POSTGRES_URL := $(TEST_POSTGRES_URL)
+test-go: export TEST_REDIS_URL := $(TEST_REDIS_URL)
+test-go: export JWT_SECRET := $(TEST_JWT_SECRET)
+test-go: export PEPPER := $(TEST_PEPPER)
+test-go: export NN_SITE_URL := $(TEST_NN_SITE_URL)
+test-go: export NN_API_URL := $(TEST_NN_API_URL)
+test-go:
+	go test -race ./...
 
-test: test-env-up
-	TEST_POSTGRES_URL=$(TEST_POSTGRES_URL) TEST_REDIS_URL=$(TEST_REDIS_URL) JWT_SECRET=$(TEST_JWT_SECRET) PEPPER=$(TEST_PEPPER) NN_SITE_URL=$(TEST_NN_SITE_URL) NN_API_URL=$(TEST_NN_API_URL) $(MAKE) vet _go-test; status=$$?; $(MAKE) test-env-down; exit $$status
+test:
+	$(MAKE) test-env-up && $(MAKE) vet test-go; status=$$?; $(MAKE) test-env-down; exit $$status
