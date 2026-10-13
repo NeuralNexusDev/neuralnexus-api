@@ -15,9 +15,6 @@ RUN wget https://github.com/protocolbuffers/protobuf/releases/download/v$PROTOC_
 COPY go.mod go.sum ./
 RUN go mod download
 
-COPY Makefile ./
-RUN make update
-
 COPY . .
 
 RUN make generate
