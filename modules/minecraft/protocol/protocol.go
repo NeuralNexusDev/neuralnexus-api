@@ -3,9 +3,10 @@ package protocol
 import (
 	"bufio"
 	"context"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
-	"net"
 	"time"
 )
 
@@ -138,54 +139,13 @@ func WriteUtf8(w StreamWriter, s string) error {
 	return WriteUtf8MaxSize(w, s, MaxStringLength)
 }
 
-func openConnection(ctx context.Context, addr string) (net.Conn, error) {
-	var d net.Dialer
-	conn, err := d.DialContext(ctx, "tcp", addr)
-	if err != nil {
-		return nil, err
-	}
-
-	if deadline, ok := ctx.Deadline(); ok {
-		_ = conn.SetDeadline(deadline)
-	}
-
-	return conn, nil
-}
-
-func send(conn net.Conn, payloads ...[]byte) error {
-	buffers := net.Buffers(payloads)
-	if _, err := buffers.WriteTo(conn); err != nil {
-		return err
-	}
-	return nil
-}
-
-func receive(r *bufio.Reader) ([]byte, error) {
-	size, err := ReadVarInt(r)
-	if err != nil {
-		return nil, err
-	}
-	if size < 0 {
-		return nil, ErrNegativePacketSize
-	}
-	if size > MaxPacketSize {
-		return nil, ErrPacketTooLarge
-	}
-
-	body := make([]byte, size)
-	if _, err := io.ReadFull(r, body); err != nil {
-		return nil, err
-	}
-	return body, nil
-}
-
 func GetStatus(ctx context.Context, addr, host string, port uint16, protocolVersion int32) (*StatusResponse, time.Duration, error) {
 	handshake, err := NewIntentionPacket(protocolVersion, host, port, IntentStatus).MarshalBinary()
 	if err != nil {
 		return nil, 0, err
 	}
 
-	conn, err := openConnection(ctx, addr)
+	conn, err := openConnection(ctx, "tcp", addr)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -220,7 +180,7 @@ func GetLatency(ctx context.Context, addr, host string, port uint16, protocolVer
 		return 0, err
 	}
 
-	conn, err := openConnection(ctx, addr)
+	conn, err := openConnection(ctx, "tcp", addr)
 	if err != nil {
 		return 0, err
 	}
@@ -254,4 +214,41 @@ func GetLatency(ctx context.Context, addr, host string, port uint16, protocolVer
 	}
 
 	return delta, nil
+}
+
+func GetStatusLegacy(ctx context.Context, addr, host string, port uint32, protocolVersion uint8) (*LegacyPingResponse, time.Duration, error) {
+	ping, err := NewLegacyPingRequest(protocolVersion, host, port).MarshalBinary()
+	if err != nil {
+		return nil, 0, err
+	}
+
+	fmt.Println(hex.Dump(ping))
+
+	conn, err := openConnection(ctx, "tcp", addr)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer conn.Close()
+
+	lr := io.LimitReader(conn, MaxPacketSize)
+	r := bufio.NewReader(lr)
+
+	start := time.Now()
+	if err := send(conn, ping); err != nil {
+		return nil, 0, err
+	}
+
+	body, err := io.ReadAll(r)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	delta := time.Since(start)
+
+	var pingResponse LegacyPingResponse
+	if err := pingResponse.UnmarshalBinary(body); err != nil {
+		return nil, 0, err
+	}
+
+	return &pingResponse, delta, nil
 }

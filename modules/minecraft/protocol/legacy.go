@@ -3,7 +3,9 @@ package protocol
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"strconv"
 	"strings"
@@ -48,6 +50,15 @@ type LegacyPingRequest struct {
 	ProtocolVersion uint8
 	Hostname        string
 	Port            uint32
+}
+
+// NewLegacyPingRequest creates a new LegacyPingRequest with the given protocol version, hostname, and port.
+func NewLegacyPingRequest(protocolVersion uint8, hostname string, port uint32) *LegacyPingRequest {
+	return &LegacyPingRequest{
+		ProtocolVersion: protocolVersion,
+		Hostname:        hostname,
+		Port:            port,
+	}
 }
 
 // ID returns the packet ID for the legacy ping request packet
@@ -157,6 +168,9 @@ func (p *LegacyPingResponse) ID() int32 {
 func (p *LegacyPingResponse) UnmarshalBinary(data []byte) error {
 	r := bytes.NewReader(data)
 
+	fmt.Println("UnmarshalBinary: data length:", len(data))
+	fmt.Print(hex.Dump(data))
+
 	packetID, err := readUint8(r)
 	if err != nil {
 		return err
@@ -178,8 +192,12 @@ func (p *LegacyPingResponse) UnmarshalBinary(data []byte) error {
 		}
 
 		proto, err := strconv.Atoi(fields[1])
-		if err != nil || proto < 0 || proto > 255 {
+		if err != nil || proto < 0 {
 			return ErrInvalidProtocolVersion
+		}
+		// Some Velocity versions provide a protocol version greater than 127
+		if proto > 127 {
+			proto = 127
 		}
 		p.ProtocolVersion = uint8(proto)
 		p.ServerVersion = fields[2]
