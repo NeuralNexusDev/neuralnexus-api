@@ -110,9 +110,16 @@ type Players struct {
 	Sample []PlayerSample `json:"sample"` // Optional, some servers include additional information
 }
 
+// Mod represents a single mod in the server's mod list.
 type Mod struct {
 	Name    string `json:"modid"`
 	Version string `json:"version"`
+}
+
+// ModInfo represents the mod information in the server's status response.
+type ModInfo struct {
+	Type string `json:"type"`
+	Mods []Mod  `json:"modList"`
 }
 
 // StatusResponse the server's response to a status request, containing information about the server.
@@ -122,7 +129,7 @@ type StatusResponse struct {
 	Description        Component `json:"description"`                  // Optional
 	Favicon            string    `json:"favicon"`                      // Optional
 	EnforcesSecureChat *bool     `json:"enforcesSecureChat,omitempty"` // version-specific
-	ModInfo            *[]Mod    `json:"modinfo,omitempty"`            // Optional
+	ModInfo            *ModInfo  `json:"modinfo,omitempty"`            // Optional
 }
 
 // PingRequestPacket a ping request packet sent by the client to the server to measure latency.
