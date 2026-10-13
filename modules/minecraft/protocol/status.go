@@ -110,13 +110,19 @@ type Players struct {
 	Sample []PlayerSample `json:"sample"` // Optional, some servers include additional information
 }
 
+type Mod struct {
+	Name    string `json:"modid"`
+	Version string `json:"version"`
+}
+
 // StatusResponse the server's response to a status request, containing information about the server.
 type StatusResponse struct {
 	Version            Version   `json:"version"`
-	Players            Players   `json:"players"`            // Optional
-	Description        Component `json:"description"`        // Optional
-	Favicon            string    `json:"favicon"`            // Optional
-	EnforcesSecureChat *bool     `json:"enforcesSecureChat"` // version-specific
+	Players            Players   `json:"players"`                      // Optional
+	Description        Component `json:"description"`                  // Optional
+	Favicon            string    `json:"favicon"`                      // Optional
+	EnforcesSecureChat *bool     `json:"enforcesSecureChat,omitempty"` // version-specific
+	ModInfo            *[]Mod    `json:"modinfo,omitempty"`            // Optional
 }
 
 // PingRequestPacket a ping request packet sent by the client to the server to measure latency.
