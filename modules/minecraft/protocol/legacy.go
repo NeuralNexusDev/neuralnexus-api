@@ -3,9 +3,7 @@ package protocol
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"strconv"
 	"strings"
@@ -167,9 +165,6 @@ func (p *LegacyPingResponse) ID() int32 {
 // UnmarshalBinary unmarshals the legacy ping response packet from a byte slice.
 func (p *LegacyPingResponse) UnmarshalBinary(data []byte) error {
 	r := bytes.NewReader(data)
-
-	fmt.Println("UnmarshalBinary: data length:", len(data))
-	fmt.Print(hex.Dump(data))
 
 	packetID, err := readUint8(r)
 	if err != nil {

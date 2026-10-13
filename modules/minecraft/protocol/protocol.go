@@ -3,9 +3,7 @@ package protocol
 import (
 	"bufio"
 	"context"
-	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"time"
 )
@@ -221,8 +219,6 @@ func GetStatusLegacy(ctx context.Context, addr, host string, port uint32, protoc
 	if err != nil {
 		return nil, 0, err
 	}
-
-	fmt.Println(hex.Dump(ping))
 
 	conn, err := openConnection(ctx, "tcp", addr)
 	if err != nil {
