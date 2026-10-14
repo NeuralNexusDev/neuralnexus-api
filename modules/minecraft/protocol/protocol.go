@@ -248,3 +248,68 @@ func GetStatusLegacy(ctx context.Context, addr, host string, port uint32, protoc
 
 	return &pingResponse, delta, nil
 }
+
+func GetQueryStatus(ctx context.Context, addr string) (*QueryFullStatResponse, time.Duration, error) {
+	conn, err := openConnection(ctx, "udp", addr)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer conn.Close()
+
+	lr := io.LimitReader(conn, MaxPacketSize)
+	r := bufio.NewReader(lr)
+
+	start := time.Now()
+	if _, err := conn.Write(QueryChallengePayload); err != nil {
+		return nil, 0, err
+	}
+
+	body := make([]byte, 32)
+	n, err := r.Read(body)
+	if err != nil {
+		return nil, 0, err
+	}
+	body = body[:n]
+
+	delta := time.Since(start)
+
+	var challengeResponse QueryChallengeResponse
+	if err := challengeResponse.UnmarshalBinary(body); err != nil {
+		return nil, 0, err
+	}
+
+	//basicStatRequest := NewQueryBasicStatRequest(challengeResponse.SessionID, challengeResponse.ChallengeToken)
+	//basicStat, err := basicStatRequest.MarshalBinary()
+	//if err != nil {
+	//	return nil, 0, err
+	//}
+
+	fullStatRequest := NewQueryFullStatRequest(challengeResponse.SessionID, challengeResponse.ChallengeToken)
+	fullStat, err := fullStatRequest.MarshalBinary()
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if _, err := conn.Write(fullStat); err != nil {
+		return nil, 0, err
+	}
+
+	body2 := make([]byte, 1024)
+	n2, err := r.Read(body2)
+	if err != nil {
+		return nil, 0, err
+	}
+	body2 = body2[:n2]
+
+	//var basicStatResponse QueryBasicStatResponse
+	//if err := basicStatResponse.UnmarshalBinary(body2); err != nil {
+	//	return nil, 0, err
+	//}
+
+	var fullStatResponse QueryFullStatResponse
+	if err := fullStatResponse.UnmarshalBinary(body2); err != nil {
+		return nil, 0, err
+	}
+
+	return &fullStatResponse, delta, nil
+}
