@@ -17,8 +17,9 @@ const (
 )
 
 var (
-	QueryStatHeader  = []byte{GSQueryV4MSB, GSQueryV4LSB, QueryTypeStat}
-	QueryStatPadding = []byte{0xFF, 0xFF, 0xFF, 0x01}
+	QueryStatHeader      = []byte{GSQueryV4MSB, GSQueryV4LSB, QueryTypeStat}
+	QueryChallengeHeader = []byte{GSQueryV4MSB, GSQueryV4LSB, QueryTypeChallenge}
+	QueryStatPadding     = []byte{0xFF, 0xFF, 0xFF, 0x01}
 )
 
 // QueryChallengeRequest request a challenge token.
@@ -42,7 +43,7 @@ func (p *QueryChallengeRequest) MarshalBinary() ([]byte, error) {
 	// magic + type + session ID
 	buf.Grow(2 + 1 + 4)
 
-	buf.Write([]byte{GSQueryV4MSB, GSQueryV4LSB, QueryTypeChallenge})
+	buf.Write(QueryChallengeHeader)
 	buf.Write(p.SessionID)
 
 	return buf.Bytes(), nil
@@ -201,22 +202,23 @@ func (p *QueryStatResponse) UnmarshalBinary(data []byte) error {
 		return err
 	}
 
-	// TODO: Learn what the padding does
-	// Skip the 11 bytes of padding
-	//padding := make([]byte, 10)
-	//if _, err := r.Read(padding); err != nil {
-	//	return err
-	//}
-
+	// Read splitnum\x00
 	_, err = readNullTerminatedString(r)
 	if err != nil {
 		return err
 	}
-	_, err = readNullTerminatedString(r)
+	// Read numPackets: MSB is high when this is the last packet, the other 7 bits represent the packet index
+	_, err = r.ReadByte()
+	if err != nil {
+		return err
+	}
+	// Packet number byte, not documented
+	_, err = r.ReadByte()
 	if err != nil {
 		return err
 	}
 
+	// Read key-value pairs
 	p.KVPs = make(map[string]string)
 	kvps, err := readNullTerminatedStrings(r)
 	if err != nil {
@@ -226,13 +228,14 @@ func (p *QueryStatResponse) UnmarshalBinary(data []byte) error {
 		p.KVPs[kvps[i]] = kvps[i+1]
 	}
 
-	// TODO: Learn what the padding does
-	// Skip the 10 bytes of padding
+	// Skip padding
+	// \x01player_\x00\x00
 	padding := make([]byte, 10)
 	if _, err := r.Read(padding); err != nil {
 		return err
 	}
 
+	// Read player names
 	p.Players, err = readNullTerminatedStrings(r)
 	if err != nil {
 		return err
