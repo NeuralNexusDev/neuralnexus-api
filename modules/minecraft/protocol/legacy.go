@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"math"
 	"strconv"
 	"strings"
 	"unicode/utf16"
@@ -66,7 +67,7 @@ func (p *LegacyPingRequest) ID() int32 {
 
 // MarshalBinary marshals the legacy ping request packet into a byte slice.
 func (p *LegacyPingRequest) MarshalBinary() ([]byte, error) {
-	if p.Port > 65535 {
+	if p.Port > math.MaxUint16 {
 		return nil, ErrInvalidPort
 	}
 	host := utf16.Encode([]rune(p.Hostname))
@@ -82,9 +83,10 @@ func (p *LegacyPingRequest) MarshalBinary() ([]byte, error) {
 	// Write the legacy ping preamble (packet identifiers and plugin message channel)
 	body.Write(LegacyPingPreamble)
 
-	var buf2 [2]byte
-	binary.BigEndian.PutUint16(buf2[:], payloadLength)
-	body.Write(buf2[:])
+	err := writeUint16(&body, payloadLength)
+	if err != nil {
+		return nil, err
+	}
 
 	body.WriteByte(p.ProtocolVersion)
 
@@ -140,7 +142,7 @@ func (p *LegacyPingRequest) UnmarshalBinary(data []byte) error {
 	if err != nil {
 		return err
 	}
-	if port > 65535 {
+	if port > math.MaxUint16 {
 		return ErrInvalidPort
 	}
 	p.Port = port
