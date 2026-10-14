@@ -259,32 +259,6 @@ func (p *QueryBasicStatResponse) MarshalBinary() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func readNullTerminatedString(r *bufio.Reader) (string, error) {
-	str, err := r.ReadString('\000')
-	if err != nil {
-		return "", err
-	}
-	return str[:len(str)-1], nil
-}
-
-func readNullTerminatedStrings(r *bufio.Reader) ([]string, error) {
-	var strings []string
-	for {
-		str, err := readNullTerminatedString(r)
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return nil, err
-		}
-		if str == "" {
-			break
-		}
-		strings = append(strings, str)
-	}
-	return strings, nil
-}
-
 type QueryFullStatRequest struct {
 	SessionID      []byte
 	ChallengeToken []byte

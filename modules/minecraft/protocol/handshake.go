@@ -49,14 +49,14 @@ func (p *Intention) MarshalBinary() ([]byte, error) {
 	// 20 bytes for 4 VarInts, + 2 bytes for the Port + length of ServerAddress
 	body.Grow(len(p.ServerAddress) + 22)
 
-	if err := WriteVarInt(&body, p.ID()); err != nil {
+	if err := writeVarInt(&body, p.ID()); err != nil {
 		return nil, err
 	}
-	if err := WriteVarInt(&body, p.ProtocolVersion); err != nil {
+	if err := writeVarInt(&body, p.ProtocolVersion); err != nil {
 		return nil, err
 	}
 
-	if err := WriteUtf8MaxSize(&body, p.ServerAddress, MaxServerAddressLength); err != nil {
+	if err := writeUtf8MaxSize(&body, p.ServerAddress, MaxServerAddressLength); err != nil {
 		return nil, err
 	}
 
@@ -64,7 +64,7 @@ func (p *Intention) MarshalBinary() ([]byte, error) {
 	binary.BigEndian.PutUint16(port[:], p.ServerPort)
 	body.Write(port[:])
 
-	if err := WriteVarInt(&body, int32(p.Intent)); err != nil {
+	if err := writeVarInt(&body, int32(p.Intent)); err != nil {
 		return nil, err
 	}
 
@@ -72,7 +72,7 @@ func (p *Intention) MarshalBinary() ([]byte, error) {
 	// body length plus 5 for VarInt
 	packet.Grow(body.Len() + 5)
 
-	if err := WriteVarInt(&packet, int32(body.Len())); err != nil {
+	if err := writeVarInt(&packet, int32(body.Len())); err != nil {
 		return nil, err
 	}
 	packet.Write(body.Bytes())
@@ -84,7 +84,7 @@ func (p *Intention) MarshalBinary() ([]byte, error) {
 func (p *Intention) UnmarshalBinary(b []byte) error {
 	r := bytes.NewReader(b)
 
-	packetID, err := ReadVarInt(r)
+	packetID, err := readVarInt(r)
 	if err != nil {
 		return err
 	}
@@ -92,12 +92,12 @@ func (p *Intention) UnmarshalBinary(b []byte) error {
 		return ErrUnexpectedPacket
 	}
 
-	p.ProtocolVersion, err = ReadVarInt(r)
+	p.ProtocolVersion, err = readVarInt(r)
 	if err != nil {
 		return err
 	}
 
-	p.ServerAddress, err = ReadUtf8MaxSize(r, MaxServerAddressLength)
+	p.ServerAddress, err = readUtf8MaxSize(r, MaxServerAddressLength)
 	if err != nil {
 		return err
 	}
@@ -108,7 +108,7 @@ func (p *Intention) UnmarshalBinary(b []byte) error {
 	}
 	p.ServerPort = binary.BigEndian.Uint16(port[:])
 
-	intent, err := ReadVarInt(r)
+	intent, err := readVarInt(r)
 	if err != nil {
 		return err
 	}

@@ -35,11 +35,11 @@ func (p *StatusResponsePacket) MarshalBinary() ([]byte, error) {
 	// Packet ID + VarInt length of JSON + JSON data
 	body.Grow(len(jsonData) + 10)
 
-	if err := WriteVarInt(&body, p.ID()); err != nil {
+	if err := writeVarInt(&body, p.ID()); err != nil {
 		return nil, err
 	}
 
-	if err := WriteVarInt(&body, int32(len(jsonData))); err != nil {
+	if err := writeVarInt(&body, int32(len(jsonData))); err != nil {
 		return nil, err
 	}
 	body.Write(jsonData)
@@ -48,7 +48,7 @@ func (p *StatusResponsePacket) MarshalBinary() ([]byte, error) {
 	// body length plus 5 for VarInt
 	packet.Grow(body.Len() + 5)
 
-	if err := WriteVarInt(&packet, int32(body.Len())); err != nil {
+	if err := writeVarInt(&packet, int32(body.Len())); err != nil {
 		return nil, err
 	}
 	packet.Write(body.Bytes())
@@ -60,7 +60,7 @@ func (p *StatusResponsePacket) MarshalBinary() ([]byte, error) {
 func (p *StatusResponsePacket) UnmarshalBinary(b []byte) error {
 	r := bytes.NewReader(b)
 
-	packetID, err := ReadVarInt(r)
+	packetID, err := readVarInt(r)
 	if err != nil {
 		return err
 	}
@@ -68,7 +68,7 @@ func (p *StatusResponsePacket) UnmarshalBinary(b []byte) error {
 		return ErrUnexpectedPacket
 	}
 
-	jsonLength, err := ReadVarInt(r)
+	jsonLength, err := readVarInt(r)
 	if err != nil {
 		return err
 	}
@@ -182,7 +182,7 @@ func marshalPingPong(id int32, ts int64) ([]byte, error) {
 	// 5 for packet ID + 8 for timestamp
 	body.Grow(13)
 
-	if err := WriteVarInt(&body, id); err != nil {
+	if err := writeVarInt(&body, id); err != nil {
 		return nil, err
 	}
 
@@ -194,7 +194,7 @@ func marshalPingPong(id int32, ts int64) ([]byte, error) {
 	// body length plus 5 for VarInt
 	packet.Grow(body.Len() + 5)
 
-	if err := WriteVarInt(&packet, int32(body.Len())); err != nil {
+	if err := writeVarInt(&packet, int32(body.Len())); err != nil {
 		return nil, err
 	}
 	packet.Write(body.Bytes())
@@ -205,7 +205,7 @@ func marshalPingPong(id int32, ts int64) ([]byte, error) {
 func unmarshalPingPong(id int32, ts *int64, b []byte) error {
 	r := bytes.NewReader(b)
 
-	packetID, err := ReadVarInt(r)
+	packetID, err := readVarInt(r)
 	if err != nil {
 		return err
 	}

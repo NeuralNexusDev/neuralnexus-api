@@ -2,7 +2,6 @@ package protocol
 
 import (
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"io"
 	"math"
@@ -83,7 +82,7 @@ func (p *LegacyPingRequest) MarshalBinary() ([]byte, error) {
 	// Write the legacy ping preamble (packet identifiers and plugin message channel)
 	body.Write(LegacyPingPreamble)
 
-	err := writeUint16(&body, payloadLength)
+	err := writeUint16BE(&body, payloadLength)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +93,7 @@ func (p *LegacyPingRequest) MarshalBinary() ([]byte, error) {
 		return nil, err
 	}
 
-	if err := writeUint32(&body, p.Port); err != nil {
+	if err := writeUint32BE(&body, p.Port); err != nil {
 		return nil, err
 	}
 
@@ -115,7 +114,7 @@ func (p *LegacyPingRequest) UnmarshalBinary(data []byte) error {
 	}
 
 	// Read payload length
-	payloadLen, err := readUint16(r)
+	payloadLen, err := readUint16BE(r)
 	if err != nil {
 		return err
 	}
@@ -138,7 +137,7 @@ func (p *LegacyPingRequest) UnmarshalBinary(data []byte) error {
 	p.Hostname = hostname
 
 	// Read port
-	port, err := readUint32(lr)
+	port, err := readUint32BE(lr)
 	if err != nil {
 		return err
 	}
@@ -200,17 +199,15 @@ func (p *LegacyPingResponse) UnmarshalBinary(data []byte) error {
 		p.ServerVersion = fields[2]
 		p.MOTD = fields[3]
 
-		currP, err := parsePlayerCount(fields[4])
+		p.CurrentPlayers, err = parsePlayerCount(fields[4])
 		if err != nil {
 			return err
 		}
-		p.CurrentPlayers = currP
 
-		maxP, err := parsePlayerCount(fields[5])
+		p.MaxPlayers, err = parsePlayerCount(fields[5])
 		if err != nil {
 			return err
 		}
-		p.MaxPlayers = maxP
 
 		return nil
 	}
@@ -225,17 +222,15 @@ func (p *LegacyPingResponse) UnmarshalBinary(data []byte) error {
 	p.ServerVersion = ""
 	p.MOTD = fields[0]
 
-	currP, err := parsePlayerCount(fields[1])
+	p.CurrentPlayers, err = parsePlayerCount(fields[1])
 	if err != nil {
 		return err
 	}
-	p.CurrentPlayers = currP
 
-	maxP, err := parsePlayerCount(fields[2])
+	p.MaxPlayers, err = parsePlayerCount(fields[2])
 	if err != nil {
 		return err
 	}
-	p.MaxPlayers = maxP
 
 	return nil
 }
@@ -314,93 +309,4 @@ func parsePlayerCount(s string) (int, error) {
 		return 0, ErrInvalidPlayerCount
 	}
 	return p, nil
-}
-
-// readUint8 reads a single byte from any io.Reader.
-func readUint8(r io.Reader) (uint8, error) {
-	var buf [1]byte
-	if _, err := io.ReadFull(r, buf[:]); err != nil {
-		return 0, err
-	}
-	return buf[0], nil
-}
-
-// writeUint8 writes a single byte to any io.Writer.
-func writeUint8(w io.Writer, v uint8) error {
-	if bw, ok := w.(io.ByteWriter); ok {
-		return bw.WriteByte(v)
-	}
-	_, err := w.Write([]byte{v})
-	return err
-}
-
-// readUint16 reads a big-endian 2-byte integer from any io.Reader.
-func readUint16(r io.Reader) (uint16, error) {
-	var buf [2]byte
-	if _, err := io.ReadFull(r, buf[:]); err != nil {
-		return 0, err
-	}
-	return binary.BigEndian.Uint16(buf[:]), nil
-}
-
-// writeUint16 writes a big-endian 2-byte integer to any io.Writer.
-func writeUint16(w io.Writer, v uint16) error {
-	var buf [2]byte
-	binary.BigEndian.PutUint16(buf[:], v)
-	_, err := w.Write(buf[:])
-	return err
-}
-
-// readUint32 reads a big-endian 4-byte integer from any io.Reader.
-func readUint32(r io.Reader) (uint32, error) {
-	var buf [4]byte
-	if _, err := io.ReadFull(r, buf[:]); err != nil {
-		return 0, err
-	}
-	return binary.BigEndian.Uint32(buf[:]), nil
-}
-
-// writeUint32 writes a big-endian 4-byte integer to any io.Writer.
-func writeUint32(w io.Writer, v uint32) error {
-	var buf [4]byte
-	binary.BigEndian.PutUint32(buf[:], v)
-	_, err := w.Write(buf[:])
-	return err
-}
-
-// readUTF16BEString reads a 2-byte length in UTF-16 code units followed by the UTF-16BE
-// code units from the reader, returning a Go string.
-func readUTF16BEString(r io.Reader, maxLen uint16) (string, error) {
-	charLen, err := readUint16(r)
-	if err != nil {
-		return "", err
-	}
-	if charLen == 0 {
-		return "", nil
-	}
-	if charLen > maxLen {
-		return "", ErrStringTooLong
-	}
-
-	units := make([]uint16, charLen)
-	if err := binary.Read(r, binary.BigEndian, units); err != nil {
-		return "", err
-	}
-	return string(utf16.Decode(units)), nil
-}
-
-// writeUTF16BEUnits writes UTF-16 code units as a 2-byte length followed by the UTF-16BE code units.
-func writeUTF16BEUnits(w io.Writer, units []uint16) error {
-	if err := writeUint16(w, uint16(len(units))); err != nil {
-		return err
-	}
-
-	var unitBytes [2]byte
-	for _, u := range units {
-		binary.BigEndian.PutUint16(unitBytes[:], u)
-		if _, err := w.Write(unitBytes[:]); err != nil {
-			return err
-		}
-	}
-	return nil
 }

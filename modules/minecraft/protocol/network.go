@@ -30,7 +30,7 @@ func send(conn net.Conn, payloads ...[]byte) error {
 }
 
 func receive(r *bufio.Reader) ([]byte, error) {
-	size, err := ReadVarInt(r)
+	size, err := readVarInt(r)
 	if err != nil {
 		return nil, err
 	}
