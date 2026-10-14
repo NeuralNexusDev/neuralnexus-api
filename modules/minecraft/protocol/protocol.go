@@ -155,12 +155,17 @@ func GetQueryStatusBasic(ctx context.Context, addr string) (*QueryBasicStatRespo
 	lr := io.LimitReader(conn, MaxPacketSize)
 	r := bufio.NewReader(lr)
 
-	start := time.Now()
-	if _, err := conn.Write(QueryChallengePayload); err != nil {
+	challengeRequest, err := NewQueryChallengeRequest().MarshalBinary()
+	if err != nil {
 		return nil, 0, err
 	}
 
-	body := make([]byte, 32)
+	start := time.Now()
+	if _, err := conn.Write(challengeRequest); err != nil {
+		return nil, 0, err
+	}
+
+	body := make([]byte, 18)
 	n, err := r.Read(body)
 	if err != nil {
 		return nil, 0, err
@@ -174,7 +179,7 @@ func GetQueryStatusBasic(ctx context.Context, addr string) (*QueryBasicStatRespo
 		return nil, 0, err
 	}
 
-	basicStatRequest := NewQueryBasicStatRequest(challengeResponse.SessionID, challengeResponse.ChallengeToken)
+	basicStatRequest := NewQueryBasicStatRequest(challengeResponse.ChallengeToken)
 	basicStat, err := basicStatRequest.MarshalBinary()
 	if err != nil {
 		return nil, 0, err
@@ -199,7 +204,7 @@ func GetQueryStatusBasic(ctx context.Context, addr string) (*QueryBasicStatRespo
 	return &basicStatResponse, delta, nil
 }
 
-func GetQueryStatusFull(ctx context.Context, addr string) (*QueryFullStatResponse, time.Duration, error) {
+func GetQueryStatus(ctx context.Context, addr string) (*QueryStatResponse, time.Duration, error) {
 	conn, err := openConnection(ctx, "udp", addr)
 	if err != nil {
 		return nil, 0, err
@@ -209,12 +214,17 @@ func GetQueryStatusFull(ctx context.Context, addr string) (*QueryFullStatRespons
 	lr := io.LimitReader(conn, MaxPacketSize)
 	r := bufio.NewReader(lr)
 
-	start := time.Now()
-	if _, err := conn.Write(QueryChallengePayload); err != nil {
+	challengeRequest, err := NewQueryChallengeRequest().MarshalBinary()
+	if err != nil {
 		return nil, 0, err
 	}
 
-	body := make([]byte, 32)
+	start := time.Now()
+	if _, err := conn.Write(challengeRequest); err != nil {
+		return nil, 0, err
+	}
+
+	body := make([]byte, 18)
 	n, err := r.Read(body)
 	if err != nil {
 		return nil, 0, err
@@ -228,13 +238,13 @@ func GetQueryStatusFull(ctx context.Context, addr string) (*QueryFullStatRespons
 		return nil, 0, err
 	}
 
-	fullStatRequest := NewQueryFullStatRequest(challengeResponse.SessionID, challengeResponse.ChallengeToken)
-	fullStat, err := fullStatRequest.MarshalBinary()
+	statRequest := NewQueryStatRequest(challengeResponse.ChallengeToken)
+	Stat, err := statRequest.MarshalBinary()
 	if err != nil {
 		return nil, 0, err
 	}
 
-	if _, err := conn.Write(fullStat); err != nil {
+	if _, err := conn.Write(Stat); err != nil {
 		return nil, 0, err
 	}
 
@@ -245,10 +255,10 @@ func GetQueryStatusFull(ctx context.Context, addr string) (*QueryFullStatRespons
 	}
 	body2 = body2[:n2]
 
-	var fullStatResponse QueryFullStatResponse
-	if err := fullStatResponse.UnmarshalBinary(body2); err != nil {
+	var statResponse QueryStatResponse
+	if err := statResponse.UnmarshalBinary(body2); err != nil {
 		return nil, 0, err
 	}
 
-	return &fullStatResponse, delta, nil
+	return &statResponse, delta, nil
 }

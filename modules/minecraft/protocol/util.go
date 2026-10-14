@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"time"
 	"unicode/utf16"
 )
 
@@ -239,4 +240,13 @@ func readNullTerminatedStrings(r *bufio.Reader) ([]string, error) {
 		strings = append(strings, str)
 	}
 	return strings, nil
+}
+
+// ------------------------------ GameSpy v4 ------------------------------
+
+func packedTimestamp() []byte {
+	now := int32(time.Now().Unix())
+	var buf [4]byte
+	binary.BigEndian.PutUint32(buf[:], uint32(now))
+	return buf[:]
 }
