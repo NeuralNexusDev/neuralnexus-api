@@ -262,3 +262,40 @@ func GetQueryStatus(ctx context.Context, addr string) (*QueryStatResponse, time.
 
 	return &statResponse, delta, nil
 }
+
+func GetBedrockStatus(ctx context.Context, addr string) (*UnconnectedPongPacket, time.Duration, error) {
+	conn, err := openConnection(ctx, "udp", addr)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer conn.Close()
+
+	lr := io.LimitReader(conn, MaxPacketSize)
+	r := bufio.NewReader(lr)
+
+	ping, err := NewUnconnectedPingPacket().MarshalBinary()
+	if err != nil {
+		return nil, 0, err
+	}
+
+	start := time.Now()
+	if _, err := conn.Write(ping); err != nil {
+		return nil, 0, err
+	}
+
+	body := make([]byte, 1024)
+	n, err := r.Read(body)
+	if err != nil {
+		return nil, 0, err
+	}
+	body = body[:n]
+
+	delta := time.Since(start)
+
+	var pong UnconnectedPongPacket
+	if err := pong.UnmarshalBinary(body); err != nil {
+		return nil, 0, err
+	}
+
+	return &pong, delta, nil
+}
