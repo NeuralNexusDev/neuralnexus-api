@@ -217,7 +217,7 @@ func writeUTF16BEUnits(w io.Writer, units []uint16) error {
 // ------------------------------ Null-Terminated Strings ------------------------------
 
 func readNullTerminatedString(r *bufio.Reader) (string, error) {
-	str, err := r.ReadString('\000')
+	str, err := r.ReadString('\x00')
 	if err != nil {
 		return "", err
 	}
@@ -227,15 +227,28 @@ func readNullTerminatedString(r *bufio.Reader) (string, error) {
 func readNullTerminatedStrings(r *bufio.Reader) ([]string, error) {
 	var strings []string
 	for {
-		str, err := readNullTerminatedString(r)
+		// Peek to check to see if the text two bytes are \0x00\0x01
+		peek, err := r.Peek(2)
 		if err != nil {
 			if err == io.EOF {
 				break
 			}
 			return nil, err
 		}
-		if str == "" {
+		// Special case for Minecraft's Query protocol implementation
+		if len(peek) == 2 && peek[0] == 0x00 && (peek[1]&0x0F) == 0x01 {
+			// Consume the null terminator
+			if _, err := r.Discard(1); err != nil {
+				return nil, err
+			}
 			break
+		}
+		str, err := readNullTerminatedString(r)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
 		}
 		strings = append(strings, str)
 	}
