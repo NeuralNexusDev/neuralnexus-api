@@ -12,12 +12,13 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
+	authaccount "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/goccy/go-json"
 )
 
 type stMockAccountService struct {
-	accounts        map[string]*auth.Account
+	accounts        map[string]*authaccount.Account
 	addAccountErr   error
 	getByIDErr      error
 	deleteErr       error
@@ -25,13 +26,13 @@ type stMockAccountService struct {
 	addAccountCalls int
 }
 
-var _ auth.AccountService = (*stMockAccountService)(nil)
+var _ authaccount.AccountService = (*stMockAccountService)(nil)
 
 func newSTMockAccountService() *stMockAccountService {
-	return &stMockAccountService{accounts: map[string]*auth.Account{}}
+	return &stMockAccountService{accounts: map[string]*authaccount.Account{}}
 }
 
-func (m *stMockAccountService) AddAccount(a *auth.Account) error {
+func (m *stMockAccountService) AddAccount(a *authaccount.Account) error {
 	m.addAccountCalls++
 	if m.addAccountErr != nil {
 		return m.addAccountErr
@@ -39,23 +40,23 @@ func (m *stMockAccountService) AddAccount(a *auth.Account) error {
 	m.accounts[a.UserID] = a
 	return nil
 }
-func (m *stMockAccountService) GetAccountByID(userID string) (*auth.Account, error) {
+func (m *stMockAccountService) GetAccountByID(userID string) (*authaccount.Account, error) {
 	if m.getByIDErr != nil {
 		return nil, m.getByIDErr
 	}
 	a, ok := m.accounts[userID]
 	if !ok {
-		return nil, auth.ErrNotFound
+		return nil, authaccount.ErrNotFound
 	}
 	return a, nil
 }
-func (m *stMockAccountService) GetAccountByUsername(string) (*auth.Account, error) {
-	return nil, auth.ErrNotFound
+func (m *stMockAccountService) GetAccountByUsername(string) (*authaccount.Account, error) {
+	return nil, authaccount.ErrNotFound
 }
-func (m *stMockAccountService) GetAccountByEmail(string) (*auth.Account, error) {
-	return nil, auth.ErrNotFound
+func (m *stMockAccountService) GetAccountByEmail(string) (*authaccount.Account, error) {
+	return nil, authaccount.ErrNotFound
 }
-func (m *stMockAccountService) UpdateAccount(a *auth.Account) error {
+func (m *stMockAccountService) UpdateAccount(a *authaccount.Account) error {
 	m.accounts[a.UserID] = a
 	return nil
 }
@@ -68,7 +69,7 @@ func (m *stMockAccountService) DeleteAccount(userID string) error {
 	return nil
 }
 func (m *stMockAccountService) IsPasswordAuthEnabled(string) (bool, error) { return false, nil }
-func (m *stMockAccountService) NewSession(a *auth.Account, expiresAt int64) (*authsession.Session, error) {
+func (m *stMockAccountService) NewSession(a *authaccount.Account, expiresAt int64) (*authsession.Session, error) {
 	return &authsession.Session{ID: "stub-session", UserID: a.UserID, Permissions: []string{"stub:perm"}, ExpiresAt: expiresAt}, nil
 }
 
@@ -103,15 +104,15 @@ func (m *stMockLinkAccountStore) GetLinkedAccountByPlatformID(platform auth.Plat
 	}
 	la, ok := m.byPlatformID[platform][platformID]
 	if !ok {
-		return nil, auth.ErrNotFound
+		return nil, authaccount.ErrNotFound
 	}
 	return la, nil
 }
 func (m *stMockLinkAccountStore) GetLinkedAccountByPlatformName(auth.Platform, string) (*auth.LinkedAccount, error) {
-	return nil, auth.ErrNotFound
+	return nil, authaccount.ErrNotFound
 }
 func (m *stMockLinkAccountStore) GetLinkedAccountByUserID(string, auth.Platform) (*auth.LinkedAccount, error) {
-	return nil, auth.ErrNotFound
+	return nil, authaccount.ErrNotFound
 }
 func (m *stMockLinkAccountStore) GetLinkedAccountsByUserID(string) ([]*auth.LinkedAccount, error) {
 	return nil, nil
@@ -136,13 +137,13 @@ func (m *stMockSessionService) AddSession(session *authsession.Session) error {
 	return nil
 }
 func (m *stMockSessionService) GetSession(string) (*authsession.Session, error) {
-	return nil, auth.ErrNotFound
+	return nil, authaccount.ErrNotFound
 }
 func (m *stMockSessionService) UpdateSession(*authsession.Session) error       { return nil }
 func (m *stMockSessionService) DeleteSession(string) error                     { return nil }
 func (m *stMockSessionService) CreateJWT(*authsession.Session) (string, error) { return "", nil }
 func (m *stMockSessionService) ReadJWT(string) (*authsession.Session, error) {
-	return nil, auth.ErrNotFound
+	return nil, authaccount.ErrNotFound
 }
 
 func stRequestWithSession(session *authsession.Session) *http.Request {

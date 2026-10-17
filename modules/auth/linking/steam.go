@@ -16,6 +16,7 @@ import (
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
+	authaccount "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 )
 
@@ -201,7 +202,7 @@ func GetSteamUser(steamID64 string) (*SteamData, error) {
 
 // ProcessSteamLogin resolves or creates an account for the given,
 // already-verified Steam identity and returns a new session for it.
-func ProcessSteamLogin(as auth.AccountService, las auth.LinkAccountStore, ss authsession.SessionService, user *SteamData) (*authsession.Session, error) {
+func ProcessSteamLogin(as authaccount.AccountService, las auth.LinkAccountStore, ss authsession.SessionService, user *SteamData) (*authsession.Session, error) {
 	a, err := resolveOrCreateAccountForPlatformUser(as, las, auth.PlatformSteam, user)
 	if err != nil {
 		return nil, err

@@ -11,6 +11,7 @@ import (
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
+	authaccount "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
 	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
@@ -45,7 +46,7 @@ type Login struct {
 }
 
 // LoginHandler handles the login route
-func LoginHandler(as auth.AccountService, ss authsession.SessionService) http.HandlerFunc {
+func LoginHandler(as authaccount.AccountService, ss authsession.SessionService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var login Login
 		err := responses.DecodeStruct(r, &login)
@@ -54,19 +55,19 @@ func LoginHandler(as auth.AccountService, ss authsession.SessionService) http.Ha
 			return
 		}
 
-		var account *auth.Account
+		var account *authaccount.Account
 		if login.Username != "" {
 			account, err = as.GetAccountByUsername(login.Username)
 		} else {
 			account, err = as.GetAccountByEmail(login.Email)
 		}
 		if err != nil {
-			if !errors.Is(err, auth.ErrNotFound) {
+			if !errors.Is(err, authaccount.ErrNotFound) {
 				log.Println("Failed to look up account:\n\t", err)
 				responses.InternalServerError(w, r, msgAuthenticationFailed)
 				return
 			}
-			auth.DummyValidateUser(login.Password)
+			authaccount.DummyValidateUser(login.Password)
 			responses.BadRequest(w, r, msgInvalidUsernameOrPassword)
 			return
 		}
@@ -129,7 +130,7 @@ func LogoutHandler(ss authsession.SessionService) http.HandlerFunc {
 }
 
 // OAuthHandler handles the OAuth route
-func OAuthHandler(as auth.AccountService, las auth.LinkAccountStore, ss authsession.SessionService) http.HandlerFunc {
+func OAuthHandler(as authaccount.AccountService, las auth.LinkAccountStore, ss authsession.SessionService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		code := r.URL.Query().Get("code")
 		if code == "" {
@@ -187,7 +188,7 @@ func OAuthHandler(as auth.AccountService, las auth.LinkAccountStore, ss authsess
 }
 
 // OpenIDHandler handles the Steam OpenID 2.0 login/link callback.
-func OpenIDHandler(as auth.AccountService, las auth.LinkAccountStore, ss authsession.SessionService) http.HandlerFunc {
+func OpenIDHandler(as authaccount.AccountService, las auth.LinkAccountStore, ss authsession.SessionService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		state, ok := decodeAndValidateState(w, r)
 		if !ok {
