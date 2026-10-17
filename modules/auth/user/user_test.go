@@ -1,4 +1,4 @@
-package auth
+package user
 
 import (
 	"errors"
@@ -176,11 +176,11 @@ func (f *usFakeAccountSettingsStore) SetPasswordAuthEnabled(_ string, _ bool) er
 	return f.setErr
 }
 
-func usNewService(as *usFakeAccountStore, als *usFakeLinkAccountStore, ass *usFakeAccountSettingsStore) UserService {
-	return NewUserService(as, als, linking.NewService(als, as), ass, rsDefaultRoleStore())
+func usNewService(as *usFakeAccountStore, als *usFakeLinkAccountStore, ass *usFakeAccountSettingsStore) Service {
+	return NewService(as, als, linking.NewService(als, as), ass, rsDefaultRoleStore())
 }
 
-func TestUS01NewUserService(t *testing.T) {
+func TestUS01NewService(t *testing.T) {
 	t.Run("US-01_WiresGivenSubStores", func(t *testing.T) {
 		as := &usFakeAccountStore{getByIDAccount: &authaccount.Account{UserID: "u1"}}
 		als := &usFakeLinkAccountStore{}
@@ -198,12 +198,11 @@ func TestUS01NewUserService(t *testing.T) {
 
 func TestUS02to03GetUser(t *testing.T) {
 	t.Run("US-02_Success", func(t *testing.T) {
-		want := &authaccount.Account{UserID: "u1"}
-		svc := usNewService(&usFakeAccountStore{getByIDAccount: want}, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})
+		svc := usNewService(&usFakeAccountStore{getByIDAccount: &authaccount.Account{UserID: "u1", Username: "name"}}, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})
 
 		got, err := svc.GetUser("u1")
-		if err != nil || got != want {
-			t.Errorf("GetUser() = (%v, %v), want (%v, nil)", got, err, want)
+		if err != nil || got == nil || got.UserID != "u1" || got.Username != "name" {
+			t.Errorf("GetUser() = (%+v, %v), want the u1 user, nil", got, err)
 		}
 	})
 
@@ -225,8 +224,8 @@ func TestUS43to44ListUsers(t *testing.T) {
 		svc := usNewService(as, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})
 
 		got, err := svc.ListUsers(25, 50)
-		if err != nil || len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
-			t.Errorf("ListUsers() = (%v, %v), want (%v, nil)", got, err, want)
+		if err != nil || len(got) != 2 || got[0].UserID != "u1" || got[1].UserID != "u2" {
+			t.Errorf("ListUsers() = (%v, %v), want the two users, nil", got, err)
 		}
 		if as.listCalls != 1 || as.listLastLimit != 25 || as.listLastOffset != 50 {
 			t.Errorf("store called %d times with (%d, %d), want once with (25, 50)", as.listCalls, as.listLastLimit, as.listLastOffset)
@@ -252,8 +251,8 @@ func TestUS04to06GetUserFromPlatform(t *testing.T) {
 		svc := usNewService(as, als, &usFakeAccountSettingsStore{})
 
 		got, err := svc.GetUserFromPlatform(linking.PlatformDiscord, "p1")
-		if err != nil || got != want {
-			t.Errorf("GetUserFromPlatform() = (%v, %v), want (%v, nil)", got, err, want)
+		if err != nil || got == nil || got.UserID != want.UserID {
+			t.Errorf("GetUserFromPlatform() = (%+v, %v), want the u1 user, nil", got, err)
 		}
 	})
 
@@ -317,7 +316,7 @@ func TestUS07to10GetUserPermissions(t *testing.T) {
 	t.Run("US-09_ResolvesAllRolesTogether", func(t *testing.T) {
 		as := &usFakeAccountStore{getByIDAccount: &authaccount.Account{UserID: "u1", Roles: []string{"1", "2"}}}
 		rs := rsDefaultRoleStore()
-		svc := NewUserService(as, &usFakeLinkAccountStore{}, linking.NewService(&usFakeLinkAccountStore{}, as), &usFakeAccountSettingsStore{}, rs)
+		svc := NewService(as, &usFakeLinkAccountStore{}, linking.NewService(&usFakeLinkAccountStore{}, as), &usFakeAccountSettingsStore{}, rs)
 
 		got, err := svc.GetUserPermissions("u1")
 		if err != nil {
@@ -331,7 +330,7 @@ func TestUS07to10GetUserPermissions(t *testing.T) {
 	t.Run("US-41_RoleStoreFailureFailsTheLookup", func(t *testing.T) {
 		wantErr := testerrors.ErrBoom
 		as := &usFakeAccountStore{getByIDAccount: &authaccount.Account{UserID: "u1", Roles: []string{"1"}}}
-		svc := NewUserService(as, &usFakeLinkAccountStore{}, linking.NewService(&usFakeLinkAccountStore{}, as), &usFakeAccountSettingsStore{}, &rsFakeRoleStore{err: wantErr})
+		svc := NewService(as, &usFakeLinkAccountStore{}, linking.NewService(&usFakeLinkAccountStore{}, as), &usFakeAccountSettingsStore{}, &rsFakeRoleStore{err: wantErr})
 
 		got, err := svc.GetUserPermissions("u1")
 
@@ -343,7 +342,7 @@ func TestUS07to10GetUserPermissions(t *testing.T) {
 	t.Run("US-10_NoRoles", func(t *testing.T) {
 		as := &usFakeAccountStore{getByIDAccount: &authaccount.Account{UserID: "u1"}}
 		rs := rsDefaultRoleStore()
-		svc := NewUserService(as, &usFakeLinkAccountStore{}, linking.NewService(&usFakeLinkAccountStore{}, as), &usFakeAccountSettingsStore{}, rs)
+		svc := NewService(as, &usFakeLinkAccountStore{}, linking.NewService(&usFakeLinkAccountStore{}, as), &usFakeAccountSettingsStore{}, rs)
 
 		got, err := svc.GetUserPermissions("u1")
 		if err != nil || got == nil || len(got) != 0 || len(rs.calls) != 0 {
@@ -354,7 +353,7 @@ func TestUS07to10GetUserPermissions(t *testing.T) {
 	t.Run("US-42_RolesWithoutPermissionsGiveEmptyNonNil", func(t *testing.T) {
 		as := &usFakeAccountStore{getByIDAccount: &authaccount.Account{UserID: "u1", Roles: []string{"99"}}}
 		als := &usFakeLinkAccountStore{}
-		svc := NewUserService(as, als, linking.NewService(als, as), &usFakeAccountSettingsStore{}, rsDefaultRoleStore())
+		svc := NewService(as, als, linking.NewService(als, as), &usFakeAccountSettingsStore{}, rsDefaultRoleStore())
 
 		got, err := svc.GetUserPermissions("u1")
 
@@ -365,14 +364,12 @@ func TestUS07to10GetUserPermissions(t *testing.T) {
 }
 
 func TestUS11to14UpdateUser(t *testing.T) {
-	oldEmail := "old@b.com"
-	newEmail := "new@b.com"
-
 	t.Run("US-11_MergesNonZeroFields", func(t *testing.T) {
-		as := &usFakeAccountStore{getByIDAccount: &authaccount.Account{UserID: "u1", Username: "old", Email: &oldEmail, Roles: []string{"old"}}}
+		email := "old@b.com"
+		as := &usFakeAccountStore{getByIDAccount: &authaccount.Account{UserID: "u1", Username: "old", Email: &email, Roles: []string{"old"}}}
 		svc := usNewService(as, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})
 
-		err := svc.UpdateUser(&authaccount.Account{UserID: "u1", Username: "new", Email: &newEmail, Roles: []string{"new"}})
+		err := svc.UpdateUser("u1", &UserUpdate{Username: "new", Roles: []string{"new"}})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -380,21 +377,22 @@ func TestUS11to14UpdateUser(t *testing.T) {
 			t.Fatalf("expected UpdateAccountInDB to be called once, got %d", as.updateCalls)
 		}
 		got := as.updateLastAccount
-		if got.Username != "new" || got.Email == nil || *got.Email != "new@b.com" || len(got.Roles) != 1 || got.Roles[0] != "new" {
-			t.Errorf("UpdateAccountInDB called with %+v, want merged fields overwritten", got)
+		if got.Username != "new" || len(got.Roles) != 1 || got.Roles[0] != "new" {
+			t.Errorf("UpdateAccountInDB called with %+v, want username and roles overwritten", got)
 		}
 	})
 
 	t.Run("US-12_ZeroValueFieldsPreserveExisting", func(t *testing.T) {
-		as := &usFakeAccountStore{getByIDAccount: &authaccount.Account{UserID: "u1", Username: "old", Email: &oldEmail, Roles: []string{"old"}}}
+		email := "old@b.com"
+		as := &usFakeAccountStore{getByIDAccount: &authaccount.Account{UserID: "u1", Username: "old", Email: &email, Roles: []string{"old"}}}
 		svc := usNewService(as, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})
 
-		err := svc.UpdateUser(&authaccount.Account{UserID: "u1"})
+		err := svc.UpdateUser("u1", &UserUpdate{})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		got := as.updateLastAccount
-		if got.Username != "old" || got.Email == nil || *got.Email != oldEmail || len(got.Roles) != 1 || got.Roles[0] != "old" {
+		if got.Username != "old" || got.Email == nil || *got.Email != email || len(got.Roles) != 1 || got.Roles[0] != "old" {
 			t.Errorf("UpdateAccountInDB called with %+v, want the original fields preserved when the patch supplies zero values", got)
 		}
 	})
@@ -404,7 +402,7 @@ func TestUS11to14UpdateUser(t *testing.T) {
 		as := &usFakeAccountStore{getByIDErr: wantErr}
 		svc := usNewService(as, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})
 
-		err := svc.UpdateUser(&authaccount.Account{UserID: "u1"})
+		err := svc.UpdateUser("u1", &UserUpdate{})
 		if !errors.Is(err, wantErr) {
 			t.Errorf("UpdateUser() err = %v, want %v", err, wantErr)
 		}
@@ -418,7 +416,7 @@ func TestUS11to14UpdateUser(t *testing.T) {
 		as := &usFakeAccountStore{getByIDAccount: &authaccount.Account{UserID: "u1"}, updateErr: wantErr}
 		svc := usNewService(as, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})
 
-		err := svc.UpdateUser(&authaccount.Account{UserID: "u1"})
+		err := svc.UpdateUser("u1", &UserUpdate{})
 		if !errors.Is(err, wantErr) {
 			t.Errorf("UpdateUser() err = %v, want %v", err, wantErr)
 		}
@@ -555,14 +553,14 @@ func (s *usStubLinkingService) UpdateFromPlatform(linking.Platform, string, link
 func TestUS83UpdateUserFromPlatformReturnsAccountForLinkedUser(t *testing.T) {
 	t.Run("US-83_ReturnsAccountForTheLinkingUserID", func(t *testing.T) {
 		as := &usFakeAccountStore{getByIDAccount: &authaccount.Account{UserID: "resolved"}}
-		svc := NewUserService(as, &usFakeLinkAccountStore{}, &usStubLinkingService{userID: "resolved"}, &usFakeAccountSettingsStore{}, rsDefaultRoleStore())
+		svc := NewService(as, &usFakeLinkAccountStore{}, &usStubLinkingService{userID: "resolved"}, &usFakeAccountSettingsStore{}, rsDefaultRoleStore())
 
 		got, err := svc.UpdateUserFromPlatform(linking.PlatformDiscord, "p1", usFakePlatformData{})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if got != as.getByIDAccount {
-			t.Errorf("UpdateUserFromPlatform() = %v, want %v", got, as.getByIDAccount)
+		if got == nil || got.UserID != "resolved" {
+			t.Errorf("UpdateUserFromPlatform() = %+v, want the resolved user", got)
 		}
 		if as.getByIDLastUserID != "resolved" {
 			t.Errorf("expected GetAccountByID to be called with the linking service's user ID, got %q", as.getByIDLastUserID)
@@ -574,7 +572,7 @@ func TestUS84UpdateUserFromPlatformLinkErrorSkipsAccountLookup(t *testing.T) {
 	t.Run("US-84_LinkingErrorPassesThroughWithoutLookup", func(t *testing.T) {
 		wantErr := testerrors.ErrBoom
 		as := &usFakeAccountStore{}
-		svc := NewUserService(as, &usFakeLinkAccountStore{}, &usStubLinkingService{err: wantErr}, &usFakeAccountSettingsStore{}, rsDefaultRoleStore())
+		svc := NewService(as, &usFakeLinkAccountStore{}, &usStubLinkingService{err: wantErr}, &usFakeAccountSettingsStore{}, rsDefaultRoleStore())
 
 		_, err := svc.UpdateUserFromPlatform(linking.PlatformDiscord, "p1", usFakePlatformData{})
 		if !errors.Is(err, wantErr) {

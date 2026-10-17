@@ -1,4 +1,4 @@
-package auth
+package user
 
 type rsFakeRoleStore struct {
 	permissions map[string][]string
