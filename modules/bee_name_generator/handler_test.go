@@ -10,7 +10,7 @@ import (
 
 	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
+	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/proto/bngpb"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
@@ -48,11 +48,11 @@ func (m *bngMockStore) RejectBeeNameSuggestion(beeName string) (string, error) {
 }
 
 var (
-	bngAuthorizedSession   = &auth.Session{ID: "s1", UserID: "u1", Permissions: []string{"beenamegenerator.admin"}}
-	bngUnauthorizedSession = &auth.Session{ID: "s2", UserID: "u2", Permissions: []string{}}
+	bngAuthorizedSession   = &authsession.Session{ID: "s1", UserID: "u1", Permissions: []string{"beenamegenerator.admin"}}
+	bngUnauthorizedSession = &authsession.Session{ID: "s2", UserID: "u2", Permissions: []string{}}
 )
 
-func bngRequest(t *testing.T, method, target string, pathValues map[string]string, session *auth.Session) *http.Request {
+func bngRequest(t *testing.T, method, target string, pathValues map[string]string, session *authsession.Session) *http.Request {
 	t.Helper()
 	r := httptest.NewRequest(method, target, nil)
 	for k, v := range pathValues {

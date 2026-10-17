@@ -12,6 +12,7 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
+	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/goccy/go-json"
 )
 
@@ -67,8 +68,8 @@ func (m *stMockAccountService) DeleteAccount(userID string) error {
 	return nil
 }
 func (m *stMockAccountService) IsPasswordAuthEnabled(string) (bool, error) { return false, nil }
-func (m *stMockAccountService) NewSession(a *auth.Account, expiresAt int64) (*auth.Session, error) {
-	return &auth.Session{ID: "stub-session", UserID: a.UserID, Permissions: []string{"stub:perm"}, ExpiresAt: expiresAt}, nil
+func (m *stMockAccountService) NewSession(a *auth.Account, expiresAt int64) (*authsession.Session, error) {
+	return &authsession.Session{ID: "stub-session", UserID: a.UserID, Permissions: []string{"stub:perm"}, ExpiresAt: expiresAt}, nil
 }
 
 type stMockLinkAccountStore struct {
@@ -122,27 +123,29 @@ func (m *stMockLinkAccountStore) SetLinkedAccountLoginEnabled(string, auth.Platf
 
 type stMockSessionService struct {
 	addSessionErr error
-	added         []*auth.Session
+	added         []*authsession.Session
 }
 
-var _ auth.SessionService = (*stMockSessionService)(nil)
+var _ authsession.SessionService = (*stMockSessionService)(nil)
 
-func (m *stMockSessionService) AddSession(session *auth.Session) error {
+func (m *stMockSessionService) AddSession(session *authsession.Session) error {
 	if m.addSessionErr != nil {
 		return m.addSessionErr
 	}
 	m.added = append(m.added, session)
 	return nil
 }
-func (m *stMockSessionService) GetSession(string) (*auth.Session, error) {
+func (m *stMockSessionService) GetSession(string) (*authsession.Session, error) {
 	return nil, auth.ErrNotFound
 }
-func (m *stMockSessionService) UpdateSession(*auth.Session) error       { return nil }
-func (m *stMockSessionService) DeleteSession(string) error              { return nil }
-func (m *stMockSessionService) CreateJWT(*auth.Session) (string, error) { return "", nil }
-func (m *stMockSessionService) ReadJWT(string) (*auth.Session, error)   { return nil, auth.ErrNotFound }
+func (m *stMockSessionService) UpdateSession(*authsession.Session) error       { return nil }
+func (m *stMockSessionService) DeleteSession(string) error                     { return nil }
+func (m *stMockSessionService) CreateJWT(*authsession.Session) (string, error) { return "", nil }
+func (m *stMockSessionService) ReadJWT(string) (*authsession.Session, error) {
+	return nil, auth.ErrNotFound
+}
 
-func stRequestWithSession(session *auth.Session) *http.Request {
+func stRequestWithSession(session *authsession.Session) *http.Request {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	if session == nil {
 		return req
@@ -509,7 +512,7 @@ func TestST26to29ProcessSteamLink(t *testing.T) {
 
 	t.Run("ST-26_LinksToSession", func(t *testing.T) {
 		las := newSTMockLinkAccountStore()
-		session := &auth.Session{ID: "sess-1", UserID: "user-1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
+		session := &authsession.Session{ID: "sess-1", UserID: "user-1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
 		req := stRequestWithSession(session)
 
 		got, err := ProcessSteamLink(req, las, user)
@@ -536,7 +539,7 @@ func TestST26to29ProcessSteamLink(t *testing.T) {
 
 	t.Run("ST-28_ExpiredSessionRejected", func(t *testing.T) {
 		las := newSTMockLinkAccountStore()
-		session := &auth.Session{ID: "sess-1", UserID: "user-1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
+		session := &authsession.Session{ID: "sess-1", UserID: "user-1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
 		req := stRequestWithSession(session)
 
 		_, err := ProcessSteamLink(req, las, user)
@@ -550,7 +553,7 @@ func TestST26to29ProcessSteamLink(t *testing.T) {
 		las.byPlatformID[auth.PlatformSteam] = map[string]*auth.LinkedAccount{
 			user.SteamID64: {UserID: "other-user", Platform: auth.PlatformSteam, PlatformID: user.SteamID64},
 		}
-		session := &auth.Session{ID: "sess-1", UserID: "user-1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
+		session := &authsession.Session{ID: "sess-1", UserID: "user-1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
 		req := stRequestWithSession(session)
 
 		_, err := ProcessSteamLink(req, las, user)
