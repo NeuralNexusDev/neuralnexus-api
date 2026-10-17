@@ -19,6 +19,7 @@ import (
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/ratelimit"
 	authroutes "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/routes"
 	bng "github.com/NeuralNexusDev/neuralnexus-api/modules/bee_name_generator"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
@@ -54,7 +55,7 @@ func ApplyRoutes(
 	rdb *redis.Client,
 	session auth.SessionService,
 	authStore auth.Store,
-	rateLimit auth.RateLimitService) *http.ServeMux {
+	rateLimit ratelimit.RateLimitService) *http.ServeMux {
 	mwAuth := mw.Auth(session)
 
 	dbUrl := os.Getenv("DATABASE_URL")
@@ -254,7 +255,7 @@ func (s *APIServer) Setup() http.Handler {
 	rdb := database.GetRedis()
 	authStore := auth.NewStore(db, rdb)
 	session := auth.NewSessionService(authStore.Session())
-	rateLimit := auth.NewRateLimitService(authStore.RateLimit())
+	rateLimit := ratelimit.NewRateLimitService(ratelimit.NewStore(rdb))
 
 	middlewareStack := mw.CreateStack(
 		mw.NoSniffMiddleware,
