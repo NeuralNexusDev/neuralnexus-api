@@ -1,13 +1,40 @@
 package user
 
 import (
+	"encoding/json"
 	"errors"
 	authaccount "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
 	"testing"
+	"time"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 )
+
+var usUpdatedAt = time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+
+// usFullAccount is an account with every field set, including the ones the API must not return.
+func usFullAccount() *authaccount.Account {
+	email := "u1@example.com"
+	return &authaccount.Account{
+		UserID:       "u1",
+		Username:     "name",
+		Email:        &email,
+		HashedSecret: []byte("hash"),
+		Salt:         []byte("salt"),
+		Roles:        []string{"1", "2"},
+		UpdatedAt:    usUpdatedAt,
+	}
+}
+
+func usMarshal(t *testing.T, v any) string {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("json.Marshal() err = %v", err)
+	}
+	return string(b)
+}
 
 type usFakePlatformData struct {
 	username string
@@ -191,7 +218,7 @@ func TestUS01NewService(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if as.getByIDCalls != 1 {
-			t.Errorf("expected GetUser to delegate to the AccountStore passed to NewUserService")
+			t.Errorf("expected GetUser to delegate to the AccountStore passed to NewService")
 		}
 	})
 }
@@ -219,13 +246,13 @@ func TestUS02to03GetUser(t *testing.T) {
 
 func TestUS43to44ListUsers(t *testing.T) {
 	t.Run("US-43_PassesThePageToTheStore", func(t *testing.T) {
-		want := []*authaccount.Account{{UserID: "u1"}, {UserID: "u2"}}
+		want := []*authaccount.Account{{UserID: "u1", Username: "one", Roles: []string{"1"}, UpdatedAt: usUpdatedAt}, {UserID: "u2", Username: "two"}}
 		as := &usFakeAccountStore{listAccounts: want}
 		svc := usNewService(as, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})
 
 		got, err := svc.ListUsers(25, 50)
-		if err != nil || len(got) != 2 || got[0].UserID != "u1" || got[1].UserID != "u2" {
-			t.Errorf("ListUsers() = (%v, %v), want the two users, nil", got, err)
+		if err != nil || usMarshal(t, got) != usMarshal(t, want) {
+			t.Errorf("ListUsers() = (%s, %v), want the JSON of %s, nil", usMarshal(t, got), err, usMarshal(t, want))
 		}
 		if as.listCalls != 1 || as.listLastLimit != 25 || as.listLastOffset != 50 {
 			t.Errorf("store called %d times with (%d, %d), want once with (25, 50)", as.listCalls, as.listLastLimit, as.listLastOffset)
@@ -245,14 +272,14 @@ func TestUS43to44ListUsers(t *testing.T) {
 
 func TestUS04to06GetUserFromPlatform(t *testing.T) {
 	t.Run("US-04_Success", func(t *testing.T) {
-		want := &authaccount.Account{UserID: "u1"}
+		want := usFullAccount()
 		as := &usFakeAccountStore{getByIDAccount: want}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{&linking.LinkedAccount{UserID: "u1"}, nil}}}
 		svc := usNewService(as, als, &usFakeAccountSettingsStore{})
 
 		got, err := svc.GetUserFromPlatform(linking.PlatformDiscord, "p1")
-		if err != nil || got == nil || got.UserID != want.UserID {
-			t.Errorf("GetUserFromPlatform() = (%+v, %v), want the u1 user, nil", got, err)
+		if err != nil || usMarshal(t, got) != usMarshal(t, want) {
+			t.Errorf("GetUserFromPlatform() = (%s, %v), want the JSON of %s, nil", usMarshal(t, got), err, usMarshal(t, want))
 		}
 	})
 
@@ -550,17 +577,39 @@ func (s *usStubLinkingService) UpdateFromPlatform(linking.Platform, string, link
 	return s.userID, s.err
 }
 
+func TestUS85UserFromAccountKeepsOnlyPublicFields(t *testing.T) {
+	t.Run("US-85_GetUserMarshalsLikeTheAccount", func(t *testing.T) {
+		want := usFullAccount()
+		svc := usNewService(&usFakeAccountStore{getByIDAccount: want}, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})
+
+		got, err := svc.GetUser("u1")
+		if err != nil || usMarshal(t, got) != usMarshal(t, want) {
+			t.Errorf("GetUser() = (%s, %v), want the JSON of the account %s, nil", usMarshal(t, got), err, usMarshal(t, want))
+		}
+	})
+
+	t.Run("US-86_NilAccountGivesNilUser", func(t *testing.T) {
+		svc := usNewService(&usFakeAccountStore{}, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})
+
+		got, err := svc.GetUser("u1")
+		if got != nil || err != nil {
+			t.Errorf("GetUser() = (%+v, %v), want (nil, nil)", got, err)
+		}
+	})
+}
+
 func TestUS83UpdateUserFromPlatformReturnsAccountForLinkedUser(t *testing.T) {
 	t.Run("US-83_ReturnsAccountForTheLinkingUserID", func(t *testing.T) {
-		as := &usFakeAccountStore{getByIDAccount: &authaccount.Account{UserID: "resolved"}}
+		want := &authaccount.Account{UserID: "resolved", Username: "r", Roles: []string{"1"}, UpdatedAt: usUpdatedAt}
+		as := &usFakeAccountStore{getByIDAccount: want}
 		svc := NewService(as, &usFakeLinkAccountStore{}, &usStubLinkingService{userID: "resolved"}, &usFakeAccountSettingsStore{}, rsDefaultRoleStore())
 
 		got, err := svc.UpdateUserFromPlatform(linking.PlatformDiscord, "p1", usFakePlatformData{})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if got == nil || got.UserID != "resolved" {
-			t.Errorf("UpdateUserFromPlatform() = %+v, want the resolved user", got)
+		if usMarshal(t, got) != usMarshal(t, want) {
+			t.Errorf("UpdateUserFromPlatform() = %s, want the JSON of %s", usMarshal(t, got), usMarshal(t, want))
 		}
 		if as.getByIDLastUserID != "resolved" {
 			t.Errorf("expected GetAccountByID to be called with the linking service's user ID, got %q", as.getByIDLastUserID)
