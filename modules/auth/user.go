@@ -1,42 +1,36 @@
 package auth
 
 import (
-	"errors"
-	"log"
-
 	authaccount "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
 )
-
-const LogLinkCleanupFailed = "Failed to link account, and failed to clean up the orphaned placeholder account:\n\t"
 
 // UserService - The userService interface
 // TODO: Convert to a user struct that cannot modify sensitive data
 type UserService interface {
 	GetUser(userID string) (*authaccount.Account, error)
-	GetUserFromPlatform(platform Platform, platformID string) (*authaccount.Account, error)
+	GetUserFromPlatform(platform linking.Platform, platformID string) (*authaccount.Account, error)
 	ListUsers(limit, offset int) ([]*authaccount.Account, error)
 	GetUserPermissions(userID string) ([]string, error)
 	UpdateUser(user *authaccount.Account) error
-	UpdateUserFromPlatform(platform Platform, platformID string, data PlatformData) (*authaccount.Account, error)
+	UpdateUserFromPlatform(platform linking.Platform, platformID string, data linking.PlatformData) (*authaccount.Account, error)
 	DeleteUser(userID string) error
-	GetUserLinkedAccounts(userID string) ([]*LinkedAccount, error)
-	UnlinkPlatform(userID string, platform Platform) error
-	SetPlatformLoginEnabled(userID string, platform Platform, enabled bool) error
 	GetAccountSettings(userID string) (*authaccount.AccountSettings, error)
 	SetPasswordAuthEnabled(userID string, enabled bool) error
 }
 
 // userService - The userService struct
 type userService struct {
-	as  authaccount.AccountStore
-	als LinkAccountStore
-	ass authaccount.AccountSettingsStore
-	rs  authaccount.RoleStore
+	as    authaccount.AccountStore
+	als   linking.LinkAccountStore
+	links linking.Service
+	ass   authaccount.AccountSettingsStore
+	rs    authaccount.RoleStore
 }
 
 // NewUserService - Create a new userService
-func NewUserService(as authaccount.AccountStore, als LinkAccountStore, ass authaccount.AccountSettingsStore, rs authaccount.RoleStore) UserService {
-	return &userService{as, als, ass, rs}
+func NewUserService(as authaccount.AccountStore, als linking.LinkAccountStore, links linking.Service, ass authaccount.AccountSettingsStore, rs authaccount.RoleStore) UserService {
+	return &userService{as, als, links, ass, rs}
 }
 
 // GetUser - Get a user by their ID
@@ -45,7 +39,7 @@ func (s *userService) GetUser(userID string) (*authaccount.Account, error) {
 }
 
 // GetUserFromPlatform - Get a user by their platform ID
-func (s *userService) GetUserFromPlatform(platform Platform, platformID string) (*authaccount.Account, error) {
+func (s *userService) GetUserFromPlatform(platform linking.Platform, platformID string) (*authaccount.Account, error) {
 	la, err := s.als.GetLinkedAccountByPlatformID(platform, platformID)
 	if err != nil {
 		return nil, err
@@ -96,79 +90,17 @@ func (s *userService) UpdateUser(user *authaccount.Account) error {
 }
 
 // UpdateUserFromPlatform - Update a user from a platform
-func (s *userService) UpdateUserFromPlatform(platform Platform, platformID string, data PlatformData) (*authaccount.Account, error) {
-	// If the user doesn't exist, create a new account
-	la, err := s.als.GetLinkedAccountByPlatformID(platform, platformID)
-	if err != nil {
-		if !errors.Is(err, authaccount.ErrNotFound) {
-			return nil, err
-		}
-		a, err := authaccount.NewIDOnlyAccount()
-		if err != nil {
-			return nil, err
-		}
-		err = s.as.AddAccountToDB(a)
-		if err != nil {
-			return nil, err
-		}
-		var username string
-		if data != nil {
-			username = data.GetUsername()
-		}
-		la = NewLinkedAccount(a.UserID, platform, username, platformID, data)
-		err = s.als.AddLinkedAccountToDB(la)
-		if err != nil {
-			// Whatever went wrong, the placeholder account created above is
-			// now orphaned - clean it up before deciding how to handle err.
-			if delErr := s.as.DeleteAccountFromDB(a.UserID); delErr != nil {
-				log.Println(LogLinkCleanupFailed, err)
-				return nil, delErr
-			}
-			if !errors.Is(err, ErrAlreadyLinked) {
-				return nil, err
-			}
-			// Lost the race to link this platform account: another
-			// request's insert won between our lookup and our own insert.
-			// Use the winner's linked account instead.
-			la, err = s.als.GetLinkedAccountByPlatformID(platform, platformID)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	// Update the linked account
-	la.Data = data
-	err = s.als.UpdateLinkedAccount(la)
+func (s *userService) UpdateUserFromPlatform(platform linking.Platform, platformID string, data linking.PlatformData) (*authaccount.Account, error) {
+	userID, err := s.links.UpdateFromPlatform(platform, platformID, data)
 	if err != nil {
 		return nil, err
 	}
-
-	a, err := s.as.GetAccountByID(la.UserID)
-	if err != nil {
-		return nil, err
-	}
-	return a, nil
+	return s.as.GetAccountByID(userID)
 }
 
 // DeleteUser - Delete a user
 func (s *userService) DeleteUser(userID string) error {
 	return s.as.DeleteAccountFromDB(userID)
-}
-
-// GetUserLinkedAccounts - List every platform linked to a user
-func (s *userService) GetUserLinkedAccounts(userID string) ([]*LinkedAccount, error) {
-	return s.als.GetLinkedAccountsByUserID(userID)
-}
-
-// UnlinkPlatform - Unlink a platform from a user
-func (s *userService) UnlinkPlatform(userID string, platform Platform) error {
-	return s.als.DeleteLinkedAccount(userID, platform)
-}
-
-// SetPlatformLoginEnabled - Toggle whether a linked platform can log in
-func (s *userService) SetPlatformLoginEnabled(userID string, platform Platform, enabled bool) error {
-	return s.als.SetLinkedAccountLoginEnabled(userID, platform, enabled)
 }
 
 // GetAccountSettings - Get a user's account settings

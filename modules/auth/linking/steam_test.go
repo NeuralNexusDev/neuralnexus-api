@@ -11,7 +11,6 @@ import (
 
 	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	authaccount "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/goccy/go-json"
@@ -74,31 +73,31 @@ func (m *stMockAccountService) NewSession(a *authaccount.Account, expiresAt int6
 }
 
 type stMockLinkAccountStore struct {
-	byPlatformID map[auth.Platform]map[string]*auth.LinkedAccount
+	byPlatformID map[Platform]map[string]*LinkedAccount
 	getErr       error
 	addErr       error
 	addCalls     int
 }
 
-var _ auth.LinkAccountStore = (*stMockLinkAccountStore)(nil)
+var _ LinkAccountStore = (*stMockLinkAccountStore)(nil)
 
 func newSTMockLinkAccountStore() *stMockLinkAccountStore {
-	return &stMockLinkAccountStore{byPlatformID: map[auth.Platform]map[string]*auth.LinkedAccount{}}
+	return &stMockLinkAccountStore{byPlatformID: map[Platform]map[string]*LinkedAccount{}}
 }
 
-func (m *stMockLinkAccountStore) AddLinkedAccountToDB(la *auth.LinkedAccount) error {
+func (m *stMockLinkAccountStore) AddLinkedAccountToDB(la *LinkedAccount) error {
 	m.addCalls++
 	if m.addErr != nil {
 		return m.addErr
 	}
 	if m.byPlatformID[la.Platform] == nil {
-		m.byPlatformID[la.Platform] = map[string]*auth.LinkedAccount{}
+		m.byPlatformID[la.Platform] = map[string]*LinkedAccount{}
 	}
 	m.byPlatformID[la.Platform][la.PlatformID] = la
 	return nil
 }
-func (m *stMockLinkAccountStore) UpdateLinkedAccount(*auth.LinkedAccount) error { return nil }
-func (m *stMockLinkAccountStore) GetLinkedAccountByPlatformID(platform auth.Platform, platformID string) (*auth.LinkedAccount, error) {
+func (m *stMockLinkAccountStore) UpdateLinkedAccount(*LinkedAccount) error { return nil }
+func (m *stMockLinkAccountStore) GetLinkedAccountByPlatformID(platform Platform, platformID string) (*LinkedAccount, error) {
 	if m.getErr != nil {
 		return nil, m.getErr
 	}
@@ -108,17 +107,17 @@ func (m *stMockLinkAccountStore) GetLinkedAccountByPlatformID(platform auth.Plat
 	}
 	return la, nil
 }
-func (m *stMockLinkAccountStore) GetLinkedAccountByPlatformName(auth.Platform, string) (*auth.LinkedAccount, error) {
+func (m *stMockLinkAccountStore) GetLinkedAccountByPlatformName(Platform, string) (*LinkedAccount, error) {
 	return nil, authaccount.ErrNotFound
 }
-func (m *stMockLinkAccountStore) GetLinkedAccountByUserID(string, auth.Platform) (*auth.LinkedAccount, error) {
+func (m *stMockLinkAccountStore) GetLinkedAccountByUserID(string, Platform) (*LinkedAccount, error) {
 	return nil, authaccount.ErrNotFound
 }
-func (m *stMockLinkAccountStore) GetLinkedAccountsByUserID(string) ([]*auth.LinkedAccount, error) {
+func (m *stMockLinkAccountStore) GetLinkedAccountsByUserID(string) ([]*LinkedAccount, error) {
 	return nil, nil
 }
-func (m *stMockLinkAccountStore) DeleteLinkedAccount(string, auth.Platform) error { return nil }
-func (m *stMockLinkAccountStore) SetLinkedAccountLoginEnabled(string, auth.Platform, bool) error {
+func (m *stMockLinkAccountStore) DeleteLinkedAccount(string, Platform) error { return nil }
+func (m *stMockLinkAccountStore) SetLinkedAccountLoginEnabled(string, Platform, bool) error {
 	return nil
 }
 
@@ -190,7 +189,7 @@ func TestST05CreateLinkedAccount(t *testing.T) {
 		s := &SteamData{SteamID64: "76500000000000001", PersonaName: "bob"}
 		la := s.CreateLinkedAccount("user-1")
 
-		if la.UserID != "user-1" || la.Platform != auth.PlatformSteam || la.PlatformUsername != "bob" || la.PlatformID != "76500000000000001" {
+		if la.UserID != "user-1" || la.Platform != PlatformSteam || la.PlatformUsername != "bob" || la.PlatformID != "76500000000000001" {
 			t.Errorf("CreateLinkedAccount() = %+v, want UserID=user-1 Platform=steam PlatformUsername=bob PlatformID=76500000000000001", la)
 		}
 		if !la.Verified || !la.LoginEnabled {
@@ -551,8 +550,8 @@ func TestST26to29ProcessSteamLink(t *testing.T) {
 
 	t.Run("ST-29_AlreadyLinkedToDifferentAccountRejected", func(t *testing.T) {
 		las := newSTMockLinkAccountStore()
-		las.byPlatformID[auth.PlatformSteam] = map[string]*auth.LinkedAccount{
-			user.SteamID64: {UserID: "other-user", Platform: auth.PlatformSteam, PlatformID: user.SteamID64},
+		las.byPlatformID[PlatformSteam] = map[string]*LinkedAccount{
+			user.SteamID64: {UserID: "other-user", Platform: PlatformSteam, PlatformID: user.SteamID64},
 		}
 		session := &authsession.Session{ID: "sess-1", UserID: "user-1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
 		req := stRequestWithSession(session)

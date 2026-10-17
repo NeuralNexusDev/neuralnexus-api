@@ -15,7 +15,6 @@ import (
 	"github.com/goccy/go-json"
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	authaccount "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 )
@@ -80,8 +79,8 @@ func (s *SteamData) GetData() string {
 }
 
 // CreateLinkedAccount creates a linked account
-func (s *SteamData) CreateLinkedAccount(userID string) *auth.LinkedAccount {
-	return auth.NewLinkedAccount(userID, auth.PlatformSteam, s.PersonaName, s.SteamID64, s)
+func (s *SteamData) CreateLinkedAccount(userID string) *LinkedAccount {
+	return NewLinkedAccount(userID, PlatformSteam, s.PersonaName, s.SteamID64, s)
 }
 
 // -------------- Functions --------------
@@ -202,8 +201,8 @@ func GetSteamUser(steamID64 string) (*SteamData, error) {
 
 // ProcessSteamLogin resolves or creates an account for the given,
 // already-verified Steam identity and returns a new session for it.
-func ProcessSteamLogin(as authaccount.AccountService, las auth.LinkAccountStore, ss authsession.SessionService, user *SteamData) (*authsession.Session, error) {
-	a, err := resolveOrCreateAccountForPlatformUser(as, las, auth.PlatformSteam, user)
+func ProcessSteamLogin(as authaccount.AccountService, las LinkAccountStore, ss authsession.SessionService, user *SteamData) (*authsession.Session, error) {
+	a, err := resolveOrCreateAccountForPlatformUser(as, las, PlatformSteam, user)
 	if err != nil {
 		return nil, err
 	}
@@ -219,7 +218,7 @@ func ProcessSteamLogin(as authaccount.AccountService, las auth.LinkAccountStore,
 
 // ProcessSteamLink links the given, already-verified Steam identity to the
 // session already in r's context.
-func ProcessSteamLink(r *http.Request, las auth.LinkAccountStore, user *SteamData) (*authsession.Session, error) {
+func ProcessSteamLink(r *http.Request, las LinkAccountStore, user *SteamData) (*authsession.Session, error) {
 	session, ok := r.Context().Value(mw.SessionKey).(*authsession.Session)
 	if !ok || session == nil {
 		return nil, ErrSessionNotFound
@@ -227,7 +226,7 @@ func ProcessSteamLink(r *http.Request, las auth.LinkAccountStore, user *SteamDat
 	if !session.IsValid() {
 		return nil, ErrSessionExpired
 	}
-	if err := linkPlatformUserToSession(las, session.UserID, auth.PlatformSteam, user); err != nil {
+	if err := linkPlatformUserToSession(las, session.UserID, PlatformSteam, user); err != nil {
 		return nil, err
 	}
 	return session, nil

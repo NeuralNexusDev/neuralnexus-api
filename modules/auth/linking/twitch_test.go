@@ -1,11 +1,9 @@
-package twitch
+package linking
 
 import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 )
 
 // withAPIBaseURL points APIBaseURL at a test server for the duration of the
@@ -40,9 +38,9 @@ func TestGetUserSuccess(t *testing.T) {
 		_, _ = w.Write([]byte(`{"data": [{"id": "12345", "login": "someuser", "email": "someuser@example.com"}]}`))
 	})
 
-	data, err := GetUser(&auth.OAuthToken{AccessToken: "test-access-token"})
+	data, err := GetTwitchUser(&OAuthToken{AccessToken: "test-access-token"})
 	if err != nil {
-		t.Fatalf("GetUser returned error: %v", err)
+		t.Fatalf("GetTwitchUser returned error: %v", err)
 	}
 	if data.GetID() != "12345" || data.GetUsername() != "someuser" || data.GetEmail() != "someuser@example.com" {
 		t.Errorf("unexpected user data: %+v", data.User)
@@ -55,7 +53,7 @@ func TestGetUserNoUsersReturned(t *testing.T) {
 		_, _ = w.Write([]byte(`{"data": []}`))
 	})
 
-	if _, err := GetUser(&auth.OAuthToken{AccessToken: "test-access-token"}); err == nil {
+	if _, err := GetTwitchUser(&OAuthToken{AccessToken: "test-access-token"}); err == nil {
 		t.Fatal("expected an error when Twitch returns no user data")
 	}
 }
@@ -67,7 +65,7 @@ func TestGetUserAPIError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"error": "Unauthorized", "status": 401, "message": "Invalid OAuth token"}`))
 	})
 
-	if _, err := GetUser(&auth.OAuthToken{AccessToken: "bad-token"}); err == nil {
+	if _, err := GetTwitchUser(&OAuthToken{AccessToken: "bad-token"}); err == nil {
 		t.Fatal("expected an error for a non-2xx response from Twitch")
 	}
 }

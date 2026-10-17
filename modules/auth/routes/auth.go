@@ -10,7 +10,6 @@ import (
 	"time"
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	authaccount "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
 	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
@@ -130,7 +129,7 @@ func LogoutHandler(ss authsession.SessionService) http.HandlerFunc {
 }
 
 // OAuthHandler handles the OAuth route
-func OAuthHandler(as authaccount.AccountService, las auth.LinkAccountStore, ss authsession.SessionService) http.HandlerFunc {
+func OAuthHandler(as authaccount.AccountService, las linking.LinkAccountStore, ss authsession.SessionService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		code := r.URL.Query().Get("code")
 		if code == "" {
@@ -188,7 +187,7 @@ func OAuthHandler(as authaccount.AccountService, las auth.LinkAccountStore, ss a
 }
 
 // OpenIDHandler handles the Steam OpenID 2.0 login/link callback.
-func OpenIDHandler(as authaccount.AccountService, las auth.LinkAccountStore, ss authsession.SessionService) http.HandlerFunc {
+func OpenIDHandler(as authaccount.AccountService, las linking.LinkAccountStore, ss authsession.SessionService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		state, ok := decodeAndValidateState(w, r)
 		if !ok {

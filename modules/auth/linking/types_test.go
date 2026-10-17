@@ -1,4 +1,4 @@
-package auth
+package linking
 
 import "testing"
 
