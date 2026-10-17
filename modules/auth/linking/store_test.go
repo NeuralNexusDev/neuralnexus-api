@@ -625,3 +625,137 @@ func TestLS77to78_NotFoundSentinels(t *testing.T) {
 		}
 	})
 }
+
+func TestST69SetPasswordAuthEnabledEnableAllowedWithPassword(t *testing.T) {
+	as, las, ass := stLiveStore(t)
+	t.Run("ST-69_EnableAllowedWithPassword", func(t *testing.T) {
+		a := stSeedPasswordAccount(t, as, "910000000000000023")
+		stSeedLink(t, las, a.UserID, PlatformDiscord, "sttest-discord-23", true, true)
+
+		if err := ass.SetPasswordAuthEnabled(a.UserID, false); err != nil {
+			t.Fatalf("expected the disable to succeed, got: %v", err)
+		}
+		if err := ass.SetPasswordAuthEnabled(a.UserID, true); err != nil {
+			t.Fatalf("expected the re-enable to succeed, got: %v", err)
+		}
+		settings, err := ass.GetAccountSettings(a.UserID)
+		if err != nil {
+			t.Fatalf("GetAccountSettings returned error: %v", err)
+		}
+		if !settings.PasswordAuthEnabled {
+			t.Error("expected password auth to be re-enabled")
+		}
+	})
+}
+
+func TestST71SetPasswordAuthEnabledDisableAllowedWithLinkedAccount(t *testing.T) {
+	as, las, ass := stLiveStore(t)
+	t.Run("ST-71_DisableAllowedWithLinkedAccount", func(t *testing.T) {
+		a := stSeedPasswordAccount(t, as, "910000000000000025")
+		stSeedLink(t, las, a.UserID, PlatformDiscord, "sttest-discord-25", true, true)
+
+		if err := ass.SetPasswordAuthEnabled(a.UserID, false); err != nil {
+			t.Fatalf("expected the disable to succeed, got: %v", err)
+		}
+		settings, err := ass.GetAccountSettings(a.UserID)
+		if err != nil {
+			t.Fatalf("GetAccountSettings returned error: %v", err)
+		}
+		if settings.PasswordAuthEnabled {
+			t.Error("expected password auth to be disabled")
+		}
+	})
+}
+
+func TestST72SetPasswordAuthEnabledConcurrentWithDeleteLinkedAccountNeverBothSucceed(t *testing.T) {
+	as, las, ass := stLiveStore(t)
+	t.Run("ST-72_ConcurrentWithDeleteLinkedAccountNeverBothSucceed", func(t *testing.T) {
+		const trials = 50
+		for i := 0; i < trials; i++ {
+			userID := fmt.Sprintf("91000000000003%04d", i)
+			a := stSeedPasswordAccount(t, as, userID)
+			stSeedLink(t, las, userID, PlatformDiscord, "sttest-discord-"+userID, true, true)
+
+			var wg sync.WaitGroup
+			results := make([]error, 2)
+			wg.Add(2)
+			go func() { defer wg.Done(); results[0] = ass.SetPasswordAuthEnabled(a.UserID, false) }()
+			go func() { defer wg.Done(); results[1] = las.DeleteLinkedAccount(a.UserID, PlatformDiscord) }()
+			wg.Wait()
+
+			successes := 0
+			for _, err := range results {
+				switch {
+				case err == nil:
+					successes++
+				case errors.Is(err, authaccount.ErrWouldLockAccount):
+				default:
+					t.Fatalf("trial %d: unexpected error: %v", i, err)
+				}
+			}
+			if successes != 1 {
+				t.Fatalf("trial %d: expected exactly 1 of 2 concurrent operations to succeed, got %d (results: %v)", i, successes, results)
+			}
+
+			settings, err := ass.GetAccountSettings(userID)
+			if err != nil {
+				t.Fatalf("trial %d: GetAccountSettings returned error: %v", i, err)
+			}
+			links, err := las.GetLinkedAccountsByUserID(userID)
+			if err != nil {
+				t.Fatalf("trial %d: GetLinkedAccountsByUserID returned error: %v", i, err)
+			}
+			if !settings.PasswordAuthEnabled && len(links) == 0 {
+				t.Fatalf("trial %d: account left with NO usable login method (password disabled and link gone)", i)
+			}
+		}
+	})
+}
+
+func TestST73SetPasswordAuthEnabledConcurrentWithSetLinkedAccountLoginEnabledNeverBothSucceed(t *testing.T) {
+	as, las, ass := stLiveStore(t)
+	t.Run("ST-73_ConcurrentWithSetLinkedAccountLoginEnabledNeverBothSucceed", func(t *testing.T) {
+		const trials = 50
+		for i := 0; i < trials; i++ {
+			userID := fmt.Sprintf("91000000000004%04d", i)
+			a := stSeedPasswordAccount(t, as, userID)
+			stSeedLink(t, las, userID, PlatformDiscord, "sttest-discord-"+userID, true, true)
+
+			var wg sync.WaitGroup
+			results := make([]error, 2)
+			wg.Add(2)
+			go func() { defer wg.Done(); results[0] = ass.SetPasswordAuthEnabled(a.UserID, false) }()
+			go func() {
+				defer wg.Done()
+				results[1] = las.SetLinkedAccountLoginEnabled(a.UserID, PlatformDiscord, false)
+			}()
+			wg.Wait()
+
+			successes := 0
+			for _, err := range results {
+				switch {
+				case err == nil:
+					successes++
+				case errors.Is(err, authaccount.ErrWouldLockAccount):
+				default:
+					t.Fatalf("trial %d: unexpected error: %v", i, err)
+				}
+			}
+			if successes != 1 {
+				t.Fatalf("trial %d: expected exactly 1 of 2 concurrent operations to succeed, got %d (results: %v)", i, successes, results)
+			}
+
+			settings, err := ass.GetAccountSettings(userID)
+			if err != nil {
+				t.Fatalf("trial %d: GetAccountSettings returned error: %v", i, err)
+			}
+			la, err := las.GetLinkedAccountByUserID(userID, PlatformDiscord)
+			if err != nil {
+				t.Fatalf("trial %d: GetLinkedAccountByUserID returned error: %v", i, err)
+			}
+			if !settings.PasswordAuthEnabled && !la.LoginEnabled {
+				t.Fatalf("trial %d: account left with NO usable login method (password disabled and link disabled)", i)
+			}
+		}
+	})
+}
