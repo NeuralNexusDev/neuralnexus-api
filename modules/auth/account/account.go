@@ -1,4 +1,4 @@
-package auth
+package account
 
 import (
 	"time"
@@ -7,7 +7,7 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 )
 
-// AccountService - The userService interface
+// AccountService - The account service interface
 type AccountService interface {
 	AddAccount(account *Account) error
 	GetAccountByID(userID string) (*Account, error)
@@ -19,14 +19,14 @@ type AccountService interface {
 	NewSession(account *Account, expiresAt int64) (*authsession.Session, error)
 }
 
-// userService - The userService struct
+// accountService - The accountService struct
 type accountService struct {
 	as  AccountStore
 	ass AccountSettingsStore
 	rs  RoleStore
 }
 
-// NewAccountService - Create a new userService
+// NewAccountService - Create a new AccountService
 func NewAccountService(as AccountStore, ass AccountSettingsStore, rs RoleStore) AccountService {
 	return &accountService{as, ass, rs}
 }

@@ -18,52 +18,53 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
+	authaccount "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
 	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
 type stubAccountService struct {
-	account              *auth.Account
+	account              *authaccount.Account
 	lookupErr            error
 	passwordAuthDisabled bool
 	passwordAuthErr      error
 	newSessionErr        error
 }
 
-var _ auth.AccountService = (*stubAccountService)(nil)
+var _ authaccount.AccountService = (*stubAccountService)(nil)
 
-func (s *stubAccountService) AddAccount(*auth.Account) error { return nil }
-func (s *stubAccountService) GetAccountByID(string) (*auth.Account, error) {
-	return nil, auth.ErrNotFound
+func (s *stubAccountService) AddAccount(*authaccount.Account) error { return nil }
+func (s *stubAccountService) GetAccountByID(string) (*authaccount.Account, error) {
+	return nil, authaccount.ErrNotFound
 }
-func (s *stubAccountService) GetAccountByUsername(string) (*auth.Account, error) {
+func (s *stubAccountService) GetAccountByUsername(string) (*authaccount.Account, error) {
 	if s.lookupErr != nil {
 		return nil, s.lookupErr
 	}
 	if s.account != nil {
 		return s.account, s.lookupErr
 	}
-	return nil, auth.ErrNotFound
+	return nil, authaccount.ErrNotFound
 }
-func (s *stubAccountService) GetAccountByEmail(string) (*auth.Account, error) {
+func (s *stubAccountService) GetAccountByEmail(string) (*authaccount.Account, error) {
 	if s.lookupErr != nil {
 		return nil, s.lookupErr
 	}
 	if s.account != nil {
 		return s.account, s.lookupErr
 	}
-	return nil, auth.ErrNotFound
+	return nil, authaccount.ErrNotFound
 }
-func (s *stubAccountService) UpdateAccount(*auth.Account) error { return nil }
-func (s *stubAccountService) DeleteAccount(string) error        { return nil }
+func (s *stubAccountService) UpdateAccount(*authaccount.Account) error { return nil }
+func (s *stubAccountService) DeleteAccount(string) error               { return nil }
 func (s *stubAccountService) IsPasswordAuthEnabled(string) (bool, error) {
 	return !s.passwordAuthDisabled, s.passwordAuthErr
 }
 
 const stubSessionPermission = "stub:perm"
 
-func (s *stubAccountService) NewSession(a *auth.Account, expiresAt int64) (*authsession.Session, error) {
+func (s *stubAccountService) NewSession(a *authaccount.Account, expiresAt int64) (*authsession.Session, error) {
 	if s.newSessionErr != nil {
 		return nil, s.newSessionErr
 	}
@@ -87,13 +88,13 @@ func (s *stubLinkAccountStore) GetLinkedAccountByPlatformID(platform auth.Platfo
 	if s.existing != nil {
 		return s.existing, nil
 	}
-	return nil, auth.ErrNotFound
+	return nil, authaccount.ErrNotFound
 }
 func (s *stubLinkAccountStore) GetLinkedAccountByPlatformName(auth.Platform, string) (*auth.LinkedAccount, error) {
-	return nil, auth.ErrNotFound
+	return nil, authaccount.ErrNotFound
 }
 func (s *stubLinkAccountStore) GetLinkedAccountByUserID(string, auth.Platform) (*auth.LinkedAccount, error) {
-	return nil, auth.ErrNotFound
+	return nil, authaccount.ErrNotFound
 }
 func (s *stubLinkAccountStore) GetLinkedAccountsByUserID(string) ([]*auth.LinkedAccount, error) {
 	return nil, nil
@@ -118,7 +119,7 @@ func (s *stubSessionService) AddSession(session *authsession.Session) error {
 	return s.addSessionErr
 }
 func (s *stubSessionService) GetSession(string) (*authsession.Session, error) {
-	return nil, auth.ErrNotFound
+	return nil, authaccount.ErrNotFound
 }
 func (s *stubSessionService) UpdateSession(*authsession.Session) error { return nil }
 func (s *stubSessionService) DeleteSession(id string) error {
@@ -132,7 +133,7 @@ func (s *stubSessionService) CreateJWT(session *authsession.Session) (string, er
 	return "", nil
 }
 func (s *stubSessionService) ReadJWT(string) (*authsession.Session, error) {
-	return nil, auth.ErrNotFound
+	return nil, authaccount.ErrNotFound
 }
 
 func encodeState(t *testing.T, state linking.OAuthState) string {
@@ -205,7 +206,7 @@ func findCookie(w *httptest.ResponseRecorder, name string) *http.Cookie {
 }
 
 func TestAU01LoginHandlerUsernameHappyPath(t *testing.T) {
-	account, err := auth.NewAccount("testuser", "test@example.com", "correct-password")
+	account, err := authaccount.NewAccount("testuser", "test@example.com", "correct-password")
 	if err != nil {
 		t.Fatalf("failed to build account: %v", err)
 	}
@@ -231,7 +232,7 @@ func TestAU01LoginHandlerUsernameHappyPath(t *testing.T) {
 }
 
 func TestAU02LoginHandlerEmailHappyPath(t *testing.T) {
-	account, err := auth.NewAccount("testuser", "test@example.com", "correct-password")
+	account, err := authaccount.NewAccount("testuser", "test@example.com", "correct-password")
 	if err != nil {
 		t.Fatalf("failed to build account: %v", err)
 	}
@@ -288,7 +289,7 @@ func TestAU04LoginHandlerAccountLookupFails(t *testing.T) {
 }
 
 func TestAU05LoginHandlerWrongPassword(t *testing.T) {
-	account, err := auth.NewAccount("testuser", "test@example.com", "correct-password")
+	account, err := authaccount.NewAccount("testuser", "test@example.com", "correct-password")
 	if err != nil {
 		t.Fatalf("failed to build account: %v", err)
 	}
@@ -311,7 +312,7 @@ func TestAU05LoginHandlerWrongPassword(t *testing.T) {
 }
 
 func TestAU06LoginHandlerPasswordAuthCheckErrors(t *testing.T) {
-	account, err := auth.NewAccount("testuser", "test@example.com", "correct-password")
+	account, err := authaccount.NewAccount("testuser", "test@example.com", "correct-password")
 	if err != nil {
 		t.Fatalf("failed to build account: %v", err)
 	}
@@ -331,7 +332,7 @@ func TestAU06LoginHandlerPasswordAuthCheckErrors(t *testing.T) {
 }
 
 func TestAU07LoginHandlerPasswordAuthDisabled(t *testing.T) {
-	account, err := auth.NewAccount("testuser", "test@example.com", "correct-password")
+	account, err := authaccount.NewAccount("testuser", "test@example.com", "correct-password")
 	if err != nil {
 		t.Fatalf("failed to build account: %v", err)
 	}
@@ -354,7 +355,7 @@ func TestAU07LoginHandlerPasswordAuthDisabled(t *testing.T) {
 }
 
 func TestAU08LoginHandlerAddSessionFails(t *testing.T) {
-	account, err := auth.NewAccount("testuser", "test@example.com", "correct-password")
+	account, err := authaccount.NewAccount("testuser", "test@example.com", "correct-password")
 	if err != nil {
 		t.Fatalf("failed to build account: %v", err)
 	}
@@ -377,7 +378,7 @@ func TestAU08LoginHandlerAddSessionFails(t *testing.T) {
 }
 
 func TestAU09LoginHandlerCreateJWTFails(t *testing.T) {
-	account, err := auth.NewAccount("testuser", "test@example.com", "correct-password")
+	account, err := authaccount.NewAccount("testuser", "test@example.com", "correct-password")
 	if err != nil {
 		t.Fatalf("failed to build account: %v", err)
 	}
@@ -758,7 +759,7 @@ func TestAU52to57OAuthAndOpenIDFailuresHideCause(t *testing.T) {
 }
 
 func TestAU58LoginHandlerNewSessionFails(t *testing.T) {
-	account := &auth.Account{UserID: "u1", Username: "testuser"}
+	account := &authaccount.Account{UserID: "u1", Username: "testuser"}
 	if err := account.HashPassword("correct-password"); err != nil {
 		t.Fatalf("failed to hash password: %v", err)
 	}

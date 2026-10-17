@@ -3,6 +3,7 @@ package authroutes
 import (
 	"errors"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
+	authaccount "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"log"
 	"net/http"
@@ -64,15 +65,15 @@ const (
 
 func respondUpdateUserFailure(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
-	case errors.Is(err, auth.ErrNotFound):
+	case errors.Is(err, authaccount.ErrNotFound):
 		responses.NotFound(w, r, msgUserNotFound)
-	case errors.Is(err, auth.ErrEmailAlreadyExists):
+	case errors.Is(err, authaccount.ErrEmailAlreadyExists):
 		responses.Conflict(w, r, msgEmailAlreadyExists)
-	case errors.Is(err, auth.ErrUsernameAlreadyExists):
+	case errors.Is(err, authaccount.ErrUsernameAlreadyExists):
 		responses.Conflict(w, r, msgUsernameAlreadyExists)
-	case errors.Is(err, auth.ErrInvalidRoleID):
+	case errors.Is(err, authaccount.ErrInvalidRoleID):
 		responses.BadRequest(w, r, msgInvalidRoleID)
-	case errors.Is(err, auth.ErrUnknownRoleID):
+	case errors.Is(err, authaccount.ErrUnknownRoleID):
 		responses.BadRequest(w, r, msgUnknownRoleID)
 	default:
 		log.Println(logFailedToUpdateUser, err)
@@ -113,7 +114,7 @@ func ListUsersHandler(service auth.UserService) http.HandlerFunc {
 			return
 		}
 		if users == nil {
-			users = []*auth.Account{}
+			users = []*authaccount.Account{}
 		}
 		responses.StructOK(w, r, users)
 	}
@@ -134,7 +135,7 @@ func GetUserHandler(service auth.UserService) http.HandlerFunc {
 		}
 		user, err := service.GetUser(userID)
 		if err != nil {
-			if errors.Is(err, auth.ErrNotFound) {
+			if errors.Is(err, authaccount.ErrNotFound) {
 				responses.NotFound(w, r, msgUserNotFound)
 				return
 			}
@@ -158,7 +159,7 @@ func GetUserFromPlatformHandler(service auth.UserService) http.HandlerFunc {
 		platformID := r.PathValue("platform_id")
 		user, err := service.GetUserFromPlatform(platform, platformID)
 		if err != nil {
-			if errors.Is(err, auth.ErrNotFound) {
+			if errors.Is(err, authaccount.ErrNotFound) {
 				responses.NotFound(w, r, msgUserNotFound)
 				return
 			}
@@ -181,7 +182,7 @@ func GetUserPermissionsHandler(service auth.UserService) http.HandlerFunc {
 		}
 		permissions, err := service.GetUserPermissions(userID)
 		if err != nil {
-			if errors.Is(err, auth.ErrNotFound) {
+			if errors.Is(err, authaccount.ErrNotFound) {
 				responses.NotFound(w, r, msgUserNotFound)
 				return
 			}
@@ -202,7 +203,7 @@ func UpdateUserHandler(service auth.UserService) http.HandlerFunc {
 			return
 		}
 		userID := r.PathValue("user_id")
-		var user auth.Account
+		var user authaccount.Account
 		err := responses.DecodeStruct(r, &user)
 		if err != nil {
 			responses.BadRequest(w, r, msgInvalidRequestBody)
@@ -336,9 +337,9 @@ func UnlinkPlatformHandler(service auth.UserService) http.HandlerFunc {
 		switch {
 		case err == nil:
 			responses.NoContent(w, r)
-		case errors.Is(err, auth.ErrNotFound):
+		case errors.Is(err, authaccount.ErrNotFound):
 			responses.NotFound(w, r, msgPlatformNotLinked)
-		case errors.Is(err, auth.ErrWouldLockAccount):
+		case errors.Is(err, authaccount.ErrWouldLockAccount):
 			responses.BadRequest(w, r, msgSetPasswordOrLinkBeforeUnlinking)
 		default:
 			responses.InternalServerError(w, r, msgFailedToUnlinkPlatform)
@@ -373,9 +374,9 @@ func SetPlatformLoginEnabledHandler(service auth.UserService) http.HandlerFunc {
 		switch {
 		case err == nil:
 			responses.NoContent(w, r)
-		case errors.Is(err, auth.ErrNotFound):
+		case errors.Is(err, authaccount.ErrNotFound):
 			responses.NotFound(w, r, msgPlatformNotLinked)
-		case errors.Is(err, auth.ErrWouldLockAccount):
+		case errors.Is(err, authaccount.ErrWouldLockAccount):
 			responses.BadRequest(w, r, msgSetPasswordOrLinkBeforeDisabling)
 		case errors.Is(err, auth.ErrLinkedAccountUnverified):
 			responses.BadRequest(w, r, msgLinkedAccountUnverified)
@@ -396,7 +397,7 @@ func GetAccountSettingsHandler(service auth.UserService) http.HandlerFunc {
 		}
 		settings, err := service.GetAccountSettings(userID)
 		if err != nil {
-			if errors.Is(err, auth.ErrNotFound) {
+			if errors.Is(err, authaccount.ErrNotFound) {
 				responses.NotFound(w, r, msgUserNotFound)
 				return
 			}
@@ -434,11 +435,11 @@ func UpdateAccountSettingsHandler(service auth.UserService) http.HandlerFunc {
 		switch {
 		case err == nil:
 			responses.NoContent(w, r)
-		case errors.Is(err, auth.ErrNotFound):
+		case errors.Is(err, authaccount.ErrNotFound):
 			responses.NotFound(w, r, msgUserNotFound)
-		case errors.Is(err, auth.ErrWouldLockAccount):
+		case errors.Is(err, authaccount.ErrWouldLockAccount):
 			responses.BadRequest(w, r, msgEnableLoginMethodBeforeDisablingPassword)
-		case errors.Is(err, auth.ErrNoPasswordSet):
+		case errors.Is(err, authaccount.ErrNoPasswordSet):
 			responses.BadRequest(w, r, msgSetPasswordBeforeEnablingPasswordLogin)
 		default:
 			responses.InternalServerError(w, r, msgFailedToUpdateUserSettings)
