@@ -41,8 +41,9 @@ dev:
 TEST_POSTGRES_URL ?= postgres://neuralnexus:neuralnexus@localhost:55432/neuralnexus_test
 TEST_REDIS_URL ?= redis://localhost:56379
 
-# Not real secrets - fixed fixture values the auth package's init() requires
-# to be non-empty (see modules/auth/types.go and modules/auth/session.go).
+# Not real secrets - fixed fixture values that the account and session packages
+# require to be non-empty (see modules/auth/account/types.go for PEPPER and
+# modules/auth/session/session.go for JWT_SECRET, NN_SITE_URL and NN_API_URL).
 # Overridable, but any non-empty value works since nothing here is deployed.
 TEST_JWT_SECRET ?= test-jwt-secret
 TEST_PEPPER ?= test-pepper

@@ -18,7 +18,6 @@ import (
 	"golang.org/x/crypto/ed25519"
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	authaccount "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/ratelimit"
@@ -58,7 +57,9 @@ func ApplyRoutes(
 	nndb *pgxpool.Pool,
 	rdb *redis.Client,
 	session authsession.SessionService,
-	authStore auth.Store,
+	accountStore authaccount.Store,
+	linkAccountStore linking.LinkAccountStore,
+	oauthTokenStore linking.OAuthTokenStore,
 	rateLimit ratelimit.RateLimitService) *http.ServeMux {
 	mwAuth := mw.Auth(session)
 
@@ -76,17 +77,17 @@ func ApplyRoutes(
 
 	// --------------- Auth ---------------
 	rbacService := rbac.NewService(rbac.NewStore(nndb))
-	account := authaccount.NewAccountService(authStore.Account(), authStore.AccountSettings(), rbacService)
-	linkingService := linking.NewService(authStore.LinkAccount(), authStore.Account())
-	user := authuser.NewService(authStore.Account(), authStore.LinkAccount(), linkingService, authStore.AccountSettings(), rbacService)
+	account := authaccount.NewAccountService(accountStore, accountStore, rbacService)
+	linkingService := linking.NewService(linkAccountStore, accountStore)
+	user := authuser.NewService(accountStore, linkAccountStore, linkingService, accountStore, rbacService)
 
 	loginRateLimit := mw.RateLimitMiddleware(rateLimit, "login", 5, 5)
 
 	mux.Handle("POST /api/v1/auth/login", loginRateLimit(authroutes.LoginHandler(account, session)))
 	mux.Handle("POST /api/v1/auth/logout", loginRateLimit(mwAuth(authroutes.LogoutHandler(session))))
 
-	mux.Handle("/api/oauth", loginRateLimit(authroutes.OAuthHandler(account, authStore.LinkAccount(), session)))
-	mux.Handle("/api/openid", loginRateLimit(authroutes.OpenIDHandler(account, authStore.LinkAccount(), session)))
+	mux.Handle("/api/oauth", loginRateLimit(authroutes.OAuthHandler(account, linkAccountStore, session)))
+	mux.Handle("/api/openid", loginRateLimit(authroutes.OpenIDHandler(account, linkAccountStore, session)))
 
 	mux.Handle("GET /api/v1/users", mwAuth(authroutes.ListUsersHandler(user)))
 	mux.Handle("GET /api/v1/users/{user_id}", mwAuth(authroutes.GetUserHandler(user)))
@@ -237,7 +238,7 @@ func ApplyRoutes(
 	// --------------- Twitch ---------------
 	twitchStore := twitch.NewStore(database.GetDB(dbUrl + "/twitch"))
 	twitchService := twitch.NewService(twitchStore)
-	mux.HandleFunc("POST /api/twitch/eventsub", twitch.HandleEventSub(twitchService, authStore.OAuthToken(), authStore.LinkAccount()))
+	mux.HandleFunc("POST /api/twitch/eventsub", twitch.HandleEventSub(twitchService, oauthTokenStore, linkAccountStore))
 
 	// --------------- Health Check ---------------
 	mux.HandleFunc("GET /api/v1/health", func(w http.ResponseWriter, r *http.Request) {
@@ -258,8 +259,10 @@ func (s *APIServer) Setup() http.Handler {
 
 	db := database.GetDB(dbUrl + "/neuralnexus")
 	rdb := database.GetRedis()
-	authStore := auth.NewStore(db, rdb)
-	session := authsession.NewSessionService(authStore.Session())
+	session := authsession.NewSessionService(authsession.NewStore(db, rdb))
+	accountStore := authaccount.NewStore(db)
+	linkAccountStore := linking.NewLinkAccountStore(db)
+	oauthTokenStore := linking.NewOAuthTokenStore(db)
 	rateLimit := ratelimit.NewRateLimitService(ratelimit.NewStore(rdb))
 
 	middlewareStack := mw.CreateStack(
@@ -278,7 +281,7 @@ func (s *APIServer) Setup() http.Handler {
 		mw.RequestLoggerMiddleware,
 	)
 
-	router := ApplyRoutes(http.NewServeMux(), db, rdb, session, authStore, rateLimit)
+	router := ApplyRoutes(http.NewServeMux(), db, rdb, session, accountStore, linkAccountStore, oauthTokenStore, rateLimit)
 
 	// --------------- Static Files ---------------
 	router.Handle("/", http.FileServer(http.Dir("./public")))
