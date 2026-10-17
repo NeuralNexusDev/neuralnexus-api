@@ -157,21 +157,8 @@ func (f *usFakeAccountSettingsStore) SetPasswordAuthEnabled(_ string, _ bool) er
 	return f.setErr
 }
 
-type usFakeStore struct {
-	as  AccountStore
-	als LinkAccountStore
-	ass AccountSettingsStore
-}
-
-func (f *usFakeStore) Account() AccountStore                 { return f.as }
-func (f *usFakeStore) AccountSettings() AccountSettingsStore { return f.ass }
-func (f *usFakeStore) Session() SessionStore                 { panic("usFakeStore: Session not implemented") }
-func (f *usFakeStore) LinkAccount() LinkAccountStore         { return f.als }
-func (f *usFakeStore) RateLimit() RateLimitStore             { panic("usFakeStore: RateLimit not implemented") }
-func (f *usFakeStore) OAuthToken() OAuthTokenStore           { panic("usFakeStore: OAuthToken not implemented") }
-
 func usNewService(as *usFakeAccountStore, als *usFakeLinkAccountStore, ass *usFakeAccountSettingsStore) UserService {
-	return NewUserService(&usFakeStore{as: as, als: als, ass: ass}, rsDefaultRoleStore())
+	return NewUserService(as, als, ass, rsDefaultRoleStore())
 }
 
 func TestUS01NewUserService(t *testing.T) {
@@ -185,7 +172,7 @@ func TestUS01NewUserService(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if as.getByIDCalls != 1 {
-			t.Errorf("expected GetUser to delegate to the store.Account() instance passed to NewUserService")
+			t.Errorf("expected GetUser to delegate to the AccountStore passed to NewUserService")
 		}
 	})
 }
@@ -311,7 +298,7 @@ func TestUS07to10GetUserPermissions(t *testing.T) {
 	t.Run("US-09_ResolvesAllRolesTogether", func(t *testing.T) {
 		as := &usFakeAccountStore{getByIDAccount: &Account{UserID: "u1", Roles: []string{"1", "2"}}}
 		rs := rsDefaultRoleStore()
-		svc := NewUserService(&usFakeStore{as: as, als: &usFakeLinkAccountStore{}, ass: &usFakeAccountSettingsStore{}}, rs)
+		svc := NewUserService(as, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{}, rs)
 
 		got, err := svc.GetUserPermissions("u1")
 		if err != nil {
@@ -325,7 +312,7 @@ func TestUS07to10GetUserPermissions(t *testing.T) {
 	t.Run("US-41_RoleStoreFailureFailsTheLookup", func(t *testing.T) {
 		wantErr := testerrors.ErrBoom
 		as := &usFakeAccountStore{getByIDAccount: &Account{UserID: "u1", Roles: []string{"1"}}}
-		svc := NewUserService(&usFakeStore{as: as, als: &usFakeLinkAccountStore{}, ass: &usFakeAccountSettingsStore{}}, &rsFakeRoleStore{err: wantErr})
+		svc := NewUserService(as, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{}, &rsFakeRoleStore{err: wantErr})
 
 		got, err := svc.GetUserPermissions("u1")
 
@@ -337,7 +324,7 @@ func TestUS07to10GetUserPermissions(t *testing.T) {
 	t.Run("US-10_NoRoles", func(t *testing.T) {
 		as := &usFakeAccountStore{getByIDAccount: &Account{UserID: "u1"}}
 		rs := rsDefaultRoleStore()
-		svc := NewUserService(&usFakeStore{as: as, als: &usFakeLinkAccountStore{}, ass: &usFakeAccountSettingsStore{}}, rs)
+		svc := NewUserService(as, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{}, rs)
 
 		got, err := svc.GetUserPermissions("u1")
 		if err != nil || got == nil || len(got) != 0 || len(rs.calls) != 0 {
@@ -347,7 +334,7 @@ func TestUS07to10GetUserPermissions(t *testing.T) {
 
 	t.Run("US-42_RolesWithoutPermissionsGiveEmptyNonNil", func(t *testing.T) {
 		as := &usFakeAccountStore{getByIDAccount: &Account{UserID: "u1", Roles: []string{"99"}}}
-		svc := NewUserService(&usFakeStore{as: as, als: &usFakeLinkAccountStore{}, ass: &usFakeAccountSettingsStore{}}, rsDefaultRoleStore())
+		svc := NewUserService(as, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{}, rsDefaultRoleStore())
 
 		got, err := svc.GetUserPermissions("u1")
 
@@ -705,32 +692,13 @@ func (s *usConcurrentStore) accountCount() int {
 	return len(s.accounts)
 }
 
-type usConcurrentWrapperStore struct {
-	cs *usConcurrentStore
-}
-
-func (w *usConcurrentWrapperStore) Account() AccountStore { return w.cs }
-func (w *usConcurrentWrapperStore) AccountSettings() AccountSettingsStore {
-	return &usFakeAccountSettingsStore{}
-}
-func (w *usConcurrentWrapperStore) Session() SessionStore {
-	panic("usConcurrentWrapperStore: Session not implemented")
-}
-func (w *usConcurrentWrapperStore) LinkAccount() LinkAccountStore { return w.cs }
-func (w *usConcurrentWrapperStore) RateLimit() RateLimitStore {
-	panic("usConcurrentWrapperStore: RateLimit not implemented")
-}
-func (w *usConcurrentWrapperStore) OAuthToken() OAuthTokenStore {
-	panic("usConcurrentWrapperStore: OAuthToken not implemented")
-}
-
 func TestUS25UpdateUserFromPlatformConcurrentRace(t *testing.T) {
 	t.Run("US-25_ConcurrentCallersConvergeOnSameAccount", func(t *testing.T) {
 		const trials = 50
 		const n = 8
 		for trial := 0; trial < trials; trial++ {
 			cs := newUSConcurrentStore(n)
-			svc := NewUserService(&usConcurrentWrapperStore{cs: cs}, rsDefaultRoleStore())
+			svc := NewUserService(cs, cs, &usFakeAccountSettingsStore{}, rsDefaultRoleStore())
 
 			var wg sync.WaitGroup
 			results := make([]*Account, n)

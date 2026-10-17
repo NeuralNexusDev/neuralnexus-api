@@ -71,8 +71,8 @@ func ApplyRoutes(
 
 	// --------------- Auth ---------------
 	rbacService := rbac.NewService(rbac.NewStore(nndb))
-	account := auth.NewAccountService(authStore, rbacService)
-	user := auth.NewUserService(authStore, rbacService)
+	account := auth.NewAccountService(authStore.Account(), authStore.AccountSettings(), rbacService)
+	user := auth.NewUserService(authStore.Account(), authStore.LinkAccount(), authStore.AccountSettings(), rbacService)
 
 	loginRateLimit := mw.RateLimitMiddleware(rateLimit, "login", 5, 5)
 
@@ -253,8 +253,8 @@ func (s *APIServer) Setup() http.Handler {
 	db := database.GetDB(dbUrl + "/neuralnexus")
 	rdb := database.GetRedis()
 	authStore := auth.NewStore(db, rdb)
-	session := auth.NewSessionService(authStore)
-	rateLimit := auth.NewRateLimitService(authStore)
+	session := auth.NewSessionService(authStore.Session())
+	rateLimit := auth.NewRateLimitService(authStore.RateLimit())
 
 	middlewareStack := mw.CreateStack(
 		mw.NoSniffMiddleware,
