@@ -26,8 +26,8 @@ type accountService struct {
 }
 
 // NewAccountService - Create a new userService
-func NewAccountService(store Store, rs RoleStore) AccountService {
-	return &accountService{store.Account(), store.AccountSettings(), rs}
+func NewAccountService(as AccountStore, ass AccountSettingsStore, rs RoleStore) AccountService {
+	return &accountService{as, ass, rs}
 }
 
 // GetAccountByID - Get an account by its ID

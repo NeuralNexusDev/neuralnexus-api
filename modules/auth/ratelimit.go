@@ -14,9 +14,9 @@ type rateLimitService struct {
 }
 
 // NewRateLimitService - Create a new rate limit service
-func NewRateLimitService(store Store) RateLimitService {
+func NewRateLimitService(store RateLimitStore) RateLimitService {
 	return &rateLimitService{
-		store: store.RateLimit(),
+		store: store,
 	}
 }
 

@@ -38,8 +38,8 @@ type userService struct {
 }
 
 // NewUserService - Create a new userService
-func NewUserService(store Store, rs RoleStore) UserService {
-	return &userService{store.Account(), store.LinkAccount(), store.AccountSettings(), rs}
+func NewUserService(as AccountStore, als LinkAccountStore, ass AccountSettingsStore, rs RoleStore) UserService {
+	return &userService{as, als, ass, rs}
 }
 
 // GetUser - Get a user by their ID

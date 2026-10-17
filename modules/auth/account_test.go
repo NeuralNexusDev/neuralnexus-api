@@ -69,32 +69,18 @@ func (f *acFakeAccountSettingsStore) SetPasswordAuthEnabled(_ string, _ bool) er
 	return errors.New("acFakeAccountSettingsStore: SetPasswordAuthEnabled not implemented")
 }
 
-type acFakeStore struct {
-	as  AccountStore
-	ass AccountSettingsStore
-}
-
-func (f *acFakeStore) Account() AccountStore                 { return f.as }
-func (f *acFakeStore) AccountSettings() AccountSettingsStore { return f.ass }
-func (f *acFakeStore) Session() SessionStore                 { panic("acFakeStore: Session not implemented") }
-func (f *acFakeStore) LinkAccount() LinkAccountStore {
-	panic("acFakeStore: LinkAccount not implemented")
-}
-func (f *acFakeStore) RateLimit() RateLimitStore   { panic("acFakeStore: RateLimit not implemented") }
-func (f *acFakeStore) OAuthToken() OAuthTokenStore { panic("acFakeStore: OAuthToken not implemented") }
-
 func TestAC01NewAccountService(t *testing.T) {
 	t.Run("AC-01_WiresGivenSubStores", func(t *testing.T) {
 		as := &acFakeAccountStore{getByIDAccount: &Account{UserID: "u1"}}
 		ass := &acFakeAccountSettingsStore{}
-		svc := NewAccountService(&acFakeStore{as: as, ass: ass}, nil)
+		svc := NewAccountService(as, ass, nil)
 
 		got, err := svc.GetAccountByID("u1")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if got != as.getByIDAccount {
-			t.Errorf("GetAccountByID did not delegate to the store.Account() instance passed to NewAccountService")
+			t.Errorf("GetAccountByID did not delegate to the AccountStore passed to NewAccountService")
 		}
 		if as.getByIDCalls != 1 {
 			t.Errorf("expected the fake AccountStore to be called once, got %d", as.getByIDCalls)
@@ -106,7 +92,7 @@ func TestAC02to03GetAccountByID(t *testing.T) {
 	t.Run("AC-02_Success", func(t *testing.T) {
 		want := &Account{UserID: "u1"}
 		as := &acFakeAccountStore{getByIDAccount: want}
-		svc := NewAccountService(&acFakeStore{as: as, ass: &acFakeAccountSettingsStore{}}, nil)
+		svc := NewAccountService(as, &acFakeAccountSettingsStore{}, nil)
 
 		got, err := svc.GetAccountByID("u1")
 		if err != nil || got != want {
@@ -116,7 +102,7 @@ func TestAC02to03GetAccountByID(t *testing.T) {
 
 	t.Run("AC-03_StoreError", func(t *testing.T) {
 		as := &acFakeAccountStore{getByIDErr: ErrNotFound}
-		svc := NewAccountService(&acFakeStore{as: as, ass: &acFakeAccountSettingsStore{}}, nil)
+		svc := NewAccountService(as, &acFakeAccountSettingsStore{}, nil)
 
 		_, err := svc.GetAccountByID("u1")
 		if !errors.Is(err, ErrNotFound) {
@@ -129,7 +115,7 @@ func TestAC04to05GetAccountByUsername(t *testing.T) {
 	t.Run("AC-04_Success", func(t *testing.T) {
 		want := &Account{UserID: "u1", Username: "alice"}
 		as := &acFakeAccountStore{getByUserAccount: want}
-		svc := NewAccountService(&acFakeStore{as: as, ass: &acFakeAccountSettingsStore{}}, nil)
+		svc := NewAccountService(as, &acFakeAccountSettingsStore{}, nil)
 
 		got, err := svc.GetAccountByUsername("alice")
 		if err != nil || got != want {
@@ -140,7 +126,7 @@ func TestAC04to05GetAccountByUsername(t *testing.T) {
 	t.Run("AC-05_StoreError", func(t *testing.T) {
 		wantErr := testerrors.ErrBoom
 		as := &acFakeAccountStore{getByUserErr: wantErr}
-		svc := NewAccountService(&acFakeStore{as: as, ass: &acFakeAccountSettingsStore{}}, nil)
+		svc := NewAccountService(as, &acFakeAccountSettingsStore{}, nil)
 
 		_, err := svc.GetAccountByUsername("alice")
 		if !errors.Is(err, wantErr) {
@@ -153,7 +139,7 @@ func TestAC06to07GetAccountByEmail(t *testing.T) {
 	t.Run("AC-06_Success", func(t *testing.T) {
 		want := &Account{UserID: "u1"}
 		as := &acFakeAccountStore{getByEmailAccount: want}
-		svc := NewAccountService(&acFakeStore{as: as, ass: &acFakeAccountSettingsStore{}}, nil)
+		svc := NewAccountService(as, &acFakeAccountSettingsStore{}, nil)
 
 		got, err := svc.GetAccountByEmail("a@b.com")
 		if err != nil || got != want {
@@ -164,7 +150,7 @@ func TestAC06to07GetAccountByEmail(t *testing.T) {
 	t.Run("AC-07_StoreError", func(t *testing.T) {
 		wantErr := testerrors.ErrBoom
 		as := &acFakeAccountStore{getByEmailErr: wantErr}
-		svc := NewAccountService(&acFakeStore{as: as, ass: &acFakeAccountSettingsStore{}}, nil)
+		svc := NewAccountService(as, &acFakeAccountSettingsStore{}, nil)
 
 		_, err := svc.GetAccountByEmail("a@b.com")
 		if !errors.Is(err, wantErr) {
@@ -176,7 +162,7 @@ func TestAC06to07GetAccountByEmail(t *testing.T) {
 func TestAC08to09AddAccount(t *testing.T) {
 	t.Run("AC-08_Success", func(t *testing.T) {
 		as := &acFakeAccountStore{}
-		svc := NewAccountService(&acFakeStore{as: as, ass: &acFakeAccountSettingsStore{}}, nil)
+		svc := NewAccountService(as, &acFakeAccountSettingsStore{}, nil)
 
 		if err := svc.AddAccount(&Account{UserID: "u1"}); err != nil {
 			t.Errorf("AddAccount() = %v, want nil", err)
@@ -188,7 +174,7 @@ func TestAC08to09AddAccount(t *testing.T) {
 
 	t.Run("AC-09_StoreError", func(t *testing.T) {
 		as := &acFakeAccountStore{addErr: ErrUsernameAlreadyExists}
-		svc := NewAccountService(&acFakeStore{as: as, ass: &acFakeAccountSettingsStore{}}, nil)
+		svc := NewAccountService(as, &acFakeAccountSettingsStore{}, nil)
 
 		err := svc.AddAccount(&Account{UserID: "u1"})
 		if !errors.Is(err, ErrUsernameAlreadyExists) {
@@ -200,7 +186,7 @@ func TestAC08to09AddAccount(t *testing.T) {
 func TestAC10to11UpdateAccount(t *testing.T) {
 	t.Run("AC-10_Success", func(t *testing.T) {
 		as := &acFakeAccountStore{}
-		svc := NewAccountService(&acFakeStore{as: as, ass: &acFakeAccountSettingsStore{}}, nil)
+		svc := NewAccountService(as, &acFakeAccountSettingsStore{}, nil)
 
 		if err := svc.UpdateAccount(&Account{UserID: "u1"}); err != nil {
 			t.Errorf("UpdateAccount() = %v, want nil", err)
@@ -213,7 +199,7 @@ func TestAC10to11UpdateAccount(t *testing.T) {
 	t.Run("AC-11_StoreError", func(t *testing.T) {
 		wantErr := testerrors.ErrBoom
 		as := &acFakeAccountStore{updateErr: wantErr}
-		svc := NewAccountService(&acFakeStore{as: as, ass: &acFakeAccountSettingsStore{}}, nil)
+		svc := NewAccountService(as, &acFakeAccountSettingsStore{}, nil)
 
 		err := svc.UpdateAccount(&Account{UserID: "u1"})
 		if !errors.Is(err, wantErr) {
@@ -225,7 +211,7 @@ func TestAC10to11UpdateAccount(t *testing.T) {
 func TestAC12to13DeleteAccount(t *testing.T) {
 	t.Run("AC-12_Success", func(t *testing.T) {
 		as := &acFakeAccountStore{}
-		svc := NewAccountService(&acFakeStore{as: as, ass: &acFakeAccountSettingsStore{}}, nil)
+		svc := NewAccountService(as, &acFakeAccountSettingsStore{}, nil)
 
 		if err := svc.DeleteAccount("u1"); err != nil {
 			t.Errorf("DeleteAccount() = %v, want nil", err)
@@ -238,7 +224,7 @@ func TestAC12to13DeleteAccount(t *testing.T) {
 	t.Run("AC-13_StoreError", func(t *testing.T) {
 		wantErr := testerrors.ErrBoom
 		as := &acFakeAccountStore{deleteErr: wantErr}
-		svc := NewAccountService(&acFakeStore{as: as, ass: &acFakeAccountSettingsStore{}}, nil)
+		svc := NewAccountService(as, &acFakeAccountSettingsStore{}, nil)
 
 		err := svc.DeleteAccount("u1")
 		if !errors.Is(err, wantErr) {
@@ -250,7 +236,7 @@ func TestAC12to13DeleteAccount(t *testing.T) {
 func TestAC14to16IsPasswordAuthEnabled(t *testing.T) {
 	t.Run("AC-14_Enabled", func(t *testing.T) {
 		ass := &acFakeAccountSettingsStore{settings: &AccountSettings{UserID: "u1", PasswordAuthEnabled: true}}
-		svc := NewAccountService(&acFakeStore{as: &acFakeAccountStore{}, ass: ass}, nil)
+		svc := NewAccountService(&acFakeAccountStore{}, ass, nil)
 
 		got, err := svc.IsPasswordAuthEnabled("u1")
 		if err != nil || got != true {
@@ -260,7 +246,7 @@ func TestAC14to16IsPasswordAuthEnabled(t *testing.T) {
 
 	t.Run("AC-15_Disabled", func(t *testing.T) {
 		ass := &acFakeAccountSettingsStore{settings: &AccountSettings{UserID: "u1", PasswordAuthEnabled: false}}
-		svc := NewAccountService(&acFakeStore{as: &acFakeAccountStore{}, ass: ass}, nil)
+		svc := NewAccountService(&acFakeAccountStore{}, ass, nil)
 
 		got, err := svc.IsPasswordAuthEnabled("u1")
 		if err != nil || got != false {
@@ -271,7 +257,7 @@ func TestAC14to16IsPasswordAuthEnabled(t *testing.T) {
 	t.Run("AC-16_SettingsLookupError", func(t *testing.T) {
 		wantErr := testerrors.ErrBoom
 		ass := &acFakeAccountSettingsStore{err: wantErr}
-		svc := NewAccountService(&acFakeStore{as: &acFakeAccountStore{}, ass: ass}, nil)
+		svc := NewAccountService(&acFakeAccountStore{}, ass, nil)
 
 		got, err := svc.IsPasswordAuthEnabled("u1")
 		if got != false || !errors.Is(err, wantErr) {
@@ -293,7 +279,7 @@ func TestAC22NewSessionSnowflakeFails(t *testing.T) {
 	}
 
 	t.Run("AC-22_SnowflakeFailureFailsTheSession", func(t *testing.T) {
-		svc := NewAccountService(&acFakeStore{as: &acFakeAccountStore{}, ass: &acFakeAccountSettingsStore{}}, rsDefaultRoleStore())
+		svc := NewAccountService(&acFakeAccountStore{}, &acFakeAccountSettingsStore{}, rsDefaultRoleStore())
 
 		s, err := svc.NewSession(&Account{UserID: "u1"}, 1)
 
@@ -305,7 +291,7 @@ func TestAC22NewSessionSnowflakeFails(t *testing.T) {
 
 func TestAC17to21NewSession(t *testing.T) {
 	newService := func(rs RoleStore) AccountService {
-		return NewAccountService(&acFakeStore{as: &acFakeAccountStore{}, ass: &acFakeAccountSettingsStore{}}, rs)
+		return NewAccountService(&acFakeAccountStore{}, &acFakeAccountSettingsStore{}, rs)
 	}
 
 	t.Run("AC-17_UsesTheRoleStorePermissions", func(t *testing.T) {

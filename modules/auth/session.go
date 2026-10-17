@@ -106,9 +106,9 @@ type sessionService struct {
 }
 
 // NewSessionService - Create a new session userService
-func NewSessionService(store Store) SessionService {
+func NewSessionService(store SessionStore) SessionService {
 	return &sessionService{
-		store: store.Session(),
+		store: store,
 	}
 }
 
