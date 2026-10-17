@@ -12,6 +12,7 @@ import (
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
+	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
@@ -44,7 +45,7 @@ type Login struct {
 }
 
 // LoginHandler handles the login route
-func LoginHandler(as auth.AccountService, ss auth.SessionService) http.HandlerFunc {
+func LoginHandler(as auth.AccountService, ss authsession.SessionService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var login Login
 		err := responses.DecodeStruct(r, &login)
@@ -109,9 +110,9 @@ func LoginHandler(as auth.AccountService, ss auth.SessionService) http.HandlerFu
 }
 
 // LogoutHandler handles the logout route
-func LogoutHandler(ss auth.SessionService) http.HandlerFunc {
+func LogoutHandler(ss authsession.SessionService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*auth.Session)
+		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
 		if session == nil {
 			responses.BadRequest(w, r, msgInvalidSession)
 			return
@@ -128,12 +129,12 @@ func LogoutHandler(ss auth.SessionService) http.HandlerFunc {
 }
 
 // OAuthHandler handles the OAuth route
-func OAuthHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.SessionService) http.HandlerFunc {
+func OAuthHandler(as auth.AccountService, las auth.LinkAccountStore, ss authsession.SessionService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		code := r.URL.Query().Get("code")
 		if code == "" {
 			log.Println("No code provided")
-			redirectBadRequest(w, r, auth.NN_SITE_URL, msgInvalidRequest)
+			redirectBadRequest(w, r, authsession.NN_SITE_URL, msgInvalidRequest)
 			return
 		}
 
@@ -145,7 +146,7 @@ func OAuthHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Ses
 			return
 		}
 
-		var session *auth.Session
+		var session *authsession.Session
 		var err error
 		switch state.Mode {
 		case linking.ModeLogin:
@@ -186,7 +187,7 @@ func OAuthHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Ses
 }
 
 // OpenIDHandler handles the Steam OpenID 2.0 login/link callback.
-func OpenIDHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.SessionService) http.HandlerFunc {
+func OpenIDHandler(as auth.AccountService, las auth.LinkAccountStore, ss authsession.SessionService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		state, ok := decodeAndValidateState(w, r)
 		if !ok {
@@ -222,7 +223,7 @@ func OpenIDHandler(as auth.AccountService, las auth.LinkAccountStore, ss auth.Se
 			return
 		}
 
-		var session *auth.Session
+		var session *authsession.Session
 		switch state.Mode {
 		case linking.ModeLogin:
 			session, err = linking.ProcessSteamLogin(as, las, ss, user)
@@ -263,40 +264,40 @@ func decodeAndValidateState(w http.ResponseWriter, r *http.Request) (linking.OAu
 	stateB64 := r.URL.Query().Get("state")
 	if stateB64 == "" {
 		log.Println("No state provided")
-		redirectBadRequest(w, r, auth.NN_SITE_URL, msgInvalidRequest)
+		redirectBadRequest(w, r, authsession.NN_SITE_URL, msgInvalidRequest)
 		return state, false
 	}
 	stateBytes, err := base64.URLEncoding.DecodeString(stateB64)
 	if err != nil {
 		log.Println("Failed to decode state:\n\t", err)
-		redirectBadRequest(w, r, auth.NN_SITE_URL, msgInvalidState)
+		redirectBadRequest(w, r, authsession.NN_SITE_URL, msgInvalidState)
 		return state, false
 	}
 	if err := json.Unmarshal(stateBytes, &state); err != nil {
 		log.Println("Failed to unmarshal state:\n\t", err)
-		redirectBadRequest(w, r, auth.NN_SITE_URL, msgInvalidState)
+		redirectBadRequest(w, r, authsession.NN_SITE_URL, msgInvalidState)
 		return state, false
 	}
 	if state.Platform == "" || state.Nonce == "" || state.RedirectURI == "" || state.Mode == "" {
 		log.Println(logInvalidState)
-		redirectBadRequest(w, r, auth.NN_SITE_URL, msgInvalidState)
+		redirectBadRequest(w, r, authsession.NN_SITE_URL, msgInvalidState)
 		return state, false
 	}
 	if !isAllowedRedirect(state.RedirectURI) {
 		log.Println("Redirect URI is not allowed:\n\t", state.RedirectURI)
-		redirectBadRequest(w, r, auth.NN_SITE_URL, msgInvalidState)
+		redirectBadRequest(w, r, authsession.NN_SITE_URL, msgInvalidState)
 		return state, false
 	}
 
 	cookie, err := r.Cookie("nonce")
 	if err != nil {
 		log.Println("Failed to get nonce cookie:\n\t", err)
-		redirectBadRequest(w, r, auth.NN_SITE_URL, msgInvalidState)
+		redirectBadRequest(w, r, authsession.NN_SITE_URL, msgInvalidState)
 		return state, false
 	}
 	if cookie.Value != state.Nonce {
 		log.Println("Nonce does not match")
-		redirectBadRequest(w, r, auth.NN_SITE_URL, msgInvalidState)
+		redirectBadRequest(w, r, authsession.NN_SITE_URL, msgInvalidState)
 		return state, false
 	}
 
@@ -310,7 +311,7 @@ func requireValidModeAndSession(w http.ResponseWriter, r *http.Request, mode lin
 	case linking.ModeLogin:
 		return true
 	case linking.ModeLink:
-		if session, ok := r.Context().Value(mw.SessionKey).(*auth.Session); ok && session != nil && session.IsValid() {
+		if session, ok := r.Context().Value(mw.SessionKey).(*authsession.Session); ok && session != nil && session.IsValid() {
 			return true
 		}
 		redirectUnauthorized(w, r, redirectURI, msgLoginRequiredToLink)
@@ -324,7 +325,7 @@ func requireValidModeAndSession(w http.ResponseWriter, r *http.Request, mode lin
 
 // createSessionJWTAndSetCookie creates a JWT for an already-persisted
 // session and sets it as the session cookie.
-func createSessionJWTAndSetCookie(ss auth.SessionService, w http.ResponseWriter, session *auth.Session) error {
+func createSessionJWTAndSetCookie(ss authsession.SessionService, w http.ResponseWriter, session *authsession.Session) error {
 	jwtString, err := ss.CreateJWT(session)
 	if err != nil {
 		return err
@@ -371,7 +372,7 @@ func redirectInternalServerError(w http.ResponseWriter, r *http.Request, target,
 
 // isAllowedRedirect reports whether redirectURI's scheme and host match NN_SITE_URL.
 func isAllowedRedirect(redirectURI string) bool {
-	siteURL, err := url.Parse(auth.NN_SITE_URL)
+	siteURL, err := url.Parse(authsession.NN_SITE_URL)
 	if err != nil {
 		return false
 	}

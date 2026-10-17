@@ -13,6 +13,7 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
+	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/twitch"
 	"github.com/bwmarrin/discordgo"
 	"github.com/google/uuid"
@@ -78,8 +79,8 @@ func (m *oaMockAccountService) DeleteAccount(userID string) error {
 	return nil
 }
 func (m *oaMockAccountService) IsPasswordAuthEnabled(string) (bool, error) { return false, nil }
-func (m *oaMockAccountService) NewSession(a *auth.Account, expiresAt int64) (*auth.Session, error) {
-	return &auth.Session{ID: "stub-session", UserID: a.UserID, Permissions: []string{"stub:perm"}, ExpiresAt: expiresAt}, nil
+func (m *oaMockAccountService) NewSession(a *auth.Account, expiresAt int64) (*authsession.Session, error) {
+	return &authsession.Session{ID: "stub-session", UserID: a.UserID, Permissions: []string{"stub:perm"}, ExpiresAt: expiresAt}, nil
 }
 
 type oaMockLinkAccountStore struct {
@@ -126,28 +127,30 @@ func (m *oaMockLinkAccountStore) SetLinkedAccountLoginEnabled(string, auth.Platf
 }
 
 type oaMockSessionService struct {
-	AddSessionFunc  func(*auth.Session) error
+	AddSessionFunc  func(*authsession.Session) error
 	AddSessionCalls int
 }
 
-var _ auth.SessionService = (*oaMockSessionService)(nil)
+var _ authsession.SessionService = (*oaMockSessionService)(nil)
 
-func (m *oaMockSessionService) AddSession(session *auth.Session) error {
+func (m *oaMockSessionService) AddSession(session *authsession.Session) error {
 	m.AddSessionCalls++
 	if m.AddSessionFunc != nil {
 		return m.AddSessionFunc(session)
 	}
 	return nil
 }
-func (m *oaMockSessionService) GetSession(string) (*auth.Session, error) {
+func (m *oaMockSessionService) GetSession(string) (*authsession.Session, error) {
 	return nil, auth.ErrNotFound
 }
-func (m *oaMockSessionService) UpdateSession(*auth.Session) error       { return nil }
-func (m *oaMockSessionService) DeleteSession(string) error              { return nil }
-func (m *oaMockSessionService) CreateJWT(*auth.Session) (string, error) { return "", nil }
-func (m *oaMockSessionService) ReadJWT(string) (*auth.Session, error)   { return nil, auth.ErrNotFound }
+func (m *oaMockSessionService) UpdateSession(*authsession.Session) error       { return nil }
+func (m *oaMockSessionService) DeleteSession(string) error                     { return nil }
+func (m *oaMockSessionService) CreateJWT(*authsession.Session) (string, error) { return "", nil }
+func (m *oaMockSessionService) ReadJWT(string) (*authsession.Session, error) {
+	return nil, auth.ErrNotFound
+}
 
-func oaRequestWithSession(session *auth.Session) *http.Request {
+func oaRequestWithSession(session *authsession.Session) *http.Request {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	if session == nil {
 		return req
@@ -582,7 +585,7 @@ func TestOA09to16ProcessOAuthLogin(t *testing.T) {
 		oaSetupDiscordPlatform(t)
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{}
-		ss := &oaMockSessionService{AddSessionFunc: func(*auth.Session) error { return testerrors.ErrDBDown }}
+		ss := &oaMockSessionService{AddSessionFunc: func(*authsession.Session) error { return testerrors.ErrDBDown }}
 
 		session, err := ProcessOAuthLogin(as, las, ss, "code", &OAuthState{Platform: auth.PlatformDiscord, Mode: ModeLogin})
 		if err == nil {
@@ -897,8 +900,8 @@ func oaSetupDiscordUserFailure(t *testing.T) {
 }
 
 func TestOA27to42ProcessOAuthLink(t *testing.T) {
-	activeSession := func(userID string) *auth.Session {
-		return &auth.Session{ID: "sess-1", UserID: userID, ExpiresAt: time.Now().Add(time.Hour).Unix()}
+	activeSession := func(userID string) *authsession.Session {
+		return &authsession.Session{ID: "sess-1", UserID: userID, ExpiresAt: time.Now().Add(time.Hour).Unix()}
 	}
 
 	t.Run("OA-27_DiscordLinksToSession", func(t *testing.T) {
@@ -930,7 +933,7 @@ func TestOA27to42ProcessOAuthLink(t *testing.T) {
 
 	t.Run("OA-29_ExpiredSession", func(t *testing.T) {
 		las := &oaMockLinkAccountStore{}
-		expired := &auth.Session{ID: "sess-1", UserID: "user-1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
+		expired := &authsession.Session{ID: "sess-1", UserID: "user-1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
 		req := oaRequestWithSession(expired)
 
 		_, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: auth.PlatformDiscord, Mode: ModeLink})
@@ -1166,8 +1169,8 @@ func TestOA27to42ProcessOAuthLink(t *testing.T) {
 }
 
 func TestOA79to81ProcessOAuthLinkAdditionalPlatformDispatch(t *testing.T) {
-	activeSession := func(userID string) *auth.Session {
-		return &auth.Session{ID: "sess-1", UserID: userID, ExpiresAt: time.Now().Add(time.Hour).Unix()}
+	activeSession := func(userID string) *authsession.Session {
+		return &authsession.Session{ID: "sess-1", UserID: userID, ExpiresAt: time.Now().Add(time.Hour).Unix()}
 	}
 
 	t.Run("OA-79_TwitchLinksToSession", func(t *testing.T) {
@@ -1814,8 +1817,8 @@ func (m *oaConcurrentAccountService) DeleteAccount(userID string) error {
 	return nil
 }
 func (m *oaConcurrentAccountService) IsPasswordAuthEnabled(string) (bool, error) { return false, nil }
-func (m *oaConcurrentAccountService) NewSession(a *auth.Account, expiresAt int64) (*auth.Session, error) {
-	return &auth.Session{ID: "stub-session", UserID: a.UserID, Permissions: []string{"stub:perm"}, ExpiresAt: expiresAt}, nil
+func (m *oaConcurrentAccountService) NewSession(a *auth.Account, expiresAt int64) (*authsession.Session, error) {
+	return &authsession.Session{ID: "stub-session", UserID: a.UserID, Permissions: []string{"stub:perm"}, ExpiresAt: expiresAt}, nil
 }
 
 func (m *oaConcurrentAccountService) count() int {

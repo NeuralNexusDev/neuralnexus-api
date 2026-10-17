@@ -12,6 +12,7 @@ import (
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
+	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
@@ -95,7 +96,7 @@ func (s *stubUserService) SetPasswordAuthEnabled(_ string, enabled bool) error {
 	return s.setPasswordAuthErr
 }
 
-func newSessionRequest(method string, session *auth.Session, userID, platform, body string) *http.Request {
+func newSessionRequest(method string, session *authsession.Session, userID, platform, body string) *http.Request {
 	ctx := context.WithValue(context.Background(), mw.SessionKey, session)
 	var r *http.Request
 	if body != "" {
@@ -113,12 +114,12 @@ func newSessionRequest(method string, session *auth.Session, userID, platform, b
 	return r
 }
 
-func selfSession(userID string) *auth.Session {
-	return &auth.Session{UserID: userID}
+func selfSession(userID string) *authsession.Session {
+	return &authsession.Session{UserID: userID}
 }
 
-func adminUsersSession(userID string) *auth.Session {
-	return &auth.Session{UserID: userID, Permissions: []string{perms.ScopeAdminUsers.Node}}
+func adminUsersSession(userID string) *authsession.Session {
+	return &authsession.Session{UserID: userID, Permissions: []string{perms.ScopeAdminUsers.Node}}
 }
 
 func expectStatus(t *testing.T, w *httptest.ResponseRecorder, want int) {
@@ -1025,7 +1026,7 @@ func TestUS72to73UpdateUserRespondsWithTheStoredAccount(t *testing.T) {
 	})
 }
 
-func newListUsersRequest(session *auth.Session, query string) *http.Request {
+func newListUsersRequest(session *authsession.Session, query string) *http.Request {
 	ctx := context.WithValue(context.Background(), mw.SessionKey, session)
 	return httptest.NewRequest(http.MethodGet, "/api/v1/users"+query, nil).WithContext(ctx)
 }

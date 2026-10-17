@@ -104,7 +104,7 @@ func TestST02to07Accessors(t *testing.T) {
 	}{
 		{"ST-02_Account", func() bool { v, ok := s.Account().(*store); return ok && v == s }},
 		{"ST-03_AccountSettings", func() bool { v, ok := s.AccountSettings().(*store); return ok && v == s }},
-		{"ST-04_Session", func() bool { v, ok := s.Session().(*store); return ok && v == s }},
+		{"ST-04_Session", func() bool { return s.Session() != nil }},
 		{"ST-05_LinkAccount", func() bool { v, ok := s.LinkAccount().(*store); return ok && v == s }},
 		{"ST-06_RateLimit", func() bool { v, ok := s.RateLimit().(*store); return ok && v == s }},
 		{"ST-07_OAuthToken", func() bool { v, ok := s.OAuthToken().(*store); return ok && v == s }},
@@ -210,79 +210,6 @@ func TestST18DeleteAccountFromDB(t *testing.T) {
 	s := stStoreWithUnreachableDB(t)
 	t.Run("ST-18_ConnectionError", func(t *testing.T) {
 		stAssertRawConnectionError(t, s.DeleteAccountFromDB("u1"))
-	})
-}
-
-func TestST19AddSessionToDB(t *testing.T) {
-	s := stStoreWithUnreachableDB(t)
-	t.Run("ST-19_ConnectionErrorNoPanicFromDeferredCleanup", func(t *testing.T) {
-		stAssertRawConnectionError(t, s.AddSessionToDB(&Session{ID: "s1"}))
-	})
-}
-
-func TestST20GetSessionFromDB(t *testing.T) {
-	s := stStoreWithUnreachableDB(t)
-	t.Run("ST-20_ConnectionError", func(t *testing.T) {
-		got, err := s.GetSessionFromDB("s1")
-		if got != nil {
-			t.Errorf("expected nil session, got %v", got)
-		}
-		stAssertRawConnectionError(t, err)
-	})
-}
-
-func TestST21DeleteSessionInDB(t *testing.T) {
-	s := stStoreWithUnreachableDB(t)
-	t.Run("ST-21_ConnectionError", func(t *testing.T) {
-		stAssertRawConnectionError(t, s.DeleteSessionInDB("s1"))
-	})
-}
-
-func TestST22UpdateSessionInDB(t *testing.T) {
-	s := stStoreWithUnreachableDB(t)
-	t.Run("ST-22_ConnectionError", func(t *testing.T) {
-		stAssertRawConnectionError(t, s.UpdateSessionInDB(&Session{ID: "s1"}))
-	})
-}
-
-func TestST23ClearExpiredSessions(t *testing.T) {
-	s := stStoreWithUnreachableDB(t)
-	t.Run("ST-23_SwallowsErrorWithoutPanicking", func(t *testing.T) {
-		s.ClearExpiredSessions()
-	})
-}
-
-func TestST24to25AddSessionToCache(t *testing.T) {
-	t.Run("ST-24_PastExpirySkipsRedisEntirely", func(t *testing.T) {
-		s := &store{}
-		err := s.AddSessionToCache(&Session{ID: "s1", ExpiresAt: time.Now().Add(-time.Hour).Unix()})
-		if err != nil {
-			t.Errorf("AddSessionToCache() = %v, want nil", err)
-		}
-	})
-
-	t.Run("ST-25_NeverExpiringAttemptsCacheWrite", func(t *testing.T) {
-		s := stStoreWithUnreachableRedis(t)
-		err := s.AddSessionToCache(&Session{ID: "s1", ExpiresAt: 0})
-		stAssertRawConnectionError(t, err)
-	})
-}
-
-func TestST26GetSessionFromCache(t *testing.T) {
-	s := stStoreWithUnreachableRedis(t)
-	t.Run("ST-26_ConnectionErrorNotTreatedAsMiss", func(t *testing.T) {
-		got, err := s.GetSessionFromCache("s1")
-		if got != nil {
-			t.Errorf("expected nil session, got %v", got)
-		}
-		stAssertRawConnectionError(t, err)
-	})
-}
-
-func TestST27DeleteSessionFromCache(t *testing.T) {
-	s := stStoreWithUnreachableRedis(t)
-	t.Run("ST-27_ConnectionError", func(t *testing.T) {
-		stAssertRawConnectionError(t, s.DeleteSessionFromCache("s1"))
 	})
 }
 
@@ -1177,15 +1104,8 @@ func TestST75AddLinkedAccountToDBDuplicatePlatformID(t *testing.T) {
 	})
 }
 
-func TestST76to79_NotFoundSentinels(t *testing.T) {
+func TestST77to79_NotFoundSentinels(t *testing.T) {
 	s := stLiveFullStore(t)
-
-	t.Run("ST-76_GetSessionFromDBNotFound", func(t *testing.T) {
-		got, err := s.Session().GetSessionFromDB("910000000000000101")
-		if got != nil || !errors.Is(err, ErrNotFound) {
-			t.Errorf("GetSessionFromDB() = (%v, %v), want (nil, %v)", got, err, ErrNotFound)
-		}
-	})
 
 	t.Run("ST-77_GetLinkedAccountByPlatformNameNotFound", func(t *testing.T) {
 		got, err := s.LinkAccount().GetLinkedAccountByPlatformName(PlatformDiscord, "sttest-missing-name")
@@ -1210,27 +1130,6 @@ func TestST76to79_NotFoundSentinels(t *testing.T) {
 		got, err := s.OAuthToken().GetOAuthTokenByUserID("910000000000000104", PlatformDiscord)
 		if got != nil || !errors.Is(err, ErrNotFound) {
 			t.Errorf("GetOAuthTokenByUserID() = (%v, %v), want (nil, %v)", got, err, ErrNotFound)
-		}
-	})
-}
-
-func TestST80_GetSessionFromCacheMiss(t *testing.T) {
-	url := os.Getenv("TEST_REDIS_URL")
-	if url == "" {
-		t.Skip("TEST_REDIS_URL not set; skipping live-Redis test")
-	}
-	opts, err := redis.ParseURL(url)
-	if err != nil {
-		t.Fatalf("failed to parse TEST_REDIS_URL: %v", err)
-	}
-	rdb := redis.NewClient(opts)
-	t.Cleanup(func() { rdb.Close() })
-	s := &store{rdb: rdb}
-
-	t.Run("ST-80_GetSessionFromCacheNotFound", func(t *testing.T) {
-		got, err := s.GetSessionFromCache("910000000000000201")
-		if got != nil || !errors.Is(err, ErrNotFound) {
-			t.Errorf("GetSessionFromCache() = (%v, %v), want (nil, %v)", got, err, ErrNotFound)
 		}
 	})
 }

@@ -20,6 +20,7 @@ import (
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	authroutes "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/routes"
+	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	bng "github.com/NeuralNexusDev/neuralnexus-api/modules/bee_name_generator"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	ds "github.com/NeuralNexusDev/neuralnexus-api/modules/datastore"
@@ -52,7 +53,7 @@ func ApplyRoutes(
 	mux *http.ServeMux,
 	nndb *pgxpool.Pool,
 	rdb *redis.Client,
-	session auth.SessionService,
+	session authsession.SessionService,
 	authStore auth.Store,
 	rateLimit auth.RateLimitService) *http.ServeMux {
 	mwAuth := mw.Auth(session)
@@ -253,13 +254,13 @@ func (s *APIServer) Setup() http.Handler {
 	db := database.GetDB(dbUrl + "/neuralnexus")
 	rdb := database.GetRedis()
 	authStore := auth.NewStore(db, rdb)
-	session := auth.NewSessionService(authStore.Session())
+	session := authsession.NewSessionService(authStore.Session())
 	rateLimit := auth.NewRateLimitService(authStore.RateLimit())
 
 	middlewareStack := mw.CreateStack(
 		mw.NoSniffMiddleware,
 		cors.New(cors.Options{
-			AllowedOrigins:   []string{auth.NN_SITE_URL},
+			AllowedOrigins:   []string{authsession.NN_SITE_URL},
 			AllowedMethods:   []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete},
 			AllowedHeaders:   []string{"Content-Type", "Authorization"},
 			AllowCredentials: true,
