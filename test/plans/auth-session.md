@@ -1,15 +1,9 @@
 # Test plan: modules/auth/session
 
-## session.go
+## service.go
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| SE-01 | ToProto | Happy Path | Populated `*Session` | | Returns `*sessionpb.Session` with Id/UserId/Permissions/IssuedAt/LastUsedAt/ExpiresAt copied 1:1 | P2 |  |
-| SE-02 | HasPermission | Happy Path | `Permissions` holds the node bare, with a value, or with a value containing a colon | | Returns true | P1 |  |
-| SE-03 | HasPermission | Error Path | no permissions, or only look-alike entries | entries such as `perm.nodes`, `perm.node.sub`, `perm.nod`, `perm.node2:value` and `x:perm.node` | Returns false | P1 |  |
-| SE-04 | IsValid | Happy Path | `ExpiresAt` in the future | | Returns true | P1 |  |
-| SE-05 | IsValid | Edge Case | `ExpiresAt == 0` (never expires) | | Returns true | P1 |  |
-| SE-06 | IsValid | Edge Case | `ExpiresAt` in the past | | Returns false | P0 |  |
 | SE-07 | NewSessionService | Happy Path | Service wired to `store.Session()` | fake `Store` | Returned service delegates to the exact `SessionStore` the fake `Store` returned | P2 |  |
 | SE-08 | AddSession | Happy Path | `store.AddSessionToDB` and `store.AddSessionToCache` both succeed | | Returns nil; both called exactly once | P1 |  |
 | SE-09 | AddSession | Error Path | `store.AddSessionToDB` fails | | Returns that error; `AddSessionToCache` never called | P1 |  |
@@ -38,9 +32,19 @@
 | SE-32 | init | Happy Path | Package loads under the required `JWT_SECRET`/`NN_SITE_URL`/`NN_API_URL` env (the precondition every other test in this file already runs under) | | `JWT_SECRET` and `validAudiences` are populated from env without `log.Fatal` firing; `validAudiences == []string{NN_SITE_URL, NN_API_URL}` | P2 | Asserts init's already-established postcondition rather than re-invoking it |
 | SE-33 | init | Error Path | `JWT_SECRET` unset | Test binary re-exec'd as a subprocess with `JWT_SECRET=""`, other required env vars inherited unchanged | Subprocess exits non-zero via `log.Fatal(msgJWTSecretUnset)` | P1 | Re-exec/TestCrasher pattern (see `os/exec` docs) — init() runs unconditionally at process start, before any `-test.run` filtering |
 | SE-34 | init | Error Path | `NN_SITE_URL` or `NN_API_URL` unset (`JWT_SECRET` set) | Test binary re-exec'd as a subprocess with each cleared in turn | Subprocess exits non-zero via `log.Fatal(msgSiteAPIURLUnset)` | P1 | Same re-exec pattern; exercises both var slots of the OR condition |
+
+## types.go
+
+| ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
+|----|----------|---------------|----------|---------------|------------------|----------|-------|
+| SE-01 | ToProto | Happy Path | Populated `*Session` | | Returns `*sessionpb.Session` with Id/UserId/Permissions/IssuedAt/LastUsedAt/ExpiresAt copied 1:1 | P2 |  |
+| SE-02 | HasPermission | Happy Path | `Permissions` holds the node bare, with a value, or with a value containing a colon | | Returns true | P1 |  |
+| SE-03 | HasPermission | Error Path | no permissions, or only look-alike entries | entries such as `perm.nodes`, `perm.node.sub`, `perm.nod`, `perm.node2:value` and `x:perm.node` | Returns false | P1 |  |
+| SE-04 | IsValid | Happy Path | `ExpiresAt` in the future | | Returns true | P1 |  |
+| SE-05 | IsValid | Edge Case | `ExpiresAt == 0` (never expires) | | Returns true | P1 |  |
+| SE-06 | IsValid | Edge Case | `ExpiresAt` in the past | | Returns false | P0 |  |
 | SE-35 | HasPermissionValue | Happy Path | the session holds `node:a` and `node:b:c` | | true for `a` and `b:c` | P1 |  |
 | SE-36 | HasPermissionValue | Error Path | the value is absent, empty, extends a held value, or is the node itself | | false | P1 |  |
-
 
 ## store.go
 

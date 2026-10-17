@@ -1,4 +1,4 @@
-package authroutes
+package user
 
 import (
 	"context"
@@ -14,15 +14,14 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
-	authuser "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/user"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
 type stubUserService struct {
-	user    *authuser.User
+	user    *User
 	userErr error
 
-	listed     []*authuser.User
+	listed     []*User
 	listErr    error
 	listCalls  int
 	listLimit  int
@@ -33,9 +32,9 @@ type stubUserService struct {
 
 	updateUserErr error
 	updatedUserID string
-	updatedUpdate *authuser.UserUpdate
+	updatedUpdate *UserUpdate
 
-	updatedUser              *authuser.User
+	updatedUser              *User
 	updateFromPlatformErr    error
 	updateFromPlatformCalled bool
 
@@ -57,13 +56,13 @@ type stubUserService struct {
 	setPasswordAuthCalls []bool
 }
 
-var _ authuser.Service = (*stubUserService)(nil)
+var _ Service = (*stubUserService)(nil)
 
-func (s *stubUserService) GetUser(string) (*authuser.User, error) { return s.user, s.userErr }
-func (s *stubUserService) GetUserFromPlatform(linking.Platform, string) (*authuser.User, error) {
+func (s *stubUserService) GetUser(string) (*User, error) { return s.user, s.userErr }
+func (s *stubUserService) GetUserFromPlatform(linking.Platform, string) (*User, error) {
 	return s.user, s.userErr
 }
-func (s *stubUserService) ListUsers(limit, offset int) ([]*authuser.User, error) {
+func (s *stubUserService) ListUsers(limit, offset int) ([]*User, error) {
 	s.listCalls++
 	s.listLimit, s.listOffset = limit, offset
 	return s.listed, s.listErr
@@ -71,12 +70,12 @@ func (s *stubUserService) ListUsers(limit, offset int) ([]*authuser.User, error)
 func (s *stubUserService) GetUserPermissions(string) ([]string, error) {
 	return s.permissions, s.permissionsErr
 }
-func (s *stubUserService) UpdateUser(userID string, update *authuser.UserUpdate) error {
+func (s *stubUserService) UpdateUser(userID string, update *UserUpdate) error {
 	s.updatedUserID = userID
 	s.updatedUpdate = update
 	return s.updateUserErr
 }
-func (s *stubUserService) UpdateUserFromPlatform(linking.Platform, string, linking.PlatformData) (*authuser.User, error) {
+func (s *stubUserService) UpdateUserFromPlatform(linking.Platform, string, linking.PlatformData) (*User, error) {
 	s.updateFromPlatformCalled = true
 	return s.updatedUser, s.updateFromPlatformErr
 }
@@ -148,7 +147,7 @@ func expectDetail(t *testing.T, w *httptest.ResponseRecorder, want string) {
 }
 
 func TestUR01GetUserHandlerSelfHappyPath(t *testing.T) {
-	svc := &stubUserService{user: &authuser.User{UserID: "u1"}}
+	svc := &stubUserService{user: &User{UserID: "u1"}}
 	r := newSessionRequest(http.MethodGet, selfSession("u1"), "u1", "", "")
 	w := httptest.NewRecorder()
 
@@ -159,7 +158,7 @@ func TestUR01GetUserHandlerSelfHappyPath(t *testing.T) {
 }
 
 func TestUR02GetUserHandlerAdminHappyPath(t *testing.T) {
-	svc := &stubUserService{user: &authuser.User{UserID: "someone-else"}}
+	svc := &stubUserService{user: &User{UserID: "someone-else"}}
 	r := newSessionRequest(http.MethodGet, adminUsersSession("admin1"), "someone-else", "", "")
 	w := httptest.NewRecorder()
 
@@ -194,7 +193,7 @@ func TestUR04GetUserHandlerServiceErrorMapsTo500(t *testing.T) {
 }
 
 func TestUR05GetUserFromPlatformHandlerAdminHappyPath(t *testing.T) {
-	svc := &stubUserService{user: &authuser.User{UserID: "u1"}}
+	svc := &stubUserService{user: &User{UserID: "u1"}}
 	r := newSessionRequest(http.MethodGet, adminUsersSession("admin1"), "", "discord", "")
 	r.SetPathValue("platform_id", "12345")
 	w := httptest.NewRecorder()
@@ -278,7 +277,7 @@ func TestUR11GetUserPermissionsHandlerServiceErrorMapsTo500(t *testing.T) {
 }
 
 func TestUR12UpdateUserHandlerHappyPath(t *testing.T) {
-	svc := &stubUserService{user: &authuser.User{UserID: "u1", Username: "stored-name"}}
+	svc := &stubUserService{user: &User{UserID: "u1", Username: "stored-name"}}
 	r := newSessionRequest(http.MethodPatch, adminUsersSession("admin1"), "u1", "", `{"user_id":"someone-else","username":"newname"}`)
 	w := httptest.NewRecorder()
 
@@ -345,7 +344,7 @@ func TestUR16to20UpdateUserFromPlatformHandlerPlatformHappyPaths(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.id+"_UpdateUserFromPlatform"+tc.name+"HappyPath", func(t *testing.T) {
-			svc := &stubUserService{updatedUser: &authuser.User{UserID: "u1"}}
+			svc := &stubUserService{updatedUser: &User{UserID: "u1"}}
 			r := newSessionRequest(http.MethodPatch, adminUsersSession("admin1"), "", tc.platform, tc.body)
 			r.SetPathValue("platform_id", "123")
 			w := httptest.NewRecorder()
@@ -1006,7 +1005,7 @@ func TestUR68to71UpdateUserRoleIDFailures(t *testing.T) {
 
 func TestUR72to73UpdateUserRespondsWithTheStoredAccount(t *testing.T) {
 	t.Run("UR-72_UpdateUserResponseRolesAreTheStoredRoles", func(t *testing.T) {
-		svc := &stubUserService{user: &authuser.User{UserID: "u1", Roles: []string{"1", "3"}}}
+		svc := &stubUserService{user: &User{UserID: "u1", Roles: []string{"1", "3"}}}
 		r := newSessionRequest(http.MethodPatch, adminUsersSession("admin1"), "u1", "", `{"roles":["1","1","3"]}`)
 		w := httptest.NewRecorder()
 
@@ -1040,7 +1039,7 @@ func newListUsersRequest(session *authsession.Session, query string) *http.Reque
 
 func TestUR74to82ListUsersHandler(t *testing.T) {
 	t.Run("UR-74_ListsUsersWithTheDefaultPage", func(t *testing.T) {
-		svc := &stubUserService{listed: []*authuser.User{{UserID: "u1", Username: "one", Roles: []string{"7"}}, {UserID: "u2", Username: "two", Roles: []string{}}}}
+		svc := &stubUserService{listed: []*User{{UserID: "u1", Username: "one", Roles: []string{"7"}}, {UserID: "u2", Username: "two", Roles: []string{}}}}
 		w := httptest.NewRecorder()
 
 		ListUsersHandler(svc)(w, newListUsersRequest(adminUsersSession("admin1"), ""))
@@ -1076,7 +1075,7 @@ func TestUR74to82ListUsersHandler(t *testing.T) {
 	})
 
 	t.Run("UR-76_RefusesWithoutUsersAdmin", func(t *testing.T) {
-		svc := &stubUserService{listed: []*authuser.User{{UserID: "u1"}}}
+		svc := &stubUserService{listed: []*User{{UserID: "u1"}}}
 		w := httptest.NewRecorder()
 
 		ListUsersHandler(svc)(w, newListUsersRequest(selfSession("u1"), ""))

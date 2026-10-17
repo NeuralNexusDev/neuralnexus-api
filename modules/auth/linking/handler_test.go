@@ -1,9 +1,8 @@
-package authroutes
+package linking
 
 import (
 	"context"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,7 +17,6 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	authaccount "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
 	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
@@ -34,9 +32,11 @@ type stubAccountService struct {
 var _ authaccount.AccountService = (*stubAccountService)(nil)
 
 func (s *stubAccountService) AddAccount(*authaccount.Account) error { return nil }
+
 func (s *stubAccountService) GetAccountByID(string) (*authaccount.Account, error) {
 	return nil, authaccount.ErrNotFound
 }
+
 func (s *stubAccountService) GetAccountByUsername(string) (*authaccount.Account, error) {
 	if s.lookupErr != nil {
 		return nil, s.lookupErr
@@ -46,6 +46,7 @@ func (s *stubAccountService) GetAccountByUsername(string) (*authaccount.Account,
 	}
 	return nil, authaccount.ErrNotFound
 }
+
 func (s *stubAccountService) GetAccountByEmail(string) (*authaccount.Account, error) {
 	if s.lookupErr != nil {
 		return nil, s.lookupErr
@@ -55,8 +56,11 @@ func (s *stubAccountService) GetAccountByEmail(string) (*authaccount.Account, er
 	}
 	return nil, authaccount.ErrNotFound
 }
+
 func (s *stubAccountService) UpdateAccount(*authaccount.Account) error { return nil }
-func (s *stubAccountService) DeleteAccount(string) error               { return nil }
+
+func (s *stubAccountService) DeleteAccount(string) error { return nil }
+
 func (s *stubAccountService) IsPasswordAuthEnabled(string) (bool, error) {
 	return !s.passwordAuthDisabled, s.passwordAuthErr
 }
@@ -71,16 +75,18 @@ func (s *stubAccountService) NewSession(a *authaccount.Account, expiresAt int64)
 }
 
 type stubLinkAccountStore struct {
-	existing   *linking.LinkedAccount
-	byPlatform map[linking.Platform]*linking.LinkedAccount
+	existing   *LinkedAccount
+	byPlatform map[Platform]*LinkedAccount
 	addErr     error
 }
 
-var _ linking.LinkAccountStore = (*stubLinkAccountStore)(nil)
+var _ LinkAccountStore = (*stubLinkAccountStore)(nil)
 
-func (s *stubLinkAccountStore) AddLinkedAccountToDB(*linking.LinkedAccount) error { return s.addErr }
-func (s *stubLinkAccountStore) UpdateLinkedAccount(*linking.LinkedAccount) error  { return nil }
-func (s *stubLinkAccountStore) GetLinkedAccountByPlatformID(platform linking.Platform, _ string) (*linking.LinkedAccount, error) {
+func (s *stubLinkAccountStore) AddLinkedAccountToDB(*LinkedAccount) error { return s.addErr }
+
+func (s *stubLinkAccountStore) UpdateLinkedAccount(*LinkedAccount) error { return nil }
+
+func (s *stubLinkAccountStore) GetLinkedAccountByPlatformID(platform Platform, _ string) (*LinkedAccount, error) {
 	if la, ok := s.byPlatform[platform]; ok {
 		return la, nil
 	}
@@ -89,17 +95,22 @@ func (s *stubLinkAccountStore) GetLinkedAccountByPlatformID(platform linking.Pla
 	}
 	return nil, authaccount.ErrNotFound
 }
-func (s *stubLinkAccountStore) GetLinkedAccountByPlatformName(linking.Platform, string) (*linking.LinkedAccount, error) {
+
+func (s *stubLinkAccountStore) GetLinkedAccountByPlatformName(Platform, string) (*LinkedAccount, error) {
 	return nil, authaccount.ErrNotFound
 }
-func (s *stubLinkAccountStore) GetLinkedAccountByUserID(string, linking.Platform) (*linking.LinkedAccount, error) {
+
+func (s *stubLinkAccountStore) GetLinkedAccountByUserID(string, Platform) (*LinkedAccount, error) {
 	return nil, authaccount.ErrNotFound
 }
-func (s *stubLinkAccountStore) GetLinkedAccountsByUserID(string) ([]*linking.LinkedAccount, error) {
+
+func (s *stubLinkAccountStore) GetLinkedAccountsByUserID(string) ([]*LinkedAccount, error) {
 	return nil, nil
 }
-func (s *stubLinkAccountStore) DeleteLinkedAccount(string, linking.Platform) error { return nil }
-func (s *stubLinkAccountStore) SetLinkedAccountLoginEnabled(string, linking.Platform, bool) error {
+
+func (s *stubLinkAccountStore) DeleteLinkedAccount(string, Platform) error { return nil }
+
+func (s *stubLinkAccountStore) SetLinkedAccountLoginEnabled(string, Platform, bool) error {
 	return nil
 }
 
@@ -117,25 +128,30 @@ func (s *stubSessionService) AddSession(session *authsession.Session) error {
 	s.added = append(s.added, session)
 	return s.addSessionErr
 }
+
 func (s *stubSessionService) GetSession(string) (*authsession.Session, error) {
 	return nil, authaccount.ErrNotFound
 }
+
 func (s *stubSessionService) UpdateSession(*authsession.Session) error { return nil }
+
 func (s *stubSessionService) DeleteSession(id string) error {
 	s.deletedIDs = append(s.deletedIDs, id)
 	return s.deleteSessionErr
 }
+
 func (s *stubSessionService) CreateJWT(session *authsession.Session) (string, error) {
 	if s.createJWT != nil {
 		return s.createJWT(session)
 	}
 	return "", nil
 }
+
 func (s *stubSessionService) ReadJWT(string) (*authsession.Session, error) {
 	return nil, authaccount.ErrNotFound
 }
 
-func encodeState(t *testing.T, state linking.OAuthState) string {
+func encodeState(t *testing.T, state OAuthState) string {
 	t.Helper()
 	stateJSON, err := json.Marshal(state)
 	if err != nil {
@@ -159,17 +175,6 @@ func requireRedirect(t *testing.T, w *httptest.ResponseRecorder, wantTarget stri
 		t.Errorf("expected redirect target %q, got %q (full Location %q)", wantTarget, target, location)
 	}
 	return u
-}
-
-func requireProblemDetail(t *testing.T, w *httptest.ResponseRecorder, want string) {
-	t.Helper()
-	var p responses.Problem
-	if err := json.Unmarshal(w.Body.Bytes(), &p); err != nil {
-		t.Fatalf("failed to decode problem body %q: %v", w.Body.String(), err)
-	}
-	if p.Detail != want {
-		t.Fatalf("detail = %q, want %q", p.Detail, want)
-	}
 }
 
 func requireProblemRedirect(t *testing.T, w *httptest.ResponseRecorder, wantTarget string, wantStatus int, wantDetail string) {
@@ -204,269 +209,6 @@ func findCookie(w *httptest.ResponseRecorder, name string) *http.Cookie {
 	return nil
 }
 
-func TestAU01LoginHandlerUsernameHappyPath(t *testing.T) {
-	account, err := authaccount.NewAccount("testuser", "test@example.com", "correct-password")
-	if err != nil {
-		t.Fatalf("failed to build account: %v", err)
-	}
-	as := &stubAccountService{account: account}
-	ss := &stubSessionService{createJWT: func(*authsession.Session) (string, error) { return "test-jwt", nil }}
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
-	w := httptest.NewRecorder()
-
-	t.Run("AU-01_LoginUsernameHappyPath", func(t *testing.T) {
-		LoginHandler(as, ss)(w, r)
-
-		if w.Code != http.StatusNoContent {
-			t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
-		}
-		cookie := findCookie(w, mw.SessionCookieName)
-		if cookie == nil || cookie.Value != "test-jwt" {
-			t.Errorf("expected session cookie with value %q, got %+v", "test-jwt", cookie)
-		}
-		if len(ss.added) != 1 || len(ss.added[0].Permissions) != 1 || ss.added[0].Permissions[0] != stubSessionPermission {
-			t.Errorf("stored sessions = %+v, want one session carrying the permissions the account service built", ss.added)
-		}
-	})
-}
-
-func TestAU02LoginHandlerEmailHappyPath(t *testing.T) {
-	account, err := authaccount.NewAccount("testuser", "test@example.com", "correct-password")
-	if err != nil {
-		t.Fatalf("failed to build account: %v", err)
-	}
-	as := &stubAccountService{account: account}
-	ss := &stubSessionService{createJWT: func(*authsession.Session) (string, error) { return "test-jwt", nil }}
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"email":"test@example.com","password":"correct-password"}`))
-	w := httptest.NewRecorder()
-
-	t.Run("AU-02_LoginEmailHappyPath", func(t *testing.T) {
-		LoginHandler(as, ss)(w, r)
-
-		if w.Code != http.StatusNoContent {
-			t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
-		}
-		if findCookie(w, mw.SessionCookieName) == nil {
-			t.Error("expected a session cookie to be set")
-		}
-	})
-}
-
-func TestAU03LoginHandlerMalformedBody(t *testing.T) {
-	as := &stubAccountService{}
-	ss := &stubSessionService{}
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`not json`))
-	w := httptest.NewRecorder()
-
-	t.Run("AU-03_LoginMalformedBody", func(t *testing.T) {
-		LoginHandler(as, ss)(w, r)
-
-		if w.Code != http.StatusBadRequest {
-			t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
-		}
-		requireProblemDetail(t, w, msgInvalidUsernameOrPassword)
-	})
-}
-
-func TestAU04LoginHandlerAccountLookupFails(t *testing.T) {
-	as := &stubAccountService{}
-	ss := &stubSessionService{}
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"no-such-user","password":"whatever"}`))
-	w := httptest.NewRecorder()
-
-	t.Run("AU-04_LoginAccountLookupFails", func(t *testing.T) {
-		LoginHandler(as, ss)(w, r)
-
-		if w.Code != http.StatusBadRequest {
-			t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
-		}
-		requireProblemDetail(t, w, msgInvalidUsernameOrPassword)
-		if findCookie(w, mw.SessionCookieName) != nil {
-			t.Error("expected no session cookie on a failed lookup")
-		}
-	})
-}
-
-func TestAU05LoginHandlerWrongPassword(t *testing.T) {
-	account, err := authaccount.NewAccount("testuser", "test@example.com", "correct-password")
-	if err != nil {
-		t.Fatalf("failed to build account: %v", err)
-	}
-	as := &stubAccountService{account: account}
-	ss := &stubSessionService{}
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"wrong-password"}`))
-	w := httptest.NewRecorder()
-
-	t.Run("AU-05_LoginWrongPassword", func(t *testing.T) {
-		LoginHandler(as, ss)(w, r)
-
-		if w.Code != http.StatusBadRequest {
-			t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
-		}
-		requireProblemDetail(t, w, msgInvalidUsernameOrPassword)
-		if findCookie(w, mw.SessionCookieName) != nil {
-			t.Error("expected no session cookie on a wrong password")
-		}
-	})
-}
-
-func TestAU06LoginHandlerPasswordAuthCheckErrors(t *testing.T) {
-	account, err := authaccount.NewAccount("testuser", "test@example.com", "correct-password")
-	if err != nil {
-		t.Fatalf("failed to build account: %v", err)
-	}
-	as := &stubAccountService{account: account, passwordAuthErr: testerrors.ErrDBDown}
-	ss := &stubSessionService{}
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
-	w := httptest.NewRecorder()
-
-	t.Run("AU-06_LoginPasswordAuthCheckErrors", func(t *testing.T) {
-		LoginHandler(as, ss)(w, r)
-
-		if w.Code != http.StatusInternalServerError {
-			t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
-		}
-		requireProblemDetail(t, w, msgAuthenticationFailed)
-	})
-}
-
-func TestAU07LoginHandlerPasswordAuthDisabled(t *testing.T) {
-	account, err := authaccount.NewAccount("testuser", "test@example.com", "correct-password")
-	if err != nil {
-		t.Fatalf("failed to build account: %v", err)
-	}
-	as := &stubAccountService{account: account, passwordAuthDisabled: true}
-	ss := &stubSessionService{}
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
-	w := httptest.NewRecorder()
-
-	t.Run("AU-07_LoginPasswordAuthDisabled", func(t *testing.T) {
-		LoginHandler(as, ss)(w, r)
-
-		if w.Code != http.StatusBadRequest {
-			t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
-		}
-		requireProblemDetail(t, w, msgInvalidUsernameOrPassword)
-		if findCookie(w, mw.SessionCookieName) != nil {
-			t.Error("expected no session cookie when password auth is disabled")
-		}
-	})
-}
-
-func TestAU08LoginHandlerAddSessionFails(t *testing.T) {
-	account, err := authaccount.NewAccount("testuser", "test@example.com", "correct-password")
-	if err != nil {
-		t.Fatalf("failed to build account: %v", err)
-	}
-	as := &stubAccountService{account: account}
-	ss := &stubSessionService{addSessionErr: testerrors.ErrDBDown}
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
-	w := httptest.NewRecorder()
-
-	t.Run("AU-08_LoginAddSessionFails", func(t *testing.T) {
-		LoginHandler(as, ss)(w, r)
-
-		if w.Code != http.StatusInternalServerError {
-			t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
-		}
-		requireProblemDetail(t, w, msgAuthenticationFailed)
-		if findCookie(w, mw.SessionCookieName) != nil {
-			t.Error("expected no session cookie when AddSession fails")
-		}
-	})
-}
-
-func TestAU09LoginHandlerCreateJWTFails(t *testing.T) {
-	account, err := authaccount.NewAccount("testuser", "test@example.com", "correct-password")
-	if err != nil {
-		t.Fatalf("failed to build account: %v", err)
-	}
-	as := &stubAccountService{account: account}
-	ss := &stubSessionService{createJWT: func(*authsession.Session) (string, error) { return "", testerrors.ErrSigningFailed }}
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
-	w := httptest.NewRecorder()
-
-	t.Run("AU-09_LoginCreateJWTFails", func(t *testing.T) {
-		LoginHandler(as, ss)(w, r)
-
-		if w.Code != http.StatusInternalServerError {
-			t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
-		}
-		requireProblemDetail(t, w, msgAuthenticationFailed)
-		if findCookie(w, mw.SessionCookieName) != nil {
-			t.Error("expected no session cookie when CreateJWT fails")
-		}
-	})
-}
-
-func TestAU10LogoutHandlerHappyPath(t *testing.T) {
-	session := &authsession.Session{ID: "s1", UserID: "u1"}
-	ctx := context.WithValue(context.Background(), mw.SessionKey, session)
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil).WithContext(ctx)
-	w := httptest.NewRecorder()
-	ss := &stubSessionService{}
-
-	t.Run("AU-10_LogoutHappyPath", func(t *testing.T) {
-		LogoutHandler(ss)(w, r)
-
-		if w.Code != http.StatusNoContent {
-			t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
-		}
-		if len(ss.deletedIDs) != 1 || ss.deletedIDs[0] != "s1" {
-			t.Errorf("expected DeleteSession(\"s1\"), got %v", ss.deletedIDs)
-		}
-		cookie := findCookie(w, mw.SessionCookieName)
-		if cookie == nil {
-			t.Fatal("expected the session cookie to be cleared")
-		}
-		if cookie.Value != "" {
-			t.Errorf("expected an empty cleared cookie value, got %q", cookie.Value)
-		}
-		if !cookie.Expires.Before(time.Now()) {
-			t.Errorf("expected the cleared cookie's Expires to be in the past, got %v", cookie.Expires)
-		}
-	})
-}
-
-func TestAU11LogoutHandlerNilSessionInContext(t *testing.T) {
-	ctx := context.WithValue(context.Background(), mw.SessionKey, (*authsession.Session)(nil))
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil).WithContext(ctx)
-	w := httptest.NewRecorder()
-	ss := &stubSessionService{}
-
-	t.Run("AU-11_LogoutNilSessionInContext", func(t *testing.T) {
-		LogoutHandler(ss)(w, r)
-
-		if w.Code != http.StatusBadRequest {
-			t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
-		}
-		requireProblemDetail(t, w, msgInvalidSession)
-		if len(ss.deletedIDs) != 0 {
-			t.Error("expected DeleteSession to never be called for a nil session")
-		}
-	})
-}
-
-func TestAU12LogoutHandlerDeleteSessionFails(t *testing.T) {
-	session := &authsession.Session{ID: "s1", UserID: "u1"}
-	ctx := context.WithValue(context.Background(), mw.SessionKey, session)
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil).WithContext(ctx)
-	w := httptest.NewRecorder()
-	ss := &stubSessionService{deleteSessionErr: testerrors.ErrDBDown}
-
-	t.Run("AU-12_LogoutDeleteSessionFails", func(t *testing.T) {
-		LogoutHandler(ss)(w, r)
-
-		if w.Code != http.StatusInternalServerError {
-			t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
-		}
-		requireProblemDetail(t, w, msgFailedToDeleteSession)
-		if findCookie(w, mw.SessionCookieName) != nil {
-			t.Error("expected no cleared cookie when DeleteSession fails")
-		}
-	})
-}
-
 func TestAU13OAuthHandlerMissingCode(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/api/oauth", nil)
 	w := httptest.NewRecorder()
@@ -490,7 +232,7 @@ func TestAU14OAuthHandlerMissingState(t *testing.T) {
 }
 
 func TestAU15OAuthHandlerLinkModeNoSession(t *testing.T) {
-	state := linking.OAuthState{Platform: linking.PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLink}
+	state := OAuthState{Platform: PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: ModeLink}
 	stateB64 := encodeState(t, state)
 	r := httptest.NewRequest(http.MethodGet, "/api/oauth?code=somecode&state="+stateB64, nil)
 	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
@@ -540,9 +282,9 @@ func swapDefaultTransport(t *testing.T, rt http.RoundTripper) {
 
 func swapSteamAPIKey(t *testing.T, value string) {
 	t.Helper()
-	original := linking.STEAM_API_KEY
-	linking.STEAM_API_KEY = value
-	t.Cleanup(func() { linking.STEAM_API_KEY = original })
+	original := STEAM_API_KEY
+	STEAM_API_KEY = value
+	t.Cleanup(func() { STEAM_API_KEY = original })
 }
 
 func TestAU50OAuthHandlerLoginHappyPath(t *testing.T) {
@@ -557,7 +299,7 @@ func TestAU50OAuthHandlerLoginHappyPath(t *testing.T) {
 		}
 	}))
 
-	state := linking.OAuthState{Platform: linking.PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	state := OAuthState{Platform: PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: ModeLogin}
 	stateB64 := encodeState(t, state)
 	r := httptest.NewRequest(http.MethodGet, "/api/oauth?code=disc-code&state="+stateB64, nil)
 	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
@@ -595,7 +337,7 @@ func TestAU51OpenIDHandlerLoginHappyPath(t *testing.T) {
 		}
 	}))
 
-	state := linking.OAuthState{Platform: linking.PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	state := OAuthState{Platform: PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: ModeLogin}
 	stateB64 := encodeState(t, state)
 	q := url.Values{
 		"state":               {stateB64},
@@ -644,7 +386,7 @@ func auDiscordTransport(t *testing.T) {
 	}))
 }
 
-func auOAuthRequest(t *testing.T, state linking.OAuthState) *http.Request {
+func auOAuthRequest(t *testing.T, state OAuthState) *http.Request {
 	t.Helper()
 	r := httptest.NewRequest(http.MethodGet, "/api/oauth?code=disc-code&state="+encodeState(t, state), nil)
 	r.AddCookie(&http.Cookie{Name: "nonce", Value: state.Nonce})
@@ -673,7 +415,7 @@ func auSteamTransportBody(t *testing.T, checkStatus, summaryStatus int, summaryB
 	}))
 }
 
-func auOpenIDRequest(t *testing.T, state linking.OAuthState) *http.Request {
+func auOpenIDRequest(t *testing.T, state OAuthState) *http.Request {
 	t.Helper()
 	q := url.Values{
 		"state":               {encodeState(t, state)},
@@ -691,8 +433,8 @@ func auOpenIDRequest(t *testing.T, state linking.OAuthState) *http.Request {
 }
 
 func TestAU52to57OAuthAndOpenIDFailuresHideCause(t *testing.T) {
-	oauthState := linking.OAuthState{Platform: linking.PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
-	steamState := linking.OAuthState{Platform: linking.PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	oauthState := OAuthState{Platform: PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: ModeLogin}
+	steamState := OAuthState{Platform: PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: ModeLogin}
 	okJWT := func(*authsession.Session) (string, error) { return "test-jwt", nil }
 	failJWT := func(*authsession.Session) (string, error) { return "", testerrors.ErrSigningFailed }
 
@@ -757,29 +499,6 @@ func TestAU52to57OAuthAndOpenIDFailuresHideCause(t *testing.T) {
 	})
 }
 
-func TestAU58LoginHandlerNewSessionFails(t *testing.T) {
-	account := &authaccount.Account{UserID: "u1", Username: "testuser"}
-	if err := account.HashPassword("correct-password"); err != nil {
-		t.Fatalf("failed to hash password: %v", err)
-	}
-	as := &stubAccountService{account: account, newSessionErr: testerrors.ErrBoom}
-	ss := &stubSessionService{createJWT: func(*authsession.Session) (string, error) { return "test-jwt", nil }}
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
-	w := httptest.NewRecorder()
-
-	t.Run("AU-58_LoginNewSessionFails", func(t *testing.T) {
-		LoginHandler(as, ss)(w, r)
-
-		if w.Code != http.StatusInternalServerError {
-			t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
-		}
-		requireProblemDetail(t, w, msgAuthenticationFailed)
-		if len(ss.added) != 0 {
-			t.Errorf("stored sessions = %v, want none", ss.added)
-		}
-	})
-}
-
 func TestAU17OpenIDHandlerMissingState(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/api/openid", nil)
 	w := httptest.NewRecorder()
@@ -792,7 +511,7 @@ func TestAU17OpenIDHandlerMissingState(t *testing.T) {
 }
 
 func TestAU18OpenIDHandlerLinkModeNoSession(t *testing.T) {
-	state := linking.OAuthState{Platform: linking.PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLink}
+	state := OAuthState{Platform: PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: ModeLink}
 	stateB64 := encodeState(t, state)
 	r := httptest.NewRequest(http.MethodGet, "/api/openid?state="+stateB64, nil)
 	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
@@ -806,7 +525,7 @@ func TestAU18OpenIDHandlerLinkModeNoSession(t *testing.T) {
 }
 
 func TestAU19OpenIDHandlerBadOpenIDMode(t *testing.T) {
-	state := linking.OAuthState{Platform: linking.PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	state := OAuthState{Platform: PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: ModeLogin}
 	stateB64 := encodeState(t, state)
 	q := url.Values{"state": {stateB64}, "openid.mode": {"cancel"}}
 	r := httptest.NewRequest(http.MethodGet, "/api/openid?"+q.Encode(), nil)
@@ -821,7 +540,7 @@ func TestAU19OpenIDHandlerBadOpenIDMode(t *testing.T) {
 }
 
 func TestAU20OpenIDHandlerBadClaimedID(t *testing.T) {
-	state := linking.OAuthState{Platform: linking.PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	state := OAuthState{Platform: PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: ModeLogin}
 	stateB64 := encodeState(t, state)
 	q := url.Values{"state": {stateB64}, "openid.mode": {"id_res"}, "openid.claimed_id": {"not-a-steam-id-url"}}
 	r := httptest.NewRequest(http.MethodGet, "/api/openid?"+q.Encode(), nil)
@@ -836,7 +555,7 @@ func TestAU20OpenIDHandlerBadClaimedID(t *testing.T) {
 }
 
 func TestAU22DecodeAndValidateStateHappyPath(t *testing.T) {
-	state := linking.OAuthState{Platform: linking.PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	state := OAuthState{Platform: PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: ModeLogin}
 	stateB64 := encodeState(t, state)
 	r := httptest.NewRequest(http.MethodGet, "/api/oauth?state="+stateB64, nil)
 	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
@@ -894,7 +613,7 @@ func TestAU25DecodeAndValidateStateInvalidJSON(t *testing.T) {
 }
 
 func TestAU26DecodeAndValidateStateMissingRequiredField(t *testing.T) {
-	state := linking.OAuthState{Platform: "", Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	state := OAuthState{Platform: "", Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: ModeLogin}
 	stateB64 := encodeState(t, state)
 	r := httptest.NewRequest(http.MethodGet, "/api/oauth?state="+stateB64, nil)
 	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
@@ -910,7 +629,7 @@ func TestAU26DecodeAndValidateStateMissingRequiredField(t *testing.T) {
 }
 
 func TestAU27DecodeAndValidateStateDisallowedRedirect(t *testing.T) {
-	state := linking.OAuthState{Platform: linking.PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://evil.example.com/phish", Mode: linking.ModeLogin}
+	state := OAuthState{Platform: PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://evil.example.com/phish", Mode: ModeLogin}
 	stateB64 := encodeState(t, state)
 	r := httptest.NewRequest(http.MethodGet, "/api/oauth?state="+stateB64, nil)
 	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
@@ -929,7 +648,7 @@ func TestAU27DecodeAndValidateStateDisallowedRedirect(t *testing.T) {
 }
 
 func TestAU28DecodeAndValidateStateMissingNonceCookie(t *testing.T) {
-	state := linking.OAuthState{Platform: linking.PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	state := OAuthState{Platform: PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: ModeLogin}
 	stateB64 := encodeState(t, state)
 	r := httptest.NewRequest(http.MethodGet, "/api/oauth?state="+stateB64, nil)
 	w := httptest.NewRecorder()
@@ -944,7 +663,7 @@ func TestAU28DecodeAndValidateStateMissingNonceCookie(t *testing.T) {
 }
 
 func TestAU29DecodeAndValidateStateNonceMismatch(t *testing.T) {
-	state := linking.OAuthState{Platform: linking.PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	state := OAuthState{Platform: PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: ModeLogin}
 	stateB64 := encodeState(t, state)
 	r := httptest.NewRequest(http.MethodGet, "/api/oauth?state="+stateB64, nil)
 	r.AddCookie(&http.Cookie{Name: "nonce", Value: "wrong-nonce"})
@@ -964,7 +683,7 @@ func TestAU30RequireValidModeAndSessionLoginMode(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("AU-30_RequireValidModeAndSessionLoginMode", func(t *testing.T) {
-		if ok := requireValidModeAndSession(w, r, linking.ModeLogin, "https://neuralnexus.test/done"); !ok {
+		if ok := requireValidModeAndSession(w, r, ModeLogin, "https://neuralnexus.test/done"); !ok {
 			t.Fatal("expected true for mode=login")
 		}
 		if loc := w.Header().Get("Location"); loc != "" {
@@ -980,7 +699,7 @@ func TestAU31RequireValidModeAndSessionLinkModeValidSession(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("AU-31_RequireValidModeAndSessionLinkModeValidSession", func(t *testing.T) {
-		if ok := requireValidModeAndSession(w, r, linking.ModeLink, "https://neuralnexus.test/done"); !ok {
+		if ok := requireValidModeAndSession(w, r, ModeLink, "https://neuralnexus.test/done"); !ok {
 			t.Fatal("expected true for a valid session")
 		}
 		if loc := w.Header().Get("Location"); loc != "" {
@@ -994,7 +713,7 @@ func TestAU32RequireValidModeAndSessionLinkModeNoSessionKey(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("AU-32_RequireValidModeAndSessionLinkModeNoSessionKey", func(t *testing.T) {
-		if ok := requireValidModeAndSession(w, r, linking.ModeLink, "https://neuralnexus.test/done"); ok {
+		if ok := requireValidModeAndSession(w, r, ModeLink, "https://neuralnexus.test/done"); ok {
 			t.Fatal("expected false with no session in context")
 		}
 		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, msgLoginRequiredToLink)
@@ -1007,7 +726,7 @@ func TestAU33RequireValidModeAndSessionLinkModeNilSession(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("AU-33_RequireValidModeAndSessionLinkModeNilSession", func(t *testing.T) {
-		if ok := requireValidModeAndSession(w, r, linking.ModeLink, "https://neuralnexus.test/done"); ok {
+		if ok := requireValidModeAndSession(w, r, ModeLink, "https://neuralnexus.test/done"); ok {
 			t.Fatal("expected false for a nil session")
 		}
 		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, msgLoginRequiredToLink)
@@ -1021,7 +740,7 @@ func TestAU34RequireValidModeAndSessionLinkModeExpiredSession(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("AU-34_RequireValidModeAndSessionLinkModeExpiredSession", func(t *testing.T) {
-		if ok := requireValidModeAndSession(w, r, linking.ModeLink, "https://neuralnexus.test/done"); ok {
+		if ok := requireValidModeAndSession(w, r, ModeLink, "https://neuralnexus.test/done"); ok {
 			t.Fatal("expected false for an expired session")
 		}
 		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, msgLoginRequiredToLink)
@@ -1033,50 +752,10 @@ func TestAU35RequireValidModeAndSessionUnrecognizedMode(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("AU-35_RequireValidModeAndSessionUnrecognizedMode", func(t *testing.T) {
-		if ok := requireValidModeAndSession(w, r, linking.Mode("bogus-mode"), "https://neuralnexus.test/done"); ok {
+		if ok := requireValidModeAndSession(w, r, Mode("bogus-mode"), "https://neuralnexus.test/done"); ok {
 			t.Fatal("expected false for an unrecognized mode")
 		}
 		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusBadRequest, msgInvalidState)
-	})
-}
-
-func TestAU36CreateSessionJWTAndSetCookieHappyPath(t *testing.T) {
-	session := &authsession.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
-	ss := &stubSessionService{createJWT: func(*authsession.Session) (string, error) { return "test-jwt", nil }}
-	w := httptest.NewRecorder()
-
-	t.Run("AU-36_CreateSessionJWTAndSetCookieHappyPath", func(t *testing.T) {
-		if err := createSessionJWTAndSetCookie(ss, w, session); err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
-		cookie := findCookie(w, mw.SessionCookieName)
-		if cookie == nil {
-			t.Fatal("expected a session cookie to be set")
-		}
-		if cookie.Value != "test-jwt" {
-			t.Errorf("expected cookie value %q, got %q", "test-jwt", cookie.Value)
-		}
-		wantExpires := time.Unix(session.ExpiresAt, 0)
-		if !cookie.Expires.Equal(wantExpires) {
-			t.Errorf("expected cookie Expires %v, got %v", wantExpires, cookie.Expires)
-		}
-	})
-}
-
-func TestAU37CreateSessionJWTAndSetCookieCreateJWTFails(t *testing.T) {
-	session := &authsession.Session{ID: "s1", UserID: "u1"}
-	wantErr := testerrors.ErrSigningFailed
-	ss := &stubSessionService{createJWT: func(*authsession.Session) (string, error) { return "", wantErr }}
-	w := httptest.NewRecorder()
-
-	t.Run("AU-37_CreateSessionJWTAndSetCookieCreateJWTFails", func(t *testing.T) {
-		err := createSessionJWTAndSetCookie(ss, w, session)
-		if !errors.Is(err, wantErr) {
-			t.Fatalf("expected %v, got %v", wantErr, err)
-		}
-		if findCookie(w, mw.SessionCookieName) != nil {
-			t.Error("expected no cookie to be set when CreateJWT fails")
-		}
 	})
 }
 
@@ -1186,58 +865,6 @@ func TestAU48IsAllowedRedirectUnparseableSiteURL(t *testing.T) {
 	})
 }
 
-func TestAU49SessionCookie(t *testing.T) {
-	expires := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
-
-	t.Run("AU-49_SessionCookie", func(t *testing.T) {
-		c := sessionCookie("abc", expires)
-
-		if c.Name != mw.SessionCookieName {
-			t.Errorf("expected Name %q, got %q", mw.SessionCookieName, c.Name)
-		}
-		if c.Value != "abc" {
-			t.Errorf("expected Value %q, got %q", "abc", c.Value)
-		}
-		if c.Domain != ".neuralnexus.dev" {
-			t.Errorf("expected Domain %q, got %q", ".neuralnexus.dev", c.Domain)
-		}
-		if c.Path != "/" {
-			t.Errorf("expected Path %q, got %q", "/", c.Path)
-		}
-		if !c.Expires.Equal(expires) {
-			t.Errorf("expected Expires %v, got %v", expires, c.Expires)
-		}
-		if !c.Secure {
-			t.Error("expected Secure=true")
-		}
-		if !c.HttpOnly {
-			t.Error("expected HttpOnly=true")
-		}
-		if c.SameSite != http.SameSiteLaxMode {
-			t.Errorf("expected SameSite=Lax, got %v", c.SameSite)
-		}
-	})
-}
-
-func TestAU59LoginHandlerAccountLookupInfraFails(t *testing.T) {
-	as := &stubAccountService{lookupErr: testerrors.ErrDBDown}
-	ss := &stubSessionService{}
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"someone","password":"whatever"}`))
-	w := httptest.NewRecorder()
-
-	t.Run("AU-59_LoginAccountLookupInfraFails", func(t *testing.T) {
-		LoginHandler(as, ss)(w, r)
-
-		if w.Code != http.StatusInternalServerError {
-			t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
-		}
-		requireProblemDetail(t, w, msgAuthenticationFailed)
-		if findCookie(w, mw.SessionCookieName) != nil {
-			t.Error("expected no session cookie on a failed lookup")
-		}
-	})
-}
-
 func auWithSession(r *http.Request, userID string) *http.Request {
 	session := &authsession.Session{ID: "link-session", UserID: userID}
 	return r.WithContext(context.WithValue(r.Context(), mw.SessionKey, session))
@@ -1301,17 +928,17 @@ func auWithSessionChange(r *http.Request, second any) *http.Request {
 
 func TestAU60to71OAuthAndOpenIDFailureMapping(t *testing.T) {
 	const redirect = "https://neuralnexus.test/done"
-	discordLogin := linking.OAuthState{Platform: linking.PlatformDiscord, Nonce: "test-nonce", RedirectURI: redirect, Mode: linking.ModeLogin}
-	discordLink := linking.OAuthState{Platform: linking.PlatformDiscord, Nonce: "test-nonce", RedirectURI: redirect, Mode: linking.ModeLink}
-	steamLogin := linking.OAuthState{Platform: linking.PlatformSteam, Nonce: "test-nonce", RedirectURI: redirect, Mode: linking.ModeLogin}
-	steamLink := linking.OAuthState{Platform: linking.PlatformSteam, Nonce: "test-nonce", RedirectURI: redirect, Mode: linking.ModeLink}
+	discordLogin := OAuthState{Platform: PlatformDiscord, Nonce: "test-nonce", RedirectURI: redirect, Mode: ModeLogin}
+	discordLink := OAuthState{Platform: PlatformDiscord, Nonce: "test-nonce", RedirectURI: redirect, Mode: ModeLink}
+	steamLogin := OAuthState{Platform: PlatformSteam, Nonce: "test-nonce", RedirectURI: redirect, Mode: ModeLogin}
+	steamLink := OAuthState{Platform: PlatformSteam, Nonce: "test-nonce", RedirectURI: redirect, Mode: ModeLink}
 	okJWT := func(*authsession.Session) (string, error) { return "test-jwt", nil }
-	linkedElsewhere := &stubLinkAccountStore{existing: &linking.LinkedAccount{UserID: "u2", Verified: true, LoginEnabled: true}}
+	linkedElsewhere := &stubLinkAccountStore{existing: &LinkedAccount{UserID: "u2", Verified: true, LoginEnabled: true}}
 	addFails := func(err error) *stubLinkAccountStore { return &stubLinkAccountStore{addErr: err} }
 
 	t.Run("AU-60_OAuthInvalidPlatform", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		state := linking.OAuthState{Platform: "nonexistent", Nonce: "test-nonce", RedirectURI: redirect, Mode: linking.ModeLogin}
+		state := OAuthState{Platform: "nonexistent", Nonce: "test-nonce", RedirectURI: redirect, Mode: ModeLogin}
 
 		OAuthHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{createJWT: okJWT})(w, auOAuthRequest(t, state))
 
@@ -1348,11 +975,11 @@ func TestAU60to71OAuthAndOpenIDFailureMapping(t *testing.T) {
 	t.Run("AU-64_OAuthConflictingMicrosoftIdentities", func(t *testing.T) {
 		auMicrosoftTransport(t)
 		w := httptest.NewRecorder()
-		las := &stubLinkAccountStore{byPlatform: map[linking.Platform]*linking.LinkedAccount{
-			linking.PlatformXboxLive:  {UserID: "u1", Verified: true, LoginEnabled: true},
-			linking.PlatformMinecraft: {UserID: "u2", Verified: true, LoginEnabled: true},
+		las := &stubLinkAccountStore{byPlatform: map[Platform]*LinkedAccount{
+			PlatformXboxLive:  {UserID: "u1", Verified: true, LoginEnabled: true},
+			PlatformMinecraft: {UserID: "u2", Verified: true, LoginEnabled: true},
 		}}
-		state := linking.OAuthState{Platform: linking.PlatformMinecraft, Nonce: "test-nonce", RedirectURI: redirect, Mode: linking.ModeLogin}
+		state := OAuthState{Platform: PlatformMinecraft, Nonce: "test-nonce", RedirectURI: redirect, Mode: ModeLogin}
 
 		OAuthHandler(&stubAccountService{}, las, &stubSessionService{createJWT: okJWT})(w, auOAuthRequest(t, state))
 
@@ -1424,10 +1051,10 @@ func TestAU60to71OAuthAndOpenIDFailureMapping(t *testing.T) {
 }
 
 func TestAU72to74OAuthAndOpenIDFailuresUseMapping(t *testing.T) {
-	oauthState := linking.OAuthState{Platform: linking.PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
-	steamState := linking.OAuthState{Platform: linking.PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	oauthState := OAuthState{Platform: PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: ModeLogin}
+	steamState := OAuthState{Platform: PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: ModeLogin}
 	okJWT := func(*authsession.Session) (string, error) { return "test-jwt", nil }
-	disabledLink := &stubLinkAccountStore{existing: &linking.LinkedAccount{UserID: "u1", Verified: true, LoginEnabled: false}}
+	disabledLink := &stubLinkAccountStore{existing: &LinkedAccount{UserID: "u1", Verified: true, LoginEnabled: false}}
 
 	t.Run("AU-72_OAuthProcessMapsLoginDisabled", func(t *testing.T) {
 		auDiscordTransport(t)

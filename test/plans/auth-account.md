@@ -1,6 +1,6 @@
 # Test plan: modules/auth/account
 
-## account.go
+## service.go
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
@@ -98,3 +98,25 @@
 | ST-96 | ListAccounts | Happy Path (live) | accounts with a short ID and long IDs are stored, one without a username | accounts `95`, `...601`, `...602`, and `...603` stored without a username | The accounts come back ordered by number, so `95` is before the long IDs; every account lists its roles as a non-nil slice; the account without a username lists an empty username | P1 |  |
 | ST-97 | ListAccounts | Happy Path (live) | a limit and an offset select a page | the accounts above | `ListAccounts(2, i)` returns `...601` and `...602`, `ListAccounts(1, i+1)` returns only `...602` and `ListAccounts(1, i)` returns only `...601` | P1 |  |
 | ST-98 | ListAccounts | Edge Case (live) | the offset is past the last account | offset 1000000 | An empty page and a nil error | P2 |  |
+
+## handler.go
+
+| ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
+|----|----------|---------------|----------|---------------|------------------|----------|-------|
+| AU-01 | LoginHandler | Happy Path | Login with username+password | Account exists for username, password matches, password auth enabled | 204 No Content, session cookie set, and the stored session carries the permissions the account service built | P1 |  |
+| AU-02 | LoginHandler | Happy Path | Login with email+password (username field empty) | Account exists for email, password matches, password auth enabled | 204 No Content, session cookie set | P1 |  |
+| AU-03 | LoginHandler | Error Path | Malformed request body | Body is not valid JSON | 400 Bad Request `msgInvalidUsernameOrPassword` | P2 |  |
+| AU-04 | LoginHandler | Error Path | Account lookup finds no account | AccountService.GetAccountByUsername/GetAccountByEmail returns `account.ErrNotFound` | 400 Bad Request `msgInvalidUsernameOrPassword` | P2 |  |
+| AU-05 | LoginHandler | Error Path | Wrong password | Account found, Account.ValidateUser returns false | 400 Bad Request `msgInvalidUsernameOrPassword` | P2 |  |
+| AU-06 | LoginHandler | Error Path | IsPasswordAuthEnabled errors | Account and password valid, AccountService.IsPasswordAuthEnabled returns an error | 500 Internal Server Error `msgAuthenticationFailed` | P2 |  |
+| AU-07 | LoginHandler | Edge Case | Password auth disabled for account | Account and password valid, IsPasswordAuthEnabled returns (false, nil) | 400 Bad Request `msgInvalidUsernameOrPassword` | P2 |  |
+| AU-08 | LoginHandler | Error Path | SessionService.AddSession fails | Account/password/enabled all valid, ss.AddSession returns an error | 500 Internal Server Error `msgAuthenticationFailed` | P2 |  |
+| AU-09 | LoginHandler | Error Path | SessionService.CreateJWT fails | AddSession succeeds, ss.CreateJWT returns an error | 500 Internal Server Error `msgAuthenticationFailed` | P2 |  |
+| AU-10 | LogoutHandler | Happy Path | Logout with a valid session | Context carries a non-nil *auth.Session, ss.DeleteSession succeeds | 204 No Content, session cookie cleared (empty value, expiry in the past) | P1 |  |
+| AU-11 | LogoutHandler | Edge Case | Session in context is a nil *auth.Session | Context value under mw.SessionKey is (*auth.Session)(nil) | 400 Bad Request `msgInvalidSession` | P3 |  |
+| AU-12 | LogoutHandler | Error Path | SessionService.DeleteSession fails | Valid session in context, ss.DeleteSession returns an error | 500 Internal Server Error `msgFailedToDeleteSession` | P2 |  |
+| AU-58 | LoginHandler | Error Path | the account service fails to build the session | Account/password/enabled all valid; `NewSession` returns `testerrors.ErrBoom` | 500 Internal Server Error, `detail` is `msgAuthenticationFailed`, and no session is stored | P2 |  |
+| AU-59 | LoginHandler | Error Path | Account lookup fails with a non-not-found error | AccountService.GetAccountByUsername returns `testerrors.ErrDBDown` | 500 Internal Server Error `msgAuthenticationFailed`; no session cookie | P2 |  |
+| AU-36 | SetSessionCookie | Happy Path | ss.CreateJWT succeeds | Valid session, ss.CreateJWT returns a JWT string | Returns nil error; Set-Cookie header carries the JWT value with Expires == time.Unix(session.ExpiresAt,0) | P1 |  |
+| AU-37 | SetSessionCookie | Error Path | ss.CreateJWT fails | ss.CreateJWT returns an error | Returns that error; no Set-Cookie header written | P2 |  |
+| AU-49 | sessionCookie | Accessor | Build a cookie for a given value/expiry | value="abc", expires=fixed time | Returns *http.Cookie with Name=mw.SessionCookieName, Domain=".neuralnexus.dev", Path="/", Expires=expires, Secure=true, HttpOnly=true, SameSite=Lax | P2 |  |
