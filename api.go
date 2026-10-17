@@ -21,7 +21,6 @@ import (
 	authaccount "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/ratelimit"
-	authroutes "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/routes"
 	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	authuser "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/user"
 	bng "github.com/NeuralNexusDev/neuralnexus-api/modules/bee_name_generator"
@@ -83,31 +82,31 @@ func ApplyRoutes(
 
 	loginRateLimit := mw.RateLimitMiddleware(rateLimit, "login", 5, 5)
 
-	mux.Handle("POST /api/v1/auth/login", loginRateLimit(authroutes.LoginHandler(account, session)))
-	mux.Handle("POST /api/v1/auth/logout", loginRateLimit(mwAuth(authroutes.LogoutHandler(session))))
+	mux.Handle("POST /api/v1/auth/login", loginRateLimit(authaccount.LoginHandler(account, session)))
+	mux.Handle("POST /api/v1/auth/logout", loginRateLimit(mwAuth(authaccount.LogoutHandler(session))))
 
-	mux.Handle("/api/oauth", loginRateLimit(authroutes.OAuthHandler(account, linkAccountStore, session)))
-	mux.Handle("/api/openid", loginRateLimit(authroutes.OpenIDHandler(account, linkAccountStore, session)))
+	mux.Handle("/api/oauth", loginRateLimit(linking.OAuthHandler(account, linkAccountStore, session)))
+	mux.Handle("/api/openid", loginRateLimit(linking.OpenIDHandler(account, linkAccountStore, session)))
 
-	mux.Handle("GET /api/v1/users", mwAuth(authroutes.ListUsersHandler(user)))
-	mux.Handle("GET /api/v1/users/{user_id}", mwAuth(authroutes.GetUserHandler(user)))
-	mux.Handle("GET /api/v1/users/me", mwAuth(mw.SelfUserID(authroutes.GetUserHandler(user))))
-	mux.Handle("GET /api/v1/users/{user_id}/permissions", mwAuth(authroutes.GetUserPermissionsHandler(user)))
-	mux.Handle("GET /api/v1/users/me/permissions", mwAuth(mw.SelfUserID(authroutes.GetUserPermissionsHandler(user))))
-	mux.Handle("GET /api/v1/users/{platform}/{platform_id}", mwAuth(authroutes.GetUserFromPlatformHandler(user)))
-	mux.Handle("PUT /api/v1/users/{user_id}", mwAuth(authroutes.UpdateUserHandler(user)))
-	mux.Handle("PUT /api/v1/users/{platform}/{platform_id}", mwAuth(authroutes.UpdateUserFromPlatformHandler(user)))
-	mux.Handle("GET /api/v1/users/{user_id}/links", mwAuth(authroutes.GetUserLinkedAccountsHandler(linkingService)))
-	mux.Handle("GET /api/v1/users/me/links", mwAuth(mw.SelfUserID(authroutes.GetUserLinkedAccountsHandler(linkingService))))
-	mux.Handle("DELETE /api/v1/users/{user_id}/link/{platform}", mwAuth(authroutes.UnlinkPlatformHandler(linkingService)))
-	mux.Handle("DELETE /api/v1/users/me/link/{platform}", mwAuth(mw.SelfUserID(authroutes.UnlinkPlatformHandler(linkingService))))
-	mux.Handle("PATCH /api/v1/users/{user_id}/link/{platform}", mwAuth(authroutes.SetPlatformLoginEnabledHandler(linkingService)))
-	mux.Handle("PATCH /api/v1/users/me/link/{platform}", mwAuth(mw.SelfUserID(authroutes.SetPlatformLoginEnabledHandler(linkingService))))
-	mux.Handle("GET /api/v1/users/{user_id}/settings", mwAuth(authroutes.GetAccountSettingsHandler(user)))
-	mux.Handle("GET /api/v1/users/me/settings", mwAuth(mw.SelfUserID(authroutes.GetAccountSettingsHandler(user))))
-	mux.Handle("PATCH /api/v1/users/{user_id}/settings", mwAuth(authroutes.UpdateAccountSettingsHandler(user)))
-	mux.Handle("PATCH /api/v1/users/me/settings", mwAuth(mw.SelfUserID(authroutes.UpdateAccountSettingsHandler(user))))
-	// mux.HandleFunc("DELETE /api/v1/users/{user_id}", mwAuth(authroutes.DeleteUserHandler(gssService)))
+	mux.Handle("GET /api/v1/users", mwAuth(authuser.ListUsersHandler(user)))
+	mux.Handle("GET /api/v1/users/{user_id}", mwAuth(authuser.GetUserHandler(user)))
+	mux.Handle("GET /api/v1/users/me", mwAuth(mw.SelfUserID(authuser.GetUserHandler(user))))
+	mux.Handle("GET /api/v1/users/{user_id}/permissions", mwAuth(authuser.GetUserPermissionsHandler(user)))
+	mux.Handle("GET /api/v1/users/me/permissions", mwAuth(mw.SelfUserID(authuser.GetUserPermissionsHandler(user))))
+	mux.Handle("GET /api/v1/users/{platform}/{platform_id}", mwAuth(authuser.GetUserFromPlatformHandler(user)))
+	mux.Handle("PUT /api/v1/users/{user_id}", mwAuth(authuser.UpdateUserHandler(user)))
+	mux.Handle("PUT /api/v1/users/{platform}/{platform_id}", mwAuth(authuser.UpdateUserFromPlatformHandler(user)))
+	mux.Handle("GET /api/v1/users/{user_id}/links", mwAuth(linking.GetUserLinkedAccountsHandler(linkingService)))
+	mux.Handle("GET /api/v1/users/me/links", mwAuth(mw.SelfUserID(linking.GetUserLinkedAccountsHandler(linkingService))))
+	mux.Handle("DELETE /api/v1/users/{user_id}/link/{platform}", mwAuth(linking.UnlinkPlatformHandler(linkingService)))
+	mux.Handle("DELETE /api/v1/users/me/link/{platform}", mwAuth(mw.SelfUserID(linking.UnlinkPlatformHandler(linkingService))))
+	mux.Handle("PATCH /api/v1/users/{user_id}/link/{platform}", mwAuth(linking.SetPlatformLoginEnabledHandler(linkingService)))
+	mux.Handle("PATCH /api/v1/users/me/link/{platform}", mwAuth(mw.SelfUserID(linking.SetPlatformLoginEnabledHandler(linkingService))))
+	mux.Handle("GET /api/v1/users/{user_id}/settings", mwAuth(authuser.GetAccountSettingsHandler(user)))
+	mux.Handle("GET /api/v1/users/me/settings", mwAuth(mw.SelfUserID(authuser.GetAccountSettingsHandler(user))))
+	mux.Handle("PATCH /api/v1/users/{user_id}/settings", mwAuth(authuser.UpdateAccountSettingsHandler(user)))
+	mux.Handle("PATCH /api/v1/users/me/settings", mwAuth(mw.SelfUserID(authuser.UpdateAccountSettingsHandler(user))))
+	// mux.HandleFunc("DELETE /api/v1/users/{user_id}", mwAuth(authuser.DeleteUserHandler(gssService)))
 
 	mux.Handle("GET /api/v1/roles", mwAuth(rbac.ListRolesHandler(rbacService)))
 	mux.Handle("POST /api/v1/roles", mwAuth(rbac.CreateRoleHandler(rbacService)))

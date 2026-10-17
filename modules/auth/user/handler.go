@@ -1,10 +1,9 @@
-package authroutes
+package user
 
 import (
 	"errors"
 	authaccount "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
-	authuser "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/user"
 	"log"
 	"net/http"
 	"strconv"
@@ -21,22 +20,12 @@ const (
 	msgNoPermissionToUpdateUsers                = "You do not have permission to update users"
 	msgInvalidRequestBody                       = "Invalid request body"
 	msgFailedToUpdateUser                       = "Failed to update user"
-	msgPlatformNotLinked                        = "This platform isn't linked to this user"
 	msgNoPermissionToGetUser                    = "You do not have permission to get this user"
 	msgNoPermissionToGetUsers                   = "You do not have permission to get users"
 	msgNoPermissionToGetUserPermissions         = "You do not have permission to get user permissions"
 	msgUnsupportedPlatform                      = "Unsupported platform"
 	msgNoPermissionToDeleteUsers                = "You do not have permission to delete users"
 	msgFailedToDeleteUser                       = "Failed to delete user"
-	msgNoPermissionToViewLinkedAccounts         = "You do not have permission to view this user's linked accounts"
-	msgFailedToGetLinkedAccounts                = "Failed to get linked accounts"
-	msgNoPermissionToUnlinkPlatforms            = "You do not have permission to unlink this user's platforms"
-	msgSetPasswordOrLinkBeforeUnlinking         = "Set a password or link another platform before unlinking your last one"
-	msgFailedToUnlinkPlatform                   = "Failed to unlink platform"
-	msgNoPermissionToUpdatePlatforms            = "You do not have permission to update this user's platforms"
-	msgSetPasswordOrLinkBeforeDisabling         = "Set a password or link another platform before disabling your last login method"
-	msgLinkedAccountUnverified                  = "This linked account is unverified and can't be enabled for login"
-	msgFailedToUpdatePlatform                   = "Failed to update platform"
 	msgNoPermissionToViewSettings               = "You do not have permission to view this user's settings"
 	msgFailedToGetAccountSettings               = "Failed to get account settings"
 	msgNoPermissionToUpdateSettings             = "You do not have permission to update this user's settings"
@@ -81,7 +70,7 @@ func respondUpdateUserFailure(w http.ResponseWriter, r *http.Request, err error)
 }
 
 // ListUsersHandler - List a page of users
-func ListUsersHandler(service authuser.Service) http.HandlerFunc {
+func ListUsersHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
 		if !session.HasPermission(perms.ScopeAdminUsers) {
@@ -113,14 +102,14 @@ func ListUsersHandler(service authuser.Service) http.HandlerFunc {
 			return
 		}
 		if users == nil {
-			users = []*authuser.User{}
+			users = []*User{}
 		}
 		responses.StructOK(w, r, users)
 	}
 }
 
 // GetUserHandler - Get a user
-func GetUserHandler(service authuser.Service) http.HandlerFunc {
+func GetUserHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
 		userID := r.PathValue("user_id")
@@ -147,7 +136,7 @@ func GetUserHandler(service authuser.Service) http.HandlerFunc {
 }
 
 // GetUserFromPlatformHandler - Get a user from a platform
-func GetUserFromPlatformHandler(service authuser.Service) http.HandlerFunc {
+func GetUserFromPlatformHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
 		if !session.HasPermission(perms.ScopeAdminUsers) {
@@ -171,7 +160,7 @@ func GetUserFromPlatformHandler(service authuser.Service) http.HandlerFunc {
 }
 
 // GetUserPermissionsHandler - Get a user's permissions
-func GetUserPermissionsHandler(service authuser.Service) http.HandlerFunc {
+func GetUserPermissionsHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
 		userID := r.PathValue("user_id")
@@ -194,7 +183,7 @@ func GetUserPermissionsHandler(service authuser.Service) http.HandlerFunc {
 }
 
 // UpdateUserHandler - Update a user
-func UpdateUserHandler(service authuser.Service) http.HandlerFunc {
+func UpdateUserHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
 		if !session.HasPermission(perms.ScopeAdminUsers) {
@@ -202,7 +191,7 @@ func UpdateUserHandler(service authuser.Service) http.HandlerFunc {
 			return
 		}
 		userID := r.PathValue("user_id")
-		var update authuser.UserUpdate
+		var update UserUpdate
 		err := responses.DecodeStruct(r, &update)
 		if err != nil {
 			responses.BadRequest(w, r, msgInvalidRequestBody)
@@ -223,7 +212,7 @@ func UpdateUserHandler(service authuser.Service) http.HandlerFunc {
 }
 
 // UpdateUserFromPlatformHandler - Update a user from a platform
-func UpdateUserFromPlatformHandler(service authuser.Service) http.HandlerFunc {
+func UpdateUserFromPlatformHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
 		if !session.HasPermission(perms.ScopeAdminUsers) {
@@ -285,7 +274,7 @@ func UpdateUserFromPlatformHandler(service authuser.Service) http.HandlerFunc {
 }
 
 // DeleteUserHandler - Delete a user
-func DeleteUserHandler(service authuser.Service) http.HandlerFunc {
+func DeleteUserHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
 		if !session.HasPermission(perms.ScopeAdminUsers) {
@@ -303,89 +292,8 @@ func DeleteUserHandler(service authuser.Service) http.HandlerFunc {
 	}
 }
 
-// GetUserLinkedAccountsHandler - List a user's linked platforms
-func GetUserLinkedAccountsHandler(service linking.Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
-		userID := r.PathValue("user_id")
-		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
-			responses.Forbidden(w, r, msgNoPermissionToViewLinkedAccounts)
-			return
-		}
-		links, err := service.GetUserLinkedAccounts(userID)
-		if err != nil {
-			responses.InternalServerError(w, r, msgFailedToGetLinkedAccounts)
-			return
-		}
-		responses.StructOK(w, r, links)
-	}
-}
-
-// UnlinkPlatformHandler - Unlink a platform from a user
-func UnlinkPlatformHandler(service linking.Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
-		userID := r.PathValue("user_id")
-		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
-			responses.Forbidden(w, r, msgNoPermissionToUnlinkPlatforms)
-			return
-		}
-		platform := linking.Platform(r.PathValue("platform"))
-		err := service.UnlinkPlatform(userID, platform)
-		switch {
-		case err == nil:
-			responses.NoContent(w, r)
-		case errors.Is(err, authaccount.ErrNotFound):
-			responses.NotFound(w, r, msgPlatformNotLinked)
-		case errors.Is(err, authaccount.ErrWouldLockAccount):
-			responses.BadRequest(w, r, msgSetPasswordOrLinkBeforeUnlinking)
-		default:
-			responses.InternalServerError(w, r, msgFailedToUnlinkPlatform)
-		}
-	}
-}
-
-// SetPlatformLoginEnabledRequest - Body for SetPlatformLoginEnabledHandler
-type SetPlatformLoginEnabledRequest struct {
-	// LoginEnabled is a pointer so a missing field is rejected instead of
-	// silently defaulting to false.
-	LoginEnabled *bool `json:"login_enabled" xml:"login_enabled"`
-}
-
-// SetPlatformLoginEnabledHandler - Toggle whether a linked platform can log in
-func SetPlatformLoginEnabledHandler(service linking.Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
-		userID := r.PathValue("user_id")
-		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
-			responses.Forbidden(w, r, msgNoPermissionToUpdatePlatforms)
-			return
-		}
-		platform := linking.Platform(r.PathValue("platform"))
-		var body SetPlatformLoginEnabledRequest
-		if err := responses.DecodeStruct(r, &body); err != nil || body.LoginEnabled == nil {
-			responses.BadRequest(w, r, msgInvalidRequestBody)
-			return
-		}
-
-		err := service.SetPlatformLoginEnabled(userID, platform, *body.LoginEnabled)
-		switch {
-		case err == nil:
-			responses.NoContent(w, r)
-		case errors.Is(err, authaccount.ErrNotFound):
-			responses.NotFound(w, r, msgPlatformNotLinked)
-		case errors.Is(err, authaccount.ErrWouldLockAccount):
-			responses.BadRequest(w, r, msgSetPasswordOrLinkBeforeDisabling)
-		case errors.Is(err, linking.ErrLinkedAccountUnverified):
-			responses.BadRequest(w, r, msgLinkedAccountUnverified)
-		default:
-			responses.InternalServerError(w, r, msgFailedToUpdatePlatform)
-		}
-	}
-}
-
 // GetAccountSettingsHandler - Get a user's account settings
-func GetAccountSettingsHandler(service authuser.Service) http.HandlerFunc {
+func GetAccountSettingsHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
 		userID := r.PathValue("user_id")
@@ -415,7 +323,7 @@ type UpdateAccountSettingsRequest struct {
 }
 
 // UpdateAccountSettingsHandler - Update a user's account settings
-func UpdateAccountSettingsHandler(service authuser.Service) http.HandlerFunc {
+func UpdateAccountSettingsHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
 		userID := r.PathValue("user_id")
