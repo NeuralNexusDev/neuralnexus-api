@@ -20,22 +20,12 @@ const (
 	msgNoPermissionToUpdateUsers                = "You do not have permission to update users"
 	msgInvalidRequestBody                       = "Invalid request body"
 	msgFailedToUpdateUser                       = "Failed to update user"
-	msgPlatformNotLinked                        = "This platform isn't linked to this user"
 	msgNoPermissionToGetUser                    = "You do not have permission to get this user"
 	msgNoPermissionToGetUsers                   = "You do not have permission to get users"
 	msgNoPermissionToGetUserPermissions         = "You do not have permission to get user permissions"
 	msgUnsupportedPlatform                      = "Unsupported platform"
 	msgNoPermissionToDeleteUsers                = "You do not have permission to delete users"
 	msgFailedToDeleteUser                       = "Failed to delete user"
-	msgNoPermissionToViewLinkedAccounts         = "You do not have permission to view this user's linked accounts"
-	msgFailedToGetLinkedAccounts                = "Failed to get linked accounts"
-	msgNoPermissionToUnlinkPlatforms            = "You do not have permission to unlink this user's platforms"
-	msgSetPasswordOrLinkBeforeUnlinking         = "Set a password or link another platform before unlinking your last one"
-	msgFailedToUnlinkPlatform                   = "Failed to unlink platform"
-	msgNoPermissionToUpdatePlatforms            = "You do not have permission to update this user's platforms"
-	msgSetPasswordOrLinkBeforeDisabling         = "Set a password or link another platform before disabling your last login method"
-	msgLinkedAccountUnverified                  = "This linked account is unverified and can't be enabled for login"
-	msgFailedToUpdatePlatform                   = "Failed to update platform"
 	msgNoPermissionToViewSettings               = "You do not have permission to view this user's settings"
 	msgFailedToGetAccountSettings               = "Failed to get account settings"
 	msgNoPermissionToUpdateSettings             = "You do not have permission to update this user's settings"
@@ -299,87 +289,6 @@ func DeleteUserHandler(service Service) http.HandlerFunc {
 			return
 		}
 		responses.NoContent(w, r)
-	}
-}
-
-// GetUserLinkedAccountsHandler - List a user's linked platforms
-func GetUserLinkedAccountsHandler(service linking.Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
-		userID := r.PathValue("user_id")
-		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
-			responses.Forbidden(w, r, msgNoPermissionToViewLinkedAccounts)
-			return
-		}
-		links, err := service.GetUserLinkedAccounts(userID)
-		if err != nil {
-			responses.InternalServerError(w, r, msgFailedToGetLinkedAccounts)
-			return
-		}
-		responses.StructOK(w, r, links)
-	}
-}
-
-// UnlinkPlatformHandler - Unlink a platform from a user
-func UnlinkPlatformHandler(service linking.Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
-		userID := r.PathValue("user_id")
-		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
-			responses.Forbidden(w, r, msgNoPermissionToUnlinkPlatforms)
-			return
-		}
-		platform := linking.Platform(r.PathValue("platform"))
-		err := service.UnlinkPlatform(userID, platform)
-		switch {
-		case err == nil:
-			responses.NoContent(w, r)
-		case errors.Is(err, authaccount.ErrNotFound):
-			responses.NotFound(w, r, msgPlatformNotLinked)
-		case errors.Is(err, authaccount.ErrWouldLockAccount):
-			responses.BadRequest(w, r, msgSetPasswordOrLinkBeforeUnlinking)
-		default:
-			responses.InternalServerError(w, r, msgFailedToUnlinkPlatform)
-		}
-	}
-}
-
-// SetPlatformLoginEnabledRequest - Body for SetPlatformLoginEnabledHandler
-type SetPlatformLoginEnabledRequest struct {
-	// LoginEnabled is a pointer so a missing field is rejected instead of
-	// silently defaulting to false.
-	LoginEnabled *bool `json:"login_enabled" xml:"login_enabled"`
-}
-
-// SetPlatformLoginEnabledHandler - Toggle whether a linked platform can log in
-func SetPlatformLoginEnabledHandler(service linking.Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
-		userID := r.PathValue("user_id")
-		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
-			responses.Forbidden(w, r, msgNoPermissionToUpdatePlatforms)
-			return
-		}
-		platform := linking.Platform(r.PathValue("platform"))
-		var body SetPlatformLoginEnabledRequest
-		if err := responses.DecodeStruct(r, &body); err != nil || body.LoginEnabled == nil {
-			responses.BadRequest(w, r, msgInvalidRequestBody)
-			return
-		}
-
-		err := service.SetPlatformLoginEnabled(userID, platform, *body.LoginEnabled)
-		switch {
-		case err == nil:
-			responses.NoContent(w, r)
-		case errors.Is(err, authaccount.ErrNotFound):
-			responses.NotFound(w, r, msgPlatformNotLinked)
-		case errors.Is(err, authaccount.ErrWouldLockAccount):
-			responses.BadRequest(w, r, msgSetPasswordOrLinkBeforeDisabling)
-		case errors.Is(err, linking.ErrLinkedAccountUnverified):
-			responses.BadRequest(w, r, msgLinkedAccountUnverified)
-		default:
-			responses.InternalServerError(w, r, msgFailedToUpdatePlatform)
-		}
 	}
 }
 

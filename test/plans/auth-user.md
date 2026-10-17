@@ -67,23 +67,6 @@
 | UR-25 | DeleteUserHandler | Happy Path | Admin deletes a user | session has ScopeAdminUsers, service.DeleteUser succeeds | 204 No Content | P1 |  |
 | UR-26 | DeleteUserHandler | Error Path | No permission | session lacks ScopeAdminUsers | 403 Forbidden `msgNoPermissionToDeleteUsers` | P2 |  |
 | UR-27 | DeleteUserHandler | Error Path | UserService.DeleteUser fails with an unclassified error | Admin session, service returns `testerrors.ErrDBDown` | 500 Internal Server Error `msgFailedToDeleteUser` | P2 |  |
-| UR-28 | GetUserLinkedAccountsHandler | Happy Path | Self-lookup | session.UserID == path user_id | 200 OK with the linked-accounts list | P1 |  |
-| UR-29 | GetUserLinkedAccountsHandler | Happy Path | Admin looks up another user's linked accounts | session.UserID != path user_id, session has ScopeAdminUsers | 200 OK with the linked-accounts list | P2 |  |
-| UR-30 | GetUserLinkedAccountsHandler | Error Path | No permission | session.UserID != path user_id, no ScopeAdminUsers | 403 Forbidden `msgNoPermissionToViewLinkedAccounts` | P2 |  |
-| UR-31 | GetUserLinkedAccountsHandler | Error Path | UserService.GetUserLinkedAccounts errors | Permission check passes, service returns an error | 500 Internal Server Error `msgFailedToGetLinkedAccounts` | P2 |  |
-| UR-32 | UnlinkPlatformHandler | Happy Path | Self unlinks a platform | session.UserID == path user_id, service.UnlinkPlatform succeeds | 204 No Content | P1 |  |
-| UR-33 | UnlinkPlatformHandler | Error Path | No permission | session.UserID != path user_id, no ScopeAdminUsers | 403 Forbidden `msgNoPermissionToUnlinkPlatforms` | P2 |  |
-| UR-34 | UnlinkPlatformHandler | Error Path | Platform not linked | service.UnlinkPlatform returns account.ErrNotFound | 404 Not Found `msgPlatformNotLinked` | P2 |  |
-| UR-35 | UnlinkPlatformHandler | Error Path | Would lock the account | service.UnlinkPlatform returns account.ErrWouldLockAccount | 400 Bad Request `msgSetPasswordOrLinkBeforeUnlinking` | P2 |  |
-| UR-36 | UnlinkPlatformHandler | Error Path | Unclassified service error | service.UnlinkPlatform returns some other error | 500 Internal Server Error `msgFailedToUnlinkPlatform` | P2 |  |
-| UR-37 | SetPlatformLoginEnabledHandler | Happy Path | Self toggles login-enabled | session.UserID == path user_id, body {"login_enabled":true}, service succeeds | 204 No Content | P1 |  |
-| UR-38 | SetPlatformLoginEnabledHandler | Error Path | No permission | session.UserID != path user_id, no ScopeAdminUsers | 403 Forbidden `msgNoPermissionToUpdatePlatforms` | P2 |  |
-| UR-39 | SetPlatformLoginEnabledHandler | Error Path | Malformed body | Permission check passes, body is not valid JSON | 400 Bad Request `msgInvalidRequestBody` | P2 |  |
-| UR-40 | SetPlatformLoginEnabledHandler | Edge Case | login_enabled field omitted | Body decodes with no error but LoginEnabled == nil | 400 Bad Request `msgInvalidRequestBody` | P2 |  |
-| UR-41 | SetPlatformLoginEnabledHandler | Error Path | Platform not linked | service.SetPlatformLoginEnabled returns account.ErrNotFound | 404 Not Found `msgPlatformNotLinked` | P2 |  |
-| UR-42 | SetPlatformLoginEnabledHandler | Error Path | Would lock the account | service.SetPlatformLoginEnabled returns account.ErrWouldLockAccount | 400 Bad Request `msgSetPasswordOrLinkBeforeDisabling` | P2 |  |
-| UR-43 | SetPlatformLoginEnabledHandler | Error Path | Linked account unverified | service.SetPlatformLoginEnabled returns auth.ErrLinkedAccountUnverified | 400 Bad Request `msgLinkedAccountUnverified` | P2 |  |
-| UR-44 | SetPlatformLoginEnabledHandler | Error Path | Unclassified service error | service.SetPlatformLoginEnabled returns some other error | 500 Internal Server Error `msgFailedToUpdatePlatform` | P2 |  |
 | UR-45 | GetAccountSettingsHandler | Happy Path | Self-lookup | session.UserID == path user_id | 200 OK with the account settings | P1 |  |
 | UR-46 | GetAccountSettingsHandler | Happy Path | Admin looks up another user's settings | session.UserID != path user_id, session has ScopeAdminUsers | 200 OK with the account settings | P2 |  |
 | UR-47 | GetAccountSettingsHandler | Error Path | No permission | session.UserID != path user_id, no ScopeAdminUsers | 403 Forbidden `msgNoPermissionToViewSettings` | P2 |  |

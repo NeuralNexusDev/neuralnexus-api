@@ -7,6 +7,11 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 )
 
+// RoleStore - The source of the permissions that roles grant
+type RoleStore interface {
+	GetPermissionsForRoles(roleIDs []string) ([]string, error)
+}
+
 // AccountService - The account service interface
 type AccountService interface {
 	AddAccount(account *Account) error

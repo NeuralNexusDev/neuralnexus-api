@@ -2,32 +2,45 @@ package linking
 
 import (
 	"encoding/base64"
+	"errors"
 	"log"
 	"net/http"
 	"net/url"
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	authaccount "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
+	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"github.com/goccy/go-json"
 )
 
 const (
-	msgAuthenticationFailed           = "Authentication failed"
-	msgInvalidRequest                 = "Invalid request"
-	logInvalidState                   = "Invalid state"
-	msgInvalidState                   = "Invalid state"
-	msgLoginRequiredToLink            = "You must be logged in to link an account"
-	logFailedToCreateJWT              = "Failed to create JWT:\n\t"
-	msgInvalidPlatform                = "Invalid platform"
-	msgSessionExpired                 = "Your session has expired"
-	msgMissingOAuthScope              = "The platform did not grant the required access"
-	msgPlatformLoginDisabled          = "Login with this platform is disabled for this account"
-	msgConflictingMicrosoftIdentities = "This Microsoft account's Xbox Live and Minecraft: Java Edition identities belong to different accounts"
-	msgPlatformAlreadyLinked          = "This platform account is already linked to a different account"
-	msgSteamAccountNotFound           = "Steam account not found"
-	msgSteamAccountMismatch           = "Steam account mismatch"
+	msgAuthenticationFailed             = "Authentication failed"
+	msgInvalidRequest                   = "Invalid request"
+	logInvalidState                     = "Invalid state"
+	msgInvalidState                     = "Invalid state"
+	msgLoginRequiredToLink              = "You must be logged in to link an account"
+	logFailedToCreateJWT                = "Failed to create JWT:\n\t"
+	msgInvalidPlatform                  = "Invalid platform"
+	msgSessionExpired                   = "Your session has expired"
+	msgMissingOAuthScope                = "The platform did not grant the required access"
+	msgPlatformLoginDisabled            = "Login with this platform is disabled for this account"
+	msgConflictingMicrosoftIdentities   = "This Microsoft account's Xbox Live and Minecraft: Java Edition identities belong to different accounts"
+	msgPlatformAlreadyLinked            = "This platform account is already linked to a different account"
+	msgSteamAccountNotFound             = "Steam account not found"
+	msgSteamAccountMismatch             = "Steam account mismatch"
+	msgInvalidRequestBody               = "Invalid request body"
+	msgPlatformNotLinked                = "This platform isn't linked to this user"
+	msgNoPermissionToViewLinkedAccounts = "You do not have permission to view this user's linked accounts"
+	msgFailedToGetLinkedAccounts        = "Failed to get linked accounts"
+	msgNoPermissionToUnlinkPlatforms    = "You do not have permission to unlink this user's platforms"
+	msgSetPasswordOrLinkBeforeUnlinking = "Set a password or link another platform before unlinking your last one"
+	msgFailedToUnlinkPlatform           = "Failed to unlink platform"
+	msgNoPermissionToUpdatePlatforms    = "You do not have permission to update this user's platforms"
+	msgSetPasswordOrLinkBeforeDisabling = "Set a password or link another platform before disabling your last login method"
+	msgLinkedAccountUnverified          = "This linked account is unverified and can't be enabled for login"
+	msgFailedToUpdatePlatform           = "Failed to update platform"
 )
 
 // OAuthHandler handles the OAuth route
@@ -272,4 +285,85 @@ func isAllowedRedirect(redirectURI string) bool {
 		return false
 	}
 	return target.Scheme == siteURL.Scheme && target.Host == siteURL.Host
+}
+
+// GetUserLinkedAccountsHandler - List a user's linked platforms
+func GetUserLinkedAccountsHandler(service Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
+		userID := r.PathValue("user_id")
+		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
+			responses.Forbidden(w, r, msgNoPermissionToViewLinkedAccounts)
+			return
+		}
+		links, err := service.GetUserLinkedAccounts(userID)
+		if err != nil {
+			responses.InternalServerError(w, r, msgFailedToGetLinkedAccounts)
+			return
+		}
+		responses.StructOK(w, r, links)
+	}
+}
+
+// UnlinkPlatformHandler - Unlink a platform from a user
+func UnlinkPlatformHandler(service Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
+		userID := r.PathValue("user_id")
+		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
+			responses.Forbidden(w, r, msgNoPermissionToUnlinkPlatforms)
+			return
+		}
+		platform := Platform(r.PathValue("platform"))
+		err := service.UnlinkPlatform(userID, platform)
+		switch {
+		case err == nil:
+			responses.NoContent(w, r)
+		case errors.Is(err, authaccount.ErrNotFound):
+			responses.NotFound(w, r, msgPlatformNotLinked)
+		case errors.Is(err, authaccount.ErrWouldLockAccount):
+			responses.BadRequest(w, r, msgSetPasswordOrLinkBeforeUnlinking)
+		default:
+			responses.InternalServerError(w, r, msgFailedToUnlinkPlatform)
+		}
+	}
+}
+
+// SetPlatformLoginEnabledRequest - Body for SetPlatformLoginEnabledHandler
+type SetPlatformLoginEnabledRequest struct {
+	// LoginEnabled is a pointer so a missing field is rejected instead of
+	// silently defaulting to false.
+	LoginEnabled *bool `json:"login_enabled" xml:"login_enabled"`
+}
+
+// SetPlatformLoginEnabledHandler - Toggle whether a linked platform can log in
+func SetPlatformLoginEnabledHandler(service Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
+		userID := r.PathValue("user_id")
+		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
+			responses.Forbidden(w, r, msgNoPermissionToUpdatePlatforms)
+			return
+		}
+		platform := Platform(r.PathValue("platform"))
+		var body SetPlatformLoginEnabledRequest
+		if err := responses.DecodeStruct(r, &body); err != nil || body.LoginEnabled == nil {
+			responses.BadRequest(w, r, msgInvalidRequestBody)
+			return
+		}
+
+		err := service.SetPlatformLoginEnabled(userID, platform, *body.LoginEnabled)
+		switch {
+		case err == nil:
+			responses.NoContent(w, r)
+		case errors.Is(err, authaccount.ErrNotFound):
+			responses.NotFound(w, r, msgPlatformNotLinked)
+		case errors.Is(err, authaccount.ErrWouldLockAccount):
+			responses.BadRequest(w, r, msgSetPasswordOrLinkBeforeDisabling)
+		case errors.Is(err, ErrLinkedAccountUnverified):
+			responses.BadRequest(w, r, msgLinkedAccountUnverified)
+		default:
+			responses.InternalServerError(w, r, msgFailedToUpdatePlatform)
+		}
+	}
 }
