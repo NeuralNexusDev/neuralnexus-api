@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/ratelimit"
 	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"golang.org/x/crypto/ed25519"
@@ -183,7 +183,7 @@ func SessionMiddleware(service authsession.SessionService) Middleware {
 }
 
 // RateLimitMiddleware - Rate limit requests
-func RateLimitMiddleware(service auth.RateLimitService, prefix string, sessionLimit int, ipLimit int) Middleware {
+func RateLimitMiddleware(service ratelimit.RateLimitService, prefix string, sessionLimit int, ipLimit int) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			session, ok := r.Context().Value(SessionKey).(*authsession.Session)

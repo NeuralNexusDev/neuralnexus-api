@@ -96,7 +96,7 @@ func TestST01NewStore(t *testing.T) {
 	})
 }
 
-func TestST02to07Accessors(t *testing.T) {
+func TestST02to05And07Accessors(t *testing.T) {
 	s := &store{}
 	cases := []struct {
 		id string
@@ -106,7 +106,6 @@ func TestST02to07Accessors(t *testing.T) {
 		{"ST-03_AccountSettings", func() bool { v, ok := s.AccountSettings().(*store); return ok && v == s }},
 		{"ST-04_Session", func() bool { return s.Session() != nil }},
 		{"ST-05_LinkAccount", func() bool { v, ok := s.LinkAccount().(*store); return ok && v == s }},
-		{"ST-06_RateLimit", func() bool { v, ok := s.RateLimit().(*store); return ok && v == s }},
 		{"ST-07_OAuthToken", func() bool { v, ok := s.OAuthToken().(*store); return ok && v == s }},
 	}
 	for _, c := range cases {
@@ -310,31 +309,6 @@ func TestST38to39SetPasswordAuthEnabled(t *testing.T) {
 	t.Run("ST-39_DisableBeginFails", func(t *testing.T) {
 		s := stStoreWithUnreachableDB(t)
 		stAssertRawConnectionError(t, s.SetPasswordAuthEnabled("u1", false))
-	})
-}
-
-func TestST40GetRateLimit(t *testing.T) {
-	s := stStoreWithUnreachableRedis(t)
-	t.Run("ST-40_ConnectionErrorNotTreatedAsMiss", func(t *testing.T) {
-		got, err := s.GetRateLimit("k")
-		if got != 0 {
-			t.Errorf("expected 0, got %d", got)
-		}
-		stAssertRawConnectionError(t, err)
-	})
-}
-
-func TestST41SetRateLimit(t *testing.T) {
-	s := stStoreWithUnreachableRedis(t)
-	t.Run("ST-41_ConnectionError", func(t *testing.T) {
-		stAssertRawConnectionError(t, s.SetRateLimit("k", 1))
-	})
-}
-
-func TestST42IncrementRateLimit(t *testing.T) {
-	s := stStoreWithUnreachableRedis(t)
-	t.Run("ST-42_ConnectionError", func(t *testing.T) {
-		stAssertRawConnectionError(t, s.IncrementRateLimit("k"))
 	})
 }
 

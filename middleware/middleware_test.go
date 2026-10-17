@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/ratelimit"
 	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"golang.org/x/crypto/ed25519"
@@ -66,7 +66,7 @@ type mwFakeRateLimitSvc struct {
 	getCalls  []string
 }
 
-var _ auth.RateLimitService = (*mwFakeRateLimitSvc)(nil)
+var _ ratelimit.RateLimitService = (*mwFakeRateLimitSvc)(nil)
 
 func (f *mwFakeRateLimitSvc) IncrRateLimit(key string) error {
 	f.incrCalls = append(f.incrCalls, key)
@@ -88,7 +88,7 @@ type mwSyncedRateLimitSvc struct {
 	counts map[string]int
 }
 
-var _ auth.RateLimitService = (*mwSyncedRateLimitSvc)(nil)
+var _ ratelimit.RateLimitService = (*mwSyncedRateLimitSvc)(nil)
 
 func (f *mwSyncedRateLimitSvc) IncrRateLimit(key string) error {
 	f.mu.Lock()
@@ -570,7 +570,7 @@ func TestSessionMiddleware(t *testing.T) {
 	})
 }
 
-func mwRunRateLimit(svc auth.RateLimitService, prefix string, sessionLimit, ipLimit int, r *http.Request) (rec *httptest.ResponseRecorder, nextCalls int) {
+func mwRunRateLimit(svc ratelimit.RateLimitService, prefix string, sessionLimit, ipLimit int, r *http.Request) (rec *httptest.ResponseRecorder, nextCalls int) {
 	rec = httptest.NewRecorder()
 	next := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		nextCalls++

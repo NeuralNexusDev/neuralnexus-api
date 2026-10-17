@@ -27,18 +27,6 @@
 | AC-21 | NewSession (service) | Edge Case | the account's role grants nothing | role store returns no permissions | `Permissions` is empty and non-nil | P1 |   |
 | AC-22 | NewSession (service) | Error Path | the snowflake generator fails | the test binary re-executes itself with `SNOWFLAKE_NODE_ID` above 31 | Returns a nil session and an error | P2 | Re-exec because the snowflake settings are read when the package loads |
 
-## ratelimit.go
-
-| ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
-|----|----------|---------------|----------|---------------|------------------|----------|-------|
-| RL-01 | NewRateLimitService | Happy Path | Service wired to `store.RateLimit()` | fake `Store` | Returned service delegates to the exact `RateLimitStore` the fake `Store` returned | P2 |  |
-| RL-02 | GetRateLimit | Happy Path | `store.GetRateLimit` succeeds | fake store returns `(5, nil)` | Returns `(5, nil)` | P1 |  |
-| RL-03 | GetRateLimit | Error Path | `store.GetRateLimit` fails | | Error propagated unchanged | P2 |  |
-| RL-04 | SetRateLimit | Happy Path | `store.SetRateLimit` succeeds | | Returns nil | P1 |  |
-| RL-05 | SetRateLimit | Error Path | `store.SetRateLimit` fails | | Error propagated unchanged | P2 |  |
-| RL-06 | IncrRateLimit | Happy Path | `store.IncrementRateLimit` succeeds | | Returns nil | P1 |  |
-| RL-07 | IncrRateLimit | Error Path | `store.IncrementRateLimit` fails | | Error propagated unchanged | P2 |  |
-
 ## store.go
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
@@ -48,7 +36,6 @@
 | ST-03 | AccountSettings | Accessor | | | Same pointer-identity check | P3 |  |
 | ST-04 | Session | Accessor | | | Returns a non-nil `SessionStore` | P3 |  |
 | ST-05 | LinkAccount | Accessor | | | Same pointer-identity check | P3 |  |
-| ST-06 | RateLimit | Accessor | | | Same pointer-identity check | P3 |  |
 | ST-07 | OAuthToken | Accessor | | | Same pointer-identity check | P3 |  |
 | ST-08 | translateAccountConstraintErr | Edge Case | `err` is not a `*pgconn.PgError` | a plain error that is not a `*pgconn.PgError` (`testerrors.ErrBoom`) | Returned unchanged | P1 |  |
 | ST-09 | translateAccountConstraintErr | Edge Case | `*pgconn.PgError` with `Code != "23505"` | | Returned unchanged | P2 |  |
@@ -73,9 +60,6 @@
 | ST-37 | GetAccountSettings | Error Path | DB unreachable | | Returns nil, raw error (the `DefaultAccountSettings` fallback is `ErrNoRows`-specific and not reached) | P1 |  |
 | ST-38 | SetPasswordAuthEnabled | Error Path | DB unreachable, `enabled=true` | `s.db.Begin` fails | Returns raw error | P1 |  |
 | ST-39 | SetPasswordAuthEnabled | Error Path | DB unreachable, `enabled=false` | | Returns raw error | P2 |  |
-| ST-40 | GetRateLimit | Error Path | Redis unreachable | `Get` fails with a non-`redis.Nil` error | Returns `(0, err)`; the auto-provision-on-miss branch is never taken | P1 |  |
-| ST-41 | SetRateLimit | Error Path | Redis unreachable | | Returns raw error | P2 |  |
-| ST-42 | IncrementRateLimit | Error Path | Redis unreachable | `Incr` fails | Returns raw error; `ExpireNX` never attempted | P2 |  |
 | ST-43 | AddOAuthTokenToDB | Error Path | DB unreachable | | Returns raw error | P2 |  |
 | ST-44 | GetOAuthTokenByUserID | Error Path | DB unreachable | | Returns nil, raw error | P2 |  |
 | ST-45 | UpdateOAuthToken | Error Path | DB unreachable | | Returns raw error | P2 |  |

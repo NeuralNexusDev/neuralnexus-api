@@ -1,4 +1,4 @@
-package auth
+package ratelimit
 
 // RateLimitService - Rate limit service interface
 // If there is no session fall back to the request's IP
@@ -8,7 +8,6 @@ type RateLimitService interface {
 	IncrRateLimit(key string) error
 }
 
-// rateLimitService - Rate limit service struct
 type rateLimitService struct {
 	store RateLimitStore
 }
