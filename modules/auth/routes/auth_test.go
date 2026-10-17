@@ -17,7 +17,6 @@ import (
 
 	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	authaccount "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
 	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
@@ -72,16 +71,16 @@ func (s *stubAccountService) NewSession(a *authaccount.Account, expiresAt int64)
 }
 
 type stubLinkAccountStore struct {
-	existing   *auth.LinkedAccount
-	byPlatform map[auth.Platform]*auth.LinkedAccount
+	existing   *linking.LinkedAccount
+	byPlatform map[linking.Platform]*linking.LinkedAccount
 	addErr     error
 }
 
-var _ auth.LinkAccountStore = (*stubLinkAccountStore)(nil)
+var _ linking.LinkAccountStore = (*stubLinkAccountStore)(nil)
 
-func (s *stubLinkAccountStore) AddLinkedAccountToDB(*auth.LinkedAccount) error { return s.addErr }
-func (s *stubLinkAccountStore) UpdateLinkedAccount(*auth.LinkedAccount) error  { return nil }
-func (s *stubLinkAccountStore) GetLinkedAccountByPlatformID(platform auth.Platform, _ string) (*auth.LinkedAccount, error) {
+func (s *stubLinkAccountStore) AddLinkedAccountToDB(*linking.LinkedAccount) error { return s.addErr }
+func (s *stubLinkAccountStore) UpdateLinkedAccount(*linking.LinkedAccount) error  { return nil }
+func (s *stubLinkAccountStore) GetLinkedAccountByPlatformID(platform linking.Platform, _ string) (*linking.LinkedAccount, error) {
 	if la, ok := s.byPlatform[platform]; ok {
 		return la, nil
 	}
@@ -90,17 +89,17 @@ func (s *stubLinkAccountStore) GetLinkedAccountByPlatformID(platform auth.Platfo
 	}
 	return nil, authaccount.ErrNotFound
 }
-func (s *stubLinkAccountStore) GetLinkedAccountByPlatformName(auth.Platform, string) (*auth.LinkedAccount, error) {
+func (s *stubLinkAccountStore) GetLinkedAccountByPlatformName(linking.Platform, string) (*linking.LinkedAccount, error) {
 	return nil, authaccount.ErrNotFound
 }
-func (s *stubLinkAccountStore) GetLinkedAccountByUserID(string, auth.Platform) (*auth.LinkedAccount, error) {
+func (s *stubLinkAccountStore) GetLinkedAccountByUserID(string, linking.Platform) (*linking.LinkedAccount, error) {
 	return nil, authaccount.ErrNotFound
 }
-func (s *stubLinkAccountStore) GetLinkedAccountsByUserID(string) ([]*auth.LinkedAccount, error) {
+func (s *stubLinkAccountStore) GetLinkedAccountsByUserID(string) ([]*linking.LinkedAccount, error) {
 	return nil, nil
 }
-func (s *stubLinkAccountStore) DeleteLinkedAccount(string, auth.Platform) error { return nil }
-func (s *stubLinkAccountStore) SetLinkedAccountLoginEnabled(string, auth.Platform, bool) error {
+func (s *stubLinkAccountStore) DeleteLinkedAccount(string, linking.Platform) error { return nil }
+func (s *stubLinkAccountStore) SetLinkedAccountLoginEnabled(string, linking.Platform, bool) error {
 	return nil
 }
 
@@ -491,7 +490,7 @@ func TestAU14OAuthHandlerMissingState(t *testing.T) {
 }
 
 func TestAU15OAuthHandlerLinkModeNoSession(t *testing.T) {
-	state := linking.OAuthState{Platform: auth.PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLink}
+	state := linking.OAuthState{Platform: linking.PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLink}
 	stateB64 := encodeState(t, state)
 	r := httptest.NewRequest(http.MethodGet, "/api/oauth?code=somecode&state="+stateB64, nil)
 	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
@@ -558,7 +557,7 @@ func TestAU50OAuthHandlerLoginHappyPath(t *testing.T) {
 		}
 	}))
 
-	state := linking.OAuthState{Platform: auth.PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	state := linking.OAuthState{Platform: linking.PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
 	stateB64 := encodeState(t, state)
 	r := httptest.NewRequest(http.MethodGet, "/api/oauth?code=disc-code&state="+stateB64, nil)
 	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
@@ -596,7 +595,7 @@ func TestAU51OpenIDHandlerLoginHappyPath(t *testing.T) {
 		}
 	}))
 
-	state := linking.OAuthState{Platform: auth.PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	state := linking.OAuthState{Platform: linking.PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
 	stateB64 := encodeState(t, state)
 	q := url.Values{
 		"state":               {stateB64},
@@ -692,8 +691,8 @@ func auOpenIDRequest(t *testing.T, state linking.OAuthState) *http.Request {
 }
 
 func TestAU52to57OAuthAndOpenIDFailuresHideCause(t *testing.T) {
-	oauthState := linking.OAuthState{Platform: auth.PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
-	steamState := linking.OAuthState{Platform: auth.PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	oauthState := linking.OAuthState{Platform: linking.PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	steamState := linking.OAuthState{Platform: linking.PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
 	okJWT := func(*authsession.Session) (string, error) { return "test-jwt", nil }
 	failJWT := func(*authsession.Session) (string, error) { return "", testerrors.ErrSigningFailed }
 
@@ -793,7 +792,7 @@ func TestAU17OpenIDHandlerMissingState(t *testing.T) {
 }
 
 func TestAU18OpenIDHandlerLinkModeNoSession(t *testing.T) {
-	state := linking.OAuthState{Platform: auth.PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLink}
+	state := linking.OAuthState{Platform: linking.PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLink}
 	stateB64 := encodeState(t, state)
 	r := httptest.NewRequest(http.MethodGet, "/api/openid?state="+stateB64, nil)
 	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
@@ -807,7 +806,7 @@ func TestAU18OpenIDHandlerLinkModeNoSession(t *testing.T) {
 }
 
 func TestAU19OpenIDHandlerBadOpenIDMode(t *testing.T) {
-	state := linking.OAuthState{Platform: auth.PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	state := linking.OAuthState{Platform: linking.PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
 	stateB64 := encodeState(t, state)
 	q := url.Values{"state": {stateB64}, "openid.mode": {"cancel"}}
 	r := httptest.NewRequest(http.MethodGet, "/api/openid?"+q.Encode(), nil)
@@ -822,7 +821,7 @@ func TestAU19OpenIDHandlerBadOpenIDMode(t *testing.T) {
 }
 
 func TestAU20OpenIDHandlerBadClaimedID(t *testing.T) {
-	state := linking.OAuthState{Platform: auth.PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	state := linking.OAuthState{Platform: linking.PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
 	stateB64 := encodeState(t, state)
 	q := url.Values{"state": {stateB64}, "openid.mode": {"id_res"}, "openid.claimed_id": {"not-a-steam-id-url"}}
 	r := httptest.NewRequest(http.MethodGet, "/api/openid?"+q.Encode(), nil)
@@ -837,7 +836,7 @@ func TestAU20OpenIDHandlerBadClaimedID(t *testing.T) {
 }
 
 func TestAU22DecodeAndValidateStateHappyPath(t *testing.T) {
-	state := linking.OAuthState{Platform: auth.PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	state := linking.OAuthState{Platform: linking.PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
 	stateB64 := encodeState(t, state)
 	r := httptest.NewRequest(http.MethodGet, "/api/oauth?state="+stateB64, nil)
 	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
@@ -911,7 +910,7 @@ func TestAU26DecodeAndValidateStateMissingRequiredField(t *testing.T) {
 }
 
 func TestAU27DecodeAndValidateStateDisallowedRedirect(t *testing.T) {
-	state := linking.OAuthState{Platform: auth.PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://evil.example.com/phish", Mode: linking.ModeLogin}
+	state := linking.OAuthState{Platform: linking.PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://evil.example.com/phish", Mode: linking.ModeLogin}
 	stateB64 := encodeState(t, state)
 	r := httptest.NewRequest(http.MethodGet, "/api/oauth?state="+stateB64, nil)
 	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
@@ -930,7 +929,7 @@ func TestAU27DecodeAndValidateStateDisallowedRedirect(t *testing.T) {
 }
 
 func TestAU28DecodeAndValidateStateMissingNonceCookie(t *testing.T) {
-	state := linking.OAuthState{Platform: auth.PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	state := linking.OAuthState{Platform: linking.PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
 	stateB64 := encodeState(t, state)
 	r := httptest.NewRequest(http.MethodGet, "/api/oauth?state="+stateB64, nil)
 	w := httptest.NewRecorder()
@@ -945,7 +944,7 @@ func TestAU28DecodeAndValidateStateMissingNonceCookie(t *testing.T) {
 }
 
 func TestAU29DecodeAndValidateStateNonceMismatch(t *testing.T) {
-	state := linking.OAuthState{Platform: auth.PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	state := linking.OAuthState{Platform: linking.PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
 	stateB64 := encodeState(t, state)
 	r := httptest.NewRequest(http.MethodGet, "/api/oauth?state="+stateB64, nil)
 	r.AddCookie(&http.Cookie{Name: "nonce", Value: "wrong-nonce"})
@@ -1302,12 +1301,12 @@ func auWithSessionChange(r *http.Request, second any) *http.Request {
 
 func TestAU60to71OAuthAndOpenIDFailureMapping(t *testing.T) {
 	const redirect = "https://neuralnexus.test/done"
-	discordLogin := linking.OAuthState{Platform: auth.PlatformDiscord, Nonce: "test-nonce", RedirectURI: redirect, Mode: linking.ModeLogin}
-	discordLink := linking.OAuthState{Platform: auth.PlatformDiscord, Nonce: "test-nonce", RedirectURI: redirect, Mode: linking.ModeLink}
-	steamLogin := linking.OAuthState{Platform: auth.PlatformSteam, Nonce: "test-nonce", RedirectURI: redirect, Mode: linking.ModeLogin}
-	steamLink := linking.OAuthState{Platform: auth.PlatformSteam, Nonce: "test-nonce", RedirectURI: redirect, Mode: linking.ModeLink}
+	discordLogin := linking.OAuthState{Platform: linking.PlatformDiscord, Nonce: "test-nonce", RedirectURI: redirect, Mode: linking.ModeLogin}
+	discordLink := linking.OAuthState{Platform: linking.PlatformDiscord, Nonce: "test-nonce", RedirectURI: redirect, Mode: linking.ModeLink}
+	steamLogin := linking.OAuthState{Platform: linking.PlatformSteam, Nonce: "test-nonce", RedirectURI: redirect, Mode: linking.ModeLogin}
+	steamLink := linking.OAuthState{Platform: linking.PlatformSteam, Nonce: "test-nonce", RedirectURI: redirect, Mode: linking.ModeLink}
 	okJWT := func(*authsession.Session) (string, error) { return "test-jwt", nil }
-	linkedElsewhere := &stubLinkAccountStore{existing: &auth.LinkedAccount{UserID: "u2", Verified: true, LoginEnabled: true}}
+	linkedElsewhere := &stubLinkAccountStore{existing: &linking.LinkedAccount{UserID: "u2", Verified: true, LoginEnabled: true}}
 	addFails := func(err error) *stubLinkAccountStore { return &stubLinkAccountStore{addErr: err} }
 
 	t.Run("AU-60_OAuthInvalidPlatform", func(t *testing.T) {
@@ -1349,11 +1348,11 @@ func TestAU60to71OAuthAndOpenIDFailureMapping(t *testing.T) {
 	t.Run("AU-64_OAuthConflictingMicrosoftIdentities", func(t *testing.T) {
 		auMicrosoftTransport(t)
 		w := httptest.NewRecorder()
-		las := &stubLinkAccountStore{byPlatform: map[auth.Platform]*auth.LinkedAccount{
-			auth.PlatformXboxLive:  {UserID: "u1", Verified: true, LoginEnabled: true},
-			auth.PlatformMinecraft: {UserID: "u2", Verified: true, LoginEnabled: true},
+		las := &stubLinkAccountStore{byPlatform: map[linking.Platform]*linking.LinkedAccount{
+			linking.PlatformXboxLive:  {UserID: "u1", Verified: true, LoginEnabled: true},
+			linking.PlatformMinecraft: {UserID: "u2", Verified: true, LoginEnabled: true},
 		}}
-		state := linking.OAuthState{Platform: auth.PlatformMinecraft, Nonce: "test-nonce", RedirectURI: redirect, Mode: linking.ModeLogin}
+		state := linking.OAuthState{Platform: linking.PlatformMinecraft, Nonce: "test-nonce", RedirectURI: redirect, Mode: linking.ModeLogin}
 
 		OAuthHandler(&stubAccountService{}, las, &stubSessionService{createJWT: okJWT})(w, auOAuthRequest(t, state))
 
@@ -1425,10 +1424,10 @@ func TestAU60to71OAuthAndOpenIDFailureMapping(t *testing.T) {
 }
 
 func TestAU72to74OAuthAndOpenIDFailuresUseMapping(t *testing.T) {
-	oauthState := linking.OAuthState{Platform: auth.PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
-	steamState := linking.OAuthState{Platform: auth.PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	oauthState := linking.OAuthState{Platform: linking.PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
+	steamState := linking.OAuthState{Platform: linking.PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: linking.ModeLogin}
 	okJWT := func(*authsession.Session) (string, error) { return "test-jwt", nil }
-	disabledLink := &stubLinkAccountStore{existing: &auth.LinkedAccount{UserID: "u1", Verified: true, LoginEnabled: false}}
+	disabledLink := &stubLinkAccountStore{existing: &linking.LinkedAccount{UserID: "u1", Verified: true, LoginEnabled: false}}
 
 	t.Run("AU-72_OAuthProcessMapsLoginDisabled", func(t *testing.T) {
 		auDiscordTransport(t)

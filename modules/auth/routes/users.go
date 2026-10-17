@@ -11,7 +11,6 @@ import (
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/twitch"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
@@ -155,7 +154,7 @@ func GetUserFromPlatformHandler(service auth.UserService) http.HandlerFunc {
 			responses.Forbidden(w, r, msgNoPermissionToGetUsers)
 			return
 		}
-		platform := auth.Platform(r.PathValue("platform"))
+		platform := linking.Platform(r.PathValue("platform"))
 		platformID := r.PathValue("platform_id")
 		user, err := service.GetUserFromPlatform(platform, platformID)
 		if err != nil {
@@ -232,40 +231,40 @@ func UpdateUserFromPlatformHandler(service auth.UserService) http.HandlerFunc {
 			responses.Forbidden(w, r, msgNoPermissionToUpdateUsers)
 			return
 		}
-		platform := auth.Platform(r.PathValue("platform"))
+		platform := linking.Platform(r.PathValue("platform"))
 		platformID := r.PathValue("platform_id")
 
-		var data auth.PlatformData
+		var data linking.PlatformData
 		switch platform {
-		case auth.PlatformDiscord:
+		case linking.PlatformDiscord:
 			var d linking.DiscordData
 			if err := responses.DecodeStruct(r, &d); err != nil {
 				responses.BadRequest(w, r, msgInvalidRequestBody)
 				return
 			}
 			data = &d
-		case auth.PlatformMinecraft:
+		case linking.PlatformMinecraft:
 			var d linking.MinecraftData
 			if err := responses.DecodeStruct(r, &d); err != nil {
 				responses.BadRequest(w, r, msgInvalidRequestBody)
 				return
 			}
 			data = &d
-		case auth.PlatformTwitch:
-			var d twitch.Data
+		case linking.PlatformTwitch:
+			var d linking.TwitchData
 			if err := responses.DecodeStruct(r, &d); err != nil {
 				responses.BadRequest(w, r, msgInvalidRequestBody)
 				return
 			}
 			data = &d
-		case auth.PlatformXboxLive:
+		case linking.PlatformXboxLive:
 			var d linking.XboxLiveData
 			if err := responses.DecodeStruct(r, &d); err != nil {
 				responses.BadRequest(w, r, msgInvalidRequestBody)
 				return
 			}
 			data = &d
-		case auth.PlatformMicrosoft:
+		case linking.PlatformMicrosoft:
 			var d linking.MicrosoftUserData
 			if err := responses.DecodeStruct(r, &d); err != nil {
 				responses.BadRequest(w, r, msgInvalidRequestBody)
@@ -306,7 +305,7 @@ func DeleteUserHandler(service auth.UserService) http.HandlerFunc {
 }
 
 // GetUserLinkedAccountsHandler - List a user's linked platforms
-func GetUserLinkedAccountsHandler(service auth.UserService) http.HandlerFunc {
+func GetUserLinkedAccountsHandler(service linking.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
 		userID := r.PathValue("user_id")
@@ -324,7 +323,7 @@ func GetUserLinkedAccountsHandler(service auth.UserService) http.HandlerFunc {
 }
 
 // UnlinkPlatformHandler - Unlink a platform from a user
-func UnlinkPlatformHandler(service auth.UserService) http.HandlerFunc {
+func UnlinkPlatformHandler(service linking.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
 		userID := r.PathValue("user_id")
@@ -332,7 +331,7 @@ func UnlinkPlatformHandler(service auth.UserService) http.HandlerFunc {
 			responses.Forbidden(w, r, msgNoPermissionToUnlinkPlatforms)
 			return
 		}
-		platform := auth.Platform(r.PathValue("platform"))
+		platform := linking.Platform(r.PathValue("platform"))
 		err := service.UnlinkPlatform(userID, platform)
 		switch {
 		case err == nil:
@@ -355,7 +354,7 @@ type SetPlatformLoginEnabledRequest struct {
 }
 
 // SetPlatformLoginEnabledHandler - Toggle whether a linked platform can log in
-func SetPlatformLoginEnabledHandler(service auth.UserService) http.HandlerFunc {
+func SetPlatformLoginEnabledHandler(service linking.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
 		userID := r.PathValue("user_id")
@@ -363,7 +362,7 @@ func SetPlatformLoginEnabledHandler(service auth.UserService) http.HandlerFunc {
 			responses.Forbidden(w, r, msgNoPermissionToUpdatePlatforms)
 			return
 		}
-		platform := auth.Platform(r.PathValue("platform"))
+		platform := linking.Platform(r.PathValue("platform"))
 		var body SetPlatformLoginEnabledRequest
 		if err := responses.DecodeStruct(r, &body); err != nil || body.LoginEnabled == nil {
 			responses.BadRequest(w, r, msgInvalidRequestBody)
@@ -378,7 +377,7 @@ func SetPlatformLoginEnabledHandler(service auth.UserService) http.HandlerFunc {
 			responses.NotFound(w, r, msgPlatformNotLinked)
 		case errors.Is(err, authaccount.ErrWouldLockAccount):
 			responses.BadRequest(w, r, msgSetPasswordOrLinkBeforeDisabling)
-		case errors.Is(err, auth.ErrLinkedAccountUnverified):
+		case errors.Is(err, linking.ErrLinkedAccountUnverified):
 			responses.BadRequest(w, r, msgLinkedAccountUnverified)
 		default:
 			responses.InternalServerError(w, r, msgFailedToUpdatePlatform)

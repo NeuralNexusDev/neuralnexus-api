@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"github.com/goccy/go-json"
 	"github.com/google/uuid"
 	"golang.org/x/oauth2"
@@ -146,8 +145,8 @@ func (x *XboxLiveData) GetData() string {
 }
 
 // CreateLinkedAccount creates a linked account
-func (x *XboxLiveData) CreateLinkedAccount(userID string) *auth.LinkedAccount {
-	return auth.NewLinkedAccount(userID, auth.PlatformXboxLive, x.Gamertag, x.XUID, x)
+func (x *XboxLiveData) CreateLinkedAccount(userID string) *LinkedAccount {
+	return NewLinkedAccount(userID, PlatformXboxLive, x.Gamertag, x.XUID, x)
 }
 
 // MicrosoftUserData is a plain Microsoft account identity, sourced from the
@@ -180,14 +179,14 @@ func (m *MicrosoftUserData) GetData() string {
 }
 
 // CreateLinkedAccount creates a linked account
-func (m *MicrosoftUserData) CreateLinkedAccount(userID string) *auth.LinkedAccount {
-	return auth.NewLinkedAccount(userID, auth.PlatformMicrosoft, m.Name, m.Sub, m)
+func (m *MicrosoftUserData) CreateLinkedAccount(userID string) *LinkedAccount {
+	return NewLinkedAccount(userID, PlatformMicrosoft, m.Name, m.Sub, m)
 }
 
 // GetMicrosoftUser fetches the caller's plain Microsoft account identity from
 // the OIDC userinfo endpoint, for a "sign in with Microsoft" login that isn't
 // about Xbox Live or Minecraft ownership.
-func GetMicrosoftUser(token *auth.OAuthToken) (*MicrosoftUserData, error) {
+func GetMicrosoftUser(token *OAuthToken) (*MicrosoftUserData, error) {
 	req, err := http.NewRequest(http.MethodGet, microsoftUserInfoURL, nil)
 	if err != nil {
 		return nil, err
@@ -489,7 +488,7 @@ func authenticateXboxLiveIdentity(xblToken string) (*XboxLiveData, error) {
 // requesting a Minecraft-scoped XSTS token) at all - for callers that want
 // to link Xbox Live without also linking (or checking ownership of)
 // Minecraft: Java Edition.
-func GetXboxUser(token *auth.OAuthToken) (*XboxLiveData, error) {
+func GetXboxUser(token *OAuthToken) (*XboxLiveData, error) {
 	xblToken, err := xblAuthenticate(token.AccessToken)
 	if err != nil {
 		return nil, err
@@ -512,7 +511,7 @@ func GetXboxUser(token *auth.OAuthToken) (*XboxLiveData, error) {
 // before the Xbox Live identity is authorized at all, rather than
 // interleaving the two XSTS authorizations - a previous version requested
 // both up front and login_with_xbox started failing with 403s in prod.
-func GetXboxAndMinecraftUser(token *auth.OAuthToken) (xbox *XboxLiveData, java *MinecraftData, err error) {
+func GetXboxAndMinecraftUser(token *OAuthToken) (xbox *XboxLiveData, java *MinecraftData, err error) {
 	xblToken, err := xblAuthenticate(token.AccessToken)
 	if err != nil {
 		return nil, nil, err

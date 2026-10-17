@@ -20,6 +20,7 @@ import (
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	authaccount "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/ratelimit"
 	authroutes "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/routes"
 	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
@@ -75,7 +76,8 @@ func ApplyRoutes(
 	// --------------- Auth ---------------
 	rbacService := rbac.NewService(rbac.NewStore(nndb))
 	account := authaccount.NewAccountService(authStore.Account(), authStore.AccountSettings(), rbacService)
-	user := auth.NewUserService(authStore.Account(), authStore.LinkAccount(), authStore.AccountSettings(), rbacService)
+	linkingService := linking.NewService(authStore.LinkAccount(), authStore.Account())
+	user := auth.NewUserService(authStore.Account(), authStore.LinkAccount(), linkingService, authStore.AccountSettings(), rbacService)
 
 	loginRateLimit := mw.RateLimitMiddleware(rateLimit, "login", 5, 5)
 
@@ -93,12 +95,12 @@ func ApplyRoutes(
 	mux.Handle("GET /api/v1/users/{platform}/{platform_id}", mwAuth(authroutes.GetUserFromPlatformHandler(user)))
 	mux.Handle("PUT /api/v1/users/{user_id}", mwAuth(authroutes.UpdateUserHandler(user)))
 	mux.Handle("PUT /api/v1/users/{platform}/{platform_id}", mwAuth(authroutes.UpdateUserFromPlatformHandler(user)))
-	mux.Handle("GET /api/v1/users/{user_id}/links", mwAuth(authroutes.GetUserLinkedAccountsHandler(user)))
-	mux.Handle("GET /api/v1/users/me/links", mwAuth(mw.SelfUserID(authroutes.GetUserLinkedAccountsHandler(user))))
-	mux.Handle("DELETE /api/v1/users/{user_id}/link/{platform}", mwAuth(authroutes.UnlinkPlatformHandler(user)))
-	mux.Handle("DELETE /api/v1/users/me/link/{platform}", mwAuth(mw.SelfUserID(authroutes.UnlinkPlatformHandler(user))))
-	mux.Handle("PATCH /api/v1/users/{user_id}/link/{platform}", mwAuth(authroutes.SetPlatformLoginEnabledHandler(user)))
-	mux.Handle("PATCH /api/v1/users/me/link/{platform}", mwAuth(mw.SelfUserID(authroutes.SetPlatformLoginEnabledHandler(user))))
+	mux.Handle("GET /api/v1/users/{user_id}/links", mwAuth(authroutes.GetUserLinkedAccountsHandler(linkingService)))
+	mux.Handle("GET /api/v1/users/me/links", mwAuth(mw.SelfUserID(authroutes.GetUserLinkedAccountsHandler(linkingService))))
+	mux.Handle("DELETE /api/v1/users/{user_id}/link/{platform}", mwAuth(authroutes.UnlinkPlatformHandler(linkingService)))
+	mux.Handle("DELETE /api/v1/users/me/link/{platform}", mwAuth(mw.SelfUserID(authroutes.UnlinkPlatformHandler(linkingService))))
+	mux.Handle("PATCH /api/v1/users/{user_id}/link/{platform}", mwAuth(authroutes.SetPlatformLoginEnabledHandler(linkingService)))
+	mux.Handle("PATCH /api/v1/users/me/link/{platform}", mwAuth(mw.SelfUserID(authroutes.SetPlatformLoginEnabledHandler(linkingService))))
 	mux.Handle("GET /api/v1/users/{user_id}/settings", mwAuth(authroutes.GetAccountSettingsHandler(user)))
 	mux.Handle("GET /api/v1/users/me/settings", mwAuth(mw.SelfUserID(authroutes.GetAccountSettingsHandler(user))))
 	mux.Handle("PATCH /api/v1/users/{user_id}/settings", mwAuth(authroutes.UpdateAccountSettingsHandler(user)))

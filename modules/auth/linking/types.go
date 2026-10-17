@@ -1,4 +1,4 @@
-package auth
+package linking
 
 import (
 	"time"
@@ -50,3 +50,17 @@ var (
 	PlatformMicrosoft Platform = "microsoft"
 	PlatformSteam     Platform = "steam"
 )
+
+// OAuthToken OAuth2 token with scope
+type OAuthToken struct {
+	AccessToken  string    `json:"access_token" db:"access_token"`
+	TokenType    string    `json:"token_type,omitempty" db:"token_type"`
+	RefreshToken string    `json:"refresh_token,omitempty" db:"refresh_token"`
+	Expiry       int64     `json:"expiry,omitempty" db:"expiry"`
+	ExpiresIn    int64     `json:"expires_in,omitempty" db:"expires_in"`
+	UserID       string    `json:"user_id" db:"user_id"`
+	Platform     Platform  `json:"platform" db:"platform"`
+	Scope        []string  `json:"scope" db:"scope"`
+	CreatedAt    time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
+}

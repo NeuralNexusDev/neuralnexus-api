@@ -8,7 +8,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"github.com/google/uuid"
 )
 
@@ -60,7 +59,7 @@ func TestMS05XboxLiveDataCreateLinkedAccount(t *testing.T) {
 	t.Run("MS-05_CreateLinkedAccount", func(t *testing.T) {
 		x := &XboxLiveData{XUID: "x1", Gamertag: "Tag"}
 		la := x.CreateLinkedAccount("user-1")
-		if la.UserID != "user-1" || la.Platform != auth.PlatformXboxLive || la.PlatformID != "x1" || la.PlatformUsername != "Tag" {
+		if la.UserID != "user-1" || la.Platform != PlatformXboxLive || la.PlatformID != "x1" || la.PlatformUsername != "Tag" {
 			t.Errorf("CreateLinkedAccount() = %+v, want UserID=user-1 Platform=xboxlive PlatformID=x1 PlatformUsername=Tag", la)
 		}
 	})
@@ -96,7 +95,7 @@ func TestMS10MicrosoftUserDataCreateLinkedAccount(t *testing.T) {
 	t.Run("MS-10_CreateLinkedAccount", func(t *testing.T) {
 		m := &MicrosoftUserData{Sub: "sub1", Name: "Alice"}
 		la := m.CreateLinkedAccount("user-1")
-		if la.UserID != "user-1" || la.Platform != auth.PlatformMicrosoft || la.PlatformID != "sub1" || la.PlatformUsername != "Alice" {
+		if la.UserID != "user-1" || la.Platform != PlatformMicrosoft || la.PlatformID != "sub1" || la.PlatformUsername != "Alice" {
 			t.Errorf("CreateLinkedAccount() = %+v, want UserID=user-1 Platform=microsoft PlatformID=sub1 PlatformUsername=Alice", la)
 		}
 	})
@@ -141,7 +140,7 @@ func TestMS17to21GetMicrosoftUser(t *testing.T) {
 		defer ts.Close()
 		msSetURL(t, &microsoftUserInfoURL, ts.URL)
 
-		got, err := GetMicrosoftUser(&auth.OAuthToken{AccessToken: "tok"})
+		got, err := GetMicrosoftUser(&OAuthToken{AccessToken: "tok"})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -152,7 +151,7 @@ func TestMS17to21GetMicrosoftUser(t *testing.T) {
 
 	t.Run("MS-18_NetworkError", func(t *testing.T) {
 		msSetURL(t, &microsoftUserInfoURL, "http://127.0.0.1:1")
-		_, err := GetMicrosoftUser(&auth.OAuthToken{AccessToken: "tok"})
+		_, err := GetMicrosoftUser(&OAuthToken{AccessToken: "tok"})
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -165,7 +164,7 @@ func TestMS17to21GetMicrosoftUser(t *testing.T) {
 		defer ts.Close()
 		msSetURL(t, &microsoftUserInfoURL, ts.URL)
 
-		_, err := GetMicrosoftUser(&auth.OAuthToken{AccessToken: "tok"})
+		_, err := GetMicrosoftUser(&OAuthToken{AccessToken: "tok"})
 		if !errors.Is(err, ErrMicrosoftUserinfoLookup) {
 			t.Fatalf("error = %v, want %v", err, ErrMicrosoftUserinfoLookup)
 		}
@@ -178,7 +177,7 @@ func TestMS17to21GetMicrosoftUser(t *testing.T) {
 		defer ts.Close()
 		msSetURL(t, &microsoftUserInfoURL, ts.URL)
 
-		_, err := GetMicrosoftUser(&auth.OAuthToken{AccessToken: "tok"})
+		_, err := GetMicrosoftUser(&OAuthToken{AccessToken: "tok"})
 		if err == nil {
 			t.Fatal("expected a decode error")
 		}
@@ -191,7 +190,7 @@ func TestMS17to21GetMicrosoftUser(t *testing.T) {
 		defer ts.Close()
 		msSetURL(t, &microsoftUserInfoURL, ts.URL)
 
-		_, err := GetMicrosoftUser(&auth.OAuthToken{AccessToken: "tok"})
+		_, err := GetMicrosoftUser(&OAuthToken{AccessToken: "tok"})
 		if !errors.Is(err, ErrUserinfoMissingSub) {
 			t.Fatalf("GetMicrosoftUser() error = %v, want %v", err, ErrUserinfoMissingSub)
 		}
@@ -592,7 +591,7 @@ func TestMS50to51GetXboxUser(t *testing.T) {
 		msSetURL(t, &xboxLiveAuthenticateURL, xblTS.URL)
 		msSetURL(t, &xstsAuthorizeURL, xstsTS.URL)
 
-		got, err := GetXboxUser(&auth.OAuthToken{AccessToken: "ms-tok"})
+		got, err := GetXboxUser(&OAuthToken{AccessToken: "ms-tok"})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -611,7 +610,7 @@ func TestMS50to51GetXboxUser(t *testing.T) {
 		msSetURL(t, &xboxLiveAuthenticateURL, "http://127.0.0.1:1")
 		msSetURL(t, &xstsAuthorizeURL, xstsTS.URL)
 
-		_, err := GetXboxUser(&auth.OAuthToken{AccessToken: "ms-tok"})
+		_, err := GetXboxUser(&OAuthToken{AccessToken: "ms-tok"})
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -684,7 +683,7 @@ func TestMS52to58GetXboxAndMinecraftUser(t *testing.T) {
 		s := newMSFullChain(t, true, false, false, false)
 		defer s.close()
 
-		xbox, java, err := GetXboxAndMinecraftUser(&auth.OAuthToken{AccessToken: "tok"})
+		xbox, java, err := GetXboxAndMinecraftUser(&OAuthToken{AccessToken: "tok"})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -700,7 +699,7 @@ func TestMS52to58GetXboxAndMinecraftUser(t *testing.T) {
 		s := newMSFullChain(t, false, false, false, false)
 		defer s.close()
 
-		xbox, java, err := GetXboxAndMinecraftUser(&auth.OAuthToken{AccessToken: "tok"})
+		xbox, java, err := GetXboxAndMinecraftUser(&OAuthToken{AccessToken: "tok"})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -717,7 +716,7 @@ func TestMS52to58GetXboxAndMinecraftUser(t *testing.T) {
 		defer s.close()
 		msSetURL(t, &xboxLiveAuthenticateURL, "http://127.0.0.1:1")
 
-		xbox, java, err := GetXboxAndMinecraftUser(&auth.OAuthToken{AccessToken: "tok"})
+		xbox, java, err := GetXboxAndMinecraftUser(&OAuthToken{AccessToken: "tok"})
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -738,7 +737,7 @@ func TestMS52to58GetXboxAndMinecraftUser(t *testing.T) {
 		msSetURL(t, &xboxLiveAuthenticateURL, xbl.URL)
 		msSetURL(t, &xstsAuthorizeURL, xsts.URL)
 
-		xbox, java, err := GetXboxAndMinecraftUser(&auth.OAuthToken{AccessToken: "tok"})
+		xbox, java, err := GetXboxAndMinecraftUser(&OAuthToken{AccessToken: "tok"})
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -751,7 +750,7 @@ func TestMS52to58GetXboxAndMinecraftUser(t *testing.T) {
 		s := newMSFullChain(t, true, true, false, false)
 		defer s.close()
 
-		xbox, java, err := GetXboxAndMinecraftUser(&auth.OAuthToken{AccessToken: "tok"})
+		xbox, java, err := GetXboxAndMinecraftUser(&OAuthToken{AccessToken: "tok"})
 		if err == nil {
 			t.Fatal("expected a minecraft-login error")
 		}
@@ -767,7 +766,7 @@ func TestMS52to58GetXboxAndMinecraftUser(t *testing.T) {
 		s := newMSFullChain(t, true, true, false, true)
 		defer s.close()
 
-		xbox, java, err := GetXboxAndMinecraftUser(&auth.OAuthToken{AccessToken: "tok"})
+		xbox, java, err := GetXboxAndMinecraftUser(&OAuthToken{AccessToken: "tok"})
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -780,7 +779,7 @@ func TestMS52to58GetXboxAndMinecraftUser(t *testing.T) {
 		s := newMSFullChain(t, true, false, true, false)
 		defer s.close()
 
-		xbox, java, err := GetXboxAndMinecraftUser(&auth.OAuthToken{AccessToken: "tok"})
+		xbox, java, err := GetXboxAndMinecraftUser(&OAuthToken{AccessToken: "tok"})
 		if err == nil {
 			t.Fatal("expected a minecraft-profile error")
 		}

@@ -1,7 +1,6 @@
 package linking
 
 import (
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"github.com/bwmarrin/discordgo"
 	"github.com/goccy/go-json"
 	"golang.org/x/oauth2"
@@ -56,14 +55,14 @@ func (d *DiscordData) GetData() string {
 }
 
 // CreateLinkedAccount creates a linked account
-func (d *DiscordData) CreateLinkedAccount(userID string) *auth.LinkedAccount {
-	return auth.NewLinkedAccount(userID, auth.PlatformDiscord, d.Username, d.ID, d)
+func (d *DiscordData) CreateLinkedAccount(userID string) *LinkedAccount {
+	return NewLinkedAccount(userID, PlatformDiscord, d.Username, d.ID, d)
 }
 
 // -------------- Functions --------------
 
 // GetDiscordUser gets a Discord user with the given access token
-func GetDiscordUser(token *auth.OAuthToken) (*DiscordData, error) {
+func GetDiscordUser(token *OAuthToken) (*DiscordData, error) {
 	discord, err := discordgo.New("Bearer " + token.AccessToken)
 	if err != nil {
 		return nil, err

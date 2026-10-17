@@ -12,6 +12,7 @@ import (
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	authaccount "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
@@ -39,11 +40,11 @@ type stubUserService struct {
 
 	deleteUserErr error
 
-	links    []*auth.LinkedAccount
+	links    []*linking.LinkedAccount
 	linksErr error
 
 	unlinkErr   error
-	unlinkCalls []auth.Platform
+	unlinkCalls []linking.Platform
 
 	setEnableErr   error
 	setEnableCalls []bool
@@ -58,7 +59,7 @@ type stubUserService struct {
 var _ auth.UserService = (*stubUserService)(nil)
 
 func (s *stubUserService) GetUser(string) (*authaccount.Account, error) { return s.user, s.userErr }
-func (s *stubUserService) GetUserFromPlatform(auth.Platform, string) (*authaccount.Account, error) {
+func (s *stubUserService) GetUserFromPlatform(linking.Platform, string) (*authaccount.Account, error) {
 	return s.user, s.userErr
 }
 func (s *stubUserService) ListUsers(limit, offset int) ([]*authaccount.Account, error) {
@@ -73,19 +74,22 @@ func (s *stubUserService) UpdateUser(user *authaccount.Account) error {
 	s.updatedAccount = user
 	return s.updateUserErr
 }
-func (s *stubUserService) UpdateUserFromPlatform(auth.Platform, string, auth.PlatformData) (*authaccount.Account, error) {
+func (s *stubUserService) UpdateUserFromPlatform(linking.Platform, string, linking.PlatformData) (*authaccount.Account, error) {
 	s.updateFromPlatformCalled = true
 	return s.updatedUser, s.updateFromPlatformErr
 }
 func (s *stubUserService) DeleteUser(string) error { return s.deleteUserErr }
-func (s *stubUserService) GetUserLinkedAccounts(string) ([]*auth.LinkedAccount, error) {
+func (s *stubUserService) UpdateFromPlatform(linking.Platform, string, linking.PlatformData) (string, error) {
+	return "", nil
+}
+func (s *stubUserService) GetUserLinkedAccounts(string) ([]*linking.LinkedAccount, error) {
 	return s.links, s.linksErr
 }
-func (s *stubUserService) UnlinkPlatform(_ string, platform auth.Platform) error {
+func (s *stubUserService) UnlinkPlatform(_ string, platform linking.Platform) error {
 	s.unlinkCalls = append(s.unlinkCalls, platform)
 	return s.unlinkErr
 }
-func (s *stubUserService) SetPlatformLoginEnabled(_ string, _ auth.Platform, enabled bool) error {
+func (s *stubUserService) SetPlatformLoginEnabled(_ string, _ linking.Platform, enabled bool) error {
 	s.setEnableCalls = append(s.setEnableCalls, enabled)
 	return s.setEnableErr
 }
@@ -403,7 +407,7 @@ func TestUS23UpdateUserFromPlatformHandlerMalformedBody(t *testing.T) {
 }
 
 func TestUS56UpdateUserFromPlatformHandlerMalformedBodyOtherPlatforms(t *testing.T) {
-	for _, platform := range []auth.Platform{auth.PlatformMinecraft, auth.PlatformTwitch, auth.PlatformXboxLive, auth.PlatformMicrosoft} {
+	for _, platform := range []linking.Platform{linking.PlatformMinecraft, linking.PlatformTwitch, linking.PlatformXboxLive, linking.PlatformMicrosoft} {
 		t.Run("US-56_MalformedBody_"+string(platform), func(t *testing.T) {
 			svc := &stubUserService{}
 			r := newSessionRequest(http.MethodPatch, adminUsersSession("admin1"), "", string(platform), `not json`)
@@ -470,7 +474,7 @@ func TestUS27DeleteUserHandlerServiceErrorMapsTo500(t *testing.T) {
 }
 
 func TestUS28GetUserLinkedAccountsHandlerSelfHappyPath(t *testing.T) {
-	svc := &stubUserService{links: []*auth.LinkedAccount{{Platform: auth.PlatformDiscord}}}
+	svc := &stubUserService{links: []*linking.LinkedAccount{{Platform: linking.PlatformDiscord}}}
 	r := newSessionRequest(http.MethodGet, selfSession("u1"), "u1", "", "")
 	w := httptest.NewRecorder()
 
@@ -481,7 +485,7 @@ func TestUS28GetUserLinkedAccountsHandlerSelfHappyPath(t *testing.T) {
 }
 
 func TestUS29GetUserLinkedAccountsHandlerAdminHappyPath(t *testing.T) {
-	svc := &stubUserService{links: []*auth.LinkedAccount{{Platform: auth.PlatformDiscord}}}
+	svc := &stubUserService{links: []*linking.LinkedAccount{{Platform: linking.PlatformDiscord}}}
 	r := newSessionRequest(http.MethodGet, adminUsersSession("admin1"), "someone-else", "", "")
 	w := httptest.NewRecorder()
 
@@ -523,7 +527,7 @@ func TestUS32UnlinkPlatformHandlerHappyPath(t *testing.T) {
 	t.Run("US-32_UnlinkPlatformHappyPath", func(t *testing.T) {
 		UnlinkPlatformHandler(svc)(w, r)
 		expectStatus(t, w, http.StatusNoContent)
-		if len(svc.unlinkCalls) != 1 || svc.unlinkCalls[0] != auth.PlatformDiscord {
+		if len(svc.unlinkCalls) != 1 || svc.unlinkCalls[0] != linking.PlatformDiscord {
 			t.Errorf("expected UnlinkPlatform(discord) to be called, got %v", svc.unlinkCalls)
 		}
 	})
@@ -661,7 +665,7 @@ func TestUS42SetPlatformLoginEnabledHandlerWouldLockAccountMapsTo400(t *testing.
 }
 
 func TestUS43SetPlatformLoginEnabledHandlerUnverifiedMapsTo400(t *testing.T) {
-	svc := &stubUserService{setEnableErr: auth.ErrLinkedAccountUnverified}
+	svc := &stubUserService{setEnableErr: linking.ErrLinkedAccountUnverified}
 	r := newSessionRequest(http.MethodPatch, selfSession("u1"), "u1", "discord", `{"login_enabled":true}`)
 	w := httptest.NewRecorder()
 

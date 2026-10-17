@@ -2,7 +2,7 @@ package twitch
 
 import (
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"io"
 	"net/http"
@@ -30,7 +30,7 @@ const (
 )
 
 // HandleEventSub handles the EventSub notifications
-func HandleEventSub(eventsub EventSubService, tokens auth.OAuthTokenStore, linked auth.LinkAccountStore) http.HandlerFunc {
+func HandleEventSub(eventsub EventSubService, tokens linking.OAuthTokenStore, linked linking.LinkAccountStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get(EventSubMessageType) == "" {
 			mw.LogRequest(r.Context(), "EventSub message type not set")
