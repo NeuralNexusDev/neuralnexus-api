@@ -24,6 +24,7 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/ratelimit"
 	authroutes "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/routes"
 	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	authuser "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/user"
 	bng "github.com/NeuralNexusDev/neuralnexus-api/modules/bee_name_generator"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	ds "github.com/NeuralNexusDev/neuralnexus-api/modules/datastore"
@@ -77,7 +78,7 @@ func ApplyRoutes(
 	rbacService := rbac.NewService(rbac.NewStore(nndb))
 	account := authaccount.NewAccountService(authStore.Account(), authStore.AccountSettings(), rbacService)
 	linkingService := linking.NewService(authStore.LinkAccount(), authStore.Account())
-	user := auth.NewUserService(authStore.Account(), authStore.LinkAccount(), linkingService, authStore.AccountSettings(), rbacService)
+	user := authuser.NewService(authStore.Account(), authStore.LinkAccount(), linkingService, authStore.AccountSettings(), rbacService)
 
 	loginRateLimit := mw.RateLimitMiddleware(rateLimit, "login", 5, 5)
 
