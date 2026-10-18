@@ -64,7 +64,7 @@ func OAuthHandler(as account.Service, las Store, ss session.Service) http.Handle
 		var err error
 		switch state.Mode {
 		case ModeLogin:
-			session, err = ProcessOAuthLogin(as, las, ss, code, &state)
+			session, err = ProcessOAuthLogin(r.Context(), as, las, ss, code, &state)
 		case ModeLink:
 			session, err = ProcessOAuthLink(r, las, code, &state)
 		}
@@ -140,7 +140,7 @@ func OpenIDHandler(as account.Service, las Store, ss session.Service) http.Handl
 		var session *session.Session
 		switch state.Mode {
 		case ModeLogin:
-			session, err = ProcessSteamLogin(as, las, ss, user)
+			session, err = ProcessSteamLogin(r.Context(), as, las, ss, user)
 		case ModeLink:
 			session, err = ProcessSteamLink(r, las, user)
 		}

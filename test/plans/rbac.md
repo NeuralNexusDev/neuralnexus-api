@@ -69,6 +69,7 @@
 | RCV-22 | AttachPermission | Edge Case | list values | permission of type `string_list`; unsorted lists with duplicates; empty, non-string and bad-text lists; a list of 1000 items | lists are stored sorted and deduplicated; the others give `ErrInvalidValue` without an attach | P1 |  |
 | RCV-23 | AttachPermission | Error Path | the permission does not exist | store returns `ErrPermissionNotFound` | `ErrPermissionNotFound` and no attach | P2 |  |
 | RCV-11 | UpdateRole | Error Path | an invalid name or description | stored role | `ErrInvalidRoleName` or `ErrInvalidDescription` and no write reaches the store | P1 |  |
+| RCV-24 | GetRole | Happy Path | a context value set on the call | fake store | The store receives the same context, so the value reads back from it | P1 |  |
 
 
 ## handler.go

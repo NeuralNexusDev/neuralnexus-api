@@ -1,17 +1,21 @@
 package rbac
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"slices"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 )
 
 var errSvcStore = errors.New("store failure")
 
 type fakeStore struct {
+	ctx           context.Context
 	calls         []string
 	err           error
 	role          *Role
@@ -22,66 +26,67 @@ type fakeStore struct {
 	created       []string
 }
 
-func (f *fakeStore) CreateRole(id string, name, description string) error {
+func (f *fakeStore) CreateRole(_ context.Context, id string, name, description string) error {
 	f.calls = append(f.calls, "CreateRole")
 	f.created = []string{name, description}
 	f.createdID = id
 	return f.err
 }
-func (f *fakeStore) GetRole(id string) (*Role, error) {
+func (f *fakeStore) GetRole(ctx context.Context, id string) (*Role, error) {
+	f.ctx = ctx
 	f.calls = append(f.calls, "GetRole")
 	return f.role, f.err
 }
-func (f *fakeStore) GetRoleByName(name string) (*Role, error) {
+func (f *fakeStore) GetRoleByName(_ context.Context, name string) (*Role, error) {
 	f.calls = append(f.calls, "GetRoleByName")
 	return f.role, f.err
 }
-func (f *fakeStore) ListRoles() ([]*Role, error) {
+func (f *fakeStore) ListRoles(_ context.Context) ([]*Role, error) {
 	f.calls = append(f.calls, "ListRoles")
 	return []*Role{f.role}, f.err
 }
-func (f *fakeStore) UpdateRole(id string, name, description string) error {
+func (f *fakeStore) UpdateRole(_ context.Context, id string, name, description string) error {
 	f.calls = append(f.calls, "UpdateRole:"+name+":"+description)
 	return f.err
 }
-func (f *fakeStore) DeleteRole(id string) error {
+func (f *fakeStore) DeleteRole(_ context.Context, id string) error {
 	f.calls = append(f.calls, "DeleteRole")
 	return f.err
 }
-func (f *fakeStore) CreatePermission(id string, node, description, valueType, merge string) error {
+func (f *fakeStore) CreatePermission(_ context.Context, id string, node, description, valueType, merge string) error {
 	f.calls = append(f.calls, "CreatePermission")
 	f.created = []string{node, description, valueType, merge}
 	f.createdID = id
 	return f.err
 }
-func (f *fakeStore) GetPermission(id string) (*Permission, error) {
+func (f *fakeStore) GetPermission(_ context.Context, id string) (*Permission, error) {
 	f.calls = append(f.calls, "GetPermission")
 	return f.permission, f.err
 }
-func (f *fakeStore) GetPermissionByNode(node string) (*Permission, error) {
+func (f *fakeStore) GetPermissionByNode(_ context.Context, node string) (*Permission, error) {
 	f.calls = append(f.calls, "GetPermissionByNode")
 	return f.permission, f.err
 }
-func (f *fakeStore) ListPermissions() ([]*Permission, error) {
+func (f *fakeStore) ListPermissions(_ context.Context) ([]*Permission, error) {
 	f.calls = append(f.calls, "ListPermissions")
 	return []*Permission{f.permission}, f.err
 }
-func (f *fakeStore) DeletePermission(id string) error {
+func (f *fakeStore) DeletePermission(_ context.Context, id string) error {
 	f.calls = append(f.calls, "DeletePermission")
 	return f.err
 }
-func (f *fakeStore) AttachPermission(roleID, permissionID string, value []byte) error {
+func (f *fakeStore) AttachPermission(_ context.Context, roleID, permissionID string, value []byte) error {
 	f.calls = append(f.calls, "AttachPermission")
 	f.attached = [2]string{roleID, permissionID}
 	f.attachedValue = value
 	return f.err
 }
-func (f *fakeStore) DetachPermission(roleID, permissionID string) error {
+func (f *fakeStore) DetachPermission(_ context.Context, roleID, permissionID string) error {
 	f.calls = append(f.calls, "DetachPermission")
 	f.attached = [2]string{roleID, permissionID}
 	return f.err
 }
-func (f *fakeStore) GetPermissionsForRoles(roleIDs []string) ([]string, error) {
+func (f *fakeStore) GetPermissionsForRoles(_ context.Context, roleIDs []string) ([]string, error) {
 	f.calls = append(f.calls, "GetPermissionsForRoles")
 	return []string{"a:b"}, f.err
 }
@@ -93,7 +98,7 @@ func TestSV01to04RoleValidation(t *testing.T) {
 	t.Run("RCV-01_ValidNamesAreCreated", func(t *testing.T) {
 		for _, name := range valid {
 			f := &fakeStore{}
-			role, err := NewService(f).CreateRole(name, "")
+			role, err := NewService(f).CreateRole(context.Background(), name, "")
 			if err != nil || len(f.created) != 2 || role.Name != name || f.created[0] != name {
 				t.Fatalf("name %q: got %v, %v, store got %v", name, role, err, f.created)
 			}
@@ -102,7 +107,7 @@ func TestSV01to04RoleValidation(t *testing.T) {
 	t.Run("RCV-02_InvalidNamesAreRejectedBeforeTheStore", func(t *testing.T) {
 		for _, name := range invalid {
 			f := &fakeStore{}
-			if _, err := NewService(f).CreateRole(name, ""); !errors.Is(err, ErrInvalidRoleName) {
+			if _, err := NewService(f).CreateRole(context.Background(), name, ""); !errors.Is(err, ErrInvalidRoleName) {
 				t.Fatalf("name %q: got %v, want ErrInvalidRoleName", name, err)
 			}
 			if len(f.calls) != 0 {
@@ -113,7 +118,7 @@ func TestSV01to04RoleValidation(t *testing.T) {
 	t.Run("RCV-03_LongDescriptionsAreAccepted", func(t *testing.T) {
 		f := &fakeStore{}
 		long := strings.Repeat("d", 10000)
-		if _, err := NewService(f).CreateRole("a", long); err != nil {
+		if _, err := NewService(f).CreateRole(context.Background(), "a", long); err != nil {
 			t.Fatalf("a long description: err %v", err)
 		}
 		if len(f.created) != 2 {
@@ -125,7 +130,7 @@ func TestSV01to04RoleValidation(t *testing.T) {
 	})
 	t.Run("RCV-04_CreatedRoleCarriesTheGeneratedSnowflake", func(t *testing.T) {
 		f := &fakeStore{}
-		role, err := NewService(f).CreateRole("a", "d")
+		role, err := NewService(f).CreateRole(context.Background(), "a", "d")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -143,7 +148,7 @@ func TestSV05to06NodeValidation(t *testing.T) {
 		bad := []string{"", "A", "aB", "1a", "a.1b", "a._b", "_a", "a..b", ".a", "a.", "a-b", "a:b", "a b", "a|b", "a\x00", "é", "a.é"}
 		for _, node := range bad {
 			f := &fakeStore{}
-			if _, err := NewService(f).CreatePermission(node, "", "", ""); !errors.Is(err, ErrInvalidNode) {
+			if _, err := NewService(f).CreatePermission(context.Background(), node, "", "", ""); !errors.Is(err, ErrInvalidNode) {
 				t.Fatalf("node %q: got %v, want ErrInvalidNode", node, err)
 			}
 			if len(f.calls) != 0 {
@@ -154,7 +159,7 @@ func TestSV05to06NodeValidation(t *testing.T) {
 	t.Run("RCV-06_ValidNodesAreCreatedUnchanged", func(t *testing.T) {
 		for _, node := range []string{"a", "roles.admin", "a_b.c2.d_3", "a0", strings.Repeat("a", 300)} {
 			f := &fakeStore{}
-			p, err := NewService(f).CreatePermission(node, "d", "", "")
+			p, err := NewService(f).CreatePermission(context.Background(), node, "d", "", "")
 			if err != nil || p.Node != node || p.ID != f.createdID || f.created[0] != node || f.created[1] != "d" {
 				t.Fatalf("node %q: got %v, %v, store got %v", node, p, err, f.created)
 			}
@@ -168,14 +173,14 @@ func TestSV05to06NodeValidation(t *testing.T) {
 		}
 		for _, c := range valid {
 			f := &fakeStore{}
-			p, err := NewService(f).CreatePermission("a.b", "", c[0], c[1])
+			p, err := NewService(f).CreatePermission(context.Background(), "a.b", "", c[0], c[1])
 			if err != nil || p.ValueType != c[0] || p.Merge != c[2] || f.created[2] != c[0] || f.created[3] != c[2] {
 				t.Fatalf("%v: got %v, %v, store got %v, want merge %q", c, p, err, f.created, c[2])
 			}
 		}
 		for _, c := range [][2]string{{"int", ""}, {"int", "first"}, {"int", "union"}, {"string", "max"}, {"string_list", "min"}, {"bool", ""}, {"", "max"}} {
 			f := &fakeStore{}
-			if _, err := NewService(f).CreatePermission("a.b", "", c[0], c[1]); !errors.Is(err, ErrInvalidValueType) || len(f.calls) != 0 {
+			if _, err := NewService(f).CreatePermission(context.Background(), "a.b", "", c[0], c[1]); !errors.Is(err, ErrInvalidValueType) || len(f.calls) != 0 {
 				t.Fatalf("%v: got %v with calls %v, want ErrInvalidValueType before the store", c, err, f.calls)
 			}
 		}
@@ -183,15 +188,15 @@ func TestSV05to06NodeValidation(t *testing.T) {
 	t.Run("RCV-13_TextRulesApplyToDescriptions", func(t *testing.T) {
 		for _, d := range []string{"a\x00b", "\xff", "a\ufffdb"} {
 			f := &fakeStore{}
-			if _, err := NewService(f).CreateRole("a", d); !errors.Is(err, ErrInvalidDescription) || len(f.calls) != 0 {
+			if _, err := NewService(f).CreateRole(context.Background(), "a", d); !errors.Is(err, ErrInvalidDescription) || len(f.calls) != 0 {
 				t.Fatalf("description %q: got %v with calls %v, want ErrInvalidDescription before the store", d, err, f.calls)
 			}
 			f = &fakeStore{}
-			if _, err := NewService(f).CreatePermission("a.b", d, "", ""); !errors.Is(err, ErrInvalidDescription) || len(f.calls) != 0 {
+			if _, err := NewService(f).CreatePermission(context.Background(), "a.b", d, "", ""); !errors.Is(err, ErrInvalidDescription) || len(f.calls) != 0 {
 				t.Fatalf("permission description %q: got %v with calls %v, want ErrInvalidDescription before the store", d, err, f.calls)
 			}
 		}
-		if _, err := NewService(&fakeStore{}).CreateRole("a", "line one\nline two \U0001F468\u200d\U0001F4BB"); err != nil {
+		if _, err := NewService(&fakeStore{}).CreateRole(context.Background(), "a", "line one\nline two \U0001F468\u200d\U0001F4BB"); err != nil {
 			t.Fatalf("a description with a newline and a joined emoji was refused: %v", err)
 		}
 	})
@@ -199,22 +204,22 @@ func TestSV05to06NodeValidation(t *testing.T) {
 		f := &fakeStore{role: &Role{}, permission: &Permission{}}
 		s := NewService(f)
 		for _, name := range []string{"own\x00er", "Owner", "123", ""} {
-			if _, err := s.GetRoleByName(name); !errors.Is(err, ErrRoleNotFound) {
+			if _, err := s.GetRoleByName(context.Background(), name); !errors.Is(err, ErrRoleNotFound) {
 				t.Fatalf("GetRoleByName(%q) err = %v, want ErrRoleNotFound", name, err)
 			}
 		}
 		for _, node := range []string{"a\x00", "n:x", "N", "a..b", ""} {
-			if _, err := s.GetPermissionByNode(node); !errors.Is(err, ErrPermissionNotFound) {
+			if _, err := s.GetPermissionByNode(context.Background(), node); !errors.Is(err, ErrPermissionNotFound) {
 				t.Fatalf("GetPermissionByNode(%q) err = %v, want ErrPermissionNotFound", node, err)
 			}
 		}
 		if len(f.calls) != 0 {
 			t.Fatalf("lookups reached the store: %v", f.calls)
 		}
-		if _, err := s.GetRoleByName("owner"); err != nil {
+		if _, err := s.GetRoleByName(context.Background(), "owner"); err != nil {
 			t.Fatalf("GetRoleByName() of a valid name err = %v", err)
 		}
-		if _, err := s.GetPermissionByNode("roles.admin"); err != nil {
+		if _, err := s.GetPermissionByNode(context.Background(), "roles.admin"); err != nil {
 			t.Fatalf("GetPermissionByNode() of a valid node err = %v", err)
 		}
 	})
@@ -229,18 +234,18 @@ func TestSV07to09IDs(t *testing.T) {
 			s := NewService(f)
 			name := "x"
 			errs := []error{
-				s.DeleteRole(id),
-				s.DeletePermission(id),
-				s.AttachPermission(id, "1", nil),
-				s.AttachPermission("1", id, nil),
-				s.DetachPermission(id, "1"),
-				s.DetachPermission("1", id),
+				s.DeleteRole(context.Background(), id),
+				s.DeletePermission(context.Background(), id),
+				s.AttachPermission(context.Background(), id, "1", nil),
+				s.AttachPermission(context.Background(), "1", id, nil),
+				s.DetachPermission(context.Background(), id, "1"),
+				s.DetachPermission(context.Background(), "1", id),
 			}
-			_, e := s.GetRole(id)
+			_, e := s.GetRole(context.Background(), id)
 			errs = append(errs, e)
-			_, e = s.GetPermission(id)
+			_, e = s.GetPermission(context.Background(), id)
 			errs = append(errs, e)
-			_, e = s.UpdateRole(id, &name, nil)
+			_, e = s.UpdateRole(context.Background(), id, &name, nil)
 			errs = append(errs, e)
 			for i, err := range errs {
 				if !errors.Is(err, ErrInvalidID) {
@@ -255,11 +260,11 @@ func TestSV07to09IDs(t *testing.T) {
 	t.Run("RCV-08_AttachAndDetachPassTheParsedIDsInOrder", func(t *testing.T) {
 		f := &fakeStore{role: &Role{Name: "mod"}, permission: &Permission{}}
 		s := NewService(f)
-		if err := s.AttachPermission("11", "22", nil); err != nil || f.attached != [2]string{"11", "22"} {
+		if err := s.AttachPermission(context.Background(), "11", "22", nil); err != nil || f.attached != [2]string{"11", "22"} {
 			t.Fatalf("attach: %v %v", err, f.attached)
 		}
 		f.attached = [2]string{}
-		if err := s.DetachPermission("33", "44"); err != nil || f.attached != [2]string{"33", "44"} {
+		if err := s.DetachPermission(context.Background(), "33", "44"); err != nil || f.attached != [2]string{"33", "44"} {
 			t.Fatalf("detach: %v %v", err, f.attached)
 		}
 	})
@@ -268,28 +273,28 @@ func TestSV07to09IDs(t *testing.T) {
 		s := NewService(f)
 		name := "x"
 		errs := []error{
-			s.DeleteRole("1"), s.DeletePermission("1"), s.AttachPermission("1", "1", nil), s.DetachPermission("1", "1"),
+			s.DeleteRole(context.Background(), "1"), s.DeletePermission(context.Background(), "1"), s.AttachPermission(context.Background(), "1", "1", nil), s.DetachPermission(context.Background(), "1", "1"),
 		}
 		var e error
-		_, e = s.CreateRole("a", "")
+		_, e = s.CreateRole(context.Background(), "a", "")
 		errs = append(errs, e)
-		_, e = s.CreatePermission("n", "", "", "")
+		_, e = s.CreatePermission(context.Background(), "n", "", "", "")
 		errs = append(errs, e)
-		_, e = s.GetRole("1")
+		_, e = s.GetRole(context.Background(), "1")
 		errs = append(errs, e)
-		_, e = s.GetRoleByName("a")
+		_, e = s.GetRoleByName(context.Background(), "a")
 		errs = append(errs, e)
-		_, e = s.ListRoles()
+		_, e = s.ListRoles(context.Background())
 		errs = append(errs, e)
-		_, e = s.UpdateRole("1", &name, nil)
+		_, e = s.UpdateRole(context.Background(), "1", &name, nil)
 		errs = append(errs, e)
-		_, e = s.GetPermission("1")
+		_, e = s.GetPermission(context.Background(), "1")
 		errs = append(errs, e)
-		_, e = s.GetPermissionByNode("n")
+		_, e = s.GetPermissionByNode(context.Background(), "n")
 		errs = append(errs, e)
-		_, e = s.ListPermissions()
+		_, e = s.ListPermissions(context.Background())
 		errs = append(errs, e)
-		_, e = s.GetPermissionsForRoles([]string{"1"})
+		_, e = s.GetPermissionsForRoles(context.Background(), []string{"1"})
 		errs = append(errs, e)
 		for i, err := range errs {
 			if !errors.Is(err, errSvcStore) {
@@ -305,7 +310,7 @@ func TestSV10UpdateRoleMerge(t *testing.T) {
 
 	t.Run("RCV-10_OmittedFieldsKeepTheirCurrentValue", func(t *testing.T) {
 		f := newStore()
-		role, err := NewService(f).UpdateRole("1", str("new"), nil)
+		role, err := NewService(f).UpdateRole(context.Background(), "1", str("new"), nil)
 		if err != nil || role.Name != "new" || role.Description != "olddesc" {
 			t.Fatalf("got %v, %v", role, err)
 		}
@@ -313,7 +318,7 @@ func TestSV10UpdateRoleMerge(t *testing.T) {
 			t.Fatalf("store got %v", f.calls)
 		}
 		f = newStore()
-		role, err = NewService(f).UpdateRole("1", nil, str(""))
+		role, err = NewService(f).UpdateRole(context.Background(), "1", nil, str(""))
 		if err != nil || role.Name != "old" || role.Description != "" {
 			t.Fatalf("an empty description must clear it: %v, %v", role, err)
 		}
@@ -330,7 +335,7 @@ func TestSV10UpdateRoleMerge(t *testing.T) {
 			{nil, str("a\x00b"), ErrInvalidDescription},
 		} {
 			f := newStore()
-			if _, err := NewService(f).UpdateRole("1", c.name, c.desc); !errors.Is(err, c.want) {
+			if _, err := NewService(f).UpdateRole(context.Background(), "1", c.name, c.desc); !errors.Is(err, c.want) {
 				t.Fatalf("got %v, want %v", err, c.want)
 			}
 			for _, call := range f.calls {
@@ -348,7 +353,7 @@ func TestSV15to18BuiltinRoles(t *testing.T) {
 	t.Run("RCV-15_BuiltinRolesCannotBeDeleted", func(t *testing.T) {
 		for _, name := range []string{"system", "owner"} {
 			f := &fakeStore{role: &Role{ID: "5", Name: name}}
-			if err := NewService(f).DeleteRole("5"); !errors.Is(err, ErrBuiltinRole) {
+			if err := NewService(f).DeleteRole(context.Background(), "5"); !errors.Is(err, ErrBuiltinRole) {
 				t.Fatalf("DeleteRole(%s) err = %v, want ErrBuiltinRole", name, err)
 			}
 			for _, call := range f.calls {
@@ -359,22 +364,22 @@ func TestSV15to18BuiltinRoles(t *testing.T) {
 		}
 		for _, name := range []string{"mod", "bee_admin"} {
 			f := &fakeStore{role: &Role{ID: "5", Name: name}}
-			if err := NewService(f).DeleteRole("5"); err != nil || f.calls[len(f.calls)-1] != "DeleteRole" {
+			if err := NewService(f).DeleteRole(context.Background(), "5"); err != nil || f.calls[len(f.calls)-1] != "DeleteRole" {
 				t.Fatalf("DeleteRole(%s) err = %v, calls %v", name, err, f.calls)
 			}
 		}
 	})
 	t.Run("RCV-16_BuiltinRolesCannotBeRenamedButCanBeDescribed", func(t *testing.T) {
 		f := &fakeStore{role: &Role{ID: "5", Name: "owner", Description: "d"}}
-		if _, err := NewService(f).UpdateRole("5", str("boss"), nil); !errors.Is(err, ErrBuiltinRole) {
+		if _, err := NewService(f).UpdateRole(context.Background(), "5", str("boss"), nil); !errors.Is(err, ErrBuiltinRole) {
 			t.Fatalf("rename err = %v, want ErrBuiltinRole", err)
 		}
 		f = &fakeStore{role: &Role{ID: "5", Name: "bee_admin"}}
-		if _, err := NewService(f).UpdateRole("5", str("bee_manager"), nil); err != nil || f.calls[len(f.calls)-1] != "UpdateRole:bee_manager:" {
+		if _, err := NewService(f).UpdateRole(context.Background(), "5", str("bee_manager"), nil); err != nil || f.calls[len(f.calls)-1] != "UpdateRole:bee_manager:" {
 			t.Fatalf("renaming bee_admin err = %v, calls %v", err, f.calls)
 		}
 		f = &fakeStore{role: &Role{ID: "5", Name: "owner", Description: "d"}}
-		if _, err := NewService(f).UpdateRole("5", str("owner"), str("new")); err != nil {
+		if _, err := NewService(f).UpdateRole(context.Background(), "5", str("owner"), str("new")); err != nil {
 			t.Fatalf("a description change that repeats the name err = %v", err)
 		}
 		if f.calls[len(f.calls)-1] != "UpdateRole:owner:new" {
@@ -384,7 +389,7 @@ func TestSV15to18BuiltinRoles(t *testing.T) {
 	t.Run("RCV-17_RolesPermissionStaysOnSystemAndOwner", func(t *testing.T) {
 		for _, name := range []string{"system", "owner"} {
 			f := &fakeStore{role: &Role{ID: "5", Name: name}, permission: &Permission{ID: "6", Node: "roles.admin"}}
-			if err := NewService(f).DetachPermission("5", "6"); !errors.Is(err, ErrBuiltinRole) {
+			if err := NewService(f).DetachPermission(context.Background(), "5", "6"); !errors.Is(err, ErrBuiltinRole) {
 				t.Fatalf("detach from %s err = %v, want ErrBuiltinRole", name, err)
 			}
 			for _, call := range f.calls {
@@ -399,7 +404,7 @@ func TestSV15to18BuiltinRoles(t *testing.T) {
 			{"owner", "users.admin"}, {"owner", "roles"}, {"owner", "roles.administrator"}, {"mod", "roles.admin"}, {"bee_admin", "roles.admin"},
 		} {
 			f := &fakeStore{role: &Role{Name: c.role}, permission: &Permission{Node: c.node}}
-			if err := NewService(f).DetachPermission("5", "6"); err != nil || f.calls[len(f.calls)-1] != "DetachPermission" {
+			if err := NewService(f).DetachPermission(context.Background(), "5", "6"); err != nil || f.calls[len(f.calls)-1] != "DetachPermission" {
 				t.Fatalf("detach %s from %s err = %v, calls %v", c.node, c.role, err, f.calls)
 			}
 		}
@@ -409,7 +414,7 @@ func TestSV15to18BuiltinRoles(t *testing.T) {
 func TestSV19to23GrantedValues(t *testing.T) {
 	attach := func(valueType string, value any) (*fakeStore, error) {
 		f := &fakeStore{role: &Role{Name: "mod"}, permission: &Permission{ID: "6", Node: "a.b", ValueType: valueType}}
-		return f, NewService(f).AttachPermission("5", "6", value)
+		return f, NewService(f).AttachPermission(context.Background(), "5", "6", value)
 	}
 
 	t.Run("RCV-19_PermissionsWithoutATypeTakeNoValue", func(t *testing.T) {
@@ -492,8 +497,21 @@ func TestSV19to23GrantedValues(t *testing.T) {
 	})
 	t.Run("RCV-23_UnknownPermissionsFailBeforeTheValueIsChecked", func(t *testing.T) {
 		f := &fakeStore{err: ErrPermissionNotFound}
-		if err := NewService(f).AttachPermission("5", "6", "x"); !errors.Is(err, ErrPermissionNotFound) || slices.Contains(f.calls, "AttachPermission") {
+		if err := NewService(f).AttachPermission(context.Background(), "5", "6", "x"); !errors.Is(err, ErrPermissionNotFound) || slices.Contains(f.calls, "AttachPermission") {
 			t.Fatalf("err %v, calls %v, want ErrPermissionNotFound without an attach", err, f.calls)
+		}
+	})
+}
+
+func TestSV24RequestContextReachesStore(t *testing.T) {
+	t.Run("RCV-24_RequestContextReachesStore", func(t *testing.T) {
+		f := &fakeStore{role: &Role{ID: "1"}}
+		ctx := context.WithValue(context.Background(), reqctx.UserIDKey, "u1")
+		if _, err := NewService(f).GetRole(ctx, "1"); err != nil {
+			t.Fatalf("GetRole() error = %v", err)
+		}
+		if got := f.ctx.Value(reqctx.UserIDKey); got != "u1" {
+			t.Errorf("store context user ID = %v, want %q", got, "u1")
 		}
 	})
 }

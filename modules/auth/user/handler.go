@@ -167,7 +167,7 @@ func GetUserPermissionsHandler(service Service) http.HandlerFunc {
 			responses.Forbidden(w, r, msgNoPermissionToGetUserPermissions)
 			return
 		}
-		permissions, err := service.GetUserPermissions(userID)
+		permissions, err := service.GetUserPermissions(r.Context(), userID)
 		if err != nil {
 			if err == account.ErrNotFound {
 				responses.NotFound(w, r, msgUserNotFound)

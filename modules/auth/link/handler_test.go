@@ -68,7 +68,7 @@ func (s *stubAccountService) IsPasswordAuthEnabled(string) (bool, error) {
 
 const stubSessionPermission = "stub:perm"
 
-func (s *stubAccountService) NewSession(a *account.Account, expiresAt int64) (*session.Session, error) {
+func (s *stubAccountService) NewSession(_ context.Context, a *account.Account, expiresAt int64) (*session.Session, error) {
 	if s.newSessionErr != nil {
 		return nil, s.newSessionErr
 	}

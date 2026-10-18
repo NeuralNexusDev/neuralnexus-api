@@ -1,5 +1,7 @@
 package testutil
 
+import "context"
+
 // FakeRoleStore is a role store that maps role IDs to permissions and records each lookup.
 type FakeRoleStore struct {
 	Permissions map[string][]string
@@ -8,7 +10,7 @@ type FakeRoleStore struct {
 }
 
 // GetPermissionsForRoles returns the permissions of roleIDs, or Err.
-func (f *FakeRoleStore) GetPermissionsForRoles(roleIDs []string) ([]string, error) {
+func (f *FakeRoleStore) GetPermissionsForRoles(_ context.Context, roleIDs []string) ([]string, error) {
 	f.Calls = append(f.Calls, roleIDs)
 	if f.Err != nil {
 		return nil, f.Err

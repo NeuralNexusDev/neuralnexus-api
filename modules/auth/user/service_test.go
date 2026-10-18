@@ -1,6 +1,7 @@
 package user
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
@@ -315,7 +316,7 @@ func TestUS07to10GetUserPermissions(t *testing.T) {
 		as := &usFakeAccountStore{getByIDAccount: &account.Account{UserID: "u1", Roles: []string{"1"}}}
 		svc := usNewService(as, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})
 
-		got, err := svc.GetUserPermissions("u1")
+		got, err := svc.GetUserPermissions(context.Background(), "u1")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -334,7 +335,7 @@ func TestUS07to10GetUserPermissions(t *testing.T) {
 		wantErr := testutil.ErrBoom
 		svc := usNewService(&usFakeAccountStore{getByIDErr: wantErr}, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})
 
-		got, err := svc.GetUserPermissions("u1")
+		got, err := svc.GetUserPermissions(context.Background(), "u1")
 		if got != nil || !errors.Is(err, wantErr) {
 			t.Errorf("GetUserPermissions() = (%v, %v), want (nil, %v)", got, err, wantErr)
 		}
@@ -345,7 +346,7 @@ func TestUS07to10GetUserPermissions(t *testing.T) {
 		rs := testutil.DefaultRoleStore()
 		svc := NewService(as, &usFakeLinkAccountStore{}, link.NewService(&usFakeLinkAccountStore{}, as), &usFakeAccountSettingsStore{}, rs)
 
-		got, err := svc.GetUserPermissions("u1")
+		got, err := svc.GetUserPermissions(context.Background(), "u1")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -359,7 +360,7 @@ func TestUS07to10GetUserPermissions(t *testing.T) {
 		as := &usFakeAccountStore{getByIDAccount: &account.Account{UserID: "u1", Roles: []string{"1"}}}
 		svc := NewService(as, &usFakeLinkAccountStore{}, link.NewService(&usFakeLinkAccountStore{}, as), &usFakeAccountSettingsStore{}, &testutil.FakeRoleStore{Err: wantErr})
 
-		got, err := svc.GetUserPermissions("u1")
+		got, err := svc.GetUserPermissions(context.Background(), "u1")
 
 		if got != nil || !errors.Is(err, wantErr) {
 			t.Errorf("GetUserPermissions() = (%v, %v), want (nil, %v)", got, err, wantErr)
@@ -371,7 +372,7 @@ func TestUS07to10GetUserPermissions(t *testing.T) {
 		rs := testutil.DefaultRoleStore()
 		svc := NewService(as, &usFakeLinkAccountStore{}, link.NewService(&usFakeLinkAccountStore{}, as), &usFakeAccountSettingsStore{}, rs)
 
-		got, err := svc.GetUserPermissions("u1")
+		got, err := svc.GetUserPermissions(context.Background(), "u1")
 		if err != nil || got == nil || len(got) != 0 || len(rs.Calls) != 0 {
 			t.Errorf("GetUserPermissions() = (%#v, %v) with calls %v, want (empty non-nil, nil) and no role lookup", got, err, rs.Calls)
 		}
@@ -382,7 +383,7 @@ func TestUS07to10GetUserPermissions(t *testing.T) {
 		als := &usFakeLinkAccountStore{}
 		svc := NewService(as, als, link.NewService(als, as), &usFakeAccountSettingsStore{}, testutil.DefaultRoleStore())
 
-		got, err := svc.GetUserPermissions("u1")
+		got, err := svc.GetUserPermissions(context.Background(), "u1")
 
 		if err != nil || got == nil || len(got) != 0 {
 			t.Errorf("GetUserPermissions() = (%#v, %v), want (empty non-nil, nil)", got, err)

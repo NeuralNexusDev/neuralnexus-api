@@ -78,7 +78,7 @@ func (m *oaMockAccountService) DeleteAccount(userID string) error {
 	return nil
 }
 func (m *oaMockAccountService) IsPasswordAuthEnabled(string) (bool, error) { return false, nil }
-func (m *oaMockAccountService) NewSession(a *account.Account, expiresAt int64) (*session.Session, error) {
+func (m *oaMockAccountService) NewSession(_ context.Context, a *account.Account, expiresAt int64) (*session.Session, error) {
 	return &session.Session{ID: "stub-session", UserID: a.UserID, Permissions: []string{"stub:perm"}, ExpiresAt: expiresAt}, nil
 }
 
@@ -450,7 +450,7 @@ func TestOA09to16ProcessOAuthLogin(t *testing.T) {
 		las := &oaMockLinkAccountStore{}
 		ss := &oaMockSessionService{}
 
-		session, err := ProcessOAuthLogin(as, las, ss, "code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLogin})
+		session, err := ProcessOAuthLogin(context.Background(), as, las, ss, "code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLogin})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -489,7 +489,7 @@ func TestOA09to16ProcessOAuthLogin(t *testing.T) {
 		}
 		ss := &oaMockSessionService{}
 
-		session, err := ProcessOAuthLogin(as, las, ss, "code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLogin})
+		session, err := ProcessOAuthLogin(context.Background(), as, las, ss, "code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLogin})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -506,9 +506,9 @@ func TestOA09to16ProcessOAuthLogin(t *testing.T) {
 		las := &oaMockLinkAccountStore{}
 		ss := &oaMockSessionService{}
 
-		_, err := ProcessOAuthLogin(as, las, ss, "code", &OAuthState{Platform: "bogus", Mode: ModeLogin})
+		_, err := ProcessOAuthLogin(context.Background(), as, las, ss, "code", &OAuthState{Platform: "bogus", Mode: ModeLogin})
 		if !errors.Is(err, ErrInvalidPlatform) {
-			t.Fatalf("ProcessOAuthLogin() error = %v, want %v", err, ErrInvalidPlatform)
+			t.Fatalf("ProcessOAuthLogin(context.Background(), ) error = %v, want %v", err, ErrInvalidPlatform)
 		}
 		if as.AddAccountCalls != 0 || las.AddLinkedAccountToDBCalls != 0 || ss.AddSessionCalls != 0 {
 			t.Error("expected no store calls for an invalid platform")
@@ -521,7 +521,7 @@ func TestOA09to16ProcessOAuthLogin(t *testing.T) {
 		las := &oaMockLinkAccountStore{}
 		ss := &oaMockSessionService{}
 
-		_, err := ProcessOAuthLogin(as, las, ss, "bad-code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLogin})
+		_, err := ProcessOAuthLogin(context.Background(), as, las, ss, "bad-code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLogin})
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -540,9 +540,9 @@ func TestOA09to16ProcessOAuthLogin(t *testing.T) {
 		}
 		ss := &oaMockSessionService{}
 
-		_, err := ProcessOAuthLogin(as, las, ss, "code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLogin})
+		_, err := ProcessOAuthLogin(context.Background(), as, las, ss, "code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLogin})
 		if !errors.Is(err, ErrPlatformLoginDisabled) {
-			t.Fatalf("ProcessOAuthLogin() error = %v, want ErrPlatformLoginDisabled", err)
+			t.Fatalf("ProcessOAuthLogin(context.Background(), ) error = %v, want ErrPlatformLoginDisabled", err)
 		}
 	})
 
@@ -553,7 +553,7 @@ func TestOA09to16ProcessOAuthLogin(t *testing.T) {
 		las := &oaMockLinkAccountStore{}
 		ss := &oaMockSessionService{}
 
-		session, err := ProcessOAuthLogin(as, las, ss, "code", &OAuthState{Platform: PlatformMinecraft, Mode: ModeLogin})
+		session, err := ProcessOAuthLogin(context.Background(), as, las, ss, "code", &OAuthState{Platform: PlatformMinecraft, Mode: ModeLogin})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -571,7 +571,7 @@ func TestOA09to16ProcessOAuthLogin(t *testing.T) {
 		las := &oaMockLinkAccountStore{}
 		ss := &oaMockSessionService{}
 
-		_, err := ProcessOAuthLogin(as, las, ss, "code", &OAuthState{Platform: PlatformMinecraft, Mode: ModeLogin})
+		_, err := ProcessOAuthLogin(context.Background(), as, las, ss, "code", &OAuthState{Platform: PlatformMinecraft, Mode: ModeLogin})
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -586,7 +586,7 @@ func TestOA09to16ProcessOAuthLogin(t *testing.T) {
 		las := &oaMockLinkAccountStore{}
 		ss := &oaMockSessionService{AddSessionFunc: func(*session.Session) error { return testutil.ErrDBDown }}
 
-		session, err := ProcessOAuthLogin(as, las, ss, "code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLogin})
+		session, err := ProcessOAuthLogin(context.Background(), as, las, ss, "code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLogin})
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -603,7 +603,7 @@ func TestOA76to78ProcessOAuthLoginAdditionalPlatformDispatch(t *testing.T) {
 		las := &oaMockLinkAccountStore{}
 		ss := &oaMockSessionService{}
 
-		session, err := ProcessOAuthLogin(as, las, ss, "code", &OAuthState{Platform: PlatformTwitch, Mode: ModeLogin})
+		session, err := ProcessOAuthLogin(context.Background(), as, las, ss, "code", &OAuthState{Platform: PlatformTwitch, Mode: ModeLogin})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -633,7 +633,7 @@ func TestOA76to78ProcessOAuthLoginAdditionalPlatformDispatch(t *testing.T) {
 		las := &oaMockLinkAccountStore{}
 		ss := &oaMockSessionService{}
 
-		session, err := ProcessOAuthLogin(as, las, ss, "code", &OAuthState{Platform: PlatformMicrosoft, Mode: ModeLogin})
+		session, err := ProcessOAuthLogin(context.Background(), as, las, ss, "code", &OAuthState{Platform: PlatformMicrosoft, Mode: ModeLogin})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -676,7 +676,7 @@ func TestOA76to78ProcessOAuthLoginAdditionalPlatformDispatch(t *testing.T) {
 		las := &oaMockLinkAccountStore{}
 		ss := &oaMockSessionService{}
 
-		session, err := ProcessOAuthLogin(as, las, ss, "code", &OAuthState{Platform: PlatformXboxLive, Mode: ModeLogin})
+		session, err := ProcessOAuthLogin(context.Background(), as, las, ss, "code", &OAuthState{Platform: PlatformXboxLive, Mode: ModeLogin})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1829,7 +1829,7 @@ func (m *oaConcurrentAccountService) DeleteAccount(userID string) error {
 	return nil
 }
 func (m *oaConcurrentAccountService) IsPasswordAuthEnabled(string) (bool, error) { return false, nil }
-func (m *oaConcurrentAccountService) NewSession(a *account.Account, expiresAt int64) (*session.Session, error) {
+func (m *oaConcurrentAccountService) NewSession(_ context.Context, a *account.Account, expiresAt int64) (*session.Session, error) {
 	return &session.Session{ID: "stub-session", UserID: a.UserID, Permissions: []string{"stub:perm"}, ExpiresAt: expiresAt}, nil
 }
 

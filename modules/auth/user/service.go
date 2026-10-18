@@ -1,6 +1,7 @@
 package user
 
 import (
+	"context"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/link"
 )
@@ -10,7 +11,7 @@ type Service interface {
 	GetUser(userID string) (*User, error)
 	GetUserFromPlatform(platform link.Platform, platformID string) (*User, error)
 	ListUsers(limit, offset int) ([]*User, error)
-	GetUserPermissions(userID string) ([]string, error)
+	GetUserPermissions(ctx context.Context, userID string) ([]string, error)
 	UpdateUser(userID string, update *UserUpdate) error
 	UpdateUserFromPlatform(platform link.Platform, platformID string, data link.PlatformData) (*User, error)
 	DeleteUser(userID string) error
@@ -74,7 +75,7 @@ func (s *service) ListUsers(limit, offset int) ([]*User, error) {
 }
 
 // GetUserPermissions - Get a user's permissions
-func (s *service) GetUserPermissions(userID string) ([]string, error) {
+func (s *service) GetUserPermissions(ctx context.Context, userID string) ([]string, error) {
 	a, err := s.as.GetAccountByID(userID)
 	if err != nil {
 		return nil, err
@@ -82,7 +83,7 @@ func (s *service) GetUserPermissions(userID string) ([]string, error) {
 	if len(a.Roles) == 0 {
 		return []string{}, nil
 	}
-	permissions, err := s.rs.GetPermissionsForRoles(a.Roles)
+	permissions, err := s.rs.GetPermissionsForRoles(ctx, a.Roles)
 	if err != nil {
 		return nil, err
 	}

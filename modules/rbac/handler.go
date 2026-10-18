@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log"
 	"net/http"
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
@@ -69,9 +69,9 @@ func ListRolesHandler(s Service) http.HandlerFunc {
 		if !authorized(w, r) {
 			return
 		}
-		roles, err := s.ListRoles()
+		roles, err := s.ListRoles(r.Context())
 		if err != nil {
-			log.Println(logFailedToHandleRbac, err)
+			reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
 			responses.InternalServerError(w, r, msgFailedToHandleRbac)
 			return
 		}
@@ -85,7 +85,7 @@ func GetRoleHandler(s Service) http.HandlerFunc {
 		if !authorized(w, r) {
 			return
 		}
-		role, err := s.GetRole(r.PathValue("id"))
+		role, err := s.GetRole(r.Context(), r.PathValue("id"))
 		switch err {
 		case ErrInvalidID:
 			responses.BadRequest(w, r, msgInvalidID)
@@ -94,7 +94,7 @@ func GetRoleHandler(s Service) http.HandlerFunc {
 		case nil:
 			responses.StructOK(w, r, role)
 		default:
-			log.Println(logFailedToHandleRbac, err)
+			reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
 			responses.InternalServerError(w, r, msgFailedToHandleRbac)
 		}
 	}
@@ -106,14 +106,14 @@ func GetRoleByNameHandler(s Service) http.HandlerFunc {
 		if !authorized(w, r) {
 			return
 		}
-		role, err := s.GetRoleByName(r.PathValue("name"))
+		role, err := s.GetRoleByName(r.Context(), r.PathValue("name"))
 		switch err {
 		case ErrRoleNotFound:
 			responses.NotFound(w, r, msgRoleNotFound)
 		case nil:
 			responses.StructOK(w, r, role)
 		default:
-			log.Println(logFailedToHandleRbac, err)
+			reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
 			responses.InternalServerError(w, r, msgFailedToHandleRbac)
 		}
 	}
@@ -130,7 +130,7 @@ func CreateRoleHandler(s Service) http.HandlerFunc {
 			responses.BadRequest(w, r, msgUnableToParseBody)
 			return
 		}
-		role, err := s.CreateRole(body.Name, body.Description)
+		role, err := s.CreateRole(r.Context(), body.Name, body.Description)
 		switch err {
 		case ErrInvalidRoleName:
 			responses.BadRequest(w, r, msgInvalidRoleName)
@@ -141,7 +141,7 @@ func CreateRoleHandler(s Service) http.HandlerFunc {
 		case nil:
 			responses.SendStruct(w, r, http.StatusCreated, role)
 		default:
-			log.Println(logFailedToHandleRbac, err)
+			reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
 			responses.InternalServerError(w, r, msgFailedToHandleRbac)
 		}
 	}
@@ -158,7 +158,7 @@ func UpdateRoleHandler(s Service) http.HandlerFunc {
 			responses.BadRequest(w, r, msgUnableToParseBody)
 			return
 		}
-		role, err := s.UpdateRole(r.PathValue("id"), body.Name, body.Description)
+		role, err := s.UpdateRole(r.Context(), r.PathValue("id"), body.Name, body.Description)
 		switch err {
 		case ErrInvalidID:
 			responses.BadRequest(w, r, msgInvalidID)
@@ -175,7 +175,7 @@ func UpdateRoleHandler(s Service) http.HandlerFunc {
 		case nil:
 			responses.StructOK(w, r, role)
 		default:
-			log.Println(logFailedToHandleRbac, err)
+			reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
 			responses.InternalServerError(w, r, msgFailedToHandleRbac)
 		}
 	}
@@ -187,7 +187,7 @@ func DeleteRoleHandler(s Service) http.HandlerFunc {
 		if !authorized(w, r) {
 			return
 		}
-		err := s.DeleteRole(r.PathValue("id"))
+		err := s.DeleteRole(r.Context(), r.PathValue("id"))
 		switch err {
 		case ErrInvalidID:
 			responses.BadRequest(w, r, msgInvalidID)
@@ -200,7 +200,7 @@ func DeleteRoleHandler(s Service) http.HandlerFunc {
 		case nil:
 			responses.NoContent(w, r)
 		default:
-			log.Println(logFailedToHandleRbac, err)
+			reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
 			responses.InternalServerError(w, r, msgFailedToHandleRbac)
 		}
 	}
@@ -212,9 +212,9 @@ func ListPermissionsHandler(s Service) http.HandlerFunc {
 		if !authorized(w, r) {
 			return
 		}
-		permissions, err := s.ListPermissions()
+		permissions, err := s.ListPermissions(r.Context())
 		if err != nil {
-			log.Println(logFailedToHandleRbac, err)
+			reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
 			responses.InternalServerError(w, r, msgFailedToHandleRbac)
 			return
 		}
@@ -228,7 +228,7 @@ func GetPermissionHandler(s Service) http.HandlerFunc {
 		if !authorized(w, r) {
 			return
 		}
-		permission, err := s.GetPermission(r.PathValue("id"))
+		permission, err := s.GetPermission(r.Context(), r.PathValue("id"))
 		switch err {
 		case ErrInvalidID:
 			responses.BadRequest(w, r, msgInvalidID)
@@ -237,7 +237,7 @@ func GetPermissionHandler(s Service) http.HandlerFunc {
 		case nil:
 			responses.StructOK(w, r, permission)
 		default:
-			log.Println(logFailedToHandleRbac, err)
+			reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
 			responses.InternalServerError(w, r, msgFailedToHandleRbac)
 		}
 	}
@@ -249,14 +249,14 @@ func GetPermissionByNodeHandler(s Service) http.HandlerFunc {
 		if !authorized(w, r) {
 			return
 		}
-		permission, err := s.GetPermissionByNode(r.PathValue("node"))
+		permission, err := s.GetPermissionByNode(r.Context(), r.PathValue("node"))
 		switch err {
 		case ErrPermissionNotFound:
 			responses.NotFound(w, r, msgPermissionNotFound)
 		case nil:
 			responses.StructOK(w, r, permission)
 		default:
-			log.Println(logFailedToHandleRbac, err)
+			reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
 			responses.InternalServerError(w, r, msgFailedToHandleRbac)
 		}
 	}
@@ -273,7 +273,7 @@ func CreatePermissionHandler(s Service) http.HandlerFunc {
 			responses.BadRequest(w, r, msgUnableToParseBody)
 			return
 		}
-		permission, err := s.CreatePermission(body.Node, body.Description, body.ValueType, body.Merge)
+		permission, err := s.CreatePermission(r.Context(), body.Node, body.Description, body.ValueType, body.Merge)
 		switch err {
 		case ErrInvalidNode:
 			responses.BadRequest(w, r, msgInvalidNode)
@@ -286,7 +286,7 @@ func CreatePermissionHandler(s Service) http.HandlerFunc {
 		case nil:
 			responses.SendStruct(w, r, http.StatusCreated, permission)
 		default:
-			log.Println(logFailedToHandleRbac, err)
+			reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
 			responses.InternalServerError(w, r, msgFailedToHandleRbac)
 		}
 	}
@@ -298,7 +298,7 @@ func DeletePermissionHandler(s Service) http.HandlerFunc {
 		if !authorized(w, r) {
 			return
 		}
-		err := s.DeletePermission(r.PathValue("id"))
+		err := s.DeletePermission(r.Context(), r.PathValue("id"))
 		switch err {
 		case ErrInvalidID:
 			responses.BadRequest(w, r, msgInvalidID)
@@ -309,7 +309,7 @@ func DeletePermissionHandler(s Service) http.HandlerFunc {
 		case nil:
 			responses.NoContent(w, r)
 		default:
-			log.Println(logFailedToHandleRbac, err)
+			reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
 			responses.InternalServerError(w, r, msgFailedToHandleRbac)
 		}
 	}
@@ -330,7 +330,7 @@ func AttachPermissionHandler(s Service) http.HandlerFunc {
 				return
 			}
 		}
-		err := s.AttachPermission(r.PathValue("id"), r.PathValue("permission_id"), body.Value)
+		err := s.AttachPermission(r.Context(), r.PathValue("id"), r.PathValue("permission_id"), body.Value)
 		switch err {
 		case ErrInvalidID:
 			responses.BadRequest(w, r, msgInvalidID)
@@ -343,7 +343,7 @@ func AttachPermissionHandler(s Service) http.HandlerFunc {
 		case nil:
 			responses.NoContent(w, r)
 		default:
-			log.Println(logFailedToHandleRbac, err)
+			reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
 			responses.InternalServerError(w, r, msgFailedToHandleRbac)
 		}
 	}
@@ -355,7 +355,7 @@ func DetachPermissionHandler(s Service) http.HandlerFunc {
 		if !authorized(w, r) {
 			return
 		}
-		err := s.DetachPermission(r.PathValue("id"), r.PathValue("permission_id"))
+		err := s.DetachPermission(r.Context(), r.PathValue("id"), r.PathValue("permission_id"))
 		switch err {
 		case ErrInvalidID:
 			responses.BadRequest(w, r, msgInvalidID)
@@ -368,7 +368,7 @@ func DetachPermissionHandler(s Service) http.HandlerFunc {
 		case nil:
 			responses.NoContent(w, r)
 		default:
-			log.Println(logFailedToHandleRbac, err)
+			reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
 			responses.InternalServerError(w, r, msgFailedToHandleRbac)
 		}
 	}

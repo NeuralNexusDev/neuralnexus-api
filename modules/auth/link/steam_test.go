@@ -68,7 +68,7 @@ func (m *stMockAccountService) DeleteAccount(userID string) error {
 	return nil
 }
 func (m *stMockAccountService) IsPasswordAuthEnabled(string) (bool, error) { return false, nil }
-func (m *stMockAccountService) NewSession(a *account.Account, expiresAt int64) (*session.Session, error) {
+func (m *stMockAccountService) NewSession(_ context.Context, a *account.Account, expiresAt int64) (*session.Session, error) {
 	return &session.Session{ID: "stub-session", UserID: a.UserID, Permissions: []string{"stub:perm"}, ExpiresAt: expiresAt}, nil
 }
 
@@ -465,7 +465,7 @@ func TestST23to25ProcessSteamLogin(t *testing.T) {
 		las := newSTMockLinkAccountStore()
 		ss := &stMockSessionService{}
 
-		session, err := ProcessSteamLogin(as, las, ss, user)
+		session, err := ProcessSteamLogin(context.Background(), as, las, ss, user)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -489,7 +489,7 @@ func TestST23to25ProcessSteamLogin(t *testing.T) {
 		las := newSTMockLinkAccountStore()
 		ss := &stMockSessionService{}
 
-		_, err := ProcessSteamLogin(as, las, ss, user)
+		_, err := ProcessSteamLogin(context.Background(), as, las, ss, user)
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -500,7 +500,7 @@ func TestST23to25ProcessSteamLogin(t *testing.T) {
 		las := newSTMockLinkAccountStore()
 		ss := &stMockSessionService{addSessionErr: testutil.ErrDBDown}
 
-		_, err := ProcessSteamLogin(as, las, ss, user)
+		_, err := ProcessSteamLogin(context.Background(), as, las, ss, user)
 		if err == nil {
 			t.Fatal("expected an error")
 		}
