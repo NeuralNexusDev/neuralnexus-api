@@ -113,7 +113,7 @@
 | ACH-08 | LoginHandler | Error Path | session.Service.AddSession fails | Account/password/enabled all valid, ss.AddSession returns an error | 500 Internal Server Error `msgAuthenticationFailed` | P2 |  |
 | ACH-09 | LoginHandler | Error Path | session.Service.CreateJWT fails | AddSession succeeds, ss.CreateJWT returns an error | 500 Internal Server Error `msgAuthenticationFailed` | P2 |  |
 | ACH-10 | LogoutHandler | Happy Path | Logout with a valid session | Context carries a non-nil *auth.Session, ss.DeleteSession succeeds | 204 No Content, session cookie cleared (empty value, expiry in the past) | P1 |  |
-| ACH-11 | LogoutHandler | Edge Case | Session in context is a nil *auth.Session | Context value under mw.SessionKey is (*auth.Session)(nil) | 400 Bad Request `msgInvalidSession` | P3 |  |
+| ACH-11 | LogoutHandler | Edge Case | Session in context is a nil *auth.Session | Context value under reqctx.SessionKey is (*auth.Session)(nil) | 400 Bad Request `msgInvalidSession` | P3 |  |
 | ACH-12 | LogoutHandler | Error Path | session.Service.DeleteSession fails | Valid session in context, ss.DeleteSession returns an error | 500 Internal Server Error `msgFailedToDeleteSession` | P2 |  |
 | ACH-58 | LoginHandler | Error Path | the account service fails to build the session | Account/password/enabled all valid; `NewSession` returns `testutil.ErrBoom` | 500 Internal Server Error, `detail` is `msgAuthenticationFailed`, and no session is stored | P2 |  |
 | ACH-59 | LoginHandler | Error Path | Account lookup fails with a non-not-found error | Service.GetAccountByUsername returns `testutil.ErrDBDown` | 500 Internal Server Error `msgAuthenticationFailed`; no session cookie | P2 |  |

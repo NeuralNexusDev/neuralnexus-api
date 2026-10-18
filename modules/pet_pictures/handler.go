@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"strconv"
 
-	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
@@ -35,7 +34,7 @@ const (
 // CreatePetHandler - Create a new pet
 func CreatePetHandler(s PetPicService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*session.Session)
+		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
 		if !session.HasPermission(perms.ScopeAdminPetPictures) {
 			responses.Forbidden(w, r, msgNoPermissionToCreatePet)
 			return
@@ -116,7 +115,7 @@ func UpdatePetHandler(s PetPicService) http.HandlerFunc {
 			return
 		}
 
-		session := r.Context().Value(mw.SessionKey).(*session.Session)
+		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
 		if !session.HasPermissionValue(perms.ScopePetPictures, pet.Name) {
 			responses.Forbidden(w, r, msgNoPermissionToUpdatePet)
 			return
@@ -223,7 +222,7 @@ func UpdatePetPictureHandler(s PetPicService) http.HandlerFunc {
 			return
 		}
 
-		session := r.Context().Value(mw.SessionKey).(*session.Session)
+		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
 		if !session.HasPermissionValue(perms.ScopePetPictures, pet.Name) {
 			responses.Forbidden(w, r, msgNoPermissionToUpdatePet)
 			return
@@ -281,7 +280,7 @@ func DeletePetPictureHandler(s PetPicService) http.HandlerFunc {
 			return
 		}
 
-		session := r.Context().Value(mw.SessionKey).(*session.Session)
+		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
 		if !session.HasPermissionValue(perms.ScopePetPictures, pet.Name) {
 			responses.Forbidden(w, r, msgNoPermissionToUpdatePet)
 			return

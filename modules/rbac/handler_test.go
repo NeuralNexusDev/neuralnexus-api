@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
@@ -118,7 +118,7 @@ func rbSession(permissions ...string) *session.Session {
 
 func rbRequest(c handlerCase, session *session.Session, body string) *http.Request {
 	r := testutil.NewRequest(http.MethodPost, "/", strings.NewReader(body))
-	r = r.WithContext(context.WithValue(r.Context(), mw.SessionKey, session))
+	r = r.WithContext(context.WithValue(r.Context(), reqctx.SessionKey, session))
 	r.Header.Set("Content-Type", "application/json")
 	for k, v := range c.paths {
 		r.SetPathValue(k, v)

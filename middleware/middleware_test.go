@@ -138,7 +138,7 @@ func TestMiddlewareLog(t *testing.T) {
 	t.Run("MW-01_SessionInContextLogsUserID", func(t *testing.T) {
 		getLog := mwCaptureLog(t)
 		ctx := mwBaseCtx()
-		ctx = context.WithValue(ctx, SessionKey, &session.Session{ID: "s1", UserID: "u1"})
+		ctx = context.WithValue(ctx, reqctx.SessionKey, &session.Session{ID: "s1", UserID: "u1"})
 		ctx = context.WithValue(ctx, reqctx.UserIDKey, "u1")
 
 		reqctx.Log(ctx, "hello", "world")
@@ -350,7 +350,7 @@ func mwRunSession(svc session.Service, r *http.Request) (rec *httptest.ResponseR
 	rec = httptest.NewRecorder()
 	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		nextCalls++
-		gotSession, _ = r.Context().Value(SessionKey).(*session.Session)
+		gotSession, _ = r.Context().Value(reqctx.SessionKey).(*session.Session)
 	})
 	SessionMiddleware(svc)(next).ServeHTTP(rec, r)
 	return rec, nextCalls, gotSession
@@ -649,7 +649,7 @@ func mwRateLimitRequest(session *session.Session, remoteAddr string) *http.Reque
 	r.RemoteAddr = remoteAddr
 	ctx := mwBaseCtx()
 	if session != nil {
-		ctx = context.WithValue(ctx, SessionKey, session)
+		ctx = context.WithValue(ctx, reqctx.SessionKey, session)
 	}
 	return r.WithContext(ctx)
 }
@@ -1095,7 +1095,7 @@ func TestAuth(t *testing.T) {
 
 	t.Run("MW-39_TypedNilSessionInContextRejected", func(t *testing.T) {
 		svc := &mwFakeSessionSvc{}
-		ctx := context.WithValue(mwBaseCtx(), SessionKey, (*session.Session)(nil))
+		ctx := context.WithValue(mwBaseCtx(), reqctx.SessionKey, (*session.Session)(nil))
 		r := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
 
 		rec, nextCalls := mwRunAuth(svc, r)
@@ -1111,7 +1111,7 @@ func TestAuth(t *testing.T) {
 	t.Run("MW-40_ExpiredSessionRejectedAndDeleted", func(t *testing.T) {
 		svc := &mwFakeSessionSvc{}
 		session := &session.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
-		ctx := context.WithValue(mwBaseCtx(), SessionKey, session)
+		ctx := context.WithValue(mwBaseCtx(), reqctx.SessionKey, session)
 		r := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
 
 		rec, nextCalls := mwRunAuth(svc, r)
@@ -1131,7 +1131,7 @@ func TestAuth(t *testing.T) {
 		readLog := mwCaptureLog(t)
 		svc := &mwFakeSessionSvc{deleteFunc: func(string) error { return testutil.ErrCacheDown }}
 		session := &session.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
-		ctx := context.WithValue(mwBaseCtx(), SessionKey, session)
+		ctx := context.WithValue(mwBaseCtx(), reqctx.SessionKey, session)
 		r := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
 
 		rec, nextCalls := mwRunAuth(svc, r)
@@ -1150,7 +1150,7 @@ func TestAuth(t *testing.T) {
 	t.Run("MW-42_ValidSessionCallsNext", func(t *testing.T) {
 		svc := &mwFakeSessionSvc{}
 		session := &session.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
-		ctx := context.WithValue(mwBaseCtx(), SessionKey, session)
+		ctx := context.WithValue(mwBaseCtx(), reqctx.SessionKey, session)
 		r := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
 
 		rec, nextCalls := mwRunAuth(svc, r)
@@ -1192,7 +1192,7 @@ func TestSelfUserID(t *testing.T) {
 	})
 
 	t.Run("MW-44_TypedNilSessionInContextRejected", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), SessionKey, (*session.Session)(nil))
+		ctx := context.WithValue(context.Background(), reqctx.SessionKey, (*session.Session)(nil))
 		r := httptest.NewRequest(http.MethodGet, "/users/me", nil).WithContext(ctx)
 
 		rec, nextCalls, _ := mwRunSelfUserID(r)
@@ -1206,7 +1206,7 @@ func TestSelfUserID(t *testing.T) {
 	})
 
 	t.Run("MW-45_ValidSessionSetsPathValueAndCallsNext", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), SessionKey, &session.Session{ID: "s1", UserID: "u1"})
+		ctx := context.WithValue(context.Background(), reqctx.SessionKey, &session.Session{ID: "s1", UserID: "u1"})
 		r := httptest.NewRequest(http.MethodGet, "/users/me", nil).WithContext(ctx)
 
 		rec, nextCalls, gotUserID := mwRunSelfUserID(r)
