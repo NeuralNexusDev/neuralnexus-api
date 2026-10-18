@@ -56,11 +56,6 @@ const (
 	RetryAfter = 60
 )
 
-// LogRequest - Log a message with the request's ID, user and remote address
-func LogRequest(ctx context.Context, message ...string) {
-	reqctx.Log(ctx, message...)
-}
-
 // CreateStack - Create a stack of middlewares
 func CreateStack(middlewares ...Middleware) Middleware {
 	return func(next http.Handler) http.Handler {
@@ -130,7 +125,7 @@ func SessionMiddleware(service session.Service) Middleware {
 				}
 				session, err := service.ReadJWT(authStrings[1])
 				if err != nil {
-					LogRequest(r.Context(), "Error reading JWT:\n\t", err.Error())
+					reqctx.Log(r.Context(), "Error reading JWT:\n\t", err.Error())
 					responses.Unauthorized(w, r, "")
 					return
 				}
@@ -138,7 +133,7 @@ func SessionMiddleware(service session.Service) Middleware {
 				if !session.IsValid() {
 					responses.Unauthorized(w, r, "")
 					if delErr := service.DeleteSession(session.ID); delErr != nil {
-						LogRequest(r.Context(), logErrorDeletingSession, delErr.Error())
+						reqctx.Log(r.Context(), logErrorDeletingSession, delErr.Error())
 					}
 					return
 				}
@@ -149,10 +144,10 @@ func SessionMiddleware(service session.Service) Middleware {
 			} else if cookie, err := r.Cookie(SessionCookieName); err == nil {
 				session, jwtErr := service.ReadJWT(cookie.Value)
 				if jwtErr != nil {
-					LogRequest(r.Context(), logErrorReadingJWTFromCookie, jwtErr.Error())
+					reqctx.Log(r.Context(), logErrorReadingJWTFromCookie, jwtErr.Error())
 				} else if !session.IsValid() {
 					if delErr := service.DeleteSession(session.ID); delErr != nil {
-						LogRequest(r.Context(), logErrorDeletingSession, delErr.Error())
+						reqctx.Log(r.Context(), logErrorDeletingSession, delErr.Error())
 					}
 				} else {
 					ctx := context.WithValue(r.Context(), SessionKey, session)
@@ -174,13 +169,13 @@ func RateLimitMiddleware(service ratelimit.Service, prefix string, sessionLimit 
 			if ok && session != nil {
 				err := service.IncrRateLimit(prefix + ":" + session.UserID)
 				if err != nil {
-					LogRequest(r.Context(), logErrorIncrementingRateLimit, err.Error())
+					reqctx.Log(r.Context(), logErrorIncrementingRateLimit, err.Error())
 					next.ServeHTTP(w, r)
 					return
 				}
 				limit, err := service.GetRateLimit(prefix + ":" + session.UserID)
 				if err != nil {
-					LogRequest(r.Context(), logErrorGettingRateLimit, err.Error())
+					reqctx.Log(r.Context(), logErrorGettingRateLimit, err.Error())
 					next.ServeHTTP(w, r)
 					return
 				}
@@ -195,13 +190,13 @@ func RateLimitMiddleware(service ratelimit.Service, prefix string, sessionLimit 
 				}
 				err = service.IncrRateLimit(prefix + ":" + ip)
 				if err != nil {
-					LogRequest(r.Context(), logErrorIncrementingRateLimit, err.Error())
+					reqctx.Log(r.Context(), logErrorIncrementingRateLimit, err.Error())
 					next.ServeHTTP(w, r)
 					return
 				}
 				limit, err := service.GetRateLimit(prefix + ":" + ip)
 				if err != nil {
-					LogRequest(r.Context(), logErrorGettingRateLimit, err.Error())
+					reqctx.Log(r.Context(), logErrorGettingRateLimit, err.Error())
 					next.ServeHTTP(w, r)
 					return
 				}
@@ -227,7 +222,7 @@ func RecoveryMiddleware(next http.Handler) http.Handler {
 			if recovered == http.ErrAbortHandler {
 				panic(recovered)
 			}
-			LogRequest(r.Context(), fmt.Sprintf("panic serving %s %s: %v\n%s", r.Method, r.URL.Path, recovered, debug.Stack()))
+			reqctx.Log(r.Context(), fmt.Sprintf("panic serving %s %s: %v\n%s", r.Method, r.URL.Path, recovered, debug.Stack()))
 			if !tracked.started {
 				responses.InternalServerError(tracked, r, msgInternalError)
 			}
@@ -271,7 +266,7 @@ func RequestLoggerMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(wrapped, r)
 
-		LogRequest(r.Context(), fmt.Sprintf("%d %s %s %s",
+		reqctx.Log(r.Context(), fmt.Sprintf("%d %s %s %s",
 			wrapped.statusCode,
 			r.Method,
 			r.URL.Path,
@@ -294,7 +289,7 @@ func Auth(service session.Service) Middleware {
 				responses.Unauthorized(w, r, "")
 				err := service.DeleteSession(session.ID)
 				if err != nil {
-					LogRequest(r.Context(), logErrorDeletingSession, err.Error())
+					reqctx.Log(r.Context(), logErrorDeletingSession, err.Error())
 				}
 				return
 			}
@@ -328,7 +323,7 @@ func VerifyEd25519Middleware(publicKey ed25519.PublicKey) Middleware {
 			timestamp := r.Header.Get(XSignatureTimestamp)
 			if signatureStr == "" || timestamp == "" {
 				if err != nil {
-					LogRequest(r.Context(), "Error decoding signature:\n\t", err.Error())
+					reqctx.Log(r.Context(), "Error decoding signature:\n\t", err.Error())
 				}
 				responses.Unauthorized(w, r, msgInvalidSignature)
 				return
@@ -336,7 +331,7 @@ func VerifyEd25519Middleware(publicKey ed25519.PublicKey) Middleware {
 
 			bodyBytes, err := io.ReadAll(r.Body)
 			if err != nil {
-				LogRequest(r.Context(), "Error reading body:\n\t", err.Error())
+				reqctx.Log(r.Context(), "Error reading body:\n\t", err.Error())
 				responses.Unauthorized(w, r, msgInvalidSignature)
 				return
 			}

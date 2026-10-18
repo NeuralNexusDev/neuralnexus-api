@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/link"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/goccy/go-json"
 	"github.com/nicklaw5/helix/v2"
 	"log"
@@ -48,24 +48,24 @@ func handleRevocation(ctx context.Context, userId string, eventsub EventSubServi
 	var err error
 	switch vals.Subscription.Status {
 	case helix.EventSubStatusAuthorizationRevoked:
-		mw.LogRequest(ctx, userId, "EventSub authorization revoked")
+		reqctx.Log(ctx, userId, "EventSub authorization revoked")
 		err = tokens.DeleteOAuthToken(vals.Subscription.Condition.BroadcasterUserID, link.PlatformTwitch)
 		if err != nil {
-			mw.LogRequest(ctx, userId, "Failed to delete OAuth token:", err.Error())
+			reqctx.Log(ctx, userId, "Failed to delete OAuth token:", err.Error())
 			return errors.New("failed to delete OAuth token")
 		}
 		fallthrough
 	case helix.EventSubStatusUserRemoved,
 		helix.EventSubStatusNotificationFailuresExceeded,
 		EventSubStatusVersionRemoved:
-		mw.LogRequest(ctx, userId, "EventSub subscription removed")
+		reqctx.Log(ctx, userId, "EventSub subscription removed")
 		err = eventsub.RevokeEventSubSubscription(vals.Subscription.ID, vals.Subscription.Status)
 		if err != nil {
-			mw.LogRequest(ctx, userId, "Failed to revoke EventSub subscription:", err.Error())
+			reqctx.Log(ctx, userId, "Failed to revoke EventSub subscription:", err.Error())
 			return errors.New("failed to revoke EventSub subscription")
 		}
 	default:
-		mw.LogRequest(ctx, userId, "EventSub unknown revocation status:", vals.Subscription.Status)
+		reqctx.Log(ctx, userId, "EventSub unknown revocation status:", vals.Subscription.Status)
 		return errors.New("unknown EventSub revocation status")
 	}
 	return nil
@@ -74,17 +74,17 @@ func handleRevocation(ctx context.Context, userId string, eventsub EventSubServi
 // handleVerification handles the EventSub verification challenge
 func handleVerification(w http.ResponseWriter, ctx context.Context, userId string, eventsub EventSubService, vals eventSubNotification) error {
 	if vals.Challenge == "" || vals.Subscription.Status != helix.EventSubStatusPending {
-		mw.LogRequest(ctx, userId, "EventSub unknown verification status:", vals.Subscription.Status)
+		reqctx.Log(ctx, userId, "EventSub unknown verification status:", vals.Subscription.Status)
 		return errors.New("unknown EventSub verification status")
 	}
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(vals.Challenge))
-	mw.LogRequest(ctx, userId, "EventSub challenge received, responding with challenge")
+	reqctx.Log(ctx, userId, "EventSub challenge received, responding with challenge")
 
 	var err = eventsub.UpdateEventSubSubscriptionStatus(vals.Subscription.ID, helix.EventSubStatusEnabled)
 	if err != nil {
-		mw.LogRequest(ctx, userId, "Failed to update EventSub subscription:", err.Error())
+		reqctx.Log(ctx, userId, "Failed to update EventSub subscription:", err.Error())
 	}
 	return nil
 }
@@ -92,16 +92,16 @@ func handleVerification(w http.ResponseWriter, ctx context.Context, userId strin
 // handleNotification handles the EventSub notifications
 func handleNotification(ctx context.Context, userId string, eventsub EventSubService, tokens link.OAuthTokenStore, vals eventSubNotification, linked link.Store) error {
 	var err error
-	mw.LogRequest(ctx, userId, "EventSub notification type:", vals.Subscription.Type)
+	reqctx.Log(ctx, userId, "EventSub notification type:", vals.Subscription.Type)
 	switch vals.Subscription.Type {
 	case helix.EventSubTypeChannelChatMessage:
 		err = handleChannelChatMessage(ctx, userId, eventsub, tokens, vals, linked)
 	default:
-		mw.LogRequest(ctx, userId, "EventSub unknown notification type:", vals.Subscription.Type)
+		reqctx.Log(ctx, userId, "EventSub unknown notification type:", vals.Subscription.Type)
 		return errors.New("unknown EventSub notification type")
 	}
 	if err != nil {
-		mw.LogRequest(ctx, userId, "Failed to handle EventSub notification:", err.Error())
+		reqctx.Log(ctx, userId, "Failed to handle EventSub notification:", err.Error())
 		return errors.New("failed to handle EventSub notification")
 	}
 	return nil
@@ -113,7 +113,7 @@ func handleChannelChatMessage(ctx context.Context, userId string, eventsub Event
 	var chatEvent helix.EventSubChannelChatMessageEvent
 	err = json.NewDecoder(bytes.NewReader(vals.Event)).Decode(&chatEvent)
 	if err != nil {
-		mw.LogRequest(ctx, userId, "Failed to decode EventSub chat message event:", err.Error())
+		reqctx.Log(ctx, userId, "Failed to decode EventSub chat message event:", err.Error())
 		return errors.New("failed to decode EventSub chat message event")
 	}
 
@@ -124,7 +124,7 @@ func handleChannelChatMessage(ctx context.Context, userId string, eventsub Event
 
 	var args = strings.Split(message[1:], " ")
 	if len(args) < 1 {
-		mw.LogRequest(ctx, userId, "Chat message does not contain a command")
+		reqctx.Log(ctx, userId, "Chat message does not contain a command")
 		// return errors.New("chat message does not contain a command")
 	}
 	switch args[0] {
@@ -146,17 +146,17 @@ func handleChannelChatMessage(ctx context.Context, userId string, eventsub Event
 			// 2. The Twitch user is already linked to another Minecraft account
 
 			if fromLinkedAccount != nil && toLinkedAccount != nil && fromLinkedAccount.UserID == toLinkedAccount.UserID {
-				mw.LogRequest(ctx, userId, logMinecraftAlreadyLinked, toLinkedAccount.PlatformUsername)
+				reqctx.Log(ctx, userId, logMinecraftAlreadyLinked, toLinkedAccount.PlatformUsername)
 				// return errors.New("user is already linked to Minecraft account")
 				// TODO: Reply with Twitch API
 				return nil
 			} else if fromLinkedAccount != nil && alreadyLinkedAccount != nil {
 				if alreadyLinkedAccount.PlatformUsername == toLinkedAccount.PlatformUsername {
-					mw.LogRequest(ctx, userId, logMinecraftAlreadyLinked, alreadyLinkedAccount.PlatformUsername)
+					reqctx.Log(ctx, userId, logMinecraftAlreadyLinked, alreadyLinkedAccount.PlatformUsername)
 					// return errors.New("user is already linked to Minecraft account")
 				}
 			} else if toLinkedAccount != nil {
-				mw.LogRequest(ctx, userId, "Minecraft account is already linked to another user:", toLinkedAccount.PlatformUsername)
+				reqctx.Log(ctx, userId, "Minecraft account is already linked to another user:", toLinkedAccount.PlatformUsername)
 				// return errors.New("user is already linked to Minecraft account")
 				// TODO: Reply with Twitch API
 				return nil
@@ -167,7 +167,7 @@ func handleChannelChatMessage(ctx context.Context, userId string, eventsub Event
 			if fromLinkedAccount != nil {
 				tla, _ := linked.GetLinkedAccountByUserID(fromLinkedAccount.UserID, toPlatform)
 				if tla != nil {
-					mw.LogRequest(ctx, userId, "User is already linked to a Minecraft account:", tla.PlatformUsername)
+					reqctx.Log(ctx, userId, "User is already linked to a Minecraft account:", tla.PlatformUsername)
 					// return errors.New("user is already linked to Minecraft account")
 					// TODO: Reply with Twitch API
 					return nil
@@ -175,7 +175,7 @@ func handleChannelChatMessage(ctx context.Context, userId string, eventsub Event
 			}
 
 		} else {
-			mw.LogRequest(ctx, userId, "Unsupported platform for linking:", string(toPlatform))
+			reqctx.Log(ctx, userId, "Unsupported platform for linking:", string(toPlatform))
 			// return errors.New("unsupported platform for linking")
 			// TODO: Reply with Twitch API
 			return nil
