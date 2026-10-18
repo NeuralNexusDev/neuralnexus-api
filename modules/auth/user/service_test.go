@@ -561,19 +561,19 @@ func TestUS39to40_AccountSettingsNotFoundPassesThrough(t *testing.T) {
 	})
 }
 
-type usStubLinkingService struct {
+type usStubLinkService struct {
 	userID string
 	err    error
 }
 
-func (s *usStubLinkingService) GetUserLinkedAccounts(string) ([]*link.LinkedAccount, error) {
+func (s *usStubLinkService) GetUserLinkedAccounts(string) ([]*link.LinkedAccount, error) {
 	return nil, nil
 }
-func (s *usStubLinkingService) UnlinkPlatform(string, link.Platform) error { return nil }
-func (s *usStubLinkingService) SetPlatformLoginEnabled(string, link.Platform, bool) error {
+func (s *usStubLinkService) UnlinkPlatform(string, link.Platform) error { return nil }
+func (s *usStubLinkService) SetPlatformLoginEnabled(string, link.Platform, bool) error {
 	return nil
 }
-func (s *usStubLinkingService) UpdateFromPlatform(link.Platform, string, link.PlatformData) (string, error) {
+func (s *usStubLinkService) UpdateFromPlatform(link.Platform, string, link.PlatformData) (string, error) {
 	return s.userID, s.err
 }
 
@@ -602,7 +602,7 @@ func TestUS83UpdateUserFromPlatformReturnsAccountForLinkedUser(t *testing.T) {
 	t.Run("US-83_ReturnsAccountForTheLinkUserID", func(t *testing.T) {
 		want := &account.Account{UserID: "resolved", Username: "r", Roles: []string{"1"}, UpdatedAt: usUpdatedAt}
 		as := &usFakeAccountStore{getByIDAccount: want}
-		svc := NewService(as, &usFakeLinkAccountStore{}, &usStubLinkingService{userID: "resolved"}, &usFakeAccountSettingsStore{}, rsDefaultRoleStore())
+		svc := NewService(as, &usFakeLinkAccountStore{}, &usStubLinkService{userID: "resolved"}, &usFakeAccountSettingsStore{}, rsDefaultRoleStore())
 
 		got, err := svc.UpdateUserFromPlatform(link.PlatformDiscord, "p1", usFakePlatformData{})
 		if err != nil {
@@ -621,7 +621,7 @@ func TestUS84UpdateUserFromPlatformLinkErrorSkipsAccountLookup(t *testing.T) {
 	t.Run("US-84_LinkErrorPassesThroughWithoutLookup", func(t *testing.T) {
 		wantErr := testerrors.ErrBoom
 		as := &usFakeAccountStore{}
-		svc := NewService(as, &usFakeLinkAccountStore{}, &usStubLinkingService{err: wantErr}, &usFakeAccountSettingsStore{}, rsDefaultRoleStore())
+		svc := NewService(as, &usFakeLinkAccountStore{}, &usStubLinkService{err: wantErr}, &usFakeAccountSettingsStore{}, rsDefaultRoleStore())
 
 		_, err := svc.UpdateUserFromPlatform(link.PlatformDiscord, "p1", usFakePlatformData{})
 		if !errors.Is(err, wantErr) {
