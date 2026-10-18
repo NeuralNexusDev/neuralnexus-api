@@ -2,7 +2,6 @@ package link
 
 import (
 	"encoding/base64"
-	"errors"
 	"log"
 	"net/http"
 	"net/url"
@@ -316,12 +315,12 @@ func UnlinkPlatformHandler(service Service) http.HandlerFunc {
 		}
 		platform := Platform(r.PathValue("platform"))
 		err := service.UnlinkPlatform(userID, platform)
-		switch {
-		case err == nil:
+		switch err {
+		case nil:
 			responses.NoContent(w, r)
-		case errors.Is(err, account.ErrNotFound):
+		case account.ErrNotFound:
 			responses.NotFound(w, r, msgPlatformNotLinked)
-		case errors.Is(err, account.ErrWouldLockAccount):
+		case account.ErrWouldLockAccount:
 			responses.BadRequest(w, r, msgSetPasswordOrLinkBeforeUnlinking)
 		default:
 			responses.InternalServerError(w, r, msgFailedToUnlinkPlatform)
@@ -353,14 +352,14 @@ func SetPlatformLoginEnabledHandler(service Service) http.HandlerFunc {
 		}
 
 		err := service.SetPlatformLoginEnabled(userID, platform, *body.LoginEnabled)
-		switch {
-		case err == nil:
+		switch err {
+		case nil:
 			responses.NoContent(w, r)
-		case errors.Is(err, account.ErrNotFound):
+		case account.ErrNotFound:
 			responses.NotFound(w, r, msgPlatformNotLinked)
-		case errors.Is(err, account.ErrWouldLockAccount):
+		case account.ErrWouldLockAccount:
 			responses.BadRequest(w, r, msgSetPasswordOrLinkBeforeDisabling)
-		case errors.Is(err, ErrLinkedAccountUnverified):
+		case ErrLinkedAccountUnverified:
 			responses.BadRequest(w, r, msgLinkedAccountUnverified)
 		default:
 			responses.InternalServerError(w, r, msgFailedToUpdatePlatform)

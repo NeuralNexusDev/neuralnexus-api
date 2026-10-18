@@ -195,7 +195,7 @@ func resolveOrCreateAccountForPlatformUser(as account.Service, las Store, platfo
 		}
 		return as.GetAccountByID(la.UserID)
 	}
-	if !errors.Is(err, account.ErrNotFound) {
+	if err != account.ErrNotFound {
 		return nil, err
 	}
 
@@ -215,7 +215,7 @@ func resolveOrCreateAccountForPlatformUser(as account.Service, las Store, platfo
 			log.Println(logLinkCleanupFailed, err)
 			return nil, delErr
 		}
-		if !errors.Is(err, ErrAlreadyLinked) {
+		if err != ErrAlreadyLinked {
 			return nil, err
 		}
 		// Lost the race: use the winner's account instead.
@@ -284,7 +284,7 @@ func ProcessOAuthLink(r *http.Request, las Store, code string, state *OAuthState
 			if la.UserID != session.UserID {
 				return nil, ErrPlatformAlreadyLinkedToDifferentAccount
 			}
-		} else if !errors.Is(err, account.ErrNotFound) {
+		} else if err != account.ErrNotFound {
 			return nil, err
 		}
 		if java != nil {
@@ -292,7 +292,7 @@ func ProcessOAuthLink(r *http.Request, las Store, code string, state *OAuthState
 				if la.UserID != session.UserID {
 					return nil, ErrPlatformAlreadyLinkedToDifferentAccount
 				}
-			} else if !errors.Is(err, account.ErrNotFound) {
+			} else if err != account.ErrNotFound {
 				return nil, err
 			}
 		}
@@ -339,7 +339,7 @@ var ErrConflictingMicrosoftIdentities = errors.New("this Microsoft account's Xbo
 func resolveOrCreateAccountForMicrosoftUser(as account.Service, las Store, xbox *XboxLiveData, java *MinecraftData) (*account.Account, error) {
 	xboxLA, err := las.GetLinkedAccountByPlatformID(PlatformXboxLive, xbox.GetID())
 	if err != nil {
-		if !errors.Is(err, account.ErrNotFound) {
+		if err != account.ErrNotFound {
 			return nil, err
 		}
 		xboxLA = nil
@@ -348,7 +348,7 @@ func resolveOrCreateAccountForMicrosoftUser(as account.Service, las Store, xbox 
 	if java != nil {
 		javaLA, err = las.GetLinkedAccountByPlatformID(PlatformMinecraft, java.GetID())
 		if err != nil {
-			if !errors.Is(err, account.ErrNotFound) {
+			if err != account.ErrNotFound {
 				return nil, err
 			}
 			javaLA = nil
@@ -428,7 +428,7 @@ func ensureMicrosoftIdentityLinked(as account.Service, las Store, a *account.Acc
 	if err == nil {
 		return a, false, nil
 	}
-	if !errors.Is(err, ErrAlreadyLinked) {
+	if err != ErrAlreadyLinked {
 		if isNewAccount {
 			if delErr := as.DeleteAccount(a.UserID); delErr != nil {
 				log.Println(logLinkCleanupFailed, err)
@@ -441,7 +441,7 @@ func ensureMicrosoftIdentityLinked(as account.Service, las Store, a *account.Acc
 	// We might already be the owner (a concurrent identical login won the
 	// race for both identities) rather than facing a genuine conflict.
 	actualOwnerLA, lookupErr := las.GetLinkedAccountByPlatformID(platform, user.GetID())
-	if lookupErr != nil && !errors.Is(lookupErr, account.ErrNotFound) {
+	if lookupErr != nil && lookupErr != account.ErrNotFound {
 		if isNewAccount {
 			if delErr := as.DeleteAccount(a.UserID); delErr != nil {
 				log.Println(logLinkCleanupFailed, lookupErr)
@@ -479,13 +479,14 @@ var ErrPlatformAlreadyLinkedToDifferentAccount = errors.New("this platform accou
 // if it's already linked to this same account, linking is a no-op.
 func linkPlatformUserToSession(las Store, userID string, platform Platform, user PlatformData) error {
 	la, err := las.GetLinkedAccountByPlatformID(platform, user.GetID())
-	switch {
-	case err == nil:
+	switch err {
+	case nil:
 		if userID == la.UserID {
 			return nil
 		}
 		return ErrPlatformAlreadyLinkedToDifferentAccount
-	case !errors.Is(err, account.ErrNotFound):
+	case account.ErrNotFound:
+	default:
 		return err
 	}
 
