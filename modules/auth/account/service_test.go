@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
+	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
 type acFakeAccountStore struct {
@@ -279,7 +280,7 @@ func TestAC22NewSessionSnowflakeFails(t *testing.T) {
 	}
 
 	t.Run("AC-22_SnowflakeFailureFailsTheSession", func(t *testing.T) {
-		svc := NewService(&acFakeAccountStore{}, &acFakeAccountSettingsStore{}, rsDefaultRoleStore())
+		svc := NewService(&acFakeAccountStore{}, &acFakeAccountSettingsStore{}, testutil.DefaultRoleStore())
 
 		s, err := svc.NewSession(&Account{UserID: "u1"}, 1)
 
@@ -295,7 +296,7 @@ func TestAC17to21NewSession(t *testing.T) {
 	}
 
 	t.Run("AC-17_UsesTheRoleStorePermissions", func(t *testing.T) {
-		rs := rsDefaultRoleStore()
+		rs := testutil.DefaultRoleStore()
 		svc := newService(rs)
 
 		s, err := svc.NewSession(&Account{UserID: "u1", Roles: []string{"1"}}, 12345)
@@ -321,13 +322,13 @@ func TestAC17to21NewSession(t *testing.T) {
 				t.Errorf("Permissions[%d] = %q, want %q", i, s.Permissions[i], want[i])
 			}
 		}
-		if len(rs.calls) != 1 || len(rs.calls[0]) != 1 || rs.calls[0][0] != "1" {
-			t.Errorf("role store calls = %v, want one call with the account's role IDs", rs.calls)
+		if len(rs.Calls) != 1 || len(rs.Calls[0]) != 1 || rs.Calls[0][0] != "1" {
+			t.Errorf("role store calls = %v, want one call with the account's role IDs", rs.Calls)
 		}
 	})
 
 	t.Run("AC-18_AllTheAccountsRolesAreResolvedTogether", func(t *testing.T) {
-		rs := rsDefaultRoleStore()
+		rs := testutil.DefaultRoleStore()
 		svc := newService(rs)
 
 		s, err := svc.NewSession(&Account{UserID: "u1", Roles: []string{"1", "2"}}, 1)
@@ -338,13 +339,13 @@ func TestAC17to21NewSession(t *testing.T) {
 		if len(s.Permissions) != 5 {
 			t.Errorf("Permissions = %v, want the permissions of both roles", s.Permissions)
 		}
-		if len(rs.calls) != 1 || len(rs.calls[0]) != 2 {
-			t.Errorf("role store calls = %v, want a single call with both role IDs", rs.calls)
+		if len(rs.Calls) != 1 || len(rs.Calls[0]) != 2 {
+			t.Errorf("role store calls = %v, want a single call with both role IDs", rs.Calls)
 		}
 	})
 
 	t.Run("AC-19_NoRolesLooksNothingUp", func(t *testing.T) {
-		rs := rsDefaultRoleStore()
+		rs := testutil.DefaultRoleStore()
 		svc := newService(rs)
 
 		s, err := svc.NewSession(&Account{UserID: "u1"}, 1)
@@ -352,13 +353,13 @@ func TestAC17to21NewSession(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if s.Permissions == nil || len(s.Permissions) != 0 || len(rs.calls) != 0 {
-			t.Errorf("Permissions = %#v, calls = %v, want empty non-nil permissions and no role lookup", s.Permissions, rs.calls)
+		if s.Permissions == nil || len(s.Permissions) != 0 || len(rs.Calls) != 0 {
+			t.Errorf("Permissions = %#v, calls = %v, want empty non-nil permissions and no role lookup", s.Permissions, rs.Calls)
 		}
 	})
 
 	t.Run("AC-21_RolesWithoutPermissionsGiveEmptyNonNilPermissions", func(t *testing.T) {
-		svc := newService(rsDefaultRoleStore())
+		svc := newService(testutil.DefaultRoleStore())
 
 		s, err := svc.NewSession(&Account{UserID: "u1", Roles: []string{"99"}}, 1)
 
@@ -372,7 +373,7 @@ func TestAC17to21NewSession(t *testing.T) {
 
 	t.Run("AC-20_RoleStoreFailureFailsTheSession", func(t *testing.T) {
 		wantErr := testerrors.ErrBoom
-		svc := newService(&rsFakeRoleStore{err: wantErr})
+		svc := newService(&testutil.FakeRoleStore{Err: wantErr})
 
 		s, err := svc.NewSession(&Account{UserID: "u1", Roles: []string{"1"}}, 1)
 
@@ -380,29 +381,4 @@ func TestAC17to21NewSession(t *testing.T) {
 			t.Errorf("NewSession() = (%v, %v), want (nil, %v)", s, err, wantErr)
 		}
 	})
-}
-
-type rsFakeRoleStore struct {
-	permissions map[string][]string
-	err         error
-	calls       [][]string
-}
-
-func (f *rsFakeRoleStore) GetPermissionsForRoles(roleIDs []string) ([]string, error) {
-	f.calls = append(f.calls, roleIDs)
-	if f.err != nil {
-		return nil, f.err
-	}
-	var out []string
-	for _, id := range roleIDs {
-		out = append(out, f.permissions[id]...)
-	}
-	return out, nil
-}
-
-func rsDefaultRoleStore() *rsFakeRoleStore {
-	return &rsFakeRoleStore{permissions: map[string][]string{
-		"1": {"beenamegenerator.admin", "petpictures.admin", "ratelimit:1000"},
-		"2": {"users.admin", "datastore.admin"},
-	}}
 }
