@@ -133,7 +133,7 @@ func hdDecodePixel(t *testing.T, body []byte) color.RGBA {
 }
 
 func TestServerStatusHandler(t *testing.T) {
-	t.Run("HD-01_DefaultRawOmitsRawField", func(t *testing.T) {
+	t.Run("CSH-01_DefaultRawOmitsRawField", func(t *testing.T) {
 		mock := &hdMockService{serverStatus: hdValidStatus("raw-marker")}
 		req := hdRequest(t, "mc.example.com:25565", "")
 		w := httptest.NewRecorder()
@@ -152,7 +152,7 @@ func TestServerStatusHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-02_RawTrueKeepsRawField", func(t *testing.T) {
+	t.Run("CSH-02_RawTrueKeepsRawField", func(t *testing.T) {
 		mock := &hdMockService{serverStatus: hdValidStatus("raw-marker")}
 		req := hdRequest(t, "mc.example.com:25565", "raw=true")
 		w := httptest.NewRecorder()
@@ -168,7 +168,7 @@ func TestServerStatusHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-03_ErrorReturnsNotFound", func(t *testing.T) {
+	t.Run("CSH-03_ErrorReturnsNotFound", func(t *testing.T) {
 		mock := &hdMockService{serverErr: ErrJavaStatus}
 		req := hdRequest(t, "mc.example.com:25565", "")
 		w := httptest.NewRecorder()
@@ -184,7 +184,7 @@ func TestServerStatusHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-04_NoPortSuffixDefaultsJavaPort", func(t *testing.T) {
+	t.Run("CSH-04_NoPortSuffixDefaultsJavaPort", func(t *testing.T) {
 		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 		req := hdRequest(t, "example.com", "")
 		w := httptest.NewRecorder()
@@ -202,7 +202,7 @@ func TestServerStatusHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-05_NoPortSuffixDefaultsBedrockPort", func(t *testing.T) {
+	t.Run("CSH-05_NoPortSuffixDefaultsBedrockPort", func(t *testing.T) {
 		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 		req := hdRequest(t, "example.com", "bedrock=true")
 		w := httptest.NewRecorder()
@@ -223,7 +223,7 @@ func TestServerStatusHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-06_MissingQueryPortDefaultsToPort", func(t *testing.T) {
+	t.Run("CSH-06_MissingQueryPortDefaultsToPort", func(t *testing.T) {
 		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 		req := hdRequest(t, "example.com:25566", "")
 		w := httptest.NewRecorder()
@@ -242,7 +242,7 @@ func TestServerStatusHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-07_QueryFlagsForwarded", func(t *testing.T) {
+	t.Run("CSH-07_QueryFlagsForwarded", func(t *testing.T) {
 		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 		req := hdRequest(t, "example.com:25566", "bedrock=true&query=true&query_port=9999")
 		w := httptest.NewRecorder()
@@ -280,7 +280,7 @@ func TestServerStatusHandler(t *testing.T) {
 		{"BedrockStatus", ErrBedrockStatus, http.StatusNotFound, msgBedrockStatusFailed},
 		{"Unrecognized", testerrors.ErrBoom, http.StatusInternalServerError, msgFailedToGetServerStatus},
 	} {
-		t.Run("HD-16_"+tc.name, func(t *testing.T) {
+		t.Run("CSH-16_"+tc.name, func(t *testing.T) {
 			mock := &hdMockService{serverErr: tc.err}
 			req := hdRequest(t, "mc.example.com:25565", "")
 			w := httptest.NewRecorder()
@@ -305,7 +305,7 @@ func TestServerStatusHandler(t *testing.T) {
 		{"TooLarge", "65536"},
 		{"NotANumber", "abc"},
 	} {
-		t.Run("HD-18_ServerStatus_InvalidQueryPort_"+tc.name, func(t *testing.T) {
+		t.Run("CSH-18_ServerStatus_InvalidQueryPort_"+tc.name, func(t *testing.T) {
 			mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 			req := hdRequest(t, "mc.example.com:25570", "query=true&query_port="+tc.value)
 
@@ -321,7 +321,7 @@ func TestServerStatusHandler(t *testing.T) {
 	}
 
 	for _, bound := range []string{"1", "65535"} {
-		t.Run("HD-18_ServerStatus_BoundaryAccepted_"+bound, func(t *testing.T) {
+		t.Run("CSH-18_ServerStatus_BoundaryAccepted_"+bound, func(t *testing.T) {
 			mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 			req := hdRequest(t, "mc.example.com:25570", "query=true&query_port="+bound)
 
@@ -334,7 +334,7 @@ func TestServerStatusHandler(t *testing.T) {
 		})
 	}
 
-	t.Run("HD-21_HostPortSplitJava", func(t *testing.T) {
+	t.Run("CSH-21_HostPortSplitJava", func(t *testing.T) {
 		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 		req := hdRequest(t, "mc.example.com:25570", "")
 
@@ -348,7 +348,7 @@ func TestServerStatusHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-22_HostPortSplitBedrock", func(t *testing.T) {
+	t.Run("CSH-22_HostPortSplitBedrock", func(t *testing.T) {
 		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 		req := hdRequest(t, "mc.example.com:19140", "bedrock=true")
 
@@ -362,7 +362,7 @@ func TestServerStatusHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-35_Ipv6BracketedWithPort", func(t *testing.T) {
+	t.Run("CSH-35_Ipv6BracketedWithPort", func(t *testing.T) {
 		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 		req := hdRequest(t, "[2001:db8::1]:25570", "")
 
@@ -376,7 +376,7 @@ func TestServerStatusHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-36_Ipv6BracketedNoPortBedrock", func(t *testing.T) {
+	t.Run("CSH-36_Ipv6BracketedNoPortBedrock", func(t *testing.T) {
 		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 		req := hdRequest(t, "[2001:db8::1]", "bedrock=true")
 
@@ -390,7 +390,7 @@ func TestServerStatusHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-37_Ipv6BareLiteralDefaultsPort", func(t *testing.T) {
+	t.Run("CSH-37_Ipv6BareLiteralDefaultsPort", func(t *testing.T) {
 		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 		req := hdRequest(t, "2001:db8::1", "")
 
@@ -404,7 +404,7 @@ func TestServerStatusHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-41_Ipv6BracketedWithPortBedrock", func(t *testing.T) {
+	t.Run("CSH-41_Ipv6BracketedWithPortBedrock", func(t *testing.T) {
 		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 		req := hdRequest(t, "[2001:db8::1]:19133", "bedrock=true")
 
@@ -418,7 +418,7 @@ func TestServerStatusHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-42_Ipv6BracketedNoPortJava", func(t *testing.T) {
+	t.Run("CSH-42_Ipv6BracketedNoPortJava", func(t *testing.T) {
 		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 		req := hdRequest(t, "[2001:db8::1]", "")
 
@@ -432,7 +432,7 @@ func TestServerStatusHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-43_Ipv6BareLiteralBedrock", func(t *testing.T) {
+	t.Run("CSH-43_Ipv6BareLiteralBedrock", func(t *testing.T) {
 		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 		req := hdRequest(t, "2001:db8::1", "bedrock=true")
 
@@ -476,7 +476,7 @@ func TestServerStatusHandler(t *testing.T) {
 		{"Ipv6MappedIpv4", "::ffff:1.2.3.4", "", "::ffff:1.2.3.4", 25565},
 		{"Ipv6Ipv4Tail", "::1.2.3.4", "", "::102:304", 25565},
 	} {
-		t.Run("HD-45_AcceptedHost_"+tc.name, func(t *testing.T) {
+		t.Run("CSH-45_AcceptedHost_"+tc.name, func(t *testing.T) {
 			mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 			req := hdRequest(t, tc.input, tc.query)
 
@@ -537,7 +537,7 @@ func TestServerStatusHandler(t *testing.T) {
 		{"Ipv6TooManyGroups", "1:2:3:4:5:6:7:8:9"},
 		{"MultipleColonsNotIpv6", "a:b:c"},
 	} {
-		t.Run("HD-46_RejectedHost_"+tc.name, func(t *testing.T) {
+		t.Run("CSH-46_RejectedHost_"+tc.name, func(t *testing.T) {
 			mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 			req := hdRequest(t, tc.input, "")
 			w := httptest.NewRecorder()
@@ -556,7 +556,7 @@ func TestServerStatusHandler(t *testing.T) {
 		})
 	}
 
-	t.Run("HD-47_OfflineProblemCarriesCanonicalHostAndPort", func(t *testing.T) {
+	t.Run("CSH-47_OfflineProblemCarriesCanonicalHostAndPort", func(t *testing.T) {
 		mock := &hdMockService{serverErr: ErrJavaStatus}
 		req := hdRequest(t, "Example.COM:25570", "")
 		w := httptest.NewRecorder()
@@ -589,7 +589,7 @@ func TestServerStatusHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-48_UnrecognizedErrorProblemHasNoHostOrPort", func(t *testing.T) {
+	t.Run("CSH-48_UnrecognizedErrorProblemHasNoHostOrPort", func(t *testing.T) {
 		mock := &hdMockService{serverErr: testerrors.ErrBoom}
 		req := hdRequest(t, "example.com:25570", "")
 		w := httptest.NewRecorder()
@@ -608,7 +608,7 @@ func TestServerStatusHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-52_OfflineProblemXmlHasProblemRoot", func(t *testing.T) {
+	t.Run("CSH-52_OfflineProblemXmlHasProblemRoot", func(t *testing.T) {
 		mock := &hdMockService{serverErr: ErrJavaStatus}
 		req := hdRequest(t, "example.com:25570", "")
 		req.Header.Set("Accept", "application/xml")
@@ -625,7 +625,7 @@ func TestServerStatusHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-53_OfflineProblemProtobufIsThePlainProblem", func(t *testing.T) {
+	t.Run("CSH-53_OfflineProblemProtobufIsThePlainProblem", func(t *testing.T) {
 		mock := &hdMockService{serverErr: ErrJavaStatus}
 		req := hdRequest(t, "example.com:25570", "")
 		req.Header.Set("Accept", "application/x-protobuf")
@@ -641,7 +641,7 @@ func TestServerStatusHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-54_BedrockOfflineProblemCarriesDefaultPort", func(t *testing.T) {
+	t.Run("CSH-54_BedrockOfflineProblemCarriesDefaultPort", func(t *testing.T) {
 		mock := &hdMockService{serverErr: ErrBedrockStatus}
 		req := hdRequest(t, "Example.COM", "bedrock=true")
 		w := httptest.NewRecorder()
@@ -666,7 +666,7 @@ func TestServerStatusHandler(t *testing.T) {
 }
 
 func TestIconHandler(t *testing.T) {
-	t.Run("HD-08_HappyPathReturnsPNG", func(t *testing.T) {
+	t.Run("CSH-08_HappyPathReturnsPNG", func(t *testing.T) {
 		icon := image.NewRGBA(image.Rect(0, 0, 1, 1))
 		status := NewServerStatus("", 0, "Test", "MOTD", "", 20, 1, nil, "1.20.1", "", ServerTypeJava, nil, icon)
 		mock := &hdMockService{javaStatus: status}
@@ -696,7 +696,7 @@ func TestIconHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-09_LookupFailureServesDefaultIcon", func(t *testing.T) {
+	t.Run("CSH-09_LookupFailureServesDefaultIcon", func(t *testing.T) {
 		hdUseIconDir(t, true)
 		mock := &hdMockService{javaErr: ErrJavaStatus}
 		req := hdRequest(t, "example.com:25565", "")
@@ -718,7 +718,7 @@ func TestIconHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-17_UnrecognizedErrorReturnsInternalServerError", func(t *testing.T) {
+	t.Run("CSH-17_UnrecognizedErrorReturnsInternalServerError", func(t *testing.T) {
 		mock := &hdMockService{javaErr: testerrors.ErrBoom}
 		req := hdRequest(t, "example.com:25565", "")
 		w := httptest.NewRecorder()
@@ -733,7 +733,7 @@ func TestIconHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-10_NoPortSuffixDefaultsPort", func(t *testing.T) {
+	t.Run("CSH-10_NoPortSuffixDefaultsPort", func(t *testing.T) {
 		icon := image.NewRGBA(image.Rect(0, 0, 1, 1))
 		status := NewServerStatus("", 0, "Test", "MOTD", "", 20, 1, nil, "1.20.1", "", ServerTypeJava, nil, icon)
 		mock := &hdMockService{javaStatus: status}
@@ -753,7 +753,7 @@ func TestIconHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-11_BedrockServesBedrockIcon", func(t *testing.T) {
+	t.Run("CSH-11_BedrockServesBedrockIcon", func(t *testing.T) {
 		hdUseIconDir(t, true)
 		mock := &hdMockService{javaErr: ErrJavaStatus}
 		req := hdRequest(t, "example.com:19132", "bedrock=true")
@@ -775,7 +775,7 @@ func TestIconHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-23_HostPortSplit", func(t *testing.T) {
+	t.Run("CSH-23_HostPortSplit", func(t *testing.T) {
 		icon := image.NewRGBA(image.Rect(0, 0, 1, 1))
 		status := NewServerStatus("", 0, "Test", "MOTD", "", 20, 1, nil, "1.20.1", "", ServerTypeJava, nil, icon)
 		mock := &hdMockService{javaStatus: status}
@@ -791,7 +791,7 @@ func TestIconHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-31_NoIconServesDefaultIcon", func(t *testing.T) {
+	t.Run("CSH-31_NoIconServesDefaultIcon", func(t *testing.T) {
 		hdUseIconDir(t, true)
 		mock := &hdMockService{javaStatus: hdValidStatus(nil)}
 		req := hdRequest(t, "example.com:25565", "")
@@ -807,7 +807,7 @@ func TestIconHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-34_LegacyNoIconServesLegacyIcon", func(t *testing.T) {
+	t.Run("CSH-34_LegacyNoIconServesLegacyIcon", func(t *testing.T) {
 		hdUseIconDir(t, true)
 		mock := &hdMockService{javaStatus: GetPing16Status(&minequery.Status16{})}
 		req := hdRequest(t, "example.com:25565", "")
@@ -823,7 +823,7 @@ func TestIconHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-32_MissingDefaultIconReturns500", func(t *testing.T) {
+	t.Run("CSH-32_MissingDefaultIconReturns500", func(t *testing.T) {
 		hdUseIconDir(t, false)
 		mock := &hdMockService{javaStatus: hdValidStatus(nil)}
 		req := hdRequest(t, "example.com:25565", "")
@@ -839,7 +839,7 @@ func TestIconHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-33_MissingBedrockIconReturns500", func(t *testing.T) {
+	t.Run("CSH-33_MissingBedrockIconReturns500", func(t *testing.T) {
 		hdUseIconDir(t, false)
 		mock := &hdMockService{}
 		req := hdRequest(t, "example.com:19132", "bedrock=true")
@@ -855,7 +855,7 @@ func TestIconHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-40_Ipv6BracketedWithPort", func(t *testing.T) {
+	t.Run("CSH-40_Ipv6BracketedWithPort", func(t *testing.T) {
 		mock := &hdMockService{javaStatus: hdValidStatus(nil)}
 		req := hdRequest(t, "[2001:db8::1]:25570", "")
 
@@ -869,7 +869,7 @@ func TestIconHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-50_MalformedHostIsRefused", func(t *testing.T) {
+	t.Run("CSH-50_MalformedHostIsRefused", func(t *testing.T) {
 		mock := &hdMockService{}
 		req := hdRequest(t, "localhost", "")
 		w := httptest.NewRecorder()
@@ -887,7 +887,7 @@ func TestIconHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-51_MalformedHostIsRefusedForBedrock", func(t *testing.T) {
+	t.Run("CSH-51_MalformedHostIsRefusedForBedrock", func(t *testing.T) {
 		mock := &hdMockService{}
 		req := hdRequest(t, "localhost", "bedrock=true")
 		w := httptest.NewRecorder()
@@ -901,7 +901,7 @@ func TestIconHandler(t *testing.T) {
 }
 
 func TestSimpleStatusHandler(t *testing.T) {
-	t.Run("HD-12_HappyPathOnline", func(t *testing.T) {
+	t.Run("CSH-12_HappyPathOnline", func(t *testing.T) {
 		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 		req := hdRequest(t, "example.com:25565", "")
 		w := httptest.NewRecorder()
@@ -923,7 +923,7 @@ func TestSimpleStatusHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-13_ErrorReturnsOffline", func(t *testing.T) {
+	t.Run("CSH-13_ErrorReturnsOffline", func(t *testing.T) {
 		mock := &hdMockService{serverErr: ErrJavaStatus}
 		req := hdRequest(t, "example.com:25565", "")
 		w := httptest.NewRecorder()
@@ -938,7 +938,7 @@ func TestSimpleStatusHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-14_NoPortSuffixDefaultsBedrockPort", func(t *testing.T) {
+	t.Run("CSH-14_NoPortSuffixDefaultsBedrockPort", func(t *testing.T) {
 		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 		req := hdRequest(t, "example.com", "bedrock=true")
 		w := httptest.NewRecorder()
@@ -956,7 +956,7 @@ func TestSimpleStatusHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-15_QueryFlagsForwarded", func(t *testing.T) {
+	t.Run("CSH-15_QueryFlagsForwarded", func(t *testing.T) {
 		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 		req := hdRequest(t, "example.com:25566", "bedrock=true&query=true&query_port=1234")
 		w := httptest.NewRecorder()
@@ -981,7 +981,7 @@ func TestSimpleStatusHandler(t *testing.T) {
 		{"TooLarge", "65536"},
 		{"NotANumber", "abc"},
 	} {
-		t.Run("HD-19_SimpleStatus_InvalidQueryPort_"+tc.name, func(t *testing.T) {
+		t.Run("CSH-19_SimpleStatus_InvalidQueryPort_"+tc.name, func(t *testing.T) {
 			mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 			req := hdRequest(t, "mc.example.com:25570", "query=true&query_port="+tc.value)
 
@@ -997,7 +997,7 @@ func TestSimpleStatusHandler(t *testing.T) {
 	}
 
 	for _, bound := range []string{"1", "65535"} {
-		t.Run("HD-19_SimpleStatus_BoundaryAccepted_"+bound, func(t *testing.T) {
+		t.Run("CSH-19_SimpleStatus_BoundaryAccepted_"+bound, func(t *testing.T) {
 			mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 			req := hdRequest(t, "mc.example.com:25570", "query=true&query_port="+bound)
 
@@ -1010,7 +1010,7 @@ func TestSimpleStatusHandler(t *testing.T) {
 		})
 	}
 
-	t.Run("HD-20_MissingQueryPortDefaultsToPort", func(t *testing.T) {
+	t.Run("CSH-20_MissingQueryPortDefaultsToPort", func(t *testing.T) {
 		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 		req := hdRequest(t, "mc.example.com:25570", "query=true")
 
@@ -1024,7 +1024,7 @@ func TestSimpleStatusHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-24_HostPortSplitJava", func(t *testing.T) {
+	t.Run("CSH-24_HostPortSplitJava", func(t *testing.T) {
 		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 		req := hdRequest(t, "mc.example.com:25570", "")
 
@@ -1038,7 +1038,7 @@ func TestSimpleStatusHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-25_HostPortSplitBedrock", func(t *testing.T) {
+	t.Run("CSH-25_HostPortSplitBedrock", func(t *testing.T) {
 		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 		req := hdRequest(t, "mc.example.com:19140", "bedrock=true")
 
@@ -1052,7 +1052,7 @@ func TestSimpleStatusHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-26_NoPortSuffixDefaultsJavaPort", func(t *testing.T) {
+	t.Run("CSH-26_NoPortSuffixDefaultsJavaPort", func(t *testing.T) {
 		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 		req := hdRequest(t, "example.com", "")
 
@@ -1066,7 +1066,7 @@ func TestSimpleStatusHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-39_Ipv6BracketedWithPort", func(t *testing.T) {
+	t.Run("CSH-39_Ipv6BracketedWithPort", func(t *testing.T) {
 		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 		req := hdRequest(t, "[2001:db8::1]:25570", "")
 
@@ -1080,7 +1080,7 @@ func TestSimpleStatusHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-49_MalformedHostIsRefused", func(t *testing.T) {
+	t.Run("CSH-49_MalformedHostIsRefused", func(t *testing.T) {
 		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 		req := hdRequest(t, "localhost", "")
 		w := httptest.NewRecorder()

@@ -29,7 +29,7 @@ func tySmallImage() image.Image {
 }
 
 func TestNewServerStatus(t *testing.T) {
-	t.Run("TY-01_AllFieldsMapped", func(t *testing.T) {
+	t.Run("CST-01_AllFieldsMapped", func(t *testing.T) {
 		players := []*mcstatuspb.Player{{Name: "Steve", Uuid: "uuid-1"}}
 		icon := tySmallImage()
 		raw := "raw-marker"
@@ -80,7 +80,7 @@ func TestNewServerStatus(t *testing.T) {
 		}
 	})
 
-	t.Run("TY-02_BedrockServerTypeMapsToBedrockEnum", func(t *testing.T) {
+	t.Run("CST-02_BedrockServerTypeMapsToBedrockEnum", func(t *testing.T) {
 		status := NewServerStatus("", 0, "", "", "", 0, 0, nil, "", "", ServerTypeBedrock, nil, nil)
 
 		if status.ServerType != ServerTypeBedrock {
@@ -91,7 +91,7 @@ func TestNewServerStatus(t *testing.T) {
 		}
 	})
 
-	t.Run("TY-03_NilPlayersPassedThrough", func(t *testing.T) {
+	t.Run("CST-03_NilPlayersPassedThrough", func(t *testing.T) {
 		status := NewServerStatus("", 0, "", "", "", 0, 0, nil, "", "", ServerTypeJava, nil, nil)
 
 		if status.Players != nil {
@@ -99,7 +99,7 @@ func TestNewServerStatus(t *testing.T) {
 		}
 	})
 
-	t.Run("TY-04_NilIconPassedThrough", func(t *testing.T) {
+	t.Run("CST-04_NilIconPassedThrough", func(t *testing.T) {
 		status := NewServerStatus("", 0, "", "", "", 0, 0, nil, "", "", ServerTypeJava, nil, nil)
 
 		if status.Icon != nil {
@@ -107,7 +107,7 @@ func TestNewServerStatus(t *testing.T) {
 		}
 	})
 
-	t.Run("TY-05_UnknownServerTypeDefaultsProtoEnumToZeroValue", func(t *testing.T) {
+	t.Run("CST-05_UnknownServerTypeDefaultsProtoEnumToZeroValue", func(t *testing.T) {
 		status := NewServerStatus("", 0, "", "", "", 0, 0, nil, "", "", ServerType("unknown"), nil, nil)
 
 		if status.ServerType != ServerType("unknown") {
@@ -120,31 +120,31 @@ func TestNewServerStatus(t *testing.T) {
 }
 
 func TestMOTDToName(t *testing.T) {
-	t.Run("TY-06_PlainMOTDUnchanged", func(t *testing.T) {
+	t.Run("CST-06_PlainMOTDUnchanged", func(t *testing.T) {
 		if got := MOTDToName("Hello World"); got != "Hello World" {
 			t.Errorf("expected %q, got %q", "Hello World", got)
 		}
 	})
 
-	t.Run("TY-07_NewlineReplacedWithSpace", func(t *testing.T) {
+	t.Run("CST-07_NewlineReplacedWithSpace", func(t *testing.T) {
 		if got := MOTDToName("Line1\nLine2"); got != "Line1 Line2" {
 			t.Errorf("expected %q, got %q", "Line1 Line2", got)
 		}
 	})
 
-	t.Run("TY-08_ColorCodesStripped", func(t *testing.T) {
+	t.Run("CST-08_ColorCodesStripped", func(t *testing.T) {
 		if got := MOTDToName("§aRed§r Text"); got != "Red Text" {
 			t.Errorf("expected %q, got %q", "Red Text", got)
 		}
 	})
 
-	t.Run("TY-09_ResultIsTrimmed", func(t *testing.T) {
+	t.Run("CST-09_ResultIsTrimmed", func(t *testing.T) {
 		if got := MOTDToName("  \nHello\n  "); got != "Hello" {
 			t.Errorf("expected %q, got %q", "Hello", got)
 		}
 	})
 
-	t.Run("TY-10_EmptyStringReturnsEmpty", func(t *testing.T) {
+	t.Run("CST-10_EmptyStringReturnsEmpty", func(t *testing.T) {
 		if got := MOTDToName(""); got != "" {
 			t.Errorf("expected empty string, got %q", got)
 		}
@@ -152,7 +152,7 @@ func TestMOTDToName(t *testing.T) {
 }
 
 func TestImgToBase64(t *testing.T) {
-	t.Run("TY-11_ValidImageEncodedAsDataURI", func(t *testing.T) {
+	t.Run("CST-11_ValidImageEncodedAsDataURI", func(t *testing.T) {
 		img := tySmallImage()
 		got := ImgToBase64(img)
 
@@ -173,7 +173,7 @@ func TestImgToBase64(t *testing.T) {
 		}
 	})
 
-	t.Run("TY-12_NilImageReturnsEmptyString", func(t *testing.T) {
+	t.Run("CST-12_NilImageReturnsEmptyString", func(t *testing.T) {
 		if got := ImgToBase64(nil); got != "" {
 			t.Errorf("expected empty string, got %q", got)
 		}
@@ -181,7 +181,7 @@ func TestImgToBase64(t *testing.T) {
 }
 
 func TestLoadImgFromFile(t *testing.T) {
-	t.Run("TY-13_ValidPNGFileDecodes", func(t *testing.T) {
+	t.Run("CST-13_ValidPNGFileDecodes", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "icon.png")
 		img := tySmallImage()
@@ -206,7 +206,7 @@ func TestLoadImgFromFile(t *testing.T) {
 		}
 	})
 
-	t.Run("TY-14_MissingFileReturnsError", func(t *testing.T) {
+	t.Run("CST-14_MissingFileReturnsError", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "does-not-exist.png")
 
@@ -219,7 +219,7 @@ func TestLoadImgFromFile(t *testing.T) {
 		}
 	})
 
-	t.Run("TY-15_InvalidImageDataReturnsError", func(t *testing.T) {
+	t.Run("CST-15_InvalidImageDataReturnsError", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "garbage.png")
 		if err := os.WriteFile(path, []byte("not an image"), 0o644); err != nil {
@@ -237,7 +237,7 @@ func TestLoadImgFromFile(t *testing.T) {
 }
 
 func TestGetPing17Status(t *testing.T) {
-	t.Run("TY-16_AllFieldsMapped", func(t *testing.T) {
+	t.Run("CST-16_AllFieldsMapped", func(t *testing.T) {
 		icon := tySmallImage()
 		expectedFavicon := ImgToBase64(icon)
 		playerUUID := uuid.New()
@@ -290,7 +290,7 @@ func TestGetPing17Status(t *testing.T) {
 		}
 	})
 
-	t.Run("TY-17_EmptySamplePlayersYieldsEmptySlice", func(t *testing.T) {
+	t.Run("CST-17_EmptySamplePlayersYieldsEmptySlice", func(t *testing.T) {
 		s := &minequery.Status17{
 			Description:   tyStubChat17(""),
 			SamplePlayers: nil,
@@ -308,7 +308,7 @@ func TestGetPing17Status(t *testing.T) {
 }
 
 func TestGetPing16Status(t *testing.T) {
-	t.Run("TY-18_AllFieldsMapped", func(t *testing.T) {
+	t.Run("CST-18_AllFieldsMapped", func(t *testing.T) {
 		s := &minequery.Status16{
 			MOTD:          "Hi\nThere",
 			OnlinePlayers: 3,
@@ -354,7 +354,7 @@ func TestGetPing16Status(t *testing.T) {
 }
 
 func TestGetPing14Status(t *testing.T) {
-	t.Run("TY-19_AllFieldsMapped", func(t *testing.T) {
+	t.Run("CST-19_AllFieldsMapped", func(t *testing.T) {
 		s := &minequery.Status14{
 			MOTD:          "Old\nServer",
 			OnlinePlayers: 2,
@@ -388,7 +388,7 @@ func TestGetPing14Status(t *testing.T) {
 }
 
 func TestGetBeta18Status(t *testing.T) {
-	t.Run("TY-20_AllFieldsMapped", func(t *testing.T) {
+	t.Run("CST-20_AllFieldsMapped", func(t *testing.T) {
 		s := &minequery.StatusBeta18{
 			MOTD:          "Beta\nServer",
 			OnlinePlayers: 1,
@@ -422,7 +422,7 @@ func TestGetBeta18Status(t *testing.T) {
 }
 
 func TestGetQueryStatus(t *testing.T) {
-	t.Run("TY-21_AllFieldsMapped", func(t *testing.T) {
+	t.Run("CST-21_AllFieldsMapped", func(t *testing.T) {
 		s := &minequery.FullQueryStatus{
 			MOTD:          "Q\nMotd",
 			OnlinePlayers: 7,
@@ -465,7 +465,7 @@ func TestGetQueryStatus(t *testing.T) {
 		}
 	})
 
-	t.Run("TY-22_EmptySamplePlayersYieldsEmptySlice", func(t *testing.T) {
+	t.Run("CST-22_EmptySamplePlayersYieldsEmptySlice", func(t *testing.T) {
 		s := &minequery.FullQueryStatus{SamplePlayers: nil}
 
 		result := GetQueryStatus(s)
@@ -480,7 +480,7 @@ func TestGetQueryStatus(t *testing.T) {
 }
 
 func TestGetBedrockStatus(t *testing.T) {
-	t.Run("TY-23_ExtraWithMapNamePresent", func(t *testing.T) {
+	t.Run("CST-23_ExtraWithMapNamePresent", func(t *testing.T) {
 		s := bedrockping.Response{
 			ServerName:  "BedrockSrv",
 			Extra:       []string{"unused0", "motdLine1", "MyMap"},
@@ -517,7 +517,7 @@ func TestGetBedrockStatus(t *testing.T) {
 		}
 	})
 
-	t.Run("TY-24_NoExtraOmitsSecondLineAndMap", func(t *testing.T) {
+	t.Run("CST-24_NoExtraOmitsSecondLineAndMap", func(t *testing.T) {
 		s := bedrockping.Response{
 			ServerName:  "BedrockSrv",
 			Extra:       nil,
@@ -539,7 +539,7 @@ func TestGetBedrockStatus(t *testing.T) {
 		}
 	})
 
-	t.Run("TY-25_ExtraLengthTwoOmitsMap", func(t *testing.T) {
+	t.Run("CST-25_ExtraLengthTwoOmitsMap", func(t *testing.T) {
 		s := bedrockping.Response{
 			ServerName:  "BedrockSrv",
 			Extra:       []string{"unused0", "motdLine1"},

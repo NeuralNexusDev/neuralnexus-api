@@ -8,7 +8,7 @@ import (
 )
 
 func TestNewGameServerStatus(t *testing.T) {
-	t.Run("TY-01_HappyPath_RecognizedQueryType", func(t *testing.T) {
+	t.Run("GST-01_HappyPath_RecognizedQueryType", func(t *testing.T) {
 		players := []*gsspb.Player{{Name: "alice", Id: "u1"}}
 		status := NewGameServerStatus("1.2.3.4", 25565, "Test Server", "world", 20, 3, players, QueryTypeMinecraft, "rawdata")
 
@@ -29,7 +29,7 @@ func TestNewGameServerStatus(t *testing.T) {
 		}
 	})
 
-	t.Run("TY-02_EdgeCase_UnrecognizedQueryTypeString", func(t *testing.T) {
+	t.Run("GST-02_EdgeCase_UnrecognizedQueryTypeString", func(t *testing.T) {
 		status := NewGameServerStatus("1.2.3.4", 25565, "n", "m", 1, 0, nil, QueryType("bogus"), nil)
 
 		if status.ServerStatus.QueryType != gsspb.QueryType_UNKNOWN {
@@ -47,11 +47,11 @@ func TestParseQueryType(t *testing.T) {
 		input string
 		want  QueryType
 	}{
-		{"TY-03_HappyPath_Minecraft", "minecraft", QueryTypeMinecraft},
-		{"TY-04_HappyPath_GameQ", "gameq", QueryTypeGameQ},
-		{"TY-05_HappyPath_GameDig", "gamedig", QueryTypeGameDig},
-		{"TY-06_EdgeCase_EmptyString", "", QueryTypeUnknown},
-		{"TY-06_EdgeCase_UnrecognizedString", "xyz", QueryTypeUnknown},
+		{"GST-03_HappyPath_Minecraft", "minecraft", QueryTypeMinecraft},
+		{"GST-04_HappyPath_GameQ", "gameq", QueryTypeGameQ},
+		{"GST-05_HappyPath_GameDig", "gamedig", QueryTypeGameDig},
+		{"GST-06_EdgeCase_EmptyString", "", QueryTypeUnknown},
+		{"GST-06_EdgeCase_UnrecognizedString", "xyz", QueryTypeUnknown},
 	}
 	for _, tc := range tests {
 		t.Run(tc.id, func(t *testing.T) {
@@ -63,7 +63,7 @@ func TestParseQueryType(t *testing.T) {
 }
 
 func TestMCServerStatusNormalize(t *testing.T) {
-	t.Run("TY-07_HappyPath_PopulatedPlayers", func(t *testing.T) {
+	t.Run("GST-07_HappyPath_PopulatedPlayers", func(t *testing.T) {
 		mc := &mcServerStatus{
 			ServerStatus: &mcstatuspb.ServerStatus{
 				Host:       "1.2.3.4",
@@ -95,7 +95,7 @@ func TestMCServerStatusNormalize(t *testing.T) {
 		}
 	})
 
-	t.Run("TY-08_EdgeCase_NilPlayers", func(t *testing.T) {
+	t.Run("GST-08_EdgeCase_NilPlayers", func(t *testing.T) {
 		mc := &mcServerStatus{
 			ServerStatus: &mcstatuspb.ServerStatus{Host: "1.2.3.4", Port: 25565},
 		}
@@ -112,7 +112,7 @@ func TestMCServerStatusNormalize(t *testing.T) {
 }
 
 func TestGameQResponseNormalize(t *testing.T) {
-	t.Run("TY-09_HappyPath_PopulatedPlayers", func(t *testing.T) {
+	t.Run("GST-09_HappyPath_PopulatedPlayers", func(t *testing.T) {
 		gq := &GameQResponse{
 			HostName:   "host1",
 			PortQuery:  27015,
@@ -139,7 +139,7 @@ func TestGameQResponseNormalize(t *testing.T) {
 		}
 	})
 
-	t.Run("TY-10_EdgeCase_NilPlayers", func(t *testing.T) {
+	t.Run("GST-10_EdgeCase_NilPlayers", func(t *testing.T) {
 		gq := &GameQResponse{HostName: "host1", PortQuery: 27015}
 
 		got := gq.Normalize()
@@ -154,7 +154,7 @@ func TestGameQResponseNormalize(t *testing.T) {
 }
 
 func TestGameDigResponseNormalize(t *testing.T) {
-	t.Run("TY-11_HappyPath_PopulatedPlayers", func(t *testing.T) {
+	t.Run("GST-11_HappyPath_PopulatedPlayers", func(t *testing.T) {
 		gd := &GameDigResponse{
 			Name:       "GD Server",
 			Map:        "island",
@@ -184,7 +184,7 @@ func TestGameDigResponseNormalize(t *testing.T) {
 		}
 	})
 
-	t.Run("TY-12_EdgeCase_NilPlayers", func(t *testing.T) {
+	t.Run("GST-12_EdgeCase_NilPlayers", func(t *testing.T) {
 		gd := &GameDigResponse{Connect: "1.2.3.4:25566", QueryPort: 25566}
 
 		got := gd.Normalize()
