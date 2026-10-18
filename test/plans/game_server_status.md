@@ -15,6 +15,7 @@
 | GSH-09 | SimpleGameServerStatus | Error Path | Non-numeric port | `host` set, `port` is not an integer | 400 Bad Request, problem detail `msgInvalidPort` | P2 |  |
 | GSH-10 | SimpleGameServerStatus | Error Path | Underlying service returns an error | host/port valid, fake GSSService.QueryGameServer returns (nil, someErr) | 404 Not Found, body "Offline" | P1 |  |
 | GSH-11 | GameServerStatusHandler | Error Path | Underlying service returns each known sentinel | fake `QueryGameServer` returns `ErrGameQQuery`, `ErrGameDigQuery`, `ErrReadBody`, `ErrDecodeBody`, `ErrNoGameQResponse`, `ErrGameUnsupported`, `mcstatus.ErrJavaStatus`, `mcstatus.ErrBedrockStatus`, or an unrecognized error | 502 Bad Gateway with the matching const (`msgGameQQueryFailed`, `msgGameDigQueryFailed`, `msgReadBodyFailed`, `msgDecodeBodyFailed`, `msgNoGameQResponse`, `msgJavaStatusFailed`, `msgBedrockStatusFailed`); 400 Bad Request with `msgGameUnsupported` for `ErrGameUnsupported`; 500 Internal Server Error with `msgQueryFailed` for an unrecognized error; no cause text | P1 | |
+| GSH-12 | GameServerStatusHandler | Happy Path | The request ctx reaches the service | request ctx carries a marker value; recording `QueryGameServer` | The recorded ctx holds the marker value | P1 |  |
 
 ## service.go
 
@@ -51,6 +52,8 @@
 | GSV-29 | QueryGameServer | Error Path | GameDig dispatch, underlying transport error | game="aoc", queryType=QueryTypeGameDig, fake transport's RoundTrip returns an error | Returns nil, error propagated from QueryGameDig (`ErrGameDigQuery`) | P2 |  |
 | GSV-30 | QueryGameQ | Error Path | Upstream returns non-200 status and reading its body fails | Fake transport returns 500 with a body whose `Read` errors | Returns nil, `ErrReadBody` | P2 | |
 | GSV-31 | QueryGameDig | Error Path | Upstream returns non-200 status and reading its body fails | Fake transport returns 500 with a body whose `Read` errors | Returns nil, `ErrReadBody` | P2 | |
+| GSV-32 | QueryGameQ | Error Path | Cancelling the ctx stops the outbound GET | transport blocks until the request ctx is done; ctx cancelled once the transport is reached | Returns `ErrGameQQuery` without waiting for the transport | P1 |  |
+| GSV-33 | QueryGameDig | Error Path | Cancelling the ctx stops the outbound GET | transport blocks until the request ctx is done; ctx cancelled once the transport is reached | Returns `ErrGameDigQuery` without waiting for the transport | P1 |  |
 
 ## types.go
 

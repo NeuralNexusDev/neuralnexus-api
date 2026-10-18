@@ -1,11 +1,11 @@
 package gss
 
 import (
-	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/mcstatus"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
@@ -41,9 +41,9 @@ func GameServerStatusHandler(s GSSService) http.HandlerFunc {
 		}
 
 		queryType := ParseQueryType(r.URL.Query().Get("query_type"))
-		status, err := s.QueryGameServer(game, host, port, queryType)
+		status, err := s.QueryGameServer(r.Context(), game, host, port, queryType)
 		if err != nil {
-			log.Println(logUnableToQueryGameServer, err)
+			reqctx.Log(r.Context(), logUnableToQueryGameServer, err.Error())
 			switch err {
 			case ErrServerOffline:
 				responses.NotFound(w, r, msgServerOffline)
@@ -94,7 +94,7 @@ func SimpleGameServerStatus(s GSSService) http.HandlerFunc {
 		status := "Online"
 		statusCode := http.StatusOK
 		queryType := ParseQueryType(r.URL.Query().Get("query_type"))
-		_, err = s.QueryGameServer(game, host, port, queryType)
+		_, err = s.QueryGameServer(r.Context(), game, host, port, queryType)
 		if err != nil {
 			status = "Offline"
 			statusCode = http.StatusNotFound

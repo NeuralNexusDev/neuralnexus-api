@@ -2,6 +2,7 @@ package mcstatus
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"image"
 	"image/color"
@@ -49,16 +50,16 @@ type hdMockService struct {
 	serverCalls  []hdServerCallArgs
 }
 
-func (m *hdMockService) GetJavaServerStatus(host string, port int, queryEnabled bool, queryPort int) (*MCServerStatus, error) {
+func (m *hdMockService) GetJavaServerStatus(_ context.Context, host string, port int, queryEnabled bool, queryPort int) (*MCServerStatus, error) {
 	m.javaCalls = append(m.javaCalls, hdJavaCallArgs{host, port, queryEnabled, queryPort})
 	return m.javaStatus, m.javaErr
 }
 
-func (m *hdMockService) GetBedrockServerStatus(host string, port int) (*MCServerStatus, error) {
+func (m *hdMockService) GetBedrockServerStatus(_ context.Context, host string, port int) (*MCServerStatus, error) {
 	return m.bedrockStatus, m.bedrockErr
 }
 
-func (m *hdMockService) GetServerStatus(host string, port int, isBedrock bool, queryEnabled bool, queryPort int) (*MCServerStatus, error) {
+func (m *hdMockService) GetServerStatus(_ context.Context, host string, port int, isBedrock bool, queryEnabled bool, queryPort int) (*MCServerStatus, error) {
 	m.serverCalls = append(m.serverCalls, hdServerCallArgs{host, port, isBedrock, queryEnabled, queryPort})
 	return m.serverStatus, m.serverErr
 }
@@ -69,7 +70,7 @@ func hdRequest(t *testing.T, host string, rawQuery string) *http.Request {
 	if rawQuery != "" {
 		target += "?" + rawQuery
 	}
-	req := httptest.NewRequest(http.MethodGet, target, nil)
+	req := testutil.NewRequest(http.MethodGet, target, nil)
 	req.SetPathValue("host", host)
 	return req
 }
@@ -1095,6 +1096,32 @@ func TestSimpleStatusHandler(t *testing.T) {
 		}
 		if len(mock.serverCalls) != 0 {
 			t.Fatalf("expected no lookup, got %d", len(mock.serverCalls))
+		}
+	})
+}
+
+type hdCtxService struct {
+	hdMockService
+	ctx context.Context
+}
+
+func (m *hdCtxService) GetServerStatus(ctx context.Context, host string, port int, isBedrock bool, queryEnabled bool, queryPort int) (*MCServerStatus, error) {
+	m.ctx = ctx
+	return m.serverStatus, m.serverErr
+}
+
+func TestServerStatusHandlerContext(t *testing.T) {
+	type ctxKey struct{}
+
+	t.Run("CSH-55_ServerStatus_RequestContextReachesService", func(t *testing.T) {
+		mock := &hdCtxService{hdMockService: hdMockService{serverStatus: hdValidStatus(nil)}}
+		req := hdRequest(t, "mc.example.com:25570", "")
+		req = req.WithContext(context.WithValue(req.Context(), ctxKey{}, "marker"))
+
+		ServerStatusHandler(mock)(httptest.NewRecorder(), req)
+
+		if mock.ctx == nil || mock.ctx.Value(ctxKey{}) != "marker" {
+			t.Fatalf("service ctx = %v, want the request ctx carrying the marker", mock.ctx)
 		}
 	})
 }
