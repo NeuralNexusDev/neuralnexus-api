@@ -22,6 +22,7 @@ type usFakeLinkAccountStore struct {
 
 	addErr               error
 	addCalls             int
+	addCtxErr            error
 	addLastLinkedAccount *LinkedAccount
 
 	updateErr               error
@@ -39,7 +40,8 @@ type usFakeLinkAccountStore struct {
 	setLoginEnabledCalls int
 }
 
-func (f *usFakeLinkAccountStore) AddLinkedAccountToDB(_ context.Context, la *LinkedAccount) error {
+func (f *usFakeLinkAccountStore) AddLinkedAccountToDB(ctx context.Context, la *LinkedAccount) error {
+	f.addCtxErr = ctx.Err()
 	f.addCalls++
 	f.addLastLinkedAccount = la
 	return f.addErr
@@ -178,6 +180,7 @@ type usFakeAccountStore struct {
 	addErr         error
 	addCalls       int
 	addLastAccount *account.Account
+	addCtxErr      error
 
 	getByIDAccount    *account.Account
 	getByIDErr        error
@@ -197,15 +200,18 @@ type usFakeAccountStore struct {
 	deleteErr        error
 	deleteCalls      int
 	deleteLastUserID string
+	deleteCtxErr     error
 }
 
-func (f *usFakeAccountStore) AddAccountToDB(_ context.Context, a *account.Account) error {
+func (f *usFakeAccountStore) AddAccountToDB(ctx context.Context, a *account.Account) error {
+	f.addCtxErr = ctx.Err()
 	f.addCalls++
 	f.addLastAccount = a
 	return f.addErr
 }
 
-func (f *usFakeAccountStore) DeleteAccountFromDB(_ context.Context, userID string) error {
+func (f *usFakeAccountStore) DeleteAccountFromDB(ctx context.Context, userID string) error {
+	f.deleteCtxErr = ctx.Err()
 	f.deleteCalls++
 	f.deleteLastUserID = userID
 	return f.deleteErr
@@ -575,6 +581,22 @@ func TestUS39RequestContextReachesStore(t *testing.T) {
 		}
 		if got := als.getsByUserIDCtx.Value(reqctx.UserIDKey); got != "u1" {
 			t.Errorf("store context user ID = %v, want %q", got, "u1")
+		}
+	})
+}
+
+func TestUS40UpdateFromPlatformCreateAndCleanupIgnoreCancel(t *testing.T) {
+	t.Run("LKV-40_CreateLinkAndCleanupRunOnAnUncancelledContext", func(t *testing.T) {
+		as := &usFakeAccountStore{}
+		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, account.ErrNotFound}}, addErr: testutil.ErrInsertFailed}
+		ctx, cancel := context.WithCancel(testutil.LogContext(context.Background()))
+		cancel()
+
+		if _, err := NewService(als, as).UpdateFromPlatform(ctx, PlatformDiscord, "p1", usFakePlatformData{}); !errors.Is(err, testutil.ErrInsertFailed) {
+			t.Fatalf("UpdateFromPlatform() err = %v, want %v", err, testutil.ErrInsertFailed)
+		}
+		if as.addCtxErr != nil || als.addCtxErr != nil || as.deleteCtxErr != nil {
+			t.Errorf("context errors at the account insert, link insert and cleanup delete = %v, %v, %v, want all nil", as.addCtxErr, als.addCtxErr, as.deleteCtxErr)
 		}
 	})
 }

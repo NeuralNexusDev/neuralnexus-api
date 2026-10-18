@@ -210,7 +210,7 @@ func resolveOrCreateAccountForPlatformUser(ctx context.Context, as account.Servi
 	if err := las.AddLinkedAccountToDB(context.WithoutCancel(ctx), la); err != nil {
 		// Whatever went wrong, the account created above is now orphaned -
 		// clean it up before deciding how to handle err.
-		if delErr := as.DeleteAccount(ctx, a.UserID); delErr != nil {
+		if delErr := as.DeleteAccount(context.WithoutCancel(ctx), a.UserID); delErr != nil {
 			reqctx.Log(ctx, logLinkCleanupFailed, err.Error())
 			return nil, delErr
 		}
@@ -430,7 +430,7 @@ func ensureMicrosoftIdentityLinked(ctx context.Context, as account.Service, las 
 	}
 	if err != ErrAlreadyLinked {
 		if isNewAccount {
-			if delErr := as.DeleteAccount(ctx, a.UserID); delErr != nil {
+			if delErr := as.DeleteAccount(context.WithoutCancel(ctx), a.UserID); delErr != nil {
 				reqctx.Log(ctx, logLinkCleanupFailed, err.Error())
 				return nil, false, delErr
 			}
@@ -443,7 +443,7 @@ func ensureMicrosoftIdentityLinked(ctx context.Context, as account.Service, las 
 	actualOwnerLA, lookupErr := las.GetLinkedAccountByPlatformID(ctx, platform, user.GetID())
 	if lookupErr != nil && lookupErr != account.ErrNotFound {
 		if isNewAccount {
-			if delErr := as.DeleteAccount(ctx, a.UserID); delErr != nil {
+			if delErr := as.DeleteAccount(context.WithoutCancel(ctx), a.UserID); delErr != nil {
 				reqctx.Log(ctx, logLinkCleanupFailed, lookupErr.Error())
 				return nil, false, delErr
 			}
@@ -461,7 +461,7 @@ func ensureMicrosoftIdentityLinked(ctx context.Context, as account.Service, las 
 		return nil, false, ErrConflictingMicrosoftIdentities
 	}
 
-	if delErr := as.DeleteAccount(ctx, a.UserID); delErr != nil {
+	if delErr := as.DeleteAccount(context.WithoutCancel(ctx), a.UserID); delErr != nil {
 		reqctx.Log(ctx, logLinkCleanupFailed, err.Error())
 		return nil, false, delErr
 	}

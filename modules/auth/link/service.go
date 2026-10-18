@@ -55,7 +55,7 @@ func (s *service) UpdateFromPlatform(ctx context.Context, platform Platform, pla
 		if err != nil {
 			return "", err
 		}
-		err = s.as.AddAccountToDB(ctx, a)
+		err = s.as.AddAccountToDB(context.WithoutCancel(ctx), a)
 		if err != nil {
 			return "", err
 		}
@@ -64,11 +64,11 @@ func (s *service) UpdateFromPlatform(ctx context.Context, platform Platform, pla
 			username = data.GetUsername()
 		}
 		la = NewLinkedAccount(a.UserID, platform, username, platformID, data)
-		err = s.als.AddLinkedAccountToDB(ctx, la)
+		err = s.als.AddLinkedAccountToDB(context.WithoutCancel(ctx), la)
 		if err != nil {
 			// Whatever went wrong, the placeholder account created above is
 			// now orphaned - clean it up before deciding how to handle err.
-			if delErr := s.as.DeleteAccountFromDB(ctx, a.UserID); delErr != nil {
+			if delErr := s.as.DeleteAccountFromDB(context.WithoutCancel(ctx), a.UserID); delErr != nil {
 				reqctx.Log(ctx, logLinkCleanupFailed, err.Error())
 				return "", delErr
 			}

@@ -291,6 +291,7 @@
 | LKV-25 | UpdateFromPlatform | Concurrency Invariant | Two concurrent callers race to resolve/create an account for the same, brand-new platform identity | Two goroutines call `UpdateUserFromPlatform` simultaneously against a shared, mutex-serialized fake store enforcing the real `(platform, platformID)` uniqueness constraint (the losing `AddLinkedAccountToDB` call gets `ErrAlreadyLinked`) | Both goroutines return without error and resolve to the same user ID; exactly one account row exists afterward (the loser's placeholder was cleaned up) | P0 | design: 50 trials x 8 concurrent callers; a barrier holds each goroutine's first lookup until all 8 arrive, since an untimed trial isn't guaranteed to hit the "lost the race" branch |
 | LKV-38 | UpdateFromPlatform | Error Path | Same as LKV-20, asserting the cleanup error | `AddLinkedAccountToDB` fails with `testutil.ErrInsertFailed`; `DeleteAccountFromDB` fails with `testutil.ErrBoom` | Returns an error matching `testutil.ErrBoom` (the cleanup failure) | P2 | |
 | LKV-39 | GetUserLinkedAccounts | Happy Path | a context value set on the call | fake `Store` | The store receives the same context, so the value reads back from it | P1 |  |
+| LKV-40 | UpdateFromPlatform | Edge Case | the call's ctx is cancelled before the placeholder account is created, the link insert fails | `als.GetLinkedAccountByPlatformID` → `ErrNotFound`; `AddLinkedAccountToDB` fails | The account insert, the link insert and the cleanup delete each run on a ctx that is not cancelled | P1 |  |
 
 ## handler.go
 
