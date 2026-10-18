@@ -1591,6 +1591,19 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 		}
 	})
 
+	t.Run("OA-86_AlreadyLinkedOwnerVanishedExistingAccountConflict", func(t *testing.T) {
+		as := &oaMockAccountService{}
+		las := &oaMockLinkAccountStore{
+			AddLinkedAccountToDBFunc:         func(*LinkedAccount) error { return ErrAlreadyLinked },
+			GetLinkedAccountByPlatformIDFunc: func(Platform, string) (*LinkedAccount, error) { return nil, account.ErrNotFound },
+		}
+
+		_, _, err := ensureMicrosoftIdentityLinked(as, las, acct, false, PlatformXboxLive, xbox)
+		if !errors.Is(err, ErrConflictingMicrosoftIdentities) {
+			t.Fatalf("error = %v, want ErrConflictingMicrosoftIdentities", err)
+		}
+	})
+
 	t.Run("OA-62_AlreadyLinkedRefetchFailsCleanupAlsoFails", func(t *testing.T) {
 		lookupErr := testutil.ErrDBDown
 		cleanupErr := testutil.ErrBoom
