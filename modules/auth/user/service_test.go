@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
@@ -235,7 +234,7 @@ func TestUS02to03GetUser(t *testing.T) {
 	})
 
 	t.Run("US-03_StoreError", func(t *testing.T) {
-		wantErr := testerrors.ErrBoom
+		wantErr := testutil.ErrBoom
 		svc := usNewService(&usFakeAccountStore{getByIDErr: wantErr}, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})
 
 		_, err := svc.GetUser("u1")
@@ -261,7 +260,7 @@ func TestUS43to44ListUsers(t *testing.T) {
 	})
 
 	t.Run("US-44_StoreError", func(t *testing.T) {
-		wantErr := testerrors.ErrBoom
+		wantErr := testutil.ErrBoom
 		svc := usNewService(&usFakeAccountStore{listErr: wantErr}, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})
 
 		got, err := svc.ListUsers(10, 0)
@@ -299,7 +298,7 @@ func TestUS04to06GetUserFromPlatform(t *testing.T) {
 	})
 
 	t.Run("US-06_ResolvedAccountLookupFails", func(t *testing.T) {
-		wantErr := testerrors.ErrBoom
+		wantErr := testutil.ErrBoom
 		as := &usFakeAccountStore{getByIDErr: wantErr}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{&link.LinkedAccount{UserID: "u1"}, nil}}}
 		svc := usNewService(as, als, &usFakeAccountSettingsStore{})
@@ -332,7 +331,7 @@ func TestUS07to10GetUserPermissions(t *testing.T) {
 	})
 
 	t.Run("US-08_AccountLookupFails", func(t *testing.T) {
-		wantErr := testerrors.ErrBoom
+		wantErr := testutil.ErrBoom
 		svc := usNewService(&usFakeAccountStore{getByIDErr: wantErr}, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})
 
 		got, err := svc.GetUserPermissions("u1")
@@ -356,7 +355,7 @@ func TestUS07to10GetUserPermissions(t *testing.T) {
 	})
 
 	t.Run("US-41_RoleStoreFailureFailsTheLookup", func(t *testing.T) {
-		wantErr := testerrors.ErrBoom
+		wantErr := testutil.ErrBoom
 		as := &usFakeAccountStore{getByIDAccount: &account.Account{UserID: "u1", Roles: []string{"1"}}}
 		svc := NewService(as, &usFakeLinkAccountStore{}, link.NewService(&usFakeLinkAccountStore{}, as), &usFakeAccountSettingsStore{}, &testutil.FakeRoleStore{Err: wantErr})
 
@@ -426,7 +425,7 @@ func TestUS11to14UpdateUser(t *testing.T) {
 	})
 
 	t.Run("US-13_GetAccountFails", func(t *testing.T) {
-		wantErr := testerrors.ErrBoom
+		wantErr := testutil.ErrBoom
 		as := &usFakeAccountStore{getByIDErr: wantErr}
 		svc := usNewService(as, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})
 
@@ -440,7 +439,7 @@ func TestUS11to14UpdateUser(t *testing.T) {
 	})
 
 	t.Run("US-14_UpdateFails", func(t *testing.T) {
-		wantErr := testerrors.ErrBoom
+		wantErr := testutil.ErrBoom
 		as := &usFakeAccountStore{getByIDAccount: &account.Account{UserID: "u1"}, updateErr: wantErr}
 		svc := usNewService(as, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})
 
@@ -453,7 +452,7 @@ func TestUS11to14UpdateUser(t *testing.T) {
 
 func TestUS24UpdateUserFromPlatformFinalGetAccountFails(t *testing.T) {
 	t.Run("US-24_FinalGetAccountFails", func(t *testing.T) {
-		wantErr := testerrors.ErrDBDown
+		wantErr := testutil.ErrDBDown
 		existing := &link.LinkedAccount{UserID: "u1", Platform: link.PlatformDiscord, PlatformID: "p1"}
 		as := &usFakeAccountStore{getByIDErr: wantErr}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{existing, nil}}}
@@ -480,7 +479,7 @@ func TestUS26to27DeleteUser(t *testing.T) {
 	})
 
 	t.Run("US-27_StoreError", func(t *testing.T) {
-		wantErr := testerrors.ErrBoom
+		wantErr := testutil.ErrBoom
 		as := &usFakeAccountStore{deleteErr: wantErr}
 		svc := usNewService(as, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})
 
@@ -504,7 +503,7 @@ func TestUS34to35GetAccountSettings(t *testing.T) {
 	})
 
 	t.Run("US-35_StoreError", func(t *testing.T) {
-		wantErr := testerrors.ErrBoom
+		wantErr := testutil.ErrBoom
 		ass := &usFakeAccountSettingsStore{getErr: wantErr}
 		svc := usNewService(&usFakeAccountStore{}, &usFakeLinkAccountStore{}, ass)
 
@@ -529,7 +528,7 @@ func TestUS36to37SetPasswordAuthEnabled(t *testing.T) {
 	})
 
 	t.Run("US-37_StoreError", func(t *testing.T) {
-		wantErr := testerrors.ErrBoom
+		wantErr := testutil.ErrBoom
 		ass := &usFakeAccountSettingsStore{setErr: wantErr}
 		svc := usNewService(&usFakeAccountStore{}, &usFakeLinkAccountStore{}, ass)
 
@@ -620,7 +619,7 @@ func TestUS83UpdateUserFromPlatformReturnsAccountForLinkedUser(t *testing.T) {
 
 func TestUS84UpdateUserFromPlatformLinkErrorSkipsAccountLookup(t *testing.T) {
 	t.Run("US-84_LinkErrorPassesThroughWithoutLookup", func(t *testing.T) {
-		wantErr := testerrors.ErrBoom
+		wantErr := testutil.ErrBoom
 		as := &usFakeAccountStore{}
 		svc := NewService(as, &usFakeLinkAccountStore{}, &usStubLinkService{err: wantErr}, &usFakeAccountSettingsStore{}, testutil.DefaultRoleStore())
 

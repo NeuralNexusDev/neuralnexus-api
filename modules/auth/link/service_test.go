@@ -7,7 +7,7 @@ import (
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
+	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
 type usLinkResult struct {
@@ -95,7 +95,7 @@ func TestUS28to29GetUserLinkedAccounts(t *testing.T) {
 	})
 
 	t.Run("LKV-29_StoreError", func(t *testing.T) {
-		wantErr := testerrors.ErrBoom
+		wantErr := testutil.ErrBoom
 		als := &usFakeLinkAccountStore{getsByUserIDErr: wantErr}
 		svc := NewService(als, nil)
 
@@ -144,7 +144,7 @@ func TestUS32to33SetPlatformLoginEnabled(t *testing.T) {
 	})
 
 	t.Run("LKV-33_StoreError", func(t *testing.T) {
-		wantErr := testerrors.ErrBoom
+		wantErr := testutil.ErrBoom
 		als := &usFakeLinkAccountStore{setLoginEnabledErr: wantErr}
 		svc := NewService(als, nil)
 
@@ -397,7 +397,7 @@ func TestUS15to23and38UpdateFromPlatform(t *testing.T) {
 		}
 	})
 	t.Run("LKV-17_InitialLookupUnexpectedError", func(t *testing.T) {
-		wantErr := testerrors.ErrBoom
+		wantErr := testutil.ErrBoom
 		as := &usFakeAccountStore{}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, wantErr}}}
 		svc := NewService(als, as)
@@ -411,7 +411,7 @@ func TestUS15to23and38UpdateFromPlatform(t *testing.T) {
 		}
 	})
 	t.Run("LKV-18_AddAccountFails", func(t *testing.T) {
-		wantErr := testerrors.ErrBoom
+		wantErr := testutil.ErrBoom
 		as := &usFakeAccountStore{addErr: wantErr}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, account.ErrNotFound}}}
 		svc := NewService(als, as)
@@ -425,7 +425,7 @@ func TestUS15to23and38UpdateFromPlatform(t *testing.T) {
 		}
 	})
 	t.Run("LKV-19_AddLinkFailsCleansUpPlaceholder", func(t *testing.T) {
-		wantErr := testerrors.ErrInsertFailed
+		wantErr := testutil.ErrInsertFailed
 		as := &usFakeAccountStore{}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, account.ErrNotFound}}, addErr: wantErr}
 		svc := NewService(als, as)
@@ -439,8 +439,8 @@ func TestUS15to23and38UpdateFromPlatform(t *testing.T) {
 		}
 	})
 	t.Run("LKV-20_AddLinkFailsAndCleanupFailsReturnsTheCleanupError", func(t *testing.T) {
-		linkErr := testerrors.ErrInsertFailed
-		deleteErr := testerrors.ErrDBDown
+		linkErr := testutil.ErrInsertFailed
+		deleteErr := testutil.ErrDBDown
 		as := &usFakeAccountStore{deleteErr: deleteErr}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, account.ErrNotFound}}, addErr: linkErr}
 		svc := NewService(als, as)
@@ -480,7 +480,7 @@ func TestUS15to23and38UpdateFromPlatform(t *testing.T) {
 		}
 	})
 	t.Run("LKV-22_LostRaceRefetchFails", func(t *testing.T) {
-		wantErr := testerrors.ErrDBDown
+		wantErr := testutil.ErrDBDown
 		as := &usFakeAccountStore{}
 		als := &usFakeLinkAccountStore{
 			getByPlatformIDResults: []usLinkResult{{nil, account.ErrNotFound}, {nil, wantErr}},
@@ -494,7 +494,7 @@ func TestUS15to23and38UpdateFromPlatform(t *testing.T) {
 		}
 	})
 	t.Run("LKV-23_UpdateLinkedAccountFails", func(t *testing.T) {
-		wantErr := testerrors.ErrDBDown
+		wantErr := testutil.ErrDBDown
 		existing := &LinkedAccount{UserID: "u1", Platform: PlatformDiscord, PlatformID: "p1"}
 		as := &usFakeAccountStore{}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{existing, nil}}, updateErr: wantErr}
@@ -506,13 +506,13 @@ func TestUS15to23and38UpdateFromPlatform(t *testing.T) {
 		}
 	})
 	t.Run("LKV-38_AddLinkAndCleanupFailReturnsTheCleanupError", func(t *testing.T) {
-		as := &usFakeAccountStore{deleteErr: testerrors.ErrBoom}
-		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, account.ErrNotFound}}, addErr: testerrors.ErrInsertFailed}
+		as := &usFakeAccountStore{deleteErr: testutil.ErrBoom}
+		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, account.ErrNotFound}}, addErr: testutil.ErrInsertFailed}
 		svc := NewService(als, as)
 
 		_, err := svc.UpdateFromPlatform(PlatformDiscord, "p1", usFakePlatformData{})
-		if !errors.Is(err, testerrors.ErrBoom) {
-			t.Errorf("UpdateFromPlatform() err = %v, want the cleanup error %v", err, testerrors.ErrBoom)
+		if !errors.Is(err, testutil.ErrBoom) {
+			t.Errorf("UpdateFromPlatform() err = %v, want the cleanup error %v", err, testutil.ErrBoom)
 		}
 	})
 }

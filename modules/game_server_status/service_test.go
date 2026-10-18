@@ -11,7 +11,7 @@ import (
 	"testing"
 	"testing/iotest"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
+	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
 // fakeRoundTripper is swapped in for http.DefaultTransport: QueryGameQ and
@@ -113,7 +113,7 @@ func TestQueryGameQ(t *testing.T) {
 	})
 
 	t.Run("GSV-03_ErrorPath_TransportError", func(t *testing.T) {
-		swapTransport(t, &fakeRoundTripper{err: testerrors.ErrTransportFailed})
+		swapTransport(t, &fakeRoundTripper{err: testutil.ErrTransportFailed})
 
 		resp, err := svc.QueryGameQ("cs16", "1.2.3.4", 27015)
 		if err == nil {
@@ -173,7 +173,7 @@ func TestQueryGameQ(t *testing.T) {
 	})
 
 	t.Run("GSV-30_ErrorPath_NonOKStatusBodyUnreadable", func(t *testing.T) {
-		resp := &http.Response{StatusCode: http.StatusInternalServerError, Body: io.NopCloser(iotest.ErrReader(testerrors.ErrBodyRead)), Header: make(http.Header)}
+		resp := &http.Response{StatusCode: http.StatusInternalServerError, Body: io.NopCloser(iotest.ErrReader(testutil.ErrBodyRead)), Header: make(http.Header)}
 		swapTransport(t, &fakeRoundTripper{resp: resp})
 
 		got, err := svc.QueryGameQ("cs16", "1.2.3.4", 27015)
@@ -208,7 +208,7 @@ func TestQueryGameDig(t *testing.T) {
 	})
 
 	t.Run("GSV-08_ErrorPath_TransportError", func(t *testing.T) {
-		swapTransport(t, &fakeRoundTripper{err: testerrors.ErrTransportFailed})
+		swapTransport(t, &fakeRoundTripper{err: testutil.ErrTransportFailed})
 
 		resp, err := svc.QueryGameDig("factorio", "1.2.3.4", 25566)
 		if err == nil {
@@ -253,7 +253,7 @@ func TestQueryGameDig(t *testing.T) {
 	})
 
 	t.Run("GSV-31_ErrorPath_NonOKStatusBodyUnreadable", func(t *testing.T) {
-		resp := &http.Response{StatusCode: http.StatusInternalServerError, Body: io.NopCloser(iotest.ErrReader(testerrors.ErrBodyRead)), Header: make(http.Header)}
+		resp := &http.Response{StatusCode: http.StatusInternalServerError, Body: io.NopCloser(iotest.ErrReader(testutil.ErrBodyRead)), Header: make(http.Header)}
 		swapTransport(t, &fakeRoundTripper{resp: resp})
 
 		got, err := svc.QueryGameDig("valheim", "1.2.3.4", 27015)
@@ -391,7 +391,7 @@ func TestQueryGameServer(t *testing.T) {
 	})
 
 	t.Run("GSV-27_ErrorPath_GameQDispatchTransportError", func(t *testing.T) {
-		swapTransport(t, &fakeRoundTripper{err: testerrors.ErrTransportFailed})
+		swapTransport(t, &fakeRoundTripper{err: testutil.ErrTransportFailed})
 
 		status, err := svc.QueryGameServer("aa3", "1.2.3.4", 27015, QueryTypeGameQ)
 		if err == nil {
@@ -428,7 +428,7 @@ func TestQueryGameServer(t *testing.T) {
 	})
 
 	t.Run("GSV-29_ErrorPath_GameDigDispatchTransportError", func(t *testing.T) {
-		swapTransport(t, &fakeRoundTripper{err: testerrors.ErrTransportFailed})
+		swapTransport(t, &fakeRoundTripper{err: testutil.ErrTransportFailed})
 
 		status, err := svc.QueryGameServer("aoc", "1.2.3.4", 25566, QueryTypeGameDig)
 		if err == nil {

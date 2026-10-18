@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/link"
@@ -122,7 +121,7 @@ func TestUR03GetUserHandlerForbidden(t *testing.T) {
 }
 
 func TestUR04GetUserHandlerServiceErrorMapsTo500(t *testing.T) {
-	svc := &stubService{userErr: testerrors.ErrDBDown}
+	svc := &stubService{userErr: testutil.ErrDBDown}
 	r := authtest.NewSessionRequest(http.MethodGet, authtest.SelfSession("u1"), "u1", "", "")
 	w := httptest.NewRecorder()
 
@@ -206,7 +205,7 @@ func TestUR10GetUserPermissionsHandlerForbidden(t *testing.T) {
 }
 
 func TestUR11GetUserPermissionsHandlerServiceErrorMapsTo500(t *testing.T) {
-	svc := &stubService{permissionsErr: testerrors.ErrDBDown}
+	svc := &stubService{permissionsErr: testutil.ErrDBDown}
 	r := authtest.NewSessionRequest(http.MethodGet, authtest.SelfSession("u1"), "u1", "", "")
 	w := httptest.NewRecorder()
 
@@ -259,7 +258,7 @@ func TestUR14UpdateUserHandlerMalformedBody(t *testing.T) {
 }
 
 func TestUR15UpdateUserHandlerServiceErrorMapsTo500(t *testing.T) {
-	svc := &stubService{updateUserErr: testerrors.ErrDBDown}
+	svc := &stubService{updateUserErr: testutil.ErrDBDown}
 	r := authtest.NewSessionRequest(http.MethodPatch, authtest.AdminUsersSession("admin1"), "u1", "", `{"username":"newname"}`)
 	w := httptest.NewRecorder()
 
@@ -368,7 +367,7 @@ func TestUR56UpdateUserFromPlatformHandlerMalformedBodyOtherPlatforms(t *testing
 }
 
 func TestUR24UpdateUserFromPlatformHandlerServiceErrorMapsTo500(t *testing.T) {
-	svc := &stubService{updateFromPlatformErr: testerrors.ErrDBDown}
+	svc := &stubService{updateFromPlatformErr: testutil.ErrDBDown}
 	r := authtest.NewSessionRequest(http.MethodPatch, authtest.AdminUsersSession("admin1"), "", "discord", `{"id":"123"}`)
 	r.SetPathValue("platform_id", "123")
 	w := httptest.NewRecorder()
@@ -404,7 +403,7 @@ func TestUR26DeleteUserHandlerForbidden(t *testing.T) {
 }
 
 func TestUR27DeleteUserHandlerServiceErrorMapsTo500(t *testing.T) {
-	svc := &stubService{deleteUserErr: testerrors.ErrDBDown}
+	svc := &stubService{deleteUserErr: testutil.ErrDBDown}
 	r := authtest.NewSessionRequest(http.MethodDelete, authtest.AdminUsersSession("admin1"), "u1", "", "")
 	w := httptest.NewRecorder()
 
@@ -450,7 +449,7 @@ func TestUR47GetAccountSettingsHandlerForbidden(t *testing.T) {
 }
 
 func TestUR48GetAccountSettingsHandlerServiceErrorMapsTo500(t *testing.T) {
-	svc := &stubService{getSettingsErr: testerrors.ErrDBDown}
+	svc := &stubService{getSettingsErr: testutil.ErrDBDown}
 	r := authtest.NewSessionRequest(http.MethodGet, authtest.SelfSession("u1"), "u1", "", "")
 	w := httptest.NewRecorder()
 
@@ -542,7 +541,7 @@ func TestUR54UpdateAccountSettingsHandlerNoPasswordSetMapsTo400(t *testing.T) {
 }
 
 func TestUR55UpdateAccountSettingsHandlerUnclassifiedErrorMapsTo500(t *testing.T) {
-	svc := &stubService{setPasswordAuthErr: testerrors.ErrDBDown}
+	svc := &stubService{setPasswordAuthErr: testutil.ErrDBDown}
 	r := authtest.NewSessionRequest(http.MethodPatch, authtest.SelfSession("u1"), "u1", "", `{"password_auth":true}`)
 	w := httptest.NewRecorder()
 
@@ -554,7 +553,7 @@ func TestUR55UpdateAccountSettingsHandlerUnclassifiedErrorMapsTo500(t *testing.T
 }
 
 func TestUR57GetUserFromPlatformHandlerServiceErrorMapsTo500(t *testing.T) {
-	svc := &stubService{userErr: testerrors.ErrDBDown}
+	svc := &stubService{userErr: testutil.ErrDBDown}
 	r := authtest.NewSessionRequest(http.MethodGet, authtest.AdminUsersSession("admin1"), "", "discord", "")
 	r.SetPathValue("platform_id", "12345")
 	w := httptest.NewRecorder()
@@ -744,7 +743,7 @@ func TestUR72to73UpdateUserRespondsWithTheStoredAccount(t *testing.T) {
 	})
 
 	t.Run("UR-73_UpdateUserReadBackFailureMapsTo500", func(t *testing.T) {
-		svc := &stubService{userErr: testerrors.ErrDBDown}
+		svc := &stubService{userErr: testutil.ErrDBDown}
 		r := authtest.NewSessionRequest(http.MethodPatch, authtest.AdminUsersSession("admin1"), "u1", "", `{"username":"newname"}`)
 		w := httptest.NewRecorder()
 
@@ -856,7 +855,7 @@ func TestUR74to82ListUsersHandler(t *testing.T) {
 	})
 
 	t.Run("UR-80_ServiceFailureMapsTo500", func(t *testing.T) {
-		svc := &stubService{listErr: testerrors.ErrDBDown}
+		svc := &stubService{listErr: testutil.ErrDBDown}
 		w := httptest.NewRecorder()
 
 		ListUsersHandler(svc)(w, newListUsersRequest(authtest.AdminUsersSession("admin1"), ""))

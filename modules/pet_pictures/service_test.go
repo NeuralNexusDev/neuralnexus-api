@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
+	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
 type svCreatePetPictureArgs struct {
@@ -179,7 +179,7 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 	})
 
 	t.Run("PPV-04_StoreErrorPropagates", func(t *testing.T) {
-		wantErr := testerrors.ErrDBDown
+		wantErr := testutil.ErrDBDown
 		mock := &svMockStore{createPetPictureErr: wantErr}
 		svc := NewService(mock)
 		file := svTempFile(t, "sv04-upload-*.jpg", []byte("bytes"))
@@ -223,7 +223,7 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 		svc := NewService(mock)
 		file := svTempFile(t, "sv06-upload-*.jpg", []byte("bytes"))
 
-		wantErr := testerrors.ErrTransportFailed
+		wantErr := testutil.ErrTransportFailed
 		swapTransport(t, &svFakeRoundTripper{err: wantErr})
 
 		got, err := svc.UploadPetPicture(file, 1, nil, nil)

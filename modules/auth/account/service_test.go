@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
@@ -133,7 +132,7 @@ func TestAC04to05GetAccountByUsername(t *testing.T) {
 	})
 
 	t.Run("AC-05_StoreError", func(t *testing.T) {
-		wantErr := testerrors.ErrBoom
+		wantErr := testutil.ErrBoom
 		as := &acFakeAccountStore{getByUserErr: wantErr}
 		svc := NewService(as, &acFakeAccountSettingsStore{}, nil)
 
@@ -157,7 +156,7 @@ func TestAC06to07GetAccountByEmail(t *testing.T) {
 	})
 
 	t.Run("AC-07_StoreError", func(t *testing.T) {
-		wantErr := testerrors.ErrBoom
+		wantErr := testutil.ErrBoom
 		as := &acFakeAccountStore{getByEmailErr: wantErr}
 		svc := NewService(as, &acFakeAccountSettingsStore{}, nil)
 
@@ -206,7 +205,7 @@ func TestAC10to11UpdateAccount(t *testing.T) {
 	})
 
 	t.Run("AC-11_StoreError", func(t *testing.T) {
-		wantErr := testerrors.ErrBoom
+		wantErr := testutil.ErrBoom
 		as := &acFakeAccountStore{updateErr: wantErr}
 		svc := NewService(as, &acFakeAccountSettingsStore{}, nil)
 
@@ -231,7 +230,7 @@ func TestAC12to13DeleteAccount(t *testing.T) {
 	})
 
 	t.Run("AC-13_StoreError", func(t *testing.T) {
-		wantErr := testerrors.ErrBoom
+		wantErr := testutil.ErrBoom
 		as := &acFakeAccountStore{deleteErr: wantErr}
 		svc := NewService(as, &acFakeAccountSettingsStore{}, nil)
 
@@ -264,7 +263,7 @@ func TestAC14to16IsPasswordAuthEnabled(t *testing.T) {
 	})
 
 	t.Run("AC-16_SettingsLookupError", func(t *testing.T) {
-		wantErr := testerrors.ErrBoom
+		wantErr := testutil.ErrBoom
 		ass := &acFakeAccountSettingsStore{err: wantErr}
 		svc := NewService(&acFakeAccountStore{}, ass, nil)
 
@@ -380,7 +379,7 @@ func TestAC17to21NewSession(t *testing.T) {
 	})
 
 	t.Run("AC-20_RoleStoreFailureFailsTheSession", func(t *testing.T) {
-		wantErr := testerrors.ErrBoom
+		wantErr := testutil.ErrBoom
 		svc := newService(&testutil.FakeRoleStore{Err: wantErr})
 
 		s, err := svc.NewSession(&Account{UserID: "u1", Roles: []string{"1"}}, 1)

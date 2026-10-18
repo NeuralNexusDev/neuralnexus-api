@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -163,7 +162,7 @@ func stSeedPasswordAccount(t *testing.T, as Store, userID string) *Account {
 
 func TestST08to12TranslateAccountConstraintErr(t *testing.T) {
 	t.Run("ACS-08_NonPgError", func(t *testing.T) {
-		orig := testerrors.ErrBoom
+		orig := testutil.ErrBoom
 		if got := translateAccountConstraintErr(orig); !errors.Is(got, orig) {
 			t.Errorf("translateAccountConstraintErr() = %v, want unchanged %v", got, orig)
 		}

@@ -8,11 +8,11 @@ import (
 
 	"github.com/goccy/go-json"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/proto/bngpb"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
+	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
 type bngMockStore struct {
@@ -96,7 +96,7 @@ func TestHD01to02_GetBeeNameHandler(t *testing.T) {
 	})
 
 	t.Run("BNH-02_StoreError", func(t *testing.T) {
-		s := &bngMockStore{getBeeName: func() (string, error) { return "", testerrors.ErrBoom }}
+		s := &bngMockStore{getBeeName: func() (string, error) { return "", testutil.ErrBoom }}
 		h := GetBeeNameHandler(s)
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodGet, "/", nil, nil))
@@ -135,7 +135,7 @@ func TestHD03to06_UploadBeeNameHandler(t *testing.T) {
 	})
 
 	t.Run("BNH-06_StoreError", func(t *testing.T) {
-		s := &bngMockStore{uploadBeeName: func(string) (string, error) { return "", testerrors.ErrBoom }}
+		s := &bngMockStore{uploadBeeName: func(string) (string, error) { return "", testutil.ErrBoom }}
 		h := UploadBeeNameHandler(s)
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodPut, "/Buzzy", map[string]string{"name": "Buzzy"}, bngAuthorizedSession))
@@ -170,7 +170,7 @@ func TestHD07to10_DeleteBeeNameHandler(t *testing.T) {
 	})
 
 	t.Run("BNH-10_StoreError", func(t *testing.T) {
-		s := &bngMockStore{deleteBeeName: func(string) (string, error) { return "", testerrors.ErrBoom }}
+		s := &bngMockStore{deleteBeeName: func(string) (string, error) { return "", testutil.ErrBoom }}
 		h := DeleteBeeNameHandler(s)
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodDelete, "/Buzzy", map[string]string{"name": "Buzzy"}, bngAuthorizedSession))
@@ -201,7 +201,7 @@ func TestHD11to13_SubmitBeeNameHandler(t *testing.T) {
 	})
 
 	t.Run("BNH-13_StoreError", func(t *testing.T) {
-		s := &bngMockStore{submitBeeName: func(string) (string, error) { return "", testerrors.ErrBoom }}
+		s := &bngMockStore{submitBeeName: func(string) (string, error) { return "", testutil.ErrBoom }}
 		h := SubmitBeeNameHandler(s)
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodPost, "/Buzzy", map[string]string{"name": "Buzzy"}, nil))
@@ -263,7 +263,7 @@ func TestHD14to19_GetBeeNameSuggestionsHandler(t *testing.T) {
 	})
 
 	t.Run("BNH-19_StoreError", func(t *testing.T) {
-		s := &bngMockStore{getBeeNameSuggestions: func(int64) ([]string, error) { return nil, testerrors.ErrBoom }}
+		s := &bngMockStore{getBeeNameSuggestions: func(int64) ([]string, error) { return nil, testutil.ErrBoom }}
 		h := GetBeeNameSuggestionsHandler(s)
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodGet, "/5", map[string]string{"amount": "5"}, bngAuthorizedSession))
@@ -302,7 +302,7 @@ func TestHD20to23_AcceptBeeNameSuggestionHandler(t *testing.T) {
 	})
 
 	t.Run("BNH-23_StoreError", func(t *testing.T) {
-		s := &bngMockStore{acceptBeeNameSuggestion: func(string) (string, error) { return "", testerrors.ErrBoom }}
+		s := &bngMockStore{acceptBeeNameSuggestion: func(string) (string, error) { return "", testutil.ErrBoom }}
 		h := AcceptBeeNameSuggestionHandler(s)
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodPost, "/Buzzy", map[string]string{"name": "Buzzy"}, bngAuthorizedSession))
@@ -337,7 +337,7 @@ func TestHD24to27_RejectBeeNameSuggestionHandler(t *testing.T) {
 	})
 
 	t.Run("BNH-27_StoreError", func(t *testing.T) {
-		s := &bngMockStore{rejectBeeNameSuggestion: func(string) (string, error) { return "", testerrors.ErrBoom }}
+		s := &bngMockStore{rejectBeeNameSuggestion: func(string) (string, error) { return "", testutil.ErrBoom }}
 		h := RejectBeeNameSuggestionHandler(s)
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodPost, "/Buzzy", map[string]string{"name": "Buzzy"}, bngAuthorizedSession))

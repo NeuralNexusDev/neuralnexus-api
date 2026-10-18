@@ -14,7 +14,6 @@ import (
 
 	"github.com/goccy/go-json"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
@@ -412,12 +411,12 @@ func TestAU52to57OAuthAndOpenIDFailuresHideCause(t *testing.T) {
 	oauthState := OAuthState{Platform: PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: ModeLogin}
 	steamState := OAuthState{Platform: PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: ModeLogin}
 	okJWT := func(*session.Session) (string, error) { return "test-jwt", nil }
-	failJWT := func(*session.Session) (string, error) { return "", testerrors.ErrSigningFailed }
+	failJWT := func(*session.Session) (string, error) { return "", testutil.ErrSigningFailed }
 
 	t.Run("AU-52_OAuthProcessFails", func(t *testing.T) {
 		auDiscordTransport(t)
 		w := httptest.NewRecorder()
-		ss := &stubSessionService{createJWT: okJWT, addSessionErr: testerrors.ErrDBDown}
+		ss := &stubSessionService{createJWT: okJWT, addSessionErr: testutil.ErrDBDown}
 
 		OAuthHandler(&stubAccountService{}, &stubLinkAccountStore{}, ss)(w, auOAuthRequest(t, oauthState))
 
@@ -457,7 +456,7 @@ func TestAU52to57OAuthAndOpenIDFailuresHideCause(t *testing.T) {
 	t.Run("AU-56_OpenIDProcessFails", func(t *testing.T) {
 		auSteamTransport(t, http.StatusOK, http.StatusOK)
 		w := httptest.NewRecorder()
-		ss := &stubSessionService{createJWT: okJWT, addSessionErr: testerrors.ErrDBDown}
+		ss := &stubSessionService{createJWT: okJWT, addSessionErr: testutil.ErrDBDown}
 
 		OpenIDHandler(&stubAccountService{}, &stubLinkAccountStore{}, ss)(w, auOpenIDRequest(t, steamState))
 
@@ -966,7 +965,7 @@ func TestAU60to71OAuthAndOpenIDFailureMapping(t *testing.T) {
 		auDiscordTransport(t)
 		w := httptest.NewRecorder()
 
-		OAuthHandler(&stubAccountService{}, addFails(testerrors.ErrDBDown), &stubSessionService{createJWT: okJWT})(w, auWithSession(auOAuthRequest(t, discordLink), "u1"))
+		OAuthHandler(&stubAccountService{}, addFails(testutil.ErrDBDown), &stubSessionService{createJWT: okJWT})(w, auWithSession(auOAuthRequest(t, discordLink), "u1"))
 
 		requireProblemRedirect(t, w, redirect, http.StatusInternalServerError, msgAuthenticationFailed)
 	})
@@ -984,7 +983,7 @@ func TestAU60to71OAuthAndOpenIDFailureMapping(t *testing.T) {
 		auSteamTransport(t, http.StatusOK, http.StatusOK)
 		w := httptest.NewRecorder()
 
-		OpenIDHandler(&stubAccountService{}, addFails(testerrors.ErrDBDown), &stubSessionService{createJWT: okJWT})(w, auWithSession(auOpenIDRequest(t, steamLink), "u1"))
+		OpenIDHandler(&stubAccountService{}, addFails(testutil.ErrDBDown), &stubSessionService{createJWT: okJWT})(w, auWithSession(auOpenIDRequest(t, steamLink), "u1"))
 
 		requireProblemRedirect(t, w, redirect, http.StatusInternalServerError, msgAuthenticationFailed)
 	})
@@ -1126,7 +1125,7 @@ func TestUR30GetUserLinkedAccountsHandlerForbidden(t *testing.T) {
 }
 
 func TestUR31GetUserLinkedAccountsHandlerServiceErrorMapsTo500(t *testing.T) {
-	svc := &stubService{linksErr: testerrors.ErrDBDown}
+	svc := &stubService{linksErr: testutil.ErrDBDown}
 	r := authtest.NewSessionRequest(http.MethodGet, authtest.SelfSession("u1"), "u1", "", "")
 	w := httptest.NewRecorder()
 
@@ -1191,7 +1190,7 @@ func TestUR35UnlinkPlatformHandlerWouldLockAccountMapsTo400(t *testing.T) {
 }
 
 func TestUR36UnlinkPlatformHandlerUnclassifiedErrorMapsTo500(t *testing.T) {
-	svc := &stubService{unlinkErr: testerrors.ErrDBDown}
+	svc := &stubService{unlinkErr: testutil.ErrDBDown}
 	r := authtest.NewSessionRequest(http.MethodDelete, authtest.SelfSession("u1"), "u1", "discord", "")
 	w := httptest.NewRecorder()
 
@@ -1295,7 +1294,7 @@ func TestUR43SetPlatformLoginEnabledHandlerUnverifiedMapsTo400(t *testing.T) {
 }
 
 func TestUR44SetPlatformLoginEnabledHandlerUnclassifiedErrorMapsTo500(t *testing.T) {
-	svc := &stubService{setEnableErr: testerrors.ErrDBDown}
+	svc := &stubService{setEnableErr: testutil.ErrDBDown}
 	r := authtest.NewSessionRequest(http.MethodPatch, authtest.SelfSession("u1"), "u1", "discord", `{"login_enabled":true}`)
 	w := httptest.NewRecorder()
 
