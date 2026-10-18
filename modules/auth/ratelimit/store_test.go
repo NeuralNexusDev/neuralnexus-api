@@ -48,7 +48,7 @@ func stAssertRawConnectionError(t *testing.T, err error) {
 }
 
 func TestST01NewStore(t *testing.T) {
-	t.Run("ST-01_WrapsGivenClient", func(t *testing.T) {
+	t.Run("RLS-01_WrapsGivenClient", func(t *testing.T) {
 		rdb := stUnreachableRedis(t)
 
 		got := NewStore(rdb)
@@ -64,7 +64,7 @@ func TestST01NewStore(t *testing.T) {
 
 func TestST40GetRateLimit(t *testing.T) {
 	s := stStoreWithUnreachableRedis(t)
-	t.Run("ST-40_ConnectionErrorNotTreatedAsMiss", func(t *testing.T) {
+	t.Run("RLS-40_ConnectionErrorNotTreatedAsMiss", func(t *testing.T) {
 		got, err := s.GetRateLimit("k")
 		if got != 0 {
 			t.Errorf("expected 0, got %d", got)
@@ -75,14 +75,14 @@ func TestST40GetRateLimit(t *testing.T) {
 
 func TestST41SetRateLimit(t *testing.T) {
 	s := stStoreWithUnreachableRedis(t)
-	t.Run("ST-41_ConnectionError", func(t *testing.T) {
+	t.Run("RLS-41_ConnectionError", func(t *testing.T) {
 		stAssertRawConnectionError(t, s.SetRateLimit("k", 1))
 	})
 }
 
 func TestST42IncrementRateLimit(t *testing.T) {
 	s := stStoreWithUnreachableRedis(t)
-	t.Run("ST-42_ConnectionError", func(t *testing.T) {
+	t.Run("RLS-42_ConnectionError", func(t *testing.T) {
 		stAssertRawConnectionError(t, s.IncrementRateLimit("k"))
 	})
 }

@@ -99,7 +99,7 @@ func ppUniqueID(prefix string) string {
 }
 
 func TestST01_NewStore(t *testing.T) {
-	t.Run("ST-01_WrapsGivenPool", func(t *testing.T) {
+	t.Run("PPS-01_WrapsGivenPool", func(t *testing.T) {
 		if s := NewStore(nil); s == nil {
 			t.Error("NewStore(nil) = nil, want a non-nil PetPicStore")
 		}
@@ -107,7 +107,7 @@ func TestST01_NewStore(t *testing.T) {
 }
 
 func TestST02to05and26_CreatePet(t *testing.T) {
-	t.Run("ST-04_ConnectionFailure", func(t *testing.T) {
+	t.Run("PPS-04_ConnectionFailure", func(t *testing.T) {
 		ppSetUnreachableDatabaseURL(t)
 		s := &store{}
 		if _, err := s.CreatePet(ppUniqueID("pet")); err == nil {
@@ -115,7 +115,7 @@ func TestST02to05and26_CreatePet(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-02_HappyPath", func(t *testing.T) {
+	t.Run("PPS-02_HappyPath", func(t *testing.T) {
 		pool := ppLiveDatabase(t)
 		s := &store{}
 		name := ppUniqueID("pet")
@@ -125,7 +125,7 @@ func TestST02to05and26_CreatePet(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-03_DuplicateName", func(t *testing.T) {
+	t.Run("PPS-03_DuplicateName", func(t *testing.T) {
 		pool := ppLiveDatabase(t)
 		s := &store{}
 		name := ppUniqueID("pet")
@@ -136,7 +136,7 @@ func TestST02to05and26_CreatePet(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-05_ConcurrentSameName", func(t *testing.T) {
+	t.Run("PPS-05_ConcurrentSameName", func(t *testing.T) {
 		pool := ppLiveDatabase(t)
 		s := &store{}
 		for round := 0; round < 5; round++ {
@@ -166,7 +166,7 @@ func TestST02to05and26_CreatePet(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-26_EmptyName", func(t *testing.T) {
+	t.Run("PPS-26_EmptyName", func(t *testing.T) {
 		pool := ppLiveDatabase(t)
 		t.Cleanup(func() { pool.Exec(context.Background(), "DELETE FROM pets WHERE name = ''") })
 		s := &store{}
@@ -178,7 +178,7 @@ func TestST02to05and26_CreatePet(t *testing.T) {
 }
 
 func TestST06to09and27_GetPetAndGetPetByName(t *testing.T) {
-	t.Run("ST-09_ConnectionFailure", func(t *testing.T) {
+	t.Run("PPS-09_ConnectionFailure", func(t *testing.T) {
 		ppSetUnreachableDatabaseURL(t)
 		s := &store{}
 		if _, err := s.GetPetByName("anything"); err == nil {
@@ -186,7 +186,7 @@ func TestST06to09and27_GetPetAndGetPetByName(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-06_GetPetNoRow", func(t *testing.T) {
+	t.Run("PPS-06_GetPetNoRow", func(t *testing.T) {
 		ppLiveDatabase(t)
 		s := &store{}
 		pet, err := s.GetPet(-1)
@@ -195,7 +195,7 @@ func TestST06to09and27_GetPetAndGetPetByName(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-27_GetPetHappyPath", func(t *testing.T) {
+	t.Run("PPS-27_GetPetHappyPath", func(t *testing.T) {
 		pool := ppLiveDatabase(t)
 		s := &store{}
 		created := ppCreatePet(t, pool, s, ppUniqueID("pet"))
@@ -205,7 +205,7 @@ func TestST06to09and27_GetPetAndGetPetByName(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-07_HappyPath", func(t *testing.T) {
+	t.Run("PPS-07_HappyPath", func(t *testing.T) {
 		pool := ppLiveDatabase(t)
 		s := &store{}
 		created := ppCreatePet(t, pool, s, ppUniqueID("pet"))
@@ -215,7 +215,7 @@ func TestST06to09and27_GetPetAndGetPetByName(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-08_NoRow", func(t *testing.T) {
+	t.Run("PPS-08_NoRow", func(t *testing.T) {
 		ppLiveDatabase(t)
 		s := &store{}
 		pet, err := s.GetPetByName(ppUniqueID("missing"))
@@ -226,7 +226,7 @@ func TestST06to09and27_GetPetAndGetPetByName(t *testing.T) {
 }
 
 func TestST10to12_UpdatePet(t *testing.T) {
-	t.Run("ST-12_ConnectionFailure", func(t *testing.T) {
+	t.Run("PPS-12_ConnectionFailure", func(t *testing.T) {
 		ppSetUnreachableDatabaseURL(t)
 		s := &store{}
 		if _, err := s.UpdatePet(&Pet{ID: 1, Name: "x"}); err == nil {
@@ -234,7 +234,7 @@ func TestST10to12_UpdatePet(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-10_HappyPath", func(t *testing.T) {
+	t.Run("PPS-10_HappyPath", func(t *testing.T) {
 		pool := ppLiveDatabase(t)
 		s := &store{}
 		created := ppCreatePet(t, pool, s, ppUniqueID("pet"))
@@ -252,7 +252,7 @@ func TestST10to12_UpdatePet(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-11_NoMatchingRow", func(t *testing.T) {
+	t.Run("PPS-11_NoMatchingRow", func(t *testing.T) {
 		ppLiveDatabase(t)
 		s := &store{}
 		got, err := s.UpdatePet(&Pet{ID: -1, Name: ppUniqueID("ghost")})
@@ -263,7 +263,7 @@ func TestST10to12_UpdatePet(t *testing.T) {
 }
 
 func TestST13to16_CreatePetPicture(t *testing.T) {
-	t.Run("ST-15_ConnectionFailure", func(t *testing.T) {
+	t.Run("PPS-15_ConnectionFailure", func(t *testing.T) {
 		ppSetUnreachableDatabaseURL(t)
 		s := &store{}
 		if _, err := s.CreatePetPicture(ppUniqueID("pic"), "jpg", 1, nil, nil); err == nil {
@@ -271,7 +271,7 @@ func TestST13to16_CreatePetPicture(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-13_HappyPath", func(t *testing.T) {
+	t.Run("PPS-13_HappyPath", func(t *testing.T) {
 		pool := ppLiveDatabase(t)
 		s := &store{}
 		id := ppUniqueID("pic")
@@ -283,7 +283,7 @@ func TestST13to16_CreatePetPicture(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-14_DuplicateID", func(t *testing.T) {
+	t.Run("PPS-14_DuplicateID", func(t *testing.T) {
 		pool := ppLiveDatabase(t)
 		s := &store{}
 		id := ppUniqueID("pic")
@@ -294,7 +294,7 @@ func TestST13to16_CreatePetPicture(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-16_ConcurrentSameID", func(t *testing.T) {
+	t.Run("PPS-16_ConcurrentSameID", func(t *testing.T) {
 		pool := ppLiveDatabase(t)
 		s := &store{}
 		for round := 0; round < 5; round++ {
@@ -325,7 +325,7 @@ func TestST13to16_CreatePetPicture(t *testing.T) {
 }
 
 func TestST17to20and28to29_GetPetPictureAndGetRandPetPictureByName(t *testing.T) {
-	t.Run("ST-20_ConnectionFailure", func(t *testing.T) {
+	t.Run("PPS-20_ConnectionFailure", func(t *testing.T) {
 		ppSetUnreachableDatabaseURL(t)
 		s := &store{}
 		if _, err := s.GetPetPicture("anything"); err == nil {
@@ -333,7 +333,7 @@ func TestST17to20and28to29_GetPetPictureAndGetRandPetPictureByName(t *testing.T)
 		}
 	})
 
-	t.Run("ST-17_RandPictureNoPet", func(t *testing.T) {
+	t.Run("PPS-17_RandPictureNoPet", func(t *testing.T) {
 		ppLiveDatabase(t)
 		s := &store{}
 		got, err := s.GetRandPetPictureByName(ppUniqueID("missing"))
@@ -342,7 +342,7 @@ func TestST17to20and28to29_GetPetPictureAndGetRandPetPictureByName(t *testing.T)
 		}
 	})
 
-	t.Run("ST-18_RandPictureNoPictures", func(t *testing.T) {
+	t.Run("PPS-18_RandPictureNoPictures", func(t *testing.T) {
 		pool := ppLiveDatabase(t)
 		s := &store{}
 		pet := ppCreatePet(t, pool, s, ppUniqueID("pet"))
@@ -352,7 +352,7 @@ func TestST17to20and28to29_GetPetPictureAndGetRandPetPictureByName(t *testing.T)
 		}
 	})
 
-	t.Run("ST-19_NoRow", func(t *testing.T) {
+	t.Run("PPS-19_NoRow", func(t *testing.T) {
 		ppLiveDatabase(t)
 		s := &store{}
 		got, err := s.GetPetPicture(ppUniqueID("missing"))
@@ -362,7 +362,7 @@ func TestST17to20and28to29_GetPetPictureAndGetRandPetPictureByName(t *testing.T)
 	})
 
 	for _, tz := range ppSessionTimeZones {
-		t.Run("ST-28_GetPetPictureHappyPath_"+strings.ReplaceAll(tz, "/", "_"), func(t *testing.T) {
+		t.Run("PPS-28_GetPetPictureHappyPath_"+strings.ReplaceAll(tz, "/", "_"), func(t *testing.T) {
 			t.Setenv("PGTZ", tz)
 			pool := ppLiveDatabase(t)
 			s := &store{}
@@ -377,7 +377,7 @@ func TestST17to20and28to29_GetPetPictureAndGetRandPetPictureByName(t *testing.T)
 		})
 	}
 
-	t.Run("ST-29_RandPictureHappyPath", func(t *testing.T) {
+	t.Run("PPS-29_RandPictureHappyPath", func(t *testing.T) {
 		pool := ppLiveDatabase(t)
 		s := &store{}
 		pet := ppCreatePet(t, pool, s, ppUniqueID("pet"))
@@ -391,7 +391,7 @@ func TestST17to20and28to29_GetPetPictureAndGetRandPetPictureByName(t *testing.T)
 }
 
 func TestST21to22and30_UpdatePetPicture(t *testing.T) {
-	t.Run("ST-21_ConnectionFailure", func(t *testing.T) {
+	t.Run("PPS-21_ConnectionFailure", func(t *testing.T) {
 		ppSetUnreachableDatabaseURL(t)
 		s := &store{}
 		if _, err := s.UpdatePetPicture(PetPicture{ID: "anything"}); err == nil {
@@ -399,7 +399,7 @@ func TestST21to22and30_UpdatePetPicture(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-30_NoMatchingRow", func(t *testing.T) {
+	t.Run("PPS-30_NoMatchingRow", func(t *testing.T) {
 		ppLiveDatabase(t)
 		s := &store{}
 		got, err := s.UpdatePetPicture(PetPicture{ID: ppUniqueID("missing"), FileExt: "png", Created: "caller-supplied"})
@@ -409,7 +409,7 @@ func TestST21to22and30_UpdatePetPicture(t *testing.T) {
 	})
 
 	for _, tz := range ppSessionTimeZones {
-		t.Run("ST-22_HappyPath_"+strings.ReplaceAll(tz, "/", "_"), func(t *testing.T) {
+		t.Run("PPS-22_HappyPath_"+strings.ReplaceAll(tz, "/", "_"), func(t *testing.T) {
 			t.Setenv("PGTZ", tz)
 			pool := ppLiveDatabase(t)
 			s := &store{}
@@ -432,7 +432,7 @@ func TestST21to22and30_UpdatePetPicture(t *testing.T) {
 }
 
 func TestST23to25_DeletePetPicture(t *testing.T) {
-	t.Run("ST-24_ConnectionFailure", func(t *testing.T) {
+	t.Run("PPS-24_ConnectionFailure", func(t *testing.T) {
 		ppSetUnreachableDatabaseURL(t)
 		s := &store{}
 		if _, err := s.DeletePetPicture("anything"); err == nil {
@@ -440,7 +440,7 @@ func TestST23to25_DeletePetPicture(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-23_HappyPath", func(t *testing.T) {
+	t.Run("PPS-23_HappyPath", func(t *testing.T) {
 		pool := ppLiveDatabase(t)
 		s := &store{}
 		id := ppUniqueID("pic")
@@ -454,7 +454,7 @@ func TestST23to25_DeletePetPicture(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-25_NoMatchingRow", func(t *testing.T) {
+	t.Run("PPS-25_NoMatchingRow", func(t *testing.T) {
 		ppLiveDatabase(t)
 		s := &store{}
 		id := ppUniqueID("missing")

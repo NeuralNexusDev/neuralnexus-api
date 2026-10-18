@@ -155,7 +155,7 @@ func TestAU01LoginHandlerUsernameHappyPath(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
 	w := httptest.NewRecorder()
 
-	t.Run("AU-01_LoginUsernameHappyPath", func(t *testing.T) {
+	t.Run("ACH-01_LoginUsernameHappyPath", func(t *testing.T) {
 		LoginHandler(as, ss)(w, r)
 
 		if w.Code != http.StatusNoContent {
@@ -181,7 +181,7 @@ func TestAU02LoginHandlerEmailHappyPath(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"email":"test@example.com","password":"correct-password"}`))
 	w := httptest.NewRecorder()
 
-	t.Run("AU-02_LoginEmailHappyPath", func(t *testing.T) {
+	t.Run("ACH-02_LoginEmailHappyPath", func(t *testing.T) {
 		LoginHandler(as, ss)(w, r)
 
 		if w.Code != http.StatusNoContent {
@@ -199,7 +199,7 @@ func TestAU03LoginHandlerMalformedBody(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`not json`))
 	w := httptest.NewRecorder()
 
-	t.Run("AU-03_LoginMalformedBody", func(t *testing.T) {
+	t.Run("ACH-03_LoginMalformedBody", func(t *testing.T) {
 		LoginHandler(as, ss)(w, r)
 
 		if w.Code != http.StatusBadRequest {
@@ -215,7 +215,7 @@ func TestAU04LoginHandlerAccountLookupFails(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"no-such-user","password":"whatever"}`))
 	w := httptest.NewRecorder()
 
-	t.Run("AU-04_LoginAccountLookupFails", func(t *testing.T) {
+	t.Run("ACH-04_LoginAccountLookupFails", func(t *testing.T) {
 		LoginHandler(as, ss)(w, r)
 
 		if w.Code != http.StatusBadRequest {
@@ -238,7 +238,7 @@ func TestAU05LoginHandlerWrongPassword(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"wrong-password"}`))
 	w := httptest.NewRecorder()
 
-	t.Run("AU-05_LoginWrongPassword", func(t *testing.T) {
+	t.Run("ACH-05_LoginWrongPassword", func(t *testing.T) {
 		LoginHandler(as, ss)(w, r)
 
 		if w.Code != http.StatusBadRequest {
@@ -261,7 +261,7 @@ func TestAU06LoginHandlerPasswordAuthCheckErrors(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
 	w := httptest.NewRecorder()
 
-	t.Run("AU-06_LoginPasswordAuthCheckErrors", func(t *testing.T) {
+	t.Run("ACH-06_LoginPasswordAuthCheckErrors", func(t *testing.T) {
 		LoginHandler(as, ss)(w, r)
 
 		if w.Code != http.StatusInternalServerError {
@@ -281,7 +281,7 @@ func TestAU07LoginHandlerPasswordAuthDisabled(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
 	w := httptest.NewRecorder()
 
-	t.Run("AU-07_LoginPasswordAuthDisabled", func(t *testing.T) {
+	t.Run("ACH-07_LoginPasswordAuthDisabled", func(t *testing.T) {
 		LoginHandler(as, ss)(w, r)
 
 		if w.Code != http.StatusBadRequest {
@@ -304,7 +304,7 @@ func TestAU08LoginHandlerAddSessionFails(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
 	w := httptest.NewRecorder()
 
-	t.Run("AU-08_LoginAddSessionFails", func(t *testing.T) {
+	t.Run("ACH-08_LoginAddSessionFails", func(t *testing.T) {
 		LoginHandler(as, ss)(w, r)
 
 		if w.Code != http.StatusInternalServerError {
@@ -327,7 +327,7 @@ func TestAU09LoginHandlerCreateJWTFails(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
 	w := httptest.NewRecorder()
 
-	t.Run("AU-09_LoginCreateJWTFails", func(t *testing.T) {
+	t.Run("ACH-09_LoginCreateJWTFails", func(t *testing.T) {
 		LoginHandler(as, ss)(w, r)
 
 		if w.Code != http.StatusInternalServerError {
@@ -347,7 +347,7 @@ func TestAU10LogoutHandlerHappyPath(t *testing.T) {
 	w := httptest.NewRecorder()
 	ss := &stubSessionService{}
 
-	t.Run("AU-10_LogoutHappyPath", func(t *testing.T) {
+	t.Run("ACH-10_LogoutHappyPath", func(t *testing.T) {
 		LogoutHandler(ss)(w, r)
 
 		if w.Code != http.StatusNoContent {
@@ -375,7 +375,7 @@ func TestAU11LogoutHandlerNilSessionInContext(t *testing.T) {
 	w := httptest.NewRecorder()
 	ss := &stubSessionService{}
 
-	t.Run("AU-11_LogoutNilSessionInContext", func(t *testing.T) {
+	t.Run("ACH-11_LogoutNilSessionInContext", func(t *testing.T) {
 		LogoutHandler(ss)(w, r)
 
 		if w.Code != http.StatusBadRequest {
@@ -395,7 +395,7 @@ func TestAU12LogoutHandlerDeleteSessionFails(t *testing.T) {
 	w := httptest.NewRecorder()
 	ss := &stubSessionService{deleteSessionErr: testerrors.ErrDBDown}
 
-	t.Run("AU-12_LogoutDeleteSessionFails", func(t *testing.T) {
+	t.Run("ACH-12_LogoutDeleteSessionFails", func(t *testing.T) {
 		LogoutHandler(ss)(w, r)
 
 		if w.Code != http.StatusInternalServerError {
@@ -418,7 +418,7 @@ func TestAU58LoginHandlerNewSessionFails(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
 	w := httptest.NewRecorder()
 
-	t.Run("AU-58_LoginNewSessionFails", func(t *testing.T) {
+	t.Run("ACH-58_LoginNewSessionFails", func(t *testing.T) {
 		LoginHandler(as, ss)(w, r)
 
 		if w.Code != http.StatusInternalServerError {
@@ -436,7 +436,7 @@ func TestAU36SetSessionCookieHappyPath(t *testing.T) {
 	ss := &stubSessionService{createJWT: func(*session.Session) (string, error) { return "test-jwt", nil }}
 	w := httptest.NewRecorder()
 
-	t.Run("AU-36_SetSessionCookieHappyPath", func(t *testing.T) {
+	t.Run("ACH-36_SetSessionCookieHappyPath", func(t *testing.T) {
 		if err := SetSessionCookie(ss, w, sess); err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
@@ -460,7 +460,7 @@ func TestAU37SetSessionCookieCreateJWTFails(t *testing.T) {
 	ss := &stubSessionService{createJWT: func(*session.Session) (string, error) { return "", wantErr }}
 	w := httptest.NewRecorder()
 
-	t.Run("AU-37_SetSessionCookieCreateJWTFails", func(t *testing.T) {
+	t.Run("ACH-37_SetSessionCookieCreateJWTFails", func(t *testing.T) {
 		err := SetSessionCookie(ss, w, sess)
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("expected %v, got %v", wantErr, err)
@@ -474,7 +474,7 @@ func TestAU37SetSessionCookieCreateJWTFails(t *testing.T) {
 func TestAU49SessionCookie(t *testing.T) {
 	expires := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
 
-	t.Run("AU-49_SessionCookie", func(t *testing.T) {
+	t.Run("ACH-49_SessionCookie", func(t *testing.T) {
 		c := sessionCookie("abc", expires)
 
 		if c.Name != mw.SessionCookieName {
@@ -510,7 +510,7 @@ func TestAU59LoginHandlerAccountLookupInfraFails(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"someone","password":"whatever"}`))
 	w := httptest.NewRecorder()
 
-	t.Run("AU-59_LoginAccountLookupInfraFails", func(t *testing.T) {
+	t.Run("ACH-59_LoginAccountLookupInfraFails", func(t *testing.T) {
 		LoginHandler(as, ss)(w, r)
 
 		if w.Code != http.StatusInternalServerError {

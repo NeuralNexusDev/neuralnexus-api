@@ -10,7 +10,7 @@ import (
 )
 
 func TestTY01to02NewAccount(t *testing.T) {
-	t.Run("TY-01_Success", func(t *testing.T) {
+	t.Run("ACT-01_Success", func(t *testing.T) {
 		a, err := NewAccount("alice", "a@b.com", "hunter2")
 		if err != nil {
 			t.Fatalf("NewAccount() unexpected error: %v", err)
@@ -29,7 +29,7 @@ func TestTY01to02NewAccount(t *testing.T) {
 		}
 	})
 
-	t.Run("TY-02_EmptyEmailStaysNil", func(t *testing.T) {
+	t.Run("ACT-02_EmptyEmailStaysNil", func(t *testing.T) {
 		a, err := NewAccount("alice", "", "hunter2")
 		if err != nil {
 			t.Fatalf("NewAccount() unexpected error: %v", err)
@@ -41,7 +41,7 @@ func TestTY01to02NewAccount(t *testing.T) {
 }
 
 func TestTY04to05NewPasswordLessAccount(t *testing.T) {
-	t.Run("TY-04_Success", func(t *testing.T) {
+	t.Run("ACT-04_Success", func(t *testing.T) {
 		a, err := NewPasswordLessAccount("alice", "a@b.com")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -57,7 +57,7 @@ func TestTY04to05NewPasswordLessAccount(t *testing.T) {
 		}
 	})
 
-	t.Run("TY-05_EmptyEmailStaysNil", func(t *testing.T) {
+	t.Run("ACT-05_EmptyEmailStaysNil", func(t *testing.T) {
 		a, err := NewPasswordLessAccount("alice", "")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -69,7 +69,7 @@ func TestTY04to05NewPasswordLessAccount(t *testing.T) {
 }
 
 func TestTY06NewIDOnlyAccount(t *testing.T) {
-	t.Run("TY-06_OnlyUserIDSet", func(t *testing.T) {
+	t.Run("ACT-06_OnlyUserIDSet", func(t *testing.T) {
 		a, err := NewIDOnlyAccount()
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -87,7 +87,7 @@ func TestTY07to08IDKeyWithSecret(t *testing.T) {
 	password := []byte("hunter2")
 	salt := []byte("0123456789abcdef")
 
-	t.Run("TY-07_DeterministicForSameInputs", func(t *testing.T) {
+	t.Run("ACT-07_DeterministicForSameInputs", func(t *testing.T) {
 		secret := []byte("pepper")
 		got1 := IDKeyWithSecret(password, salt, secret, 3, 64*1024, 4, 32)
 		got2 := IDKeyWithSecret(password, salt, secret, 3, 64*1024, 4, 32)
@@ -96,7 +96,7 @@ func TestTY07to08IDKeyWithSecret(t *testing.T) {
 		}
 	})
 
-	t.Run("TY-08_DifferentSecretYieldsDifferentOutput", func(t *testing.T) {
+	t.Run("ACT-08_DifferentSecretYieldsDifferentOutput", func(t *testing.T) {
 		out1 := IDKeyWithSecret(password, salt, []byte("pepper-a"), 3, 64*1024, 4, 32)
 		out2 := IDKeyWithSecret(password, salt, []byte("pepper-b"), 3, 64*1024, 4, 32)
 		if string(out1) == string(out2) {
@@ -106,7 +106,7 @@ func TestTY07to08IDKeyWithSecret(t *testing.T) {
 }
 
 func TestTY09to10HashPassword(t *testing.T) {
-	t.Run("TY-09_Success", func(t *testing.T) {
+	t.Run("ACT-09_Success", func(t *testing.T) {
 		u := &Account{}
 		if err := u.HashPassword("hunter2"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -119,7 +119,7 @@ func TestTY09to10HashPassword(t *testing.T) {
 		}
 	})
 
-	t.Run("TY-10_DifferentCallsUseDifferentSalts", func(t *testing.T) {
+	t.Run("ACT-10_DifferentCallsUseDifferentSalts", func(t *testing.T) {
 		u1, u2 := &Account{}, &Account{}
 		if err := u1.HashPassword("hunter2"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -137,7 +137,7 @@ func TestTY09to10HashPassword(t *testing.T) {
 }
 
 func TestTY12to14ValidateUser(t *testing.T) {
-	t.Run("TY-12_CorrectPassword", func(t *testing.T) {
+	t.Run("ACT-12_CorrectPassword", func(t *testing.T) {
 		u := &Account{}
 		if err := u.HashPassword("correct-horse"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -147,7 +147,7 @@ func TestTY12to14ValidateUser(t *testing.T) {
 		}
 	})
 
-	t.Run("TY-13_WrongPassword", func(t *testing.T) {
+	t.Run("ACT-13_WrongPassword", func(t *testing.T) {
 		u := &Account{}
 		if err := u.HashPassword("correct-horse"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -157,7 +157,7 @@ func TestTY12to14ValidateUser(t *testing.T) {
 		}
 	})
 
-	t.Run("TY-14_NeverHashedDoesNotPanic", func(t *testing.T) {
+	t.Run("ACT-14_NeverHashedDoesNotPanic", func(t *testing.T) {
 		u := &Account{}
 		if u.ValidateUser("anything") {
 			t.Error("ValidateUser() = true for an account with no password set, want false")
@@ -166,13 +166,13 @@ func TestTY12to14ValidateUser(t *testing.T) {
 }
 
 func TestTY15DummyValidateUser(t *testing.T) {
-	t.Run("TY-15_DoesNotPanic", func(t *testing.T) {
+	t.Run("ACT-15_DoesNotPanic", func(t *testing.T) {
 		DummyValidateUser("whatever")
 	})
 }
 
 func TestTY17to18AddRole(t *testing.T) {
-	t.Run("TY-17_AddsToEmptyRoles", func(t *testing.T) {
+	t.Run("ACT-17_AddsToEmptyRoles", func(t *testing.T) {
 		a := &Account{}
 		a.AddRole("admin")
 		if len(a.Roles) != 1 || a.Roles[0] != "admin" {
@@ -180,7 +180,7 @@ func TestTY17to18AddRole(t *testing.T) {
 		}
 	})
 
-	t.Run("TY-18_DuplicateAllowed", func(t *testing.T) {
+	t.Run("ACT-18_DuplicateAllowed", func(t *testing.T) {
 		a := &Account{Roles: []string{"admin"}}
 		a.AddRole("admin")
 		if len(a.Roles) != 2 || a.Roles[0] != "admin" || a.Roles[1] != "admin" {
@@ -190,7 +190,7 @@ func TestTY17to18AddRole(t *testing.T) {
 }
 
 func TestTY19to21RemoveRole(t *testing.T) {
-	t.Run("TY-19_RemovesPresentRole", func(t *testing.T) {
+	t.Run("ACT-19_RemovesPresentRole", func(t *testing.T) {
 		a := &Account{Roles: []string{"a", "b", "c"}}
 		a.RemoveRole("b")
 		if len(a.Roles) != 2 || a.Roles[0] != "a" || a.Roles[1] != "c" {
@@ -198,7 +198,7 @@ func TestTY19to21RemoveRole(t *testing.T) {
 		}
 	})
 
-	t.Run("TY-20_RoleNotPresent", func(t *testing.T) {
+	t.Run("ACT-20_RoleNotPresent", func(t *testing.T) {
 		a := &Account{Roles: []string{"a", "b", "c"}}
 		a.RemoveRole("z")
 		if len(a.Roles) != 3 {
@@ -206,7 +206,7 @@ func TestTY19to21RemoveRole(t *testing.T) {
 		}
 	})
 
-	t.Run("TY-21_EmptyRoles", func(t *testing.T) {
+	t.Run("ACT-21_EmptyRoles", func(t *testing.T) {
 		a := &Account{}
 		a.RemoveRole("z")
 		if len(a.Roles) != 0 {
@@ -216,7 +216,7 @@ func TestTY19to21RemoveRole(t *testing.T) {
 }
 
 func TestTY22DefaultAccountSettings(t *testing.T) {
-	t.Run("TY-22_DefaultsToPasswordAuthEnabled", func(t *testing.T) {
+	t.Run("ACT-22_DefaultsToPasswordAuthEnabled", func(t *testing.T) {
 		got := DefaultAccountSettings("u1")
 		want := &AccountSettings{UserID: "u1", PasswordAuthEnabled: true}
 		if got.UserID != want.UserID || got.PasswordAuthEnabled != want.PasswordAuthEnabled {
@@ -226,13 +226,13 @@ func TestTY22DefaultAccountSettings(t *testing.T) {
 }
 
 func TestTY27to28InitTypesGo(t *testing.T) {
-	t.Run("TY-27_PackageLoadedUnderRequiredEnv", func(t *testing.T) {
+	t.Run("ACT-27_PackageLoadedUnderRequiredEnv", func(t *testing.T) {
 		if len(pepper) == 0 {
 			t.Fatal("pepper is empty; init() should already have log.Fatal'd if so, so this file's other tests couldn't be running")
 		}
 	})
 
-	t.Run("TY-28_MissingPepperFatals", func(t *testing.T) {
+	t.Run("ACT-28_MissingPepperFatals", func(t *testing.T) {
 		cmd := exec.Command(os.Args[0], "-test.run=^$")
 		cmd.Env = append(os.Environ(), "PEPPER=")
 		var stderr bytes.Buffer

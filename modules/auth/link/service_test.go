@@ -83,7 +83,7 @@ func (f *usFakeLinkAccountStore) SetLinkedAccountLoginEnabled(_ string, _ Platfo
 }
 
 func TestUS28to29GetUserLinkedAccounts(t *testing.T) {
-	t.Run("US-28_Success", func(t *testing.T) {
+	t.Run("LKV-28_Success", func(t *testing.T) {
 		want := []*LinkedAccount{{UserID: "u1"}}
 		als := &usFakeLinkAccountStore{getsByUserID: want}
 		svc := NewService(als, nil)
@@ -94,7 +94,7 @@ func TestUS28to29GetUserLinkedAccounts(t *testing.T) {
 		}
 	})
 
-	t.Run("US-29_StoreError", func(t *testing.T) {
+	t.Run("LKV-29_StoreError", func(t *testing.T) {
 		wantErr := testerrors.ErrBoom
 		als := &usFakeLinkAccountStore{getsByUserIDErr: wantErr}
 		svc := NewService(als, nil)
@@ -107,7 +107,7 @@ func TestUS28to29GetUserLinkedAccounts(t *testing.T) {
 }
 
 func TestUS30to31UnlinkPlatform(t *testing.T) {
-	t.Run("US-30_Success", func(t *testing.T) {
+	t.Run("LKV-30_Success", func(t *testing.T) {
 		als := &usFakeLinkAccountStore{}
 		svc := NewService(als, nil)
 
@@ -119,7 +119,7 @@ func TestUS30to31UnlinkPlatform(t *testing.T) {
 		}
 	})
 
-	t.Run("US-31_StoreError", func(t *testing.T) {
+	t.Run("LKV-31_StoreError", func(t *testing.T) {
 		als := &usFakeLinkAccountStore{deleteErr: account.ErrWouldLockAccount}
 		svc := NewService(als, nil)
 
@@ -131,7 +131,7 @@ func TestUS30to31UnlinkPlatform(t *testing.T) {
 }
 
 func TestUS32to33SetPlatformLoginEnabled(t *testing.T) {
-	t.Run("US-32_Success", func(t *testing.T) {
+	t.Run("LKV-32_Success", func(t *testing.T) {
 		als := &usFakeLinkAccountStore{}
 		svc := NewService(als, nil)
 
@@ -143,7 +143,7 @@ func TestUS32to33SetPlatformLoginEnabled(t *testing.T) {
 		}
 	})
 
-	t.Run("US-33_StoreError", func(t *testing.T) {
+	t.Run("LKV-33_StoreError", func(t *testing.T) {
 		wantErr := testerrors.ErrBoom
 		als := &usFakeLinkAccountStore{setLoginEnabledErr: wantErr}
 		svc := NewService(als, nil)
@@ -357,7 +357,7 @@ func (s *usConcurrentStore) accountCount() int {
 }
 
 func TestUS15to23and38UpdateFromPlatform(t *testing.T) {
-	t.Run("US-15_NewIdentityCreatesAccount", func(t *testing.T) {
+	t.Run("LKV-15_NewIdentityCreatesAccount", func(t *testing.T) {
 		as := &usFakeAccountStore{getByIDAccount: &account.Account{UserID: "resolved"}}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, account.ErrNotFound}}}
 		svc := NewService(als, as)
@@ -376,7 +376,7 @@ func TestUS15to23and38UpdateFromPlatform(t *testing.T) {
 			t.Errorf("linked account UserID %q does not match the newly created placeholder account %q", als.addLastLinkedAccount.UserID, as.addLastAccount.UserID)
 		}
 	})
-	t.Run("US-16_ExistingIdentitySkipsCreation", func(t *testing.T) {
+	t.Run("LKV-16_ExistingIdentitySkipsCreation", func(t *testing.T) {
 		existing := &LinkedAccount{UserID: "existing-user", Platform: PlatformDiscord, PlatformID: "p1"}
 		as := &usFakeAccountStore{getByIDAccount: &account.Account{UserID: "existing-user"}}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{existing, nil}}}
@@ -396,7 +396,7 @@ func TestUS15to23and38UpdateFromPlatform(t *testing.T) {
 			t.Errorf("UpdateFromPlatform() = %v, want %v", got, "existing-user")
 		}
 	})
-	t.Run("US-17_InitialLookupUnexpectedError", func(t *testing.T) {
+	t.Run("LKV-17_InitialLookupUnexpectedError", func(t *testing.T) {
 		wantErr := testerrors.ErrBoom
 		as := &usFakeAccountStore{}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, wantErr}}}
@@ -410,7 +410,7 @@ func TestUS15to23and38UpdateFromPlatform(t *testing.T) {
 			t.Error("expected no account creation attempt on an unexpected lookup error")
 		}
 	})
-	t.Run("US-18_AddAccountFails", func(t *testing.T) {
+	t.Run("LKV-18_AddAccountFails", func(t *testing.T) {
 		wantErr := testerrors.ErrBoom
 		as := &usFakeAccountStore{addErr: wantErr}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, account.ErrNotFound}}}
@@ -424,7 +424,7 @@ func TestUS15to23and38UpdateFromPlatform(t *testing.T) {
 			t.Error("expected AddLinkedAccountToDB to never be called when AddAccountToDB fails")
 		}
 	})
-	t.Run("US-19_AddLinkFailsCleansUpPlaceholder", func(t *testing.T) {
+	t.Run("LKV-19_AddLinkFailsCleansUpPlaceholder", func(t *testing.T) {
 		wantErr := testerrors.ErrInsertFailed
 		as := &usFakeAccountStore{}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, account.ErrNotFound}}, addErr: wantErr}
@@ -438,7 +438,7 @@ func TestUS15to23and38UpdateFromPlatform(t *testing.T) {
 			t.Errorf("expected DeleteAccountFromDB to clean up the orphaned placeholder %q, got calls=%d last=%q", as.addLastAccount.UserID, as.deleteCalls, as.deleteLastUserID)
 		}
 	})
-	t.Run("US-20_AddLinkFailsAndCleanupFailsReturnsTheCleanupError", func(t *testing.T) {
+	t.Run("LKV-20_AddLinkFailsAndCleanupFailsReturnsTheCleanupError", func(t *testing.T) {
 		linkErr := testerrors.ErrInsertFailed
 		deleteErr := testerrors.ErrDBDown
 		as := &usFakeAccountStore{deleteErr: deleteErr}
@@ -453,7 +453,7 @@ func TestUS15to23and38UpdateFromPlatform(t *testing.T) {
 			t.Errorf("UpdateFromPlatform() err = %v, want the cleanup error %v", err, deleteErr)
 		}
 	})
-	t.Run("US-21_LostRaceUsesWinner", func(t *testing.T) {
+	t.Run("LKV-21_LostRaceUsesWinner", func(t *testing.T) {
 		winner := &LinkedAccount{UserID: "winner-user", Platform: PlatformDiscord, PlatformID: "p1"}
 		as := &usFakeAccountStore{getByIDAccount: &account.Account{UserID: "winner-user"}}
 		als := &usFakeLinkAccountStore{
@@ -479,7 +479,7 @@ func TestUS15to23and38UpdateFromPlatform(t *testing.T) {
 			t.Errorf("expected the link to be looked up twice (initial miss + winner re-fetch), got %d", als.getByPlatformIDCalls)
 		}
 	})
-	t.Run("US-22_LostRaceRefetchFails", func(t *testing.T) {
+	t.Run("LKV-22_LostRaceRefetchFails", func(t *testing.T) {
 		wantErr := testerrors.ErrDBDown
 		as := &usFakeAccountStore{}
 		als := &usFakeLinkAccountStore{
@@ -493,7 +493,7 @@ func TestUS15to23and38UpdateFromPlatform(t *testing.T) {
 			t.Errorf("UpdateFromPlatform() err = %v, want %v", err, wantErr)
 		}
 	})
-	t.Run("US-23_UpdateLinkedAccountFails", func(t *testing.T) {
+	t.Run("LKV-23_UpdateLinkedAccountFails", func(t *testing.T) {
 		wantErr := testerrors.ErrDBDown
 		existing := &LinkedAccount{UserID: "u1", Platform: PlatformDiscord, PlatformID: "p1"}
 		as := &usFakeAccountStore{}
@@ -505,7 +505,7 @@ func TestUS15to23and38UpdateFromPlatform(t *testing.T) {
 			t.Errorf("UpdateFromPlatform() err = %v, want %v", err, wantErr)
 		}
 	})
-	t.Run("US-38_AddLinkAndCleanupFailReturnsTheCleanupError", func(t *testing.T) {
+	t.Run("LKV-38_AddLinkAndCleanupFailReturnsTheCleanupError", func(t *testing.T) {
 		as := &usFakeAccountStore{deleteErr: testerrors.ErrBoom}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, account.ErrNotFound}}, addErr: testerrors.ErrInsertFailed}
 		svc := NewService(als, as)
@@ -518,7 +518,7 @@ func TestUS15to23and38UpdateFromPlatform(t *testing.T) {
 }
 
 func TestUS25UpdateFromPlatformConcurrentRace(t *testing.T) {
-	t.Run("US-25_ConcurrentCallersConvergeOnSameAccount", func(t *testing.T) {
+	t.Run("LKV-25_ConcurrentCallersConvergeOnSameAccount", func(t *testing.T) {
 		const trials = 50
 		const n = 8
 		for trial := 0; trial < trials; trial++ {

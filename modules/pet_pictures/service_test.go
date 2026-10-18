@@ -107,7 +107,7 @@ func svTempFile(t *testing.T, pattern string, content []byte) *os.File {
 }
 
 func TestSV01_NewServiceAndGetStore(t *testing.T) {
-	t.Run("SV-01_GetStoreReturnsInjectedStore", func(t *testing.T) {
+	t.Run("PPV-01_GetStoreReturnsInjectedStore", func(t *testing.T) {
 		mock := &svMockStore{}
 		svc := NewService(mock)
 		if got := svc.GetStore(); got != PetPicStore(mock) {
@@ -117,7 +117,7 @@ func TestSV01_NewServiceAndGetStore(t *testing.T) {
 }
 
 func TestSV03to08_UploadPetPicture(t *testing.T) {
-	t.Run("SV-03_HappyPath", func(t *testing.T) {
+	t.Run("PPV-03_HappyPath", func(t *testing.T) {
 		mockPic := &PetPicture{ID: "sv03-mock-id", FileExt: "jpg", PrimarySubject: 4, OthersSubjects: []int{5}, Aliases: []string{"a"}}
 		t.Cleanup(func() { os.Remove("sv03-mock-id.jpg") })
 
@@ -178,7 +178,7 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-04_StoreErrorPropagates", func(t *testing.T) {
+	t.Run("PPV-04_StoreErrorPropagates", func(t *testing.T) {
 		wantErr := testerrors.ErrDBDown
 		mock := &svMockStore{createPetPictureErr: wantErr}
 		svc := NewService(mock)
@@ -199,7 +199,7 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-05_RenameFailsWhenSourceFileIsGone", func(t *testing.T) {
+	t.Run("PPV-05_RenameFailsWhenSourceFileIsGone", func(t *testing.T) {
 		mock := &svMockStore{createPetPictureResult: &PetPicture{ID: "sv05-mock-id", FileExt: "jpg"}}
 		svc := NewService(mock)
 		file := svTempFile(t, "sv05-upload-*.jpg", []byte("bytes"))
@@ -216,7 +216,7 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-06_TransportErrorPropagates", func(t *testing.T) {
+	t.Run("PPV-06_TransportErrorPropagates", func(t *testing.T) {
 		mockPic := &PetPicture{ID: "sv06-mock-id", FileExt: "jpg"}
 		t.Cleanup(func() { os.Remove("sv06-mock-id.jpg") })
 		mock := &svMockStore{createPetPictureResult: mockPic}
@@ -235,7 +235,7 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-07_MultiDotFilenameUsesLastSegment", func(t *testing.T) {
+	t.Run("PPV-07_MultiDotFilenameUsesLastSegment", func(t *testing.T) {
 		mockPic := &PetPicture{ID: "sv07-mock-id"}
 		t.Cleanup(func() { os.Remove("sv07-mock-id.gz") })
 		mock := &svMockStore{createPetPictureResult: mockPic}
@@ -252,7 +252,7 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-08_NoDotFilenameUsesWholeBasename", func(t *testing.T) {
+	t.Run("PPV-08_NoDotFilenameUsesWholeBasename", func(t *testing.T) {
 		mockPic := &PetPicture{ID: "sv08-mock-id"}
 		mock := &svMockStore{createPetPictureResult: mockPic}
 		svc := NewService(mock)

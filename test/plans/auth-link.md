@@ -107,35 +107,35 @@
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| ST-01 | GetID | Accessor | Returns SteamID64 | `SteamData{SteamID64: "765..."}` | `GetID() == "765..."` | P3 |  |
-| ST-02 | GetUsername | Accessor | Returns PersonaName | `PersonaName: "bob"` | `GetUsername() == "bob"` | P3 |  |
-| ST-03 | GetEmail | Accessor | Always empty (Steam never exposes an email) | Any `SteamData` | `GetEmail() == ""` | P3 |  |
-| ST-04 | GetData | Accessor | Returns a JSON marshal of the struct | Any populated `SteamData` | Returned string unmarshals back to an equivalent `SteamData` | P3 |  |
-| ST-05 | CreateLinkedAccount | Happy Path | Builds a `*link.LinkedAccount` for platform Steam | `SteamData{SteamID64: "765...", PersonaName: "bob"}` | `Platform: PlatformSteam`, `PlatformUsername: "bob"`, `PlatformID: "765..."` | P2 |  |
-| ST-06 | VerifySteamOpenIDCallback | Happy Path | Fully valid OpenID assertion, Steam confirms it | `query` has `openid.mode=id_res`, a matching `claimed_id`, `openid.signed` containing `claimed_id`; `steamOpenIDLoginURL` httptest server responds `is_valid:true` | Returns the parsed SteamID64, err nil | P0 |  |
-| ST-07 | VerifySteamOpenIDCallback | Error Path | `openid.mode` isn't `id_res` | `query.Set("openid.mode","cancel")` | Returns `ErrInvalidAssertion`-wrapped error, no HTTP call made | P1 |  |
-| ST-08 | VerifySteamOpenIDCallback | Error Path | `claimed_id` missing or doesn't match the expected pattern | `openid.claimed_id` unset or garbage | Returns `ErrInvalidAssertion`-wrapped error | P1 |  |
-| ST-09 | VerifySteamOpenIDCallback | Error Path | `openid.signed` doesn't cover `claimed_id` | `openid.signed = "op_endpoint,assoc_handle"` (no `claimed_id`) | Returns `ErrInvalidAssertion`-wrapped error | P0 |  |
-| ST-10 | VerifySteamOpenIDCallback | Error Path | `check_authentication` request fails outright (network error) | `steamOpenIDLoginURL` points at an unreachable address | Returns a plain (non-`ErrInvalidAssertion`) error | P2 |  |
-| ST-11 | VerifySteamOpenIDCallback | Error Path | `check_authentication` returns a non-2xx status | Server responds HTTP 500 | Returns an error wrapping `ErrSteamOpenIDCheck` (not `ErrInvalidAssertion`) | P2 |  |
-| ST-12 | VerifySteamOpenIDCallback | Error Path | Steam rejects the assertion (`is_valid:false`/absent) | Server responds 200 with `is_valid:false` | Returns `ErrInvalidAssertion`-wrapped error | P0 |  |
-| ST-13 | responseIsValid | Happy Path | Body contains an `is_valid:true` line | `[]byte("ns:foo\nis_valid:true\n")` | Returns true | P2 |  |
-| ST-14 | responseIsValid | Edge Case | `is_valid` present but false, or key absent | `"is_valid:false"` and separately `"ns:foo"` alone | Returns false | P2 |  |
-| ST-15 | responseIsValid | Edge Case | Empty body | `[]byte("")` | Returns false | P3 |  |
-| ST-16 | GetSteamUser | Happy Path | API key set, player summary returned and ID matches | `STEAM_API_KEY` non-empty; `steamPlayerSummaryURL` httptest server returns one matching player | Returns populated `*SteamData`, err nil | P1 |  |
-| ST-17 | GetSteamUser | Error Path | `STEAM_API_KEY` unset | `STEAM_API_KEY = ""` | Returns `ErrSteamAPIKeyUnset`; no HTTP call made | P1 |  |
-| ST-18 | GetSteamUser | Error Path | HTTP call fails (network) | Server URL unreachable | Error propagated | P2 |  |
-| ST-19 | GetSteamUser | Error Path | Non-2xx status | Server responds HTTP 500 | Returns an error wrapping `ErrSteamPlayerSummaryLookup` | P2 |  |
-| ST-20 | GetSteamUser | Edge Case | Malformed JSON body | Server responds 200 with invalid JSON | Decode error propagated | P2 |  |
-| ST-21 | GetSteamUser | Error Path | Empty players array | Server responds with `{"response":{"players":[]}}` | Returns `ErrSteamNoPlayers` | P1 |  |
-| ST-22 | GetSteamUser | Error Path | Returned player's SteamID64 doesn't match requested | Server returns a player with a different `steamid` | Returns an error matching `ErrSteamIDMismatch` | P1 |  |
-| ST-23 | ProcessSteamLogin | Happy Path | New Steam identity resolves and a session is created | Mocks: `GetLinkedAccountByPlatformID` → `ErrNotFound`, `AddAccount`/`AddLinkedAccountToDB`/`ss.AddSession` succeed | Returns a session carrying the permissions the account service built, err nil | P1 |  |
-| ST-24 | ProcessSteamLogin | Error Path | Account resolution fails | `resolveOrCreateAccountForPlatformUser` path fails (e.g. `AddAccount` error) | Error propagated, nil session | P2 |  |
-| ST-25 | ProcessSteamLogin | Error Path | `ss.AddSession` fails | Mock `AddSession` returns error | Error propagated | P2 |  |
-| ST-26 | ProcessSteamLink | Happy Path | Valid session, identity not yet linked | Session in request context valid; `AddLinkedAccountToDB` succeeds | Returns the same session, err nil | P1 |  |
-| ST-27 | ProcessSteamLink | Error Path | No session in request context | Plain request, no context value | Returns `ErrSessionNotFound` | P1 |  |
-| ST-28 | ProcessSteamLink | Error Path | Session expired | `session.IsValid()` false | Returns `ErrSessionExpired` | P1 |  |
-| ST-29 | ProcessSteamLink | Error Path | Identity already linked to a different account | `linkPlatformUserToSession` returns `ErrPlatformAlreadyLinkedToDifferentAccount` | Error propagated | P2 |  |
+| LKS-01 | GetID | Accessor | Returns SteamID64 | `SteamData{SteamID64: "765..."}` | `GetID() == "765..."` | P3 |  |
+| LKS-02 | GetUsername | Accessor | Returns PersonaName | `PersonaName: "bob"` | `GetUsername() == "bob"` | P3 |  |
+| LKS-03 | GetEmail | Accessor | Always empty (Steam never exposes an email) | Any `SteamData` | `GetEmail() == ""` | P3 |  |
+| LKS-04 | GetData | Accessor | Returns a JSON marshal of the struct | Any populated `SteamData` | Returned string unmarshals back to an equivalent `SteamData` | P3 |  |
+| LKS-05 | CreateLinkedAccount | Happy Path | Builds a `*link.LinkedAccount` for platform Steam | `SteamData{SteamID64: "765...", PersonaName: "bob"}` | `Platform: PlatformSteam`, `PlatformUsername: "bob"`, `PlatformID: "765..."` | P2 |  |
+| LKS-06 | VerifySteamOpenIDCallback | Happy Path | Fully valid OpenID assertion, Steam confirms it | `query` has `openid.mode=id_res`, a matching `claimed_id`, `openid.signed` containing `claimed_id`; `steamOpenIDLoginURL` httptest server responds `is_valid:true` | Returns the parsed SteamID64, err nil | P0 |  |
+| LKS-07 | VerifySteamOpenIDCallback | Error Path | `openid.mode` isn't `id_res` | `query.Set("openid.mode","cancel")` | Returns `ErrInvalidAssertion`-wrapped error, no HTTP call made | P1 |  |
+| LKS-08 | VerifySteamOpenIDCallback | Error Path | `claimed_id` missing or doesn't match the expected pattern | `openid.claimed_id` unset or garbage | Returns `ErrInvalidAssertion`-wrapped error | P1 |  |
+| LKS-09 | VerifySteamOpenIDCallback | Error Path | `openid.signed` doesn't cover `claimed_id` | `openid.signed = "op_endpoint,assoc_handle"` (no `claimed_id`) | Returns `ErrInvalidAssertion`-wrapped error | P0 |  |
+| LKS-10 | VerifySteamOpenIDCallback | Error Path | `check_authentication` request fails outright (network error) | `steamOpenIDLoginURL` points at an unreachable address | Returns a plain (non-`ErrInvalidAssertion`) error | P2 |  |
+| LKS-11 | VerifySteamOpenIDCallback | Error Path | `check_authentication` returns a non-2xx status | Server responds HTTP 500 | Returns an error wrapping `ErrSteamOpenIDCheck` (not `ErrInvalidAssertion`) | P2 |  |
+| LKS-12 | VerifySteamOpenIDCallback | Error Path | Steam rejects the assertion (`is_valid:false`/absent) | Server responds 200 with `is_valid:false` | Returns `ErrInvalidAssertion`-wrapped error | P0 |  |
+| LKS-13 | responseIsValid | Happy Path | Body contains an `is_valid:true` line | `[]byte("ns:foo\nis_valid:true\n")` | Returns true | P2 |  |
+| LKS-14 | responseIsValid | Edge Case | `is_valid` present but false, or key absent | `"is_valid:false"` and separately `"ns:foo"` alone | Returns false | P2 |  |
+| LKS-15 | responseIsValid | Edge Case | Empty body | `[]byte("")` | Returns false | P3 |  |
+| LKS-16 | GetSteamUser | Happy Path | API key set, player summary returned and ID matches | `STEAM_API_KEY` non-empty; `steamPlayerSummaryURL` httptest server returns one matching player | Returns populated `*SteamData`, err nil | P1 |  |
+| LKS-17 | GetSteamUser | Error Path | `STEAM_API_KEY` unset | `STEAM_API_KEY = ""` | Returns `ErrSteamAPIKeyUnset`; no HTTP call made | P1 |  |
+| LKS-18 | GetSteamUser | Error Path | HTTP call fails (network) | Server URL unreachable | Error propagated | P2 |  |
+| LKS-19 | GetSteamUser | Error Path | Non-2xx status | Server responds HTTP 500 | Returns an error wrapping `ErrSteamPlayerSummaryLookup` | P2 |  |
+| LKS-20 | GetSteamUser | Edge Case | Malformed JSON body | Server responds 200 with invalid JSON | Decode error propagated | P2 |  |
+| LKS-21 | GetSteamUser | Error Path | Empty players array | Server responds with `{"response":{"players":[]}}` | Returns `ErrSteamNoPlayers` | P1 |  |
+| LKS-22 | GetSteamUser | Error Path | Returned player's SteamID64 doesn't match requested | Server returns a player with a different `steamid` | Returns an error matching `ErrSteamIDMismatch` | P1 |  |
+| LKS-23 | ProcessSteamLogin | Happy Path | New Steam identity resolves and a session is created | Mocks: `GetLinkedAccountByPlatformID` → `ErrNotFound`, `AddAccount`/`AddLinkedAccountToDB`/`ss.AddSession` succeed | Returns a session carrying the permissions the account service built, err nil | P1 |  |
+| LKS-24 | ProcessSteamLogin | Error Path | Account resolution fails | `resolveOrCreateAccountForPlatformUser` path fails (e.g. `AddAccount` error) | Error propagated, nil session | P2 |  |
+| LKS-25 | ProcessSteamLogin | Error Path | `ss.AddSession` fails | Mock `AddSession` returns error | Error propagated | P2 |  |
+| LKS-26 | ProcessSteamLink | Happy Path | Valid session, identity not yet linked | Session in request context valid; `AddLinkedAccountToDB` succeeds | Returns the same session, err nil | P1 |  |
+| LKS-27 | ProcessSteamLink | Error Path | No session in request context | Plain request, no context value | Returns `ErrSessionNotFound` | P1 |  |
+| LKS-28 | ProcessSteamLink | Error Path | Session expired | `session.IsValid()` false | Returns `ErrSessionExpired` | P1 |  |
+| LKS-29 | ProcessSteamLink | Error Path | Identity already linked to a different account | `linkPlatformUserToSession` returns `ErrPlatformAlreadyLinkedToDifferentAccount` | Error propagated | P2 |  |
 
 ## microsoft.go
 
@@ -240,10 +240,10 @@
 | LS-75 | AddLinkedAccountToDB | Error Path | Second insert reuses an existing `(platform, platformID)` pair under a different `userID` | Real Postgres unique-violation on `linked_accounts_platform_unique` | Returns `ErrAlreadyLinked` | P0 |  |
 | LS-77 | GetLinkedAccountByPlatformName | Error Path | No linked account with that platform and username | Real Postgres | Returns nil, `ErrNotFound` | P2 | |
 | LS-78 | GetLinkedAccountByPlatformName | Edge Case | Two linked accounts share the platform and username | Real Postgres, two users linked on the same platform with the same username | Returns nil, `ErrDuplicateLinkedAccount` | P2 | |
-| ST-69 | SetPasswordAuthEnabled | Happy Path | `enabled=true`, account has `hashed_secret` | | Returns nil; settings read back `PasswordAuthEnabled=true` | P1 |  |
-| ST-71 | SetPasswordAuthEnabled | Happy Path | `enabled=false`, account has a password and one verified+enabled link | Guard allows | Returns nil; settings read back `PasswordAuthEnabled=false` | P1 |  |
-| ST-72 | SetPasswordAuthEnabled | Concurrency Invariant | `SetPasswordAuthEnabled(false)` races `DeleteLinkedAccount` (sole link) on the same account | Same lock, many trials | Exactly one succeeds every trial; account never ends up with neither a password nor a link (`ErrWouldLockAccount`) | P0 |  |
-| ST-73 | SetPasswordAuthEnabled | Concurrency Invariant | `SetPasswordAuthEnabled(false)` races `SetLinkedAccountLoginEnabled` (sole link, false) on the same account | Same lock, many trials | Exactly one succeeds every trial; account never ends up with neither (`ErrWouldLockAccount`) | P0 |  |
+| LKS-69 | SetPasswordAuthEnabled | Happy Path | `enabled=true`, account has `hashed_secret` | | Returns nil; settings read back `PasswordAuthEnabled=true` | P1 |  |
+| LKS-71 | SetPasswordAuthEnabled | Happy Path | `enabled=false`, account has a password and one verified+enabled link | Guard allows | Returns nil; settings read back `PasswordAuthEnabled=false` | P1 |  |
+| LKS-72 | SetPasswordAuthEnabled | Concurrency Invariant | `SetPasswordAuthEnabled(false)` races `DeleteLinkedAccount` (sole link) on the same account | Same lock, many trials | Exactly one succeeds every trial; account never ends up with neither a password nor a link (`ErrWouldLockAccount`) | P0 |  |
+| LKS-73 | SetPasswordAuthEnabled | Concurrency Invariant | `SetPasswordAuthEnabled(false)` races `SetLinkedAccountLoginEnabled` (sole link, false) on the same account | Same lock, many trials | Exactly one succeeds every trial; account never ends up with neither (`ErrWouldLockAccount`) | P0 |  |
 
 ## oauth_token_store.go
 
@@ -259,29 +259,29 @@
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| TY-26 | NewLinkedAccount | Happy Path | userID, platform, username, platformID, data given | | Returns `*LinkedAccount` with all fields copied, `Verified == true`, `LoginEnabled == true` | P2 |  |
+| LKT-26 | NewLinkedAccount | Happy Path | userID, platform, username, platformID, data given | | Returns `*LinkedAccount` with all fields copied, `Verified == true`, `LoginEnabled == true` | P2 |  |
 
 ## service.go
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| US-28 | GetUserLinkedAccounts | Happy Path | `als.GetLinkedAccountsByUserID` succeeds | | Returns the slice, nil | P1 |  |
-| US-29 | GetUserLinkedAccounts | Error Path | `als.GetLinkedAccountsByUserID` fails | | Error propagated unchanged | P2 |  |
-| US-30 | UnlinkPlatform | Happy Path | `als.DeleteLinkedAccount` succeeds | | Returns nil | P1 |  |
-| US-31 | UnlinkPlatform | Error Path | `als.DeleteLinkedAccount` fails (e.g. `ErrWouldLockAccount`) | | Error propagated unchanged | P2 |  |
-| US-32 | SetPlatformLoginEnabled | Happy Path | `als.SetLinkedAccountLoginEnabled` succeeds | | Returns nil | P1 |  |
-| US-33 | SetPlatformLoginEnabled | Error Path | `als.SetLinkedAccountLoginEnabled` fails | | Error propagated unchanged | P2 |  |
-| US-15 | UpdateFromPlatform | Happy Path | Brand-new platform identity | `als.GetLinkedAccountByPlatformID` → `ErrNotFound`; `AddAccountToDB`/`AddLinkedAccountToDB`/`UpdateLinkedAccount` all succeed | Returns the placeholder account's user ID, nil; `AddAccountToDB` and `AddLinkedAccountToDB` each called once | P1 |  |
-| US-16 | UpdateFromPlatform | Happy Path | Existing platform identity | `als.GetLinkedAccountByPlatformID` succeeds immediately | Account creation skipped entirely (`AddAccountToDB` never called); `la.Data` updated via `UpdateLinkedAccount`; returns the existing link's user ID | P1 |  |
-| US-17 | UpdateFromPlatform | Error Path | Initial lookup fails with a non-`ErrNotFound` error | | Error propagated immediately; nothing else called | P2 |  |
-| US-18 | UpdateFromPlatform | Error Path | `as.AddAccountToDB` fails (new-identity path) | | Error propagated; `als.AddLinkedAccountToDB` never called | P2 |  |
-| US-19 | UpdateFromPlatform | Error Path | `als.AddLinkedAccountToDB` fails with a generic (non-`ErrAlreadyLinked`) error; cleanup succeeds | `as.DeleteAccountFromDB` succeeds | Returns the original error; `DeleteAccountFromDB` called once with the placeholder's `UserID` | P0 |  |
-| US-20 | UpdateFromPlatform | Error Path | Same as US-19, but cleanup (`DeleteAccountFromDB`) also fails | | Returns the cleanup error; the link failure is logged | P1 |  |
-| US-21 | UpdateFromPlatform | Edge Case | `als.AddLinkedAccountToDB` fails with `ErrAlreadyLinked` ("lost the race"); cleanup and winner re-fetch succeed | | Proceeds using the winner's linked account (not the caller's placeholder); returns the winner's user ID, nil error | P0 |  |
-| US-22 | UpdateFromPlatform | Error Path | Lost the race, cleanup succeeds, but the re-fetch (`GetLinkedAccountByPlatformID`) fails | | Error propagated | P2 |  |
-| US-23 | UpdateFromPlatform | Error Path | `als.UpdateLinkedAccount` fails | | Error propagated | P2 |  |
-| US-25 | UpdateFromPlatform | Concurrency Invariant | Two concurrent callers race to resolve/create an account for the same, brand-new platform identity | Two goroutines call `UpdateUserFromPlatform` simultaneously against a shared, mutex-serialized fake store enforcing the real `(platform, platformID)` uniqueness constraint (the losing `AddLinkedAccountToDB` call gets `ErrAlreadyLinked`) | Both goroutines return without error and resolve to the same user ID; exactly one account row exists afterward (the loser's placeholder was cleaned up) | P0 | design: 50 trials x 8 concurrent callers; a barrier holds each goroutine's first lookup until all 8 arrive, since an untimed trial isn't guaranteed to hit the "lost the race" branch |
-| US-38 | UpdateFromPlatform | Error Path | Same as US-20, asserting the cleanup error | `AddLinkedAccountToDB` fails with `testerrors.ErrInsertFailed`; `DeleteAccountFromDB` fails with `testerrors.ErrBoom` | Returns an error matching `testerrors.ErrBoom` (the cleanup failure) | P2 | |
+| LKV-28 | GetUserLinkedAccounts | Happy Path | `als.GetLinkedAccountsByUserID` succeeds | | Returns the slice, nil | P1 |  |
+| LKV-29 | GetUserLinkedAccounts | Error Path | `als.GetLinkedAccountsByUserID` fails | | Error propagated unchanged | P2 |  |
+| LKV-30 | UnlinkPlatform | Happy Path | `als.DeleteLinkedAccount` succeeds | | Returns nil | P1 |  |
+| LKV-31 | UnlinkPlatform | Error Path | `als.DeleteLinkedAccount` fails (e.g. `ErrWouldLockAccount`) | | Error propagated unchanged | P2 |  |
+| LKV-32 | SetPlatformLoginEnabled | Happy Path | `als.SetLinkedAccountLoginEnabled` succeeds | | Returns nil | P1 |  |
+| LKV-33 | SetPlatformLoginEnabled | Error Path | `als.SetLinkedAccountLoginEnabled` fails | | Error propagated unchanged | P2 |  |
+| LKV-15 | UpdateFromPlatform | Happy Path | Brand-new platform identity | `als.GetLinkedAccountByPlatformID` → `ErrNotFound`; `AddAccountToDB`/`AddLinkedAccountToDB`/`UpdateLinkedAccount` all succeed | Returns the placeholder account's user ID, nil; `AddAccountToDB` and `AddLinkedAccountToDB` each called once | P1 |  |
+| LKV-16 | UpdateFromPlatform | Happy Path | Existing platform identity | `als.GetLinkedAccountByPlatformID` succeeds immediately | Account creation skipped entirely (`AddAccountToDB` never called); `la.Data` updated via `UpdateLinkedAccount`; returns the existing link's user ID | P1 |  |
+| LKV-17 | UpdateFromPlatform | Error Path | Initial lookup fails with a non-`ErrNotFound` error | | Error propagated immediately; nothing else called | P2 |  |
+| LKV-18 | UpdateFromPlatform | Error Path | `as.AddAccountToDB` fails (new-identity path) | | Error propagated; `als.AddLinkedAccountToDB` never called | P2 |  |
+| LKV-19 | UpdateFromPlatform | Error Path | `als.AddLinkedAccountToDB` fails with a generic (non-`ErrAlreadyLinked`) error; cleanup succeeds | `as.DeleteAccountFromDB` succeeds | Returns the original error; `DeleteAccountFromDB` called once with the placeholder's `UserID` | P0 |  |
+| LKV-20 | UpdateFromPlatform | Error Path | Same as LKV-19, but cleanup (`DeleteAccountFromDB`) also fails | | Returns the cleanup error; the link failure is logged | P1 |  |
+| LKV-21 | UpdateFromPlatform | Edge Case | `als.AddLinkedAccountToDB` fails with `ErrAlreadyLinked` ("lost the race"); cleanup and winner re-fetch succeed | | Proceeds using the winner's linked account (not the caller's placeholder); returns the winner's user ID, nil error | P0 |  |
+| LKV-22 | UpdateFromPlatform | Error Path | Lost the race, cleanup succeeds, but the re-fetch (`GetLinkedAccountByPlatformID`) fails | | Error propagated | P2 |  |
+| LKV-23 | UpdateFromPlatform | Error Path | `als.UpdateLinkedAccount` fails | | Error propagated | P2 |  |
+| LKV-25 | UpdateFromPlatform | Concurrency Invariant | Two concurrent callers race to resolve/create an account for the same, brand-new platform identity | Two goroutines call `UpdateUserFromPlatform` simultaneously against a shared, mutex-serialized fake store enforcing the real `(platform, platformID)` uniqueness constraint (the losing `AddLinkedAccountToDB` call gets `ErrAlreadyLinked`) | Both goroutines return without error and resolve to the same user ID; exactly one account row exists afterward (the loser's placeholder was cleaned up) | P0 | design: 50 trials x 8 concurrent callers; a barrier holds each goroutine's first lookup until all 8 arrive, since an untimed trial isn't guaranteed to hit the "lost the race" branch |
+| LKV-38 | UpdateFromPlatform | Error Path | Same as LKV-20, asserting the cleanup error | `AddLinkedAccountToDB` fails with `testerrors.ErrInsertFailed`; `DeleteAccountFromDB` fails with `testerrors.ErrBoom` | Returns an error matching `testerrors.ErrBoom` (the cleanup failure) | P2 | |
 
 ## handler.go
 
@@ -341,20 +341,20 @@
 | AU-46 | isAllowedRedirect | Edge Case | redirectURI has a different scheme, same host | e.g. http vs https | Returns false | P3 |  |
 | AU-47 | isAllowedRedirect | Edge Case | redirectURI fails url.Parse | redirectURI contains an invalid percent-escape | Returns false | P3 |  |
 | AU-48 | isAllowedRedirect | Edge Case | auth.NN_SITE_URL itself fails url.Parse | auth.NN_SITE_URL temporarily overridden with an unparseable value, restored after the subtest | Returns false | P3 |  |
-| UR-28 | GetUserLinkedAccountsHandler | Happy Path | Self-lookup | session.UserID == path user_id | 200 OK with the linked-accounts list | P1 |  |
-| UR-29 | GetUserLinkedAccountsHandler | Happy Path | Admin looks up another user's linked accounts | session.UserID != path user_id, session has ScopeAdminUsers | 200 OK with the linked-accounts list | P2 |  |
-| UR-30 | GetUserLinkedAccountsHandler | Error Path | No permission | session.UserID != path user_id, no ScopeAdminUsers | 403 Forbidden `msgNoPermissionToViewLinkedAccounts` | P2 |  |
-| UR-31 | GetUserLinkedAccountsHandler | Error Path | Service.GetUserLinkedAccounts errors | Permission check passes, service returns an error | 500 Internal Server Error `msgFailedToGetLinkedAccounts` | P2 |  |
-| UR-32 | UnlinkPlatformHandler | Happy Path | Self unlinks a platform | session.UserID == path user_id, service.UnlinkPlatform succeeds | 204 No Content | P1 |  |
-| UR-33 | UnlinkPlatformHandler | Error Path | No permission | session.UserID != path user_id, no ScopeAdminUsers | 403 Forbidden `msgNoPermissionToUnlinkPlatforms` | P2 |  |
-| UR-34 | UnlinkPlatformHandler | Error Path | Platform not linked | service.UnlinkPlatform returns account.ErrNotFound | 404 Not Found `msgPlatformNotLinked` | P2 |  |
-| UR-35 | UnlinkPlatformHandler | Error Path | Would lock the account | service.UnlinkPlatform returns account.ErrWouldLockAccount | 400 Bad Request `msgSetPasswordOrLinkBeforeUnlinking` | P2 |  |
-| UR-36 | UnlinkPlatformHandler | Error Path | Unclassified service error | service.UnlinkPlatform returns some other error | 500 Internal Server Error `msgFailedToUnlinkPlatform` | P2 |  |
-| UR-37 | SetPlatformLoginEnabledHandler | Happy Path | Self toggles login-enabled | session.UserID == path user_id, body {"login_enabled":true}, service succeeds | 204 No Content | P1 |  |
-| UR-38 | SetPlatformLoginEnabledHandler | Error Path | No permission | session.UserID != path user_id, no ScopeAdminUsers | 403 Forbidden `msgNoPermissionToUpdatePlatforms` | P2 |  |
-| UR-39 | SetPlatformLoginEnabledHandler | Error Path | Malformed body | Permission check passes, body is not valid JSON | 400 Bad Request `msgInvalidRequestBody` | P2 |  |
-| UR-40 | SetPlatformLoginEnabledHandler | Edge Case | login_enabled field omitted | Body decodes with no error but LoginEnabled == nil | 400 Bad Request `msgInvalidRequestBody` | P2 |  |
-| UR-41 | SetPlatformLoginEnabledHandler | Error Path | Platform not linked | service.SetPlatformLoginEnabled returns account.ErrNotFound | 404 Not Found `msgPlatformNotLinked` | P2 |  |
-| UR-42 | SetPlatformLoginEnabledHandler | Error Path | Would lock the account | service.SetPlatformLoginEnabled returns account.ErrWouldLockAccount | 400 Bad Request `msgSetPasswordOrLinkBeforeDisabling` | P2 |  |
-| UR-43 | SetPlatformLoginEnabledHandler | Error Path | Linked account unverified | service.SetPlatformLoginEnabled returns auth.ErrLinkedAccountUnverified | 400 Bad Request `msgLinkedAccountUnverified` | P2 |  |
-| UR-44 | SetPlatformLoginEnabledHandler | Error Path | Unclassified service error | service.SetPlatformLoginEnabled returns some other error | 500 Internal Server Error `msgFailedToUpdatePlatform` | P2 |  |
+| LKU-28 | GetUserLinkedAccountsHandler | Happy Path | Self-lookup | session.UserID == path user_id | 200 OK with the linked-accounts list | P1 |  |
+| LKU-29 | GetUserLinkedAccountsHandler | Happy Path | Admin looks up another user's linked accounts | session.UserID != path user_id, session has ScopeAdminUsers | 200 OK with the linked-accounts list | P2 |  |
+| LKU-30 | GetUserLinkedAccountsHandler | Error Path | No permission | session.UserID != path user_id, no ScopeAdminUsers | 403 Forbidden `msgNoPermissionToViewLinkedAccounts` | P2 |  |
+| LKU-31 | GetUserLinkedAccountsHandler | Error Path | Service.GetUserLinkedAccounts errors | Permission check passes, service returns an error | 500 Internal Server Error `msgFailedToGetLinkedAccounts` | P2 |  |
+| LKU-32 | UnlinkPlatformHandler | Happy Path | Self unlinks a platform | session.UserID == path user_id, service.UnlinkPlatform succeeds | 204 No Content | P1 |  |
+| LKU-33 | UnlinkPlatformHandler | Error Path | No permission | session.UserID != path user_id, no ScopeAdminUsers | 403 Forbidden `msgNoPermissionToUnlinkPlatforms` | P2 |  |
+| LKU-34 | UnlinkPlatformHandler | Error Path | Platform not linked | service.UnlinkPlatform returns account.ErrNotFound | 404 Not Found `msgPlatformNotLinked` | P2 |  |
+| LKU-35 | UnlinkPlatformHandler | Error Path | Would lock the account | service.UnlinkPlatform returns account.ErrWouldLockAccount | 400 Bad Request `msgSetPasswordOrLinkBeforeUnlinking` | P2 |  |
+| LKU-36 | UnlinkPlatformHandler | Error Path | Unclassified service error | service.UnlinkPlatform returns some other error | 500 Internal Server Error `msgFailedToUnlinkPlatform` | P2 |  |
+| LKU-37 | SetPlatformLoginEnabledHandler | Happy Path | Self toggles login-enabled | session.UserID == path user_id, body {"login_enabled":true}, service succeeds | 204 No Content | P1 |  |
+| LKU-38 | SetPlatformLoginEnabledHandler | Error Path | No permission | session.UserID != path user_id, no ScopeAdminUsers | 403 Forbidden `msgNoPermissionToUpdatePlatforms` | P2 |  |
+| LKU-39 | SetPlatformLoginEnabledHandler | Error Path | Malformed body | Permission check passes, body is not valid JSON | 400 Bad Request `msgInvalidRequestBody` | P2 |  |
+| LKU-40 | SetPlatformLoginEnabledHandler | Edge Case | login_enabled field omitted | Body decodes with no error but LoginEnabled == nil | 400 Bad Request `msgInvalidRequestBody` | P2 |  |
+| LKU-41 | SetPlatformLoginEnabledHandler | Error Path | Platform not linked | service.SetPlatformLoginEnabled returns account.ErrNotFound | 404 Not Found `msgPlatformNotLinked` | P2 |  |
+| LKU-42 | SetPlatformLoginEnabledHandler | Error Path | Would lock the account | service.SetPlatformLoginEnabled returns account.ErrWouldLockAccount | 400 Bad Request `msgSetPasswordOrLinkBeforeDisabling` | P2 |  |
+| LKU-43 | SetPlatformLoginEnabledHandler | Error Path | Linked account unverified | service.SetPlatformLoginEnabled returns auth.ErrLinkedAccountUnverified | 400 Bad Request `msgLinkedAccountUnverified` | P2 |  |
+| LKU-44 | SetPlatformLoginEnabledHandler | Error Path | Unclassified service error | service.SetPlatformLoginEnabled returns some other error | 500 Internal Server Error `msgFailedToUpdatePlatform` | P2 |  |

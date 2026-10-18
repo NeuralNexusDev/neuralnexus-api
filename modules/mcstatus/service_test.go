@@ -82,7 +82,7 @@ func svLiveBedrockServer(t *testing.T) (string, int) {
 }
 
 func TestNewService(t *testing.T) {
-	t.Run("SV-01_ReturnsNonNilService", func(t *testing.T) {
+	t.Run("CSV-01_ReturnsNonNilService", func(t *testing.T) {
 		s := NewService()
 		if s == nil {
 			t.Fatal("expected a non-nil MCStatusService")
@@ -94,7 +94,7 @@ func TestNewService(t *testing.T) {
 }
 
 func TestService_GetJavaServerStatus(t *testing.T) {
-	t.Run("SV-02_UnreachableHostReturnsError", func(t *testing.T) {
+	t.Run("CSV-02_UnreachableHostReturnsError", func(t *testing.T) {
 		port := svUnusedPort(t)
 		s := NewService()
 
@@ -108,7 +108,7 @@ func TestService_GetJavaServerStatus(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-03_UnreachableHostWithQueryEnabledStillErrors", func(t *testing.T) {
+	t.Run("CSV-03_UnreachableHostWithQueryEnabledStillErrors", func(t *testing.T) {
 		port := svUnusedPort(t)
 		s := NewService()
 
@@ -122,7 +122,7 @@ func TestService_GetJavaServerStatus(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-09_LiveServerReturnsStatus", func(t *testing.T) {
+	t.Run("CSV-09_LiveServerReturnsStatus", func(t *testing.T) {
 		host, port := svLiveJavaServer(t)
 		s := NewService()
 
@@ -144,7 +144,7 @@ func TestService_GetJavaServerStatus(t *testing.T) {
 }
 
 func TestService_GetBedrockServerStatus(t *testing.T) {
-	t.Run("SV-05_UnreachableHostReturnsError", func(t *testing.T) {
+	t.Run("CSV-05_UnreachableHostReturnsError", func(t *testing.T) {
 		port := svUnusedPort(t)
 		s := NewService()
 
@@ -158,7 +158,7 @@ func TestService_GetBedrockServerStatus(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-10_LiveServerReturnsStatus", func(t *testing.T) {
+	t.Run("CSV-10_LiveServerReturnsStatus", func(t *testing.T) {
 		host, port := svLiveBedrockServer(t)
 		s := NewService()
 
@@ -174,7 +174,7 @@ func TestService_GetBedrockServerStatus(t *testing.T) {
 }
 
 func TestService_GetServerStatus(t *testing.T) {
-	t.Run("SV-07_JavaDispatch", func(t *testing.T) {
+	t.Run("CSV-07_JavaDispatch", func(t *testing.T) {
 		port := svUnusedPort(t)
 		s := NewService()
 
@@ -185,7 +185,7 @@ func TestService_GetServerStatus(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-08_BedrockDispatch", func(t *testing.T) {
+	t.Run("CSV-08_BedrockDispatch", func(t *testing.T) {
 		port := svUnusedPort(t)
 		s := NewService()
 
@@ -253,7 +253,7 @@ func svRequireNoPacket(t *testing.T, r *svUDPRecorder) {
 }
 
 func TestService_GetJavaServerStatusQueryPort(t *testing.T) {
-	t.Run("SV-11_QueryGoesToQueryPort", func(t *testing.T) {
+	t.Run("CSV-11_QueryGoesToQueryPort", func(t *testing.T) {
 		serverPort := svNewUDPRecorder(t, 0)
 		queryPort := svNewUDPRecorder(t, 0)
 		s := NewService()
@@ -267,7 +267,7 @@ func TestService_GetJavaServerStatusQueryPort(t *testing.T) {
 		svRequireNoPacket(t, serverPort)
 	})
 
-	t.Run("SV-12_QueryGoesToServerPortWhenQueryPortEqualsIt", func(t *testing.T) {
+	t.Run("CSV-12_QueryGoesToServerPortWhenQueryPortEqualsIt", func(t *testing.T) {
 		serverPort := svNewUDPRecorder(t, 0)
 		s := NewService()
 
@@ -279,7 +279,7 @@ func TestService_GetJavaServerStatusQueryPort(t *testing.T) {
 		svRequireHandshake(t, serverPort)
 	})
 
-	t.Run("SV-13_NoQueryWhenQueryDisabled", func(t *testing.T) {
+	t.Run("CSV-13_NoQueryWhenQueryDisabled", func(t *testing.T) {
 		serverPort := svNewUDPRecorder(t, 0)
 		queryPort := svNewUDPRecorder(t, 0)
 		s := NewService()
@@ -452,7 +452,7 @@ func svFaviconDataURI(t *testing.T) string {
 }
 
 func TestService_GetJavaServerStatusProbeOrder(t *testing.T) {
-	t.Run("SV-14_FirstSuccessfulPingWins", func(t *testing.T) {
+	t.Run("CSV-14_FirstSuccessfulPingWins", func(t *testing.T) {
 		srv, port := svNewJavaServer(t, svJavaAnswers{modern: true, v16: true, v14: true, beta: true})
 
 		status, err := NewService().GetJavaServerStatus("127.0.0.1", port, false, 0)
@@ -471,7 +471,7 @@ func TestService_GetJavaServerStatusProbeOrder(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-15_LegacyPingUsedWhenModernFails", func(t *testing.T) {
+	t.Run("CSV-15_LegacyPingUsedWhenModernFails", func(t *testing.T) {
 		srv, port := svNewJavaServer(t, svJavaAnswers{v16: true, v14: true, beta: true})
 
 		status, err := NewService().GetJavaServerStatus("127.0.0.1", port, false, 0)
@@ -487,7 +487,7 @@ func TestService_GetJavaServerStatusProbeOrder(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-18_Ping14UsedWhenSixteenFails", func(t *testing.T) {
+	t.Run("CSV-18_Ping14UsedWhenSixteenFails", func(t *testing.T) {
 		srv, port := svNewJavaServer(t, svJavaAnswers{v14: true, beta: true})
 
 		status, err := NewService().GetJavaServerStatus("127.0.0.1", port, false, 0)
@@ -503,7 +503,7 @@ func TestService_GetJavaServerStatusProbeOrder(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-19_BetaPingUsedWhenOnlyBetaAnswers", func(t *testing.T) {
+	t.Run("CSV-19_BetaPingUsedWhenOnlyBetaAnswers", func(t *testing.T) {
 		srv, port := svNewJavaServer(t, svJavaAnswers{beta: true})
 
 		status, err := NewService().GetJavaServerStatus("127.0.0.1", port, false, 0)
@@ -521,7 +521,7 @@ func TestService_GetJavaServerStatusProbeOrder(t *testing.T) {
 }
 
 func TestService_GetJavaServerStatusQueryMerge(t *testing.T) {
-	t.Run("SV-20_QueryStatusKeepsPingIconAndFavicon", func(t *testing.T) {
+	t.Run("CSV-20_QueryStatusKeepsPingIconAndFavicon", func(t *testing.T) {
 		_, port := svNewJavaServer(t, svJavaAnswers{modern: true, favicon: svFaviconDataURI(t)})
 		queryPort := svNewQueryServer(t, 0)
 
@@ -540,7 +540,7 @@ func TestService_GetJavaServerStatusQueryMerge(t *testing.T) {
 }
 
 func TestService_GetJavaServerStatusQueryConcurrency(t *testing.T) {
-	t.Run("SV-21_DeadPingAndDeadQueryReturnsError", func(t *testing.T) {
+	t.Run("CSV-21_DeadPingAndDeadQueryReturnsError", func(t *testing.T) {
 		port := svUnusedPort(t)
 		queryPort := svUnusedUDPPort(t)
 
@@ -556,7 +556,7 @@ func TestService_GetJavaServerStatusQueryConcurrency(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-22_QueryRunsWhilePingChainRuns", func(t *testing.T) {
+	t.Run("CSV-22_QueryRunsWhilePingChainRuns", func(t *testing.T) {
 		delay := time.Second
 		_, port := svNewJavaServer(t, svJavaAnswers{modern: true, delay: delay})
 		queryPort := svNewQueryServer(t, delay)
@@ -576,7 +576,7 @@ func TestService_GetJavaServerStatusQueryConcurrency(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-23_QueryAnswersWhenEveryPingFails", func(t *testing.T) {
+	t.Run("CSV-23_QueryAnswersWhenEveryPingFails", func(t *testing.T) {
 		port := svUnusedPort(t)
 		queryPort := svNewQueryServer(t, 0)
 
@@ -593,7 +593,7 @@ func TestService_GetJavaServerStatusQueryConcurrency(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-24_PingStatusWaitsForSlowQuery", func(t *testing.T) {
+	t.Run("CSV-24_PingStatusWaitsForSlowQuery", func(t *testing.T) {
 		_, port := svNewJavaServer(t, svJavaAnswers{modern: true})
 		queryPort := svNewQueryServer(t, 500*time.Millisecond)
 
@@ -607,7 +607,7 @@ func TestService_GetJavaServerStatusQueryConcurrency(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-25_QueryOnlyStatusWaitsForSlowQuery", func(t *testing.T) {
+	t.Run("CSV-25_QueryOnlyStatusWaitsForSlowQuery", func(t *testing.T) {
 		port := svUnusedPort(t)
 		queryPort := svNewQueryServer(t, 500*time.Millisecond)
 
@@ -623,7 +623,7 @@ func TestService_GetJavaServerStatusQueryConcurrency(t *testing.T) {
 }
 
 func TestMergeQueryStatus(t *testing.T) {
-	t.Run("SV-16_QueryStatusKeepsPingIconFaviconAndLegacy", func(t *testing.T) {
+	t.Run("CSV-16_QueryStatusKeepsPingIconFaviconAndLegacy", func(t *testing.T) {
 		icon := image.NewRGBA(image.Rect(0, 0, 1, 1))
 		ping := NewServerStatus("", 0, "", "", "", 0, 0, nil, "", "ping-favicon", ServerTypeJava, nil, icon)
 		ping.Legacy = true
@@ -644,13 +644,13 @@ func TestMergeQueryStatus(t *testing.T) {
 }
 
 func TestBedrockAddress(t *testing.T) {
-	t.Run("SV-26_Ipv6HostIsBracketed", func(t *testing.T) {
+	t.Run("CSV-26_Ipv6HostIsBracketed", func(t *testing.T) {
 		if got := bedrockAddress("2001:db8::1", 19132); got != "[2001:db8::1]:19132" {
 			t.Fatalf("address = %q, want the IPv6 host in brackets", got)
 		}
 	})
 
-	t.Run("SV-27_HostnameJoinedWithPort", func(t *testing.T) {
+	t.Run("CSV-27_HostnameJoinedWithPort", func(t *testing.T) {
 		if got := bedrockAddress("example.com", 19132); got != "example.com:19132" {
 			t.Fatalf("address = %q, want host:port", got)
 		}
@@ -685,7 +685,7 @@ func svNewBedrockServer(t *testing.T) int {
 }
 
 func TestService_GetBedrockServerStatusHostAndPort(t *testing.T) {
-	t.Run("SV-28_StatusCarriesHostAndPort", func(t *testing.T) {
+	t.Run("CSV-28_StatusCarriesHostAndPort", func(t *testing.T) {
 		port := svNewBedrockServer(t)
 
 		status, err := NewService().GetBedrockServerStatus("127.0.0.1", port)
