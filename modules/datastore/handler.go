@@ -1,7 +1,6 @@
 package datastore
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
@@ -33,14 +32,14 @@ func CreateDataStoreHandler(s DSService) http.HandlerFunc {
 
 		id, err := database.GenSnowflake()
 		if err != nil {
-			log.Println("Failed to generate snowflake:\n\t", err)
+			reqctx.Log(r.Context(), "Failed to generate snowflake:\n\t", err.Error())
 			responses.InternalServerError(w, r, msgFailedToCreateDatastore)
 			return
 		}
 		ds := NewDataStore(id, session.UserID)
-		ds, err = s.Create(ds)
+		ds, err = s.Create(r.Context(), ds)
 		if err != nil {
-			log.Println("Failed to create data store:\n\t", err)
+			reqctx.Log(r.Context(), "Failed to create data store:\n\t", err.Error())
 			responses.InternalServerError(w, r, msgFailedToCreateDatastore)
 			return
 		}
@@ -54,13 +53,13 @@ func ReadDataStoreHandler(s DSService) http.HandlerFunc {
 		var ds *Store
 		err := responses.DecodeStruct(r, &ds)
 		if err != nil {
-			log.Println(logBadBody, err)
+			reqctx.Log(r.Context(), logBadBody, err.Error())
 			responses.BadRequest(w, r, "")
 			return
 		}
-		ds, err = s.Read(ds)
+		ds, err = s.Read(r.Context(), ds)
 		if err != nil {
-			log.Println("Failed to read data store:\n\t", err)
+			reqctx.Log(r.Context(), "Failed to read data store:\n\t", err.Error())
 			responses.InternalServerError(w, r, msgFailedToReadDatastore)
 			return
 		}
@@ -80,14 +79,14 @@ func UpdateDataStoreHandler(s DSService) http.HandlerFunc {
 		var ds *Store
 		err := responses.DecodeStruct(r, &ds)
 		if err != nil {
-			log.Println(logBadBody, err)
+			reqctx.Log(r.Context(), logBadBody, err.Error())
 			responses.BadRequest(w, r, "")
 			return
 		}
 
-		ds, err = s.Update(ds)
+		ds, err = s.Update(r.Context(), ds)
 		if err != nil {
-			log.Println("Failed to update data store:\n\t", err)
+			reqctx.Log(r.Context(), "Failed to update data store:\n\t", err.Error())
 			responses.InternalServerError(w, r, msgFailedToUpdateDatastore)
 			return
 		}
@@ -107,14 +106,14 @@ func DeleteDataStoreHandler(s DSService) http.HandlerFunc {
 		var ds *Store
 		err := responses.DecodeStruct(r, &ds)
 		if err != nil {
-			log.Println(logBadBody, err)
+			reqctx.Log(r.Context(), logBadBody, err.Error())
 			responses.BadRequest(w, r, "")
 			return
 		}
 
-		err = s.Delete(ds)
+		err = s.Delete(r.Context(), ds)
 		if err != nil {
-			log.Println("Failed to delete data store:\n\t", err)
+			reqctx.Log(r.Context(), "Failed to delete data store:\n\t", err.Error())
 			responses.InternalServerError(w, r, msgFailedToDeleteDatastore)
 			return
 		}
