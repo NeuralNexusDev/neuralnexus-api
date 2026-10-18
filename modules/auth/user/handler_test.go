@@ -60,7 +60,7 @@ func (s *stubService) ListUsers(limit, offset int) ([]*User, error) {
 	return s.listed, s.listErr
 }
 
-func (s *stubService) GetUserPermissions(string) ([]string, error) {
+func (s *stubService) GetUserPermissions(context.Context, string) ([]string, error) {
 	return s.permissions, s.permissionsErr
 }
 

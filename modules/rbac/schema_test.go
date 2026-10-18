@@ -47,11 +47,11 @@ func TestEM01EmptyTables(t *testing.T) {
 	st := NewStore(pool)
 
 	t.Run("EM-01_EmptyListsAreNonNil", func(t *testing.T) {
-		roles, err := st.ListRoles()
+		roles, err := st.ListRoles(context.Background())
 		if err != nil || roles == nil || len(roles) != 0 {
 			t.Errorf("ListRoles() = (%#v, %v), want (empty non-nil, nil)", roles, err)
 		}
-		permissions, err := st.ListPermissions()
+		permissions, err := st.ListPermissions(context.Background())
 		if err != nil || permissions == nil || len(permissions) != 0 {
 			t.Errorf("ListPermissions() = (%#v, %v), want (empty non-nil, nil)", permissions, err)
 		}

@@ -1,6 +1,7 @@
 package link
 
 import (
+	"context"
 	"errors"
 	"io"
 	"log"
@@ -201,12 +202,12 @@ func GetSteamUser(steamID64 string) (*SteamData, error) {
 
 // ProcessSteamLogin resolves or creates an account for the given,
 // already-verified Steam identity and returns a new session for it.
-func ProcessSteamLogin(as account.Service, las Store, ss session.Service, user *SteamData) (*session.Session, error) {
+func ProcessSteamLogin(ctx context.Context, as account.Service, las Store, ss session.Service, user *SteamData) (*session.Session, error) {
 	a, err := resolveOrCreateAccountForPlatformUser(as, las, PlatformSteam, user)
 	if err != nil {
 		return nil, err
 	}
-	session, err := as.NewSession(a, time.Now().Add(time.Hour*24).Unix())
+	session, err := as.NewSession(ctx, a, time.Now().Add(time.Hour*24).Unix())
 	if err != nil {
 		return nil, err
 	}

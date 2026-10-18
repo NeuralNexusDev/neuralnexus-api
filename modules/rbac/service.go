@@ -1,6 +1,7 @@
 package rbac
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"math"
@@ -42,20 +43,20 @@ var builtinRoles = map[string]bool{RoleSystem: true, RoleOwner: true}
 
 // Service is the role and permission management
 type Service interface {
-	CreateRole(name, description string) (*Role, error)
-	GetRole(id string) (*Role, error)
-	GetRoleByName(name string) (*Role, error)
-	ListRoles() ([]*Role, error)
-	UpdateRole(id string, name, description *string) (*Role, error)
-	DeleteRole(id string) error
-	CreatePermission(node, description, valueType, merge string) (*Permission, error)
-	GetPermission(id string) (*Permission, error)
-	GetPermissionByNode(node string) (*Permission, error)
-	ListPermissions() ([]*Permission, error)
-	DeletePermission(id string) error
-	AttachPermission(roleID, permissionID string, value any) error
-	DetachPermission(roleID, permissionID string) error
-	GetPermissionsForRoles(roleIDs []string) ([]string, error)
+	CreateRole(ctx context.Context, name, description string) (*Role, error)
+	GetRole(ctx context.Context, id string) (*Role, error)
+	GetRoleByName(ctx context.Context, name string) (*Role, error)
+	ListRoles(ctx context.Context) ([]*Role, error)
+	UpdateRole(ctx context.Context, id string, name, description *string) (*Role, error)
+	DeleteRole(ctx context.Context, id string) error
+	CreatePermission(ctx context.Context, node, description, valueType, merge string) (*Permission, error)
+	GetPermission(ctx context.Context, id string) (*Permission, error)
+	GetPermissionByNode(ctx context.Context, node string) (*Permission, error)
+	ListPermissions(ctx context.Context) ([]*Permission, error)
+	DeletePermission(ctx context.Context, id string) error
+	AttachPermission(ctx context.Context, roleID, permissionID string, value any) error
+	DetachPermission(ctx context.Context, roleID, permissionID string) error
+	GetPermissionsForRoles(ctx context.Context, roleIDs []string) ([]string, error)
 }
 
 type service struct {
@@ -130,7 +131,7 @@ func validValueText(s string) bool {
 	return !strings.ContainsFunc(s, func(r rune) bool { return unicode.IsControl(r) || unicode.Is(unicode.Cf, r) })
 }
 
-func (s *service) CreateRole(name, description string) (*Role, error) {
+func (s *service) CreateRole(ctx context.Context, name, description string) (*Role, error) {
 	if !validRoleName(name) {
 		return nil, ErrInvalidRoleName
 	}
@@ -141,32 +142,32 @@ func (s *service) CreateRole(name, description string) (*Role, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := s.store.CreateRole(id, name, description); err != nil {
+	if err := s.store.CreateRole(ctx, id, name, description); err != nil {
 		return nil, err
 	}
 	return &Role{ID: id, Name: name, Description: description, Permissions: []RolePermission{}}, nil
 }
 
-func (s *service) GetRole(id string) (*Role, error) {
+func (s *service) GetRole(ctx context.Context, id string) (*Role, error) {
 	if !validID(id) {
 		return nil, ErrInvalidID
 	}
-	return s.store.GetRole(id)
+	return s.store.GetRole(ctx, id)
 }
 
-func (s *service) GetRoleByName(name string) (*Role, error) {
+func (s *service) GetRoleByName(ctx context.Context, name string) (*Role, error) {
 	if !validRoleName(name) {
 		return nil, ErrRoleNotFound
 	}
-	return s.store.GetRoleByName(name)
+	return s.store.GetRoleByName(ctx, name)
 }
 
-func (s *service) ListRoles() ([]*Role, error) {
-	return s.store.ListRoles()
+func (s *service) ListRoles(ctx context.Context) ([]*Role, error) {
+	return s.store.ListRoles(ctx)
 }
 
-func (s *service) UpdateRole(id string, name, description *string) (*Role, error) {
-	role, err := s.GetRole(id)
+func (s *service) UpdateRole(ctx context.Context, id string, name, description *string) (*Role, error) {
+	role, err := s.GetRole(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -185,24 +186,24 @@ func (s *service) UpdateRole(id string, name, description *string) (*Role, error
 		}
 		role.Description = *description
 	}
-	if err := s.store.UpdateRole(id, role.Name, role.Description); err != nil {
+	if err := s.store.UpdateRole(ctx, id, role.Name, role.Description); err != nil {
 		return nil, err
 	}
 	return role, nil
 }
 
-func (s *service) DeleteRole(id string) error {
-	role, err := s.GetRole(id)
+func (s *service) DeleteRole(ctx context.Context, id string) error {
+	role, err := s.GetRole(ctx, id)
 	if err != nil {
 		return err
 	}
 	if builtinRoles[role.Name] {
 		return ErrBuiltinRole
 	}
-	return s.store.DeleteRole(id)
+	return s.store.DeleteRole(ctx, id)
 }
 
-func (s *service) CreatePermission(node, description, valueType, merge string) (*Permission, error) {
+func (s *service) CreatePermission(ctx context.Context, node, description, valueType, merge string) (*Permission, error) {
 	if !validNode(node) {
 		return nil, ErrInvalidNode
 	}
@@ -239,42 +240,42 @@ func (s *service) CreatePermission(node, description, valueType, merge string) (
 	if err != nil {
 		return nil, err
 	}
-	if err := s.store.CreatePermission(id, node, description, valueType, merge); err != nil {
+	if err := s.store.CreatePermission(ctx, id, node, description, valueType, merge); err != nil {
 		return nil, err
 	}
 	return &Permission{ID: id, Node: node, Description: description, ValueType: valueType, Merge: merge}, nil
 }
 
-func (s *service) GetPermission(id string) (*Permission, error) {
+func (s *service) GetPermission(ctx context.Context, id string) (*Permission, error) {
 	if !validID(id) {
 		return nil, ErrInvalidID
 	}
-	return s.store.GetPermission(id)
+	return s.store.GetPermission(ctx, id)
 }
 
-func (s *service) GetPermissionByNode(node string) (*Permission, error) {
+func (s *service) GetPermissionByNode(ctx context.Context, node string) (*Permission, error) {
 	if !validNode(node) {
 		return nil, ErrPermissionNotFound
 	}
-	return s.store.GetPermissionByNode(node)
+	return s.store.GetPermissionByNode(ctx, node)
 }
 
-func (s *service) ListPermissions() ([]*Permission, error) {
-	return s.store.ListPermissions()
+func (s *service) ListPermissions(ctx context.Context) ([]*Permission, error) {
+	return s.store.ListPermissions(ctx)
 }
 
-func (s *service) DeletePermission(id string) error {
+func (s *service) DeletePermission(ctx context.Context, id string) error {
 	if !validID(id) {
 		return ErrInvalidID
 	}
-	return s.store.DeletePermission(id)
+	return s.store.DeletePermission(ctx, id)
 }
 
-func (s *service) AttachPermission(roleID, permissionID string, value any) error {
+func (s *service) AttachPermission(ctx context.Context, roleID, permissionID string, value any) error {
 	if !validID(roleID) || !validID(permissionID) {
 		return ErrInvalidID
 	}
-	permission, err := s.store.GetPermission(permissionID)
+	permission, err := s.store.GetPermission(ctx, permissionID)
 	if err != nil {
 		return err
 	}
@@ -356,19 +357,19 @@ func (s *service) AttachPermission(roleID, permissionID string, value any) error
 	default:
 		return ErrInvalidValue
 	}
-	return s.store.AttachPermission(roleID, permissionID, encoded)
+	return s.store.AttachPermission(context.WithoutCancel(ctx), roleID, permissionID, encoded)
 }
 
-func (s *service) DetachPermission(roleID, permissionID string) error {
+func (s *service) DetachPermission(ctx context.Context, roleID, permissionID string) error {
 	if !validID(roleID) || !validID(permissionID) {
 		return ErrInvalidID
 	}
-	role, err := s.store.GetRole(roleID)
+	role, err := s.store.GetRole(ctx, roleID)
 	if err != nil {
 		return err
 	}
 	if role.Name == RoleSystem || role.Name == RoleOwner {
-		permission, err := s.store.GetPermission(permissionID)
+		permission, err := s.store.GetPermission(ctx, permissionID)
 		if err != nil {
 			return err
 		}
@@ -376,9 +377,9 @@ func (s *service) DetachPermission(roleID, permissionID string) error {
 			return ErrBuiltinRole
 		}
 	}
-	return s.store.DetachPermission(roleID, permissionID)
+	return s.store.DetachPermission(context.WithoutCancel(ctx), roleID, permissionID)
 }
 
-func (s *service) GetPermissionsForRoles(roleIDs []string) ([]string, error) {
-	return s.store.GetPermissionsForRoles(roleIDs)
+func (s *service) GetPermissionsForRoles(ctx context.Context, roleIDs []string) ([]string, error) {
+	return s.store.GetPermissionsForRoles(ctx, roleIDs)
 }
