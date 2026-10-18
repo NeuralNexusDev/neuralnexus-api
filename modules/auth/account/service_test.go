@@ -73,7 +73,7 @@ func (f *acFakeAccountSettingsStore) SetPasswordAuthEnabled(_ string, _ bool) er
 func TestAC01NewService(t *testing.T) {
 	t.Run("AC-01_WiresGivenSubStores", func(t *testing.T) {
 		as := &acFakeAccountStore{getByIDAccount: &Account{UserID: "u1"}}
-		ass := &acFakeAccountSettingsStore{}
+		ass := &acFakeAccountSettingsStore{settings: &AccountSettings{UserID: "u1", PasswordAuthEnabled: true}}
 		svc := NewService(as, ass, nil)
 
 		got, err := svc.GetAccountByID("u1")
@@ -85,6 +85,14 @@ func TestAC01NewService(t *testing.T) {
 		}
 		if as.getByIDCalls != 1 {
 			t.Errorf("expected the fake Store to be called once, got %d", as.getByIDCalls)
+		}
+
+		enabled, err := svc.IsPasswordAuthEnabled("u1")
+		if err != nil || !enabled {
+			t.Errorf("IsPasswordAuthEnabled() = (%v, %v), want (true, nil) from the SettingsStore passed to NewService", enabled, err)
+		}
+		if ass.calls != 1 {
+			t.Errorf("expected the fake SettingsStore to be called once, got %d", ass.calls)
 		}
 	})
 }

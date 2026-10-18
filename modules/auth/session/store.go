@@ -14,7 +14,7 @@ import (
 
 const sessionKeyPrefix = "session:"
 
-// ErrNotFound when a session lookup finds nothing.
+// ErrNotFound is returned when the session being looked up is missing.
 var ErrNotFound = errors.New("not found")
 
 type store struct {
