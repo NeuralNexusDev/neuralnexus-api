@@ -3,7 +3,7 @@ package account
 import (
 	"time"
 
-	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 )
 
@@ -12,8 +12,8 @@ type RoleStore interface {
 	GetPermissionsForRoles(roleIDs []string) ([]string, error)
 }
 
-// AccountService - The account service interface
-type AccountService interface {
+// Service - The account service interface
+type Service interface {
 	AddAccount(account *Account) error
 	GetAccountByID(userID string) (*Account, error)
 	GetAccountByUsername(username string) (*Account, error)
@@ -21,53 +21,53 @@ type AccountService interface {
 	UpdateAccount(account *Account) error
 	DeleteAccount(userID string) error
 	IsPasswordAuthEnabled(userID string) (bool, error)
-	NewSession(account *Account, expiresAt int64) (*authsession.Session, error)
+	NewSession(account *Account, expiresAt int64) (*session.Session, error)
 }
 
-// accountService - The accountService struct
-type accountService struct {
-	as  AccountStore
-	ass AccountSettingsStore
+// service - The account service struct
+type service struct {
+	as  Store
+	ass SettingsStore
 	rs  RoleStore
 }
 
-// NewAccountService - Create a new AccountService
-func NewAccountService(as AccountStore, ass AccountSettingsStore, rs RoleStore) AccountService {
-	return &accountService{as, ass, rs}
+// NewService - Create a new account service
+func NewService(as Store, ass SettingsStore, rs RoleStore) Service {
+	return &service{as, ass, rs}
 }
 
 // GetAccountByID - Get an account by its ID
-func (s *accountService) GetAccountByID(userID string) (*Account, error) {
+func (s *service) GetAccountByID(userID string) (*Account, error) {
 	return s.as.GetAccountByID(userID)
 }
 
 // GetAccountByUsername -  Get an account by its username
-func (s *accountService) GetAccountByUsername(username string) (*Account, error) {
+func (s *service) GetAccountByUsername(username string) (*Account, error) {
 	return s.as.GetAccountByUsername(username)
 }
 
 // GetAccountByEmail - Get an account by its email
-func (s *accountService) GetAccountByEmail(email string) (*Account, error) {
+func (s *service) GetAccountByEmail(email string) (*Account, error) {
 	return s.as.GetAccountByEmail(email)
 }
 
 // AddAccount - Add an account to the database
-func (s *accountService) AddAccount(account *Account) error {
+func (s *service) AddAccount(account *Account) error {
 	return s.as.AddAccountToDB(account)
 }
 
 // UpdateAccount - Update an account in the database
-func (s *accountService) UpdateAccount(account *Account) error {
+func (s *service) UpdateAccount(account *Account) error {
 	return s.as.UpdateAccountInDB(account)
 }
 
 // DeleteAccount - Delete an account from the database
-func (s *accountService) DeleteAccount(userID string) error {
+func (s *service) DeleteAccount(userID string) error {
 	return s.as.DeleteAccountFromDB(userID)
 }
 
 // IsPasswordAuthEnabled - Check whether userID's password can be used to log in
-func (s *accountService) IsPasswordAuthEnabled(userID string) (bool, error) {
+func (s *service) IsPasswordAuthEnabled(userID string) (bool, error) {
 	settings, err := s.ass.GetAccountSettings(userID)
 	if err != nil {
 		return false, err
@@ -76,7 +76,7 @@ func (s *accountService) IsPasswordAuthEnabled(userID string) (bool, error) {
 }
 
 // NewSession - Create a session for an account with the permissions of its roles
-func (s *accountService) NewSession(account *Account, expiresAt int64) (*authsession.Session, error) {
+func (s *service) NewSession(account *Account, expiresAt int64) (*session.Session, error) {
 	permissions := []string{}
 	if len(account.Roles) > 0 {
 		var err error
@@ -92,7 +92,7 @@ func (s *accountService) NewSession(account *Account, expiresAt int64) (*authses
 		return nil, err
 	}
 	now := time.Now().Unix()
-	return &authsession.Session{
+	return &session.Session{
 		ID:          id,
 		UserID:      account.UserID,
 		Permissions: permissions,

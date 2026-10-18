@@ -1,15 +1,15 @@
-package linking
+package link
 
 import (
 	"errors"
 	"log"
 
-	authaccount "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 )
 
 const logLinkCleanupFailed = "Failed to link account, and failed to clean up the orphaned placeholder account:\n\t"
 
-// Service - The linking service
+// Service - The link service
 type Service interface {
 	GetUserLinkedAccounts(userID string) ([]*LinkedAccount, error)
 	UnlinkPlatform(userID string, platform Platform) error
@@ -17,14 +17,14 @@ type Service interface {
 	UpdateFromPlatform(platform Platform, platformID string, data PlatformData) (string, error)
 }
 
-// service - The linking service struct
+// service - The link service struct
 type service struct {
-	als LinkAccountStore
-	as  authaccount.AccountStore
+	als Store
+	as  account.Store
 }
 
-// NewService - Create a new linking service
-func NewService(als LinkAccountStore, as authaccount.AccountStore) Service {
+// NewService - Create a new link service
+func NewService(als Store, as account.Store) Service {
 	return &service{als, as}
 }
 
@@ -48,10 +48,10 @@ func (s *service) UpdateFromPlatform(platform Platform, platformID string, data 
 	// If the user doesn't exist, create a new account
 	la, err := s.als.GetLinkedAccountByPlatformID(platform, platformID)
 	if err != nil {
-		if !errors.Is(err, authaccount.ErrNotFound) {
+		if !errors.Is(err, account.ErrNotFound) {
 			return "", err
 		}
-		a, err := authaccount.NewIDOnlyAccount()
+		a, err := account.NewIDOnlyAccount()
 		if err != nil {
 			return "", err
 		}

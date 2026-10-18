@@ -1,4 +1,4 @@
-package linking
+package link
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	authaccount "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 )
 
 // stUnusedTCPPort returns a port unlikely to be reused, so a later connection
@@ -53,7 +53,7 @@ func stAssertRawConnectionError(t *testing.T, err error) {
 	if err == nil {
 		t.Fatal("expected a non-nil connection error")
 	}
-	if errors.Is(err, authaccount.ErrNotFound) || errors.Is(err, authaccount.ErrEmailAlreadyExists) || errors.Is(err, authaccount.ErrUsernameAlreadyExists) || errors.Is(err, ErrAlreadyLinked) {
+	if errors.Is(err, account.ErrNotFound) || errors.Is(err, account.ErrEmailAlreadyExists) || errors.Is(err, account.ErrUsernameAlreadyExists) || errors.Is(err, ErrAlreadyLinked) {
 		t.Errorf("expected the raw connection error to pass through unchanged, got a translated sentinel: %v", err)
 	}
 }
@@ -65,7 +65,7 @@ const stLiveLockKey = 910000
 // stLiveStore's cleanup deletes rows in userID range
 // 910000000000000000..910000000000049999, so stLiveLockKey keeps the live
 // tests of every package from running at once.
-func stLiveStore(t *testing.T) (authaccount.AccountStore, LinkAccountStore, authaccount.AccountSettingsStore) {
+func stLiveStore(t *testing.T) (account.Store, Store, account.SettingsStore) {
 	t.Helper()
 	s := stLiveFullStore(t)
 	return s.Account(), s.LinkAccount(), s.AccountSettings()
@@ -171,26 +171,26 @@ type stLiveSet struct {
 	db *pgxpool.Pool
 }
 
-func (s stLiveSet) Account() authaccount.AccountStore { return authaccount.NewStore(s.db) }
+func (s stLiveSet) Account() account.Store { return account.NewStore(s.db) }
 
-func (s stLiveSet) AccountSettings() authaccount.AccountSettingsStore {
-	return authaccount.NewStore(s.db)
+func (s stLiveSet) AccountSettings() account.SettingsStore {
+	return account.NewSettingsStore(s.db)
 }
 
-func (s stLiveSet) LinkAccount() LinkAccountStore { return NewLinkAccountStore(s.db) }
+func (s stLiveSet) LinkAccount() Store { return NewStore(s.db) }
 
 func (s stLiveSet) OAuthToken() OAuthTokenStore { return NewOAuthTokenStore(s.db) }
 
-func stSeedBareAccount(t *testing.T, as authaccount.AccountStore, userID string) {
+func stSeedBareAccount(t *testing.T, as account.Store, userID string) {
 	t.Helper()
-	if err := as.AddAccountToDB(&authaccount.Account{UserID: userID, Username: "sttest-" + userID}); err != nil {
+	if err := as.AddAccountToDB(&account.Account{UserID: userID, Username: "sttest-" + userID}); err != nil {
 		t.Fatalf("failed to seed account %s: %v", userID, err)
 	}
 }
 
-func stSeedPasswordAccount(t *testing.T, as authaccount.AccountStore, userID string) *authaccount.Account {
+func stSeedPasswordAccount(t *testing.T, as account.Store, userID string) *account.Account {
 	t.Helper()
-	a := &authaccount.Account{UserID: userID, Username: "sttest-" + userID}
+	a := &account.Account{UserID: userID, Username: "sttest-" + userID}
 	if err := a.HashPassword("sttest-password"); err != nil {
 		t.Fatalf("HashPassword returned error: %v", err)
 	}
@@ -200,7 +200,7 @@ func stSeedPasswordAccount(t *testing.T, as authaccount.AccountStore, userID str
 	return a
 }
 
-func stSeedLink(t *testing.T, las LinkAccountStore, userID string, platform Platform, platformID string, verified, loginEnabled bool) {
+func stSeedLink(t *testing.T, las Store, userID string, platform Platform, platformID string, verified, loginEnabled bool) {
 	t.Helper()
 	if err := las.AddLinkedAccountToDB(&LinkedAccount{
 		UserID:           userID,
@@ -299,7 +299,7 @@ func TestLS54DeleteLinkedAccountBlockedAsLastLoginMethod(t *testing.T) {
 		stSeedLink(t, las, "910000000000000010", PlatformDiscord, "sttest-discord-10", true, true)
 
 		err := las.DeleteLinkedAccount("910000000000000010", PlatformDiscord)
-		if !errors.Is(err, authaccount.ErrWouldLockAccount) {
+		if !errors.Is(err, account.ErrWouldLockAccount) {
 			t.Fatalf("expected ErrWouldLockAccount, got: %v", err)
 		}
 		if _, err := las.GetLinkedAccountByUserID("910000000000000010", PlatformDiscord); err != nil {
@@ -317,7 +317,7 @@ func TestLS55DeleteLinkedAccountAllowedWithPassword(t *testing.T) {
 		if err := las.DeleteLinkedAccount(a.UserID, PlatformDiscord); err != nil {
 			t.Fatalf("expected the delete to succeed, got: %v", err)
 		}
-		if _, err := las.GetLinkedAccountByUserID(a.UserID, PlatformDiscord); !errors.Is(err, authaccount.ErrNotFound) {
+		if _, err := las.GetLinkedAccountByUserID(a.UserID, PlatformDiscord); !errors.Is(err, account.ErrNotFound) {
 			t.Errorf("expected the link to be gone, got: %v", err)
 		}
 	})
@@ -344,7 +344,7 @@ func TestLS57DeleteLinkedAccountNotFound(t *testing.T) {
 	t.Run("LS-57_NotFound", func(t *testing.T) {
 		stSeedBareAccount(t, as, "910000000000000013")
 		err := las.DeleteLinkedAccount("910000000000000013", PlatformDiscord)
-		if !errors.Is(err, authaccount.ErrNotFound) {
+		if !errors.Is(err, account.ErrNotFound) {
 			t.Errorf("expected ErrNotFound for a platform that was never linked, got: %v", err)
 		}
 	})
@@ -358,7 +358,7 @@ func TestLS58DeleteLinkedAccountIgnoresDisabledOtherLink(t *testing.T) {
 		stSeedLink(t, las, "910000000000000014", PlatformTwitch, "sttest-twitch-14", true, false)
 
 		err := las.DeleteLinkedAccount("910000000000000014", PlatformDiscord)
-		if !errors.Is(err, authaccount.ErrWouldLockAccount) {
+		if !errors.Is(err, account.ErrWouldLockAccount) {
 			t.Fatalf("expected ErrWouldLockAccount (the other link is disabled, so it doesn't count), got: %v", err)
 		}
 	})
@@ -374,7 +374,7 @@ func TestLS59DeleteLinkedAccountBlockedWhenPasswordAuthDisabled(t *testing.T) {
 		}
 
 		err := las.DeleteLinkedAccount(a.UserID, PlatformDiscord)
-		if !errors.Is(err, authaccount.ErrWouldLockAccount) {
+		if !errors.Is(err, account.ErrWouldLockAccount) {
 			t.Fatalf("expected ErrWouldLockAccount once password auth is disabled and this is the only link, got: %v", err)
 		}
 	})
@@ -402,7 +402,7 @@ func TestLS60DeleteLinkedAccountConcurrentDifferentPlatformsNeverBothSucceed(t *
 				switch {
 				case err == nil:
 					successes++
-				case errors.Is(err, authaccount.ErrWouldLockAccount):
+				case errors.Is(err, account.ErrWouldLockAccount):
 				default:
 					t.Fatalf("trial %d: unexpected error: %v", i, err)
 				}
@@ -461,7 +461,7 @@ func TestLS63SetLinkedAccountLoginEnabledBlockedAsLastLoginMethod(t *testing.T) 
 		stSeedLink(t, las, "910000000000000018", PlatformDiscord, "sttest-discord-18", true, true)
 
 		err := las.SetLinkedAccountLoginEnabled("910000000000000018", PlatformDiscord, false)
-		if !errors.Is(err, authaccount.ErrWouldLockAccount) {
+		if !errors.Is(err, account.ErrWouldLockAccount) {
 			t.Fatalf("expected ErrWouldLockAccount, got: %v", err)
 		}
 		la, err := las.GetLinkedAccountByUserID("910000000000000018", PlatformDiscord)
@@ -504,7 +504,7 @@ func TestLS65SetLinkedAccountLoginEnabledBlockedWhenPasswordAuthDisabled(t *test
 		}
 
 		err := las.SetLinkedAccountLoginEnabled(a.UserID, PlatformDiscord, false)
-		if !errors.Is(err, authaccount.ErrWouldLockAccount) {
+		if !errors.Is(err, account.ErrWouldLockAccount) {
 			t.Fatalf("expected ErrWouldLockAccount once password auth is disabled and this is the only enabled link, got: %v", err)
 		}
 	})
@@ -538,7 +538,7 @@ func TestLS66SetLinkedAccountLoginEnabledConcurrentDifferentPlatformsNeverBothSu
 				switch {
 				case err == nil:
 					successes++
-				case errors.Is(err, authaccount.ErrWouldLockAccount):
+				case errors.Is(err, account.ErrWouldLockAccount):
 				default:
 					t.Fatalf("trial %d: unexpected error: %v", i, err)
 				}
@@ -608,8 +608,8 @@ func TestLS77to78_NotFoundSentinels(t *testing.T) {
 
 	t.Run("LS-77_GetLinkedAccountByPlatformNameNotFound", func(t *testing.T) {
 		got, err := s.LinkAccount().GetLinkedAccountByPlatformName(PlatformDiscord, "sttest-missing-name")
-		if got != nil || !errors.Is(err, authaccount.ErrNotFound) {
-			t.Errorf("GetLinkedAccountByPlatformName() = (%v, %v), want (nil, %v)", got, err, authaccount.ErrNotFound)
+		if got != nil || !errors.Is(err, account.ErrNotFound) {
+			t.Errorf("GetLinkedAccountByPlatformName() = (%v, %v), want (nil, %v)", got, err, account.ErrNotFound)
 		}
 	})
 
@@ -688,7 +688,7 @@ func TestST72SetPasswordAuthEnabledConcurrentWithDeleteLinkedAccountNeverBothSuc
 				switch {
 				case err == nil:
 					successes++
-				case errors.Is(err, authaccount.ErrWouldLockAccount):
+				case errors.Is(err, account.ErrWouldLockAccount):
 				default:
 					t.Fatalf("trial %d: unexpected error: %v", i, err)
 				}
@@ -736,7 +736,7 @@ func TestST73SetPasswordAuthEnabledConcurrentWithSetLinkedAccountLoginEnabledNev
 				switch {
 				case err == nil:
 					successes++
-				case errors.Is(err, authaccount.ErrWouldLockAccount):
+				case errors.Is(err, account.ErrWouldLockAccount):
 				default:
 					t.Fatalf("trial %d: unexpected error: %v", i, err)
 				}

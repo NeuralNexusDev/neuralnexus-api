@@ -37,8 +37,8 @@ func init() {
 	}
 }
 
-// SessionService interface
-type SessionService interface {
+// Service - The session service interface
+type Service interface {
 	AddSession(session *Session) error
 	GetSession(id string) (*Session, error)
 	UpdateSession(session *Session) error
@@ -47,20 +47,20 @@ type SessionService interface {
 	ReadJWT(token string) (*Session, error)
 }
 
-// sessionService - SessionService implementation
-type sessionService struct {
-	store SessionStore
+// service - The session service implementation
+type service struct {
+	store Store
 }
 
-// NewSessionService - Create a new session userService
-func NewSessionService(store SessionStore) SessionService {
-	return &sessionService{
+// NewService - Create a new session service
+func NewService(store Store) Service {
+	return &service{
 		store: store,
 	}
 }
 
 // AddSession adds a session to the database and cache
-func (s *sessionService) AddSession(session *Session) error {
+func (s *service) AddSession(session *Session) error {
 	err := s.store.AddSessionToDB(session)
 	if err != nil {
 		return err
@@ -72,7 +72,7 @@ func (s *sessionService) AddSession(session *Session) error {
 }
 
 // GetSession gets a session by ID
-func (s *sessionService) GetSession(id string) (*Session, error) {
+func (s *service) GetSession(id string) (*Session, error) {
 	session, err := s.store.GetSessionFromCache(id)
 	if err != nil {
 		session, err = s.store.GetSessionFromDB(id)
@@ -87,7 +87,7 @@ func (s *sessionService) GetSession(id string) (*Session, error) {
 }
 
 // UpdateSession updates a session
-func (s *sessionService) UpdateSession(session *Session) error {
+func (s *service) UpdateSession(session *Session) error {
 	err := s.store.UpdateSessionInDB(session)
 	if err != nil {
 		return err
@@ -99,7 +99,7 @@ func (s *sessionService) UpdateSession(session *Session) error {
 }
 
 // DeleteSession deletes a session by ID
-func (s *sessionService) DeleteSession(id string) error {
+func (s *service) DeleteSession(id string) error {
 	err := s.store.DeleteSessionInDB(id)
 	if err != nil {
 		return err
@@ -113,7 +113,7 @@ func (s *sessionService) DeleteSession(id string) error {
 }
 
 // CreateJWT creates a JWT for a session
-func (s *sessionService) CreateJWT(session *Session) (string, error) {
+func (s *service) CreateJWT(session *Session) (string, error) {
 	// ExpiresAt == 0 means the session never expires (see Session.IsValid and
 	// store.AddSessionToCache). Encoding that literally would set the JWT's
 	// exp claim to 1970-01-01, which ReadJWT would immediately reject as
@@ -136,7 +136,7 @@ func (s *sessionService) CreateJWT(session *Session) (string, error) {
 }
 
 // ReadJWT reads a JWT and returns the session
-func (s *sessionService) ReadJWT(tokenStr string) (*Session, error) {
+func (s *service) ReadJWT(tokenStr string) (*Session, error) {
 	claims := &SessionClaims{}
 	_, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
 		return JWT_SECRET, nil

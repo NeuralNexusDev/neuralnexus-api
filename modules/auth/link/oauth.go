@@ -1,11 +1,11 @@
-package linking
+package link
 
 import (
 	"context"
 	"errors"
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
-	authaccount "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
-	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"golang.org/x/oauth2"
 	"log"
 	"net/http"
@@ -98,7 +98,7 @@ func RefreshToken(config *oauth2.Config, token *oauth2.Token) (*OAuthToken, erro
 }
 
 // ProcessOAuthLogin processes the OAuth2 code and returns a session
-func ProcessOAuthLogin(as authaccount.AccountService, las LinkAccountStore, ss authsession.SessionService, code string, state *OAuthState) (*authsession.Session, error) {
+func ProcessOAuthLogin(as account.Service, las Store, ss session.Service, code string, state *OAuthState) (*session.Session, error) {
 	var err error
 	var config *oauth2.Config
 	switch state.Platform {
@@ -119,7 +119,7 @@ func ProcessOAuthLogin(as authaccount.AccountService, las LinkAccountStore, ss a
 		return nil, err
 	}
 
-	var a *authaccount.Account
+	var a *account.Account
 	if state.Platform == PlatformMinecraft || state.Platform == PlatformXboxLive {
 		var xbox *XboxLiveData
 		var java *MinecraftData
@@ -187,7 +187,7 @@ var ErrPlatformLoginDisabled = errors.New("this platform account is linked but d
 // winner's linked account/account are re-fetched and returned instead of
 // treating it as a hard failure; any other error is returned as-is (wrapped
 // together with a cleanup failure, if the cleanup itself also failed).
-func resolveOrCreateAccountForPlatformUser(as authaccount.AccountService, las LinkAccountStore, platform Platform, user PlatformData) (*authaccount.Account, error) {
+func resolveOrCreateAccountForPlatformUser(as account.Service, las Store, platform Platform, user PlatformData) (*account.Account, error) {
 	la, err := las.GetLinkedAccountByPlatformID(platform, user.GetID())
 	if err == nil {
 		if !(la.Verified && la.LoginEnabled) {
@@ -195,11 +195,11 @@ func resolveOrCreateAccountForPlatformUser(as authaccount.AccountService, las Li
 		}
 		return as.GetAccountByID(la.UserID)
 	}
-	if !errors.Is(err, authaccount.ErrNotFound) {
+	if !errors.Is(err, account.ErrNotFound) {
 		return nil, err
 	}
 
-	a, err := authaccount.NewPasswordLessAccount(user.GetUsername(), user.GetEmail())
+	a, err := account.NewPasswordLessAccount(user.GetUsername(), user.GetEmail())
 	if err != nil {
 		return nil, err
 	}
@@ -232,11 +232,11 @@ func resolveOrCreateAccountForPlatformUser(as authaccount.AccountService, las Li
 }
 
 // ProcessOAuthLink links an account to an existing user
-func ProcessOAuthLink(r *http.Request, las LinkAccountStore, code string, state *OAuthState) (*authsession.Session, error) {
+func ProcessOAuthLink(r *http.Request, las Store, code string, state *OAuthState) (*session.Session, error) {
 	// Get session from request context first: there's no point exchanging
 	// the OAuth code or calling out to the platform's API for a session
 	// that's missing or already expired.
-	session, ok := r.Context().Value(mw.SessionKey).(*authsession.Session)
+	session, ok := r.Context().Value(mw.SessionKey).(*session.Session)
 	if !ok || session == nil {
 		return nil, ErrSessionNotFound
 	}
@@ -284,7 +284,7 @@ func ProcessOAuthLink(r *http.Request, las LinkAccountStore, code string, state 
 			if la.UserID != session.UserID {
 				return nil, ErrPlatformAlreadyLinkedToDifferentAccount
 			}
-		} else if !errors.Is(err, authaccount.ErrNotFound) {
+		} else if !errors.Is(err, account.ErrNotFound) {
 			return nil, err
 		}
 		if java != nil {
@@ -292,7 +292,7 @@ func ProcessOAuthLink(r *http.Request, las LinkAccountStore, code string, state 
 				if la.UserID != session.UserID {
 					return nil, ErrPlatformAlreadyLinkedToDifferentAccount
 				}
-			} else if !errors.Is(err, authaccount.ErrNotFound) {
+			} else if !errors.Is(err, account.ErrNotFound) {
 				return nil, err
 			}
 		}
@@ -336,10 +336,10 @@ var ErrConflictingMicrosoftIdentities = errors.New("this Microsoft account's Xbo
 // (always present) and Java Edition profile (present only if owned).
 // Whichever identity/identities aren't linked yet get linked to the
 // resolved (or freshly created) account.
-func resolveOrCreateAccountForMicrosoftUser(as authaccount.AccountService, las LinkAccountStore, xbox *XboxLiveData, java *MinecraftData) (*authaccount.Account, error) {
+func resolveOrCreateAccountForMicrosoftUser(as account.Service, las Store, xbox *XboxLiveData, java *MinecraftData) (*account.Account, error) {
 	xboxLA, err := las.GetLinkedAccountByPlatformID(PlatformXboxLive, xbox.GetID())
 	if err != nil {
-		if !errors.Is(err, authaccount.ErrNotFound) {
+		if !errors.Is(err, account.ErrNotFound) {
 			return nil, err
 		}
 		xboxLA = nil
@@ -348,7 +348,7 @@ func resolveOrCreateAccountForMicrosoftUser(as authaccount.AccountService, las L
 	if java != nil {
 		javaLA, err = las.GetLinkedAccountByPlatformID(PlatformMinecraft, java.GetID())
 		if err != nil {
-			if !errors.Is(err, authaccount.ErrNotFound) {
+			if !errors.Is(err, account.ErrNotFound) {
 				return nil, err
 			}
 			javaLA = nil
@@ -379,7 +379,7 @@ func resolveOrCreateAccountForMicrosoftUser(as authaccount.AccountService, las L
 		accountID = javaAccountID
 	}
 
-	var a *authaccount.Account
+	var a *account.Account
 	isNewAccount := accountID == ""
 	if isNewAccount {
 		// Prefer the Java username when both identities are present - it's
@@ -388,7 +388,7 @@ func resolveOrCreateAccountForMicrosoftUser(as authaccount.AccountService, las L
 		if java != nil {
 			username = java.GetUsername()
 		}
-		a, err = authaccount.NewPasswordLessAccount(username, "")
+		a, err = account.NewPasswordLessAccount(username, "")
 		if err != nil {
 			return nil, err
 		}
@@ -422,7 +422,7 @@ func resolveOrCreateAccountForMicrosoftUser(as authaccount.AccountService, las L
 // isNewAccount marks a as a bare placeholder with nothing else linked to it
 // yet, the only state where it's safe to delete on a lost race; otherwise a
 // lost race surfaces as a conflict for the caller to retry.
-func ensureMicrosoftIdentityLinked(as authaccount.AccountService, las LinkAccountStore, a *authaccount.Account, isNewAccount bool, platform Platform, user PlatformData) (*authaccount.Account, bool, error) {
+func ensureMicrosoftIdentityLinked(as account.Service, las Store, a *account.Account, isNewAccount bool, platform Platform, user PlatformData) (*account.Account, bool, error) {
 	la := NewLinkedAccount(a.UserID, platform, user.GetUsername(), user.GetID(), user)
 	err := las.AddLinkedAccountToDB(la)
 	if err == nil {
@@ -441,7 +441,7 @@ func ensureMicrosoftIdentityLinked(as authaccount.AccountService, las LinkAccoun
 	// We might already be the owner (a concurrent identical login won the
 	// race for both identities) rather than facing a genuine conflict.
 	actualOwnerLA, lookupErr := las.GetLinkedAccountByPlatformID(platform, user.GetID())
-	if lookupErr != nil && !errors.Is(lookupErr, authaccount.ErrNotFound) {
+	if lookupErr != nil && !errors.Is(lookupErr, account.ErrNotFound) {
 		if isNewAccount {
 			if delErr := as.DeleteAccount(a.UserID); delErr != nil {
 				log.Println(logLinkCleanupFailed, lookupErr)
@@ -477,7 +477,7 @@ var ErrPlatformAlreadyLinkedToDifferentAccount = errors.New("this platform accou
 // linkPlatformUserToSession links the given platform identity to userID. If
 // it's already linked to a different account, that's returned as an error;
 // if it's already linked to this same account, linking is a no-op.
-func linkPlatformUserToSession(las LinkAccountStore, userID string, platform Platform, user PlatformData) error {
+func linkPlatformUserToSession(las Store, userID string, platform Platform, user PlatformData) error {
 	la, err := las.GetLinkedAccountByPlatformID(platform, user.GetID())
 	switch {
 	case err == nil:
@@ -485,7 +485,7 @@ func linkPlatformUserToSession(las LinkAccountStore, userID string, platform Pla
 			return nil
 		}
 		return ErrPlatformAlreadyLinkedToDifferentAccount
-	case !errors.Is(err, authaccount.ErrNotFound):
+	case !errors.Is(err, account.ErrNotFound):
 		return err
 	}
 

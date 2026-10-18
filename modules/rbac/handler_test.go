@@ -12,8 +12,8 @@ import (
 	"testing"
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
-	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
-	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 )
 
 type stubService struct {
@@ -104,11 +104,11 @@ var handlerBodies = map[string]string{
 	"GetPermissionByNode": `"node":"a.b"`, "CreatePermission": `"node":"a.b","description":"d","value_type":"int","merge":"max"`,
 }
 
-func rbSession(permissions ...string) *authsession.Session {
-	return &authsession.Session{UserID: "u1", Permissions: permissions}
+func rbSession(permissions ...string) *session.Session {
+	return &session.Session{UserID: "u1", Permissions: permissions}
 }
 
-func rbRequest(c handlerCase, session *authsession.Session, body string) *http.Request {
+func rbRequest(c handlerCase, session *session.Session, body string) *http.Request {
 	ctx := context.WithValue(context.Background(), mw.SessionKey, session)
 	r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body)).WithContext(ctx)
 	r.Header.Set("Content-Type", "application/json")
@@ -118,7 +118,7 @@ func rbRequest(c handlerCase, session *authsession.Session, body string) *http.R
 	return r
 }
 
-func rbAdmin() *authsession.Session {
+func rbAdmin() *session.Session {
 	return rbSession(perms.ScopeAdminRoles.Node)
 }
 
@@ -136,7 +136,7 @@ func rbDetail(t *testing.T, w *httptest.ResponseRecorder) string {
 func TestRH01to03Handlers(t *testing.T) {
 	t.Run("RH-01_EveryHandlerRejectsASessionWithoutTheRolesAdminNode", func(t *testing.T) {
 		for _, c := range handlerCases {
-			for _, session := range []*authsession.Session{rbSession(), rbSession("roles.other"), rbSession("roles.admins"), rbSession("other.admin"), rbSession("roles")} {
+			for _, session := range []*session.Session{rbSession(), rbSession("roles.other"), rbSession("roles.admins"), rbSession("other.admin"), rbSession("roles")} {
 				svc := &stubService{}
 				w := httptest.NewRecorder()
 				c.handler(svc)(w, rbRequest(c, session, c.body))

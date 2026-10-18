@@ -7,7 +7,7 @@ import (
 	"time"
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
-	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
@@ -27,7 +27,7 @@ type Login struct {
 }
 
 // LoginHandler handles the login route
-func LoginHandler(as AccountService, ss authsession.SessionService) http.HandlerFunc {
+func LoginHandler(as Service, ss session.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var login Login
 		err := responses.DecodeStruct(r, &login)
@@ -92,9 +92,9 @@ func LoginHandler(as AccountService, ss authsession.SessionService) http.Handler
 }
 
 // LogoutHandler handles the logout route
-func LogoutHandler(ss authsession.SessionService) http.HandlerFunc {
+func LogoutHandler(ss session.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
+		session := r.Context().Value(mw.SessionKey).(*session.Session)
 		if session == nil {
 			responses.BadRequest(w, r, msgInvalidSession)
 			return
@@ -112,7 +112,7 @@ func LogoutHandler(ss authsession.SessionService) http.HandlerFunc {
 
 // SetSessionCookie creates a JWT for an already-persisted
 // session and sets it as the session cookie.
-func SetSessionCookie(ss authsession.SessionService, w http.ResponseWriter, session *authsession.Session) error {
+func SetSessionCookie(ss session.Service, w http.ResponseWriter, session *session.Session) error {
 	jwtString, err := ss.CreateJWT(session)
 	if err != nil {
 		return err

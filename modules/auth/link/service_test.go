@@ -1,11 +1,11 @@
-package linking
+package link
 
 import (
 	"errors"
 	"sync"
 	"testing"
 
-	authaccount "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 )
@@ -61,11 +61,11 @@ func (f *usFakeLinkAccountStore) GetLinkedAccountByPlatformID(_ Platform, _ stri
 }
 
 func (f *usFakeLinkAccountStore) GetLinkedAccountByPlatformName(_ Platform, _ string) (*LinkedAccount, error) {
-	return nil, authaccount.ErrNotFound
+	return nil, account.ErrNotFound
 }
 
 func (f *usFakeLinkAccountStore) GetLinkedAccountByUserID(_ string, _ Platform) (*LinkedAccount, error) {
-	return nil, authaccount.ErrNotFound
+	return nil, account.ErrNotFound
 }
 
 func (f *usFakeLinkAccountStore) GetLinkedAccountsByUserID(_ string) ([]*LinkedAccount, error) {
@@ -120,11 +120,11 @@ func TestUS30to31UnlinkPlatform(t *testing.T) {
 	})
 
 	t.Run("US-31_StoreError", func(t *testing.T) {
-		als := &usFakeLinkAccountStore{deleteErr: authaccount.ErrWouldLockAccount}
+		als := &usFakeLinkAccountStore{deleteErr: account.ErrWouldLockAccount}
 		svc := NewService(als, nil)
 
 		err := svc.UnlinkPlatform("u1", PlatformDiscord)
-		if !errors.Is(err, authaccount.ErrWouldLockAccount) {
+		if !errors.Is(err, account.ErrWouldLockAccount) {
 			t.Errorf("UnlinkPlatform() err = %v, want ErrWouldLockAccount", err)
 		}
 	})
@@ -174,14 +174,14 @@ func (f usFakePlatformData) CreateLinkedAccount(_ string) *LinkedAccount {
 type usFakeAccountStore struct {
 	addErr         error
 	addCalls       int
-	addLastAccount *authaccount.Account
+	addLastAccount *account.Account
 
-	getByIDAccount    *authaccount.Account
+	getByIDAccount    *account.Account
 	getByIDErr        error
 	getByIDCalls      int
 	getByIDLastUserID string
 
-	listAccounts   []*authaccount.Account
+	listAccounts   []*account.Account
 	listErr        error
 	listCalls      int
 	listLastLimit  int
@@ -189,14 +189,14 @@ type usFakeAccountStore struct {
 
 	updateErr         error
 	updateCalls       int
-	updateLastAccount *authaccount.Account
+	updateLastAccount *account.Account
 
 	deleteErr        error
 	deleteCalls      int
 	deleteLastUserID string
 }
 
-func (f *usFakeAccountStore) AddAccountToDB(a *authaccount.Account) error {
+func (f *usFakeAccountStore) AddAccountToDB(a *account.Account) error {
 	f.addCalls++
 	f.addLastAccount = a
 	return f.addErr
@@ -208,26 +208,26 @@ func (f *usFakeAccountStore) DeleteAccountFromDB(userID string) error {
 	return f.deleteErr
 }
 
-func (f *usFakeAccountStore) GetAccountByID(userID string) (*authaccount.Account, error) {
+func (f *usFakeAccountStore) GetAccountByID(userID string) (*account.Account, error) {
 	f.getByIDCalls++
 	f.getByIDLastUserID = userID
 	return f.getByIDAccount, f.getByIDErr
 }
 
-func (f *usFakeAccountStore) GetAccountByUsername(_ string) (*authaccount.Account, error) {
-	return nil, authaccount.ErrNotFound
+func (f *usFakeAccountStore) GetAccountByUsername(_ string) (*account.Account, error) {
+	return nil, account.ErrNotFound
 }
 
-func (f *usFakeAccountStore) GetAccountByEmail(_ string) (*authaccount.Account, error) {
-	return nil, authaccount.ErrNotFound
+func (f *usFakeAccountStore) GetAccountByEmail(_ string) (*account.Account, error) {
+	return nil, account.ErrNotFound
 }
 
-func (f *usFakeAccountStore) ListAccounts(_, _ int) ([]*authaccount.Account, error) {
+func (f *usFakeAccountStore) ListAccounts(_, _ int) ([]*account.Account, error) {
 	f.listCalls++
 	return f.listAccounts, f.listErr
 }
 
-func (f *usFakeAccountStore) UpdateAccountInDB(a *authaccount.Account) error {
+func (f *usFakeAccountStore) UpdateAccountInDB(a *account.Account) error {
 	f.updateCalls++
 	f.updateLastAccount = a
 	return f.updateErr
@@ -235,7 +235,7 @@ func (f *usFakeAccountStore) UpdateAccountInDB(a *authaccount.Account) error {
 
 type usConcurrentStore struct {
 	mu       sync.Mutex
-	accounts map[string]*authaccount.Account
+	accounts map[string]*account.Account
 	links    map[string]*LinkedAccount
 
 	barrierMu    sync.Mutex
@@ -245,7 +245,7 @@ type usConcurrentStore struct {
 }
 
 func newUSConcurrentStore(barrierN int) *usConcurrentStore {
-	s := &usConcurrentStore{accounts: map[string]*authaccount.Account{}, links: map[string]*LinkedAccount{}, barrierN: barrierN}
+	s := &usConcurrentStore{accounts: map[string]*account.Account{}, links: map[string]*LinkedAccount{}, barrierN: barrierN}
 	s.barrierWG.Add(barrierN)
 	return s
 }
@@ -254,34 +254,34 @@ func usLinkKey(platform Platform, platformID string) string {
 	return string(platform) + "|" + platformID
 }
 
-func (s *usConcurrentStore) AddAccountToDB(a *authaccount.Account) error {
+func (s *usConcurrentStore) AddAccountToDB(a *account.Account) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.accounts[a.UserID] = a
 	return nil
 }
 
-func (s *usConcurrentStore) GetAccountByID(userID string) (*authaccount.Account, error) {
+func (s *usConcurrentStore) GetAccountByID(userID string) (*account.Account, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	a, ok := s.accounts[userID]
 	if !ok {
-		return nil, authaccount.ErrNotFound
+		return nil, account.ErrNotFound
 	}
 	return a, nil
 }
 
-func (s *usConcurrentStore) GetAccountByUsername(_ string) (*authaccount.Account, error) {
-	return nil, authaccount.ErrNotFound
+func (s *usConcurrentStore) GetAccountByUsername(_ string) (*account.Account, error) {
+	return nil, account.ErrNotFound
 }
 
-func (s *usConcurrentStore) GetAccountByEmail(_ string) (*authaccount.Account, error) {
-	return nil, authaccount.ErrNotFound
+func (s *usConcurrentStore) GetAccountByEmail(_ string) (*account.Account, error) {
+	return nil, account.ErrNotFound
 }
 
-func (s *usConcurrentStore) ListAccounts(_, _ int) ([]*authaccount.Account, error) { return nil, nil }
+func (s *usConcurrentStore) ListAccounts(_, _ int) ([]*account.Account, error) { return nil, nil }
 
-func (s *usConcurrentStore) UpdateAccountInDB(_ *authaccount.Account) error { return nil }
+func (s *usConcurrentStore) UpdateAccountInDB(_ *account.Account) error { return nil }
 
 func (s *usConcurrentStore) DeleteAccountFromDB(userID string) error {
 	s.mu.Lock()
@@ -326,18 +326,18 @@ func (s *usConcurrentStore) GetLinkedAccountByPlatformID(platform Platform, plat
 	defer s.mu.Unlock()
 	la, ok := s.links[usLinkKey(platform, platformID)]
 	if !ok {
-		return nil, authaccount.ErrNotFound
+		return nil, account.ErrNotFound
 	}
 	cp := *la
 	return &cp, nil
 }
 
 func (s *usConcurrentStore) GetLinkedAccountByPlatformName(_ Platform, _ string) (*LinkedAccount, error) {
-	return nil, authaccount.ErrNotFound
+	return nil, account.ErrNotFound
 }
 
 func (s *usConcurrentStore) GetLinkedAccountByUserID(_ string, _ Platform) (*LinkedAccount, error) {
-	return nil, authaccount.ErrNotFound
+	return nil, account.ErrNotFound
 }
 
 func (s *usConcurrentStore) GetLinkedAccountsByUserID(_ string) ([]*LinkedAccount, error) {
@@ -358,8 +358,8 @@ func (s *usConcurrentStore) accountCount() int {
 
 func TestUS15to23and38UpdateFromPlatform(t *testing.T) {
 	t.Run("US-15_NewIdentityCreatesAccount", func(t *testing.T) {
-		as := &usFakeAccountStore{getByIDAccount: &authaccount.Account{UserID: "resolved"}}
-		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, authaccount.ErrNotFound}}}
+		as := &usFakeAccountStore{getByIDAccount: &account.Account{UserID: "resolved"}}
+		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, account.ErrNotFound}}}
 		svc := NewService(als, as)
 
 		got, err := svc.UpdateFromPlatform(PlatformDiscord, "p1", usFakePlatformData{username: "alice"})
@@ -378,7 +378,7 @@ func TestUS15to23and38UpdateFromPlatform(t *testing.T) {
 	})
 	t.Run("US-16_ExistingIdentitySkipsCreation", func(t *testing.T) {
 		existing := &LinkedAccount{UserID: "existing-user", Platform: PlatformDiscord, PlatformID: "p1"}
-		as := &usFakeAccountStore{getByIDAccount: &authaccount.Account{UserID: "existing-user"}}
+		as := &usFakeAccountStore{getByIDAccount: &account.Account{UserID: "existing-user"}}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{existing, nil}}}
 		svc := NewService(als, as)
 
@@ -413,7 +413,7 @@ func TestUS15to23and38UpdateFromPlatform(t *testing.T) {
 	t.Run("US-18_AddAccountFails", func(t *testing.T) {
 		wantErr := testerrors.ErrBoom
 		as := &usFakeAccountStore{addErr: wantErr}
-		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, authaccount.ErrNotFound}}}
+		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, account.ErrNotFound}}}
 		svc := NewService(als, as)
 
 		_, err := svc.UpdateFromPlatform(PlatformDiscord, "p1", usFakePlatformData{})
@@ -427,7 +427,7 @@ func TestUS15to23and38UpdateFromPlatform(t *testing.T) {
 	t.Run("US-19_AddLinkFailsCleansUpPlaceholder", func(t *testing.T) {
 		wantErr := testerrors.ErrInsertFailed
 		as := &usFakeAccountStore{}
-		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, authaccount.ErrNotFound}}, addErr: wantErr}
+		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, account.ErrNotFound}}, addErr: wantErr}
 		svc := NewService(als, as)
 
 		_, err := svc.UpdateFromPlatform(PlatformDiscord, "p1", usFakePlatformData{})
@@ -442,7 +442,7 @@ func TestUS15to23and38UpdateFromPlatform(t *testing.T) {
 		linkErr := testerrors.ErrInsertFailed
 		deleteErr := testerrors.ErrDBDown
 		as := &usFakeAccountStore{deleteErr: deleteErr}
-		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, authaccount.ErrNotFound}}, addErr: linkErr}
+		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, account.ErrNotFound}}, addErr: linkErr}
 		svc := NewService(als, as)
 
 		_, err := svc.UpdateFromPlatform(PlatformDiscord, "p1", usFakePlatformData{})
@@ -455,9 +455,9 @@ func TestUS15to23and38UpdateFromPlatform(t *testing.T) {
 	})
 	t.Run("US-21_LostRaceUsesWinner", func(t *testing.T) {
 		winner := &LinkedAccount{UserID: "winner-user", Platform: PlatformDiscord, PlatformID: "p1"}
-		as := &usFakeAccountStore{getByIDAccount: &authaccount.Account{UserID: "winner-user"}}
+		as := &usFakeAccountStore{getByIDAccount: &account.Account{UserID: "winner-user"}}
 		als := &usFakeLinkAccountStore{
-			getByPlatformIDResults: []usLinkResult{{nil, authaccount.ErrNotFound}, {winner, nil}},
+			getByPlatformIDResults: []usLinkResult{{nil, account.ErrNotFound}, {winner, nil}},
 			addErr:                 ErrAlreadyLinked,
 		}
 		svc := NewService(als, as)
@@ -483,7 +483,7 @@ func TestUS15to23and38UpdateFromPlatform(t *testing.T) {
 		wantErr := testerrors.ErrDBDown
 		as := &usFakeAccountStore{}
 		als := &usFakeLinkAccountStore{
-			getByPlatformIDResults: []usLinkResult{{nil, authaccount.ErrNotFound}, {nil, wantErr}},
+			getByPlatformIDResults: []usLinkResult{{nil, account.ErrNotFound}, {nil, wantErr}},
 			addErr:                 ErrAlreadyLinked,
 		}
 		svc := NewService(als, as)
@@ -507,7 +507,7 @@ func TestUS15to23and38UpdateFromPlatform(t *testing.T) {
 	})
 	t.Run("US-38_AddLinkAndCleanupFailReturnsTheCleanupError", func(t *testing.T) {
 		as := &usFakeAccountStore{deleteErr: testerrors.ErrBoom}
-		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, authaccount.ErrNotFound}}, addErr: testerrors.ErrInsertFailed}
+		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, account.ErrNotFound}}, addErr: testerrors.ErrInsertFailed}
 		svc := NewService(als, as)
 
 		_, err := svc.UpdateFromPlatform(PlatformDiscord, "p1", usFakePlatformData{})

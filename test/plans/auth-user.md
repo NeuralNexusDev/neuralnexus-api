@@ -4,7 +4,7 @@
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| US-01 | NewService | Happy Path | Service wired to the store's sub-stores | fake sub-stores | Returned `Service` delegates to the exact `AccountStore`/`LinkAccountStore`/`AccountSettingsStore` instances returned | P2 |  |
+| US-01 | NewService | Happy Path | Service wired to the store's sub-stores | fake sub-stores | Returned `Service` delegates to the exact `account.Store`/`link.Store`/`account.SettingsStore` instances returned | P2 |  |
 | US-02 | GetUser | Happy Path | `as.GetAccountByID` succeeds | | Returns the user for the account, nil | P1 |  |
 | US-03 | GetUser | Error Path | `as.GetAccountByID` fails | | Error propagated unchanged | P2 |  |
 | US-04 | GetUserFromPlatform | Happy Path | `als.GetLinkedAccountByPlatformID` then `as.GetAccountByID` both succeed | | Returns the resolved user whose JSON equals the account's JSON (user_id, username, roles, updated_at only), nil | P1 |  |
@@ -19,8 +19,8 @@
 | US-13 | UpdateUser | Error Path | `as.GetAccountByID` fails | | Returns error; `UpdateAccountInDB` never called | P2 |  |
 | US-14 | UpdateUser | Error Path | `as.UpdateAccountInDB` fails | | Error propagated unchanged | P2 |  |
 | US-24 | UpdateUserFromPlatform | Error Path | Final `as.GetAccountByID` fails | | Error propagated | P2 |  |
-| US-83 | UpdateUserFromPlatform | Happy Path | The linking service returns a user ID | `Service` built with a stub `linking.Service` returning `"resolved"`; `as.GetAccountByID` returns an account | Returns the user whose JSON equals the account's JSON, nil; `GetAccountByID` called with `"resolved"` | P1 |  |
-| US-84 | UpdateUserFromPlatform | Error Path | The linking service fails | stub `linking.Service` returns `testerrors.ErrBoom` | Returns nil and the linking error; `GetAccountByID` never called | P1 |  |
+| US-83 | UpdateUserFromPlatform | Happy Path | The link service returns a user ID | `Service` built with a stub `link.Service` returning `"resolved"`; `as.GetAccountByID` returns an account | Returns the user whose JSON equals the account's JSON, nil; `GetAccountByID` called with `"resolved"` | P1 |  |
+| US-84 | UpdateUserFromPlatform | Error Path | The link service fails | stub `link.Service` returns `testerrors.ErrBoom` | Returns nil and the linking error; `GetAccountByID` never called | P1 |  |
 | US-26 | DeleteUser | Happy Path | `as.DeleteAccountFromDB` succeeds | | Returns nil | P1 |  |
 | US-27 | DeleteUser | Error Path | `as.DeleteAccountFromDB` fails | | Error propagated unchanged | P2 |  |
 | US-34 | GetAccountSettings | Happy Path | `ass.GetAccountSettings` succeeds | | Returns the settings, nil | P1 |  |
@@ -55,11 +55,11 @@
 | UR-13 | UpdateUserHandler | Error Path | No permission | session lacks ScopeAdminUsers | 403 Forbidden `msgNoPermissionToUpdateUsers` | P2 |  |
 | UR-14 | UpdateUserHandler | Error Path | Malformed body | Admin session, body is not valid JSON | 400 Bad Request `msgInvalidRequestBody` | P2 |  |
 | UR-15 | UpdateUserHandler | Error Path | UserService.UpdateUser fails with an unclassified error | Admin session, valid body, service returns `testerrors.ErrDBDown` | 500 Internal Server Error `msgFailedToUpdateUser` | P2 |  |
-| UR-16 | UpdateUserFromPlatformHandler | Happy Path | platform=discord, valid body | Admin session, body decodes into linking.DiscordData, service succeeds | 200 OK with the user struct | P1 |  |
-| UR-17 | UpdateUserFromPlatformHandler | Happy Path | platform=minecraft, valid body | Admin session, body decodes into linking.MinecraftData, service succeeds | 200 OK with the user struct | P2 |  |
+| UR-16 | UpdateUserFromPlatformHandler | Happy Path | platform=discord, valid body | Admin session, body decodes into link.DiscordData, service succeeds | 200 OK with the user struct | P1 |  |
+| UR-17 | UpdateUserFromPlatformHandler | Happy Path | platform=minecraft, valid body | Admin session, body decodes into link.MinecraftData, service succeeds | 200 OK with the user struct | P2 |  |
 | UR-18 | UpdateUserFromPlatformHandler | Happy Path | platform=twitch, valid body | Admin session, body decodes into twitch.Data, service succeeds | 200 OK with the user struct | P2 |  |
-| UR-19 | UpdateUserFromPlatformHandler | Happy Path | platform=xboxlive, valid body | Admin session, body decodes into linking.XboxLiveData, service succeeds | 200 OK with the user struct | P2 |  |
-| UR-20 | UpdateUserFromPlatformHandler | Happy Path | platform=microsoft, valid body | Admin session, body decodes into linking.MicrosoftUserData, service succeeds | 200 OK with the user struct | P2 |  |
+| UR-19 | UpdateUserFromPlatformHandler | Happy Path | platform=xboxlive, valid body | Admin session, body decodes into link.XboxLiveData, service succeeds | 200 OK with the user struct | P2 |  |
+| UR-20 | UpdateUserFromPlatformHandler | Happy Path | platform=microsoft, valid body | Admin session, body decodes into link.MicrosoftUserData, service succeeds | 200 OK with the user struct | P2 |  |
 | UR-21 | UpdateUserFromPlatformHandler | Error Path | Unsupported platform value | platform path value matches none of the five known platforms | 400 Bad Request `msgUnsupportedPlatform` | P2 |  |
 | UR-22 | UpdateUserFromPlatformHandler | Error Path | No permission | session lacks ScopeAdminUsers | 403 Forbidden `msgNoPermissionToUpdateUsers` | P2 |  |
 | UR-23 | UpdateUserFromPlatformHandler | Error Path | Malformed body for the given platform | Admin session, platform=discord, body is not valid JSON | 400 Bad Request `msgInvalidRequestBody` | P2 |  |

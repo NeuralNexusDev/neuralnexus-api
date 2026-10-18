@@ -1,37 +1,37 @@
 package user
 
 import (
-	authaccount "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/link"
 )
 
-// Service is the user layer over the account, linking and settings services and the role lookup.
+// Service is the user layer over the account, link and settings services and the role lookup.
 type Service interface {
 	GetUser(userID string) (*User, error)
-	GetUserFromPlatform(platform linking.Platform, platformID string) (*User, error)
+	GetUserFromPlatform(platform link.Platform, platformID string) (*User, error)
 	ListUsers(limit, offset int) ([]*User, error)
 	GetUserPermissions(userID string) ([]string, error)
 	UpdateUser(userID string, update *UserUpdate) error
-	UpdateUserFromPlatform(platform linking.Platform, platformID string, data linking.PlatformData) (*User, error)
+	UpdateUserFromPlatform(platform link.Platform, platformID string, data link.PlatformData) (*User, error)
 	DeleteUser(userID string) error
-	GetAccountSettings(userID string) (*authaccount.AccountSettings, error)
+	GetAccountSettings(userID string) (*account.AccountSettings, error)
 	SetPasswordAuthEnabled(userID string, enabled bool) error
 }
 
-type userService struct {
-	as    authaccount.AccountStore
-	als   linking.LinkAccountStore
-	links linking.Service
-	ass   authaccount.AccountSettingsStore
-	rs    authaccount.RoleStore
+type service struct {
+	as    account.Store
+	als   link.Store
+	links link.Service
+	ass   account.SettingsStore
+	rs    account.RoleStore
 }
 
 // NewService - Create a new user Service
-func NewService(as authaccount.AccountStore, als linking.LinkAccountStore, links linking.Service, ass authaccount.AccountSettingsStore, rs authaccount.RoleStore) Service {
-	return &userService{as, als, links, ass, rs}
+func NewService(as account.Store, als link.Store, links link.Service, ass account.SettingsStore, rs account.RoleStore) Service {
+	return &service{as, als, links, ass, rs}
 }
 
-func userFromAccount(a *authaccount.Account) *User {
+func userFromAccount(a *account.Account) *User {
 	if a == nil {
 		return nil
 	}
@@ -39,7 +39,7 @@ func userFromAccount(a *authaccount.Account) *User {
 }
 
 // GetUser - Get a user by their ID
-func (s *userService) GetUser(userID string) (*User, error) {
+func (s *service) GetUser(userID string) (*User, error) {
 	a, err := s.as.GetAccountByID(userID)
 	if err != nil {
 		return nil, err
@@ -48,7 +48,7 @@ func (s *userService) GetUser(userID string) (*User, error) {
 }
 
 // GetUserFromPlatform - Get a user by their platform ID
-func (s *userService) GetUserFromPlatform(platform linking.Platform, platformID string) (*User, error) {
+func (s *service) GetUserFromPlatform(platform link.Platform, platformID string) (*User, error) {
 	la, err := s.als.GetLinkedAccountByPlatformID(platform, platformID)
 	if err != nil {
 		return nil, err
@@ -61,7 +61,7 @@ func (s *userService) GetUserFromPlatform(platform linking.Platform, platformID 
 }
 
 // ListUsers - List a page of users ordered by ID
-func (s *userService) ListUsers(limit, offset int) ([]*User, error) {
+func (s *service) ListUsers(limit, offset int) ([]*User, error) {
 	accounts, err := s.as.ListAccounts(limit, offset)
 	if err != nil {
 		return nil, err
@@ -74,7 +74,7 @@ func (s *userService) ListUsers(limit, offset int) ([]*User, error) {
 }
 
 // GetUserPermissions - Get a user's permissions
-func (s *userService) GetUserPermissions(userID string) ([]string, error) {
+func (s *service) GetUserPermissions(userID string) ([]string, error) {
 	a, err := s.as.GetAccountByID(userID)
 	if err != nil {
 		return nil, err
@@ -93,7 +93,7 @@ func (s *userService) GetUserPermissions(userID string) ([]string, error) {
 }
 
 // UpdateUser - Update a user's username and roles
-func (s *userService) UpdateUser(userID string, update *UserUpdate) error {
+func (s *service) UpdateUser(userID string, update *UserUpdate) error {
 	account, err := s.as.GetAccountByID(userID)
 	if err != nil {
 		return err
@@ -108,7 +108,7 @@ func (s *userService) UpdateUser(userID string, update *UserUpdate) error {
 }
 
 // UpdateUserFromPlatform - Update a user from a platform
-func (s *userService) UpdateUserFromPlatform(platform linking.Platform, platformID string, data linking.PlatformData) (*User, error) {
+func (s *service) UpdateUserFromPlatform(platform link.Platform, platformID string, data link.PlatformData) (*User, error) {
 	userID, err := s.links.UpdateFromPlatform(platform, platformID, data)
 	if err != nil {
 		return nil, err
@@ -121,16 +121,16 @@ func (s *userService) UpdateUserFromPlatform(platform linking.Platform, platform
 }
 
 // DeleteUser - Delete a user
-func (s *userService) DeleteUser(userID string) error {
+func (s *service) DeleteUser(userID string) error {
 	return s.as.DeleteAccountFromDB(userID)
 }
 
 // GetAccountSettings - Get a user's account settings
-func (s *userService) GetAccountSettings(userID string) (*authaccount.AccountSettings, error) {
+func (s *service) GetAccountSettings(userID string) (*account.AccountSettings, error) {
 	return s.ass.GetAccountSettings(userID)
 }
 
 // SetPasswordAuthEnabled - Toggle whether a user's password can log in
-func (s *userService) SetPasswordAuthEnabled(userID string, enabled bool) error {
+func (s *service) SetPasswordAuthEnabled(userID string, enabled bool) error {
 	return s.ass.SetPasswordAuthEnabled(userID, enabled)
 }

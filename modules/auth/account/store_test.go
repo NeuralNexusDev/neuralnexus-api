@@ -65,13 +65,13 @@ const stLiveLockKey = 910000
 // stLiveStore's cleanup deletes rows in userID range
 // 910000000000000000..910000000000049999, so stLiveLockKey keeps the live
 // tests of every package from running at once.
-func stLiveStore(t *testing.T) (AccountStore, AccountSettingsStore) {
+func stLiveStore(t *testing.T) (Store, SettingsStore) {
 	t.Helper()
 	s := stLiveFullStore(t)
-	return s, s
+	return s, NewSettingsStore(s.db)
 }
 
-func stLiveFullStore(t *testing.T) Store {
+func stLiveFullStore(t *testing.T) *store {
 	t.Helper()
 
 	pgURL := os.Getenv("TEST_POSTGRES_URL")
@@ -164,7 +164,7 @@ func stLiveFullStore(t *testing.T) Store {
 		}
 	}
 
-	return NewStore(db)
+	return &store{db: db}
 }
 
 func stSeedRoles(t *testing.T, db *pgxpool.Pool, ids ...int64) {
@@ -177,14 +177,14 @@ func stSeedRoles(t *testing.T, db *pgxpool.Pool, ids ...int64) {
 	}
 }
 
-func stSeedBareAccount(t *testing.T, as AccountStore, userID string) {
+func stSeedBareAccount(t *testing.T, as Store, userID string) {
 	t.Helper()
 	if err := as.AddAccountToDB(&Account{UserID: userID, Username: "sttest-" + userID}); err != nil {
 		t.Fatalf("failed to seed account %s: %v", userID, err)
 	}
 }
 
-func stSeedPasswordAccount(t *testing.T, as AccountStore, userID string) *Account {
+func stSeedPasswordAccount(t *testing.T, as Store, userID string) *Account {
 	t.Helper()
 	a := &Account{UserID: userID, Username: "sttest-" + userID}
 	if err := a.HashPassword("sttest-password"); err != nil {
@@ -292,7 +292,7 @@ func TestST18DeleteAccountFromDB(t *testing.T) {
 }
 
 func TestST37GetAccountSettings(t *testing.T) {
-	s := stStoreWithUnreachableDB(t)
+	s := &settingsStore{db: stUnreachablePool(t)}
 	t.Run("ST-37_ConnectionErrorNotDefaultsFallback", func(t *testing.T) {
 		got, err := s.GetAccountSettings("u1")
 		if got != nil {
@@ -304,12 +304,12 @@ func TestST37GetAccountSettings(t *testing.T) {
 
 func TestST38to39SetPasswordAuthEnabled(t *testing.T) {
 	t.Run("ST-38_EnableBeginFails", func(t *testing.T) {
-		s := stStoreWithUnreachableDB(t)
+		s := &settingsStore{db: stUnreachablePool(t)}
 		stAssertRawConnectionError(t, s.SetPasswordAuthEnabled("u1", true))
 	})
 
 	t.Run("ST-39_DisableBeginFails", func(t *testing.T) {
-		s := stStoreWithUnreachableDB(t)
+		s := &settingsStore{db: stUnreachablePool(t)}
 		stAssertRawConnectionError(t, s.SetPasswordAuthEnabled("u1", false))
 	})
 }
@@ -490,7 +490,7 @@ func TestST81to83_AccountSettingsUnknownUser(t *testing.T) {
 
 func TestST84_SetPasswordAuthEnabledAccountDeletedConcurrently(t *testing.T) {
 	full := stLiveFullStore(t)
-	db := full.(*store).db
+	db := full.db
 	a := stSeedPasswordAccount(t, full, "910000000000000032")
 	ctx := context.Background()
 
@@ -509,7 +509,7 @@ func TestST84_SetPasswordAuthEnabledAccountDeletedConcurrently(t *testing.T) {
 		}
 
 		done := make(chan error, 1)
-		go func() { done <- full.SetPasswordAuthEnabled(a.UserID, true) }()
+		go func() { done <- NewSettingsStore(db).SetPasswordAuthEnabled(a.UserID, true) }()
 
 		deadline := time.Now().Add(5 * time.Second)
 		for {
@@ -538,7 +538,7 @@ func TestST84_SetPasswordAuthEnabledAccountDeletedConcurrently(t *testing.T) {
 func TestST85to95AccountRoleIDs(t *testing.T) {
 	full := stLiveFullStore(t)
 	as := full
-	stSeedRoles(t, full.(*store).db, 910000000000000301, 910000000000000302, 910000000000000303)
+	stSeedRoles(t, full.db, 910000000000000301, 910000000000000302, 910000000000000303)
 
 	t.Run("ST-85_RoleIDsRoundTrip", func(t *testing.T) {
 		const userID = "910000000000000040"
@@ -665,7 +665,7 @@ func TestST85to95AccountRoleIDs(t *testing.T) {
 	t.Run("ST-95_AssignmentWaitsForAnInFlightRoleDeleteAndThenRefuses", func(t *testing.T) {
 		const userID = "910000000000000049"
 		const roleID = 910000000000000311
-		db := full.(*store).db
+		db := full.db
 		stSeedRoles(t, db, roleID)
 		ctx := context.Background()
 		tx, err := db.Begin(ctx)
@@ -715,7 +715,7 @@ func TestST85to95AccountRoleIDs(t *testing.T) {
 func TestST96to98ListAccounts(t *testing.T) {
 	full := stLiveFullStore(t)
 	as := full
-	db := full.(*store).db
+	db := full.db
 	const shortID = "95"
 	cleanShort := func() { _, _ = db.Exec(context.Background(), "DELETE FROM accounts WHERE user_id = 95") }
 	cleanShort()

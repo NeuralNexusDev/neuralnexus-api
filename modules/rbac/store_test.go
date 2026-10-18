@@ -16,8 +16,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
-	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 )
 
 func rbUnusedPort(t *testing.T) int {
@@ -477,7 +477,7 @@ func TestST22to26GetPermissionsForRoles(t *testing.T) {
 			t.Fatalf("GetPermissionsForRoles() err = %v", err)
 		}
 		rbAssertStrings(t, got, []string{"rbtest.pets:a", "rbtest.pets:b:c"})
-		s := &authsession.Session{Permissions: got}
+		s := &session.Session{Permissions: got}
 		scope := perms.Scope{Node: "rbtest.pets"}
 		if !s.HasPermission(scope) || !s.HasPermissionValue(scope, "b:c") || s.HasPermissionValue(scope, "c") {
 			t.Errorf("a session holding %v does not match as expected", got)

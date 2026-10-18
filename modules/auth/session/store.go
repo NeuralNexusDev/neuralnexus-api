@@ -23,7 +23,7 @@ type store struct {
 }
 
 // NewStore - Create a new session store
-func NewStore(db *pgxpool.Pool, rdb *redis.Client) SessionStore {
+func NewStore(db *pgxpool.Pool, rdb *redis.Client) Store {
 	return &store{
 		db:  db,
 		rdb: rdb,
@@ -40,8 +40,8 @@ func NewStore(db *pgxpool.Pool, rdb *redis.Client) SessionStore {
 //  FOREIGN KEY (user_id) REFERENCES accounts(user_id)
 // );
 
-// SessionStore interface
-type SessionStore interface {
+// Store - The session store interface
+type Store interface {
 	AddSessionToDB(session *Session) error
 	GetSessionFromDB(id string) (*Session, error)
 	UpdateSessionInDB(session *Session) error

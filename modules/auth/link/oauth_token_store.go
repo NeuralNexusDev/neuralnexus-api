@@ -1,4 +1,4 @@
-package linking
+package link
 
 import (
 	"context"
@@ -7,12 +7,16 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	authaccount "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 )
 
 // NewOAuthTokenStore - Create a new OAuth token store
 func NewOAuthTokenStore(db *pgxpool.Pool) OAuthTokenStore {
-	return &store{db: db}
+	return &oAuthTokenStore{db: db}
+}
+
+type oAuthTokenStore struct {
+	db *pgxpool.Pool
 }
 
 //CREATE TRIGGER update_oauth_tokens_modtime
@@ -44,7 +48,7 @@ type OAuthTokenStore interface {
 }
 
 // AddOAuthTokenToDB adds an OAuth token to the database
-func (s *store) AddOAuthTokenToDB(token *OAuthToken) error {
+func (s *oAuthTokenStore) AddOAuthTokenToDB(token *OAuthToken) error {
 	_, err := s.db.Exec(context.Background(),
 		"INSERT INTO oauth_tokens (user_id, platform, access_token, token_type, refresh_token, expiry, expires_in, scope) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
 		token.UserID, token.Platform, token.AccessToken, token.TokenType, token.RefreshToken, token.Expiry, token.ExpiresIn, token.Scope)
@@ -55,7 +59,7 @@ func (s *store) AddOAuthTokenToDB(token *OAuthToken) error {
 }
 
 // GetOAuthTokenByUserID gets an OAuth token by user ID and platform
-func (s *store) GetOAuthTokenByUserID(userID string, platform Platform) (*OAuthToken, error) {
+func (s *oAuthTokenStore) GetOAuthTokenByUserID(userID string, platform Platform) (*OAuthToken, error) {
 	rows, err := s.db.Query(context.Background(), "SELECT * FROM oauth_tokens WHERE user_id = $1 AND platform = $2", userID, platform)
 	if err != nil {
 		return nil, err
@@ -64,7 +68,7 @@ func (s *store) GetOAuthTokenByUserID(userID string, platform Platform) (*OAuthT
 	token, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[OAuthToken])
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, authaccount.ErrNotFound
+			return nil, account.ErrNotFound
 		}
 		return nil, err
 	}
@@ -72,7 +76,7 @@ func (s *store) GetOAuthTokenByUserID(userID string, platform Platform) (*OAuthT
 }
 
 // UpdateOAuthToken updates an OAuth token in the database
-func (s *store) UpdateOAuthToken(token *OAuthToken) error {
+func (s *oAuthTokenStore) UpdateOAuthToken(token *OAuthToken) error {
 	_, err := s.db.Exec(context.Background(),
 		"UPDATE oauth_tokens SET access_token = $2, token_type = $3, refresh_token = $4, expiry = $5, expires_in = $6, scope = $7 WHERE user_id = $1 AND platform = $8",
 		token.UserID, token.AccessToken, token.TokenType, token.RefreshToken, token.Expiry, token.ExpiresIn, token.Scope, token.Platform)
@@ -83,7 +87,7 @@ func (s *store) UpdateOAuthToken(token *OAuthToken) error {
 }
 
 // DeleteOAuthToken deletes an OAuth token from the database
-func (s *store) DeleteOAuthToken(userID string, platform Platform) error {
+func (s *oAuthTokenStore) DeleteOAuthToken(userID string, platform Platform) error {
 	_, err := s.db.Exec(context.Background(), "DELETE FROM oauth_tokens WHERE user_id = $1 AND platform = $2", userID, platform)
 	if err != nil {
 		return err
