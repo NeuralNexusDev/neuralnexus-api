@@ -1,7 +1,6 @@
 package numbersds
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
@@ -32,14 +31,14 @@ func CreateNumberHandler(s NumberService) http.HandlerFunc {
 		var n *NumberData
 		err := responses.DecodeStruct(r, &n)
 		if err != nil {
-			log.Println(logBadBody, err)
+			reqctx.Log(r.Context(), logBadBody, err.Error())
 			responses.BadRequest(w, r, "")
 			return
 		}
 
-		n, err = s.Create(n)
+		n, err = s.Create(r.Context(), n)
 		if err != nil {
-			log.Println("Failed to create numberstore:\n\t", err)
+			reqctx.Log(r.Context(), "Failed to create numberstore:\n\t", err.Error())
 			responses.InternalServerError(w, r, msgFailedToCreateNumberstore)
 			return
 		}
@@ -53,14 +52,14 @@ func ReadNumberHandler(s NumberService) http.HandlerFunc {
 		var n *NumberData
 		err := responses.DecodeStruct(r, &n)
 		if err != nil {
-			log.Println(logBadBody, err)
+			reqctx.Log(r.Context(), logBadBody, err.Error())
 			responses.BadRequest(w, r, "")
 			return
 		}
 
-		n, err = s.Read(n)
+		n, err = s.Read(r.Context(), n)
 		if err != nil {
-			log.Println("Failed to read numberstore:\n\t", err)
+			reqctx.Log(r.Context(), "Failed to read numberstore:\n\t", err.Error())
 			responses.InternalServerError(w, r, msgFailedToReadNumberstore)
 			return
 		}
@@ -80,14 +79,14 @@ func UpdateNumberHandler(s NumberService) http.HandlerFunc {
 		var n *NumberData
 		err := responses.DecodeStruct(r, &n)
 		if err != nil {
-			log.Println(logBadBody, err)
+			reqctx.Log(r.Context(), logBadBody, err.Error())
 			responses.BadRequest(w, r, "")
 			return
 		}
 
-		n, err = s.Update(n)
+		n, err = s.Update(r.Context(), n)
 		if err != nil {
-			log.Println("Failed to update numberstore:\n\t", err)
+			reqctx.Log(r.Context(), "Failed to update numberstore:\n\t", err.Error())
 			responses.InternalServerError(w, r, msgFailedToUpdateNumberstore)
 			return
 		}
@@ -101,14 +100,14 @@ func DeleteNumberHandler(s NumberService) http.HandlerFunc {
 		var n *NumberData
 		err := responses.DecodeStruct(r, &n)
 		if err != nil {
-			log.Println(logBadBody, err)
+			reqctx.Log(r.Context(), logBadBody, err.Error())
 			responses.BadRequest(w, r, "")
 			return
 		}
 
-		err = s.Delete(n)
+		err = s.Delete(r.Context(), n)
 		if err != nil {
-			log.Println("Failed to delete numberstore:\n\t", err)
+			reqctx.Log(r.Context(), "Failed to delete numberstore:\n\t", err.Error())
 			responses.InternalServerError(w, r, msgFailedToDeleteNumberstore)
 			return
 		}
