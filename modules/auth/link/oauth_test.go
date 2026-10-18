@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 	"github.com/bwmarrin/discordgo"
 	"github.com/google/uuid"
@@ -154,7 +154,7 @@ func oaRequestWithSession(session *session.Session) *http.Request {
 	if session == nil {
 		return req
 	}
-	return req.WithContext(context.WithValue(req.Context(), mw.SessionKey, session))
+	return req.WithContext(context.WithValue(req.Context(), reqctx.SessionKey, session))
 }
 
 func oaSetVar(t *testing.T, target *string, value string) {

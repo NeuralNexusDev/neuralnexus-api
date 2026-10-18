@@ -8,9 +8,9 @@ import (
 
 	"github.com/goccy/go-json"
 
-	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/proto/bngpb"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
@@ -59,7 +59,7 @@ func bngRequest(t *testing.T, method, target string, pathValues map[string]strin
 		r.SetPathValue(k, v)
 	}
 	if session != nil {
-		r = r.WithContext(context.WithValue(r.Context(), mw.SessionKey, session))
+		r = r.WithContext(context.WithValue(r.Context(), reqctx.SessionKey, session))
 	}
 	return r
 }

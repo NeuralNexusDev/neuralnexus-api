@@ -88,3 +88,22 @@ func TestLog(t *testing.T) {
 		Log(ctx, "msg")
 	})
 }
+
+func TestKeys(t *testing.T) {
+	t.Run("RQ-06_KeyValuesFollowIotaOrder", func(t *testing.T) {
+		for _, tc := range []struct {
+			name string
+			got  key
+			want key
+		}{
+			{"SessionKey", SessionKey, 0},
+			{"RequestIDKey", RequestIDKey, 1},
+			{"RemoteAddrKey", RemoteAddrKey, 2},
+			{"UserIDKey", UserIDKey, 3},
+		} {
+			if tc.got != tc.want {
+				t.Errorf("%s = %d, want %d", tc.name, tc.got, tc.want)
+			}
+		}
+	})
+}

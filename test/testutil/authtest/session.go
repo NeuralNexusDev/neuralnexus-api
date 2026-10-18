@@ -6,15 +6,15 @@ import (
 	"net/http/httptest"
 	"strings"
 
-	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
 // NewSessionRequest builds a request carrying session in its context and the given path values.
 func NewSessionRequest(method string, session *session.Session, userID, platform, body string) *http.Request {
-	ctx := context.WithValue(testutil.LogContext(context.Background()), mw.SessionKey, session)
+	ctx := context.WithValue(testutil.LogContext(context.Background()), reqctx.SessionKey, session)
 	var r *http.Request
 	if body != "" {
 		r = httptest.NewRequest(method, "/", strings.NewReader(body)).WithContext(ctx)

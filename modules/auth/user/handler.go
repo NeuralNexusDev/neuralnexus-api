@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strconv"
 
-	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/link"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
@@ -71,7 +71,7 @@ func respondUpdateUserFailure(w http.ResponseWriter, r *http.Request, err error)
 // ListUsersHandler - List a page of users
 func ListUsersHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*session.Session)
+		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
 		if !session.HasPermission(perms.ScopeAdminUsers) {
 			responses.Forbidden(w, r, msgNoPermissionToGetUsers)
 			return
@@ -110,7 +110,7 @@ func ListUsersHandler(service Service) http.HandlerFunc {
 // GetUserHandler - Get a user
 func GetUserHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*session.Session)
+		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
 		userID := r.PathValue("user_id")
 		// Locked down to self-lookup and admins for now. Cross-user lookup
 		// with the target's consent is a planned feature (for account-link
@@ -137,7 +137,7 @@ func GetUserHandler(service Service) http.HandlerFunc {
 // GetUserFromPlatformHandler - Get a user from a platform
 func GetUserFromPlatformHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*session.Session)
+		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
 		if !session.HasPermission(perms.ScopeAdminUsers) {
 			responses.Forbidden(w, r, msgNoPermissionToGetUsers)
 			return
@@ -161,7 +161,7 @@ func GetUserFromPlatformHandler(service Service) http.HandlerFunc {
 // GetUserPermissionsHandler - Get a user's permissions
 func GetUserPermissionsHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*session.Session)
+		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
 		userID := r.PathValue("user_id")
 		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
 			responses.Forbidden(w, r, msgNoPermissionToGetUserPermissions)
@@ -184,7 +184,7 @@ func GetUserPermissionsHandler(service Service) http.HandlerFunc {
 // UpdateUserHandler - Update a user
 func UpdateUserHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*session.Session)
+		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
 		if !session.HasPermission(perms.ScopeAdminUsers) {
 			responses.Forbidden(w, r, msgNoPermissionToUpdateUsers)
 			return
@@ -213,7 +213,7 @@ func UpdateUserHandler(service Service) http.HandlerFunc {
 // UpdateUserFromPlatformHandler - Update a user from a platform
 func UpdateUserFromPlatformHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*session.Session)
+		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
 		if !session.HasPermission(perms.ScopeAdminUsers) {
 			responses.Forbidden(w, r, msgNoPermissionToUpdateUsers)
 			return
@@ -275,7 +275,7 @@ func UpdateUserFromPlatformHandler(service Service) http.HandlerFunc {
 // DeleteUserHandler - Delete a user
 func DeleteUserHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*session.Session)
+		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
 		if !session.HasPermission(perms.ScopeAdminUsers) {
 			responses.Forbidden(w, r, msgNoPermissionToDeleteUsers)
 			return
@@ -294,7 +294,7 @@ func DeleteUserHandler(service Service) http.HandlerFunc {
 // GetAccountSettingsHandler - Get a user's account settings
 func GetAccountSettingsHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*session.Session)
+		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
 		userID := r.PathValue("user_id")
 		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
 			responses.Forbidden(w, r, msgNoPermissionToViewSettings)
@@ -324,7 +324,7 @@ type UpdateAccountSettingsRequest struct {
 // UpdateAccountSettingsHandler - Update a user's account settings
 func UpdateAccountSettingsHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*session.Session)
+		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
 		userID := r.PathValue("user_id")
 		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
 			responses.Forbidden(w, r, msgNoPermissionToUpdateSettings)

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
@@ -86,7 +86,7 @@ func (m *hdMockStore) DeletePetPicture(_ context.Context, id string) (*PetPictur
 }
 
 func hdCtxWithSession(session session.Session) context.Context {
-	return context.WithValue(testutil.LogContext(context.Background()), mw.SessionKey, &session)
+	return context.WithValue(testutil.LogContext(context.Background()), reqctx.SessionKey, &session)
 }
 
 // hdSessionWithPermissions builds a session whose Permissions are exactly the given strings.

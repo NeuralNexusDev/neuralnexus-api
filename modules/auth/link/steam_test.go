@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 	"github.com/goccy/go-json"
 )
@@ -150,7 +150,7 @@ func stRequestWithSession(session *session.Session) *http.Request {
 	if session == nil {
 		return req
 	}
-	ctx := context.WithValue(req.Context(), mw.SessionKey, session)
+	ctx := context.WithValue(req.Context(), reqctx.SessionKey, session)
 	return req.WithContext(ctx)
 }
 

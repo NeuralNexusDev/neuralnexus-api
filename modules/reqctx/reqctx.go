@@ -10,10 +10,12 @@ import (
 type key int
 
 const (
-	// RemoteAddrKey holds the client address (string).
-	RemoteAddrKey key = iota
+	// SessionKey holds the signed-in session (*session.Session).
+	SessionKey key = iota
 	// RequestIDKey holds the request ID (int).
 	RequestIDKey
+	// RemoteAddrKey holds the client address (string).
+	RemoteAddrKey
 	// UserIDKey holds the signed-in user's ID (string).
 	UserIDKey
 )
