@@ -2,16 +2,19 @@ package link
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"github.com/goccy/go-json"
 	"github.com/google/uuid"
 	"golang.org/x/oauth2"
 	"io"
-	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
+
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 )
 
 // -------------- Global Variables --------------
@@ -96,7 +99,7 @@ var (
 	ErrXSTSMissingXIDOrGTG      = errors.New("xsts authorization response missing xid or gtg in DisplayClaims")
 )
 
-func xstsErrForCode(code int64) error {
+func xstsErrForCode(ctx context.Context, code int64) error {
 	switch code {
 	case 2148916233:
 		return ErrNoXboxAccount
@@ -109,7 +112,7 @@ func xstsErrForCode(code int64) error {
 	case 2148916238:
 		return ErrAccountIsChild
 	default:
-		log.Println(ErrXSTSAuthentication, "code:", code)
+		reqctx.Log(ctx, ErrXSTSAuthentication.Error(), "code:", strconv.FormatInt(code, 10))
 		return ErrXSTSAuthentication
 	}
 }
@@ -186,8 +189,8 @@ func (m *MicrosoftUserData) CreateLinkedAccount(userID string) *LinkedAccount {
 // GetMicrosoftUser fetches the caller's plain Microsoft account identity from
 // the OIDC userinfo endpoint, for a "sign in with Microsoft" login that isn't
 // about Xbox Live or Minecraft ownership.
-func GetMicrosoftUser(token *OAuthToken) (*MicrosoftUserData, error) {
-	req, err := http.NewRequest(http.MethodGet, microsoftUserInfoURL, nil)
+func GetMicrosoftUser(ctx context.Context, token *OAuthToken) (*MicrosoftUserData, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, microsoftUserInfoURL, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +204,7 @@ func GetMicrosoftUser(token *OAuthToken) (*MicrosoftUserData, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		log.Println(ErrMicrosoftUserinfoLookup, resp.Status)
+		reqctx.Log(ctx, ErrMicrosoftUserinfoLookup.Error(), resp.Status)
 		return nil, ErrMicrosoftUserinfoLookup
 	}
 
@@ -244,7 +247,7 @@ type xblAuthResponse struct {
 
 // xblAuthenticate exchanges a Microsoft OAuth access token for an Xbox Live
 // (XBL) user token via the RPS ticket exchange.
-func xblAuthenticate(msAccessToken string) (string, error) {
+func xblAuthenticate(ctx context.Context, msAccessToken string) (string, error) {
 	reqBody := xblAuthRequest{
 		Properties: xblAuthProperties{
 			AuthMethod: "RPS",
@@ -261,7 +264,7 @@ func xblAuthenticate(msAccessToken string) (string, error) {
 		return "", err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, xboxLiveAuthenticateURL, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, xboxLiveAuthenticateURL, bytes.NewReader(body))
 	if err != nil {
 		return "", err
 	}
@@ -276,7 +279,7 @@ func xblAuthenticate(msAccessToken string) (string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		log.Println(ErrXboxLiveAuthentication, resp.Status)
+		reqctx.Log(ctx, ErrXboxLiveAuthentication.Error(), resp.Status)
 		return "", ErrXboxLiveAuthentication
 	}
 
@@ -311,7 +314,7 @@ type xstsAuthResponse struct {
 // relyingParty, returning that token alongside whatever DisplayClaims Xbox
 // Live includes for it. xuid/gamertag are only populated when relyingParty
 // is xstsXboxLiveRelyingParty - see the const doc comment above.
-func xstsAuthorize(xblToken, relyingParty string) (xstsToken, userHash, xuid, gamertag string, err error) {
+func xstsAuthorize(ctx context.Context, xblToken, relyingParty string) (xstsToken, userHash, xuid, gamertag string, err error) {
 	reqBody := xstsAuthRequest{
 		Properties: xstsAuthProperties{
 			SandboxId:  "RETAIL",
@@ -325,7 +328,7 @@ func xstsAuthorize(xblToken, relyingParty string) (xstsToken, userHash, xuid, ga
 		return "", "", "", "", err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, xstsAuthorizeURL, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, xstsAuthorizeURL, bytes.NewReader(body))
 	if err != nil {
 		return "", "", "", "", err
 	}
@@ -346,10 +349,10 @@ func xstsAuthorize(xblToken, relyingParty string) (xstsToken, userHash, xuid, ga
 	decodeErr := json.NewDecoder(resp.Body).Decode(&xstsResp)
 
 	if xstsResp.XErr != 0 {
-		return "", "", "", "", xstsErrForCode(xstsResp.XErr)
+		return "", "", "", "", xstsErrForCode(ctx, xstsResp.XErr)
 	}
 	if resp.StatusCode != http.StatusOK {
-		log.Println(ErrXSTSAuthorization, resp.Status)
+		reqctx.Log(ctx, ErrXSTSAuthorization.Error(), resp.Status)
 		return "", "", "", "", ErrXSTSAuthorization
 	}
 	if decodeErr != nil {
@@ -376,7 +379,7 @@ type mcLoginWithXboxResponse struct {
 
 // minecraftLoginWithXbox exchanges an XSTS token for a Minecraft Services
 // access token.
-func minecraftLoginWithXbox(userHash, xstsToken string) (string, error) {
+func minecraftLoginWithXbox(ctx context.Context, userHash, xstsToken string) (string, error) {
 	reqBody := mcLoginWithXboxRequest{
 		IdentityToken: fmt.Sprintf("XBL3.0 x=%s;%s", userHash, xstsToken),
 	}
@@ -385,7 +388,7 @@ func minecraftLoginWithXbox(userHash, xstsToken string) (string, error) {
 		return "", err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, minecraftLoginURL, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, minecraftLoginURL, bytes.NewReader(body))
 	if err != nil {
 		return "", err
 	}
@@ -400,7 +403,7 @@ func minecraftLoginWithXbox(userHash, xstsToken string) (string, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
-		log.Println(ErrMinecraftLoginWithXbox, resp.Status, string(respBody))
+		reqctx.Log(ctx, ErrMinecraftLoginWithXbox.Error(), resp.Status, string(respBody))
 		return "", ErrMinecraftLoginWithXbox
 	}
 
@@ -425,8 +428,8 @@ type mcProfileResponse struct {
 // getMinecraftProfile fetches the caller's Minecraft: Java Edition profile.
 // A nil profile with a nil error means the account simply doesn't own Java -
 // not a failure.
-func getMinecraftProfile(mcAccessToken string) (*MinecraftData, error) {
-	req, err := http.NewRequest(http.MethodGet, minecraftProfileURL, nil)
+func getMinecraftProfile(ctx context.Context, mcAccessToken string) (*MinecraftData, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, minecraftProfileURL, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -448,7 +451,7 @@ func getMinecraftProfile(mcAccessToken string) (*MinecraftData, error) {
 		return nil, nil
 	}
 	if resp.StatusCode != http.StatusOK {
-		log.Println(ErrMinecraftProfileLookup, resp.Status)
+		reqctx.Log(ctx, ErrMinecraftProfileLookup.Error(), resp.Status)
 		return nil, ErrMinecraftProfileLookup
 	}
 	if decodeErr != nil {
@@ -457,7 +460,7 @@ func getMinecraftProfile(mcAccessToken string) (*MinecraftData, error) {
 
 	id, err := uuid.Parse(profile.ID)
 	if err != nil {
-		log.Println("Minecraft profile returned an invalid UUID:", profile.ID, err)
+		reqctx.Log(ctx, "Minecraft profile returned an invalid UUID:", profile.ID, err.Error())
 		return nil, err
 	}
 	return &MinecraftData{
@@ -472,8 +475,8 @@ func getMinecraftProfile(mcAccessToken string) (*MinecraftData, error) {
 // relying party to get the caller's verified Xbox Live identity (XUID +
 // gamertag) - unrelated to Minecraft: Java ownership, and deliberately never
 // mixed into the Minecraft-scoped XSTS/login_with_xbox chain below.
-func authenticateXboxLiveIdentity(xblToken string) (*XboxLiveData, error) {
-	_, _, xuid, gamertag, err := xstsAuthorize(xblToken, xstsXboxLiveRelyingParty)
+func authenticateXboxLiveIdentity(ctx context.Context, xblToken string) (*XboxLiveData, error) {
+	_, _, xuid, gamertag, err := xstsAuthorize(ctx, xblToken, xstsXboxLiveRelyingParty)
 	if err != nil {
 		return nil, err
 	}
@@ -488,12 +491,12 @@ func authenticateXboxLiveIdentity(xblToken string) (*XboxLiveData, error) {
 // requesting a Minecraft-scoped XSTS token) at all - for callers that want
 // to link Xbox Live without also linking (or checking ownership of)
 // Minecraft: Java Edition.
-func GetXboxUser(token *OAuthToken) (*XboxLiveData, error) {
-	xblToken, err := xblAuthenticate(token.AccessToken)
+func GetXboxUser(ctx context.Context, token *OAuthToken) (*XboxLiveData, error) {
+	xblToken, err := xblAuthenticate(ctx, token.AccessToken)
 	if err != nil {
 		return nil, err
 	}
-	return authenticateXboxLiveIdentity(xblToken)
+	return authenticateXboxLiveIdentity(ctx, xblToken)
 }
 
 // GetXboxAndMinecraftUser exchanges a Microsoft OAuth access token for the
@@ -511,23 +514,23 @@ func GetXboxUser(token *OAuthToken) (*XboxLiveData, error) {
 // before the Xbox Live identity is authorized at all, rather than
 // interleaving the two XSTS authorizations - a previous version requested
 // both up front and login_with_xbox started failing with 403s in prod.
-func GetXboxAndMinecraftUser(token *OAuthToken) (xbox *XboxLiveData, java *MinecraftData, err error) {
-	xblToken, err := xblAuthenticate(token.AccessToken)
+func GetXboxAndMinecraftUser(ctx context.Context, token *OAuthToken) (xbox *XboxLiveData, java *MinecraftData, err error) {
+	xblToken, err := xblAuthenticate(ctx, token.AccessToken)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	xstsToken, userHash, _, _, err := xstsAuthorize(xblToken, xstsMinecraftRelyingParty)
+	xstsToken, userHash, _, _, err := xstsAuthorize(ctx, xblToken, xstsMinecraftRelyingParty)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	mcAccessToken, minecraftErr := minecraftLoginWithXbox(userHash, xstsToken)
+	mcAccessToken, minecraftErr := minecraftLoginWithXbox(ctx, userHash, xstsToken)
 	if minecraftErr == nil {
-		java, minecraftErr = getMinecraftProfile(mcAccessToken)
+		java, minecraftErr = getMinecraftProfile(ctx, mcAccessToken)
 	}
 
-	xbox, err = authenticateXboxLiveIdentity(xblToken)
+	xbox, err = authenticateXboxLiveIdentity(ctx, xblToken)
 	if err != nil {
 		return nil, nil, err
 	}

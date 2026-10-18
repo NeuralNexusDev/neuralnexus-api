@@ -49,7 +49,7 @@ func handleRevocation(ctx context.Context, userId string, eventsub EventSubServi
 	switch vals.Subscription.Status {
 	case helix.EventSubStatusAuthorizationRevoked:
 		reqctx.Log(ctx, userId, "EventSub authorization revoked")
-		err = tokens.DeleteOAuthToken(vals.Subscription.Condition.BroadcasterUserID, link.PlatformTwitch)
+		err = tokens.DeleteOAuthToken(ctx, vals.Subscription.Condition.BroadcasterUserID, link.PlatformTwitch)
 		if err != nil {
 			reqctx.Log(ctx, userId, "Failed to delete OAuth token:", err.Error())
 			return errors.New("failed to delete OAuth token")
@@ -137,9 +137,9 @@ func handleChannelChatMessage(ctx context.Context, userId string, eventsub Event
 		toPlatformId := args[2]
 
 		if toPlatform == link.PlatformMinecraft {
-			fromLinkedAccount, _ := linked.GetLinkedAccountByPlatformID(fromPlatform, fromPlatformId)
-			alreadyLinkedAccount, _ := linked.GetLinkedAccountByUserID(fromLinkedAccount.UserID, toPlatform)
-			toLinkedAccount, _ := linked.GetLinkedAccountByPlatformName(toPlatform, toPlatformId)
+			fromLinkedAccount, _ := linked.GetLinkedAccountByPlatformID(ctx, fromPlatform, fromPlatformId)
+			alreadyLinkedAccount, _ := linked.GetLinkedAccountByUserID(ctx, fromLinkedAccount.UserID, toPlatform)
+			toLinkedAccount, _ := linked.GetLinkedAccountByPlatformName(ctx, toPlatform, toPlatformId)
 
 			// Logic Matrix:
 			// 1. The Twitch user is already linked to this Minecraft account
@@ -165,7 +165,7 @@ func handleChannelChatMessage(ctx context.Context, userId string, eventsub Event
 
 			// Check if the user is already linked to a Minecraft account
 			if fromLinkedAccount != nil {
-				tla, _ := linked.GetLinkedAccountByUserID(fromLinkedAccount.UserID, toPlatform)
+				tla, _ := linked.GetLinkedAccountByUserID(ctx, fromLinkedAccount.UserID, toPlatform)
 				if tla != nil {
 					reqctx.Log(ctx, userId, "User is already linked to a Minecraft account:", tla.PlatformUsername)
 					// return errors.New("user is already linked to Minecraft account")
