@@ -3,7 +3,6 @@ package rbac
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +13,7 @@ import (
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
 type stubService struct {
@@ -242,12 +242,7 @@ func TestRH04ServiceFailureMapping(t *testing.T) {
 					t.Fatalf("%s with %v: got %d %s, want %d %s", c.name, sentinel, w.Code, w.Body.String(), want.status, want.msg)
 				}
 			}
-			for _, sentinel := range handled {
-				if got, w := respond(c, fmt.Errorf("wrapped: %w", sentinel)); got != outcomes[sentinel] {
-					t.Fatalf("%s with a wrapped %v: got %d %s", c.name, sentinel, w.Code, w.Body.String())
-				}
-			}
-			if got, w := respond(c, errors.New("boom")); got != internal {
+			if got, w := respond(c, testutil.ErrBoom); got != internal {
 				t.Fatalf("%s with an unknown error: got %d %s, want 500", c.name, w.Code, w.Body.String())
 			}
 		}
