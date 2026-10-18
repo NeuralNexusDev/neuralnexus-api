@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"runtime/debug"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/ratelimit"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"golang.org/x/crypto/ed25519"
 )
@@ -42,10 +42,6 @@ type key int
 const (
 	// SessionKey - Key for session in context
 	SessionKey key = iota
-	// RequestIDKey - Key for request ID in context
-	RequestIDKey
-	// RemoteAddrKey - Key for remote address in context
-	RemoteAddrKey
 )
 
 const (
@@ -60,23 +56,9 @@ const (
 	RetryAfter = 60
 )
 
+// LogRequest - Log a message with the request's ID, user and remote address
 func LogRequest(ctx context.Context, message ...string) {
-	remoteAddr := ctx.Value(RemoteAddrKey).(string)
-	requestId := ctx.Value(RequestIDKey).(int)
-	session, ok := ctx.Value(SessionKey).(*session.Session)
-	if !ok {
-		session = nil
-	}
-	userId := "N/A"
-	if session != nil {
-		userId = session.UserID
-	}
-	log.Printf("%d %s %s %s",
-		requestId,
-		userId,
-		remoteAddr,
-		strings.Join(message, " "),
-	)
+	reqctx.Log(ctx, message...)
 }
 
 // CreateStack - Create a stack of middlewares
@@ -129,7 +111,7 @@ func IPMiddleware(next http.Handler) http.Handler {
 		}
 
 		ctx := r.Context()
-		ctx = context.WithValue(ctx, RemoteAddrKey, r.RemoteAddr)
+		ctx = context.WithValue(ctx, reqctx.RemoteAddrKey, r.RemoteAddr)
 		r = r.WithContext(ctx)
 
 		next.ServeHTTP(w, r)
@@ -162,6 +144,7 @@ func SessionMiddleware(service session.Service) Middleware {
 				}
 
 				ctx := context.WithValue(r.Context(), SessionKey, session)
+				ctx = context.WithValue(ctx, reqctx.UserIDKey, session.UserID)
 				r = r.WithContext(ctx)
 			} else if cookie, err := r.Cookie(SessionCookieName); err == nil {
 				session, jwtErr := service.ReadJWT(cookie.Value)
@@ -173,6 +156,7 @@ func SessionMiddleware(service session.Service) Middleware {
 					}
 				} else {
 					ctx := context.WithValue(r.Context(), SessionKey, session)
+					ctx = context.WithValue(ctx, reqctx.UserIDKey, session.UserID)
 					r = r.WithContext(ctx)
 				}
 			}
@@ -272,7 +256,7 @@ func RequestIDMiddleware(next http.Handler) http.Handler {
 			requestId, _ = strconv.Atoi(requestIdStr)
 		}
 		ctx := r.Context()
-		ctx = context.WithValue(ctx, RequestIDKey, requestId)
+		ctx = context.WithValue(ctx, reqctx.RequestIDKey, requestId)
 		r = r.WithContext(ctx)
 
 		next.ServeHTTP(w, r)
