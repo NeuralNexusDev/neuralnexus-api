@@ -9,12 +9,6 @@ import (
 
 const logLinkCleanupFailed = "Failed to link account, and failed to clean up the orphaned placeholder account:\n\t"
 
-// PlaceholderAccountStore - the account writes a new link needs when it creates a placeholder account
-type PlaceholderAccountStore interface {
-	AddAccountToDB(a *authaccount.Account) error
-	DeleteAccountFromDB(userID string) error
-}
-
 // Service - The linking service
 type Service interface {
 	GetUserLinkedAccounts(userID string) ([]*LinkedAccount, error)
@@ -26,11 +20,11 @@ type Service interface {
 // service - The linking service struct
 type service struct {
 	als LinkAccountStore
-	as  PlaceholderAccountStore
+	as  authaccount.AccountStore
 }
 
 // NewService - Create a new linking service
-func NewService(als LinkAccountStore, as PlaceholderAccountStore) Service {
+func NewService(als LinkAccountStore, as authaccount.AccountStore) Service {
 	return &service{als, as}
 }
 

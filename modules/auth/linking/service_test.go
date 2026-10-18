@@ -208,6 +208,31 @@ func (f *usFakeAccountStore) DeleteAccountFromDB(userID string) error {
 	return f.deleteErr
 }
 
+func (f *usFakeAccountStore) GetAccountByID(userID string) (*authaccount.Account, error) {
+	f.getByIDCalls++
+	f.getByIDLastUserID = userID
+	return f.getByIDAccount, f.getByIDErr
+}
+
+func (f *usFakeAccountStore) GetAccountByUsername(_ string) (*authaccount.Account, error) {
+	return nil, authaccount.ErrNotFound
+}
+
+func (f *usFakeAccountStore) GetAccountByEmail(_ string) (*authaccount.Account, error) {
+	return nil, authaccount.ErrNotFound
+}
+
+func (f *usFakeAccountStore) ListAccounts(_, _ int) ([]*authaccount.Account, error) {
+	f.listCalls++
+	return f.listAccounts, f.listErr
+}
+
+func (f *usFakeAccountStore) UpdateAccountInDB(a *authaccount.Account) error {
+	f.updateCalls++
+	f.updateLastAccount = a
+	return f.updateErr
+}
+
 type usConcurrentStore struct {
 	mu       sync.Mutex
 	accounts map[string]*authaccount.Account
