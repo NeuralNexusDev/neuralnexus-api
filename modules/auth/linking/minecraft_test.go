@@ -3,7 +3,6 @@ package linking
 import (
 	"testing"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"github.com/goccy/go-json"
 	"github.com/google/uuid"
 )
@@ -57,8 +56,8 @@ func TestMC05CreateLinkedAccount(t *testing.T) {
 		if la.UserID != "user-1" {
 			t.Errorf("UserID = %q, want %q", la.UserID, "user-1")
 		}
-		if la.Platform != auth.PlatformMinecraft {
-			t.Errorf("Platform = %q, want %q", la.Platform, auth.PlatformMinecraft)
+		if la.Platform != PlatformMinecraft {
+			t.Errorf("Platform = %q, want %q", la.Platform, PlatformMinecraft)
 		}
 		if la.PlatformUsername != "Steve" {
 			t.Errorf("PlatformUsername = %q, want %q", la.PlatformUsername, "Steve")

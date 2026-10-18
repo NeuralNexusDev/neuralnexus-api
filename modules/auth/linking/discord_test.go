@@ -5,7 +5,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	"github.com/bwmarrin/discordgo"
 	"github.com/goccy/go-json"
 )
@@ -56,8 +55,8 @@ func TestDC05CreateLinkedAccount(t *testing.T) {
 		if la.UserID != "user-1" {
 			t.Errorf("UserID = %q, want %q", la.UserID, "user-1")
 		}
-		if la.Platform != auth.PlatformDiscord {
-			t.Errorf("Platform = %q, want %q", la.Platform, auth.PlatformDiscord)
+		if la.Platform != PlatformDiscord {
+			t.Errorf("Platform = %q, want %q", la.Platform, PlatformDiscord)
 		}
 		if la.PlatformUsername != "alice" {
 			t.Errorf("PlatformUsername = %q, want %q", la.PlatformUsername, "alice")
@@ -96,7 +95,7 @@ func TestDC06to08GetDiscordUser(t *testing.T) {
 		defer ts.Close()
 		setDiscordUsersEndpoint(t, ts)
 
-		token := &auth.OAuthToken{AccessToken: "tok"}
+		token := &OAuthToken{AccessToken: "tok"}
 		got, err := GetDiscordUser(token)
 		if err != nil {
 			t.Fatalf("GetDiscordUser() unexpected error: %v", err)
@@ -114,7 +113,7 @@ func TestDC06to08GetDiscordUser(t *testing.T) {
 		defer ts.Close()
 		setDiscordUsersEndpoint(t, ts)
 
-		token := &auth.OAuthToken{AccessToken: "bad-tok"}
+		token := &OAuthToken{AccessToken: "bad-tok"}
 		got, err := GetDiscordUser(token)
 		if err == nil {
 			t.Fatalf("GetDiscordUser() expected an error, got none (result: %+v)", got)
@@ -132,7 +131,7 @@ func TestDC06to08GetDiscordUser(t *testing.T) {
 		defer ts.Close()
 		setDiscordUsersEndpoint(t, ts)
 
-		token := &auth.OAuthToken{AccessToken: "tok"}
+		token := &OAuthToken{AccessToken: "tok"}
 		got, err := GetDiscordUser(token)
 		if err == nil {
 			t.Fatalf("GetDiscordUser() expected an error for malformed JSON, got none (result: %+v)", got)

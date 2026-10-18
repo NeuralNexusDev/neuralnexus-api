@@ -1,18 +1,15 @@
-package auth
+package account
 
 import (
 	"crypto/rand"
 	"crypto/subtle"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
-
 	"log"
 	"os"
 	"time"
-
 	_ "unsafe"
-)
 
-// -------------- Account --------------
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
+)
 
 var pepper = []byte(os.Getenv("PEPPER"))
 
@@ -146,8 +143,6 @@ func (user *Account) RemoveRole(role string) {
 	}
 }
 
-// -------------- Account Settings --------------
-
 // AccountSettings holds account-level toggles that live outside the
 // accounts table itself.
 type AccountSettings struct {
@@ -161,55 +156,3 @@ type AccountSettings struct {
 func DefaultAccountSettings(userID string) *AccountSettings {
 	return &AccountSettings{UserID: userID, PasswordAuthEnabled: true}
 }
-
-// -------------- Account Linking --------------
-
-// -------------- Structs --------------
-
-// LinkedAccount struct
-type LinkedAccount struct {
-	UserID           string      `db:"user_id" validate:"required" json:"user_id" xml:"user_id"`
-	Platform         Platform    `db:"platform" validate:"required" json:"platform" xml:"platform"`
-	PlatformUsername string      `db:"platform_username" validate:"required_without=GetID" json:"platform_username" xml:"platform_username"`
-	PlatformID       string      `db:"platform_id" validate:"required_without=GetUsername" json:"platform_id" xml:"platform_id"`
-	Data             interface{} `db:"data" validate:"required" json:"data" xml:"data"`
-	Verified         bool        `db:"verified" json:"verified" xml:"verified"`
-	LoginEnabled     bool        `db:"login_enabled" json:"login_enabled" xml:"login_enabled"`
-	DataUpdatedAt    time.Time   `db:"updated_at" json:"updated_at" xml:"updated_at"`
-	CreatedAt        time.Time   `db:"created_at" json:"created_at" xml:"created_at"`
-}
-
-// NewLinkedAccount creates a new, verified, login-enabled linked account.
-func NewLinkedAccount(userID string, platform Platform, platformUsername, platformID string, data PlatformData) *LinkedAccount {
-	return &LinkedAccount{
-		UserID:           userID,
-		Platform:         platform,
-		PlatformUsername: platformUsername,
-		PlatformID:       platformID,
-		Data:             data,
-		Verified:         true,
-		LoginEnabled:     true,
-	}
-}
-
-// PlatformData interface
-type PlatformData interface {
-	GetID() string
-	GetEmail() string
-	GetUsername() string
-	GetData() string
-	CreateLinkedAccount(string) *LinkedAccount
-}
-
-// -------------- Enums --------------
-
-type Platform string
-
-var (
-	PlatformDiscord   Platform = "discord"
-	PlatformMinecraft Platform = "minecraft"
-	PlatformTwitch    Platform = "twitch"
-	PlatformXboxLive  Platform = "xboxlive"
-	PlatformMicrosoft Platform = "microsoft"
-	PlatformSteam     Platform = "steam"
-)

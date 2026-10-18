@@ -10,7 +10,7 @@ import (
 
 	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
+	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
@@ -85,13 +85,13 @@ func (m *hdMockStore) DeletePetPicture(id string) (*PetPicture, error) {
 	return m.deletePetPictureResult, m.deletePetPictureErr
 }
 
-func hdCtxWithSession(session auth.Session) context.Context {
+func hdCtxWithSession(session authsession.Session) context.Context {
 	return context.WithValue(context.Background(), mw.SessionKey, &session)
 }
 
 // hdSessionWithPermissions builds a session whose Permissions are exactly the given strings.
-func hdSessionWithPermissions(permissions ...string) auth.Session {
-	return auth.Session{Permissions: permissions}
+func hdSessionWithPermissions(permissions ...string) authsession.Session {
+	return authsession.Session{Permissions: permissions}
 }
 
 func hdDecodeJSON(t *testing.T, body []byte) map[string]interface{} {
@@ -120,7 +120,7 @@ func TestHD01to05_CreatePetHandler(t *testing.T) {
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPost, "/pets/Rex", nil)
 		req.SetPathValue("name", "Rex")
-		req = req.WithContext(hdCtxWithSession(auth.Session{}))
+		req = req.WithContext(hdCtxWithSession(authsession.Session{}))
 		w := httptest.NewRecorder()
 
 		CreatePetHandler(svc)(w, req)

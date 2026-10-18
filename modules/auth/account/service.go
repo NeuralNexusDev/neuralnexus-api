@@ -1,12 +1,18 @@
-package auth
+package account
 
 import (
 	"time"
 
+	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 )
 
-// AccountService - The userService interface
+// RoleStore - The source of the permissions that roles grant
+type RoleStore interface {
+	GetPermissionsForRoles(roleIDs []string) ([]string, error)
+}
+
+// AccountService - The account service interface
 type AccountService interface {
 	AddAccount(account *Account) error
 	GetAccountByID(userID string) (*Account, error)
@@ -15,19 +21,19 @@ type AccountService interface {
 	UpdateAccount(account *Account) error
 	DeleteAccount(userID string) error
 	IsPasswordAuthEnabled(userID string) (bool, error)
-	NewSession(account *Account, expiresAt int64) (*Session, error)
+	NewSession(account *Account, expiresAt int64) (*authsession.Session, error)
 }
 
-// userService - The userService struct
+// accountService - The accountService struct
 type accountService struct {
 	as  AccountStore
 	ass AccountSettingsStore
 	rs  RoleStore
 }
 
-// NewAccountService - Create a new userService
-func NewAccountService(store Store, rs RoleStore) AccountService {
-	return &accountService{store.Account(), store.AccountSettings(), rs}
+// NewAccountService - Create a new AccountService
+func NewAccountService(as AccountStore, ass AccountSettingsStore, rs RoleStore) AccountService {
+	return &accountService{as, ass, rs}
 }
 
 // GetAccountByID - Get an account by its ID
@@ -70,7 +76,7 @@ func (s *accountService) IsPasswordAuthEnabled(userID string) (bool, error) {
 }
 
 // NewSession - Create a session for an account with the permissions of its roles
-func (s *accountService) NewSession(account *Account, expiresAt int64) (*Session, error) {
+func (s *accountService) NewSession(account *Account, expiresAt int64) (*authsession.Session, error) {
 	permissions := []string{}
 	if len(account.Roles) > 0 {
 		var err error
@@ -86,7 +92,7 @@ func (s *accountService) NewSession(account *Account, expiresAt int64) (*Session
 		return nil, err
 	}
 	now := time.Now().Unix()
-	return &Session{
+	return &authsession.Session{
 		ID:          id,
 		UserID:      account.UserID,
 		Permissions: permissions,

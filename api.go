@@ -18,8 +18,11 @@ import (
 	"golang.org/x/crypto/ed25519"
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
-	authroutes "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/routes"
+	authaccount "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/ratelimit"
+	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	authuser "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/user"
 	bng "github.com/NeuralNexusDev/neuralnexus-api/modules/bee_name_generator"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	ds "github.com/NeuralNexusDev/neuralnexus-api/modules/datastore"
@@ -52,9 +55,11 @@ func ApplyRoutes(
 	mux *http.ServeMux,
 	nndb *pgxpool.Pool,
 	rdb *redis.Client,
-	session auth.SessionService,
-	authStore auth.Store,
-	rateLimit auth.RateLimitService) *http.ServeMux {
+	session authsession.SessionService,
+	accountStore authaccount.Store,
+	linkAccountStore linking.LinkAccountStore,
+	oauthTokenStore linking.OAuthTokenStore,
+	rateLimit ratelimit.RateLimitService) *http.ServeMux {
 	mwAuth := mw.Auth(session)
 
 	dbUrl := os.Getenv("DATABASE_URL")
@@ -71,36 +76,37 @@ func ApplyRoutes(
 
 	// --------------- Auth ---------------
 	rbacService := rbac.NewService(rbac.NewStore(nndb))
-	account := auth.NewAccountService(authStore, rbacService)
-	user := auth.NewUserService(authStore, rbacService)
+	account := authaccount.NewAccountService(accountStore, accountStore, rbacService)
+	linkingService := linking.NewService(linkAccountStore, accountStore)
+	user := authuser.NewService(accountStore, linkAccountStore, linkingService, accountStore, rbacService)
 
 	loginRateLimit := mw.RateLimitMiddleware(rateLimit, "login", 5, 5)
 
-	mux.Handle("POST /api/v1/auth/login", loginRateLimit(authroutes.LoginHandler(account, session)))
-	mux.Handle("POST /api/v1/auth/logout", loginRateLimit(mwAuth(authroutes.LogoutHandler(session))))
+	mux.Handle("POST /api/v1/auth/login", loginRateLimit(authaccount.LoginHandler(account, session)))
+	mux.Handle("POST /api/v1/auth/logout", loginRateLimit(mwAuth(authaccount.LogoutHandler(session))))
 
-	mux.Handle("/api/oauth", loginRateLimit(authroutes.OAuthHandler(account, authStore.LinkAccount(), session)))
-	mux.Handle("/api/openid", loginRateLimit(authroutes.OpenIDHandler(account, authStore.LinkAccount(), session)))
+	mux.Handle("/api/oauth", loginRateLimit(linking.OAuthHandler(account, linkAccountStore, session)))
+	mux.Handle("/api/openid", loginRateLimit(linking.OpenIDHandler(account, linkAccountStore, session)))
 
-	mux.Handle("GET /api/v1/users", mwAuth(authroutes.ListUsersHandler(user)))
-	mux.Handle("GET /api/v1/users/{user_id}", mwAuth(authroutes.GetUserHandler(user)))
-	mux.Handle("GET /api/v1/users/me", mwAuth(mw.SelfUserID(authroutes.GetUserHandler(user))))
-	mux.Handle("GET /api/v1/users/{user_id}/permissions", mwAuth(authroutes.GetUserPermissionsHandler(user)))
-	mux.Handle("GET /api/v1/users/me/permissions", mwAuth(mw.SelfUserID(authroutes.GetUserPermissionsHandler(user))))
-	mux.Handle("GET /api/v1/users/{platform}/{platform_id}", mwAuth(authroutes.GetUserFromPlatformHandler(user)))
-	mux.Handle("PUT /api/v1/users/{user_id}", mwAuth(authroutes.UpdateUserHandler(user)))
-	mux.Handle("PUT /api/v1/users/{platform}/{platform_id}", mwAuth(authroutes.UpdateUserFromPlatformHandler(user)))
-	mux.Handle("GET /api/v1/users/{user_id}/links", mwAuth(authroutes.GetUserLinkedAccountsHandler(user)))
-	mux.Handle("GET /api/v1/users/me/links", mwAuth(mw.SelfUserID(authroutes.GetUserLinkedAccountsHandler(user))))
-	mux.Handle("DELETE /api/v1/users/{user_id}/link/{platform}", mwAuth(authroutes.UnlinkPlatformHandler(user)))
-	mux.Handle("DELETE /api/v1/users/me/link/{platform}", mwAuth(mw.SelfUserID(authroutes.UnlinkPlatformHandler(user))))
-	mux.Handle("PATCH /api/v1/users/{user_id}/link/{platform}", mwAuth(authroutes.SetPlatformLoginEnabledHandler(user)))
-	mux.Handle("PATCH /api/v1/users/me/link/{platform}", mwAuth(mw.SelfUserID(authroutes.SetPlatformLoginEnabledHandler(user))))
-	mux.Handle("GET /api/v1/users/{user_id}/settings", mwAuth(authroutes.GetAccountSettingsHandler(user)))
-	mux.Handle("GET /api/v1/users/me/settings", mwAuth(mw.SelfUserID(authroutes.GetAccountSettingsHandler(user))))
-	mux.Handle("PATCH /api/v1/users/{user_id}/settings", mwAuth(authroutes.UpdateAccountSettingsHandler(user)))
-	mux.Handle("PATCH /api/v1/users/me/settings", mwAuth(mw.SelfUserID(authroutes.UpdateAccountSettingsHandler(user))))
-	// mux.HandleFunc("DELETE /api/v1/users/{user_id}", mwAuth(authroutes.DeleteUserHandler(gssService)))
+	mux.Handle("GET /api/v1/users", mwAuth(authuser.ListUsersHandler(user)))
+	mux.Handle("GET /api/v1/users/{user_id}", mwAuth(authuser.GetUserHandler(user)))
+	mux.Handle("GET /api/v1/users/me", mwAuth(mw.SelfUserID(authuser.GetUserHandler(user))))
+	mux.Handle("GET /api/v1/users/{user_id}/permissions", mwAuth(authuser.GetUserPermissionsHandler(user)))
+	mux.Handle("GET /api/v1/users/me/permissions", mwAuth(mw.SelfUserID(authuser.GetUserPermissionsHandler(user))))
+	mux.Handle("GET /api/v1/users/{platform}/{platform_id}", mwAuth(authuser.GetUserFromPlatformHandler(user)))
+	mux.Handle("PUT /api/v1/users/{user_id}", mwAuth(authuser.UpdateUserHandler(user)))
+	mux.Handle("PUT /api/v1/users/{platform}/{platform_id}", mwAuth(authuser.UpdateUserFromPlatformHandler(user)))
+	mux.Handle("GET /api/v1/users/{user_id}/links", mwAuth(linking.GetUserLinkedAccountsHandler(linkingService)))
+	mux.Handle("GET /api/v1/users/me/links", mwAuth(mw.SelfUserID(linking.GetUserLinkedAccountsHandler(linkingService))))
+	mux.Handle("DELETE /api/v1/users/{user_id}/link/{platform}", mwAuth(linking.UnlinkPlatformHandler(linkingService)))
+	mux.Handle("DELETE /api/v1/users/me/link/{platform}", mwAuth(mw.SelfUserID(linking.UnlinkPlatformHandler(linkingService))))
+	mux.Handle("PATCH /api/v1/users/{user_id}/link/{platform}", mwAuth(linking.SetPlatformLoginEnabledHandler(linkingService)))
+	mux.Handle("PATCH /api/v1/users/me/link/{platform}", mwAuth(mw.SelfUserID(linking.SetPlatformLoginEnabledHandler(linkingService))))
+	mux.Handle("GET /api/v1/users/{user_id}/settings", mwAuth(authuser.GetAccountSettingsHandler(user)))
+	mux.Handle("GET /api/v1/users/me/settings", mwAuth(mw.SelfUserID(authuser.GetAccountSettingsHandler(user))))
+	mux.Handle("PATCH /api/v1/users/{user_id}/settings", mwAuth(authuser.UpdateAccountSettingsHandler(user)))
+	mux.Handle("PATCH /api/v1/users/me/settings", mwAuth(mw.SelfUserID(authuser.UpdateAccountSettingsHandler(user))))
+	// mux.HandleFunc("DELETE /api/v1/users/{user_id}", mwAuth(authuser.DeleteUserHandler(gssService)))
 
 	mux.Handle("GET /api/v1/roles", mwAuth(rbac.ListRolesHandler(rbacService)))
 	mux.Handle("POST /api/v1/roles", mwAuth(rbac.CreateRoleHandler(rbacService)))
@@ -231,7 +237,7 @@ func ApplyRoutes(
 	// --------------- Twitch ---------------
 	twitchStore := twitch.NewStore(database.GetDB(dbUrl + "/twitch"))
 	twitchService := twitch.NewService(twitchStore)
-	mux.HandleFunc("POST /api/twitch/eventsub", twitch.HandleEventSub(twitchService, authStore.OAuthToken(), authStore.LinkAccount()))
+	mux.HandleFunc("POST /api/twitch/eventsub", twitch.HandleEventSub(twitchService, oauthTokenStore, linkAccountStore))
 
 	// --------------- Health Check ---------------
 	mux.HandleFunc("GET /api/v1/health", func(w http.ResponseWriter, r *http.Request) {
@@ -252,14 +258,16 @@ func (s *APIServer) Setup() http.Handler {
 
 	db := database.GetDB(dbUrl + "/neuralnexus")
 	rdb := database.GetRedis()
-	authStore := auth.NewStore(db, rdb)
-	session := auth.NewSessionService(authStore)
-	rateLimit := auth.NewRateLimitService(authStore)
+	session := authsession.NewSessionService(authsession.NewStore(db, rdb))
+	accountStore := authaccount.NewStore(db)
+	linkAccountStore := linking.NewLinkAccountStore(db)
+	oauthTokenStore := linking.NewOAuthTokenStore(db)
+	rateLimit := ratelimit.NewRateLimitService(ratelimit.NewStore(rdb))
 
 	middlewareStack := mw.CreateStack(
 		mw.NoSniffMiddleware,
 		cors.New(cors.Options{
-			AllowedOrigins:   []string{auth.NN_SITE_URL},
+			AllowedOrigins:   []string{authsession.NN_SITE_URL},
 			AllowedMethods:   []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete},
 			AllowedHeaders:   []string{"Content-Type", "Authorization"},
 			AllowCredentials: true,
@@ -272,7 +280,7 @@ func (s *APIServer) Setup() http.Handler {
 		mw.RequestLoggerMiddleware,
 	)
 
-	router := ApplyRoutes(http.NewServeMux(), db, rdb, session, authStore, rateLimit)
+	router := ApplyRoutes(http.NewServeMux(), db, rdb, session, accountStore, linkAccountStore, oauthTokenStore, rateLimit)
 
 	// --------------- Static Files ---------------
 	router.Handle("/", http.FileServer(http.Dir("./public")))

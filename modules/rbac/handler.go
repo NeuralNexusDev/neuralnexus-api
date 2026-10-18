@@ -8,8 +8,8 @@ import (
 	"net/http"
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth"
 	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
+	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
@@ -55,7 +55,7 @@ type attachPermissionRequest struct {
 }
 
 func authorized(w http.ResponseWriter, r *http.Request) bool {
-	session := r.Context().Value(mw.SessionKey).(*auth.Session)
+	session := r.Context().Value(mw.SessionKey).(*authsession.Session)
 	if !session.HasPermission(perms.ScopeAdminRoles) {
 		responses.Forbidden(w, r, msgNoPermission)
 		return false

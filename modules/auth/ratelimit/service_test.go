@@ -1,4 +1,4 @@
-package auth
+package ratelimit
 
 import (
 	"errors"
@@ -30,25 +30,10 @@ func (f *rlFakeRateLimitStore) IncrementRateLimit(_ string) error {
 	return f.incrErr
 }
 
-type rlFakeStore struct {
-	rl RateLimitStore
-}
-
-func (f *rlFakeStore) Account() AccountStore { panic("rlFakeStore: Account not implemented") }
-func (f *rlFakeStore) AccountSettings() AccountSettingsStore {
-	panic("rlFakeStore: AccountSettings not implemented")
-}
-func (f *rlFakeStore) Session() SessionStore { panic("rlFakeStore: Session not implemented") }
-func (f *rlFakeStore) LinkAccount() LinkAccountStore {
-	panic("rlFakeStore: LinkAccount not implemented")
-}
-func (f *rlFakeStore) RateLimit() RateLimitStore   { return f.rl }
-func (f *rlFakeStore) OAuthToken() OAuthTokenStore { panic("rlFakeStore: OAuthToken not implemented") }
-
 func TestRL01NewRateLimitService(t *testing.T) {
 	t.Run("RL-01_WiresGivenSubStore", func(t *testing.T) {
 		rl := &rlFakeRateLimitStore{getVal: 7}
-		svc := NewRateLimitService(&rlFakeStore{rl: rl})
+		svc := NewRateLimitService(rl)
 
 		got, err := svc.GetRateLimit("k")
 		if err != nil || got != 7 {
@@ -63,7 +48,7 @@ func TestRL01NewRateLimitService(t *testing.T) {
 func TestRL02to03GetRateLimit(t *testing.T) {
 	t.Run("RL-02_Success", func(t *testing.T) {
 		rl := &rlFakeRateLimitStore{getVal: 5}
-		svc := NewRateLimitService(&rlFakeStore{rl: rl})
+		svc := NewRateLimitService(rl)
 
 		got, err := svc.GetRateLimit("k")
 		if err != nil || got != 5 {
@@ -74,7 +59,7 @@ func TestRL02to03GetRateLimit(t *testing.T) {
 	t.Run("RL-03_StoreError", func(t *testing.T) {
 		wantErr := testerrors.ErrBoom
 		rl := &rlFakeRateLimitStore{getErr: wantErr}
-		svc := NewRateLimitService(&rlFakeStore{rl: rl})
+		svc := NewRateLimitService(rl)
 
 		_, err := svc.GetRateLimit("k")
 		if !errors.Is(err, wantErr) {
@@ -86,7 +71,7 @@ func TestRL02to03GetRateLimit(t *testing.T) {
 func TestRL04to05SetRateLimit(t *testing.T) {
 	t.Run("RL-04_Success", func(t *testing.T) {
 		rl := &rlFakeRateLimitStore{}
-		svc := NewRateLimitService(&rlFakeStore{rl: rl})
+		svc := NewRateLimitService(rl)
 
 		if err := svc.SetRateLimit("k", 3); err != nil {
 			t.Errorf("SetRateLimit() = %v, want nil", err)
@@ -99,7 +84,7 @@ func TestRL04to05SetRateLimit(t *testing.T) {
 	t.Run("RL-05_StoreError", func(t *testing.T) {
 		wantErr := testerrors.ErrBoom
 		rl := &rlFakeRateLimitStore{setErr: wantErr}
-		svc := NewRateLimitService(&rlFakeStore{rl: rl})
+		svc := NewRateLimitService(rl)
 
 		err := svc.SetRateLimit("k", 3)
 		if !errors.Is(err, wantErr) {
@@ -111,7 +96,7 @@ func TestRL04to05SetRateLimit(t *testing.T) {
 func TestRL06to07IncrRateLimit(t *testing.T) {
 	t.Run("RL-06_Success", func(t *testing.T) {
 		rl := &rlFakeRateLimitStore{}
-		svc := NewRateLimitService(&rlFakeStore{rl: rl})
+		svc := NewRateLimitService(rl)
 
 		if err := svc.IncrRateLimit("k"); err != nil {
 			t.Errorf("IncrRateLimit() = %v, want nil", err)
@@ -124,7 +109,7 @@ func TestRL06to07IncrRateLimit(t *testing.T) {
 	t.Run("RL-07_StoreError", func(t *testing.T) {
 		wantErr := testerrors.ErrBoom
 		rl := &rlFakeRateLimitStore{incrErr: wantErr}
-		svc := NewRateLimitService(&rlFakeStore{rl: rl})
+		svc := NewRateLimitService(rl)
 
 		err := svc.IncrRateLimit("k")
 		if !errors.Is(err, wantErr) {
