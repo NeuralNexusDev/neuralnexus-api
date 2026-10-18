@@ -4,58 +4,23 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
+	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// stUnusedTCPPort returns a port unlikely to be reused, so a later connection
-// to it fails fast with "connection refused" instead of hanging.
-func stUnusedTCPPort(t *testing.T) int {
+func stAssertRawConnectionError(t *testing.T, err error) {
 	t.Helper()
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("failed to find an unused port: %v", err)
-	}
-	port := l.Addr().(*net.TCPAddr).Port
-	if err := l.Close(); err != nil {
-		t.Fatalf("failed to close probe listener: %v", err)
-	}
-	return port
-}
-
-func stUnreachablePool(t *testing.T) *pgxpool.Pool {
-	t.Helper()
-	port := stUnusedTCPPort(t)
-	cfg, err := pgxpool.ParseConfig(fmt.Sprintf("postgres://user:pass@127.0.0.1:%d/db?sslmode=disable&connect_timeout=2", port))
-	if err != nil {
-		t.Fatalf("failed to parse pool config: %v", err)
-	}
-	pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
-	if err != nil {
-		t.Fatalf("failed to create pool: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	return pool
+	testutil.AssertRawConnectionError(t, err, ErrNotFound, ErrEmailAlreadyExists, ErrUsernameAlreadyExists)
 }
 
 func stStoreWithUnreachableDB(t *testing.T) *store {
-	return &store{db: stUnreachablePool(t)}
-}
-
-func stAssertRawConnectionError(t *testing.T, err error) {
-	t.Helper()
-	if err == nil {
-		t.Fatal("expected a non-nil connection error")
-	}
-	if errors.Is(err, ErrNotFound) || errors.Is(err, ErrEmailAlreadyExists) || errors.Is(err, ErrUsernameAlreadyExists) {
-		t.Errorf("expected the raw connection error to pass through unchanged, got a translated sentinel: %v", err)
-	}
+	return &store{db: testutil.UnreachablePool(t)}
 }
 
 // stLiveLockKey serializes the live-database tests across packages, since each
@@ -292,7 +257,7 @@ func TestST18DeleteAccountFromDB(t *testing.T) {
 }
 
 func TestST37GetAccountSettings(t *testing.T) {
-	s := &settingsStore{db: stUnreachablePool(t)}
+	s := &settingsStore{db: testutil.UnreachablePool(t)}
 	t.Run("ACS-37_ConnectionErrorNotDefaultsFallback", func(t *testing.T) {
 		got, err := s.GetAccountSettings("u1")
 		if got != nil {
@@ -304,12 +269,12 @@ func TestST37GetAccountSettings(t *testing.T) {
 
 func TestST38to39SetPasswordAuthEnabled(t *testing.T) {
 	t.Run("ACS-38_EnableBeginFails", func(t *testing.T) {
-		s := &settingsStore{db: stUnreachablePool(t)}
+		s := &settingsStore{db: testutil.UnreachablePool(t)}
 		stAssertRawConnectionError(t, s.SetPasswordAuthEnabled("u1", true))
 	})
 
 	t.Run("ACS-39_DisableBeginFails", func(t *testing.T) {
-		s := &settingsStore{db: stUnreachablePool(t)}
+		s := &settingsStore{db: testutil.UnreachablePool(t)}
 		stAssertRawConnectionError(t, s.SetPasswordAuthEnabled("u1", false))
 	})
 }
