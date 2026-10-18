@@ -115,7 +115,7 @@ func hdRequireDetail(t *testing.T, w *httptest.ResponseRecorder, want string) {
 }
 
 func TestHD01to05_CreatePetHandler(t *testing.T) {
-	t.Run("HD-01_NoPermissionForbidden", func(t *testing.T) {
+	t.Run("PPH-01_NoPermissionForbidden", func(t *testing.T) {
 		mock := &hdMockStore{createPetResult: &Pet{ID: 1, Name: "Rex"}}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPost, "/pets/Rex", nil)
@@ -134,7 +134,7 @@ func TestHD01to05_CreatePetHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-02_HappyPathFromPathValue", func(t *testing.T) {
+	t.Run("PPH-02_HappyPathFromPathValue", func(t *testing.T) {
 		mock := &hdMockStore{createPetResult: &Pet{ID: 1, Name: "Rex"}}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPost, "/pets/Rex", nil)
@@ -156,7 +156,7 @@ func TestHD01to05_CreatePetHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-03_NameFallsBackToBody", func(t *testing.T) {
+	t.Run("PPH-03_NameFallsBackToBody", func(t *testing.T) {
 		mock := &hdMockStore{createPetResult: &Pet{ID: 2, Name: "Fido"}}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPost, "/pets", strings.NewReader(`{"name":"Fido"}`))
@@ -173,7 +173,7 @@ func TestHD01to05_CreatePetHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-04_NoNameBadRequest", func(t *testing.T) {
+	t.Run("PPH-04_NoNameBadRequest", func(t *testing.T) {
 		mock := &hdMockStore{}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPost, "/pets", nil)
@@ -191,7 +191,7 @@ func TestHD01to05_CreatePetHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-05_StoreErrorInternalServerError", func(t *testing.T) {
+	t.Run("PPH-05_StoreErrorInternalServerError", func(t *testing.T) {
 		mock := &hdMockStore{createPetErr: testerrors.ErrDBDown}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPost, "/pets/Rex", nil)
@@ -209,7 +209,7 @@ func TestHD01to05_CreatePetHandler(t *testing.T) {
 }
 
 func TestHD06to10_GetPetHandler(t *testing.T) {
-	t.Run("HD-06_HappyPathFromPathValue", func(t *testing.T) {
+	t.Run("PPH-06_HappyPathFromPathValue", func(t *testing.T) {
 		mock := &hdMockStore{getPetResult: &Pet{ID: 7, Name: "Rex"}}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodGet, "/pets/7", nil)
@@ -226,7 +226,7 @@ func TestHD06to10_GetPetHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-07_IDFallsBackToBody", func(t *testing.T) {
+	t.Run("PPH-07_IDFallsBackToBody", func(t *testing.T) {
 		mock := &hdMockStore{getPetResult: &Pet{ID: 7, Name: "Rex"}}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodGet, "/pets", strings.NewReader(`{"id":7}`))
@@ -242,7 +242,7 @@ func TestHD06to10_GetPetHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-08_NoIDBadRequest", func(t *testing.T) {
+	t.Run("PPH-08_NoIDBadRequest", func(t *testing.T) {
 		mock := &hdMockStore{}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodGet, "/pets", nil)
@@ -259,7 +259,7 @@ func TestHD06to10_GetPetHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-09_NonNumericPathValueNoBodyFallback", func(t *testing.T) {
+	t.Run("PPH-09_NonNumericPathValueNoBodyFallback", func(t *testing.T) {
 		mock := &hdMockStore{}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodGet, "/pets/abc", nil)
@@ -277,7 +277,7 @@ func TestHD06to10_GetPetHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-10_StoreErrorNotFound", func(t *testing.T) {
+	t.Run("PPH-10_StoreErrorNotFound", func(t *testing.T) {
 		mock := &hdMockStore{getPetErr: ErrPetNotFound}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodGet, "/pets/7", nil)
@@ -294,7 +294,7 @@ func TestHD06to10_GetPetHandler(t *testing.T) {
 }
 
 func TestHD11to14and35_UpdatePetHandler(t *testing.T) {
-	t.Run("HD-11_InvalidBodyBadRequest", func(t *testing.T) {
+	t.Run("PPH-11_InvalidBodyBadRequest", func(t *testing.T) {
 		mock := &hdMockStore{}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPut, "/pets", strings.NewReader(`not json`))
@@ -311,7 +311,7 @@ func TestHD11to14and35_UpdatePetHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-12_NoPermissionForbidden", func(t *testing.T) {
+	t.Run("PPH-12_NoPermissionForbidden", func(t *testing.T) {
 		mock := &hdMockStore{}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPut, "/pets", strings.NewReader(`{"id":1,"name":"Rex"}`))
@@ -329,7 +329,7 @@ func TestHD11to14and35_UpdatePetHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-13_HappyPath", func(t *testing.T) {
+	t.Run("PPH-13_HappyPath", func(t *testing.T) {
 		mock := &hdMockStore{updatePetResult: &Pet{ID: 1, Name: "Rex"}}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPut, "/pets", strings.NewReader(`{"id":1,"name":"Rex"}`))
@@ -346,7 +346,7 @@ func TestHD11to14and35_UpdatePetHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-14_StoreErrorInternalServerError", func(t *testing.T) {
+	t.Run("PPH-14_StoreErrorInternalServerError", func(t *testing.T) {
 		mock := &hdMockStore{updatePetErr: testerrors.ErrDBDown}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPut, "/pets", strings.NewReader(`{"id":1,"name":"Rex"}`))
@@ -361,7 +361,7 @@ func TestHD11to14and35_UpdatePetHandler(t *testing.T) {
 		hdRequireDetail(t, w, msgUnableToUpdatePet)
 	})
 
-	t.Run("HD-35_StoreNoRowsNotFound", func(t *testing.T) {
+	t.Run("PPH-35_StoreNoRowsNotFound", func(t *testing.T) {
 		mock := &hdMockStore{updatePetErr: ErrPetNotFound}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPut, "/pets", strings.NewReader(`{"id":1,"name":"Rex"}`))
@@ -378,7 +378,7 @@ func TestHD11to14and35_UpdatePetHandler(t *testing.T) {
 }
 
 func TestHD15to18_GetRandPetPictureByNameHandler(t *testing.T) {
-	t.Run("HD-15_HappyPathFromPathValue", func(t *testing.T) {
+	t.Run("PPH-15_HappyPathFromPathValue", func(t *testing.T) {
 		mock := &hdMockStore{getRandPetPictureByNameResult: &PetPicture{ID: "abc"}}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodGet, "/pets/Rex/picture", nil)
@@ -395,7 +395,7 @@ func TestHD15to18_GetRandPetPictureByNameHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-16_NameFallsBackToBody", func(t *testing.T) {
+	t.Run("PPH-16_NameFallsBackToBody", func(t *testing.T) {
 		mock := &hdMockStore{getRandPetPictureByNameResult: &PetPicture{ID: "abc"}}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodGet, "/pets/picture", strings.NewReader(`{"name":"Rex"}`))
@@ -411,7 +411,7 @@ func TestHD15to18_GetRandPetPictureByNameHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-17_NoNameBadRequest", func(t *testing.T) {
+	t.Run("PPH-17_NoNameBadRequest", func(t *testing.T) {
 		mock := &hdMockStore{}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodGet, "/pets/picture", nil)
@@ -425,7 +425,7 @@ func TestHD15to18_GetRandPetPictureByNameHandler(t *testing.T) {
 		hdRequireDetail(t, w, msgPetNameIsRequired)
 	})
 
-	t.Run("HD-18_StoreErrorNotFound", func(t *testing.T) {
+	t.Run("PPH-18_StoreErrorNotFound", func(t *testing.T) {
 		mock := &hdMockStore{getRandPetPictureByNameErr: ErrPetPictureNotFound}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodGet, "/pets/Rex/picture", nil)
@@ -442,7 +442,7 @@ func TestHD15to18_GetRandPetPictureByNameHandler(t *testing.T) {
 }
 
 func TestHD19to22_GetPetPictureHandler(t *testing.T) {
-	t.Run("HD-19_HappyPathFromPathValue", func(t *testing.T) {
+	t.Run("PPH-19_HappyPathFromPathValue", func(t *testing.T) {
 		mock := &hdMockStore{getPetPictureResult: &PetPicture{ID: "abc123"}}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodGet, "/pictures/abc123", nil)
@@ -459,7 +459,7 @@ func TestHD19to22_GetPetPictureHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-20_IDFallsBackToBody", func(t *testing.T) {
+	t.Run("PPH-20_IDFallsBackToBody", func(t *testing.T) {
 		mock := &hdMockStore{getPetPictureResult: &PetPicture{ID: "abc123"}}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodGet, "/pictures", strings.NewReader(`{"id":"abc123"}`))
@@ -475,7 +475,7 @@ func TestHD19to22_GetPetPictureHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-21_NoIDBadRequest", func(t *testing.T) {
+	t.Run("PPH-21_NoIDBadRequest", func(t *testing.T) {
 		mock := &hdMockStore{}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodGet, "/pictures", nil)
@@ -489,7 +489,7 @@ func TestHD19to22_GetPetPictureHandler(t *testing.T) {
 		hdRequireDetail(t, w, msgPetPictureIDIsRequired)
 	})
 
-	t.Run("HD-22_StoreErrorNotFound", func(t *testing.T) {
+	t.Run("PPH-22_StoreErrorNotFound", func(t *testing.T) {
 		mock := &hdMockStore{getPetPictureErr: ErrPetPictureNotFound}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodGet, "/pictures/abc123", nil)
@@ -506,7 +506,7 @@ func TestHD19to22_GetPetPictureHandler(t *testing.T) {
 }
 
 func TestHD23to27and36_UpdatePetPictureHandler(t *testing.T) {
-	t.Run("HD-23_InvalidBodyBadRequest", func(t *testing.T) {
+	t.Run("PPH-23_InvalidBodyBadRequest", func(t *testing.T) {
 		mock := &hdMockStore{}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPut, "/pictures", strings.NewReader(`not json`))
@@ -523,7 +523,7 @@ func TestHD23to27and36_UpdatePetPictureHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-24_PetNotFoundNotFound", func(t *testing.T) {
+	t.Run("PPH-24_PetNotFoundNotFound", func(t *testing.T) {
 		mock := &hdMockStore{getPetErr: ErrPetNotFound}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPut, "/pictures", strings.NewReader(`{"id":"abc123","prime_subj":1}`))
@@ -540,7 +540,7 @@ func TestHD23to27and36_UpdatePetPictureHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-25_NoPermissionForbidden", func(t *testing.T) {
+	t.Run("PPH-25_NoPermissionForbidden", func(t *testing.T) {
 		mock := &hdMockStore{getPetResult: &Pet{ID: 1, Name: "Rex"}}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPut, "/pictures", strings.NewReader(`{"id":"abc123","prime_subj":1}`))
@@ -558,7 +558,7 @@ func TestHD23to27and36_UpdatePetPictureHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-26_HappyPath", func(t *testing.T) {
+	t.Run("PPH-26_HappyPath", func(t *testing.T) {
 		mock := &hdMockStore{
 			getPetResult:           &Pet{ID: 1, Name: "Rex"},
 			updatePetPictureResult: &PetPicture{ID: "abc123"},
@@ -578,7 +578,7 @@ func TestHD23to27and36_UpdatePetPictureHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-27_StoreErrorInternalServerError", func(t *testing.T) {
+	t.Run("PPH-27_StoreErrorInternalServerError", func(t *testing.T) {
 		mock := &hdMockStore{
 			getPetResult:        &Pet{ID: 1, Name: "Rex"},
 			updatePetPictureErr: testerrors.ErrDBDown,
@@ -596,7 +596,7 @@ func TestHD23to27and36_UpdatePetPictureHandler(t *testing.T) {
 		hdRequireDetail(t, w, msgUnableToUpdatePetPicture)
 	})
 
-	t.Run("HD-36_StoreNoRowsNotFound", func(t *testing.T) {
+	t.Run("PPH-36_StoreNoRowsNotFound", func(t *testing.T) {
 		mock := &hdMockStore{
 			getPetResult:        &Pet{ID: 1, Name: "Rex"},
 			updatePetPictureErr: ErrPetPictureNotFound,
@@ -616,7 +616,7 @@ func TestHD23to27and36_UpdatePetPictureHandler(t *testing.T) {
 }
 
 func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
-	t.Run("HD-28_HappyPathFromPathValue", func(t *testing.T) {
+	t.Run("PPH-28_HappyPathFromPathValue", func(t *testing.T) {
 		mock := &hdMockStore{
 			getPetPictureResult: &PetPicture{ID: "abc123", PrimarySubject: 1},
 			getPetResult:        &Pet{ID: 1, Name: "Rex"},
@@ -637,7 +637,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-29_IDFallsBackToBody", func(t *testing.T) {
+	t.Run("PPH-29_IDFallsBackToBody", func(t *testing.T) {
 		mock := &hdMockStore{
 			getPetPictureResult: &PetPicture{ID: "abc123", PrimarySubject: 1},
 			getPetResult:        &Pet{ID: 1, Name: "Rex"},
@@ -657,7 +657,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-30_NoIDBadRequest", func(t *testing.T) {
+	t.Run("PPH-30_NoIDBadRequest", func(t *testing.T) {
 		mock := &hdMockStore{}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodDelete, "/pictures", nil)
@@ -671,7 +671,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 		hdRequireDetail(t, w, msgPetPictureIDIsRequired)
 	})
 
-	t.Run("HD-31_GetPetPictureErrorNotFound", func(t *testing.T) {
+	t.Run("PPH-31_GetPetPictureErrorNotFound", func(t *testing.T) {
 		mock := &hdMockStore{getPetPictureErr: ErrPetPictureNotFound}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodDelete, "/pictures/abc123", nil)
@@ -689,7 +689,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-32_GetPetErrorNotFound", func(t *testing.T) {
+	t.Run("PPH-32_GetPetErrorNotFound", func(t *testing.T) {
 		mock := &hdMockStore{
 			getPetPictureResult: &PetPicture{ID: "abc123", PrimarySubject: 1},
 			getPetErr:           ErrPetNotFound,
@@ -710,7 +710,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-33_NoPermissionForbidden", func(t *testing.T) {
+	t.Run("PPH-33_NoPermissionForbidden", func(t *testing.T) {
 		mock := &hdMockStore{
 			getPetPictureResult: &PetPicture{ID: "abc123", PrimarySubject: 1},
 			getPetResult:        &Pet{ID: 1, Name: "Rex"},
@@ -732,7 +732,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-34_StoreErrorInternalServerError", func(t *testing.T) {
+	t.Run("PPH-34_StoreErrorInternalServerError", func(t *testing.T) {
 		mock := &hdMockStore{
 			getPetPictureResult: &PetPicture{ID: "abc123", PrimarySubject: 1},
 			getPetResult:        &Pet{ID: 1, Name: "Rex"},
@@ -754,7 +754,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 }
 
 func TestHD37to44_StoreFailureMapping(t *testing.T) {
-	t.Run("HD-37_CreatePetNameEmptyBadRequest", func(t *testing.T) {
+	t.Run("PPH-37_CreatePetNameEmptyBadRequest", func(t *testing.T) {
 		mock := &hdMockStore{createPetErr: ErrPetNameEmpty}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPost, "/pets/Rex", nil)
@@ -770,7 +770,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 		hdRequireDetail(t, w, msgPetNameMustNotBeEmpty)
 	})
 
-	t.Run("HD-38_UpdatePetNameEmptyBadRequest", func(t *testing.T) {
+	t.Run("PPH-38_UpdatePetNameEmptyBadRequest", func(t *testing.T) {
 		mock := &hdMockStore{updatePetErr: ErrPetNameEmpty}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPut, "/pets", strings.NewReader(`{"id":1,"name":"Rex"}`))
@@ -785,7 +785,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 		hdRequireDetail(t, w, msgPetNameMustNotBeEmpty)
 	})
 
-	t.Run("HD-39_GetPetStoreFailureInternalServerError", func(t *testing.T) {
+	t.Run("PPH-39_GetPetStoreFailureInternalServerError", func(t *testing.T) {
 		mock := &hdMockStore{getPetErr: testerrors.ErrDBDown}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodGet, "/pets/7", nil)
@@ -800,7 +800,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 		hdRequireDetail(t, w, msgUnableToGetPet)
 	})
 
-	t.Run("HD-45_GetRandPetPicturePetNotFound", func(t *testing.T) {
+	t.Run("PPH-45_GetRandPetPicturePetNotFound", func(t *testing.T) {
 		mock := &hdMockStore{getRandPetPictureByNameErr: ErrPetNotFound}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodGet, "/pets/Rex/picture", nil)
@@ -815,7 +815,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 		hdRequireDetail(t, w, msgPetNotFound)
 	})
 
-	t.Run("HD-40_GetRandPetPictureStoreFailureInternalServerError", func(t *testing.T) {
+	t.Run("PPH-40_GetRandPetPictureStoreFailureInternalServerError", func(t *testing.T) {
 		mock := &hdMockStore{getRandPetPictureByNameErr: testerrors.ErrDBDown}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodGet, "/pets/Rex/picture", nil)
@@ -830,7 +830,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 		hdRequireDetail(t, w, msgUnableToGetRandomPetPicture)
 	})
 
-	t.Run("HD-41_GetPetPictureStoreFailureInternalServerError", func(t *testing.T) {
+	t.Run("PPH-41_GetPetPictureStoreFailureInternalServerError", func(t *testing.T) {
 		mock := &hdMockStore{getPetPictureErr: testerrors.ErrDBDown}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodGet, "/pictures/abc123", nil)
@@ -845,7 +845,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 		hdRequireDetail(t, w, msgUnableToGetPetPicture)
 	})
 
-	t.Run("HD-42_UpdatePetPictureGetPetFailureInternalServerError", func(t *testing.T) {
+	t.Run("PPH-42_UpdatePetPictureGetPetFailureInternalServerError", func(t *testing.T) {
 		mock := &hdMockStore{getPetErr: testerrors.ErrDBDown}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPut, "/pictures", strings.NewReader(`{"id":"abc123","prime_subj":1}`))
@@ -862,7 +862,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-43_DeletePetPictureGetPetPictureFailureInternalServerError", func(t *testing.T) {
+	t.Run("PPH-43_DeletePetPictureGetPetPictureFailureInternalServerError", func(t *testing.T) {
 		mock := &hdMockStore{getPetPictureErr: testerrors.ErrDBDown}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodDelete, "/pictures/abc123", nil)
@@ -880,7 +880,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 		}
 	})
 
-	t.Run("HD-44_DeletePetPictureGetPetFailureInternalServerError", func(t *testing.T) {
+	t.Run("PPH-44_DeletePetPictureGetPetFailureInternalServerError", func(t *testing.T) {
 		mock := &hdMockStore{
 			getPetPictureResult: &PetPicture{ID: "abc123", PrimarySubject: 1},
 			getPetErr:           testerrors.ErrDBDown,
