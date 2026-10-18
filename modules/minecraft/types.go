@@ -1,15 +1,16 @@
 package minecraft
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"strings"
 	"time"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/goccy/go-json"
 	"github.com/google/uuid"
 )
@@ -63,20 +64,20 @@ func (p *Player) MarshalJSON() ([]byte, error) {
 }
 
 // ParseProperties parse the player's properties
-func (p *Player) ParseProperties() *TexturesValue {
+func (p *Player) ParseProperties(ctx context.Context) *TexturesValue {
 	for _, prop := range p.Properties {
 		if prop.Name != TEXTURES {
-			log.Println("Unknown property:\n\t" + prop.String())
+			reqctx.Log(ctx, "Unknown property:\n\t"+prop.String())
 			continue
 		}
 		decoded, err := base64.StdEncoding.DecodeString(prop.Value)
 		if err != nil {
-			log.Println("Failed to base64 decode texture property:\n\t", err)
+			reqctx.Log(ctx, "Failed to base64 decode texture property:\n\t", err.Error())
 			continue
 		}
 		var textures TexturesValue
 		if err := json.Unmarshal(decoded, &textures); err != nil {
-			log.Println("Failed to unmarshal texture property:\n\t", err)
+			reqctx.Log(ctx, "Failed to unmarshal texture property:\n\t", err.Error())
 			continue
 		}
 		return &textures
@@ -91,14 +92,14 @@ func (p *Player) IsStale() bool {
 
 // ToProfile converts a Player fetched live from Mojang into our canonical,
 // decoded shape for storage and caching.
-func (p *Player) ToProfile() *Profile {
+func (p *Player) ToProfile(ctx context.Context) *Profile {
 	return &Profile{
 		ID:             p.ID,
 		Name:           p.Name,
 		Legacy:         p.Legacy,
 		Demo:           p.Demo,
 		ProfileActions: p.ProfileActions,
-		Textures:       p.ParseProperties(),
+		Textures:       p.ParseProperties(ctx),
 	}
 }
 

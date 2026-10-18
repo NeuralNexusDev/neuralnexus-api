@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"log"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -14,6 +13,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 )
 
 const (
@@ -32,36 +33,36 @@ const (
 
 // Store - Minecraft player store
 type Store interface {
-	GetPlayerByUUID(id string) (*Player, error)
-	GetPlayerByName(name string) (*Player, error)
-	GetProfileByUUID(id string) (*Profile, error)
+	GetPlayerByUUID(ctx context.Context, id string) (*Player, error)
+	GetPlayerByName(ctx context.Context, name string) (*Player, error)
+	GetProfileByUUID(ctx context.Context, id string) (*Profile, error)
 
-	UpsertPlayer(player *Player, updateProfile bool) error
-	UpsertTextures(value *TexturesValue) error
-	UpsertTextureHash(hash string) error
+	UpsertPlayer(ctx context.Context, player *Player, updateProfile bool) error
+	UpsertTextures(ctx context.Context, value *TexturesValue) error
+	UpsertTextureHash(ctx context.Context, hash string) error
 
-	GetPlayerFromCache(key string) (*Player, error)
-	SetPlayerInCache(player *Player) error
+	GetPlayerFromCache(ctx context.Context, key string) (*Player, error)
+	SetPlayerInCache(ctx context.Context, player *Player) error
 
-	GetProfileFromCache(id string) (*Profile, error)
-	SetProfileInCache(profile *Profile) error
+	GetProfileFromCache(ctx context.Context, id string) (*Profile, error)
+	SetProfileInCache(ctx context.Context, profile *Profile) error
 
-	GetSignedProfileFromCache(id string) (*Player, error)
-	SetSignedProfileInCache(player *Player) error
+	GetSignedProfileFromCache(ctx context.Context, id string) (*Player, error)
+	SetSignedProfileInCache(ctx context.Context, player *Player) error
 
-	IsTextureInS3(hash string) (bool, error)
-	PutTextureInS3(hash string, body io.ReadCloser) error
+	IsTextureInS3(ctx context.Context, hash string) (bool, error)
+	PutTextureInS3(ctx context.Context, hash string, body io.ReadCloser) error
 
-	GetGeyserPlayerByGamertag(gamertag string) (*GeyserPlayer, error)
-	GetGeyserPlayerByXUID(xuid int64) (*GeyserPlayer, error)
-	UpsertGeyserPlayer(player *GeyserPlayer) error
+	GetGeyserPlayerByGamertag(ctx context.Context, gamertag string) (*GeyserPlayer, error)
+	GetGeyserPlayerByXUID(ctx context.Context, xuid int64) (*GeyserPlayer, error)
+	UpsertGeyserPlayer(ctx context.Context, player *GeyserPlayer) error
 
-	GetGeyserSkin(xuid int64) (*GeyserSkin, error)
-	GetGeyserSkinByHash(hash string) (*GeyserSkin, error)
-	UpsertGeyserSkin(xuid int64, skin *GeyserSkin) error
+	GetGeyserSkin(ctx context.Context, xuid int64) (*GeyserSkin, error)
+	GetGeyserSkinByHash(ctx context.Context, hash string) (*GeyserSkin, error)
+	UpsertGeyserSkin(ctx context.Context, xuid int64, skin *GeyserSkin) error
 
-	IsGeyserTextureInS3(hash string) (bool, error)
-	PutGeyserTextureInS3(hash string, body io.ReadCloser) error
+	IsGeyserTextureInS3(ctx context.Context, hash string) (bool, error)
+	PutGeyserTextureInS3(ctx context.Context, hash string, body io.ReadCloser) error
 }
 
 // store - Minecraft player store implementation
@@ -77,8 +78,8 @@ func NewStore(db *pgxpool.Pool, rdb *redis.Client, s3 *s3.Client) Store {
 }
 
 // GetPlayerByUUID gets a player by UUID from the database
-func (s *store) GetPlayerByUUID(id string) (*Player, error) {
-	rows, err := s.db.Query(context.Background(),
+func (s *store) GetPlayerByUUID(ctx context.Context, id string) (*Player, error) {
+	rows, err := s.db.Query(ctx,
 		"SELECT id, name, legacy, demo, first_seen, last_seen FROM players WHERE id = $1", id)
 	if err != nil {
 		return nil, err
@@ -93,8 +94,8 @@ func (s *store) GetPlayerByUUID(id string) (*Player, error) {
 }
 
 // GetPlayerByName gets a player by name from the database
-func (s *store) GetPlayerByName(name string) (*Player, error) {
-	rows, err := s.db.Query(context.Background(),
+func (s *store) GetPlayerByName(ctx context.Context, name string) (*Player, error) {
+	rows, err := s.db.Query(ctx,
 		"SELECT id, name, legacy, demo, first_seen, last_seen FROM players WHERE name = $1", name)
 	if err != nil {
 		return nil, err
@@ -115,8 +116,8 @@ func playerNotFound(err error) error {
 }
 
 // GetProfileByUUID gets a player's full profile from the database by UUID
-func (s *store) GetProfileByUUID(id string) (*Profile, error) {
-	rows, err := s.db.Query(context.Background(),
+func (s *store) GetProfileByUUID(ctx context.Context, id string) (*Profile, error) {
+	rows, err := s.db.Query(ctx,
 		"SELECT id, name, legacy, demo, profile_actions, first_seen, last_seen FROM players WHERE id = $1", id)
 	if err != nil {
 		return nil, err
@@ -126,7 +127,7 @@ func (s *store) GetProfileByUUID(id string) (*Profile, error) {
 		return nil, playerNotFound(err)
 	}
 
-	textures, err := s.getTextures(id, player.Name)
+	textures, err := s.getTextures(ctx, id, player.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -145,8 +146,8 @@ func (s *store) GetProfileByUUID(id string) (*Profile, error) {
 
 // getTextures loads a player's most recently seen skin+cape from the
 // database and decodes it into a TexturesValue, or nil if none is stored.
-func (s *store) getTextures(id, name string) (*TexturesValue, error) {
-	rows, err := s.db.Query(context.Background(), `
+func (s *store) getTextures(ctx context.Context, id, name string) (*TexturesValue, error) {
+	rows, err := s.db.Query(ctx, `
 		SELECT player_id, skin, model, cape, last_seen
 		FROM player_textures
 		WHERE player_id = $1
@@ -167,12 +168,12 @@ func (s *store) getTextures(id, name string) (*TexturesValue, error) {
 }
 
 // UpsertPlayer upserts a player into the database and updates name history
-func (s *store) UpsertPlayer(player *Player, updateProfile bool) error {
+func (s *store) UpsertPlayer(ctx context.Context, player *Player, updateProfile bool) error {
 	now := time.Now().UnixMilli()
 
 	var err error
 	if updateProfile {
-		_, err = s.db.Exec(context.Background(), `
+		_, err = s.db.Exec(ctx, `
 			INSERT INTO players (id, name, legacy, demo, profile_actions, first_seen, last_seen)
 			VALUES ($1, $2, $3, $4, $5, $6, $6)
 			ON CONFLICT (id) DO UPDATE SET
@@ -185,7 +186,7 @@ func (s *store) UpsertPlayer(player *Player, updateProfile bool) error {
 			player.ID, player.Name, player.Legacy, player.Demo, player.ProfileActions, now,
 		)
 	} else {
-		_, err = s.db.Exec(context.Background(), `
+		_, err = s.db.Exec(ctx, `
 			INSERT INTO players (id, name, legacy, demo, profile_actions, first_seen, last_seen)
 			VALUES ($1, $2, false, false, '[]', $3, $3)
 			ON CONFLICT (id) DO UPDATE SET
@@ -200,7 +201,7 @@ func (s *store) UpsertPlayer(player *Player, updateProfile bool) error {
 	}
 
 	// Upsert name history
-	_, err = s.db.Exec(context.Background(), `
+	_, err = s.db.Exec(ctx, `
 		INSERT INTO player_names (player_id, name, first_seen, last_seen)
 		VALUES ($1, $2, $3, $3)
 		ON CONFLICT (player_id, name) DO UPDATE SET
@@ -212,7 +213,7 @@ func (s *store) UpsertPlayer(player *Player, updateProfile bool) error {
 }
 
 // UpsertTextures upserts a player's skin and cape into the database
-func (s *store) UpsertTextures(value *TexturesValue) error {
+func (s *store) UpsertTextures(ctx context.Context, value *TexturesValue) error {
 	skin := value.Textures.SKIN
 	var model *Model
 	if skin != nil && skin.Metadata != nil {
@@ -224,7 +225,7 @@ func (s *store) UpsertTextures(value *TexturesValue) error {
 	// rather than a plain-column constraint, so it can't be targeted by name
 	// via ON CONFLICT ON CONSTRAINT — the conflict target must repeat the
 	// same expressions instead.
-	_, err := s.db.Exec(context.Background(), `
+	_, err := s.db.Exec(ctx, `
 		INSERT INTO player_textures (player_id, skin, model, cape, first_seen, last_seen)
 		VALUES ($1, $2, $3, $4, $5, $5)
 		ON CONFLICT (player_id, COALESCE(skin, ''), COALESCE(model, ''), COALESCE(cape, '')) DO UPDATE SET
@@ -245,8 +246,8 @@ func textureHash(t *Texture) *string {
 }
 
 // UpsertTextureHash upserts a texture hash into the database
-func (s *store) UpsertTextureHash(hash string) error {
-	_, err := s.db.Exec(context.Background(),
+func (s *store) UpsertTextureHash(ctx context.Context, hash string) error {
+	_, err := s.db.Exec(ctx,
 		"INSERT INTO textures (hash) VALUES ($1) ON CONFLICT (hash) DO NOTHING", hash)
 	return err
 }
@@ -259,8 +260,8 @@ func cacheMiss(err error) error {
 }
 
 // GetPlayerFromCache gets a player from the cache by key (uuid or name)
-func (s *store) GetPlayerFromCache(key string) (*Player, error) {
-	val, err := s.rdb.Get(context.Background(), CachePlayer+key).Result()
+func (s *store) GetPlayerFromCache(ctx context.Context, key string) (*Player, error) {
+	val, err := s.rdb.Get(ctx, CachePlayer+key).Result()
 	if err != nil {
 		return nil, cacheMiss(err)
 	}
@@ -272,22 +273,22 @@ func (s *store) GetPlayerFromCache(key string) (*Player, error) {
 }
 
 // SetPlayerInCache sets a player in the cache under both uuid and name keys
-func (s *store) SetPlayerInCache(player *Player) error {
+func (s *store) SetPlayerInCache(ctx context.Context, player *Player) error {
 	data, err := json.Marshal(player)
 	if err != nil {
 		return err
 	}
 	blob := string(data)
 
-	if err := s.rdb.Set(context.Background(), CachePlayer+player.ID, blob, redisTTL).Err(); err != nil {
+	if err := s.rdb.Set(ctx, CachePlayer+player.ID, blob, redisTTL).Err(); err != nil {
 		return err
 	}
-	return s.rdb.Set(context.Background(), CachePlayer+player.Name, blob, redisTTL).Err()
+	return s.rdb.Set(ctx, CachePlayer+player.Name, blob, redisTTL).Err()
 }
 
 // GetProfileFromCache gets a player's profile from the cache
-func (s *store) GetProfileFromCache(id string) (*Profile, error) {
-	val, err := s.rdb.Get(context.Background(), CacheProfile+id).Result()
+func (s *store) GetProfileFromCache(ctx context.Context, id string) (*Profile, error) {
+	val, err := s.rdb.Get(ctx, CacheProfile+id).Result()
 	if err != nil {
 		return nil, cacheMiss(err)
 	}
@@ -299,17 +300,17 @@ func (s *store) GetProfileFromCache(id string) (*Profile, error) {
 }
 
 // SetProfileInCache sets a player's profile in the cache
-func (s *store) SetProfileInCache(profile *Profile) error {
+func (s *store) SetProfileInCache(ctx context.Context, profile *Profile) error {
 	data, err := json.Marshal(profile)
 	if err != nil {
 		return err
 	}
-	return s.rdb.Set(context.Background(), CacheProfile+profile.ID, string(data), redisTTL).Err()
+	return s.rdb.Set(ctx, CacheProfile+profile.ID, string(data), redisTTL).Err()
 }
 
 // GetSignedProfileFromCache gets a player's signed profile from the cache
-func (s *store) GetSignedProfileFromCache(id string) (*Player, error) {
-	val, err := s.rdb.Get(context.Background(), CacheProfileSigned+id).Result()
+func (s *store) GetSignedProfileFromCache(ctx context.Context, id string) (*Player, error) {
+	val, err := s.rdb.Get(ctx, CacheProfileSigned+id).Result()
 	if err != nil {
 		return nil, cacheMiss(err)
 	}
@@ -321,17 +322,17 @@ func (s *store) GetSignedProfileFromCache(id string) (*Player, error) {
 }
 
 // SetSignedProfileInCache sets a player's signed profile in the cache
-func (s *store) SetSignedProfileInCache(player *Player) error {
+func (s *store) SetSignedProfileInCache(ctx context.Context, player *Player) error {
 	data, err := json.Marshal(player)
 	if err != nil {
 		return err
 	}
-	return s.rdb.Set(context.Background(), CacheProfileSigned+player.ID, string(data), redisTTL).Err()
+	return s.rdb.Set(ctx, CacheProfileSigned+player.ID, string(data), redisTTL).Err()
 }
 
 // IsTextureInS3 check if the texture is in S3
-func (s *store) IsTextureInS3(hash string) (bool, error) {
-	_, err := s.s3.HeadObject(context.Background(), &s3.HeadObjectInput{
+func (s *store) IsTextureInS3(ctx context.Context, hash string) (bool, error) {
+	_, err := s.s3.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(S3Bucket),
 		Key:    aws.String(S3KeyPrefix + hash),
 	})
@@ -353,8 +354,8 @@ func (s *store) IsTextureInS3(hash string) (bool, error) {
 }
 
 // GetGeyserPlayerByGamertag gets a Bedrock player's gamertag->XUID mapping.
-func (s *store) GetGeyserPlayerByGamertag(gamertag string) (*GeyserPlayer, error) {
-	rows, err := s.db.Query(context.Background(), `
+func (s *store) GetGeyserPlayerByGamertag(ctx context.Context, gamertag string) (*GeyserPlayer, error) {
+	rows, err := s.db.Query(ctx, `
 		SELECT xuid, gamertag, first_seen, last_seen
 		FROM geyser_players
 		WHERE gamertag = $1
@@ -373,8 +374,8 @@ func (s *store) GetGeyserPlayerByGamertag(gamertag string) (*GeyserPlayer, error
 
 // GetGeyserPlayerByXUID gets a Bedrock player's gamertag->XUID mapping by xuid,
 // the table's primary key.
-func (s *store) GetGeyserPlayerByXUID(xuid int64) (*GeyserPlayer, error) {
-	rows, err := s.db.Query(context.Background(), `
+func (s *store) GetGeyserPlayerByXUID(ctx context.Context, xuid int64) (*GeyserPlayer, error) {
+	rows, err := s.db.Query(ctx, `
 		SELECT xuid, gamertag, first_seen, last_seen
 		FROM geyser_players
 		WHERE xuid = $1`, xuid)
@@ -390,9 +391,9 @@ func (s *store) GetGeyserPlayerByXUID(xuid int64) (*GeyserPlayer, error) {
 }
 
 // UpsertGeyserPlayer upserts a Bedrock player's gamertag->XUID mapping into the database
-func (s *store) UpsertGeyserPlayer(player *GeyserPlayer) error {
+func (s *store) UpsertGeyserPlayer(ctx context.Context, player *GeyserPlayer) error {
 	now := time.Now().UnixMilli()
-	_, err := s.db.Exec(context.Background(), `
+	_, err := s.db.Exec(ctx, `
 		INSERT INTO geyser_players (xuid, gamertag, first_seen, last_seen)
 		VALUES ($1, $2, $3, $3)
 		ON CONFLICT (xuid) DO UPDATE SET
@@ -405,8 +406,8 @@ func (s *store) UpsertGeyserPlayer(player *GeyserPlayer) error {
 }
 
 // GetGeyserSkin gets a Bedrock player's most recently seen converted skin from the database
-func (s *store) GetGeyserSkin(xuid int64) (*GeyserSkin, error) {
-	rows, err := s.db.Query(context.Background(), `
+func (s *store) GetGeyserSkin(ctx context.Context, xuid int64) (*GeyserSkin, error) {
+	rows, err := s.db.Query(ctx, `
 		SELECT hash, is_steve, COALESCE(signature, '') AS signature, texture_id, value, first_seen, last_seen
 		FROM geyser_player_textures
 		WHERE xuid = $1
@@ -428,8 +429,8 @@ func (s *store) GetGeyserSkin(xuid int64) (*GeyserSkin, error) {
 // GetGeyserSkinByHash gets any row carrying the given hash (multiple xuids
 // can share one, so any match's Value decodes to the same bytes), or nil if
 // the hash isn't known.
-func (s *store) GetGeyserSkinByHash(hash string) (*GeyserSkin, error) {
-	rows, err := s.db.Query(context.Background(), `
+func (s *store) GetGeyserSkinByHash(ctx context.Context, hash string) (*GeyserSkin, error) {
+	rows, err := s.db.Query(ctx, `
 		SELECT hash, is_steve, COALESCE(signature, '') AS signature, texture_id, value, first_seen, last_seen
 		FROM geyser_player_textures
 		WHERE hash = $1
@@ -448,13 +449,13 @@ func (s *store) GetGeyserSkinByHash(hash string) (*GeyserSkin, error) {
 }
 
 // UpsertGeyserSkin upserts a Bedrock player's converted skin into the database
-func (s *store) UpsertGeyserSkin(xuid int64, skin *GeyserSkin) error {
+func (s *store) UpsertGeyserSkin(ctx context.Context, xuid int64, skin *GeyserSkin) error {
 	now := time.Now().UnixMilli()
 	var signature *string
 	if skin.Signature != "" {
 		signature = &skin.Signature
 	}
-	_, err := s.db.Exec(context.Background(), `
+	_, err := s.db.Exec(ctx, `
 		INSERT INTO geyser_player_textures (xuid, hash, is_steve, signature, texture_id, value, first_seen, last_seen)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
 		ON CONFLICT (xuid, hash) DO UPDATE SET
@@ -470,7 +471,7 @@ func (s *store) UpsertGeyserSkin(xuid int64, skin *GeyserSkin) error {
 }
 
 // PutTextureInS3 upload a texture to S3
-func (s *store) PutTextureInS3(hash string, body io.ReadCloser) error {
+func (s *store) PutTextureInS3(ctx context.Context, hash string, body io.ReadCloser) error {
 	input := &s3.PutObjectInput{
 		Bucket:      aws.String(S3Bucket),
 		Key:         aws.String(S3KeyPrefix + hash),
@@ -481,17 +482,17 @@ func (s *store) PutTextureInS3(hash string, body io.ReadCloser) error {
 		input.ContentLength = aws.Int64(int64(lr.Len()))
 	}
 
-	_, err := s.s3.PutObject(context.Background(), input)
+	_, err := s.s3.PutObject(ctx, input)
 	if err != nil {
-		log.Println(ErrUploadS3, err)
+		reqctx.Log(ctx, ErrUploadS3.Error(), err.Error())
 		return ErrUploadS3
 	}
 	return nil
 }
 
 // IsGeyserTextureInS3 checks if a Bedrock skin's bytes are archived in S3
-func (s *store) IsGeyserTextureInS3(hash string) (bool, error) {
-	_, err := s.s3.HeadObject(context.Background(), &s3.HeadObjectInput{
+func (s *store) IsGeyserTextureInS3(ctx context.Context, hash string) (bool, error) {
+	_, err := s.s3.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(S3Bucket),
 		Key:    aws.String(GeyserS3KeyPrefix + hash),
 	})
@@ -508,7 +509,7 @@ func (s *store) IsGeyserTextureInS3(hash string) (bool, error) {
 }
 
 // PutGeyserTextureInS3 uploads a Bedrock skin's bytes to S3
-func (s *store) PutGeyserTextureInS3(hash string, body io.ReadCloser) error {
+func (s *store) PutGeyserTextureInS3(ctx context.Context, hash string, body io.ReadCloser) error {
 	input := &s3.PutObjectInput{
 		Bucket:      aws.String(S3Bucket),
 		Key:         aws.String(GeyserS3KeyPrefix + hash),
@@ -519,9 +520,9 @@ func (s *store) PutGeyserTextureInS3(hash string, body io.ReadCloser) error {
 		input.ContentLength = aws.Int64(int64(lr.Len()))
 	}
 
-	_, err := s.s3.PutObject(context.Background(), input)
+	_, err := s.s3.PutObject(ctx, input)
 	if err != nil {
-		log.Println(ErrUploadS3, err)
+		reqctx.Log(ctx, ErrUploadS3.Error(), err.Error())
 		return ErrUploadS3
 	}
 	return nil

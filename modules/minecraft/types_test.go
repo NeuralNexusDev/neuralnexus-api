@@ -60,7 +60,7 @@ func TestTY04to09_Player_ParseProperties(t *testing.T) {
 		want := TexturesValue{ProfileID: "abc", ProfileName: "Steve", Textures: Textures{SKIN: &Texture{URL: "http://x/y"}}}
 		p := &Player{Properties: []Property{{Name: TEXTURES, Value: mcEncodeTextures(t, want)}}}
 
-		got := p.ParseProperties()
+		got := p.ParseProperties(mcCtx)
 		if got == nil {
 			t.Fatal("ParseProperties() = nil, want decoded value")
 		}
@@ -71,21 +71,21 @@ func TestTY04to09_Player_ParseProperties(t *testing.T) {
 
 	t.Run("TY-05_NoProperties", func(t *testing.T) {
 		p := &Player{Properties: nil}
-		if got := p.ParseProperties(); got != nil {
+		if got := p.ParseProperties(mcCtx); got != nil {
 			t.Errorf("ParseProperties() = %+v, want nil", got)
 		}
 	})
 
 	t.Run("TY-06_UnknownPropertyName", func(t *testing.T) {
 		p := &Player{Properties: []Property{{Name: "other", Value: "irrelevant"}}}
-		if got := p.ParseProperties(); got != nil {
+		if got := p.ParseProperties(mcCtx); got != nil {
 			t.Errorf("ParseProperties() = %+v, want nil", got)
 		}
 	})
 
 	t.Run("TY-07_InvalidBase64", func(t *testing.T) {
 		p := &Player{Properties: []Property{{Name: TEXTURES, Value: "not-base64!!"}}}
-		if got := p.ParseProperties(); got != nil {
+		if got := p.ParseProperties(mcCtx); got != nil {
 			t.Errorf("ParseProperties() = %+v, want nil", got)
 		}
 	})
@@ -93,7 +93,7 @@ func TestTY04to09_Player_ParseProperties(t *testing.T) {
 	t.Run("TY-08_ValidBase64InvalidJSON", func(t *testing.T) {
 		bad := base64.StdEncoding.EncodeToString([]byte("not json"))
 		p := &Player{Properties: []Property{{Name: TEXTURES, Value: bad}}}
-		if got := p.ParseProperties(); got != nil {
+		if got := p.ParseProperties(mcCtx); got != nil {
 			t.Errorf("ParseProperties() = %+v, want nil", got)
 		}
 	})
@@ -104,7 +104,7 @@ func TestTY04to09_Player_ParseProperties(t *testing.T) {
 			{Name: TEXTURES, Value: "not-base64!!"},
 			{Name: TEXTURES, Value: mcEncodeTextures(t, want)},
 		}}
-		got := p.ParseProperties()
+		got := p.ParseProperties(mcCtx)
 		if got == nil || got.ProfileID != "second" {
 			t.Errorf("ParseProperties() = %+v, want ProfileID=second", got)
 		}
@@ -179,7 +179,7 @@ func TestTY12to13_Player_ToProfile(t *testing.T) {
 			ProfileActions: []string{"a"},
 			Properties:     []Property{{Name: TEXTURES, Value: mcEncodeTextures(t, tex)}},
 		}
-		got := p.ToProfile()
+		got := p.ToProfile(mcCtx)
 		if got.ID != p.ID || got.Name != p.Name || got.Legacy != p.Legacy || got.Demo != p.Demo {
 			t.Errorf("ToProfile() = %+v, fields do not mirror Player", got)
 		}
@@ -193,7 +193,7 @@ func TestTY12to13_Player_ToProfile(t *testing.T) {
 
 	t.Run("TY-13_NoProperties", func(t *testing.T) {
 		p := &Player{ID: "id", Name: "name"}
-		got := p.ToProfile()
+		got := p.ToProfile(mcCtx)
 		if got.Textures != nil {
 			t.Errorf("ToProfile().Textures = %+v, want nil", got.Textures)
 		}
