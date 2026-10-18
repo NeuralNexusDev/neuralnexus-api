@@ -180,7 +180,7 @@ func bngCountByName(t *testing.T, db *pgxpool.Pool, table, name string) int {
 }
 
 func TestST01_NewStore(t *testing.T) {
-	t.Run("ST-01_WrapsGivenPool", func(t *testing.T) {
+	t.Run("BNS-01_WrapsGivenPool", func(t *testing.T) {
 		db := bngUnreachablePool(t)
 		got := NewStore(db)
 		s, ok := got.(*store)
@@ -194,7 +194,7 @@ func TestST01_NewStore(t *testing.T) {
 }
 
 func TestST02to04_GetBeeName(t *testing.T) {
-	t.Run("ST-02_Unreachable", func(t *testing.T) {
+	t.Run("BNS-02_Unreachable", func(t *testing.T) {
 		s := bngStoreWithUnreachableDB(t)
 		_, err := s.GetBeeName()
 		if err == nil {
@@ -202,7 +202,7 @@ func TestST02to04_GetBeeName(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-04_Live_NoRows", func(t *testing.T) {
+	t.Run("BNS-04_Live_NoRows", func(t *testing.T) {
 		s, db := bngLiveStore(t)
 		bngClearTable(t, db, "bee_name")
 		_, err := s.GetBeeName()
@@ -214,7 +214,7 @@ func TestST02to04_GetBeeName(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-03_Live_Found", func(t *testing.T) {
+	t.Run("BNS-03_Live_Found", func(t *testing.T) {
 		s, _ := bngLiveStore(t)
 		name := bngUniqueName("get")
 		if _, err := s.UploadBeeName(name); err != nil {
@@ -233,7 +233,7 @@ func TestST02to04_GetBeeName(t *testing.T) {
 }
 
 func TestST05to06and21and24_UploadBeeName(t *testing.T) {
-	t.Run("ST-05_Unreachable", func(t *testing.T) {
+	t.Run("BNS-05_Unreachable", func(t *testing.T) {
 		s := bngStoreWithUnreachableDB(t)
 		_, err := s.UploadBeeName(bngUniqueName("up"))
 		if err == nil {
@@ -241,7 +241,7 @@ func TestST05to06and21and24_UploadBeeName(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-06_Live_OK", func(t *testing.T) {
+	t.Run("BNS-06_Live_OK", func(t *testing.T) {
 		s, db := bngLiveStore(t)
 		name := bngUniqueName("up")
 		got, err := s.UploadBeeName(name)
@@ -258,7 +258,7 @@ func TestST05to06and21and24_UploadBeeName(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-21_Live_ConcurrentUpload", func(t *testing.T) {
+	t.Run("BNS-21_Live_ConcurrentUpload", func(t *testing.T) {
 		s, db := bngLiveStore(t)
 		const trials = 20
 
@@ -288,7 +288,7 @@ func TestST05to06and21and24_UploadBeeName(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-24_Live_WhitespaceOnlyNameRejected", func(t *testing.T) {
+	t.Run("BNS-24_Live_WhitespaceOnlyNameRejected", func(t *testing.T) {
 		s, db := bngLiveStore(t)
 		blank := "  \t "
 		t.Cleanup(func() {
@@ -310,7 +310,7 @@ func TestST05to06and21and24_UploadBeeName(t *testing.T) {
 }
 
 func TestST07to09_DeleteBeeName(t *testing.T) {
-	t.Run("ST-07_Unreachable", func(t *testing.T) {
+	t.Run("BNS-07_Unreachable", func(t *testing.T) {
 		s := bngStoreWithUnreachableDB(t)
 		_, err := s.DeleteBeeName(bngUniqueName("del"))
 		if err == nil {
@@ -318,7 +318,7 @@ func TestST07to09_DeleteBeeName(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-08_Live_OK", func(t *testing.T) {
+	t.Run("BNS-08_Live_OK", func(t *testing.T) {
 		s, db := bngLiveStore(t)
 		name := bngUniqueName("del")
 		if _, err := s.UploadBeeName(name); err != nil {
@@ -337,7 +337,7 @@ func TestST07to09_DeleteBeeName(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-09_Live_NonExistent", func(t *testing.T) {
+	t.Run("BNS-09_Live_NonExistent", func(t *testing.T) {
 		s, _ := bngLiveStore(t)
 		name := bngUniqueName("del-missing")
 		got, err := s.DeleteBeeName(name)
@@ -351,7 +351,7 @@ func TestST07to09_DeleteBeeName(t *testing.T) {
 }
 
 func TestST10to11and22and25_SubmitBeeName(t *testing.T) {
-	t.Run("ST-10_Unreachable", func(t *testing.T) {
+	t.Run("BNS-10_Unreachable", func(t *testing.T) {
 		s := bngStoreWithUnreachableDB(t)
 		_, err := s.SubmitBeeName(bngUniqueName("sub"))
 		if err == nil {
@@ -359,7 +359,7 @@ func TestST10to11and22and25_SubmitBeeName(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-11_Live_OK", func(t *testing.T) {
+	t.Run("BNS-11_Live_OK", func(t *testing.T) {
 		s, db := bngLiveStore(t)
 		name := bngUniqueName("sub")
 		got, err := s.SubmitBeeName(name)
@@ -376,7 +376,7 @@ func TestST10to11and22and25_SubmitBeeName(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-22_Live_ConcurrentSubmit", func(t *testing.T) {
+	t.Run("BNS-22_Live_ConcurrentSubmit", func(t *testing.T) {
 		s, db := bngLiveStore(t)
 		const trials = 20
 
@@ -406,7 +406,7 @@ func TestST10to11and22and25_SubmitBeeName(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-25_Live_WhitespaceOnlyNameRejected", func(t *testing.T) {
+	t.Run("BNS-25_Live_WhitespaceOnlyNameRejected", func(t *testing.T) {
 		s, db := bngLiveStore(t)
 		blank := "  \t "
 		t.Cleanup(func() {
@@ -428,7 +428,7 @@ func TestST10to11and22and25_SubmitBeeName(t *testing.T) {
 }
 
 func TestST12to14and23_GetBeeNameSuggestions(t *testing.T) {
-	t.Run("ST-12_Unreachable", func(t *testing.T) {
+	t.Run("BNS-12_Unreachable", func(t *testing.T) {
 		s := bngStoreWithUnreachableDB(t)
 		got, err := s.GetBeeNameSuggestions(5)
 		if err == nil {
@@ -439,7 +439,7 @@ func TestST12to14and23_GetBeeNameSuggestions(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-14_Live_NoRows", func(t *testing.T) {
+	t.Run("BNS-14_Live_NoRows", func(t *testing.T) {
 		s, db := bngLiveStore(t)
 		bngClearTable(t, db, "bee_name_suggestion")
 
@@ -452,7 +452,7 @@ func TestST12to14and23_GetBeeNameSuggestions(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-13_Live_OK", func(t *testing.T) {
+	t.Run("BNS-13_Live_OK", func(t *testing.T) {
 		s, db := bngLiveStore(t)
 		bngClearTable(t, db, "bee_name_suggestion")
 
@@ -479,7 +479,7 @@ func TestST12to14and23_GetBeeNameSuggestions(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-23_Live_IterationError", func(t *testing.T) {
+	t.Run("BNS-23_Live_IterationError", func(t *testing.T) {
 		seed, db := bngLiveStore(t)
 		bngClearTable(t, db, "bee_name_suggestion")
 		names := make([]string, 5)
@@ -508,7 +508,7 @@ func TestST12to14and23_GetBeeNameSuggestions(t *testing.T) {
 }
 
 func TestST15to17and26_AcceptBeeNameSuggestion(t *testing.T) {
-	t.Run("ST-15_Unreachable", func(t *testing.T) {
+	t.Run("BNS-15_Unreachable", func(t *testing.T) {
 		s := bngStoreWithUnreachableDB(t)
 		_, err := s.AcceptBeeNameSuggestion(bngUniqueName("acc"))
 		if err == nil {
@@ -516,7 +516,7 @@ func TestST15to17and26_AcceptBeeNameSuggestion(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-16_Live_OK", func(t *testing.T) {
+	t.Run("BNS-16_Live_OK", func(t *testing.T) {
 		s, db := bngLiveStore(t)
 		name := bngUniqueName("acc")
 		if _, err := s.SubmitBeeName(name); err != nil {
@@ -540,7 +540,7 @@ func TestST15to17and26_AcceptBeeNameSuggestion(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-17_Live_ConcurrentAccept", func(t *testing.T) {
+	t.Run("BNS-17_Live_ConcurrentAccept", func(t *testing.T) {
 		s, db := bngLiveStore(t)
 		const trials = 20
 
@@ -576,7 +576,7 @@ func TestST15to17and26_AcceptBeeNameSuggestion(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-26_Live_WhitespaceOnlyNameRejected", func(t *testing.T) {
+	t.Run("BNS-26_Live_WhitespaceOnlyNameRejected", func(t *testing.T) {
 		s, db := bngLiveStore(t)
 		blank := "  \t "
 		t.Cleanup(func() {
@@ -598,7 +598,7 @@ func TestST15to17and26_AcceptBeeNameSuggestion(t *testing.T) {
 }
 
 func TestST18to20_RejectBeeNameSuggestion(t *testing.T) {
-	t.Run("ST-18_Unreachable", func(t *testing.T) {
+	t.Run("BNS-18_Unreachable", func(t *testing.T) {
 		s := bngStoreWithUnreachableDB(t)
 		_, err := s.RejectBeeNameSuggestion(bngUniqueName("rej"))
 		if err == nil {
@@ -606,7 +606,7 @@ func TestST18to20_RejectBeeNameSuggestion(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-19_Live_OK", func(t *testing.T) {
+	t.Run("BNS-19_Live_OK", func(t *testing.T) {
 		s, db := bngLiveStore(t)
 		name := bngUniqueName("rej")
 		if _, err := s.SubmitBeeName(name); err != nil {
@@ -625,7 +625,7 @@ func TestST18to20_RejectBeeNameSuggestion(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-20_Live_NonExistent", func(t *testing.T) {
+	t.Run("BNS-20_Live_NonExistent", func(t *testing.T) {
 		s, _ := bngLiveStore(t)
 		name := bngUniqueName("rej-missing")
 		got, err := s.RejectBeeNameSuggestion(name)
