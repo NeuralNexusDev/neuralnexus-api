@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 	"github.com/goccy/go-json"
 )
 
@@ -485,7 +485,7 @@ func TestST23to25ProcessSteamLogin(t *testing.T) {
 
 	t.Run("LKS-24_AccountResolutionFails", func(t *testing.T) {
 		as := newSTMockAccountService()
-		as.addAccountErr = testerrors.ErrDBDown
+		as.addAccountErr = testutil.ErrDBDown
 		las := newSTMockLinkAccountStore()
 		ss := &stMockSessionService{}
 
@@ -498,7 +498,7 @@ func TestST23to25ProcessSteamLogin(t *testing.T) {
 	t.Run("LKS-25_AddSessionFails", func(t *testing.T) {
 		as := newSTMockAccountService()
 		las := newSTMockLinkAccountStore()
-		ss := &stMockSessionService{addSessionErr: testerrors.ErrDBDown}
+		ss := &stMockSessionService{addSessionErr: testutil.ErrDBDown}
 
 		_, err := ProcessSteamLogin(as, las, ss, user)
 		if err == nil {

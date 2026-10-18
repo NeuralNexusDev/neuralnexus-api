@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
+	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
 type rlFakeRateLimitStore struct {
@@ -57,7 +57,7 @@ func TestRL02to03GetRateLimit(t *testing.T) {
 	})
 
 	t.Run("RL-03_StoreError", func(t *testing.T) {
-		wantErr := testerrors.ErrBoom
+		wantErr := testutil.ErrBoom
 		rl := &rlFakeRateLimitStore{getErr: wantErr}
 		svc := NewService(rl)
 
@@ -82,7 +82,7 @@ func TestRL04to05SetRateLimit(t *testing.T) {
 	})
 
 	t.Run("RL-05_StoreError", func(t *testing.T) {
-		wantErr := testerrors.ErrBoom
+		wantErr := testutil.ErrBoom
 		rl := &rlFakeRateLimitStore{setErr: wantErr}
 		svc := NewService(rl)
 
@@ -107,7 +107,7 @@ func TestRL06to07IncrRateLimit(t *testing.T) {
 	})
 
 	t.Run("RL-07_StoreError", func(t *testing.T) {
-		wantErr := testerrors.ErrBoom
+		wantErr := testutil.ErrBoom
 		rl := &rlFakeRateLimitStore{incrErr: wantErr}
 		svc := NewService(rl)
 

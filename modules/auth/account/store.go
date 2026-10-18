@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	// ErrNotFound when a store lookup finds nothing.
+	// ErrNotFound is returned when an account, linked account or OAuth token is missing, including from the link store.
 	ErrNotFound = errors.New("not found")
 	// ErrInvalidRoleID when an account role ID is not a canonical positive integer.
 	ErrInvalidRoleID = errors.New("invalid role id")

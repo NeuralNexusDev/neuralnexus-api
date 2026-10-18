@@ -23,7 +23,7 @@
 | AC-17 | NewSession (service) | Happy Path | the account holds role ids | fake role store returns three permissions | Returns a `*Session` with a snowflake `ID`, `IssuedAt` and `LastUsedAt` set to now, `UserID`, `ExpiresAt` as given and `Permissions` exactly as the role store returned them; the role store is called once with the account's role ids | P1 |   |
 | AC-18 | NewSession (service) | Edge Case | the account holds two role ids | fake role store | The role store is called once with both ids and the permissions of both roles are returned | P1 |   |
 | AC-19 | NewSession (service) | Edge Case | the account has no roles |  | `Permissions` is empty and non-nil, the error is nil and the role store is never called | P2 |   |
-| AC-20 | NewSession (service) | Error Path | the role store fails | role store returns `testerrors.ErrBoom` | Returns a nil session and an error matching the store error, so no session is issued with missing permissions | P1 |   |
+| AC-20 | NewSession (service) | Error Path | the role store fails | role store returns `testutil.ErrBoom` | Returns a nil session and an error matching the store error, so no session is issued with missing permissions | P1 |   |
 | AC-21 | NewSession (service) | Edge Case | the account's role grants nothing | role store returns no permissions | `Permissions` is empty and non-nil | P1 |   |
 | AC-22 | NewSession (service) | Error Path | the snowflake generator fails | the test binary re-executes itself with `SNOWFLAKE_NODE_ID` above 31 | Returns a nil session and an error | P2 | Re-exec because the snowflake settings are read when the package loads |
 
@@ -57,7 +57,7 @@
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| ACS-08 | translateAccountConstraintErr | Edge Case | `err` is not a `*pgconn.PgError` | a plain error that is not a `*pgconn.PgError` (`testerrors.ErrBoom`) | Returned unchanged | P1 |  |
+| ACS-08 | translateAccountConstraintErr | Edge Case | `err` is not a `*pgconn.PgError` | a plain error that is not a `*pgconn.PgError` (`testutil.ErrBoom`) | Returned unchanged | P1 |  |
 | ACS-09 | translateAccountConstraintErr | Edge Case | `*pgconn.PgError` with `Code != "23505"` | | Returned unchanged | P2 |  |
 | ACS-10 | translateAccountConstraintErr | Edge Case | `Code == "23505"`, unrecognized `ConstraintName` | | Returned unchanged (falls through the switch) | P1 |  |
 | ACS-11 | translateAccountConstraintErr | Happy Path | `Code == "23505"`, `ConstraintName == "accounts_email_key"` | | Returns `ErrEmailAlreadyExists` | P0 |  |
@@ -115,8 +115,8 @@
 | ACH-10 | LogoutHandler | Happy Path | Logout with a valid session | Context carries a non-nil *auth.Session, ss.DeleteSession succeeds | 204 No Content, session cookie cleared (empty value, expiry in the past) | P1 |  |
 | ACH-11 | LogoutHandler | Edge Case | Session in context is a nil *auth.Session | Context value under mw.SessionKey is (*auth.Session)(nil) | 400 Bad Request `msgInvalidSession` | P3 |  |
 | ACH-12 | LogoutHandler | Error Path | session.Service.DeleteSession fails | Valid session in context, ss.DeleteSession returns an error | 500 Internal Server Error `msgFailedToDeleteSession` | P2 |  |
-| ACH-58 | LoginHandler | Error Path | the account service fails to build the session | Account/password/enabled all valid; `NewSession` returns `testerrors.ErrBoom` | 500 Internal Server Error, `detail` is `msgAuthenticationFailed`, and no session is stored | P2 |  |
-| ACH-59 | LoginHandler | Error Path | Account lookup fails with a non-not-found error | Service.GetAccountByUsername returns `testerrors.ErrDBDown` | 500 Internal Server Error `msgAuthenticationFailed`; no session cookie | P2 |  |
+| ACH-58 | LoginHandler | Error Path | the account service fails to build the session | Account/password/enabled all valid; `NewSession` returns `testutil.ErrBoom` | 500 Internal Server Error, `detail` is `msgAuthenticationFailed`, and no session is stored | P2 |  |
+| ACH-59 | LoginHandler | Error Path | Account lookup fails with a non-not-found error | Service.GetAccountByUsername returns `testutil.ErrDBDown` | 500 Internal Server Error `msgAuthenticationFailed`; no session cookie | P2 |  |
 | ACH-36 | SetSessionCookie | Happy Path | ss.CreateJWT succeeds | Valid session, ss.CreateJWT returns a JWT string | Returns nil error; Set-Cookie header carries the JWT value with Expires == time.Unix(session.ExpiresAt,0) | P1 |  |
 | ACH-37 | SetSessionCookie | Error Path | ss.CreateJWT fails | ss.CreateJWT returns an error | Returns that error; no Set-Cookie header written | P2 |  |
 | ACH-49 | sessionCookie | Accessor | Build a cookie for a given value/expiry | value="abc", expires=fixed time | Returns *http.Cookie with Name=mw.SessionCookieName, Domain=".neuralnexus.dev", Path="/", Expires=expires, Secure=true, HttpOnly=true, SameSite=Lax | P2 |  |

@@ -5,9 +5,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/mcstatus"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/proto/gsspb"
+	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 	"github.com/goccy/go-json"
 )
 
@@ -179,7 +179,7 @@ func TestGameServerStatusHandler(t *testing.T) {
 		{"GameUnsupported", ErrGameUnsupported, 400, msgGameUnsupported},
 		{"JavaStatus", mcstatus.ErrJavaStatus, 502, msgJavaStatusFailed},
 		{"BedrockStatus", mcstatus.ErrBedrockStatus, 502, msgBedrockStatusFailed},
-		{"Unrecognized", testerrors.ErrBoom, 500, msgQueryFailed},
+		{"Unrecognized", testutil.ErrBoom, 500, msgQueryFailed},
 	} {
 		t.Run("GSH-11_ErrorPath_"+tc.name, func(t *testing.T) {
 			fake := &fakeGSSService{err: tc.err}
