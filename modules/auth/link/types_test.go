@@ -19,7 +19,7 @@ func (f tyFakePlatformData) CreateLinkedAccount(_ string) *LinkedAccount {
 }
 
 func TestTY26NewLinkedAccount(t *testing.T) {
-	t.Run("TY-26_BuildsVerifiedLoginEnabledLink", func(t *testing.T) {
+	t.Run("LKT-26_BuildsVerifiedLoginEnabledLink", func(t *testing.T) {
 		data := tyFakePlatformData{id: "p1", username: "alice"}
 		la := NewLinkedAccount("u1", PlatformDiscord, "alice", "p1", data)
 
