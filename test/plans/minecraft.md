@@ -248,6 +248,7 @@
 | SV-131 | GetGeyserProfileByGamertag | Error Path | Gamertag lookup answers 400 | empty DB; fake Geyser endpoint answers 400 | Error is `ErrInvalidGeyserRequest` | P2 |  |
 | SV-132 | resolveProfile | Edge Case | DB lookup returns ErrPlayerNotFound | profile store reports not found; fake Mojang succeeds | No DB failure line is logged; falls through to Mojang fetch | P2 |  |
 | SV-133 | resolveProfile | Edge Case | DB lookup returns an error other than ErrPlayerNotFound | profile store returns a plain error; fake Mojang succeeds | The DB failure line is logged; falls through to Mojang fetch | P2 |  |
+| SV-134 | GetMojangPlayerByName | Happy Path | The caller's ctx reaches the store | cache-hit store records the ctx it receives; ctx carries a marker value | The recorded ctx holds the marker value | P1 |  |
 
 ## store.go
 
