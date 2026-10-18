@@ -2,6 +2,7 @@ package petpictures
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"mime"
@@ -15,6 +16,8 @@ import (
 
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
+
+var svCtx = context.Background()
 
 type svCreatePetPictureArgs struct {
 	id             string
@@ -30,32 +33,32 @@ type svMockStore struct {
 	createPetPictureCalls  []svCreatePetPictureArgs
 }
 
-func (m *svMockStore) CreatePet(name string) (*Pet, error) {
+func (m *svMockStore) CreatePet(_ context.Context, name string) (*Pet, error) {
 	panic("CreatePet not used by UploadPetPicture")
 }
-func (m *svMockStore) GetPet(id int) (*Pet, error) {
+func (m *svMockStore) GetPet(_ context.Context, id int) (*Pet, error) {
 	panic("GetPet not used by UploadPetPicture")
 }
-func (m *svMockStore) GetPetByName(name string) (*Pet, error) {
+func (m *svMockStore) GetPetByName(_ context.Context, name string) (*Pet, error) {
 	panic("GetPetByName not used by UploadPetPicture")
 }
-func (m *svMockStore) UpdatePet(pet *Pet) (*Pet, error) {
+func (m *svMockStore) UpdatePet(_ context.Context, pet *Pet) (*Pet, error) {
 	panic("UpdatePet not used by UploadPetPicture")
 }
-func (m *svMockStore) CreatePetPicture(id string, fileExt string, primarySubject int, othersSubjects []int, aliases []string) (*PetPicture, error) {
+func (m *svMockStore) CreatePetPicture(_ context.Context, id string, fileExt string, primarySubject int, othersSubjects []int, aliases []string) (*PetPicture, error) {
 	m.createPetPictureCalls = append(m.createPetPictureCalls, svCreatePetPictureArgs{id, fileExt, primarySubject, othersSubjects, aliases})
 	return m.createPetPictureResult, m.createPetPictureErr
 }
-func (m *svMockStore) GetRandPetPictureByName(name string) (*PetPicture, error) {
+func (m *svMockStore) GetRandPetPictureByName(_ context.Context, name string) (*PetPicture, error) {
 	panic("GetRandPetPictureByName not used by UploadPetPicture")
 }
-func (m *svMockStore) GetPetPicture(id string) (*PetPicture, error) {
+func (m *svMockStore) GetPetPicture(_ context.Context, id string) (*PetPicture, error) {
 	panic("GetPetPicture not used by UploadPetPicture")
 }
-func (m *svMockStore) UpdatePetPicture(picture PetPicture) (*PetPicture, error) {
+func (m *svMockStore) UpdatePetPicture(_ context.Context, picture PetPicture) (*PetPicture, error) {
 	panic("UpdatePetPicture not used by UploadPetPicture")
 }
-func (m *svMockStore) DeletePetPicture(id string) (*PetPicture, error) {
+func (m *svMockStore) DeletePetPicture(_ context.Context, id string) (*PetPicture, error) {
 	panic("DeletePetPicture not used by UploadPetPicture")
 }
 
@@ -132,7 +135,7 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 		CDN_KEY = "test-cdn-key"
 		t.Cleanup(func() { CDN_KEY = origKey })
 
-		got, err := svc.UploadPetPicture(file, 4, []int{5}, []string{"a"})
+		got, err := svc.UploadPetPicture(svCtx, file, 4, []int{5}, []string{"a"})
 		if err != nil {
 			t.Fatalf("UploadPetPicture() error = %v, want nil", err)
 		}
@@ -187,7 +190,7 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 		rt := &svFakeRoundTripper{}
 		swapTransport(t, rt)
 
-		got, err := svc.UploadPetPicture(file, 1, nil, nil)
+		got, err := svc.UploadPetPicture(svCtx, file, 1, nil, nil)
 		if got != nil {
 			t.Errorf("UploadPetPicture() picture = %+v, want nil", got)
 		}
@@ -207,7 +210,7 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 			t.Fatalf("failed to remove temp file: %v", err)
 		}
 
-		got, err := svc.UploadPetPicture(file, 1, nil, nil)
+		got, err := svc.UploadPetPicture(svCtx, file, 1, nil, nil)
 		if got != nil {
 			t.Errorf("UploadPetPicture() picture = %+v, want nil", got)
 		}
@@ -226,7 +229,7 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 		wantErr := testutil.ErrTransportFailed
 		swapTransport(t, &svFakeRoundTripper{err: wantErr})
 
-		got, err := svc.UploadPetPicture(file, 1, nil, nil)
+		got, err := svc.UploadPetPicture(svCtx, file, 1, nil, nil)
 		if got != nil {
 			t.Errorf("UploadPetPicture() picture = %+v, want nil", got)
 		}
@@ -244,7 +247,7 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 
 		swapTransport(t, &svFakeRoundTripper{resp: svOKResponse()})
 
-		if _, err := svc.UploadPetPicture(file, 1, nil, nil); err != nil {
+		if _, err := svc.UploadPetPicture(svCtx, file, 1, nil, nil); err != nil {
 			t.Fatalf("UploadPetPicture() error = %v, want nil", err)
 		}
 		if len(mock.createPetPictureCalls) != 1 || mock.createPetPictureCalls[0].fileExt != "gz" {
@@ -263,11 +266,46 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 
 		swapTransport(t, &svFakeRoundTripper{resp: svOKResponse()})
 
-		if _, err := svc.UploadPetPicture(file, 1, nil, nil); err != nil {
+		if _, err := svc.UploadPetPicture(svCtx, file, 1, nil, nil); err != nil {
 			t.Fatalf("UploadPetPicture() error = %v, want nil", err)
 		}
 		if len(mock.createPetPictureCalls) != 1 || mock.createPetPictureCalls[0].fileExt != base {
 			t.Errorf("CreatePetPicture calls = %+v, want one call with fileExt %q", mock.createPetPictureCalls, base)
+		}
+	})
+}
+
+type svCtxStore struct {
+	svMockStore
+	got context.Context
+}
+
+func (m *svCtxStore) CreatePetPicture(ctx context.Context, _ string, fileExt string, primarySubject int, othersSubjects []int, aliases []string) (*PetPicture, error) {
+	m.got = ctx
+	return &PetPicture{ID: "sv09-mock-id", FileExt: fileExt, PrimarySubject: primarySubject, OthersSubjects: othersSubjects, Aliases: aliases}, nil
+}
+
+func TestSV09_UploadCtxReachesStore(t *testing.T) {
+	t.Run("PPV-09_CtxReachesStoreUncancelled", func(t *testing.T) {
+		type ctxKey struct{}
+		t.Cleanup(func() { os.Remove("sv09-mock-id.jpg") })
+
+		mock := &svCtxStore{}
+		svc := NewService(mock)
+		file := svTempFile(t, "sv09-upload-*.jpg", []byte("some picture bytes"))
+		swapTransport(t, &svFakeRoundTripper{resp: svOKResponse()})
+
+		ctx, cancel := context.WithCancel(context.WithValue(svCtx, ctxKey{}, "marker"))
+		cancel()
+		if _, err := svc.UploadPetPicture(ctx, file, 4, nil, nil); err != nil {
+			t.Fatalf("UploadPetPicture() error = %v, want nil", err)
+		}
+
+		if mock.got == nil || mock.got.Value(ctxKey{}) != "marker" {
+			t.Error("store did not receive the caller's ctx")
+		}
+		if mock.got != nil && mock.got.Err() != nil {
+			t.Errorf("store ctx Err() = %v, want nil: the record write must outlive a cancelled request", mock.got.Err())
 		}
 	})
 }

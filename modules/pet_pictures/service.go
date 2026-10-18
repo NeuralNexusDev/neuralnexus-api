@@ -2,6 +2,7 @@ package petpictures
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
@@ -22,7 +23,7 @@ var (
 // PetPicService - Pet Picture service
 type PetPicService interface {
 	GetStore() PetPicStore
-	UploadPetPicture(file *os.File, primarySubject int, othersSubjects []int, aliases []string) (*PetPicture, error)
+	UploadPetPicture(ctx context.Context, file *os.File, primarySubject int, othersSubjects []int, aliases []string) (*PetPicture, error)
 }
 
 // service - Pet Picture service implementation
@@ -43,7 +44,7 @@ func (s *service) GetStore() PetPicStore {
 }
 
 // UploadPetPicture - Upload a pet picture
-func (s *service) UploadPetPicture(file *os.File, primarySubject int, othersSubjects []int, aliases []string) (*PetPicture, error) {
+func (s *service) UploadPetPicture(ctx context.Context, file *os.File, primarySubject int, othersSubjects []int, aliases []string) (*PetPicture, error) {
 	// Get SHA1 hash
 	hash := sha256.New()
 	if _, err := io.Copy(hash, file); err != nil {
@@ -54,7 +55,7 @@ func (s *service) UploadPetPicture(file *os.File, primarySubject int, othersSubj
 	splitName := strings.Split(filepath.Base(file.Name()), ".")
 	fileExt := splitName[len(splitName)-1]
 
-	petPicture, err := s.db.CreatePetPicture(sha, fileExt, primarySubject, othersSubjects, aliases)
+	petPicture, err := s.db.CreatePetPicture(context.WithoutCancel(ctx), sha, fileExt, primarySubject, othersSubjects, aliases)
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +67,7 @@ func (s *service) UploadPetPicture(file *os.File, primarySubject int, othersSubj
 	}
 
 	// Create a new request
-	req, err := http.NewRequest(http.MethodPost, CDN_URL+"/upload", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, CDN_URL+"/upload", nil)
 	if err != nil {
 		return nil, err
 	}

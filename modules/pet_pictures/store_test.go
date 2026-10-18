@@ -17,6 +17,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+var ppCtx = context.Background()
+
 func ppUnusedTCPPort(t *testing.T) int {
 	t.Helper()
 	l, err := net.Listen("tcp", "127.0.0.1:0")
@@ -65,7 +67,7 @@ func ppLiveDatabase(t *testing.T) *pgxpool.Pool {
 func ppCreatePet(t *testing.T, pool *pgxpool.Pool, s *store, name string) *Pet {
 	t.Helper()
 	t.Cleanup(func() { pool.Exec(context.Background(), "DELETE FROM pets WHERE name = $1", name) })
-	pet, err := s.CreatePet(name)
+	pet, err := s.CreatePet(ppCtx, name)
 	if err != nil {
 		t.Fatalf("CreatePet(%q) error = %v", name, err)
 	}
@@ -75,7 +77,7 @@ func ppCreatePet(t *testing.T, pool *pgxpool.Pool, s *store, name string) *Pet {
 func ppCreatePicture(t *testing.T, pool *pgxpool.Pool, s *store, id string, primary int, others []int, aliases []string) {
 	t.Helper()
 	t.Cleanup(func() { pool.Exec(context.Background(), "DELETE FROM pictures WHERE id = $1", id) })
-	if _, err := s.CreatePetPicture(id, "jpg", primary, others, aliases); err != nil {
+	if _, err := s.CreatePetPicture(ppCtx, id, "jpg", primary, others, aliases); err != nil {
 		t.Fatalf("CreatePetPicture(%q) error = %v", id, err)
 	}
 }
@@ -110,7 +112,7 @@ func TestST02to05and26_CreatePet(t *testing.T) {
 	t.Run("PPS-04_ConnectionFailure", func(t *testing.T) {
 		ppSetUnreachableDatabaseURL(t)
 		s := &store{}
-		if _, err := s.CreatePet(ppUniqueID("pet")); err == nil {
+		if _, err := s.CreatePet(ppCtx, ppUniqueID("pet")); err == nil {
 			t.Error("CreatePet() error = nil, want a connection error")
 		}
 	})
@@ -130,7 +132,7 @@ func TestST02to05and26_CreatePet(t *testing.T) {
 		s := &store{}
 		name := ppUniqueID("pet")
 		ppCreatePet(t, pool, s, name)
-		pet, err := s.CreatePet(name)
+		pet, err := s.CreatePet(ppCtx, name)
 		if pet != nil || err == nil {
 			t.Errorf("CreatePet(duplicate) = (%v, %v), want (nil, error)", pet, err)
 		}
@@ -150,7 +152,7 @@ func TestST02to05and26_CreatePet(t *testing.T) {
 				wg.Add(1)
 				go func(i int) {
 					defer wg.Done()
-					results[i], errs[i] = s.CreatePet(name)
+					results[i], errs[i] = s.CreatePet(ppCtx, name)
 				}(i)
 			}
 			wg.Wait()
@@ -170,7 +172,7 @@ func TestST02to05and26_CreatePet(t *testing.T) {
 		pool := ppLiveDatabase(t)
 		t.Cleanup(func() { pool.Exec(context.Background(), "DELETE FROM pets WHERE name = ''") })
 		s := &store{}
-		pet, err := s.CreatePet("")
+		pet, err := s.CreatePet(ppCtx, "")
 		if pet != nil || !errors.Is(err, ErrPetNameEmpty) {
 			t.Errorf("CreatePet(\"\") = (%v, %v), want (nil, ErrPetNameEmpty)", pet, err)
 		}
@@ -181,7 +183,7 @@ func TestST06to09and27_GetPetAndGetPetByName(t *testing.T) {
 	t.Run("PPS-09_ConnectionFailure", func(t *testing.T) {
 		ppSetUnreachableDatabaseURL(t)
 		s := &store{}
-		if _, err := s.GetPetByName("anything"); err == nil {
+		if _, err := s.GetPetByName(ppCtx, "anything"); err == nil {
 			t.Error("GetPetByName() error = nil, want a connection error")
 		}
 	})
@@ -189,7 +191,7 @@ func TestST06to09and27_GetPetAndGetPetByName(t *testing.T) {
 	t.Run("PPS-06_GetPetNoRow", func(t *testing.T) {
 		ppLiveDatabase(t)
 		s := &store{}
-		pet, err := s.GetPet(-1)
+		pet, err := s.GetPet(ppCtx, -1)
 		if pet != nil || !errors.Is(err, ErrPetNotFound) {
 			t.Errorf("GetPet(-1) = (%v, %v), want (nil, ErrPetNotFound)", pet, err)
 		}
@@ -199,7 +201,7 @@ func TestST06to09and27_GetPetAndGetPetByName(t *testing.T) {
 		pool := ppLiveDatabase(t)
 		s := &store{}
 		created := ppCreatePet(t, pool, s, ppUniqueID("pet"))
-		got, err := s.GetPet(created.ID)
+		got, err := s.GetPet(ppCtx, created.ID)
 		if err != nil || !reflect.DeepEqual(got, created) {
 			t.Errorf("GetPet() = (%+v, %v), want (%+v, nil)", got, err, created)
 		}
@@ -209,7 +211,7 @@ func TestST06to09and27_GetPetAndGetPetByName(t *testing.T) {
 		pool := ppLiveDatabase(t)
 		s := &store{}
 		created := ppCreatePet(t, pool, s, ppUniqueID("pet"))
-		got, err := s.GetPetByName(created.Name)
+		got, err := s.GetPetByName(ppCtx, created.Name)
 		if err != nil || !reflect.DeepEqual(got, created) {
 			t.Errorf("GetPetByName() = (%+v, %v), want (%+v, nil)", got, err, created)
 		}
@@ -218,7 +220,7 @@ func TestST06to09and27_GetPetAndGetPetByName(t *testing.T) {
 	t.Run("PPS-08_NoRow", func(t *testing.T) {
 		ppLiveDatabase(t)
 		s := &store{}
-		pet, err := s.GetPetByName(ppUniqueID("missing"))
+		pet, err := s.GetPetByName(ppCtx, ppUniqueID("missing"))
 		if pet != nil || !errors.Is(err, ErrPetNotFound) {
 			t.Errorf("GetPetByName(missing) = (%v, %v), want (nil, ErrPetNotFound)", pet, err)
 		}
@@ -229,7 +231,7 @@ func TestST10to12_UpdatePet(t *testing.T) {
 	t.Run("PPS-12_ConnectionFailure", func(t *testing.T) {
 		ppSetUnreachableDatabaseURL(t)
 		s := &store{}
-		if _, err := s.UpdatePet(&Pet{ID: 1, Name: "x"}); err == nil {
+		if _, err := s.UpdatePet(ppCtx, &Pet{ID: 1, Name: "x"}); err == nil {
 			t.Error("UpdatePet() error = nil, want a connection error")
 		}
 	})
@@ -242,11 +244,11 @@ func TestST10to12_UpdatePet(t *testing.T) {
 		t.Cleanup(func() { pool.Exec(context.Background(), "DELETE FROM pets WHERE name = $1", newName) })
 		pic := "pic.jpg"
 		in := &Pet{ID: created.ID, Name: newName, ProfilePicture: &pic}
-		got, err := s.UpdatePet(in)
+		got, err := s.UpdatePet(ppCtx, in)
 		if err != nil || got != in {
 			t.Fatalf("UpdatePet() = (%v, %v), want the same pet and nil error", got, err)
 		}
-		after, err := s.GetPetByName(newName)
+		after, err := s.GetPetByName(ppCtx, newName)
 		if err != nil || after.ID != created.ID || after.ProfilePicture == nil || *after.ProfilePicture != pic {
 			t.Errorf("GetPetByName(new name) = (%+v, %v), want the updated row", after, err)
 		}
@@ -255,7 +257,7 @@ func TestST10to12_UpdatePet(t *testing.T) {
 	t.Run("PPS-11_NoMatchingRow", func(t *testing.T) {
 		ppLiveDatabase(t)
 		s := &store{}
-		got, err := s.UpdatePet(&Pet{ID: -1, Name: ppUniqueID("ghost")})
+		got, err := s.UpdatePet(ppCtx, &Pet{ID: -1, Name: ppUniqueID("ghost")})
 		if got != nil || !errors.Is(err, ErrPetNotFound) {
 			t.Errorf("UpdatePet(no row) = (%v, %v), want (nil, ErrPetNotFound)", got, err)
 		}
@@ -266,7 +268,7 @@ func TestST13to16_CreatePetPicture(t *testing.T) {
 	t.Run("PPS-15_ConnectionFailure", func(t *testing.T) {
 		ppSetUnreachableDatabaseURL(t)
 		s := &store{}
-		if _, err := s.CreatePetPicture(ppUniqueID("pic"), "jpg", 1, nil, nil); err == nil {
+		if _, err := s.CreatePetPicture(ppCtx, ppUniqueID("pic"), "jpg", 1, nil, nil); err == nil {
 			t.Error("CreatePetPicture() error = nil, want a connection error")
 		}
 	})
@@ -276,7 +278,7 @@ func TestST13to16_CreatePetPicture(t *testing.T) {
 		s := &store{}
 		id := ppUniqueID("pic")
 		t.Cleanup(func() { pool.Exec(context.Background(), "DELETE FROM pictures WHERE id = $1", id) })
-		got, err := s.CreatePetPicture(id, "png", 3, []int{4, 5}, []string{"a", "b"})
+		got, err := s.CreatePetPicture(ppCtx, id, "png", 3, []int{4, 5}, []string{"a", "b"})
 		want := &PetPicture{ID: id, FileExt: "png", PrimarySubject: 3, OthersSubjects: []int{4, 5}, Aliases: []string{"a", "b"}}
 		if err != nil || !reflect.DeepEqual(got, want) {
 			t.Errorf("CreatePetPicture() = (%+v, %v), want (%+v, nil)", got, err, want)
@@ -288,7 +290,7 @@ func TestST13to16_CreatePetPicture(t *testing.T) {
 		s := &store{}
 		id := ppUniqueID("pic")
 		ppCreatePicture(t, pool, s, id, 1, nil, nil)
-		got, err := s.CreatePetPicture(id, "jpg", 1, nil, nil)
+		got, err := s.CreatePetPicture(ppCtx, id, "jpg", 1, nil, nil)
 		if got != nil || err == nil {
 			t.Errorf("CreatePetPicture(duplicate) = (%v, %v), want (nil, error)", got, err)
 		}
@@ -307,7 +309,7 @@ func TestST13to16_CreatePetPicture(t *testing.T) {
 				wg.Add(1)
 				go func(i int) {
 					defer wg.Done()
-					_, errs[i] = s.CreatePetPicture(id, "jpg", 1, nil, nil)
+					_, errs[i] = s.CreatePetPicture(ppCtx, id, "jpg", 1, nil, nil)
 				}(i)
 			}
 			wg.Wait()
@@ -328,7 +330,7 @@ func TestST17to20and28to29_GetPetPictureAndGetRandPetPictureByName(t *testing.T)
 	t.Run("PPS-20_ConnectionFailure", func(t *testing.T) {
 		ppSetUnreachableDatabaseURL(t)
 		s := &store{}
-		if _, err := s.GetPetPicture("anything"); err == nil {
+		if _, err := s.GetPetPicture(ppCtx, "anything"); err == nil {
 			t.Error("GetPetPicture() error = nil, want a connection error")
 		}
 	})
@@ -336,7 +338,7 @@ func TestST17to20and28to29_GetPetPictureAndGetRandPetPictureByName(t *testing.T)
 	t.Run("PPS-17_RandPictureNoPet", func(t *testing.T) {
 		ppLiveDatabase(t)
 		s := &store{}
-		got, err := s.GetRandPetPictureByName(ppUniqueID("missing"))
+		got, err := s.GetRandPetPictureByName(ppCtx, ppUniqueID("missing"))
 		if got != nil || !errors.Is(err, ErrPetNotFound) {
 			t.Errorf("GetRandPetPictureByName(no pet) = (%v, %v), want (nil, ErrPetNotFound)", got, err)
 		}
@@ -346,7 +348,7 @@ func TestST17to20and28to29_GetPetPictureAndGetRandPetPictureByName(t *testing.T)
 		pool := ppLiveDatabase(t)
 		s := &store{}
 		pet := ppCreatePet(t, pool, s, ppUniqueID("pet"))
-		got, err := s.GetRandPetPictureByName(pet.Name)
+		got, err := s.GetRandPetPictureByName(ppCtx, pet.Name)
 		if got != nil || !errors.Is(err, ErrPetPictureNotFound) {
 			t.Errorf("GetRandPetPictureByName(no pictures) = (%v, %v), want (nil, ErrPetPictureNotFound)", got, err)
 		}
@@ -355,7 +357,7 @@ func TestST17to20and28to29_GetPetPictureAndGetRandPetPictureByName(t *testing.T)
 	t.Run("PPS-19_NoRow", func(t *testing.T) {
 		ppLiveDatabase(t)
 		s := &store{}
-		got, err := s.GetPetPicture(ppUniqueID("missing"))
+		got, err := s.GetPetPicture(ppCtx, ppUniqueID("missing"))
 		if got != nil || !errors.Is(err, ErrPetPictureNotFound) {
 			t.Errorf("GetPetPicture(missing) = (%v, %v), want (nil, ErrPetPictureNotFound)", got, err)
 		}
@@ -368,7 +370,7 @@ func TestST17to20and28to29_GetPetPictureAndGetRandPetPictureByName(t *testing.T)
 			s := &store{}
 			id := ppUniqueID("pic")
 			ppCreatePicture(t, pool, s, id, 7, []int{8}, []string{"x"})
-			got, err := s.GetPetPicture(id)
+			got, err := s.GetPetPicture(ppCtx, id)
 			if err != nil || got.ID != id || got.FileExt != "jpg" || got.PrimarySubject != 7 ||
 				!reflect.DeepEqual(got.OthersSubjects, []int{8}) || !reflect.DeepEqual(got.Aliases, []string{"x"}) {
 				t.Fatalf("GetPetPicture() = (%+v, %v), want the created row", got, err)
@@ -383,7 +385,7 @@ func TestST17to20and28to29_GetPetPictureAndGetRandPetPictureByName(t *testing.T)
 		pet := ppCreatePet(t, pool, s, ppUniqueID("pet"))
 		id := ppUniqueID("pic")
 		ppCreatePicture(t, pool, s, id, pet.ID, nil, nil)
-		got, err := s.GetRandPetPictureByName(pet.Name)
+		got, err := s.GetRandPetPictureByName(ppCtx, pet.Name)
 		if err != nil || got.ID != id {
 			t.Errorf("GetRandPetPictureByName() = (%+v, %v), want picture %q", got, err, id)
 		}
@@ -394,7 +396,7 @@ func TestST21to22and30_UpdatePetPicture(t *testing.T) {
 	t.Run("PPS-21_ConnectionFailure", func(t *testing.T) {
 		ppSetUnreachableDatabaseURL(t)
 		s := &store{}
-		if _, err := s.UpdatePetPicture(PetPicture{ID: "anything"}); err == nil {
+		if _, err := s.UpdatePetPicture(ppCtx, PetPicture{ID: "anything"}); err == nil {
 			t.Error("UpdatePetPicture() error = nil, want a connection error")
 		}
 	})
@@ -402,7 +404,7 @@ func TestST21to22and30_UpdatePetPicture(t *testing.T) {
 	t.Run("PPS-30_NoMatchingRow", func(t *testing.T) {
 		ppLiveDatabase(t)
 		s := &store{}
-		got, err := s.UpdatePetPicture(PetPicture{ID: ppUniqueID("missing"), FileExt: "png", Created: "caller-supplied"})
+		got, err := s.UpdatePetPicture(ppCtx, PetPicture{ID: ppUniqueID("missing"), FileExt: "png", Created: "caller-supplied"})
 		if got != nil || !errors.Is(err, ErrPetPictureNotFound) {
 			t.Errorf("UpdatePetPicture(no row) = (%v, %v), want (nil, ErrPetPictureNotFound)", got, err)
 		}
@@ -416,13 +418,13 @@ func TestST21to22and30_UpdatePetPicture(t *testing.T) {
 			id := ppUniqueID("pic")
 			ppCreatePicture(t, pool, s, id, 1, nil, nil)
 			in := PetPicture{ID: id, FileExt: "webp", PrimarySubject: 2, OthersSubjects: []int{3}, Aliases: []string{"z"}}
-			got, err := s.UpdatePetPicture(in)
+			got, err := s.UpdatePetPicture(ppCtx, in)
 			if err != nil || got.ID != id || got.FileExt != "webp" || got.PrimarySubject != 2 ||
 				!reflect.DeepEqual(got.OthersSubjects, []int{3}) || !reflect.DeepEqual(got.Aliases, []string{"z"}) {
 				t.Fatalf("UpdatePetPicture() = (%+v, %v), want the updated fields and nil error", got, err)
 			}
 			ppAssertCreatedMatchesDatabase(t, pool, id, got.Created)
-			after, err := s.GetPetPicture(id)
+			after, err := s.GetPetPicture(ppCtx, id)
 			if err != nil || after.FileExt != "webp" || after.PrimarySubject != 2 ||
 				!reflect.DeepEqual(after.OthersSubjects, []int{3}) || !reflect.DeepEqual(after.Aliases, []string{"z"}) {
 				t.Errorf("GetPetPicture() after update = (%+v, %v), want the updated fields", after, err)
@@ -435,7 +437,7 @@ func TestST23to25_DeletePetPicture(t *testing.T) {
 	t.Run("PPS-24_ConnectionFailure", func(t *testing.T) {
 		ppSetUnreachableDatabaseURL(t)
 		s := &store{}
-		if _, err := s.DeletePetPicture("anything"); err == nil {
+		if _, err := s.DeletePetPicture(ppCtx, "anything"); err == nil {
 			t.Error("DeletePetPicture() error = nil, want a connection error")
 		}
 	})
@@ -445,11 +447,11 @@ func TestST23to25_DeletePetPicture(t *testing.T) {
 		s := &store{}
 		id := ppUniqueID("pic")
 		ppCreatePicture(t, pool, s, id, 1, nil, nil)
-		got, err := s.DeletePetPicture(id)
+		got, err := s.DeletePetPicture(ppCtx, id)
 		if err != nil || !reflect.DeepEqual(got, &PetPicture{ID: id}) {
 			t.Fatalf("DeletePetPicture() = (%+v, %v), want (&PetPicture{ID: %q}, nil)", got, err, id)
 		}
-		if _, err := s.GetPetPicture(id); !errors.Is(err, ErrPetPictureNotFound) {
+		if _, err := s.GetPetPicture(ppCtx, id); !errors.Is(err, ErrPetPictureNotFound) {
 			t.Errorf("GetPetPicture() after delete error = %v, want ErrPetPictureNotFound", err)
 		}
 	})
@@ -458,7 +460,7 @@ func TestST23to25_DeletePetPicture(t *testing.T) {
 		ppLiveDatabase(t)
 		s := &store{}
 		id := ppUniqueID("missing")
-		got, err := s.DeletePetPicture(id)
+		got, err := s.DeletePetPicture(ppCtx, id)
 		if err != nil || !reflect.DeepEqual(got, &PetPicture{ID: id}) {
 			t.Errorf("DeletePetPicture(missing) = (%+v, %v), want (&PetPicture{ID: %q}, nil)", got, err, id)
 		}

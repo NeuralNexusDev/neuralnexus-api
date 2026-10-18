@@ -52,6 +52,7 @@
 | PPV-06 | UploadPetPicture | Error Path | the CDN HTTP request fails | transport swapped for a `RoundTripper` returning an error | Returns `nil`, that transport error | P2 | |
 | PPV-07 | UploadPetPicture | Edge Case | source file name has multiple dots | file named like `photo-*.tar.gz` | `fileExt` computed as `"gz"` (last dot-separated segment); forwarded to `CreatePetPicture` | P3 | |
 | PPV-08 | UploadPetPicture | Edge Case | source file name has no dot | file named like `photo123456` (no `.`), opened via a relative path so `file.Name()` starts with `./` | `fileExt` computed as the entire basename (no dot found, so `strings.Split` returns one element); forwarded to `CreatePetPicture` | P3 | |
+| PPV-09 | UploadPetPicture | Happy Path | the caller's ctx reaches the store, and the record write outlives a cancelled request | mock `CreatePetPicture` records the ctx it receives; caller ctx carries a marker value and is cancelled before the call; CDN transport returns 200 | Recorded ctx holds the marker value and `ctx.Err() == nil`; `UploadPetPicture` returns a nil error | P1 | |
 
 ## handler.go
 

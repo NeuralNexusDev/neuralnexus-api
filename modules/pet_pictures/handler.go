@@ -1,13 +1,13 @@
 package petpictures
 
 import (
-	"log"
 	"net/http"
 	"strconv"
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
@@ -54,9 +54,9 @@ func CreatePetHandler(s PetPicService) http.HandlerFunc {
 			return
 		}
 
-		petResponse, err := s.GetStore().CreatePet(petName)
+		petResponse, err := s.GetStore().CreatePet(r.Context(), petName)
 		if err != nil {
-			log.Println("[Error]: Unable to create pet:\n\t", err)
+			reqctx.Log(r.Context(), "[Error]: Unable to create pet:\n\t", err.Error())
 			if err == ErrPetNameEmpty {
 				responses.BadRequest(w, r, msgPetNameMustNotBeEmpty)
 				return
@@ -92,9 +92,9 @@ func GetPetHandler(s PetPicService) http.HandlerFunc {
 			return
 		}
 
-		pet, err := s.GetStore().GetPet(petID)
+		pet, err := s.GetStore().GetPet(r.Context(), petID)
 		if err != nil {
-			log.Println(logUnableToGetPet, err)
+			reqctx.Log(r.Context(), logUnableToGetPet, err.Error())
 			if err == ErrPetNotFound {
 				responses.NotFound(w, r, msgPetNotFound)
 				return
@@ -122,9 +122,9 @@ func UpdatePetHandler(s PetPicService) http.HandlerFunc {
 			return
 		}
 
-		_, err = s.GetStore().UpdatePet(pet)
+		_, err = s.GetStore().UpdatePet(r.Context(), pet)
 		if err != nil {
-			log.Println("[Error]: Unable to update pet:\n\t", err)
+			reqctx.Log(r.Context(), "[Error]: Unable to update pet:\n\t", err.Error())
 			switch err {
 			case ErrPetNotFound:
 				responses.NotFound(w, r, msgPetNotFound)
@@ -155,9 +155,9 @@ func GetRandPetPictureByNameHandler(s PetPicService) http.HandlerFunc {
 			return
 		}
 
-		petPicture, err := s.GetStore().GetRandPetPictureByName(petName)
+		petPicture, err := s.GetStore().GetRandPetPictureByName(r.Context(), petName)
 		if err != nil {
-			log.Println("[Error]: Unable to get random pet picture:\n\t", err)
+			reqctx.Log(r.Context(), "[Error]: Unable to get random pet picture:\n\t", err.Error())
 			switch err {
 			case ErrPetNotFound:
 				responses.NotFound(w, r, msgPetNotFound)
@@ -188,9 +188,9 @@ func GetPetPictureHandler(s PetPicService) http.HandlerFunc {
 			return
 		}
 
-		petPicture, err := s.GetStore().GetPetPicture(petPictureID)
+		petPicture, err := s.GetStore().GetPetPicture(r.Context(), petPictureID)
 		if err != nil {
-			log.Println(logUnableToGetPetPicture, err)
+			reqctx.Log(r.Context(), logUnableToGetPetPicture, err.Error())
 			if err == ErrPetPictureNotFound {
 				responses.NotFound(w, r, msgPetPictureNotFound)
 				return
@@ -212,9 +212,9 @@ func UpdatePetPictureHandler(s PetPicService) http.HandlerFunc {
 			return
 		}
 
-		pet, err := s.GetStore().GetPet(petPicture.PrimarySubject)
+		pet, err := s.GetStore().GetPet(r.Context(), petPicture.PrimarySubject)
 		if err != nil {
-			log.Println(logUnableToGetPet, err)
+			reqctx.Log(r.Context(), logUnableToGetPet, err.Error())
 			if err == ErrPetNotFound {
 				responses.NotFound(w, r, msgPetNotFound)
 				return
@@ -229,9 +229,9 @@ func UpdatePetPictureHandler(s PetPicService) http.HandlerFunc {
 			return
 		}
 
-		_, err = s.GetStore().UpdatePetPicture(petPicture)
+		_, err = s.GetStore().UpdatePetPicture(r.Context(), petPicture)
 		if err != nil {
-			log.Println("[Error]: Unable to update pet picture:\n\t", err)
+			reqctx.Log(r.Context(), "[Error]: Unable to update pet picture:\n\t", err.Error())
 			if err == ErrPetPictureNotFound {
 				responses.NotFound(w, r, msgPetPictureNotFound)
 				return
@@ -259,9 +259,9 @@ func DeletePetPictureHandler(s PetPicService) http.HandlerFunc {
 			return
 		}
 
-		petPicture, err := s.GetStore().GetPetPicture(petPictureID)
+		petPicture, err := s.GetStore().GetPetPicture(r.Context(), petPictureID)
 		if err != nil {
-			log.Println(logUnableToGetPetPicture, err)
+			reqctx.Log(r.Context(), logUnableToGetPetPicture, err.Error())
 			if err == ErrPetPictureNotFound {
 				responses.NotFound(w, r, msgPetPictureNotFound)
 				return
@@ -270,9 +270,9 @@ func DeletePetPictureHandler(s PetPicService) http.HandlerFunc {
 			return
 		}
 
-		pet, err := s.GetStore().GetPet(petPicture.PrimarySubject)
+		pet, err := s.GetStore().GetPet(r.Context(), petPicture.PrimarySubject)
 		if err != nil {
-			log.Println(logUnableToGetPet, err)
+			reqctx.Log(r.Context(), logUnableToGetPet, err.Error())
 			if err == ErrPetNotFound {
 				responses.NotFound(w, r, msgPetNotFound)
 				return
@@ -287,9 +287,9 @@ func DeletePetPictureHandler(s PetPicService) http.HandlerFunc {
 			return
 		}
 
-		_, err = s.GetStore().DeletePetPicture(petPictureID)
+		_, err = s.GetStore().DeletePetPicture(r.Context(), petPictureID)
 		if err != nil {
-			log.Println("[Error]: Unable to delete pet picture:\n\t", err)
+			reqctx.Log(r.Context(), "[Error]: Unable to delete pet picture:\n\t", err.Error())
 			responses.InternalServerError(w, r, msgUnableToDeletePetPicture)
 			return
 		}
