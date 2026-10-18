@@ -132,7 +132,7 @@ func GetReleasesHandler(w http.ResponseWriter, r *http.Request) {
 	releases, err := getReleases(group, project)
 	if err != nil {
 		log.Println(err.Error())
-		if errors.Is(err, ErrGitHubTokenUnset) {
+		if err == ErrGitHubTokenUnset {
 			http.Error(w, msgGitHubTokenUnset, http.StatusInternalServerError)
 			return
 		}
