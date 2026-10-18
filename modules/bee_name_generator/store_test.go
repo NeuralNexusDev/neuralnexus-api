@@ -20,6 +20,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+var bnCtx = context.Background()
+
 // bngUnusedTCPPort returns a port that's very likely free when returned, so
 // a connection attempt against it fails fast ("connection refused") rather
 // than hanging.
@@ -196,7 +198,7 @@ func TestST01_NewStore(t *testing.T) {
 func TestST02to04_GetBeeName(t *testing.T) {
 	t.Run("BNS-02_Unreachable", func(t *testing.T) {
 		s := bngStoreWithUnreachableDB(t)
-		_, err := s.GetBeeName()
+		_, err := s.GetBeeName(bnCtx)
 		if err == nil {
 			t.Error("expected a raw connection error")
 		}
@@ -205,7 +207,7 @@ func TestST02to04_GetBeeName(t *testing.T) {
 	t.Run("BNS-04_Live_NoRows", func(t *testing.T) {
 		s, db := bngLiveStore(t)
 		bngClearTable(t, db, "bee_name")
-		_, err := s.GetBeeName()
+		_, err := s.GetBeeName(bnCtx)
 		if err == nil {
 			t.Fatal("expected a non-nil error when bee_name has no rows")
 		}
@@ -217,12 +219,12 @@ func TestST02to04_GetBeeName(t *testing.T) {
 	t.Run("BNS-03_Live_Found", func(t *testing.T) {
 		s, _ := bngLiveStore(t)
 		name := bngUniqueName("get")
-		if _, err := s.UploadBeeName(name); err != nil {
+		if _, err := s.UploadBeeName(bnCtx, name); err != nil {
 			t.Fatalf("seed UploadBeeName() error = %v", err)
 		}
-		t.Cleanup(func() { _, _ = s.DeleteBeeName(name) })
+		t.Cleanup(func() { _, _ = s.DeleteBeeName(bnCtx, name) })
 
-		got, err := s.GetBeeName()
+		got, err := s.GetBeeName(bnCtx)
 		if err != nil {
 			t.Fatalf("GetBeeName() error = %v", err)
 		}
@@ -235,7 +237,7 @@ func TestST02to04_GetBeeName(t *testing.T) {
 func TestST05to06and21and24_UploadBeeName(t *testing.T) {
 	t.Run("BNS-05_Unreachable", func(t *testing.T) {
 		s := bngStoreWithUnreachableDB(t)
-		_, err := s.UploadBeeName(bngUniqueName("up"))
+		_, err := s.UploadBeeName(bnCtx, bngUniqueName("up"))
 		if err == nil {
 			t.Error("expected a raw connection error")
 		}
@@ -244,14 +246,14 @@ func TestST05to06and21and24_UploadBeeName(t *testing.T) {
 	t.Run("BNS-06_Live_OK", func(t *testing.T) {
 		s, db := bngLiveStore(t)
 		name := bngUniqueName("up")
-		got, err := s.UploadBeeName(name)
+		got, err := s.UploadBeeName(bnCtx, name)
 		if err != nil {
 			t.Fatalf("UploadBeeName() error = %v", err)
 		}
 		if got != name {
 			t.Errorf("UploadBeeName() = %q, want %q", got, name)
 		}
-		t.Cleanup(func() { _, _ = s.DeleteBeeName(name) })
+		t.Cleanup(func() { _, _ = s.DeleteBeeName(bnCtx, name) })
 
 		if n := bngCountByName(t, db, "bee_name", name); n != 1 {
 			t.Errorf("bee_name has %d rows for %q, want 1", n, name)
@@ -271,7 +273,7 @@ func TestST05to06and21and24_UploadBeeName(t *testing.T) {
 				wg.Add(1)
 				go func(idx int) {
 					defer wg.Done()
-					_, errs[idx] = s.UploadBeeName(name)
+					_, errs[idx] = s.UploadBeeName(bnCtx, name)
 				}(i)
 			}
 			wg.Wait()
@@ -284,7 +286,7 @@ func TestST05to06and21and24_UploadBeeName(t *testing.T) {
 				t.Errorf("trial %d: bee_name has %d rows for %q after both uploads, want exactly 1", trial, n, name)
 			}
 
-			_, _ = s.DeleteBeeName(name)
+			_, _ = s.DeleteBeeName(bnCtx, name)
 		}
 	})
 
@@ -295,7 +297,7 @@ func TestST05to06and21and24_UploadBeeName(t *testing.T) {
 			_, _ = db.Exec(context.Background(), "DELETE FROM bee_name WHERE name = $1", blank)
 		})
 
-		got, err := s.UploadBeeName(blank)
+		got, err := s.UploadBeeName(bnCtx, blank)
 		var pgErr *pgconn.PgError
 		if !errors.As(err, &pgErr) || pgErr.Code != "23514" {
 			t.Errorf("UploadBeeName() error = %v, want a CHECK violation (SQLSTATE 23514)", err)
@@ -312,7 +314,7 @@ func TestST05to06and21and24_UploadBeeName(t *testing.T) {
 func TestST07to09_DeleteBeeName(t *testing.T) {
 	t.Run("BNS-07_Unreachable", func(t *testing.T) {
 		s := bngStoreWithUnreachableDB(t)
-		_, err := s.DeleteBeeName(bngUniqueName("del"))
+		_, err := s.DeleteBeeName(bnCtx, bngUniqueName("del"))
 		if err == nil {
 			t.Error("expected a raw connection error")
 		}
@@ -321,11 +323,11 @@ func TestST07to09_DeleteBeeName(t *testing.T) {
 	t.Run("BNS-08_Live_OK", func(t *testing.T) {
 		s, db := bngLiveStore(t)
 		name := bngUniqueName("del")
-		if _, err := s.UploadBeeName(name); err != nil {
+		if _, err := s.UploadBeeName(bnCtx, name); err != nil {
 			t.Fatalf("seed UploadBeeName() error = %v", err)
 		}
 
-		got, err := s.DeleteBeeName(name)
+		got, err := s.DeleteBeeName(bnCtx, name)
 		if err != nil {
 			t.Fatalf("DeleteBeeName() error = %v", err)
 		}
@@ -340,7 +342,7 @@ func TestST07to09_DeleteBeeName(t *testing.T) {
 	t.Run("BNS-09_Live_NonExistent", func(t *testing.T) {
 		s, _ := bngLiveStore(t)
 		name := bngUniqueName("del-missing")
-		got, err := s.DeleteBeeName(name)
+		got, err := s.DeleteBeeName(bnCtx, name)
 		if err != nil {
 			t.Fatalf("DeleteBeeName() of a non-existent name error = %v, want nil", err)
 		}
@@ -353,7 +355,7 @@ func TestST07to09_DeleteBeeName(t *testing.T) {
 func TestST10to11and22and25_SubmitBeeName(t *testing.T) {
 	t.Run("BNS-10_Unreachable", func(t *testing.T) {
 		s := bngStoreWithUnreachableDB(t)
-		_, err := s.SubmitBeeName(bngUniqueName("sub"))
+		_, err := s.SubmitBeeName(bnCtx, bngUniqueName("sub"))
 		if err == nil {
 			t.Error("expected a raw connection error")
 		}
@@ -362,14 +364,14 @@ func TestST10to11and22and25_SubmitBeeName(t *testing.T) {
 	t.Run("BNS-11_Live_OK", func(t *testing.T) {
 		s, db := bngLiveStore(t)
 		name := bngUniqueName("sub")
-		got, err := s.SubmitBeeName(name)
+		got, err := s.SubmitBeeName(bnCtx, name)
 		if err != nil {
 			t.Fatalf("SubmitBeeName() error = %v", err)
 		}
 		if got != name {
 			t.Errorf("SubmitBeeName() = %q, want %q", got, name)
 		}
-		t.Cleanup(func() { _, _ = s.RejectBeeNameSuggestion(name) })
+		t.Cleanup(func() { _, _ = s.RejectBeeNameSuggestion(bnCtx, name) })
 
 		if n := bngCountByName(t, db, "bee_name_suggestion", name); n != 1 {
 			t.Errorf("bee_name_suggestion has %d rows for %q, want 1", n, name)
@@ -389,7 +391,7 @@ func TestST10to11and22and25_SubmitBeeName(t *testing.T) {
 				wg.Add(1)
 				go func(idx int) {
 					defer wg.Done()
-					_, errs[idx] = s.SubmitBeeName(name)
+					_, errs[idx] = s.SubmitBeeName(bnCtx, name)
 				}(i)
 			}
 			wg.Wait()
@@ -402,7 +404,7 @@ func TestST10to11and22and25_SubmitBeeName(t *testing.T) {
 				t.Errorf("trial %d: bee_name_suggestion has %d rows for %q after both submits, want exactly 1", trial, n, name)
 			}
 
-			_, _ = s.RejectBeeNameSuggestion(name)
+			_, _ = s.RejectBeeNameSuggestion(bnCtx, name)
 		}
 	})
 
@@ -413,7 +415,7 @@ func TestST10to11and22and25_SubmitBeeName(t *testing.T) {
 			_, _ = db.Exec(context.Background(), "DELETE FROM bee_name_suggestion WHERE name = $1", blank)
 		})
 
-		got, err := s.SubmitBeeName(blank)
+		got, err := s.SubmitBeeName(bnCtx, blank)
 		var pgErr *pgconn.PgError
 		if !errors.As(err, &pgErr) || pgErr.Code != "23514" {
 			t.Errorf("SubmitBeeName() error = %v, want a CHECK violation (SQLSTATE 23514)", err)
@@ -430,7 +432,7 @@ func TestST10to11and22and25_SubmitBeeName(t *testing.T) {
 func TestST12to14and23_GetBeeNameSuggestions(t *testing.T) {
 	t.Run("BNS-12_Unreachable", func(t *testing.T) {
 		s := bngStoreWithUnreachableDB(t)
-		got, err := s.GetBeeNameSuggestions(5)
+		got, err := s.GetBeeNameSuggestions(bnCtx, 5)
 		if err == nil {
 			t.Error("expected a raw connection error")
 		}
@@ -443,7 +445,7 @@ func TestST12to14and23_GetBeeNameSuggestions(t *testing.T) {
 		s, db := bngLiveStore(t)
 		bngClearTable(t, db, "bee_name_suggestion")
 
-		got, err := s.GetBeeNameSuggestions(5)
+		got, err := s.GetBeeNameSuggestions(bnCtx, 5)
 		if err != nil {
 			t.Fatalf("GetBeeNameSuggestions() error = %v, want nil", err)
 		}
@@ -460,17 +462,17 @@ func TestST12to14and23_GetBeeNameSuggestions(t *testing.T) {
 		names := make([]string, n)
 		for i := range names {
 			names[i] = bngUniqueName("sugg")
-			if _, err := s.SubmitBeeName(names[i]); err != nil {
+			if _, err := s.SubmitBeeName(bnCtx, names[i]); err != nil {
 				t.Fatalf("seed SubmitBeeName() error = %v", err)
 			}
 		}
 		t.Cleanup(func() {
 			for _, name := range names {
-				_, _ = s.RejectBeeNameSuggestion(name)
+				_, _ = s.RejectBeeNameSuggestion(bnCtx, name)
 			}
 		})
 
-		got, err := s.GetBeeNameSuggestions(int64(n))
+		got, err := s.GetBeeNameSuggestions(bnCtx, int64(n))
 		if err != nil {
 			t.Fatalf("GetBeeNameSuggestions() error = %v", err)
 		}
@@ -485,19 +487,19 @@ func TestST12to14and23_GetBeeNameSuggestions(t *testing.T) {
 		names := make([]string, 5)
 		for i := range names {
 			names[i] = bngUniqueName("sugg")
-			if _, err := seed.SubmitBeeName(names[i]); err != nil {
+			if _, err := seed.SubmitBeeName(bnCtx, names[i]); err != nil {
 				t.Fatalf("seed SubmitBeeName() error = %v", err)
 			}
 		}
 		t.Cleanup(func() {
 			for _, name := range names {
-				_, _ = seed.RejectBeeNameSuggestion(name)
+				_, _ = seed.RejectBeeNameSuggestion(bnCtx, name)
 			}
 		})
 
 		pool, armed := bngPoolCuttingFirstResult(t)
 		armed.Store(true)
-		got, err := (&store{db: pool}).GetBeeNameSuggestions(int64(len(names)))
+		got, err := (&store{db: pool}).GetBeeNameSuggestions(bnCtx, int64(len(names)))
 		if err == nil {
 			t.Error("GetBeeNameSuggestions() error = nil, want the iteration error")
 		}
@@ -510,7 +512,7 @@ func TestST12to14and23_GetBeeNameSuggestions(t *testing.T) {
 func TestST15to17and26_AcceptBeeNameSuggestion(t *testing.T) {
 	t.Run("BNS-15_Unreachable", func(t *testing.T) {
 		s := bngStoreWithUnreachableDB(t)
-		_, err := s.AcceptBeeNameSuggestion(bngUniqueName("acc"))
+		_, err := s.AcceptBeeNameSuggestion(bnCtx, bngUniqueName("acc"))
 		if err == nil {
 			t.Error("expected a raw connection error")
 		}
@@ -519,18 +521,18 @@ func TestST15to17and26_AcceptBeeNameSuggestion(t *testing.T) {
 	t.Run("BNS-16_Live_OK", func(t *testing.T) {
 		s, db := bngLiveStore(t)
 		name := bngUniqueName("acc")
-		if _, err := s.SubmitBeeName(name); err != nil {
+		if _, err := s.SubmitBeeName(bnCtx, name); err != nil {
 			t.Fatalf("seed SubmitBeeName() error = %v", err)
 		}
 
-		got, err := s.AcceptBeeNameSuggestion(name)
+		got, err := s.AcceptBeeNameSuggestion(bnCtx, name)
 		if err != nil {
 			t.Fatalf("AcceptBeeNameSuggestion() error = %v", err)
 		}
 		if got != name {
 			t.Errorf("AcceptBeeNameSuggestion() = %q, want %q", got, name)
 		}
-		t.Cleanup(func() { _, _ = s.DeleteBeeName(name) })
+		t.Cleanup(func() { _, _ = s.DeleteBeeName(bnCtx, name) })
 
 		if n := bngCountByName(t, db, "bee_name", name); n < 1 {
 			t.Errorf("bee_name has %d rows for %q after accept, want >= 1", n, name)
@@ -546,7 +548,7 @@ func TestST15to17and26_AcceptBeeNameSuggestion(t *testing.T) {
 
 		for trial := 0; trial < trials; trial++ {
 			name := bngUniqueName(fmt.Sprintf("racc%d", trial))
-			if _, err := s.SubmitBeeName(name); err != nil {
+			if _, err := s.SubmitBeeName(bnCtx, name); err != nil {
 				t.Fatalf("trial %d: seed SubmitBeeName() error = %v", trial, err)
 			}
 
@@ -556,7 +558,7 @@ func TestST15to17and26_AcceptBeeNameSuggestion(t *testing.T) {
 				wg.Add(1)
 				go func(idx int) {
 					defer wg.Done()
-					_, errs[idx] = s.AcceptBeeNameSuggestion(name)
+					_, errs[idx] = s.AcceptBeeNameSuggestion(bnCtx, name)
 				}(i)
 			}
 			wg.Wait()
@@ -572,7 +574,7 @@ func TestST15to17and26_AcceptBeeNameSuggestion(t *testing.T) {
 				t.Errorf("trial %d: bee_name has %d rows for %q after both accepts, want exactly 1", trial, n, name)
 			}
 
-			_, _ = s.DeleteBeeName(name)
+			_, _ = s.DeleteBeeName(bnCtx, name)
 		}
 	})
 
@@ -583,7 +585,7 @@ func TestST15to17and26_AcceptBeeNameSuggestion(t *testing.T) {
 			_, _ = db.Exec(context.Background(), "DELETE FROM bee_name WHERE name = $1", blank)
 		})
 
-		got, err := s.AcceptBeeNameSuggestion(blank)
+		got, err := s.AcceptBeeNameSuggestion(bnCtx, blank)
 		var pgErr *pgconn.PgError
 		if !errors.As(err, &pgErr) || pgErr.Code != "23514" {
 			t.Errorf("AcceptBeeNameSuggestion() error = %v, want a CHECK violation (SQLSTATE 23514)", err)
@@ -600,7 +602,7 @@ func TestST15to17and26_AcceptBeeNameSuggestion(t *testing.T) {
 func TestST18to20_RejectBeeNameSuggestion(t *testing.T) {
 	t.Run("BNS-18_Unreachable", func(t *testing.T) {
 		s := bngStoreWithUnreachableDB(t)
-		_, err := s.RejectBeeNameSuggestion(bngUniqueName("rej"))
+		_, err := s.RejectBeeNameSuggestion(bnCtx, bngUniqueName("rej"))
 		if err == nil {
 			t.Error("expected a raw connection error")
 		}
@@ -609,11 +611,11 @@ func TestST18to20_RejectBeeNameSuggestion(t *testing.T) {
 	t.Run("BNS-19_Live_OK", func(t *testing.T) {
 		s, db := bngLiveStore(t)
 		name := bngUniqueName("rej")
-		if _, err := s.SubmitBeeName(name); err != nil {
+		if _, err := s.SubmitBeeName(bnCtx, name); err != nil {
 			t.Fatalf("seed SubmitBeeName() error = %v", err)
 		}
 
-		got, err := s.RejectBeeNameSuggestion(name)
+		got, err := s.RejectBeeNameSuggestion(bnCtx, name)
 		if err != nil {
 			t.Fatalf("RejectBeeNameSuggestion() error = %v", err)
 		}
@@ -628,7 +630,7 @@ func TestST18to20_RejectBeeNameSuggestion(t *testing.T) {
 	t.Run("BNS-20_Live_NonExistent", func(t *testing.T) {
 		s, _ := bngLiveStore(t)
 		name := bngUniqueName("rej-missing")
-		got, err := s.RejectBeeNameSuggestion(name)
+		got, err := s.RejectBeeNameSuggestion(bnCtx, name)
 		if err != nil {
 			t.Fatalf("RejectBeeNameSuggestion() of a non-existent name error = %v, want nil", err)
 		}

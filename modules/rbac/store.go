@@ -28,20 +28,20 @@ var (
 
 // Store is the database access for roles and permissions
 type Store interface {
-	CreateRole(id string, name, description string) error
-	GetRole(id string) (*Role, error)
-	GetRoleByName(name string) (*Role, error)
-	ListRoles() ([]*Role, error)
-	UpdateRole(id string, name, description string) error
-	DeleteRole(id string) error
-	CreatePermission(id string, node, description, valueType, merge string) error
-	GetPermission(id string) (*Permission, error)
-	GetPermissionByNode(node string) (*Permission, error)
-	ListPermissions() ([]*Permission, error)
-	DeletePermission(id string) error
-	AttachPermission(roleID, permissionID string, value []byte) error
-	DetachPermission(roleID, permissionID string) error
-	GetPermissionsForRoles(roleIDs []string) ([]string, error)
+	CreateRole(ctx context.Context, id string, name, description string) error
+	GetRole(ctx context.Context, id string) (*Role, error)
+	GetRoleByName(ctx context.Context, name string) (*Role, error)
+	ListRoles(ctx context.Context) ([]*Role, error)
+	UpdateRole(ctx context.Context, id string, name, description string) error
+	DeleteRole(ctx context.Context, id string) error
+	CreatePermission(ctx context.Context, id string, node, description, valueType, merge string) error
+	GetPermission(ctx context.Context, id string) (*Permission, error)
+	GetPermissionByNode(ctx context.Context, node string) (*Permission, error)
+	ListPermissions(ctx context.Context) ([]*Permission, error)
+	DeletePermission(ctx context.Context, id string) error
+	AttachPermission(ctx context.Context, roleID, permissionID string, value []byte) error
+	DetachPermission(ctx context.Context, roleID, permissionID string) error
+	GetPermissionsForRoles(ctx context.Context, roleIDs []string) ([]string, error)
 }
 
 type store struct {
@@ -68,8 +68,8 @@ type roleRow struct {
 	Value                 []byte  `db:"value"`
 }
 
-func (s *store) queryRoles(where string, args ...any) ([]*Role, error) {
-	rows, err := s.db.Query(context.Background(), roleSelect+where+" ORDER BY r.id, p.id", args...)
+func (s *store) queryRoles(ctx context.Context, where string, args ...any) ([]*Role, error) {
+	rows, err := s.db.Query(ctx, roleSelect+where+" ORDER BY r.id, p.id", args...)
 	if err != nil {
 		return nil, err
 	}
@@ -107,13 +107,13 @@ func (s *store) queryRoles(where string, args ...any) ([]*Role, error) {
 	return roles, nil
 }
 
-func (s *store) CreateRole(id string, name, description string) error {
-	_, err := s.db.Exec(context.Background(), "INSERT INTO roles (id, name, description) VALUES ($1, $2, $3)", id, name, description)
+func (s *store) CreateRole(ctx context.Context, id string, name, description string) error {
+	_, err := s.db.Exec(ctx, "INSERT INTO roles (id, name, description) VALUES ($1, $2, $3)", id, name, description)
 	return translateConstraintErr(err)
 }
 
-func (s *store) GetRole(id string) (*Role, error) {
-	roles, err := s.queryRoles(" WHERE r.id = $1", id)
+func (s *store) GetRole(ctx context.Context, id string) (*Role, error) {
+	roles, err := s.queryRoles(ctx, " WHERE r.id = $1", id)
 	if err != nil {
 		return nil, err
 	}
@@ -123,8 +123,8 @@ func (s *store) GetRole(id string) (*Role, error) {
 	return roles[0], nil
 }
 
-func (s *store) GetRoleByName(name string) (*Role, error) {
-	roles, err := s.queryRoles(" WHERE r.name = $1", name)
+func (s *store) GetRoleByName(ctx context.Context, name string) (*Role, error) {
+	roles, err := s.queryRoles(ctx, " WHERE r.name = $1", name)
 	if err != nil {
 		return nil, err
 	}
@@ -134,16 +134,16 @@ func (s *store) GetRoleByName(name string) (*Role, error) {
 	return roles[0], nil
 }
 
-func (s *store) ListRoles() ([]*Role, error) {
-	roles, err := s.queryRoles("")
+func (s *store) ListRoles(ctx context.Context) ([]*Role, error) {
+	roles, err := s.queryRoles(ctx, "")
 	if roles == nil {
 		roles = []*Role{}
 	}
 	return roles, err
 }
 
-func (s *store) UpdateRole(id string, name, description string) error {
-	tag, err := s.db.Exec(context.Background(), "UPDATE roles SET name = $2, description = $3 WHERE id = $1", id, name, description)
+func (s *store) UpdateRole(ctx context.Context, id string, name, description string) error {
+	tag, err := s.db.Exec(ctx, "UPDATE roles SET name = $2, description = $3 WHERE id = $1", id, name, description)
 	if err != nil {
 		return translateConstraintErr(err)
 	}
@@ -153,8 +153,7 @@ func (s *store) UpdateRole(id string, name, description string) error {
 	return nil
 }
 
-func (s *store) DeleteRole(id string) error {
-	ctx := context.Background()
+func (s *store) DeleteRole(ctx context.Context, id string) error {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return err
@@ -188,21 +187,21 @@ func deref(s *string) string {
 	return *s
 }
 
-func (s *store) CreatePermission(id string, node, description, valueType, merge string) error {
-	_, err := s.db.Exec(context.Background(), "INSERT INTO permissions (id, node, description, value_type, merge) VALUES ($1, $2, $3, NULLIF($4, ''), NULLIF($5, ''))", id, node, description, valueType, merge)
+func (s *store) CreatePermission(ctx context.Context, id string, node, description, valueType, merge string) error {
+	_, err := s.db.Exec(ctx, "INSERT INTO permissions (id, node, description, value_type, merge) VALUES ($1, $2, $3, NULLIF($4, ''), NULLIF($5, ''))", id, node, description, valueType, merge)
 	return translateConstraintErr(err)
 }
 
-func (s *store) queryPermissions(where string, args ...any) ([]*Permission, error) {
-	rows, err := s.db.Query(context.Background(), "SELECT id::text AS id, node, description, COALESCE(value_type, '') AS value_type, COALESCE(merge, '') AS merge FROM permissions"+where+" ORDER BY permissions.id", args...)
+func (s *store) queryPermissions(ctx context.Context, where string, args ...any) ([]*Permission, error) {
+	rows, err := s.db.Query(ctx, "SELECT id::text AS id, node, description, COALESCE(value_type, '') AS value_type, COALESCE(merge, '') AS merge FROM permissions"+where+" ORDER BY permissions.id", args...)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, pgx.RowToAddrOfStructByName[Permission])
 }
 
-func (s *store) GetPermission(id string) (*Permission, error) {
-	permissions, err := s.queryPermissions(" WHERE id = $1", id)
+func (s *store) GetPermission(ctx context.Context, id string) (*Permission, error) {
+	permissions, err := s.queryPermissions(ctx, " WHERE id = $1", id)
 	if err != nil {
 		return nil, err
 	}
@@ -212,8 +211,8 @@ func (s *store) GetPermission(id string) (*Permission, error) {
 	return permissions[0], nil
 }
 
-func (s *store) GetPermissionByNode(node string) (*Permission, error) {
-	permissions, err := s.queryPermissions(" WHERE node = $1", node)
+func (s *store) GetPermissionByNode(ctx context.Context, node string) (*Permission, error) {
+	permissions, err := s.queryPermissions(ctx, " WHERE node = $1", node)
 	if err != nil {
 		return nil, err
 	}
@@ -223,16 +222,16 @@ func (s *store) GetPermissionByNode(node string) (*Permission, error) {
 	return permissions[0], nil
 }
 
-func (s *store) ListPermissions() ([]*Permission, error) {
-	permissions, err := s.queryPermissions("")
+func (s *store) ListPermissions(ctx context.Context) ([]*Permission, error) {
+	permissions, err := s.queryPermissions(ctx, "")
 	if permissions == nil {
 		permissions = []*Permission{}
 	}
 	return permissions, err
 }
 
-func (s *store) DeletePermission(id string) error {
-	tag, err := s.db.Exec(context.Background(), "DELETE FROM permissions WHERE id = $1", id)
+func (s *store) DeletePermission(ctx context.Context, id string) error {
+	tag, err := s.db.Exec(ctx, "DELETE FROM permissions WHERE id = $1", id)
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == "23503" {
 		return ErrPermissionInUse
@@ -246,13 +245,13 @@ func (s *store) DeletePermission(id string) error {
 	return nil
 }
 
-func (s *store) AttachPermission(roleID, permissionID string, value []byte) error {
-	_, err := s.db.Exec(context.Background(), "INSERT INTO role_permissions (role_id, permission_id, value) VALUES ($1, $2, $3::jsonb) ON CONFLICT (role_id, permission_id) DO UPDATE SET value = EXCLUDED.value", roleID, permissionID, value)
+func (s *store) AttachPermission(ctx context.Context, roleID, permissionID string, value []byte) error {
+	_, err := s.db.Exec(ctx, "INSERT INTO role_permissions (role_id, permission_id, value) VALUES ($1, $2, $3::jsonb) ON CONFLICT (role_id, permission_id) DO UPDATE SET value = EXCLUDED.value", roleID, permissionID, value)
 	return translateConstraintErr(err)
 }
 
-func (s *store) DetachPermission(roleID, permissionID string) error {
-	tag, err := s.db.Exec(context.Background(), "DELETE FROM role_permissions WHERE role_id = $1 AND permission_id = $2", roleID, permissionID)
+func (s *store) DetachPermission(ctx context.Context, roleID, permissionID string) error {
+	tag, err := s.db.Exec(ctx, "DELETE FROM role_permissions WHERE role_id = $1 AND permission_id = $2", roleID, permissionID)
 	if err != nil {
 		return err
 	}
@@ -260,7 +259,7 @@ func (s *store) DetachPermission(roleID, permissionID string) error {
 		return nil
 	}
 	var roleExists, permissionExists bool
-	if err := s.db.QueryRow(context.Background(), "SELECT EXISTS (SELECT 1 FROM roles WHERE id = $1), EXISTS (SELECT 1 FROM permissions WHERE id = $2)", roleID, permissionID).Scan(&roleExists, &permissionExists); err != nil {
+	if err := s.db.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM roles WHERE id = $1), EXISTS (SELECT 1 FROM permissions WHERE id = $2)", roleID, permissionID).Scan(&roleExists, &permissionExists); err != nil {
 		return err
 	}
 	if !roleExists {
@@ -272,8 +271,8 @@ func (s *store) DetachPermission(roleID, permissionID string) error {
 	return nil
 }
 
-func (s *store) GetPermissionsForRoles(roleIDs []string) ([]string, error) {
-	rows, err := s.db.Query(context.Background(), "SELECT p.node, p.value_type, p.merge, rp.value FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id WHERE rp.role_id = ANY($1::text[]::bigint[]) ORDER BY p.node, rp.role_id", roleIDs)
+func (s *store) GetPermissionsForRoles(ctx context.Context, roleIDs []string) ([]string, error) {
+	rows, err := s.db.Query(ctx, "SELECT p.node, p.value_type, p.merge, rp.value FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id WHERE rp.role_id = ANY($1::text[]::bigint[]) ORDER BY p.node, rp.role_id", roleIDs)
 	if err != nil {
 		return nil, err
 	}

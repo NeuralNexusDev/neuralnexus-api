@@ -4,13 +4,13 @@ import (
 	"encoding/xml"
 	"image"
 	"image/png"
-	"log"
 	"net/http"
 	"net/netip"
 	"path/filepath"
 	"strconv"
 	"strings"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
@@ -186,9 +186,9 @@ func ServerStatusHandler(s MCStatusService) http.HandlerFunc {
 		}
 		queryPort := queryPortOrDefault(r.URL.Query().Get("query_port"), port)
 
-		status, err := s.GetServerStatus(host, port, isBedrock, queryEnabled, queryPort)
+		status, err := s.GetServerStatus(r.Context(), host, port, isBedrock, queryEnabled, queryPort)
 		if err != nil {
-			log.Println(logUnableToGetServerStatus, err)
+			reqctx.Log(r.Context(), logUnableToGetServerStatus, err.Error())
 			switch err {
 			case ErrJavaStatus:
 				problem := responses.NewNotFoundProblem(msgJavaStatusFailed)
@@ -217,7 +217,7 @@ func writeIcon(w http.ResponseWriter, img image.Image) {
 func writeStockIcon(w http.ResponseWriter, r *http.Request, name string) {
 	img, err := LoadImgFromFile(filepath.Join(iconDir, name))
 	if err != nil {
-		log.Println("[Error]: Unable to load stock icon:\n\t", err)
+		reqctx.Log(r.Context(), "[Error]: Unable to load stock icon:\n\t", err.Error())
 		responses.InternalServerError(w, r, msgIconUnavailable)
 		return
 	}
@@ -239,13 +239,13 @@ func IconHandler(s MCStatusService) http.HandlerFunc {
 			return
 		}
 
-		status, err := s.GetJavaServerStatus(host, port, false, 0)
+		status, err := s.GetJavaServerStatus(r.Context(), host, port, false, 0)
 		if err == ErrJavaStatus {
 			writeStockIcon(w, r, defaultIconFile)
 			return
 		}
 		if err != nil {
-			log.Println(logUnableToGetServerStatus, err)
+			reqctx.Log(r.Context(), logUnableToGetServerStatus, err.Error())
 			responses.InternalServerError(w, r, msgFailedToGetServerStatus)
 			return
 		}
@@ -277,7 +277,7 @@ func SimpleStatusHandler(s MCStatusService) http.HandlerFunc {
 
 		status := "Online"
 		statusCode := http.StatusOK
-		_, err := s.GetServerStatus(host, port, isBedrock, queryEnabled, queryPort)
+		_, err := s.GetServerStatus(r.Context(), host, port, isBedrock, queryEnabled, queryPort)
 		if err != nil {
 			status = "Offline"
 			statusCode = http.StatusNotFound

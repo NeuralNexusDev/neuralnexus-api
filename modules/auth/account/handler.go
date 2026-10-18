@@ -7,6 +7,7 @@ import (
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
@@ -68,7 +69,7 @@ func LoginHandler(as Service, ss session.Service) http.HandlerFunc {
 			return
 		}
 
-		session, err := as.NewSession(account, time.Now().Add(time.Hour*24).Unix())
+		session, err := as.NewSession(r.Context(), account, time.Now().Add(time.Hour*24).Unix())
 		if err != nil {
 			log.Println("Failed to create session:\n\t", err)
 			responses.InternalServerError(w, r, msgAuthenticationFailed)
@@ -93,7 +94,7 @@ func LoginHandler(as Service, ss session.Service) http.HandlerFunc {
 // LogoutHandler handles the logout route
 func LogoutHandler(ss session.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*session.Session)
+		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
 		if session == nil {
 			responses.BadRequest(w, r, msgInvalidSession)
 			return

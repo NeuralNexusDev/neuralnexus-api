@@ -328,7 +328,7 @@
 | AU-29 | decodeAndValidateState | Error Path | Nonce cookie value doesn't match state.Nonce | Valid state, "nonce" cookie present but value != state.Nonce | Returns (state, false); redirectBadRequest to auth.NN_SITE_URL, detail `msgInvalidState` | P2 |  |
 | AU-30 | requireValidModeAndSession | Happy Path | mode=login | Any session state | Returns true, no response written | P1 |  |
 | AU-31 | requireValidModeAndSession | Happy Path | mode=link with a valid, non-expired session in context | Context carries *auth.Session with IsValid()==true | Returns true, no response written | P1 |  |
-| AU-32 | requireValidModeAndSession | Error Path | mode=link, no session key in context at all | r.Context().Value(mw.SessionKey) type-asserts ok=false | Returns false; redirectUnauthorized to redirectURI (`msgLoginRequiredToLink`) | P2 |  |
+| AU-32 | requireValidModeAndSession | Error Path | mode=link, no session key in context at all | r.Context().Value(reqctx.SessionKey) type-asserts ok=false | Returns false; redirectUnauthorized to redirectURI (`msgLoginRequiredToLink`) | P2 |  |
 | AU-33 | requireValidModeAndSession | Edge Case | mode=link, session in context is a nil *auth.Session | ok=true, session==nil | Returns false; redirectUnauthorized to redirectURI (`msgLoginRequiredToLink`) | P3 |  |
 | AU-34 | requireValidModeAndSession | Error Path | mode=link, session present but expired | session.IsValid()==false (ExpiresAt in the past) | Returns false; redirectUnauthorized to redirectURI (`msgLoginRequiredToLink`) | P2 |  |
 | AU-35 | requireValidModeAndSession | Error Path | Unrecognized mode value | mode is neither link.ModeLogin nor link.ModeLink | Returns false; redirectBadRequest to redirectURI, detail `msgInvalidState` | P2 |  |

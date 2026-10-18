@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/link"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil/authtest"
 )
@@ -60,7 +60,7 @@ func (s *stubService) ListUsers(limit, offset int) ([]*User, error) {
 	return s.listed, s.listErr
 }
 
-func (s *stubService) GetUserPermissions(string) ([]string, error) {
+func (s *stubService) GetUserPermissions(context.Context, string) ([]string, error) {
 	return s.permissions, s.permissionsErr
 }
 
@@ -758,7 +758,7 @@ func TestUR72to73UpdateUserRespondsWithTheStoredAccount(t *testing.T) {
 }
 
 func newListUsersRequest(session *session.Session, query string) *http.Request {
-	ctx := context.WithValue(context.Background(), mw.SessionKey, session)
+	ctx := context.WithValue(context.Background(), reqctx.SessionKey, session)
 	return httptest.NewRequest(http.MethodGet, "/api/v1/users"+query, nil).WithContext(ctx)
 }
 

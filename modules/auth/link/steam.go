@@ -1,6 +1,7 @@
 package link
 
 import (
+	"context"
 	"errors"
 	"io"
 	"log"
@@ -14,9 +15,9 @@ import (
 
 	"github.com/goccy/go-json"
 
-	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 )
 
 // -------------- Global Variables --------------
@@ -201,12 +202,12 @@ func GetSteamUser(steamID64 string) (*SteamData, error) {
 
 // ProcessSteamLogin resolves or creates an account for the given,
 // already-verified Steam identity and returns a new session for it.
-func ProcessSteamLogin(as account.Service, las Store, ss session.Service, user *SteamData) (*session.Session, error) {
+func ProcessSteamLogin(ctx context.Context, as account.Service, las Store, ss session.Service, user *SteamData) (*session.Session, error) {
 	a, err := resolveOrCreateAccountForPlatformUser(as, las, PlatformSteam, user)
 	if err != nil {
 		return nil, err
 	}
-	session, err := as.NewSession(a, time.Now().Add(time.Hour*24).Unix())
+	session, err := as.NewSession(ctx, a, time.Now().Add(time.Hour*24).Unix())
 	if err != nil {
 		return nil, err
 	}
@@ -219,7 +220,7 @@ func ProcessSteamLogin(as account.Service, las Store, ss session.Service, user *
 // ProcessSteamLink links the given, already-verified Steam identity to the
 // session already in r's context.
 func ProcessSteamLink(r *http.Request, las Store, user *SteamData) (*session.Session, error) {
-	session, ok := r.Context().Value(mw.SessionKey).(*session.Session)
+	session, ok := r.Context().Value(reqctx.SessionKey).(*session.Session)
 	if !ok || session == nil {
 		return nil, ErrSessionNotFound
 	}

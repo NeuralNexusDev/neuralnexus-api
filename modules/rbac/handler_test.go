@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
@@ -21,20 +21,20 @@ type stubService struct {
 	args []string
 }
 
-func (s *stubService) CreateRole(name, description string) (*Role, error) {
+func (s *stubService) CreateRole(_ context.Context, name, description string) (*Role, error) {
 	s.args = []string{name, description}
 	return &Role{ID: "1", Name: name}, s.err
 }
-func (s *stubService) GetRole(id string) (*Role, error) {
+func (s *stubService) GetRole(_ context.Context, id string) (*Role, error) {
 	s.args = []string{id}
 	return &Role{ID: id}, s.err
 }
-func (s *stubService) GetRoleByName(name string) (*Role, error) {
+func (s *stubService) GetRoleByName(_ context.Context, name string) (*Role, error) {
 	s.args = []string{name}
 	return &Role{Name: name}, s.err
 }
-func (s *stubService) ListRoles() ([]*Role, error) { return []*Role{{ID: "1"}}, s.err }
-func (s *stubService) UpdateRole(id string, name, description *string) (*Role, error) {
+func (s *stubService) ListRoles(_ context.Context) ([]*Role, error) { return []*Role{{ID: "1"}}, s.err }
+func (s *stubService) UpdateRole(_ context.Context, id string, name, description *string) (*Role, error) {
 	s.args = []string{id}
 	if name != nil {
 		s.args = append(s.args, "name="+*name)
@@ -44,32 +44,40 @@ func (s *stubService) UpdateRole(id string, name, description *string) (*Role, e
 	}
 	return &Role{ID: id}, s.err
 }
-func (s *stubService) DeleteRole(id string) error { s.args = []string{id}; return s.err }
-func (s *stubService) CreatePermission(node, description, valueType, merge string) (*Permission, error) {
+func (s *stubService) DeleteRole(_ context.Context, id string) error {
+	s.args = []string{id}
+	return s.err
+}
+func (s *stubService) CreatePermission(_ context.Context, node, description, valueType, merge string) (*Permission, error) {
 	s.args = []string{node, description, valueType, merge}
 	return &Permission{ID: "1", Node: node, Description: description, ValueType: valueType, Merge: merge}, s.err
 }
-func (s *stubService) GetPermission(id string) (*Permission, error) {
+func (s *stubService) GetPermission(_ context.Context, id string) (*Permission, error) {
 	s.args = []string{id}
 	return &Permission{ID: id}, s.err
 }
-func (s *stubService) GetPermissionByNode(node string) (*Permission, error) {
+func (s *stubService) GetPermissionByNode(_ context.Context, node string) (*Permission, error) {
 	s.args = []string{node}
 	return &Permission{Node: node}, s.err
 }
-func (s *stubService) ListPermissions() ([]*Permission, error) {
+func (s *stubService) ListPermissions(_ context.Context) ([]*Permission, error) {
 	return []*Permission{{ID: "1"}}, s.err
 }
-func (s *stubService) DeletePermission(id string) error { s.args = []string{id}; return s.err }
-func (s *stubService) AttachPermission(roleID, permissionID string, value any) error {
+func (s *stubService) DeletePermission(_ context.Context, id string) error {
+	s.args = []string{id}
+	return s.err
+}
+func (s *stubService) AttachPermission(_ context.Context, roleID, permissionID string, value any) error {
 	s.args = []string{roleID, permissionID, fmt.Sprint(value)}
 	return s.err
 }
-func (s *stubService) DetachPermission(roleID, permissionID string) error {
+func (s *stubService) DetachPermission(_ context.Context, roleID, permissionID string) error {
 	s.args = []string{roleID, permissionID}
 	return s.err
 }
-func (s *stubService) GetPermissionsForRoles([]string) ([]string, error) { return nil, s.err }
+func (s *stubService) GetPermissionsForRoles(context.Context, []string) ([]string, error) {
+	return nil, s.err
+}
 
 type handlerCase struct {
 	name    string
@@ -109,8 +117,8 @@ func rbSession(permissions ...string) *session.Session {
 }
 
 func rbRequest(c handlerCase, session *session.Session, body string) *http.Request {
-	ctx := context.WithValue(context.Background(), mw.SessionKey, session)
-	r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body)).WithContext(ctx)
+	r := testutil.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	r = r.WithContext(context.WithValue(r.Context(), reqctx.SessionKey, session))
 	r.Header.Set("Content-Type", "application/json")
 	for k, v := range c.paths {
 		r.SetPathValue(k, v)

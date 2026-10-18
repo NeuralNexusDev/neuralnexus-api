@@ -19,6 +19,7 @@ import (
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/ratelimit"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 	"golang.org/x/crypto/ed25519"
@@ -116,12 +117,8 @@ func (f *mwSyncedRateLimitSvc) SetRateLimit(key string, limit int) error {
 	return nil
 }
 
-// mwBaseCtx pre-populates RemoteAddrKey/RequestIDKey, which LogRequest
-// type-asserts without an ok-check and would otherwise panic on.
 func mwBaseCtx() context.Context {
-	ctx := context.WithValue(context.Background(), RemoteAddrKey, "127.0.0.1")
-	ctx = context.WithValue(ctx, RequestIDKey, 1)
-	return ctx
+	return testutil.LogContext(context.Background())
 }
 
 func mwCaptureLog(t *testing.T) func() string {
@@ -137,13 +134,14 @@ func mwCaptureLog(t *testing.T) func() string {
 	return buf.String
 }
 
-func TestLogRequest(t *testing.T) {
+func TestMiddlewareLog(t *testing.T) {
 	t.Run("MW-01_SessionInContextLogsUserID", func(t *testing.T) {
 		getLog := mwCaptureLog(t)
 		ctx := mwBaseCtx()
-		ctx = context.WithValue(ctx, SessionKey, &session.Session{ID: "s1", UserID: "u1"})
+		ctx = context.WithValue(ctx, reqctx.SessionKey, &session.Session{ID: "s1", UserID: "u1"})
+		ctx = context.WithValue(ctx, reqctx.UserIDKey, "u1")
 
-		LogRequest(ctx, "hello", "world")
+		reqctx.Log(ctx, "hello", "world")
 
 		out := getLog()
 		if !strings.Contains(out, "u1") {
@@ -158,7 +156,7 @@ func TestLogRequest(t *testing.T) {
 		getLog := mwCaptureLog(t)
 		ctx := mwBaseCtx()
 
-		LogRequest(ctx, "msg")
+		reqctx.Log(ctx, "msg")
 
 		out := getLog()
 		if !strings.Contains(out, "N/A") {
@@ -170,7 +168,7 @@ func TestLogRequest(t *testing.T) {
 		getLog := mwCaptureLog(t)
 		ctx := mwBaseCtx()
 
-		LogRequest(ctx)
+		reqctx.Log(ctx)
 
 		out := getLog()
 		if !strings.Contains(out, "1 N/A 127.0.0.1") {
@@ -264,8 +262,8 @@ func TestIPMiddleware(t *testing.T) {
 		if got.RemoteAddr != "1.2.3.4" {
 			t.Errorf("expected RemoteAddr %q, got %q", "1.2.3.4", got.RemoteAddr)
 		}
-		if v, _ := got.Context().Value(RemoteAddrKey).(string); v != "1.2.3.4" {
-			t.Errorf("expected context RemoteAddrKey %q, got %q", "1.2.3.4", v)
+		if v, _ := got.Context().Value(reqctx.RemoteAddrKey).(string); v != "1.2.3.4" {
+			t.Errorf("expected context reqctx.RemoteAddrKey %q, got %q", "1.2.3.4", v)
 		}
 	})
 
@@ -342,8 +340,8 @@ func TestIPMiddleware(t *testing.T) {
 		if got.RemoteAddr != "10.0.0.1:1234" {
 			t.Errorf("expected RemoteAddr to be left unchanged, got %q", got.RemoteAddr)
 		}
-		if v, _ := got.Context().Value(RemoteAddrKey).(string); v != "10.0.0.1:1234" {
-			t.Errorf("expected context RemoteAddrKey to match the original RemoteAddr, got %q", v)
+		if v, _ := got.Context().Value(reqctx.RemoteAddrKey).(string); v != "10.0.0.1:1234" {
+			t.Errorf("expected context reqctx.RemoteAddrKey to match the original RemoteAddr, got %q", v)
 		}
 	})
 }
@@ -352,10 +350,18 @@ func mwRunSession(svc session.Service, r *http.Request) (rec *httptest.ResponseR
 	rec = httptest.NewRecorder()
 	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		nextCalls++
-		gotSession, _ = r.Context().Value(SessionKey).(*session.Session)
+		gotSession, _ = r.Context().Value(reqctx.SessionKey).(*session.Session)
 	})
 	SessionMiddleware(svc)(next).ServeHTTP(rec, r)
 	return rec, nextCalls, gotSession
+}
+
+func mwRunSessionUserID(svc session.Service, r *http.Request) (gotUserID string, ok bool) {
+	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		gotUserID, ok = r.Context().Value(reqctx.UserIDKey).(string)
+	})
+	SessionMiddleware(svc)(next).ServeHTTP(httptest.NewRecorder(), r)
+	return gotUserID, ok
 }
 
 func mwSessionRequest(authHeader, cookieValue string) *http.Request {
@@ -508,6 +514,54 @@ func TestSessionMiddleware(t *testing.T) {
 		}
 	})
 
+	t.Run("MW-62_BearerSessionSetsUserIDKey", func(t *testing.T) {
+		sess := &session.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
+		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*session.Session, error) { return sess, nil }}
+
+		userID, ok := mwRunSessionUserID(svc, mwSessionRequest("Bearer validtoken", ""))
+
+		if !ok || userID != "u1" {
+			t.Errorf("UserIDKey = %q (set %v), want %q", userID, ok, "u1")
+		}
+	})
+
+	t.Run("MW-63_CookieSessionSetsUserIDKey", func(t *testing.T) {
+		sess := &session.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
+		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*session.Session, error) { return sess, nil }}
+
+		userID, ok := mwRunSessionUserID(svc, mwSessionRequest("", "cookietoken"))
+
+		if !ok || userID != "u1" {
+			t.Errorf("UserIDKey = %q (set %v), want %q", userID, ok, "u1")
+		}
+	})
+
+	t.Run("MW-64_NoSessionLeavesUserIDKeyUnset", func(t *testing.T) {
+		expired := &session.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
+		cases := map[string]struct {
+			svc     *mwFakeSessionSvc
+			request *http.Request
+		}{
+			"no credentials": {&mwFakeSessionSvc{}, mwSessionRequest("", "")},
+			"cookie ReadJWT error": {
+				&mwFakeSessionSvc{readJWTFunc: func(string) (*session.Session, error) { return nil, testutil.ErrBoom }},
+				mwSessionRequest("", "badtoken"),
+			},
+			"cookie session expired": {
+				&mwFakeSessionSvc{readJWTFunc: func(string) (*session.Session, error) { return expired, nil }},
+				mwSessionRequest("", "oldtoken"),
+			},
+		}
+		for name, c := range cases {
+			t.Run(name, func(t *testing.T) {
+				mwCaptureLog(t)
+				if userID, ok := mwRunSessionUserID(c.svc, c.request); ok {
+					t.Errorf("expected UserIDKey unset, got %q", userID)
+				}
+			})
+		}
+	})
+
 	t.Run("MW-21_CookieReadJWTErrorFailsOpen", func(t *testing.T) {
 		readLog := mwCaptureLog(t)
 		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*session.Session, error) { return nil, testutil.ErrBoom }}
@@ -595,7 +649,7 @@ func mwRateLimitRequest(session *session.Session, remoteAddr string) *http.Reque
 	r.RemoteAddr = remoteAddr
 	ctx := mwBaseCtx()
 	if session != nil {
-		ctx = context.WithValue(ctx, SessionKey, session)
+		ctx = context.WithValue(ctx, reqctx.SessionKey, session)
 	}
 	return r.WithContext(ctx)
 }
@@ -843,7 +897,7 @@ func TestRequestIDMiddleware(t *testing.T) {
 			t.Fatalf("next called %d times, want 1", nextCalls)
 		}
 
-		id, ok := got.Context().Value(RequestIDKey).(int)
+		id, ok := got.Context().Value(reqctx.RequestIDKey).(int)
 		if !ok || id == 0 {
 			t.Errorf("expected a non-zero generated request ID in context, got %v (ok=%v)", id, ok)
 		}
@@ -861,7 +915,7 @@ func TestRequestIDMiddleware(t *testing.T) {
 			t.Fatalf("next called %d times, want 1", nextCalls)
 		}
 
-		id, ok := got.Context().Value(RequestIDKey).(int)
+		id, ok := got.Context().Value(reqctx.RequestIDKey).(int)
 		if !ok || id != 42 {
 			t.Errorf("expected request ID 42 in context, got %v (ok=%v)", id, ok)
 		}
@@ -876,7 +930,7 @@ func TestRequestIDMiddleware(t *testing.T) {
 			t.Fatalf("next called %d times, want 1", nextCalls)
 		}
 
-		id, ok := got.Context().Value(RequestIDKey).(int)
+		id, ok := got.Context().Value(reqctx.RequestIDKey).(int)
 		if !ok || id != 0 {
 			t.Errorf("expected request ID to default to 0 for a non-numeric header, got %v (ok=%v)", id, ok)
 		}
@@ -911,7 +965,7 @@ func TestRecoveryMiddleware(t *testing.T) {
 		getLog := mwCaptureLog(t)
 		rec := httptest.NewRecorder()
 		r := httptest.NewRequest(http.MethodGet, "/boom", nil)
-		r = r.WithContext(context.WithValue(mwBaseCtx(), RequestIDKey, 77))
+		r = r.WithContext(context.WithValue(mwBaseCtx(), reqctx.RequestIDKey, 77))
 		next := http.HandlerFunc(func(http.ResponseWriter, *http.Request) { panic("handler exploded") })
 
 		RecoveryMiddleware(next).ServeHTTP(rec, r)
@@ -1041,7 +1095,7 @@ func TestAuth(t *testing.T) {
 
 	t.Run("MW-39_TypedNilSessionInContextRejected", func(t *testing.T) {
 		svc := &mwFakeSessionSvc{}
-		ctx := context.WithValue(mwBaseCtx(), SessionKey, (*session.Session)(nil))
+		ctx := context.WithValue(mwBaseCtx(), reqctx.SessionKey, (*session.Session)(nil))
 		r := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
 
 		rec, nextCalls := mwRunAuth(svc, r)
@@ -1057,7 +1111,7 @@ func TestAuth(t *testing.T) {
 	t.Run("MW-40_ExpiredSessionRejectedAndDeleted", func(t *testing.T) {
 		svc := &mwFakeSessionSvc{}
 		session := &session.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
-		ctx := context.WithValue(mwBaseCtx(), SessionKey, session)
+		ctx := context.WithValue(mwBaseCtx(), reqctx.SessionKey, session)
 		r := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
 
 		rec, nextCalls := mwRunAuth(svc, r)
@@ -1077,7 +1131,7 @@ func TestAuth(t *testing.T) {
 		readLog := mwCaptureLog(t)
 		svc := &mwFakeSessionSvc{deleteFunc: func(string) error { return testutil.ErrCacheDown }}
 		session := &session.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
-		ctx := context.WithValue(mwBaseCtx(), SessionKey, session)
+		ctx := context.WithValue(mwBaseCtx(), reqctx.SessionKey, session)
 		r := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
 
 		rec, nextCalls := mwRunAuth(svc, r)
@@ -1096,7 +1150,7 @@ func TestAuth(t *testing.T) {
 	t.Run("MW-42_ValidSessionCallsNext", func(t *testing.T) {
 		svc := &mwFakeSessionSvc{}
 		session := &session.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
-		ctx := context.WithValue(mwBaseCtx(), SessionKey, session)
+		ctx := context.WithValue(mwBaseCtx(), reqctx.SessionKey, session)
 		r := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
 
 		rec, nextCalls := mwRunAuth(svc, r)
@@ -1138,7 +1192,7 @@ func TestSelfUserID(t *testing.T) {
 	})
 
 	t.Run("MW-44_TypedNilSessionInContextRejected", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), SessionKey, (*session.Session)(nil))
+		ctx := context.WithValue(context.Background(), reqctx.SessionKey, (*session.Session)(nil))
 		r := httptest.NewRequest(http.MethodGet, "/users/me", nil).WithContext(ctx)
 
 		rec, nextCalls, _ := mwRunSelfUserID(r)
@@ -1152,7 +1206,7 @@ func TestSelfUserID(t *testing.T) {
 	})
 
 	t.Run("MW-45_ValidSessionSetsPathValueAndCallsNext", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), SessionKey, &session.Session{ID: "s1", UserID: "u1"})
+		ctx := context.WithValue(context.Background(), reqctx.SessionKey, &session.Session{ID: "s1", UserID: "u1"})
 		r := httptest.NewRequest(http.MethodGet, "/users/me", nil).WithContext(ctx)
 
 		rec, nextCalls, gotUserID := mwRunSelfUserID(r)

@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"runtime/debug"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/ratelimit"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"golang.org/x/crypto/ed25519"
 )
@@ -36,18 +36,6 @@ const (
 // Middleware - Middleware type
 type Middleware func(http.Handler) http.Handler
 
-// key - Type for context keys
-type key int
-
-const (
-	// SessionKey - Key for session in context
-	SessionKey key = iota
-	// RequestIDKey - Key for request ID in context
-	RequestIDKey
-	// RemoteAddrKey - Key for remote address in context
-	RemoteAddrKey
-)
-
 const (
 	AuthHeader           = "Authorization"
 	SessionCookieName    = "session"
@@ -59,25 +47,6 @@ const (
 
 	RetryAfter = 60
 )
-
-func LogRequest(ctx context.Context, message ...string) {
-	remoteAddr := ctx.Value(RemoteAddrKey).(string)
-	requestId := ctx.Value(RequestIDKey).(int)
-	session, ok := ctx.Value(SessionKey).(*session.Session)
-	if !ok {
-		session = nil
-	}
-	userId := "N/A"
-	if session != nil {
-		userId = session.UserID
-	}
-	log.Printf("%d %s %s %s",
-		requestId,
-		userId,
-		remoteAddr,
-		strings.Join(message, " "),
-	)
-}
 
 // CreateStack - Create a stack of middlewares
 func CreateStack(middlewares ...Middleware) Middleware {
@@ -129,7 +98,7 @@ func IPMiddleware(next http.Handler) http.Handler {
 		}
 
 		ctx := r.Context()
-		ctx = context.WithValue(ctx, RemoteAddrKey, r.RemoteAddr)
+		ctx = context.WithValue(ctx, reqctx.RemoteAddrKey, r.RemoteAddr)
 		r = r.WithContext(ctx)
 
 		next.ServeHTTP(w, r)
@@ -148,7 +117,7 @@ func SessionMiddleware(service session.Service) Middleware {
 				}
 				session, err := service.ReadJWT(authStrings[1])
 				if err != nil {
-					LogRequest(r.Context(), "Error reading JWT:\n\t", err.Error())
+					reqctx.Log(r.Context(), "Error reading JWT:\n\t", err.Error())
 					responses.Unauthorized(w, r, "")
 					return
 				}
@@ -156,23 +125,25 @@ func SessionMiddleware(service session.Service) Middleware {
 				if !session.IsValid() {
 					responses.Unauthorized(w, r, "")
 					if delErr := service.DeleteSession(session.ID); delErr != nil {
-						LogRequest(r.Context(), logErrorDeletingSession, delErr.Error())
+						reqctx.Log(r.Context(), logErrorDeletingSession, delErr.Error())
 					}
 					return
 				}
 
-				ctx := context.WithValue(r.Context(), SessionKey, session)
+				ctx := context.WithValue(r.Context(), reqctx.SessionKey, session)
+				ctx = context.WithValue(ctx, reqctx.UserIDKey, session.UserID)
 				r = r.WithContext(ctx)
 			} else if cookie, err := r.Cookie(SessionCookieName); err == nil {
 				session, jwtErr := service.ReadJWT(cookie.Value)
 				if jwtErr != nil {
-					LogRequest(r.Context(), logErrorReadingJWTFromCookie, jwtErr.Error())
+					reqctx.Log(r.Context(), logErrorReadingJWTFromCookie, jwtErr.Error())
 				} else if !session.IsValid() {
 					if delErr := service.DeleteSession(session.ID); delErr != nil {
-						LogRequest(r.Context(), logErrorDeletingSession, delErr.Error())
+						reqctx.Log(r.Context(), logErrorDeletingSession, delErr.Error())
 					}
 				} else {
-					ctx := context.WithValue(r.Context(), SessionKey, session)
+					ctx := context.WithValue(r.Context(), reqctx.SessionKey, session)
+					ctx = context.WithValue(ctx, reqctx.UserIDKey, session.UserID)
 					r = r.WithContext(ctx)
 				}
 			}
@@ -186,17 +157,17 @@ func SessionMiddleware(service session.Service) Middleware {
 func RateLimitMiddleware(service ratelimit.Service, prefix string, sessionLimit int, ipLimit int) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			session, ok := r.Context().Value(SessionKey).(*session.Session)
+			session, ok := r.Context().Value(reqctx.SessionKey).(*session.Session)
 			if ok && session != nil {
 				err := service.IncrRateLimit(prefix + ":" + session.UserID)
 				if err != nil {
-					LogRequest(r.Context(), logErrorIncrementingRateLimit, err.Error())
+					reqctx.Log(r.Context(), logErrorIncrementingRateLimit, err.Error())
 					next.ServeHTTP(w, r)
 					return
 				}
 				limit, err := service.GetRateLimit(prefix + ":" + session.UserID)
 				if err != nil {
-					LogRequest(r.Context(), logErrorGettingRateLimit, err.Error())
+					reqctx.Log(r.Context(), logErrorGettingRateLimit, err.Error())
 					next.ServeHTTP(w, r)
 					return
 				}
@@ -211,13 +182,13 @@ func RateLimitMiddleware(service ratelimit.Service, prefix string, sessionLimit 
 				}
 				err = service.IncrRateLimit(prefix + ":" + ip)
 				if err != nil {
-					LogRequest(r.Context(), logErrorIncrementingRateLimit, err.Error())
+					reqctx.Log(r.Context(), logErrorIncrementingRateLimit, err.Error())
 					next.ServeHTTP(w, r)
 					return
 				}
 				limit, err := service.GetRateLimit(prefix + ":" + ip)
 				if err != nil {
-					LogRequest(r.Context(), logErrorGettingRateLimit, err.Error())
+					reqctx.Log(r.Context(), logErrorGettingRateLimit, err.Error())
 					next.ServeHTTP(w, r)
 					return
 				}
@@ -243,7 +214,7 @@ func RecoveryMiddleware(next http.Handler) http.Handler {
 			if recovered == http.ErrAbortHandler {
 				panic(recovered)
 			}
-			LogRequest(r.Context(), fmt.Sprintf("panic serving %s %s: %v\n%s", r.Method, r.URL.Path, recovered, debug.Stack()))
+			reqctx.Log(r.Context(), fmt.Sprintf("panic serving %s %s: %v\n%s", r.Method, r.URL.Path, recovered, debug.Stack()))
 			if !tracked.started {
 				responses.InternalServerError(tracked, r, msgInternalError)
 			}
@@ -272,7 +243,7 @@ func RequestIDMiddleware(next http.Handler) http.Handler {
 			requestId, _ = strconv.Atoi(requestIdStr)
 		}
 		ctx := r.Context()
-		ctx = context.WithValue(ctx, RequestIDKey, requestId)
+		ctx = context.WithValue(ctx, reqctx.RequestIDKey, requestId)
 		r = r.WithContext(ctx)
 
 		next.ServeHTTP(w, r)
@@ -287,7 +258,7 @@ func RequestLoggerMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(wrapped, r)
 
-		LogRequest(r.Context(), fmt.Sprintf("%d %s %s %s",
+		reqctx.Log(r.Context(), fmt.Sprintf("%d %s %s %s",
 			wrapped.statusCode,
 			r.Method,
 			r.URL.Path,
@@ -300,7 +271,7 @@ func RequestLoggerMiddleware(next http.Handler) http.Handler {
 func Auth(service session.Service) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			session, ok := r.Context().Value(SessionKey).(*session.Session)
+			session, ok := r.Context().Value(reqctx.SessionKey).(*session.Session)
 			if !ok || session == nil {
 				responses.Unauthorized(w, r, "")
 				return
@@ -310,7 +281,7 @@ func Auth(service session.Service) Middleware {
 				responses.Unauthorized(w, r, "")
 				err := service.DeleteSession(session.ID)
 				if err != nil {
-					LogRequest(r.Context(), logErrorDeletingSession, err.Error())
+					reqctx.Log(r.Context(), logErrorDeletingSession, err.Error())
 				}
 				return
 			}
@@ -324,7 +295,7 @@ func Auth(service session.Service) Middleware {
 // user ID, so a {user_id}-shaped handler can be reused for a "me" route.
 func SelfUserID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		session, ok := r.Context().Value(SessionKey).(*session.Session)
+		session, ok := r.Context().Value(reqctx.SessionKey).(*session.Session)
 		if !ok || session == nil {
 			responses.Unauthorized(w, r, "")
 			return
@@ -344,7 +315,7 @@ func VerifyEd25519Middleware(publicKey ed25519.PublicKey) Middleware {
 			timestamp := r.Header.Get(XSignatureTimestamp)
 			if signatureStr == "" || timestamp == "" {
 				if err != nil {
-					LogRequest(r.Context(), "Error decoding signature:\n\t", err.Error())
+					reqctx.Log(r.Context(), "Error decoding signature:\n\t", err.Error())
 				}
 				responses.Unauthorized(w, r, msgInvalidSignature)
 				return
@@ -352,7 +323,7 @@ func VerifyEd25519Middleware(publicKey ed25519.PublicKey) Middleware {
 
 			bodyBytes, err := io.ReadAll(r.Body)
 			if err != nil {
-				LogRequest(r.Context(), "Error reading body:\n\t", err.Error())
+				reqctx.Log(r.Context(), "Error reading body:\n\t", err.Error())
 				responses.Unauthorized(w, r, msgInvalidSignature)
 				return
 			}

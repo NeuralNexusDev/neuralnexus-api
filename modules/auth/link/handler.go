@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"net/url"
 
-	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"github.com/goccy/go-json"
 )
@@ -64,7 +64,7 @@ func OAuthHandler(as account.Service, las Store, ss session.Service) http.Handle
 		var err error
 		switch state.Mode {
 		case ModeLogin:
-			session, err = ProcessOAuthLogin(as, las, ss, code, &state)
+			session, err = ProcessOAuthLogin(r.Context(), as, las, ss, code, &state)
 		case ModeLink:
 			session, err = ProcessOAuthLink(r, las, code, &state)
 		}
@@ -140,7 +140,7 @@ func OpenIDHandler(as account.Service, las Store, ss session.Service) http.Handl
 		var session *session.Session
 		switch state.Mode {
 		case ModeLogin:
-			session, err = ProcessSteamLogin(as, las, ss, user)
+			session, err = ProcessSteamLogin(r.Context(), as, las, ss, user)
 		case ModeLink:
 			session, err = ProcessSteamLink(r, las, user)
 		}
@@ -225,7 +225,7 @@ func requireValidModeAndSession(w http.ResponseWriter, r *http.Request, mode Mod
 	case ModeLogin:
 		return true
 	case ModeLink:
-		if session, ok := r.Context().Value(mw.SessionKey).(*session.Session); ok && session != nil && session.IsValid() {
+		if session, ok := r.Context().Value(reqctx.SessionKey).(*session.Session); ok && session != nil && session.IsValid() {
 			return true
 		}
 		redirectUnauthorized(w, r, redirectURI, msgLoginRequiredToLink)
@@ -289,7 +289,7 @@ func isAllowedRedirect(redirectURI string) bool {
 // GetUserLinkedAccountsHandler - List a user's linked platforms
 func GetUserLinkedAccountsHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*session.Session)
+		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
 		userID := r.PathValue("user_id")
 		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
 			responses.Forbidden(w, r, msgNoPermissionToViewLinkedAccounts)
@@ -307,7 +307,7 @@ func GetUserLinkedAccountsHandler(service Service) http.HandlerFunc {
 // UnlinkPlatformHandler - Unlink a platform from a user
 func UnlinkPlatformHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*session.Session)
+		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
 		userID := r.PathValue("user_id")
 		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
 			responses.Forbidden(w, r, msgNoPermissionToUnlinkPlatforms)
@@ -338,7 +338,7 @@ type SetPlatformLoginEnabledRequest struct {
 // SetPlatformLoginEnabledHandler - Toggle whether a linked platform can log in
 func SetPlatformLoginEnabledHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*session.Session)
+		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
 		userID := r.PathValue("user_id")
 		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
 			responses.Forbidden(w, r, msgNoPermissionToUpdatePlatforms)

@@ -146,7 +146,7 @@ func TestST01_NewStore(t *testing.T) {
 func TestST02to04_GetPlayerByUUID(t *testing.T) {
 	t.Run("ST-02_Unreachable", func(t *testing.T) {
 		s := mcStoreWithUnreachableDB(t)
-		_, err := s.GetPlayerByUUID(uuid.New().String())
+		_, err := s.GetPlayerByUUID(mcCtx, uuid.New().String())
 		if err == nil || errors.Is(err, ErrPlayerNotFound) {
 			t.Errorf("err = %v, want a raw connection error", err)
 		}
@@ -155,10 +155,10 @@ func TestST02to04_GetPlayerByUUID(t *testing.T) {
 	t.Run("ST-03_Live_Found", func(t *testing.T) {
 		s := mcLiveStoreDB(t)
 		id := uuid.New().String()
-		if err := s.UpsertPlayer(&Player{ID: id, Name: "Steve"}, false); err != nil {
+		if err := s.UpsertPlayer(mcCtx, &Player{ID: id, Name: "Steve"}, false); err != nil {
 			t.Fatalf("seed UpsertPlayer() error = %v", err)
 		}
-		got, err := s.GetPlayerByUUID(id)
+		got, err := s.GetPlayerByUUID(mcCtx, id)
 		if err != nil {
 			t.Fatalf("GetPlayerByUUID() error = %v", err)
 		}
@@ -169,7 +169,7 @@ func TestST02to04_GetPlayerByUUID(t *testing.T) {
 
 	t.Run("ST-04_Live_NotFound", func(t *testing.T) {
 		s := mcLiveStoreDB(t)
-		_, err := s.GetPlayerByUUID(uuid.New().String())
+		_, err := s.GetPlayerByUUID(mcCtx, uuid.New().String())
 		if !errors.Is(err, ErrPlayerNotFound) {
 			t.Errorf("error = %v, want %v", err, ErrPlayerNotFound)
 		}
@@ -179,7 +179,7 @@ func TestST02to04_GetPlayerByUUID(t *testing.T) {
 func TestST05to07_GetPlayerByName(t *testing.T) {
 	t.Run("ST-05_Unreachable", func(t *testing.T) {
 		s := mcStoreWithUnreachableDB(t)
-		_, err := s.GetPlayerByName("nobody")
+		_, err := s.GetPlayerByName(mcCtx, "nobody")
 		if err == nil {
 			t.Error("expected a raw connection error")
 		}
@@ -189,10 +189,10 @@ func TestST05to07_GetPlayerByName(t *testing.T) {
 		s := mcLiveStoreDB(t)
 		id := uuid.New().String()
 		name := "Name_" + mcUniqueHash("n")
-		if err := s.UpsertPlayer(&Player{ID: id, Name: name}, false); err != nil {
+		if err := s.UpsertPlayer(mcCtx, &Player{ID: id, Name: name}, false); err != nil {
 			t.Fatalf("seed UpsertPlayer() error = %v", err)
 		}
-		got, err := s.GetPlayerByName(name)
+		got, err := s.GetPlayerByName(mcCtx, name)
 		if err != nil {
 			t.Fatalf("GetPlayerByName() error = %v", err)
 		}
@@ -203,7 +203,7 @@ func TestST05to07_GetPlayerByName(t *testing.T) {
 
 	t.Run("ST-07_Live_NotFound", func(t *testing.T) {
 		s := mcLiveStoreDB(t)
-		_, err := s.GetPlayerByName("definitely-not-a-real-name-" + mcUniqueHash("n"))
+		_, err := s.GetPlayerByName(mcCtx, "definitely-not-a-real-name-"+mcUniqueHash("n"))
 		if !errors.Is(err, ErrPlayerNotFound) {
 			t.Errorf("error = %v, want %v", err, ErrPlayerNotFound)
 		}
@@ -213,7 +213,7 @@ func TestST05to07_GetPlayerByName(t *testing.T) {
 func TestST08to11_GetProfileByUUID(t *testing.T) {
 	t.Run("ST-08_Unreachable", func(t *testing.T) {
 		s := mcStoreWithUnreachableDB(t)
-		_, err := s.GetProfileByUUID(uuid.New().String())
+		_, err := s.GetProfileByUUID(mcCtx, uuid.New().String())
 		if err == nil {
 			t.Error("expected a raw connection error")
 		}
@@ -223,18 +223,18 @@ func TestST08to11_GetProfileByUUID(t *testing.T) {
 		s := mcLiveStoreDB(t)
 		id := uuid.New().String()
 		hash := mcUniqueHash("skin")
-		if err := s.UpsertPlayer(&Player{ID: id, Name: "Steve", ProfileActions: []string{}}, true); err != nil {
+		if err := s.UpsertPlayer(mcCtx, &Player{ID: id, Name: "Steve", ProfileActions: []string{}}, true); err != nil {
 			t.Fatalf("seed UpsertPlayer() error = %v", err)
 		}
-		if err := s.UpsertTextureHash(hash); err != nil {
+		if err := s.UpsertTextureHash(mcCtx, hash); err != nil {
 			t.Fatalf("seed UpsertTextureHash() error = %v", err)
 		}
 		tv := &TexturesValue{ProfileID: id, Timestamp: mcNow(), Textures: Textures{SKIN: &Texture{URL: mojangTextureURL + hash}}}
-		if err := s.UpsertTextures(tv); err != nil {
+		if err := s.UpsertTextures(mcCtx, tv); err != nil {
 			t.Fatalf("seed UpsertTextures() error = %v", err)
 		}
 
-		got, err := s.GetProfileByUUID(id)
+		got, err := s.GetProfileByUUID(mcCtx, id)
 		if err != nil {
 			t.Fatalf("GetProfileByUUID() error = %v", err)
 		}
@@ -246,10 +246,10 @@ func TestST08to11_GetProfileByUUID(t *testing.T) {
 	t.Run("ST-10_Live_NoTextures", func(t *testing.T) {
 		s := mcLiveStoreDB(t)
 		id := uuid.New().String()
-		if err := s.UpsertPlayer(&Player{ID: id, Name: "Steve", ProfileActions: []string{}}, true); err != nil {
+		if err := s.UpsertPlayer(mcCtx, &Player{ID: id, Name: "Steve", ProfileActions: []string{}}, true); err != nil {
 			t.Fatalf("seed UpsertPlayer() error = %v", err)
 		}
-		got, err := s.GetProfileByUUID(id)
+		got, err := s.GetProfileByUUID(mcCtx, id)
 		if err != nil {
 			t.Fatalf("GetProfileByUUID() error = %v", err)
 		}
@@ -260,7 +260,7 @@ func TestST08to11_GetProfileByUUID(t *testing.T) {
 
 	t.Run("ST-11_Live_NotFound", func(t *testing.T) {
 		s := mcLiveStoreDB(t)
-		_, err := s.GetProfileByUUID(uuid.New().String())
+		_, err := s.GetProfileByUUID(mcCtx, uuid.New().String())
 		if !errors.Is(err, ErrPlayerNotFound) {
 			t.Errorf("error = %v, want %v", err, ErrPlayerNotFound)
 		}
@@ -270,7 +270,7 @@ func TestST08to11_GetProfileByUUID(t *testing.T) {
 func TestST12to14_GetTextures(t *testing.T) {
 	t.Run("ST-12_Unreachable", func(t *testing.T) {
 		s := mcStoreWithUnreachableDB(t)
-		_, err := s.getTextures(uuid.New().String(), "Steve")
+		_, err := s.getTextures(mcCtx, uuid.New().String(), "Steve")
 		if err == nil {
 			t.Error("expected a raw connection error")
 		}
@@ -280,17 +280,17 @@ func TestST12to14_GetTextures(t *testing.T) {
 		s := mcLiveStoreDB(t)
 		id := uuid.New().String()
 		hash := mcUniqueHash("skin")
-		if err := s.UpsertPlayer(&Player{ID: id, Name: "Steve"}, false); err != nil {
+		if err := s.UpsertPlayer(mcCtx, &Player{ID: id, Name: "Steve"}, false); err != nil {
 			t.Fatalf("seed UpsertPlayer() error = %v", err)
 		}
-		if err := s.UpsertTextureHash(hash); err != nil {
+		if err := s.UpsertTextureHash(mcCtx, hash); err != nil {
 			t.Fatalf("seed UpsertTextureHash() error = %v", err)
 		}
 		tv := &TexturesValue{ProfileID: id, Timestamp: mcNow(), Textures: Textures{SKIN: &Texture{URL: mojangTextureURL + hash}}}
-		if err := s.UpsertTextures(tv); err != nil {
+		if err := s.UpsertTextures(mcCtx, tv); err != nil {
 			t.Fatalf("seed UpsertTextures() error = %v", err)
 		}
-		got, err := s.getTextures(id, "Steve")
+		got, err := s.getTextures(mcCtx, id, "Steve")
 		if err != nil || got == nil {
 			t.Fatalf("getTextures() = (%+v, %v), want a decoded value", got, err)
 		}
@@ -299,10 +299,10 @@ func TestST12to14_GetTextures(t *testing.T) {
 	t.Run("ST-14_Live_Absent", func(t *testing.T) {
 		s := mcLiveStoreDB(t)
 		id := uuid.New().String()
-		if err := s.UpsertPlayer(&Player{ID: id, Name: "Steve"}, false); err != nil {
+		if err := s.UpsertPlayer(mcCtx, &Player{ID: id, Name: "Steve"}, false); err != nil {
 			t.Fatalf("seed UpsertPlayer() error = %v", err)
 		}
-		got, err := s.getTextures(id, "Steve")
+		got, err := s.getTextures(mcCtx, id, "Steve")
 		if err != nil || got != nil {
 			t.Errorf("getTextures() = (%+v, %v), want (nil, nil)", got, err)
 		}
@@ -312,7 +312,7 @@ func TestST12to14_GetTextures(t *testing.T) {
 func TestST15to19_UpsertPlayer(t *testing.T) {
 	t.Run("ST-15_Unreachable", func(t *testing.T) {
 		s := mcStoreWithUnreachableDB(t)
-		err := s.UpsertPlayer(&Player{ID: uuid.New().String(), Name: "Steve"}, false)
+		err := s.UpsertPlayer(mcCtx, &Player{ID: uuid.New().String(), Name: "Steve"}, false)
 		if err == nil {
 			t.Error("expected a raw connection error")
 		}
@@ -321,10 +321,10 @@ func TestST15to19_UpsertPlayer(t *testing.T) {
 	t.Run("ST-16_Live_UpdateProfileTrue", func(t *testing.T) {
 		s := mcLiveStoreDB(t)
 		id := uuid.New().String()
-		if err := s.UpsertPlayer(&Player{ID: id, Name: "Steve", Legacy: true, ProfileActions: []string{"FORCED_NAME_CHANGE"}}, true); err != nil {
+		if err := s.UpsertPlayer(mcCtx, &Player{ID: id, Name: "Steve", Legacy: true, ProfileActions: []string{"FORCED_NAME_CHANGE"}}, true); err != nil {
 			t.Fatalf("UpsertPlayer() error = %v", err)
 		}
-		got, err := s.GetProfileByUUID(id)
+		got, err := s.GetProfileByUUID(mcCtx, id)
 		if err != nil {
 			t.Fatalf("GetProfileByUUID() error = %v", err)
 		}
@@ -336,10 +336,10 @@ func TestST15to19_UpsertPlayer(t *testing.T) {
 	t.Run("ST-17_Live_UpdateProfileFalseDefaults", func(t *testing.T) {
 		s := mcLiveStoreDB(t)
 		id := uuid.New().String()
-		if err := s.UpsertPlayer(&Player{ID: id, Name: "Steve", Legacy: true}, false); err != nil {
+		if err := s.UpsertPlayer(mcCtx, &Player{ID: id, Name: "Steve", Legacy: true}, false); err != nil {
 			t.Fatalf("UpsertPlayer() error = %v", err)
 		}
-		got, err := s.GetPlayerByUUID(id)
+		got, err := s.GetPlayerByUUID(mcCtx, id)
 		if err != nil {
 			t.Fatalf("GetPlayerByUUID() error = %v", err)
 		}
@@ -351,13 +351,13 @@ func TestST15to19_UpsertPlayer(t *testing.T) {
 	t.Run("ST-18_Live_UpsertTwiceUpdatesInPlace", func(t *testing.T) {
 		s := mcLiveStoreDB(t)
 		id := uuid.New().String()
-		if err := s.UpsertPlayer(&Player{ID: id, Name: "First"}, false); err != nil {
+		if err := s.UpsertPlayer(mcCtx, &Player{ID: id, Name: "First"}, false); err != nil {
 			t.Fatalf("first UpsertPlayer() error = %v", err)
 		}
-		if err := s.UpsertPlayer(&Player{ID: id, Name: "Second"}, false); err != nil {
+		if err := s.UpsertPlayer(mcCtx, &Player{ID: id, Name: "Second"}, false); err != nil {
 			t.Fatalf("second UpsertPlayer() error = %v", err)
 		}
-		got, err := s.GetPlayerByUUID(id)
+		got, err := s.GetPlayerByUUID(mcCtx, id)
 		if err != nil {
 			t.Fatalf("GetPlayerByUUID() error = %v", err)
 		}
@@ -376,7 +376,7 @@ func TestST15to19_UpsertPlayer(t *testing.T) {
 			wg.Add(1)
 			go func(i int) {
 				defer wg.Done()
-				errs[i] = s.UpsertPlayer(&Player{ID: id, Name: fmt.Sprintf("Name%d", i)}, false)
+				errs[i] = s.UpsertPlayer(mcCtx, &Player{ID: id, Name: fmt.Sprintf("Name%d", i)}, false)
 			}(i)
 		}
 		wg.Wait()
@@ -385,7 +385,7 @@ func TestST15to19_UpsertPlayer(t *testing.T) {
 				t.Errorf("goroutine %d: UpsertPlayer() error = %v, want nil (ON CONFLICT should absorb the race)", i, err)
 			}
 		}
-		if _, err := s.GetPlayerByUUID(id); err != nil {
+		if _, err := s.GetPlayerByUUID(mcCtx, id); err != nil {
 			t.Errorf("GetPlayerByUUID() after concurrent upserts error = %v, want exactly one surviving row", err)
 		}
 	})
@@ -394,7 +394,7 @@ func TestST15to19_UpsertPlayer(t *testing.T) {
 func TestST20to23_UpsertTextures(t *testing.T) {
 	t.Run("ST-20_Unreachable", func(t *testing.T) {
 		s := mcStoreWithUnreachableDB(t)
-		err := s.UpsertTextures(&TexturesValue{ProfileID: uuid.New().String(), Textures: Textures{SKIN: &Texture{URL: "http://x/hash"}}})
+		err := s.UpsertTextures(mcCtx, &TexturesValue{ProfileID: uuid.New().String(), Textures: Textures{SKIN: &Texture{URL: "http://x/hash"}}})
 		if err == nil {
 			t.Error("expected a raw connection error")
 		}
@@ -404,18 +404,18 @@ func TestST20to23_UpsertTextures(t *testing.T) {
 		s := mcLiveStoreDB(t)
 		id := uuid.New().String()
 		hash := mcUniqueHash("skin")
-		if err := s.UpsertPlayer(&Player{ID: id, Name: "Steve"}, false); err != nil {
+		if err := s.UpsertPlayer(mcCtx, &Player{ID: id, Name: "Steve"}, false); err != nil {
 			t.Fatalf("seed UpsertPlayer() error = %v", err)
 		}
-		if err := s.UpsertTextureHash(hash); err != nil {
+		if err := s.UpsertTextureHash(mcCtx, hash); err != nil {
 			t.Fatalf("seed UpsertTextureHash() error = %v", err)
 		}
 		slim := SLIM
 		tv := &TexturesValue{ProfileID: id, Timestamp: mcNow(), Textures: Textures{SKIN: &Texture{URL: mojangTextureURL + hash, Metadata: &Metadata{Model: slim}}}}
-		if err := s.UpsertTextures(tv); err != nil {
+		if err := s.UpsertTextures(mcCtx, tv); err != nil {
 			t.Fatalf("UpsertTextures() error = %v", err)
 		}
-		got, err := s.getTextures(id, "Steve")
+		got, err := s.getTextures(mcCtx, id, "Steve")
 		if err != nil || got == nil || got.Textures.SKIN.Metadata == nil || got.Textures.SKIN.Metadata.Model != SLIM {
 			t.Errorf("got (%+v, %v), want SLIM model stored", got, err)
 		}
@@ -425,21 +425,21 @@ func TestST20to23_UpsertTextures(t *testing.T) {
 		s := mcLiveStoreDB(t)
 		id := uuid.New().String()
 		hash := mcUniqueHash("skin")
-		if err := s.UpsertPlayer(&Player{ID: id, Name: "Steve"}, false); err != nil {
+		if err := s.UpsertPlayer(mcCtx, &Player{ID: id, Name: "Steve"}, false); err != nil {
 			t.Fatalf("seed UpsertPlayer() error = %v", err)
 		}
-		if err := s.UpsertTextureHash(hash); err != nil {
+		if err := s.UpsertTextureHash(mcCtx, hash); err != nil {
 			t.Fatalf("seed UpsertTextureHash() error = %v", err)
 		}
 		tv := &TexturesValue{ProfileID: id, Timestamp: mcNow(), Textures: Textures{SKIN: &Texture{URL: mojangTextureURL + hash}}}
-		if err := s.UpsertTextures(tv); err != nil {
+		if err := s.UpsertTextures(mcCtx, tv); err != nil {
 			t.Fatalf("first UpsertTextures() error = %v", err)
 		}
 		tv.Timestamp = mcNow() + 1000
-		if err := s.UpsertTextures(tv); err != nil {
+		if err := s.UpsertTextures(mcCtx, tv); err != nil {
 			t.Fatalf("second UpsertTextures() error = %v", err)
 		}
-		got, err := s.getTextures(id, "Steve")
+		got, err := s.getTextures(mcCtx, id, "Steve")
 		if err != nil || got == nil {
 			t.Fatalf("getTextures() = (%+v, %v)", got, err)
 		}
@@ -452,10 +452,10 @@ func TestST20to23_UpsertTextures(t *testing.T) {
 		s := mcLiveStoreDB(t)
 		id := uuid.New().String()
 		hash := mcUniqueHash("skin")
-		if err := s.UpsertPlayer(&Player{ID: id, Name: "Steve"}, false); err != nil {
+		if err := s.UpsertPlayer(mcCtx, &Player{ID: id, Name: "Steve"}, false); err != nil {
 			t.Fatalf("seed UpsertPlayer() error = %v", err)
 		}
-		if err := s.UpsertTextureHash(hash); err != nil {
+		if err := s.UpsertTextureHash(mcCtx, hash); err != nil {
 			t.Fatalf("seed UpsertTextureHash() error = %v", err)
 		}
 		const n = 50
@@ -466,7 +466,7 @@ func TestST20to23_UpsertTextures(t *testing.T) {
 			go func(i int) {
 				defer wg.Done()
 				tv := &TexturesValue{ProfileID: id, Timestamp: mcNow(), Textures: Textures{SKIN: &Texture{URL: mojangTextureURL + hash}}}
-				errs[i] = s.UpsertTextures(tv)
+				errs[i] = s.UpsertTextures(mcCtx, tv)
 			}(i)
 		}
 		wg.Wait()
@@ -496,14 +496,14 @@ func TestST24to25_TextureHash(t *testing.T) {
 func TestST26to28_UpsertTextureHash(t *testing.T) {
 	t.Run("ST-26_Unreachable", func(t *testing.T) {
 		s := mcStoreWithUnreachableDB(t)
-		if err := s.UpsertTextureHash("abc"); err == nil {
+		if err := s.UpsertTextureHash(mcCtx, "abc"); err == nil {
 			t.Error("expected a raw connection error")
 		}
 	})
 
 	t.Run("ST-27_Live_New", func(t *testing.T) {
 		s := mcLiveStoreDB(t)
-		if err := s.UpsertTextureHash(mcUniqueHash("hash")); err != nil {
+		if err := s.UpsertTextureHash(mcCtx, mcUniqueHash("hash")); err != nil {
 			t.Errorf("UpsertTextureHash() error = %v", err)
 		}
 	})
@@ -511,10 +511,10 @@ func TestST26to28_UpsertTextureHash(t *testing.T) {
 	t.Run("ST-28_Live_Duplicate", func(t *testing.T) {
 		s := mcLiveStoreDB(t)
 		hash := mcUniqueHash("hash")
-		if err := s.UpsertTextureHash(hash); err != nil {
+		if err := s.UpsertTextureHash(mcCtx, hash); err != nil {
 			t.Fatalf("first UpsertTextureHash() error = %v", err)
 		}
-		if err := s.UpsertTextureHash(hash); err != nil {
+		if err := s.UpsertTextureHash(mcCtx, hash); err != nil {
 			t.Errorf("second UpsertTextureHash() error = %v, want nil (ON CONFLICT DO NOTHING)", err)
 		}
 	})
@@ -529,7 +529,7 @@ func TestST26to28_UpsertTextureHash(t *testing.T) {
 			wg.Add(1)
 			go func(i int) {
 				defer wg.Done()
-				errs[i] = s.UpsertTextureHash(hash)
+				errs[i] = s.UpsertTextureHash(mcCtx, hash)
 			}(i)
 		}
 		wg.Wait()
@@ -544,7 +544,7 @@ func TestST26to28_UpsertTextureHash(t *testing.T) {
 func TestST29to32_GetPlayerFromCache(t *testing.T) {
 	t.Run("ST-29_Unreachable", func(t *testing.T) {
 		s := mcStoreWithUnreachableRedis(t)
-		_, err := s.GetPlayerFromCache("key")
+		_, err := s.GetPlayerFromCache(mcCtx, "key")
 		if err == nil || errors.Is(err, ErrCacheMiss) {
 			t.Errorf("err = %v, want a raw connection error", err)
 		}
@@ -554,10 +554,10 @@ func TestST29to32_GetPlayerFromCache(t *testing.T) {
 		s := mcLiveStoreRedis(t)
 		id := uuid.New().String()
 		p := &Player{ID: id, Name: "Steve_" + mcUniqueHash("n")}
-		if err := s.SetPlayerInCache(p); err != nil {
+		if err := s.SetPlayerInCache(mcCtx, p); err != nil {
 			t.Fatalf("seed SetPlayerInCache() error = %v", err)
 		}
-		got, err := s.GetPlayerFromCache(id)
+		got, err := s.GetPlayerFromCache(mcCtx, id)
 		if err != nil || got.ID != id {
 			t.Errorf("got (%+v, %v), want cached player", got, err)
 		}
@@ -565,7 +565,7 @@ func TestST29to32_GetPlayerFromCache(t *testing.T) {
 
 	t.Run("ST-31_Live_Miss", func(t *testing.T) {
 		s := mcLiveStoreRedis(t)
-		_, err := s.GetPlayerFromCache("no-such-key-" + mcUniqueHash("k"))
+		_, err := s.GetPlayerFromCache(mcCtx, "no-such-key-"+mcUniqueHash("k"))
 		if !errors.Is(err, ErrCacheMiss) {
 			t.Errorf("err = %v, want %v", err, ErrCacheMiss)
 		}
@@ -577,7 +577,7 @@ func TestST29to32_GetPlayerFromCache(t *testing.T) {
 		if err := s.rdb.Set(context.Background(), CachePlayer+key, "not json", time.Minute).Err(); err != nil {
 			t.Fatalf("seed Set() error = %v", err)
 		}
-		_, err := s.GetPlayerFromCache(key)
+		_, err := s.GetPlayerFromCache(mcCtx, key)
 		if err == nil {
 			t.Error("expected an unmarshal error")
 		}
@@ -587,7 +587,7 @@ func TestST29to32_GetPlayerFromCache(t *testing.T) {
 func TestST33to34_SetPlayerInCache(t *testing.T) {
 	t.Run("ST-33_Unreachable", func(t *testing.T) {
 		s := mcStoreWithUnreachableRedis(t)
-		if err := s.SetPlayerInCache(&Player{ID: "id", Name: "name"}); err == nil {
+		if err := s.SetPlayerInCache(mcCtx, &Player{ID: "id", Name: "name"}); err == nil {
 			t.Error("expected a raw connection error")
 		}
 	})
@@ -597,14 +597,14 @@ func TestST33to34_SetPlayerInCache(t *testing.T) {
 		id := uuid.New().String()
 		name := "Steve_" + mcUniqueHash("n")
 		p := &Player{ID: id, Name: name}
-		if err := s.SetPlayerInCache(p); err != nil {
+		if err := s.SetPlayerInCache(mcCtx, p); err != nil {
 			t.Fatalf("SetPlayerInCache() error = %v", err)
 		}
-		byID, err := s.GetPlayerFromCache(id)
+		byID, err := s.GetPlayerFromCache(mcCtx, id)
 		if err != nil || byID.ID != id {
 			t.Errorf("GetPlayerFromCache(id) = (%+v, %v)", byID, err)
 		}
-		byName, err := s.GetPlayerFromCache(name)
+		byName, err := s.GetPlayerFromCache(mcCtx, name)
 		if err != nil || byName.ID != id {
 			t.Errorf("GetPlayerFromCache(name) = (%+v, %v)", byName, err)
 		}
@@ -614,7 +614,7 @@ func TestST33to34_SetPlayerInCache(t *testing.T) {
 func TestST35to37_GetProfileFromCache(t *testing.T) {
 	t.Run("ST-35_Unreachable", func(t *testing.T) {
 		s := mcStoreWithUnreachableRedis(t)
-		_, err := s.GetProfileFromCache("id")
+		_, err := s.GetProfileFromCache(mcCtx, "id")
 		if err == nil {
 			t.Error("expected a raw connection error")
 		}
@@ -623,10 +623,10 @@ func TestST35to37_GetProfileFromCache(t *testing.T) {
 	t.Run("ST-36_Live_Hit", func(t *testing.T) {
 		s := mcLiveStoreRedis(t)
 		id := uuid.New().String()
-		if err := s.SetProfileInCache(&Profile{ID: id, Name: "Steve"}); err != nil {
+		if err := s.SetProfileInCache(mcCtx, &Profile{ID: id, Name: "Steve"}); err != nil {
 			t.Fatalf("seed SetProfileInCache() error = %v", err)
 		}
-		got, err := s.GetProfileFromCache(id)
+		got, err := s.GetProfileFromCache(mcCtx, id)
 		if err != nil || got.ID != id {
 			t.Errorf("got (%+v, %v), want cached profile", got, err)
 		}
@@ -634,7 +634,7 @@ func TestST35to37_GetProfileFromCache(t *testing.T) {
 
 	t.Run("ST-37_Live_Miss", func(t *testing.T) {
 		s := mcLiveStoreRedis(t)
-		_, err := s.GetProfileFromCache(uuid.New().String())
+		_, err := s.GetProfileFromCache(mcCtx, uuid.New().String())
 		if !errors.Is(err, ErrCacheMiss) {
 			t.Errorf("err = %v, want %v", err, ErrCacheMiss)
 		}
@@ -644,7 +644,7 @@ func TestST35to37_GetProfileFromCache(t *testing.T) {
 func TestST38to39_SetProfileInCache(t *testing.T) {
 	t.Run("ST-38_Unreachable", func(t *testing.T) {
 		s := mcStoreWithUnreachableRedis(t)
-		if err := s.SetProfileInCache(&Profile{ID: "id"}); err == nil {
+		if err := s.SetProfileInCache(mcCtx, &Profile{ID: "id"}); err == nil {
 			t.Error("expected a raw connection error")
 		}
 	})
@@ -652,10 +652,10 @@ func TestST38to39_SetProfileInCache(t *testing.T) {
 	t.Run("ST-39_Live_ReadableBack", func(t *testing.T) {
 		s := mcLiveStoreRedis(t)
 		id := uuid.New().String()
-		if err := s.SetProfileInCache(&Profile{ID: id, Name: "Steve"}); err != nil {
+		if err := s.SetProfileInCache(mcCtx, &Profile{ID: id, Name: "Steve"}); err != nil {
 			t.Fatalf("SetProfileInCache() error = %v", err)
 		}
-		got, err := s.GetProfileFromCache(id)
+		got, err := s.GetProfileFromCache(mcCtx, id)
 		if err != nil || got.Name != "Steve" {
 			t.Errorf("got (%+v, %v)", got, err)
 		}
@@ -665,7 +665,7 @@ func TestST38to39_SetProfileInCache(t *testing.T) {
 func TestST40to42_GetSignedProfileFromCache(t *testing.T) {
 	t.Run("ST-40_Unreachable", func(t *testing.T) {
 		s := mcStoreWithUnreachableRedis(t)
-		_, err := s.GetSignedProfileFromCache("id")
+		_, err := s.GetSignedProfileFromCache(mcCtx, "id")
 		if err == nil {
 			t.Error("expected a raw connection error")
 		}
@@ -674,10 +674,10 @@ func TestST40to42_GetSignedProfileFromCache(t *testing.T) {
 	t.Run("ST-41_Live_Hit", func(t *testing.T) {
 		s := mcLiveStoreRedis(t)
 		id := uuid.New().String()
-		if err := s.SetSignedProfileInCache(&Player{ID: id, Name: "Steve"}); err != nil {
+		if err := s.SetSignedProfileInCache(mcCtx, &Player{ID: id, Name: "Steve"}); err != nil {
 			t.Fatalf("seed SetSignedProfileInCache() error = %v", err)
 		}
-		got, err := s.GetSignedProfileFromCache(id)
+		got, err := s.GetSignedProfileFromCache(mcCtx, id)
 		if err != nil || got.ID != id {
 			t.Errorf("got (%+v, %v), want cached player", got, err)
 		}
@@ -685,7 +685,7 @@ func TestST40to42_GetSignedProfileFromCache(t *testing.T) {
 
 	t.Run("ST-42_Live_Miss", func(t *testing.T) {
 		s := mcLiveStoreRedis(t)
-		_, err := s.GetSignedProfileFromCache(uuid.New().String())
+		_, err := s.GetSignedProfileFromCache(mcCtx, uuid.New().String())
 		if !errors.Is(err, ErrCacheMiss) {
 			t.Errorf("err = %v, want %v", err, ErrCacheMiss)
 		}
@@ -695,7 +695,7 @@ func TestST40to42_GetSignedProfileFromCache(t *testing.T) {
 func TestST43to44_SetSignedProfileInCache(t *testing.T) {
 	t.Run("ST-43_Unreachable", func(t *testing.T) {
 		s := mcStoreWithUnreachableRedis(t)
-		if err := s.SetSignedProfileInCache(&Player{ID: "id"}); err == nil {
+		if err := s.SetSignedProfileInCache(mcCtx, &Player{ID: "id"}); err == nil {
 			t.Error("expected a raw connection error")
 		}
 	})
@@ -703,10 +703,10 @@ func TestST43to44_SetSignedProfileInCache(t *testing.T) {
 	t.Run("ST-44_Live_ReadableBack", func(t *testing.T) {
 		s := mcLiveStoreRedis(t)
 		id := uuid.New().String()
-		if err := s.SetSignedProfileInCache(&Player{ID: id, Name: "Steve"}); err != nil {
+		if err := s.SetSignedProfileInCache(mcCtx, &Player{ID: id, Name: "Steve"}); err != nil {
 			t.Fatalf("SetSignedProfileInCache() error = %v", err)
 		}
-		got, err := s.GetSignedProfileFromCache(id)
+		got, err := s.GetSignedProfileFromCache(mcCtx, id)
 		if err != nil || got.Name != "Steve" {
 			t.Errorf("got (%+v, %v)", got, err)
 		}
@@ -717,7 +717,7 @@ func TestST45to47_IsTextureInS3(t *testing.T) {
 	t.Run("ST-45_Exists", func(t *testing.T) {
 		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
 		s := &store{s3: s3c}
-		got, err := s.IsTextureInS3("hash")
+		got, err := s.IsTextureInS3(mcCtx, "hash")
 		if err != nil || !got {
 			t.Errorf("got (%v, %v), want (true, nil)", got, err)
 		}
@@ -726,7 +726,7 @@ func TestST45to47_IsTextureInS3(t *testing.T) {
 	t.Run("ST-46_NotFound", func(t *testing.T) {
 		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNotFound) })
 		s := &store{s3: s3c}
-		got, err := s.IsTextureInS3("hash")
+		got, err := s.IsTextureInS3(mcCtx, "hash")
 		if err != nil || got {
 			t.Errorf("got (%v, %v), want (false, nil)", got, err)
 		}
@@ -735,7 +735,7 @@ func TestST45to47_IsTextureInS3(t *testing.T) {
 	t.Run("ST-47_ServerError", func(t *testing.T) {
 		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusInternalServerError) })
 		s := &store{s3: s3c}
-		got, err := s.IsTextureInS3("hash")
+		got, err := s.IsTextureInS3(mcCtx, "hash")
 		if err == nil || got {
 			t.Errorf("got (%v, %v), want (false, non-nil error)", got, err)
 		}
@@ -745,7 +745,7 @@ func TestST45to47_IsTextureInS3(t *testing.T) {
 func TestST48to50_GetGeyserPlayerByGamertag(t *testing.T) {
 	t.Run("ST-48_Unreachable", func(t *testing.T) {
 		s := mcStoreWithUnreachableDB(t)
-		_, err := s.GetGeyserPlayerByGamertag("Notch")
+		_, err := s.GetGeyserPlayerByGamertag(mcCtx, "Notch")
 		if err == nil {
 			t.Error("expected a raw connection error")
 		}
@@ -755,10 +755,10 @@ func TestST48to50_GetGeyserPlayerByGamertag(t *testing.T) {
 		s := mcLiveStoreDB(t)
 		xuid := mcUniqueXUID()
 		gamertag := "Gamertag_" + mcUniqueHash("g")
-		if err := s.UpsertGeyserPlayer(&GeyserPlayer{XUID: xuid, Gamertag: gamertag}); err != nil {
+		if err := s.UpsertGeyserPlayer(mcCtx, &GeyserPlayer{XUID: xuid, Gamertag: gamertag}); err != nil {
 			t.Fatalf("seed UpsertGeyserPlayer() error = %v", err)
 		}
-		got, err := s.GetGeyserPlayerByGamertag(gamertag)
+		got, err := s.GetGeyserPlayerByGamertag(mcCtx, gamertag)
 		if err != nil {
 			t.Fatalf("GetGeyserPlayerByGamertag() error = %v", err)
 		}
@@ -769,7 +769,7 @@ func TestST48to50_GetGeyserPlayerByGamertag(t *testing.T) {
 
 	t.Run("ST-50_Live_NotFound", func(t *testing.T) {
 		s := mcLiveStoreDB(t)
-		_, err := s.GetGeyserPlayerByGamertag("no-such-gamertag-" + mcUniqueHash("g"))
+		_, err := s.GetGeyserPlayerByGamertag(mcCtx, "no-such-gamertag-"+mcUniqueHash("g"))
 		if !errors.Is(err, ErrPlayerNotFound) {
 			t.Errorf("error = %v, want %v", err, ErrPlayerNotFound)
 		}
@@ -779,7 +779,7 @@ func TestST48to50_GetGeyserPlayerByGamertag(t *testing.T) {
 func TestST51to53_GetGeyserPlayerByXUID(t *testing.T) {
 	t.Run("ST-51_Unreachable", func(t *testing.T) {
 		s := mcStoreWithUnreachableDB(t)
-		_, err := s.GetGeyserPlayerByXUID(1)
+		_, err := s.GetGeyserPlayerByXUID(mcCtx, 1)
 		if err == nil {
 			t.Error("expected a raw connection error")
 		}
@@ -788,10 +788,10 @@ func TestST51to53_GetGeyserPlayerByXUID(t *testing.T) {
 	t.Run("ST-52_Live_Found", func(t *testing.T) {
 		s := mcLiveStoreDB(t)
 		xuid := mcUniqueXUID()
-		if err := s.UpsertGeyserPlayer(&GeyserPlayer{XUID: xuid, Gamertag: "Notch"}); err != nil {
+		if err := s.UpsertGeyserPlayer(mcCtx, &GeyserPlayer{XUID: xuid, Gamertag: "Notch"}); err != nil {
 			t.Fatalf("seed UpsertGeyserPlayer() error = %v", err)
 		}
-		got, err := s.GetGeyserPlayerByXUID(xuid)
+		got, err := s.GetGeyserPlayerByXUID(mcCtx, xuid)
 		if err != nil || got.UUID != xuidToUUID(xuid) {
 			t.Errorf("got (%+v, %v), want derived UUID", got, err)
 		}
@@ -799,7 +799,7 @@ func TestST51to53_GetGeyserPlayerByXUID(t *testing.T) {
 
 	t.Run("ST-53_Live_NotFound", func(t *testing.T) {
 		s := mcLiveStoreDB(t)
-		_, err := s.GetGeyserPlayerByXUID(mcUniqueXUID())
+		_, err := s.GetGeyserPlayerByXUID(mcCtx, mcUniqueXUID())
 		if !errors.Is(err, ErrPlayerNotFound) {
 			t.Errorf("error = %v, want %v", err, ErrPlayerNotFound)
 		}
@@ -809,14 +809,14 @@ func TestST51to53_GetGeyserPlayerByXUID(t *testing.T) {
 func TestST54to57_UpsertGeyserPlayer(t *testing.T) {
 	t.Run("ST-54_Unreachable", func(t *testing.T) {
 		s := mcStoreWithUnreachableDB(t)
-		if err := s.UpsertGeyserPlayer(&GeyserPlayer{XUID: 1, Gamertag: "Notch"}); err == nil {
+		if err := s.UpsertGeyserPlayer(mcCtx, &GeyserPlayer{XUID: 1, Gamertag: "Notch"}); err == nil {
 			t.Error("expected a raw connection error")
 		}
 	})
 
 	t.Run("ST-55_Live_New", func(t *testing.T) {
 		s := mcLiveStoreDB(t)
-		if err := s.UpsertGeyserPlayer(&GeyserPlayer{XUID: mcUniqueXUID(), Gamertag: "Notch"}); err != nil {
+		if err := s.UpsertGeyserPlayer(mcCtx, &GeyserPlayer{XUID: mcUniqueXUID(), Gamertag: "Notch"}); err != nil {
 			t.Errorf("UpsertGeyserPlayer() error = %v", err)
 		}
 	})
@@ -824,13 +824,13 @@ func TestST54to57_UpsertGeyserPlayer(t *testing.T) {
 	t.Run("ST-56_Live_UpsertTwiceUpdatesInPlace", func(t *testing.T) {
 		s := mcLiveStoreDB(t)
 		xuid := mcUniqueXUID()
-		if err := s.UpsertGeyserPlayer(&GeyserPlayer{XUID: xuid, Gamertag: "First"}); err != nil {
+		if err := s.UpsertGeyserPlayer(mcCtx, &GeyserPlayer{XUID: xuid, Gamertag: "First"}); err != nil {
 			t.Fatalf("first UpsertGeyserPlayer() error = %v", err)
 		}
-		if err := s.UpsertGeyserPlayer(&GeyserPlayer{XUID: xuid, Gamertag: "Second"}); err != nil {
+		if err := s.UpsertGeyserPlayer(mcCtx, &GeyserPlayer{XUID: xuid, Gamertag: "Second"}); err != nil {
 			t.Fatalf("second UpsertGeyserPlayer() error = %v", err)
 		}
-		got, err := s.GetGeyserPlayerByXUID(xuid)
+		got, err := s.GetGeyserPlayerByXUID(mcCtx, xuid)
 		if err != nil || got.Gamertag != "Second" {
 			t.Errorf("got (%+v, %v), want Gamertag=Second", got, err)
 		}
@@ -846,7 +846,7 @@ func TestST54to57_UpsertGeyserPlayer(t *testing.T) {
 			wg.Add(1)
 			go func(i int) {
 				defer wg.Done()
-				errs[i] = s.UpsertGeyserPlayer(&GeyserPlayer{XUID: xuid, Gamertag: fmt.Sprintf("G%d", i)})
+				errs[i] = s.UpsertGeyserPlayer(mcCtx, &GeyserPlayer{XUID: xuid, Gamertag: fmt.Sprintf("G%d", i)})
 			}(i)
 		}
 		wg.Wait()
@@ -861,7 +861,7 @@ func TestST54to57_UpsertGeyserPlayer(t *testing.T) {
 func TestST58to60_GetGeyserSkin(t *testing.T) {
 	t.Run("ST-58_Unreachable", func(t *testing.T) {
 		s := mcStoreWithUnreachableDB(t)
-		_, err := s.GetGeyserSkin(1)
+		_, err := s.GetGeyserSkin(mcCtx, 1)
 		if err == nil {
 			t.Error("expected a raw connection error")
 		}
@@ -872,10 +872,10 @@ func TestST58to60_GetGeyserSkin(t *testing.T) {
 		xuid := mcUniqueXUID()
 		hash := mcUniqueHash("skin")
 		skin := &GeyserSkin{Hash: hash, IsSteve: true, TextureID: "tex", Value: "encoded-value"}
-		if err := s.UpsertGeyserSkin(xuid, skin); err != nil {
+		if err := s.UpsertGeyserSkin(mcCtx, xuid, skin); err != nil {
 			t.Fatalf("seed UpsertGeyserSkin() error = %v", err)
 		}
-		got, err := s.GetGeyserSkin(xuid)
+		got, err := s.GetGeyserSkin(mcCtx, xuid)
 		if err != nil || got.Hash != hash {
 			t.Errorf("got (%+v, %v), want hash=%s", got, err, hash)
 		}
@@ -883,7 +883,7 @@ func TestST58to60_GetGeyserSkin(t *testing.T) {
 
 	t.Run("ST-60_Live_NotFound", func(t *testing.T) {
 		s := mcLiveStoreDB(t)
-		_, err := s.GetGeyserSkin(mcUniqueXUID())
+		_, err := s.GetGeyserSkin(mcCtx, mcUniqueXUID())
 		if !errors.Is(err, ErrSkinNotFound) {
 			t.Errorf("error = %v, want %v", err, ErrSkinNotFound)
 		}
@@ -893,7 +893,7 @@ func TestST58to60_GetGeyserSkin(t *testing.T) {
 func TestST61to63_GetGeyserSkinByHash(t *testing.T) {
 	t.Run("ST-61_Unreachable", func(t *testing.T) {
 		s := mcStoreWithUnreachableDB(t)
-		_, err := s.GetGeyserSkinByHash("hash")
+		_, err := s.GetGeyserSkinByHash(mcCtx, "hash")
 		if err == nil {
 			t.Error("expected a raw connection error")
 		}
@@ -904,10 +904,10 @@ func TestST61to63_GetGeyserSkinByHash(t *testing.T) {
 		xuid := mcUniqueXUID()
 		hash := mcUniqueHash("skin")
 		skin := &GeyserSkin{Hash: hash, IsSteve: true, TextureID: "tex", Value: "encoded-value"}
-		if err := s.UpsertGeyserSkin(xuid, skin); err != nil {
+		if err := s.UpsertGeyserSkin(mcCtx, xuid, skin); err != nil {
 			t.Fatalf("seed UpsertGeyserSkin() error = %v", err)
 		}
-		got, err := s.GetGeyserSkinByHash(hash)
+		got, err := s.GetGeyserSkinByHash(mcCtx, hash)
 		if err != nil || got == nil || got.Hash != hash {
 			t.Errorf("got (%+v, %v), want hash=%s", got, err, hash)
 		}
@@ -915,7 +915,7 @@ func TestST61to63_GetGeyserSkinByHash(t *testing.T) {
 
 	t.Run("ST-63_Live_NotFound", func(t *testing.T) {
 		s := mcLiveStoreDB(t)
-		got, err := s.GetGeyserSkinByHash(mcUniqueHash("nope"))
+		got, err := s.GetGeyserSkinByHash(mcCtx, mcUniqueHash("nope"))
 		if err != nil || got != nil {
 			t.Errorf("got (%+v, %v), want (nil, nil)", got, err)
 		}
@@ -925,7 +925,7 @@ func TestST61to63_GetGeyserSkinByHash(t *testing.T) {
 func TestST64to67_UpsertGeyserSkin(t *testing.T) {
 	t.Run("ST-64_Unreachable", func(t *testing.T) {
 		s := mcStoreWithUnreachableDB(t)
-		err := s.UpsertGeyserSkin(1, &GeyserSkin{Hash: "hash", TextureID: "tex", Value: "v"})
+		err := s.UpsertGeyserSkin(mcCtx, 1, &GeyserSkin{Hash: "hash", TextureID: "tex", Value: "v"})
 		if err == nil {
 			t.Error("expected a raw connection error")
 		}
@@ -935,10 +935,10 @@ func TestST64to67_UpsertGeyserSkin(t *testing.T) {
 		s := mcLiveStoreDB(t)
 		xuid := mcUniqueXUID()
 		hash := mcUniqueHash("skin")
-		if err := s.UpsertGeyserSkin(xuid, &GeyserSkin{Hash: hash, TextureID: "tex", Value: "v", Signature: ""}); err != nil {
+		if err := s.UpsertGeyserSkin(mcCtx, xuid, &GeyserSkin{Hash: hash, TextureID: "tex", Value: "v", Signature: ""}); err != nil {
 			t.Fatalf("UpsertGeyserSkin() error = %v", err)
 		}
-		got, err := s.GetGeyserSkin(xuid)
+		got, err := s.GetGeyserSkin(mcCtx, xuid)
 		if err != nil || got.Signature != "" {
 			t.Errorf("got (%+v, %v), want empty Signature read back via COALESCE", got, err)
 		}
@@ -948,13 +948,13 @@ func TestST64to67_UpsertGeyserSkin(t *testing.T) {
 		s := mcLiveStoreDB(t)
 		xuid := mcUniqueXUID()
 		hash := mcUniqueHash("skin")
-		if err := s.UpsertGeyserSkin(xuid, &GeyserSkin{Hash: hash, TextureID: "tex1", Value: "v1"}); err != nil {
+		if err := s.UpsertGeyserSkin(mcCtx, xuid, &GeyserSkin{Hash: hash, TextureID: "tex1", Value: "v1"}); err != nil {
 			t.Fatalf("first UpsertGeyserSkin() error = %v", err)
 		}
-		if err := s.UpsertGeyserSkin(xuid, &GeyserSkin{Hash: hash, TextureID: "tex2", Value: "v2"}); err != nil {
+		if err := s.UpsertGeyserSkin(mcCtx, xuid, &GeyserSkin{Hash: hash, TextureID: "tex2", Value: "v2"}); err != nil {
 			t.Fatalf("second UpsertGeyserSkin() error = %v", err)
 		}
-		got, err := s.GetGeyserSkin(xuid)
+		got, err := s.GetGeyserSkin(mcCtx, xuid)
 		if err != nil || got.TextureID != "tex2" {
 			t.Errorf("got (%+v, %v), want TextureID=tex2", got, err)
 		}
@@ -971,7 +971,7 @@ func TestST64to67_UpsertGeyserSkin(t *testing.T) {
 			wg.Add(1)
 			go func(i int) {
 				defer wg.Done()
-				errs[i] = s.UpsertGeyserSkin(xuid, &GeyserSkin{Hash: hash, TextureID: fmt.Sprintf("tex%d", i), Value: "v"})
+				errs[i] = s.UpsertGeyserSkin(mcCtx, xuid, &GeyserSkin{Hash: hash, TextureID: fmt.Sprintf("tex%d", i), Value: "v"})
 			}(i)
 		}
 		wg.Wait()
@@ -1011,7 +1011,7 @@ func TestST68to70and77_PutTextureInS3(t *testing.T) {
 		})
 		s := &store{s3: s3c}
 		body := mcLenReadCloser{strings.NewReader("hello world")}
-		if err := s.PutTextureInS3("hash", body); err != nil {
+		if err := s.PutTextureInS3(mcCtx, "hash", body); err != nil {
 			t.Fatalf("PutTextureInS3() error = %v", err)
 		}
 		if gotLen != int64(len("hello world")) {
@@ -1022,7 +1022,7 @@ func TestST68to70and77_PutTextureInS3(t *testing.T) {
 	t.Run("ST-69_WithoutLen", func(t *testing.T) {
 		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
 		s := &store{s3: s3c}
-		if err := s.PutTextureInS3("hash", mcSeekableReadCloser{strings.NewReader("hello")}); err != nil {
+		if err := s.PutTextureInS3(mcCtx, "hash", mcSeekableReadCloser{strings.NewReader("hello")}); err != nil {
 			t.Errorf("PutTextureInS3() error = %v", err)
 		}
 	})
@@ -1030,7 +1030,7 @@ func TestST68to70and77_PutTextureInS3(t *testing.T) {
 	t.Run("ST-70_ServerError", func(t *testing.T) {
 		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusInternalServerError) })
 		s := &store{s3: s3c}
-		err := s.PutTextureInS3("hash", mcSeekableReadCloser{strings.NewReader("hello")})
+		err := s.PutTextureInS3(mcCtx, "hash", mcSeekableReadCloser{strings.NewReader("hello")})
 		if !errors.Is(err, ErrUploadS3) {
 			t.Errorf("err = %v, want it to wrap %v", err, ErrUploadS3)
 		}
@@ -1039,7 +1039,7 @@ func TestST68to70and77_PutTextureInS3(t *testing.T) {
 	t.Run("ST-77_ServerErrorReturnsUploadError", func(t *testing.T) {
 		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusInternalServerError) })
 		s := &store{s3: s3c}
-		err := s.PutTextureInS3("hash", mcSeekableReadCloser{strings.NewReader("hello")})
+		err := s.PutTextureInS3(mcCtx, "hash", mcSeekableReadCloser{strings.NewReader("hello")})
 		mcRequireUploadS3Error(t, err)
 	})
 }
@@ -1052,7 +1052,7 @@ func TestST71to73_IsGeyserTextureInS3(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		})
 		s := &store{s3: s3c}
-		got, err := s.IsGeyserTextureInS3("hash")
+		got, err := s.IsGeyserTextureInS3(mcCtx, "hash")
 		if err != nil || !got {
 			t.Errorf("got (%v, %v), want (true, nil)", got, err)
 		}
@@ -1064,7 +1064,7 @@ func TestST71to73_IsGeyserTextureInS3(t *testing.T) {
 	t.Run("ST-72_NotFound", func(t *testing.T) {
 		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNotFound) })
 		s := &store{s3: s3c}
-		got, err := s.IsGeyserTextureInS3("hash")
+		got, err := s.IsGeyserTextureInS3(mcCtx, "hash")
 		if err != nil || got {
 			t.Errorf("got (%v, %v), want (false, nil)", got, err)
 		}
@@ -1073,7 +1073,7 @@ func TestST71to73_IsGeyserTextureInS3(t *testing.T) {
 	t.Run("ST-73_ServerError", func(t *testing.T) {
 		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusInternalServerError) })
 		s := &store{s3: s3c}
-		got, err := s.IsGeyserTextureInS3("hash")
+		got, err := s.IsGeyserTextureInS3(mcCtx, "hash")
 		if err == nil || got {
 			t.Errorf("got (%v, %v), want (false, non-nil error)", got, err)
 		}
@@ -1088,7 +1088,7 @@ func TestST74to75and78_PutGeyserTextureInS3(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		})
 		s := &store{s3: s3c}
-		if err := s.PutGeyserTextureInS3("hash", mcSeekableReadCloser{strings.NewReader("hello")}); err != nil {
+		if err := s.PutGeyserTextureInS3(mcCtx, "hash", mcSeekableReadCloser{strings.NewReader("hello")}); err != nil {
 			t.Fatalf("PutGeyserTextureInS3() error = %v", err)
 		}
 		if !strings.Contains(gotPath, GeyserS3KeyPrefix) {
@@ -1099,7 +1099,7 @@ func TestST74to75and78_PutGeyserTextureInS3(t *testing.T) {
 	t.Run("ST-75_ServerError", func(t *testing.T) {
 		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusInternalServerError) })
 		s := &store{s3: s3c}
-		err := s.PutGeyserTextureInS3("hash", mcSeekableReadCloser{strings.NewReader("hello")})
+		err := s.PutGeyserTextureInS3(mcCtx, "hash", mcSeekableReadCloser{strings.NewReader("hello")})
 		if !errors.Is(err, ErrUploadS3) {
 			t.Errorf("err = %v, want it to wrap %v", err, ErrUploadS3)
 		}
@@ -1108,7 +1108,7 @@ func TestST74to75and78_PutGeyserTextureInS3(t *testing.T) {
 	t.Run("ST-78_ServerErrorReturnsUploadError", func(t *testing.T) {
 		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusInternalServerError) })
 		s := &store{s3: s3c}
-		err := s.PutGeyserTextureInS3("hash", mcSeekableReadCloser{strings.NewReader("hello")})
+		err := s.PutGeyserTextureInS3(mcCtx, "hash", mcSeekableReadCloser{strings.NewReader("hello")})
 		mcRequireUploadS3Error(t, err)
 	})
 }

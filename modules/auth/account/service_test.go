@@ -1,6 +1,7 @@
 package account
 
 import (
+	"context"
 	"errors"
 	"os"
 	"os/exec"
@@ -289,7 +290,7 @@ func TestAC22NewSessionSnowflakeFails(t *testing.T) {
 	t.Run("AC-22_SnowflakeFailureFailsTheSession", func(t *testing.T) {
 		svc := NewService(&acFakeAccountStore{}, &acFakeAccountSettingsStore{}, testutil.DefaultRoleStore())
 
-		s, err := svc.NewSession(&Account{UserID: "u1"}, 1)
+		s, err := svc.NewSession(context.Background(), &Account{UserID: "u1"}, 1)
 
 		if s != nil || err == nil {
 			t.Errorf("NewSession() = (%v, %v), want (nil, an error)", s, err)
@@ -306,7 +307,7 @@ func TestAC17to21NewSession(t *testing.T) {
 		rs := testutil.DefaultRoleStore()
 		svc := newService(rs)
 
-		s, err := svc.NewSession(&Account{UserID: "u1", Roles: []string{"1"}}, 12345)
+		s, err := svc.NewSession(context.Background(), &Account{UserID: "u1", Roles: []string{"1"}}, 12345)
 
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -338,7 +339,7 @@ func TestAC17to21NewSession(t *testing.T) {
 		rs := testutil.DefaultRoleStore()
 		svc := newService(rs)
 
-		s, err := svc.NewSession(&Account{UserID: "u1", Roles: []string{"1", "2"}}, 1)
+		s, err := svc.NewSession(context.Background(), &Account{UserID: "u1", Roles: []string{"1", "2"}}, 1)
 
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -355,7 +356,7 @@ func TestAC17to21NewSession(t *testing.T) {
 		rs := testutil.DefaultRoleStore()
 		svc := newService(rs)
 
-		s, err := svc.NewSession(&Account{UserID: "u1"}, 1)
+		s, err := svc.NewSession(context.Background(), &Account{UserID: "u1"}, 1)
 
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -368,7 +369,7 @@ func TestAC17to21NewSession(t *testing.T) {
 	t.Run("AC-21_RolesWithoutPermissionsGiveEmptyNonNilPermissions", func(t *testing.T) {
 		svc := newService(testutil.DefaultRoleStore())
 
-		s, err := svc.NewSession(&Account{UserID: "u1", Roles: []string{"99"}}, 1)
+		s, err := svc.NewSession(context.Background(), &Account{UserID: "u1", Roles: []string{"99"}}, 1)
 
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -382,7 +383,7 @@ func TestAC17to21NewSession(t *testing.T) {
 		wantErr := testutil.ErrBoom
 		svc := newService(&testutil.FakeRoleStore{Err: wantErr})
 
-		s, err := svc.NewSession(&Account{UserID: "u1", Roles: []string{"1"}}, 1)
+		s, err := svc.NewSession(context.Background(), &Account{UserID: "u1", Roles: []string{"1"}}, 1)
 
 		if s != nil || !errors.Is(err, wantErr) {
 			t.Errorf("NewSession() = (%v, %v), want (nil, %v)", s, err, wantErr)

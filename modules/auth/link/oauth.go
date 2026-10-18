@@ -3,9 +3,9 @@ package link
 import (
 	"context"
 	"errors"
-	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"golang.org/x/oauth2"
 	"log"
 	"net/http"
@@ -98,7 +98,7 @@ func RefreshToken(config *oauth2.Config, token *oauth2.Token) (*OAuthToken, erro
 }
 
 // ProcessOAuthLogin processes the OAuth2 code and returns a session
-func ProcessOAuthLogin(as account.Service, las Store, ss session.Service, code string, state *OAuthState) (*session.Session, error) {
+func ProcessOAuthLogin(ctx context.Context, as account.Service, las Store, ss session.Service, code string, state *OAuthState) (*session.Session, error) {
 	var err error
 	var config *oauth2.Config
 	switch state.Platform {
@@ -157,7 +157,7 @@ func ProcessOAuthLogin(as account.Service, las Store, ss session.Service, code s
 		}
 	}
 
-	session, err := as.NewSession(a, time.Now().Add(time.Hour*24).Unix())
+	session, err := as.NewSession(ctx, a, time.Now().Add(time.Hour*24).Unix())
 	if err != nil {
 		return nil, err
 	}
@@ -236,7 +236,7 @@ func ProcessOAuthLink(r *http.Request, las Store, code string, state *OAuthState
 	// Get session from request context first: there's no point exchanging
 	// the OAuth code or calling out to the platform's API for a session
 	// that's missing or already expired.
-	session, ok := r.Context().Value(mw.SessionKey).(*session.Session)
+	session, ok := r.Context().Value(reqctx.SessionKey).(*session.Session)
 	if !ok || session == nil {
 		return nil, ErrSessionNotFound
 	}

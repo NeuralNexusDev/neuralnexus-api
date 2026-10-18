@@ -1,13 +1,14 @@
 package gss
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/mcstatus"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/goccy/go-json"
 )
 
@@ -23,9 +24,9 @@ var (
 
 // GSSService - Game Server Status service
 type GSSService interface {
-	QueryGameQ(game string, host string, port int) (*GameQResponse, error)
-	QueryGameDig(game string, host string, port int) (*GameDigResponse, error)
-	QueryGameServer(game string, host string, port int, queryType QueryType) (*GameServerStatus, error)
+	QueryGameQ(ctx context.Context, game string, host string, port int) (*GameQResponse, error)
+	QueryGameDig(ctx context.Context, game string, host string, port int) (*GameDigResponse, error)
+	QueryGameServer(ctx context.Context, game string, host string, port int, queryType QueryType) (*GameServerStatus, error)
 }
 
 // service - Game Server Status service implementation
@@ -37,28 +38,33 @@ func NewService() GSSService {
 }
 
 // QueryGameQ - Query GameQ REST API
-func (s *service) QueryGameQ(game string, host string, port int) (*GameQResponse, error) {
+func (s *service) QueryGameQ(ctx context.Context, game string, host string, port int) (*GameQResponse, error) {
 	var response map[string]GameQResponse
 	url := fmt.Sprintf("http://172.16.1.180:3024/GssGameq.php/%s?host=%s&port=%d", game, host, port)
-	resp, err := http.Get(url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		log.Println(err)
+		reqctx.Log(ctx, err.Error())
+		return nil, ErrGameQQuery
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		reqctx.Log(ctx, err.Error())
 		return nil, ErrGameQQuery
 	}
 	if resp.StatusCode != http.StatusOK {
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
-			log.Println(err)
+			reqctx.Log(ctx, err.Error())
 			return nil, ErrReadBody
 		}
-		log.Println(string(body))
+		reqctx.Log(ctx, string(body))
 		return nil, ErrGameQQuery
 	}
 	defer resp.Body.Close()
 
 	err = json.NewDecoder(resp.Body).Decode(&response)
 	if err != nil {
-		log.Println(err)
+		reqctx.Log(ctx, err.Error())
 		return nil, ErrDecodeBody
 	}
 
@@ -69,28 +75,33 @@ func (s *service) QueryGameQ(game string, host string, port int) (*GameQResponse
 }
 
 // QueryGameDig - Query GameDig REST API
-func (s *service) QueryGameDig(game string, host string, port int) (*GameDigResponse, error) {
+func (s *service) QueryGameDig(ctx context.Context, game string, host string, port int) (*GameDigResponse, error) {
 	var response GameDigResponse
 	url := fmt.Sprintf("http://172.16.1.180:3025/%s?host=%s&port=%d", game, host, port)
-	resp, err := http.Get(url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		log.Println(err)
+		reqctx.Log(ctx, err.Error())
+		return nil, ErrGameDigQuery
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		reqctx.Log(ctx, err.Error())
 		return nil, ErrGameDigQuery
 	}
 	if resp.StatusCode != http.StatusOK {
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
-			log.Println(err)
+			reqctx.Log(ctx, err.Error())
 			return nil, ErrReadBody
 		}
-		log.Println(string(body))
+		reqctx.Log(ctx, string(body))
 		return nil, ErrGameDigQuery
 	}
 	defer resp.Body.Close()
 
 	err = json.NewDecoder(resp.Body).Decode(&response)
 	if err != nil {
-		log.Println(err)
+		reqctx.Log(ctx, err.Error())
 		return nil, ErrDecodeBody
 	}
 
@@ -136,7 +147,7 @@ func DetermineOrVerifyQueryType(game string, queryType QueryType) (QueryType, bo
 }
 
 // QueryGameServer - Query game server status
-func (s *service) QueryGameServer(game string, host string, port int, queryType QueryType) (*GameServerStatus, error) {
+func (s *service) QueryGameServer(ctx context.Context, game string, host string, port int, queryType QueryType) (*GameServerStatus, error) {
 	queryType, valid := DetermineOrVerifyQueryType(game, queryType)
 	if !valid {
 		return nil, ErrGameUnsupported
@@ -144,13 +155,13 @@ func (s *service) QueryGameServer(game string, host string, port int, queryType 
 	switch queryType {
 	case QueryTypeMinecraft:
 		isBedrock := game != "minecraft"
-		response, err := mcstatus.NewService().GetServerStatus(host, port, isBedrock, true, port)
+		response, err := mcstatus.NewService().GetServerStatus(ctx, host, port, isBedrock, true, port)
 		if err != nil {
 			return nil, err
 		}
 		return (*mcServerStatus)(response).Normalize(), nil
 	case QueryTypeGameQ:
-		response, err := s.QueryGameQ(game, host, port)
+		response, err := s.QueryGameQ(ctx, game, host, port)
 		if err != nil {
 			return nil, err
 		}
@@ -159,7 +170,7 @@ func (s *service) QueryGameServer(game string, host string, port int, queryType 
 		}
 		return response.Normalize(), nil
 	case QueryTypeGameDig:
-		response, err := s.QueryGameDig(game, host, port)
+		response, err := s.QueryGameDig(ctx, game, host, port)
 		if err != nil {
 			return nil, err
 		}

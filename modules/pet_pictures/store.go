@@ -63,15 +63,15 @@ func translatePetConstraintErr(err error) error {
 
 // PetPicStore - Pet Picture Store
 type PetPicStore interface {
-	CreatePet(name string) (*Pet, error)
-	GetPet(id int) (*Pet, error)
-	GetPetByName(name string) (*Pet, error)
-	UpdatePet(pet *Pet) (*Pet, error)
-	CreatePetPicture(id string, fileExt string, primarySubject int, othersSubjects []int, aliases []string) (*PetPicture, error)
-	GetRandPetPictureByName(name string) (*PetPicture, error)
-	GetPetPicture(id string) (*PetPicture, error)
-	UpdatePetPicture(picture PetPicture) (*PetPicture, error)
-	DeletePetPicture(id string) (*PetPicture, error)
+	CreatePet(ctx context.Context, name string) (*Pet, error)
+	GetPet(ctx context.Context, id int) (*Pet, error)
+	GetPetByName(ctx context.Context, name string) (*Pet, error)
+	UpdatePet(ctx context.Context, pet *Pet) (*Pet, error)
+	CreatePetPicture(ctx context.Context, id string, fileExt string, primarySubject int, othersSubjects []int, aliases []string) (*PetPicture, error)
+	GetRandPetPictureByName(ctx context.Context, name string) (*PetPicture, error)
+	GetPetPicture(ctx context.Context, id string) (*PetPicture, error)
+	UpdatePetPicture(ctx context.Context, picture PetPicture) (*PetPicture, error)
+	DeletePetPicture(ctx context.Context, id string) (*PetPicture, error)
 }
 
 // store - Pet Picture Store PG implementation
@@ -85,12 +85,12 @@ func NewStore(db *pgxpool.Pool) PetPicStore {
 }
 
 // CreatePet - Create a new pet
-func (s *store) CreatePet(name string) (*Pet, error) {
+func (s *store) CreatePet(ctx context.Context, name string) (*Pet, error) {
 	db := database.GetDB(os.Getenv("DATABASE_URL") + "/pet_pictures")
 	defer db.Close()
 
 	var pet Pet
-	err := db.QueryRow(context.Background(),
+	err := db.QueryRow(ctx,
 		"INSERT INTO pets (name) VALUES ($1) RETURNING id, name, profile_picture", name,
 	).Scan(&pet.ID, &pet.Name, &pet.ProfilePicture)
 	if err != nil {
@@ -100,12 +100,12 @@ func (s *store) CreatePet(name string) (*Pet, error) {
 }
 
 // GetPet - Get a pet by ID
-func (s *store) GetPet(id int) (*Pet, error) {
+func (s *store) GetPet(ctx context.Context, id int) (*Pet, error) {
 	db := database.GetDB(os.Getenv("DATABASE_URL") + "/pet_pictures")
 	defer db.Close()
 
 	var pet Pet
-	err := db.QueryRow(context.Background(), "SELECT id, name, profile_picture FROM pets WHERE id = $1", id).Scan(&pet.ID, &pet.Name, &pet.ProfilePicture)
+	err := db.QueryRow(ctx, "SELECT id, name, profile_picture FROM pets WHERE id = $1", id).Scan(&pet.ID, &pet.Name, &pet.ProfilePicture)
 	if err != nil {
 		return nil, petNotFound(err)
 	}
@@ -113,12 +113,12 @@ func (s *store) GetPet(id int) (*Pet, error) {
 }
 
 // GetPetByName - Get a pet by name
-func (s *store) GetPetByName(name string) (*Pet, error) {
+func (s *store) GetPetByName(ctx context.Context, name string) (*Pet, error) {
 	db := database.GetDB(os.Getenv("DATABASE_URL") + "/pet_pictures")
 	defer db.Close()
 
 	var pet Pet
-	err := db.QueryRow(context.Background(), "SELECT id, name, profile_picture FROM pets WHERE name = $1", name).Scan(&pet.ID, &pet.Name, &pet.ProfilePicture)
+	err := db.QueryRow(ctx, "SELECT id, name, profile_picture FROM pets WHERE name = $1", name).Scan(&pet.ID, &pet.Name, &pet.ProfilePicture)
 	if err != nil {
 		return nil, petNotFound(err)
 	}
@@ -126,11 +126,11 @@ func (s *store) GetPetByName(name string) (*Pet, error) {
 }
 
 // UpdatePet - Update a pet
-func (s *store) UpdatePet(pet *Pet) (*Pet, error) {
+func (s *store) UpdatePet(ctx context.Context, pet *Pet) (*Pet, error) {
 	db := database.GetDB(os.Getenv("DATABASE_URL") + "/pet_pictures")
 	defer db.Close()
 
-	tag, err := db.Exec(context.Background(), "UPDATE pets SET name = $1, profile_picture = $2 WHERE id = $3", pet.Name, pet.ProfilePicture, pet.ID)
+	tag, err := db.Exec(ctx, "UPDATE pets SET name = $1, profile_picture = $2 WHERE id = $3", pet.Name, pet.ProfilePicture, pet.ID)
 	if err != nil {
 		return nil, translatePetConstraintErr(err)
 	}
@@ -141,11 +141,11 @@ func (s *store) UpdatePet(pet *Pet) (*Pet, error) {
 }
 
 // CreatePetPicture - Create a new pet picture
-func (s *store) CreatePetPicture(id string, fileExt string, primarySubject int, othersSubjects []int, aliases []string) (*PetPicture, error) {
+func (s *store) CreatePetPicture(ctx context.Context, id string, fileExt string, primarySubject int, othersSubjects []int, aliases []string) (*PetPicture, error) {
 	db := database.GetDB(os.Getenv("DATABASE_URL") + "/pet_pictures")
 	defer db.Close()
 
-	_, err := db.Exec(context.Background(),
+	_, err := db.Exec(ctx,
 		"INSERT INTO pictures (id, file_ext, prime_subj, othr_subj, aliases) VALUES ($1, $2, $3, $4, $5)",
 		id, fileExt, primarySubject, othersSubjects, aliases,
 	)
@@ -162,8 +162,8 @@ func (s *store) CreatePetPicture(id string, fileExt string, primarySubject int, 
 }
 
 // GetRandPetPictureByName - Get a random pet picture by name
-func (s *store) GetRandPetPictureByName(name string) (*PetPicture, error) {
-	pet, err := s.GetPetByName(name)
+func (s *store) GetRandPetPictureByName(ctx context.Context, name string) (*PetPicture, error) {
+	pet, err := s.GetPetByName(ctx, name)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +171,7 @@ func (s *store) GetRandPetPictureByName(name string) (*PetPicture, error) {
 	db := database.GetDB(os.Getenv("DATABASE_URL") + "/pet_pictures")
 	defer db.Close()
 
-	rows, err := db.Query(context.Background(),
+	rows, err := db.Query(ctx,
 		"SELECT id, file_ext, prime_subj, othr_subj, aliases, "+createdColumn+" AS created FROM pictures WHERE prime_subj = $1 OR $2 = ANY(othr_subj) ORDER BY random() LIMIT 1", pet.ID, pet.ID)
 	if err != nil {
 		return nil, err
@@ -186,11 +186,11 @@ func (s *store) GetRandPetPictureByName(name string) (*PetPicture, error) {
 }
 
 // GetPetPicture - Get a pet picture by ID
-func (s *store) GetPetPicture(id string) (*PetPicture, error) {
+func (s *store) GetPetPicture(ctx context.Context, id string) (*PetPicture, error) {
 	db := database.GetDB(os.Getenv("DATABASE_URL") + "/pet_pictures")
 	defer db.Close()
 
-	rows, err := db.Query(context.Background(), "SELECT id, file_ext, prime_subj, othr_subj, aliases, "+createdColumn+" AS created FROM pictures WHERE id = $1", id)
+	rows, err := db.Query(ctx, "SELECT id, file_ext, prime_subj, othr_subj, aliases, "+createdColumn+" AS created FROM pictures WHERE id = $1", id)
 	if err != nil {
 		return nil, err
 	}
@@ -204,11 +204,11 @@ func (s *store) GetPetPicture(id string) (*PetPicture, error) {
 }
 
 // UpdatePetPicture - Update a pet picture
-func (s *store) UpdatePetPicture(picture PetPicture) (*PetPicture, error) {
+func (s *store) UpdatePetPicture(ctx context.Context, picture PetPicture) (*PetPicture, error) {
 	db := database.GetDB(os.Getenv("DATABASE_URL") + "/pet_pictures")
 	defer db.Close()
 
-	err := db.QueryRow(context.Background(),
+	err := db.QueryRow(ctx,
 		"UPDATE pictures SET file_ext = $1, prime_subj = $2, othr_subj = $3, aliases = $4 WHERE id = $5 RETURNING "+createdColumn,
 		picture.FileExt, picture.PrimarySubject, picture.OthersSubjects, picture.Aliases, picture.ID,
 	).Scan(&picture.Created)
@@ -219,11 +219,11 @@ func (s *store) UpdatePetPicture(picture PetPicture) (*PetPicture, error) {
 }
 
 // DeletePetPicture - Delete a pet picture
-func (s *store) DeletePetPicture(id string) (*PetPicture, error) {
+func (s *store) DeletePetPicture(ctx context.Context, id string) (*PetPicture, error) {
 	db := database.GetDB(os.Getenv("DATABASE_URL") + "/pet_pictures")
 	defer db.Close()
 
-	_, err := db.Exec(context.Background(), "DELETE FROM pictures WHERE id = $1", id)
+	_, err := db.Exec(ctx, "DELETE FROM pictures WHERE id = $1", id)
 	if err != nil {
 		return nil, err
 	}

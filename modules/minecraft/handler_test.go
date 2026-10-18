@@ -1,6 +1,7 @@
 package minecraft
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -30,44 +31,46 @@ type mcMockService struct {
 
 var _ Service = (*mcMockService)(nil)
 
-func (m *mcMockService) GetMojangPlayerByName(name string) (*Player, error) {
+func (m *mcMockService) GetMojangPlayerByName(_ context.Context, name string) (*Player, error) {
 	return m.getMojangPlayerByName(name)
 }
-func (m *mcMockService) GetMojangPlayerByUUID(id string) (*Player, error) {
+func (m *mcMockService) GetMojangPlayerByUUID(_ context.Context, id string) (*Player, error) {
 	return m.getMojangPlayerByUUID(id)
 }
-func (m *mcMockService) GetMojangPlayersByNames(names []string) ([]*Player, error) {
+func (m *mcMockService) GetMojangPlayersByNames(_ context.Context, names []string) ([]*Player, error) {
 	return m.getMojangPlayersByNames(names)
 }
-func (m *mcMockService) GetMojangProfile(id string, signed bool) (*Player, error) {
+func (m *mcMockService) GetMojangProfile(_ context.Context, id string, signed bool) (*Player, error) {
 	return m.getMojangProfile(id, signed)
 }
-func (m *mcMockService) GetProfile(id string) (*Profile, error) { return m.getProfile(id) }
-func (m *mcMockService) GetProfileByName(name string) (*Profile, error) {
+func (m *mcMockService) GetProfile(_ context.Context, id string) (*Profile, error) {
+	return m.getProfile(id)
+}
+func (m *mcMockService) GetProfileByName(_ context.Context, name string) (*Profile, error) {
 	return m.getProfileByName(name)
 }
-func (m *mcMockService) GetTextureContent(hash string) (*TextureResult, error) {
+func (m *mcMockService) GetTextureContent(_ context.Context, hash string) (*TextureResult, error) {
 	return m.getTextureContent(hash)
 }
-func (m *mcMockService) GetGeyserXUID(gamertag string) (*GeyserPlayer, error) {
+func (m *mcMockService) GetGeyserXUID(_ context.Context, gamertag string) (*GeyserPlayer, error) {
 	return m.getGeyserXUID(gamertag)
 }
-func (m *mcMockService) GetGeyserSkin(xuid int64) (*GeyserSkin, error) {
+func (m *mcMockService) GetGeyserSkin(_ context.Context, xuid int64) (*GeyserSkin, error) {
 	return m.getGeyserSkin(xuid)
 }
-func (m *mcMockService) GetGeyserProfile(xuid int64) (*GeyserProfile, error) {
+func (m *mcMockService) GetGeyserProfile(_ context.Context, xuid int64) (*GeyserProfile, error) {
 	return m.getGeyserProfile(xuid)
 }
-func (m *mcMockService) GetGeyserProfileByGamertag(gamertag string) (*GeyserProfile, error) {
+func (m *mcMockService) GetGeyserProfileByGamertag(_ context.Context, gamertag string) (*GeyserProfile, error) {
 	return m.getGeyserProfileByGamertag(gamertag)
 }
-func (m *mcMockService) GetGeyserTextureContent(hash string) (*TextureResult, error) {
+func (m *mcMockService) GetGeyserTextureContent(_ context.Context, hash string) (*TextureResult, error) {
 	return m.getGeyserTextureContent(hash)
 }
 
 func mcRequest(t *testing.T, method, target string, body io.Reader, pathValues map[string]string) *http.Request {
 	t.Helper()
-	r := httptest.NewRequest(method, target, body)
+	r := testutil.NewRequest(method, target, body)
 	for k, v := range pathValues {
 		r.SetPathValue(k, v)
 	}
@@ -176,7 +179,7 @@ func TestHD05to08_GetMojangPlayerByUUIDHandler(t *testing.T) {
 
 func TestHD09to15_GetMojangPlayersByNamesHandler(t *testing.T) {
 	post := func(t *testing.T, body string, contentType string) *http.Request {
-		r := httptest.NewRequest(http.MethodPost, "/names", strings.NewReader(body))
+		r := testutil.NewRequest(http.MethodPost, "/names", strings.NewReader(body))
 		if contentType != "" {
 			r.Header.Set("Content-Type", contentType)
 		}

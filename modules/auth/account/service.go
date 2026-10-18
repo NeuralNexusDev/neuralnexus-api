@@ -1,6 +1,7 @@
 package account
 
 import (
+	"context"
 	"time"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
@@ -9,7 +10,7 @@ import (
 
 // RoleStore - The source of the permissions that roles grant
 type RoleStore interface {
-	GetPermissionsForRoles(roleIDs []string) ([]string, error)
+	GetPermissionsForRoles(ctx context.Context, roleIDs []string) ([]string, error)
 }
 
 // Service - The account service interface
@@ -21,7 +22,7 @@ type Service interface {
 	UpdateAccount(account *Account) error
 	DeleteAccount(userID string) error
 	IsPasswordAuthEnabled(userID string) (bool, error)
-	NewSession(account *Account, expiresAt int64) (*session.Session, error)
+	NewSession(ctx context.Context, account *Account, expiresAt int64) (*session.Session, error)
 }
 
 // service - The account service struct
@@ -76,11 +77,11 @@ func (s *service) IsPasswordAuthEnabled(userID string) (bool, error) {
 }
 
 // NewSession - Create a session for an account with the permissions of its roles
-func (s *service) NewSession(account *Account, expiresAt int64) (*session.Session, error) {
+func (s *service) NewSession(ctx context.Context, account *Account, expiresAt int64) (*session.Session, error) {
 	permissions := []string{}
 	if len(account.Roles) > 0 {
 		var err error
-		if permissions, err = s.rs.GetPermissionsForRoles(account.Roles); err != nil {
+		if permissions, err = s.rs.GetPermissionsForRoles(ctx, account.Roles); err != nil {
 			return nil, err
 		}
 		if permissions == nil {

@@ -17,6 +17,7 @@ import (
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil/authtest"
@@ -68,7 +69,7 @@ func (s *stubAccountService) IsPasswordAuthEnabled(string) (bool, error) {
 
 const stubSessionPermission = "stub:perm"
 
-func (s *stubAccountService) NewSession(a *account.Account, expiresAt int64) (*session.Session, error) {
+func (s *stubAccountService) NewSession(_ context.Context, a *account.Account, expiresAt int64) (*session.Session, error) {
 	if s.newSessionErr != nil {
 		return nil, s.newSessionErr
 	}
@@ -669,7 +670,7 @@ func TestAU30RequireValidModeAndSessionLoginMode(t *testing.T) {
 
 func TestAU31RequireValidModeAndSessionLinkModeValidSession(t *testing.T) {
 	session := &session.Session{UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
-	ctx := context.WithValue(context.Background(), mw.SessionKey, session)
+	ctx := context.WithValue(context.Background(), reqctx.SessionKey, session)
 	r := httptest.NewRequest(http.MethodGet, "/api/oauth", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 
@@ -696,7 +697,7 @@ func TestAU32RequireValidModeAndSessionLinkModeNoSessionKey(t *testing.T) {
 }
 
 func TestAU33RequireValidModeAndSessionLinkModeNilSession(t *testing.T) {
-	ctx := context.WithValue(context.Background(), mw.SessionKey, (*session.Session)(nil))
+	ctx := context.WithValue(context.Background(), reqctx.SessionKey, (*session.Session)(nil))
 	r := httptest.NewRequest(http.MethodGet, "/api/oauth", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 
@@ -710,7 +711,7 @@ func TestAU33RequireValidModeAndSessionLinkModeNilSession(t *testing.T) {
 
 func TestAU34RequireValidModeAndSessionLinkModeExpiredSession(t *testing.T) {
 	session := &session.Session{UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
-	ctx := context.WithValue(context.Background(), mw.SessionKey, session)
+	ctx := context.WithValue(context.Background(), reqctx.SessionKey, session)
 	r := httptest.NewRequest(http.MethodGet, "/api/oauth", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 
@@ -842,7 +843,7 @@ func TestAU48IsAllowedRedirectUnparseableSiteURL(t *testing.T) {
 
 func auWithSession(r *http.Request, userID string) *http.Request {
 	session := &session.Session{ID: "link-session", UserID: userID}
-	return r.WithContext(context.WithValue(r.Context(), mw.SessionKey, session))
+	return r.WithContext(context.WithValue(r.Context(), reqctx.SessionKey, session))
 }
 
 func auDiscordTransportWithoutScope(t *testing.T) {
@@ -886,7 +887,7 @@ type auSessionChangesContext struct {
 }
 
 func (c *auSessionChangesContext) Value(key any) any {
-	if key != mw.SessionKey {
+	if key != reqctx.SessionKey {
 		return c.Context.Value(key)
 	}
 	c.reads++

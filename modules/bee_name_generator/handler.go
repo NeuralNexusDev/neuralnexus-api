@@ -1,13 +1,12 @@
 package beenamegenerator
 
 import (
-	"log"
 	"net/http"
 	"strconv"
 
-	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
@@ -31,9 +30,9 @@ const (
 // GetBeeNameHandler Get a bee name
 func GetBeeNameHandler(s BNGStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		beeName, err := s.GetBeeName()
+		beeName, err := s.GetBeeName(r.Context())
 		if err != nil {
-			log.Println("Failed to get bee name:\n\t", err)
+			reqctx.Log(r.Context(), "Failed to get bee name:\n\t", err.Error())
 			responses.InternalServerError(w, r, msgFailedToGetBeeName)
 			return
 		}
@@ -44,7 +43,7 @@ func GetBeeNameHandler(s BNGStore) http.HandlerFunc {
 // UploadBeeNameHandler Upload a bee name
 func UploadBeeNameHandler(s BNGStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*session.Session)
+		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
 		if !session.HasPermission(perms.ScopeAdminBeeNameGenerator) {
 			responses.Forbidden(w, r, msgNoPermissionToUploadBeeNames)
 			return
@@ -56,13 +55,13 @@ func UploadBeeNameHandler(s BNGStore) http.HandlerFunc {
 			return
 		}
 
-		_, err := s.UploadBeeName(beeName)
+		_, err := s.UploadBeeName(r.Context(), beeName)
 		if err == ErrBeeNameExists {
 			responses.Conflict(w, r, "That bee name already exists")
 			return
 		}
 		if err != nil {
-			log.Println("Failed to upload bee name:\n\t", err)
+			reqctx.Log(r.Context(), "Failed to upload bee name:\n\t", err.Error())
 			responses.InternalServerError(w, r, msgFailedToUploadBeeName)
 			return
 		}
@@ -73,7 +72,7 @@ func UploadBeeNameHandler(s BNGStore) http.HandlerFunc {
 // DeleteBeeNameHandler Delete a bee name
 func DeleteBeeNameHandler(s BNGStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*session.Session)
+		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
 		if !session.HasPermission(perms.ScopeAdminBeeNameGenerator) {
 			responses.Forbidden(w, r, msgNoPermissionToDeleteBeeNames)
 			return
@@ -85,9 +84,9 @@ func DeleteBeeNameHandler(s BNGStore) http.HandlerFunc {
 			return
 		}
 
-		_, err := s.DeleteBeeName(beeName)
+		_, err := s.DeleteBeeName(r.Context(), beeName)
 		if err != nil {
-			log.Println("Failed to delete bee name:\n\t", err)
+			reqctx.Log(r.Context(), "Failed to delete bee name:\n\t", err.Error())
 			responses.InternalServerError(w, r, msgFailedToDeleteBeeName)
 			return
 		}
@@ -104,13 +103,13 @@ func SubmitBeeNameHandler(s BNGStore) http.HandlerFunc {
 			return
 		}
 
-		_, err := s.SubmitBeeName(beeName)
+		_, err := s.SubmitBeeName(r.Context(), beeName)
 		if err == ErrBeeNameSuggestionExists {
 			responses.Conflict(w, r, "That bee name has already been suggested")
 			return
 		}
 		if err != nil {
-			log.Println("Failed to submit bee name:\n\t", err)
+			reqctx.Log(r.Context(), "Failed to submit bee name:\n\t", err.Error())
 			responses.InternalServerError(w, r, msgFailedToSubmitBeeName)
 			return
 		}
@@ -121,7 +120,7 @@ func SubmitBeeNameHandler(s BNGStore) http.HandlerFunc {
 // GetBeeNameSuggestionsHandler Get a list of bee name suggestions
 func GetBeeNameSuggestionsHandler(s BNGStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*session.Session)
+		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
 		if !session.HasPermission(perms.ScopeAdminBeeNameGenerator) {
 			responses.Forbidden(w, r, msgNoPermissionToGetBeeNameSuggestions)
 			return
@@ -137,9 +136,9 @@ func GetBeeNameSuggestionsHandler(s BNGStore) http.HandlerFunc {
 			return
 		}
 
-		suggestions, err := s.GetBeeNameSuggestions(amountInt)
+		suggestions, err := s.GetBeeNameSuggestions(r.Context(), amountInt)
 		if err != nil {
-			log.Println("Failed to get bee name suggestions:\n\t", err)
+			reqctx.Log(r.Context(), "Failed to get bee name suggestions:\n\t", err.Error())
 			responses.InternalServerError(w, r, msgFailedToGetBeeNameSuggestions)
 			return
 		}
@@ -150,7 +149,7 @@ func GetBeeNameSuggestionsHandler(s BNGStore) http.HandlerFunc {
 // AcceptBeeNameSuggestionHandler Accept a bee name suggestion
 func AcceptBeeNameSuggestionHandler(s BNGStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*session.Session)
+		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
 		if !session.HasPermission(perms.ScopeAdminBeeNameGenerator) {
 			responses.Forbidden(w, r, msgNoPermissionToAcceptBeeNameSuggestions)
 			return
@@ -162,13 +161,13 @@ func AcceptBeeNameSuggestionHandler(s BNGStore) http.HandlerFunc {
 			return
 		}
 
-		_, err := s.AcceptBeeNameSuggestion(beeName)
+		_, err := s.AcceptBeeNameSuggestion(r.Context(), beeName)
 		if err == ErrBeeNameExists {
 			responses.Conflict(w, r, "That bee name already exists")
 			return
 		}
 		if err != nil {
-			log.Println("Failed to accept bee name suggestion:\n\t", err)
+			reqctx.Log(r.Context(), "Failed to accept bee name suggestion:\n\t", err.Error())
 			responses.InternalServerError(w, r, msgFailedToAcceptBeeNameSuggestion)
 			return
 		}
@@ -179,7 +178,7 @@ func AcceptBeeNameSuggestionHandler(s BNGStore) http.HandlerFunc {
 // RejectBeeNameSuggestionHandler Reject a bee name suggestion
 func RejectBeeNameSuggestionHandler(s BNGStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*session.Session)
+		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
 		if !session.HasPermission(perms.ScopeAdminBeeNameGenerator) {
 			responses.Forbidden(w, r, msgNoPermissionToRejectBeeNameSuggestions)
 			return
@@ -191,7 +190,7 @@ func RejectBeeNameSuggestionHandler(s BNGStore) http.HandlerFunc {
 			return
 		}
 
-		_, err := s.RejectBeeNameSuggestion(beeName)
+		_, err := s.RejectBeeNameSuggestion(r.Context(), beeName)
 		if err != nil {
 			responses.InternalServerError(w, r, msgFailedToRejectBeeNameSuggestion)
 			return

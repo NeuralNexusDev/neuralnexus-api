@@ -11,6 +11,7 @@ import (
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
@@ -60,7 +61,7 @@ func (s *stubService) IsPasswordAuthEnabled(string) (bool, error) {
 
 const stubSessionPermission = "stub:perm"
 
-func (s *stubService) NewSession(a *Account, expiresAt int64) (*session.Session, error) {
+func (s *stubService) NewSession(_ context.Context, a *Account, expiresAt int64) (*session.Session, error) {
 	if s.newSessionErr != nil {
 		return nil, s.newSessionErr
 	}
@@ -301,7 +302,7 @@ func TestAU09LoginHandlerCreateJWTFails(t *testing.T) {
 
 func TestAU10LogoutHandlerHappyPath(t *testing.T) {
 	session := &session.Session{ID: "s1", UserID: "u1"}
-	ctx := context.WithValue(context.Background(), mw.SessionKey, session)
+	ctx := context.WithValue(context.Background(), reqctx.SessionKey, session)
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 	ss := &stubSessionService{}
@@ -329,7 +330,7 @@ func TestAU10LogoutHandlerHappyPath(t *testing.T) {
 }
 
 func TestAU11LogoutHandlerNilSessionInContext(t *testing.T) {
-	ctx := context.WithValue(context.Background(), mw.SessionKey, (*session.Session)(nil))
+	ctx := context.WithValue(context.Background(), reqctx.SessionKey, (*session.Session)(nil))
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 	ss := &stubSessionService{}
@@ -349,7 +350,7 @@ func TestAU11LogoutHandlerNilSessionInContext(t *testing.T) {
 
 func TestAU12LogoutHandlerDeleteSessionFails(t *testing.T) {
 	session := &session.Session{ID: "s1", UserID: "u1"}
-	ctx := context.WithValue(context.Background(), mw.SessionKey, session)
+	ctx := context.WithValue(context.Background(), reqctx.SessionKey, session)
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 	ss := &stubSessionService{deleteSessionErr: testutil.ErrDBDown}
