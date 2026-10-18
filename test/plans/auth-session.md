@@ -50,14 +50,14 @@
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| ST-19 | AddSessionToDB | Error Path | DB unreachable | `Exec` fails | Returns the raw error; the deferred `ClearExpiredSessions` (also failing against the same unreachable db) does not panic | P1 |  |
-| ST-20 | GetSessionFromDB | Error Path | DB unreachable | | Returns nil, raw error | P1 |  |
-| ST-21 | DeleteSessionInDB | Error Path | DB unreachable | | Returns raw error | P2 |  |
-| ST-22 | UpdateSessionInDB | Error Path | DB unreachable | | Returns raw error | P2 |  |
-| ST-23 | ClearExpiredSessions | Edge Case | DB unreachable | | Logs and swallows the error; returns normally without panicking (void method) | P1 |  |
-| ST-24 | AddSessionToCache | Edge Case | `session.ExpiresAt` is in the past (nonzero) | redis client need not be reachable | Returns nil without ever calling `Set` (negative-TTL short-circuit) | P0 |  |
-| ST-25 | AddSessionToCache | Error Path | `ExpiresAt == 0` (never expires) or in the future, redis unreachable | | `Set` is attempted and fails; raw redis error propagated | P1 |  |
-| ST-26 | GetSessionFromCache | Error Path | Redis unreachable | | Returns nil, raw redis error (not treated as a cache miss) | P1 |  |
-| ST-27 | DeleteSessionFromCache | Error Path | Redis unreachable | | Returns raw redis error | P2 |  |
-| ST-76 | GetSessionFromDB | Error Path | No session with that ID | Real Postgres, unknown session ID | Returns nil, `ErrNotFound` | P2 | |
-| ST-80 | GetSessionFromCache | Error Path | No cached session for that ID | Real Redis, unknown session ID | Returns nil, `ErrNotFound` | P2 | |
+| SES-19 | AddSessionToDB | Error Path | DB unreachable | `Exec` fails | Returns the raw error; the deferred `ClearExpiredSessions` (also failing against the same unreachable db) does not panic | P1 |  |
+| SES-20 | GetSessionFromDB | Error Path | DB unreachable | | Returns nil, raw error | P1 |  |
+| SES-21 | DeleteSessionInDB | Error Path | DB unreachable | | Returns raw error | P2 |  |
+| SES-22 | UpdateSessionInDB | Error Path | DB unreachable | | Returns raw error | P2 |  |
+| SES-23 | ClearExpiredSessions | Edge Case | DB unreachable | | Logs and swallows the error; returns normally without panicking (void method) | P1 |  |
+| SES-24 | AddSessionToCache | Edge Case | `session.ExpiresAt` is in the past (nonzero) | redis client need not be reachable | Returns nil without ever calling `Set` (negative-TTL short-circuit) | P0 |  |
+| SES-25 | AddSessionToCache | Error Path | `ExpiresAt == 0` (never expires) or in the future, redis unreachable | | `Set` is attempted and fails; raw redis error propagated | P1 |  |
+| SES-26 | GetSessionFromCache | Error Path | Redis unreachable | | Returns nil, raw redis error (not treated as a cache miss) | P1 |  |
+| SES-27 | DeleteSessionFromCache | Error Path | Redis unreachable | | Returns raw redis error | P2 |  |
+| SES-76 | GetSessionFromDB | Error Path | No session with that ID | Real Postgres, unknown session ID | Returns nil, `ErrNotFound` | P2 | |
+| SES-80 | GetSessionFromCache | Error Path | No cached session for that ID | Real Redis, unknown session ID | Returns nil, `ErrNotFound` | P2 | |

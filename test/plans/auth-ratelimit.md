@@ -16,7 +16,7 @@
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| ST-01 | NewStore | Happy Path | Given a redis client | | Returns a non-nil `Store` wrapping that client | P2 |  |
-| ST-40 | GetRateLimit | Error Path | Redis unreachable | `Get` fails with a non-`redis.Nil` error | Returns `(0, err)`; the auto-provision-on-miss branch is never taken | P1 |  |
-| ST-41 | SetRateLimit | Error Path | Redis unreachable | | Returns raw error | P2 |  |
-| ST-42 | IncrementRateLimit | Error Path | Redis unreachable | `Incr` fails | Returns raw error; `ExpireNX` never attempted | P2 |  |
+| RLS-01 | NewStore | Happy Path | Given a redis client | | Returns a non-nil `Store` wrapping that client | P2 |  |
+| RLS-40 | GetRateLimit | Error Path | Redis unreachable | `Get` fails with a non-`redis.Nil` error | Returns `(0, err)`; the auto-provision-on-miss branch is never taken | P1 |  |
+| RLS-41 | SetRateLimit | Error Path | Redis unreachable | | Returns raw error | P2 |  |
+| RLS-42 | IncrementRateLimit | Error Path | Redis unreachable | `Incr` fails | Returns raw error; `ExpireNX` never attempted | P2 |  |
