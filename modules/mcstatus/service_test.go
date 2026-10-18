@@ -3,6 +3,7 @@ package mcstatus
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/binary"
 	"errors"
@@ -15,6 +16,8 @@ import (
 	"testing"
 	"time"
 	"unicode/utf16"
+
+	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
 // svUnusedPort binds and immediately releases a TCP port, which then refuses
@@ -98,7 +101,7 @@ func TestService_GetJavaServerStatus(t *testing.T) {
 		port := svUnusedPort(t)
 		s := NewService()
 
-		status, err := s.GetJavaServerStatus("127.0.0.1", port, false, 0)
+		status, err := s.GetJavaServerStatus(testutil.LogContext(context.Background()), "127.0.0.1", port, false, 0)
 
 		if status != nil {
 			t.Fatalf("expected nil status, got %+v", status)
@@ -112,7 +115,7 @@ func TestService_GetJavaServerStatus(t *testing.T) {
 		port := svUnusedPort(t)
 		s := NewService()
 
-		status, err := s.GetJavaServerStatus("127.0.0.1", port, true, port)
+		status, err := s.GetJavaServerStatus(testutil.LogContext(context.Background()), "127.0.0.1", port, true, port)
 
 		if status != nil {
 			t.Fatalf("expected nil status, got %+v", status)
@@ -126,7 +129,7 @@ func TestService_GetJavaServerStatus(t *testing.T) {
 		host, port := svLiveJavaServer(t)
 		s := NewService()
 
-		status, err := s.GetJavaServerStatus(host, port, false, 0)
+		status, err := s.GetJavaServerStatus(testutil.LogContext(context.Background()), host, port, false, 0)
 
 		if err != nil {
 			t.Fatalf("expected nil error, got %v", err)
@@ -148,7 +151,7 @@ func TestService_GetBedrockServerStatus(t *testing.T) {
 		port := svUnusedPort(t)
 		s := NewService()
 
-		status, err := s.GetBedrockServerStatus("127.0.0.1", port)
+		status, err := s.GetBedrockServerStatus(testutil.LogContext(context.Background()), "127.0.0.1", port)
 
 		if status != nil {
 			t.Fatalf("expected nil status, got %+v", status)
@@ -162,7 +165,7 @@ func TestService_GetBedrockServerStatus(t *testing.T) {
 		host, port := svLiveBedrockServer(t)
 		s := NewService()
 
-		status, err := s.GetBedrockServerStatus(host, port)
+		status, err := s.GetBedrockServerStatus(testutil.LogContext(context.Background()), host, port)
 
 		if err != nil {
 			t.Fatalf("expected nil error, got %v", err)
@@ -178,7 +181,7 @@ func TestService_GetServerStatus(t *testing.T) {
 		port := svUnusedPort(t)
 		s := NewService()
 
-		_, err := s.GetServerStatus("127.0.0.1", port, false, false, 0)
+		_, err := s.GetServerStatus(testutil.LogContext(context.Background()), "127.0.0.1", port, false, false, 0)
 
 		if !errors.Is(err, ErrJavaStatus) {
 			t.Fatalf("expected dispatch to GetJavaServerStatus (%v), got %v", ErrJavaStatus, err)
@@ -189,7 +192,7 @@ func TestService_GetServerStatus(t *testing.T) {
 		port := svUnusedPort(t)
 		s := NewService()
 
-		_, err := s.GetServerStatus("127.0.0.1", port, true, false, 0)
+		_, err := s.GetServerStatus(testutil.LogContext(context.Background()), "127.0.0.1", port, true, false, 0)
 
 		if !errors.Is(err, ErrBedrockStatus) {
 			t.Fatalf("expected dispatch to GetBedrockServerStatus (%v), got %v", ErrBedrockStatus, err)
@@ -258,7 +261,7 @@ func TestService_GetJavaServerStatusQueryPort(t *testing.T) {
 		queryPort := svNewUDPRecorder(t, 0)
 		s := NewService()
 
-		_, err := s.GetJavaServerStatus("127.0.0.1", serverPort.port(), true, queryPort.port())
+		_, err := s.GetJavaServerStatus(testutil.LogContext(context.Background()), "127.0.0.1", serverPort.port(), true, queryPort.port())
 
 		if !errors.Is(err, ErrJavaStatus) {
 			t.Fatalf("expected %v, got %v", ErrJavaStatus, err)
@@ -271,7 +274,7 @@ func TestService_GetJavaServerStatusQueryPort(t *testing.T) {
 		serverPort := svNewUDPRecorder(t, 0)
 		s := NewService()
 
-		_, err := s.GetJavaServerStatus("127.0.0.1", serverPort.port(), true, serverPort.port())
+		_, err := s.GetJavaServerStatus(testutil.LogContext(context.Background()), "127.0.0.1", serverPort.port(), true, serverPort.port())
 
 		if !errors.Is(err, ErrJavaStatus) {
 			t.Fatalf("expected %v, got %v", ErrJavaStatus, err)
@@ -284,7 +287,7 @@ func TestService_GetJavaServerStatusQueryPort(t *testing.T) {
 		queryPort := svNewUDPRecorder(t, 0)
 		s := NewService()
 
-		_, err := s.GetJavaServerStatus("127.0.0.1", serverPort.port(), false, queryPort.port())
+		_, err := s.GetJavaServerStatus(testutil.LogContext(context.Background()), "127.0.0.1", serverPort.port(), false, queryPort.port())
 
 		if !errors.Is(err, ErrJavaStatus) {
 			t.Fatalf("expected %v, got %v", ErrJavaStatus, err)
@@ -455,7 +458,7 @@ func TestService_GetJavaServerStatusProbeOrder(t *testing.T) {
 	t.Run("CSV-14_FirstSuccessfulPingWins", func(t *testing.T) {
 		srv, port := svNewJavaServer(t, svJavaAnswers{modern: true, v16: true, v14: true, beta: true})
 
-		status, err := NewService().GetJavaServerStatus("127.0.0.1", port, false, 0)
+		status, err := NewService().GetJavaServerStatus(testutil.LogContext(context.Background()), "127.0.0.1", port, false, 0)
 
 		if err != nil {
 			t.Fatalf("expected nil error, got %v", err)
@@ -474,7 +477,7 @@ func TestService_GetJavaServerStatusProbeOrder(t *testing.T) {
 	t.Run("CSV-15_LegacyPingUsedWhenModernFails", func(t *testing.T) {
 		srv, port := svNewJavaServer(t, svJavaAnswers{v16: true, v14: true, beta: true})
 
-		status, err := NewService().GetJavaServerStatus("127.0.0.1", port, false, 0)
+		status, err := NewService().GetJavaServerStatus(testutil.LogContext(context.Background()), "127.0.0.1", port, false, 0)
 
 		if err != nil {
 			t.Fatalf("expected nil error, got %v", err)
@@ -490,7 +493,7 @@ func TestService_GetJavaServerStatusProbeOrder(t *testing.T) {
 	t.Run("CSV-18_Ping14UsedWhenSixteenFails", func(t *testing.T) {
 		srv, port := svNewJavaServer(t, svJavaAnswers{v14: true, beta: true})
 
-		status, err := NewService().GetJavaServerStatus("127.0.0.1", port, false, 0)
+		status, err := NewService().GetJavaServerStatus(testutil.LogContext(context.Background()), "127.0.0.1", port, false, 0)
 
 		if err != nil {
 			t.Fatalf("expected nil error, got %v", err)
@@ -506,7 +509,7 @@ func TestService_GetJavaServerStatusProbeOrder(t *testing.T) {
 	t.Run("CSV-19_BetaPingUsedWhenOnlyBetaAnswers", func(t *testing.T) {
 		srv, port := svNewJavaServer(t, svJavaAnswers{beta: true})
 
-		status, err := NewService().GetJavaServerStatus("127.0.0.1", port, false, 0)
+		status, err := NewService().GetJavaServerStatus(testutil.LogContext(context.Background()), "127.0.0.1", port, false, 0)
 
 		if err != nil {
 			t.Fatalf("expected nil error, got %v", err)
@@ -525,7 +528,7 @@ func TestService_GetJavaServerStatusQueryMerge(t *testing.T) {
 		_, port := svNewJavaServer(t, svJavaAnswers{modern: true, favicon: svFaviconDataURI(t)})
 		queryPort := svNewQueryServer(t, 0)
 
-		status, err := NewService().GetJavaServerStatus("127.0.0.1", port, true, queryPort)
+		status, err := NewService().GetJavaServerStatus(testutil.LogContext(context.Background()), "127.0.0.1", port, true, queryPort)
 
 		if err != nil {
 			t.Fatalf("expected nil error, got %v", err)
@@ -545,7 +548,7 @@ func TestService_GetJavaServerStatusQueryConcurrency(t *testing.T) {
 		queryPort := svUnusedUDPPort(t)
 
 		start := time.Now()
-		status, err := NewService().GetJavaServerStatus("127.0.0.1", port, true, queryPort)
+		status, err := NewService().GetJavaServerStatus(testutil.LogContext(context.Background()), "127.0.0.1", port, true, queryPort)
 		elapsed := time.Since(start)
 
 		if status != nil || !errors.Is(err, ErrJavaStatus) {
@@ -562,7 +565,7 @@ func TestService_GetJavaServerStatusQueryConcurrency(t *testing.T) {
 		queryPort := svNewQueryServer(t, delay)
 
 		start := time.Now()
-		status, err := NewService().GetJavaServerStatus("127.0.0.1", port, true, queryPort)
+		status, err := NewService().GetJavaServerStatus(testutil.LogContext(context.Background()), "127.0.0.1", port, true, queryPort)
 		elapsed := time.Since(start)
 
 		if err != nil {
@@ -580,7 +583,7 @@ func TestService_GetJavaServerStatusQueryConcurrency(t *testing.T) {
 		port := svUnusedPort(t)
 		queryPort := svNewQueryServer(t, 0)
 
-		status, err := NewService().GetJavaServerStatus("127.0.0.1", port, true, queryPort)
+		status, err := NewService().GetJavaServerStatus(testutil.LogContext(context.Background()), "127.0.0.1", port, true, queryPort)
 
 		if err != nil {
 			t.Fatalf("expected nil error, got %v", err)
@@ -597,7 +600,7 @@ func TestService_GetJavaServerStatusQueryConcurrency(t *testing.T) {
 		_, port := svNewJavaServer(t, svJavaAnswers{modern: true})
 		queryPort := svNewQueryServer(t, 500*time.Millisecond)
 
-		status, err := NewService().GetJavaServerStatus("127.0.0.1", port, true, queryPort)
+		status, err := NewService().GetJavaServerStatus(testutil.LogContext(context.Background()), "127.0.0.1", port, true, queryPort)
 
 		if err != nil {
 			t.Fatalf("expected nil error, got %v", err)
@@ -611,7 +614,7 @@ func TestService_GetJavaServerStatusQueryConcurrency(t *testing.T) {
 		port := svUnusedPort(t)
 		queryPort := svNewQueryServer(t, 500*time.Millisecond)
 
-		status, err := NewService().GetJavaServerStatus("127.0.0.1", port, true, queryPort)
+		status, err := NewService().GetJavaServerStatus(testutil.LogContext(context.Background()), "127.0.0.1", port, true, queryPort)
 
 		if err != nil {
 			t.Fatalf("expected nil error, got %v", err)
@@ -688,7 +691,7 @@ func TestService_GetBedrockServerStatusHostAndPort(t *testing.T) {
 	t.Run("CSV-28_StatusCarriesHostAndPort", func(t *testing.T) {
 		port := svNewBedrockServer(t)
 
-		status, err := NewService().GetBedrockServerStatus("127.0.0.1", port)
+		status, err := NewService().GetBedrockServerStatus(testutil.LogContext(context.Background()), "127.0.0.1", port)
 
 		if err != nil {
 			t.Fatalf("expected nil error, got %v", err)

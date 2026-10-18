@@ -52,6 +52,7 @@
 | CSH-52 | ServerStatusHandler | Error Path | `GetServerStatus` returns `ErrJavaStatus` and `Accept: application/xml` | host = `"example.com:25570"` | `Content-Type: application/problem+xml` and the body has a `Problem` root element with the `host` and `port` elements | P2 |  |
 | CSH-53 | ServerStatusHandler | Error Path | `GetServerStatus` returns `ErrJavaStatus` and `Accept: application/x-protobuf` | host = `"example.com:25570"` | Response is 404 with `Content-Type: application/problem+x-protobuf` | P2 |  |
 | CSH-54 | ServerStatusHandler | Error Path | `bedrock=true` and `GetServerStatus` returns `ErrBedrockStatus` | host = `"Example.COM"` | Response is 404 and the problem carries `detail` `msgBedrockStatusFailed`, `host` `"example.com"` and `port` 19132 | P1 |  |
+| CSH-55 | ServerStatusHandler | Happy Path | The request ctx reaches the service | request ctx carries a marker value; recording `GetServerStatus` | The recorded ctx holds the marker value | P1 |  |
 
 ## service.go
 

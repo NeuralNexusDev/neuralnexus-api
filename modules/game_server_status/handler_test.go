@@ -1,6 +1,7 @@
 package gss
 
 import (
+	"context"
 	"errors"
 	"net/http/httptest"
 	"testing"
@@ -22,15 +23,15 @@ type fakeGSSService struct {
 	called          bool
 }
 
-func (f *fakeGSSService) QueryGameQ(game string, host string, port int) (*GameQResponse, error) {
+func (f *fakeGSSService) QueryGameQ(_ context.Context, game string, host string, port int) (*GameQResponse, error) {
 	return nil, errors.New("fakeGSSService.QueryGameQ not used by these tests")
 }
 
-func (f *fakeGSSService) QueryGameDig(game string, host string, port int) (*GameDigResponse, error) {
+func (f *fakeGSSService) QueryGameDig(_ context.Context, game string, host string, port int) (*GameDigResponse, error) {
 	return nil, errors.New("fakeGSSService.QueryGameDig not used by these tests")
 }
 
-func (f *fakeGSSService) QueryGameServer(game string, host string, port int, queryType QueryType) (*GameServerStatus, error) {
+func (f *fakeGSSService) QueryGameServer(_ context.Context, game string, host string, port int, queryType QueryType) (*GameServerStatus, error) {
 	f.called = true
 	f.calledGame = game
 	f.calledHost = host
@@ -51,7 +52,7 @@ func newTestStatus(raw interface{}) *GameServerStatus {
 func TestGameServerStatusHandler(t *testing.T) {
 	t.Run("GSH-01_HappyPath_RawNotRequested", func(t *testing.T) {
 		fake := &fakeGSSService{status: newTestStatus("rawdata")}
-		req := httptest.NewRequest("GET", "/gss/minecraft/status?host=1.2.3.4&port=25565&query_type=minecraft", nil)
+		req := testutil.NewRequest("GET", "/gss/minecraft/status?host=1.2.3.4&port=25565&query_type=minecraft", nil)
 		req.SetPathValue("game", "minecraft")
 		rec := httptest.NewRecorder()
 
@@ -81,7 +82,7 @@ func TestGameServerStatusHandler(t *testing.T) {
 
 	t.Run("GSH-02_HappyPath_RawRequested", func(t *testing.T) {
 		fake := &fakeGSSService{status: newTestStatus("rawdata")}
-		req := httptest.NewRequest("GET", "/gss/minecraft/status?host=1.2.3.4&port=25565&raw=true", nil)
+		req := testutil.NewRequest("GET", "/gss/minecraft/status?host=1.2.3.4&port=25565&raw=true", nil)
 		req.SetPathValue("game", "minecraft")
 		rec := httptest.NewRecorder()
 
@@ -101,7 +102,7 @@ func TestGameServerStatusHandler(t *testing.T) {
 
 	t.Run("GSH-03_ErrorPath_MissingHost", func(t *testing.T) {
 		fake := &fakeGSSService{status: newTestStatus(nil)}
-		req := httptest.NewRequest("GET", "/gss/minecraft/status?port=25565", nil)
+		req := testutil.NewRequest("GET", "/gss/minecraft/status?port=25565", nil)
 		req.SetPathValue("game", "minecraft")
 		rec := httptest.NewRecorder()
 
@@ -124,7 +125,7 @@ func TestGameServerStatusHandler(t *testing.T) {
 
 	t.Run("GSH-04_ErrorPath_InvalidPort", func(t *testing.T) {
 		fake := &fakeGSSService{status: newTestStatus(nil)}
-		req := httptest.NewRequest("GET", "/gss/minecraft/status?host=1.2.3.4&port=abc", nil)
+		req := testutil.NewRequest("GET", "/gss/minecraft/status?host=1.2.3.4&port=abc", nil)
 		req.SetPathValue("game", "minecraft")
 		rec := httptest.NewRecorder()
 
@@ -147,7 +148,7 @@ func TestGameServerStatusHandler(t *testing.T) {
 
 	t.Run("GSH-05_ErrorPath_ServiceError", func(t *testing.T) {
 		fake := &fakeGSSService{err: ErrServerOffline}
-		req := httptest.NewRequest("GET", "/gss/minecraft/status?host=1.2.3.4&port=25565", nil)
+		req := testutil.NewRequest("GET", "/gss/minecraft/status?host=1.2.3.4&port=25565", nil)
 		req.SetPathValue("game", "minecraft")
 		rec := httptest.NewRecorder()
 
@@ -183,7 +184,7 @@ func TestGameServerStatusHandler(t *testing.T) {
 	} {
 		t.Run("GSH-11_ErrorPath_"+tc.name, func(t *testing.T) {
 			fake := &fakeGSSService{err: tc.err}
-			req := httptest.NewRequest("GET", "/gss/minecraft/status?host=1.2.3.4&port=25565", nil)
+			req := testutil.NewRequest("GET", "/gss/minecraft/status?host=1.2.3.4&port=25565", nil)
 			req.SetPathValue("game", "minecraft")
 			rec := httptest.NewRecorder()
 
@@ -201,7 +202,7 @@ func TestGameServerStatusHandler(t *testing.T) {
 
 	t.Run("GSH-06_EdgeCase_UnrecognizedQueryTypeParam", func(t *testing.T) {
 		fake := &fakeGSSService{status: newTestStatus(nil)}
-		req := httptest.NewRequest("GET", "/gss/minecraft/status?host=1.2.3.4&port=25565&query_type=totallybogus", nil)
+		req := testutil.NewRequest("GET", "/gss/minecraft/status?host=1.2.3.4&port=25565&query_type=totallybogus", nil)
 		req.SetPathValue("game", "minecraft")
 		rec := httptest.NewRecorder()
 
@@ -222,7 +223,7 @@ func TestGameServerStatusHandler(t *testing.T) {
 func TestSimpleGameServerStatus(t *testing.T) {
 	t.Run("GSH-07_HappyPath_Online", func(t *testing.T) {
 		fake := &fakeGSSService{status: newTestStatus(nil)}
-		req := httptest.NewRequest("GET", "/gss/minecraft/simple?host=1.2.3.4&port=25565", nil)
+		req := testutil.NewRequest("GET", "/gss/minecraft/simple?host=1.2.3.4&port=25565", nil)
 		req.SetPathValue("game", "minecraft")
 		rec := httptest.NewRecorder()
 
@@ -241,7 +242,7 @@ func TestSimpleGameServerStatus(t *testing.T) {
 
 	t.Run("GSH-08_ErrorPath_MissingHost", func(t *testing.T) {
 		fake := &fakeGSSService{status: newTestStatus(nil)}
-		req := httptest.NewRequest("GET", "/gss/minecraft/simple?port=25565", nil)
+		req := testutil.NewRequest("GET", "/gss/minecraft/simple?port=25565", nil)
 		req.SetPathValue("game", "minecraft")
 		rec := httptest.NewRecorder()
 
@@ -264,7 +265,7 @@ func TestSimpleGameServerStatus(t *testing.T) {
 
 	t.Run("GSH-09_ErrorPath_InvalidPort", func(t *testing.T) {
 		fake := &fakeGSSService{status: newTestStatus(nil)}
-		req := httptest.NewRequest("GET", "/gss/minecraft/simple?host=1.2.3.4&port=abc", nil)
+		req := testutil.NewRequest("GET", "/gss/minecraft/simple?host=1.2.3.4&port=abc", nil)
 		req.SetPathValue("game", "minecraft")
 		rec := httptest.NewRecorder()
 
@@ -287,7 +288,7 @@ func TestSimpleGameServerStatus(t *testing.T) {
 
 	t.Run("GSH-10_ErrorPath_Offline", func(t *testing.T) {
 		fake := &fakeGSSService{err: ErrServerOffline}
-		req := httptest.NewRequest("GET", "/gss/minecraft/simple?host=1.2.3.4&port=25565", nil)
+		req := testutil.NewRequest("GET", "/gss/minecraft/simple?host=1.2.3.4&port=25565", nil)
 		req.SetPathValue("game", "minecraft")
 		rec := httptest.NewRecorder()
 
@@ -298,6 +299,33 @@ func TestSimpleGameServerStatus(t *testing.T) {
 		}
 		if got := rec.Body.String(); got != "Offline" {
 			t.Errorf("body = %q, want %q", got, "Offline")
+		}
+	})
+}
+
+type ctxGSSService struct {
+	fakeGSSService
+	ctx context.Context
+}
+
+func (f *ctxGSSService) QueryGameServer(ctx context.Context, game string, host string, port int, queryType QueryType) (*GameServerStatus, error) {
+	f.ctx = ctx
+	return f.status, f.err
+}
+
+func TestGameServerStatusHandlerContext(t *testing.T) {
+	type ctxKey struct{}
+
+	t.Run("GSH-12_RequestContextReachesService", func(t *testing.T) {
+		fake := &ctxGSSService{fakeGSSService: fakeGSSService{status: newTestStatus("rawdata")}}
+		req := testutil.NewRequest("GET", "/gss/minecraft/status?host=1.2.3.4&port=25565", nil)
+		req.SetPathValue("game", "minecraft")
+		req = req.WithContext(context.WithValue(req.Context(), ctxKey{}, "marker"))
+
+		GameServerStatusHandler(fake)(httptest.NewRecorder(), req)
+
+		if fake.ctx == nil || fake.ctx.Value(ctxKey{}) != "marker" {
+			t.Fatalf("service ctx = %v, want the request ctx carrying the marker", fake.ctx)
 		}
 	})
 }
