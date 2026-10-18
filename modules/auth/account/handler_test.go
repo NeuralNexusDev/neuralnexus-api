@@ -25,13 +25,13 @@ type stubService struct {
 
 var _ Service = (*stubService)(nil)
 
-func (s *stubService) AddAccount(*Account) error { return nil }
+func (s *stubService) AddAccount(context.Context, *Account) error { return nil }
 
-func (s *stubService) GetAccountByID(string) (*Account, error) {
+func (s *stubService) GetAccountByID(context.Context, string) (*Account, error) {
 	return nil, ErrNotFound
 }
 
-func (s *stubService) GetAccountByUsername(string) (*Account, error) {
+func (s *stubService) GetAccountByUsername(context.Context, string) (*Account, error) {
 	if s.lookupErr != nil {
 		return nil, s.lookupErr
 	}
@@ -41,7 +41,7 @@ func (s *stubService) GetAccountByUsername(string) (*Account, error) {
 	return nil, ErrNotFound
 }
 
-func (s *stubService) GetAccountByEmail(string) (*Account, error) {
+func (s *stubService) GetAccountByEmail(context.Context, string) (*Account, error) {
 	if s.lookupErr != nil {
 		return nil, s.lookupErr
 	}
@@ -51,11 +51,11 @@ func (s *stubService) GetAccountByEmail(string) (*Account, error) {
 	return nil, ErrNotFound
 }
 
-func (s *stubService) UpdateAccount(*Account) error { return nil }
+func (s *stubService) UpdateAccount(context.Context, *Account) error { return nil }
 
-func (s *stubService) DeleteAccount(string) error { return nil }
+func (s *stubService) DeleteAccount(context.Context, string) error { return nil }
 
-func (s *stubService) IsPasswordAuthEnabled(string) (bool, error) {
+func (s *stubService) IsPasswordAuthEnabled(context.Context, string) (bool, error) {
 	return !s.passwordAuthDisabled, s.passwordAuthErr
 }
 
@@ -78,18 +78,18 @@ type stubSessionService struct {
 
 var _ session.Service = (*stubSessionService)(nil)
 
-func (s *stubSessionService) AddSession(session *session.Session) error {
+func (s *stubSessionService) AddSession(_ context.Context, session *session.Session) error {
 	s.added = append(s.added, session)
 	return s.addSessionErr
 }
 
-func (s *stubSessionService) GetSession(string) (*session.Session, error) {
+func (s *stubSessionService) GetSession(context.Context, string) (*session.Session, error) {
 	return nil, ErrNotFound
 }
 
-func (s *stubSessionService) UpdateSession(*session.Session) error { return nil }
+func (s *stubSessionService) UpdateSession(context.Context, *session.Session) error { return nil }
 
-func (s *stubSessionService) DeleteSession(id string) error {
+func (s *stubSessionService) DeleteSession(_ context.Context, id string) error {
 	s.deletedIDs = append(s.deletedIDs, id)
 	return s.deleteSessionErr
 }
@@ -101,7 +101,7 @@ func (s *stubSessionService) CreateJWT(session *session.Session) (string, error)
 	return "", nil
 }
 
-func (s *stubSessionService) ReadJWT(string) (*session.Session, error) {
+func (s *stubSessionService) ReadJWT(context.Context, string) (*session.Session, error) {
 	return nil, ErrNotFound
 }
 
@@ -112,7 +112,7 @@ func TestAU01LoginHandlerUsernameHappyPath(t *testing.T) {
 	}
 	as := &stubService{account: account}
 	ss := &stubSessionService{createJWT: func(*session.Session) (string, error) { return "test-jwt", nil }}
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
+	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
 	w := httptest.NewRecorder()
 
 	t.Run("ACH-01_LoginUsernameHappyPath", func(t *testing.T) {
@@ -138,7 +138,7 @@ func TestAU02LoginHandlerEmailHappyPath(t *testing.T) {
 	}
 	as := &stubService{account: account}
 	ss := &stubSessionService{createJWT: func(*session.Session) (string, error) { return "test-jwt", nil }}
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"email":"test@example.com","password":"correct-password"}`))
+	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"email":"test@example.com","password":"correct-password"}`))
 	w := httptest.NewRecorder()
 
 	t.Run("ACH-02_LoginEmailHappyPath", func(t *testing.T) {
@@ -156,7 +156,7 @@ func TestAU02LoginHandlerEmailHappyPath(t *testing.T) {
 func TestAU03LoginHandlerMalformedBody(t *testing.T) {
 	as := &stubService{}
 	ss := &stubSessionService{}
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`not json`))
+	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`not json`))
 	w := httptest.NewRecorder()
 
 	t.Run("ACH-03_LoginMalformedBody", func(t *testing.T) {
@@ -172,7 +172,7 @@ func TestAU03LoginHandlerMalformedBody(t *testing.T) {
 func TestAU04LoginHandlerAccountLookupFails(t *testing.T) {
 	as := &stubService{}
 	ss := &stubSessionService{}
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"no-such-user","password":"whatever"}`))
+	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"no-such-user","password":"whatever"}`))
 	w := httptest.NewRecorder()
 
 	t.Run("ACH-04_LoginAccountLookupFails", func(t *testing.T) {
@@ -195,7 +195,7 @@ func TestAU05LoginHandlerWrongPassword(t *testing.T) {
 	}
 	as := &stubService{account: account}
 	ss := &stubSessionService{}
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"wrong-password"}`))
+	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"wrong-password"}`))
 	w := httptest.NewRecorder()
 
 	t.Run("ACH-05_LoginWrongPassword", func(t *testing.T) {
@@ -218,7 +218,7 @@ func TestAU06LoginHandlerPasswordAuthCheckErrors(t *testing.T) {
 	}
 	as := &stubService{account: account, passwordAuthErr: testutil.ErrDBDown}
 	ss := &stubSessionService{}
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
+	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
 	w := httptest.NewRecorder()
 
 	t.Run("ACH-06_LoginPasswordAuthCheckErrors", func(t *testing.T) {
@@ -238,7 +238,7 @@ func TestAU07LoginHandlerPasswordAuthDisabled(t *testing.T) {
 	}
 	as := &stubService{account: account, passwordAuthDisabled: true}
 	ss := &stubSessionService{}
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
+	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
 	w := httptest.NewRecorder()
 
 	t.Run("ACH-07_LoginPasswordAuthDisabled", func(t *testing.T) {
@@ -261,7 +261,7 @@ func TestAU08LoginHandlerAddSessionFails(t *testing.T) {
 	}
 	as := &stubService{account: account}
 	ss := &stubSessionService{addSessionErr: testutil.ErrDBDown}
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
+	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
 	w := httptest.NewRecorder()
 
 	t.Run("ACH-08_LoginAddSessionFails", func(t *testing.T) {
@@ -284,7 +284,7 @@ func TestAU09LoginHandlerCreateJWTFails(t *testing.T) {
 	}
 	as := &stubService{account: account}
 	ss := &stubSessionService{createJWT: func(*session.Session) (string, error) { return "", testutil.ErrSigningFailed }}
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
+	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
 	w := httptest.NewRecorder()
 
 	t.Run("ACH-09_LoginCreateJWTFails", func(t *testing.T) {
@@ -302,8 +302,8 @@ func TestAU09LoginHandlerCreateJWTFails(t *testing.T) {
 
 func TestAU10LogoutHandlerHappyPath(t *testing.T) {
 	session := &session.Session{ID: "s1", UserID: "u1"}
-	ctx := context.WithValue(context.Background(), reqctx.SessionKey, session)
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil).WithContext(ctx)
+	ctx := context.WithValue(testutil.LogContext(context.Background()), reqctx.SessionKey, session)
+	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 	ss := &stubSessionService{}
 
@@ -330,8 +330,8 @@ func TestAU10LogoutHandlerHappyPath(t *testing.T) {
 }
 
 func TestAU11LogoutHandlerNilSessionInContext(t *testing.T) {
-	ctx := context.WithValue(context.Background(), reqctx.SessionKey, (*session.Session)(nil))
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil).WithContext(ctx)
+	ctx := context.WithValue(testutil.LogContext(context.Background()), reqctx.SessionKey, (*session.Session)(nil))
+	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 	ss := &stubSessionService{}
 
@@ -350,8 +350,8 @@ func TestAU11LogoutHandlerNilSessionInContext(t *testing.T) {
 
 func TestAU12LogoutHandlerDeleteSessionFails(t *testing.T) {
 	session := &session.Session{ID: "s1", UserID: "u1"}
-	ctx := context.WithValue(context.Background(), reqctx.SessionKey, session)
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil).WithContext(ctx)
+	ctx := context.WithValue(testutil.LogContext(context.Background()), reqctx.SessionKey, session)
+	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 	ss := &stubSessionService{deleteSessionErr: testutil.ErrDBDown}
 
@@ -375,7 +375,7 @@ func TestAU58LoginHandlerNewSessionFails(t *testing.T) {
 	}
 	as := &stubService{account: account, newSessionErr: testutil.ErrBoom}
 	ss := &stubSessionService{createJWT: func(*session.Session) (string, error) { return "test-jwt", nil }}
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
+	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
 	w := httptest.NewRecorder()
 
 	t.Run("ACH-58_LoginNewSessionFails", func(t *testing.T) {
@@ -467,7 +467,7 @@ func TestAU49SessionCookie(t *testing.T) {
 func TestAU59LoginHandlerAccountLookupInfraFails(t *testing.T) {
 	as := &stubService{lookupErr: testutil.ErrDBDown}
 	ss := &stubSessionService{}
-	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"someone","password":"whatever"}`))
+	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"someone","password":"whatever"}`))
 	w := httptest.NewRecorder()
 
 	t.Run("ACH-59_LoginAccountLookupInfraFails", func(t *testing.T) {

@@ -55,13 +55,13 @@ func NewSettingsStore(db *pgxpool.Pool) SettingsStore {
 
 // Store - The account store interface
 type Store interface {
-	AddAccountToDB(account *Account) error
-	GetAccountByID(userID string) (*Account, error)
-	GetAccountByUsername(username string) (*Account, error)
-	GetAccountByEmail(email string) (*Account, error)
-	ListAccounts(limit, offset int) ([]*Account, error)
-	UpdateAccountInDB(account *Account) error
-	DeleteAccountFromDB(userID string) error
+	AddAccountToDB(ctx context.Context, account *Account) error
+	GetAccountByID(ctx context.Context, userID string) (*Account, error)
+	GetAccountByUsername(ctx context.Context, username string) (*Account, error)
+	GetAccountByEmail(ctx context.Context, email string) (*Account, error)
+	ListAccounts(ctx context.Context, limit, offset int) ([]*Account, error)
+	UpdateAccountInDB(ctx context.Context, account *Account) error
+	DeleteAccountFromDB(ctx context.Context, userID string) error
 }
 
 var ErrEmailAlreadyExists = errors.New("account with this email already exists")
@@ -85,14 +85,14 @@ func translateAccountConstraintErr(err error) error {
 }
 
 // AddAccountToDB creates an account in the database
-func (s *store) AddAccountToDB(account *Account) error {
-	return translateAccountConstraintErr(s.writeAccount(account,
+func (s *store) AddAccountToDB(ctx context.Context, account *Account) error {
+	return translateAccountConstraintErr(s.writeAccount(ctx, account,
 		"INSERT INTO accounts (user_id, username, email, hashed_secret, salt, role_ids) VALUES ($1, NULLIF($2, ''), $3, $4, $5, COALESCE($6::text[], '{}')::bigint[])"))
 }
 
 // GetAccountByID gets an account by ID
-func (s *store) GetAccountByID(userID string) (*Account, error) {
-	rows, err := s.db.Query(context.Background(), "SELECT user_id, COALESCE(username, '') AS username, email, hashed_secret, salt, role_ids::text[] AS role_ids, updated_at FROM accounts WHERE user_id = $1", userID)
+func (s *store) GetAccountByID(ctx context.Context, userID string) (*Account, error) {
+	rows, err := s.db.Query(ctx, "SELECT user_id, COALESCE(username, '') AS username, email, hashed_secret, salt, role_ids::text[] AS role_ids, updated_at FROM accounts WHERE user_id = $1", userID)
 	if err != nil {
 		return nil, err
 	}
@@ -108,8 +108,8 @@ func (s *store) GetAccountByID(userID string) (*Account, error) {
 }
 
 // GetAccountByUsername gets an account by username
-func (s *store) GetAccountByUsername(username string) (*Account, error) {
-	rows, err := s.db.Query(context.Background(), "SELECT user_id, COALESCE(username, '') AS username, email, hashed_secret, salt, role_ids::text[] AS role_ids, updated_at FROM accounts WHERE username = $1", username)
+func (s *store) GetAccountByUsername(ctx context.Context, username string) (*Account, error) {
+	rows, err := s.db.Query(ctx, "SELECT user_id, COALESCE(username, '') AS username, email, hashed_secret, salt, role_ids::text[] AS role_ids, updated_at FROM accounts WHERE username = $1", username)
 	if err != nil {
 		return nil, err
 	}
@@ -125,8 +125,8 @@ func (s *store) GetAccountByUsername(username string) (*Account, error) {
 }
 
 // GetAccountByEmail gets an account by email
-func (s *store) GetAccountByEmail(email string) (*Account, error) {
-	rows, err := s.db.Query(context.Background(), "SELECT user_id, COALESCE(username, '') AS username, email, hashed_secret, salt, role_ids::text[] AS role_ids, updated_at FROM accounts WHERE email = $1", email)
+func (s *store) GetAccountByEmail(ctx context.Context, email string) (*Account, error) {
+	rows, err := s.db.Query(ctx, "SELECT user_id, COALESCE(username, '') AS username, email, hashed_secret, salt, role_ids::text[] AS role_ids, updated_at FROM accounts WHERE email = $1", email)
 	if err != nil {
 		return nil, err
 	}
@@ -142,8 +142,8 @@ func (s *store) GetAccountByEmail(email string) (*Account, error) {
 }
 
 // ListAccounts gets a page of accounts ordered by ID
-func (s *store) ListAccounts(limit, offset int) ([]*Account, error) {
-	rows, err := s.db.Query(context.Background(), "SELECT user_id, COALESCE(username, '') AS username, email, hashed_secret, salt, role_ids::text[] AS role_ids, updated_at FROM accounts ORDER BY user_id LIMIT $1 OFFSET $2", limit, offset)
+func (s *store) ListAccounts(ctx context.Context, limit, offset int) ([]*Account, error) {
+	rows, err := s.db.Query(ctx, "SELECT user_id, COALESCE(username, '') AS username, email, hashed_secret, salt, role_ids::text[] AS role_ids, updated_at FROM accounts ORDER BY user_id LIMIT $1 OFFSET $2", limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -151,14 +151,14 @@ func (s *store) ListAccounts(limit, offset int) ([]*Account, error) {
 }
 
 // UpdateAccountInDB updates an account in the database
-func (s *store) UpdateAccountInDB(account *Account) error {
-	return translateAccountConstraintErr(s.writeAccount(account,
+func (s *store) UpdateAccountInDB(ctx context.Context, account *Account) error {
+	return translateAccountConstraintErr(s.writeAccount(ctx, account,
 		"UPDATE accounts SET username = NULLIF($2, ''), email = $3, hashed_secret = $4, salt = $5, role_ids = COALESCE($6::text[], '{}')::bigint[] WHERE user_id = $1"))
 }
 
 // DeleteAccountFromDB deletes an account from the database
-func (s *store) DeleteAccountFromDB(userID string) error {
-	_, err := s.db.Exec(context.Background(), "DELETE FROM accounts WHERE user_id = $1", userID)
+func (s *store) DeleteAccountFromDB(ctx context.Context, userID string) error {
+	_, err := s.db.Exec(ctx, "DELETE FROM accounts WHERE user_id = $1", userID)
 	if err != nil {
 		return err
 	}
@@ -178,8 +178,8 @@ func (s *store) DeleteAccountFromDB(userID string) error {
 
 // SettingsStore - The account settings store interface
 type SettingsStore interface {
-	GetAccountSettings(userID string) (*AccountSettings, error)
-	SetPasswordAuthEnabled(userID string, enabled bool) error
+	GetAccountSettings(ctx context.Context, userID string) (*AccountSettings, error)
+	SetPasswordAuthEnabled(ctx context.Context, userID string, enabled bool) error
 }
 
 var ErrNoPasswordSet = errors.New("this account has no password set")
@@ -188,8 +188,8 @@ var ErrWouldLockAccount = errors.New("this is the account's last usable login me
 
 // GetAccountSettings returns userID's settings, the defaults if the account
 // has no account_settings row yet, or ErrNotFound if the account does not exist.
-func (s *settingsStore) GetAccountSettings(userID string) (*AccountSettings, error) {
-	rows, err := s.db.Query(context.Background(), "SELECT * FROM account_settings WHERE user_id = $1", userID)
+func (s *settingsStore) GetAccountSettings(ctx context.Context, userID string) (*AccountSettings, error) {
+	rows, err := s.db.Query(ctx, "SELECT * FROM account_settings WHERE user_id = $1", userID)
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +198,7 @@ func (s *settingsStore) GetAccountSettings(userID string) (*AccountSettings, err
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			var exists bool
-			if err := s.db.QueryRow(context.Background(), "SELECT EXISTS (SELECT 1 FROM accounts WHERE user_id = $1)", userID).Scan(&exists); err != nil {
+			if err := s.db.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM accounts WHERE user_id = $1)", userID).Scan(&exists); err != nil {
 				return nil, err
 			}
 			if !exists {
@@ -216,8 +216,7 @@ func (s *settingsStore) GetAccountSettings(userID string) (*AccountSettings, err
 // guard: it's refused if the account has no other verified, login-enabled
 // linked platform. Enabling is refused if the account has no password to
 // enable in the first place.
-func (s *settingsStore) SetPasswordAuthEnabled(userID string, enabled bool) error {
-	ctx := context.Background()
+func (s *settingsStore) SetPasswordAuthEnabled(ctx context.Context, userID string, enabled bool) error {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return err
@@ -264,7 +263,7 @@ func (s *settingsStore) SetPasswordAuthEnabled(userID string, enabled bool) erro
 
 // writeAccount share-locks the account's roles so rbac.DeleteRole, which takes FOR UPDATE
 // and then checks accounts.role_ids, cannot remove one before the write commits.
-func (s *store) writeAccount(account *Account, query string) error {
+func (s *store) writeAccount(ctx context.Context, account *Account, query string) error {
 	roleIDs := make([]string, 0, len(account.Roles))
 	seen := make(map[string]struct{}, len(account.Roles))
 	for _, id := range account.Roles {
@@ -277,7 +276,6 @@ func (s *store) writeAccount(account *Account, query string) error {
 		}
 	}
 
-	ctx := context.Background()
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return err

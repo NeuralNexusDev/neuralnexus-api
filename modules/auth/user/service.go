@@ -41,7 +41,7 @@ func userFromAccount(a *account.Account) *User {
 
 // GetUser - Get a user by their ID
 func (s *service) GetUser(userID string) (*User, error) {
-	a, err := s.as.GetAccountByID(userID)
+	a, err := s.as.GetAccountByID(context.TODO(), userID)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +54,7 @@ func (s *service) GetUserFromPlatform(platform link.Platform, platformID string)
 	if err != nil {
 		return nil, err
 	}
-	a, err := s.as.GetAccountByID(la.UserID)
+	a, err := s.as.GetAccountByID(context.TODO(), la.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +63,7 @@ func (s *service) GetUserFromPlatform(platform link.Platform, platformID string)
 
 // ListUsers - List a page of users ordered by ID
 func (s *service) ListUsers(limit, offset int) ([]*User, error) {
-	accounts, err := s.as.ListAccounts(limit, offset)
+	accounts, err := s.as.ListAccounts(context.TODO(), limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +76,7 @@ func (s *service) ListUsers(limit, offset int) ([]*User, error) {
 
 // GetUserPermissions - Get a user's permissions
 func (s *service) GetUserPermissions(ctx context.Context, userID string) ([]string, error) {
-	a, err := s.as.GetAccountByID(userID)
+	a, err := s.as.GetAccountByID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +95,7 @@ func (s *service) GetUserPermissions(ctx context.Context, userID string) ([]stri
 
 // UpdateUser - Update a user's username and roles
 func (s *service) UpdateUser(userID string, update *UserUpdate) error {
-	account, err := s.as.GetAccountByID(userID)
+	account, err := s.as.GetAccountByID(context.TODO(), userID)
 	if err != nil {
 		return err
 	}
@@ -105,7 +105,7 @@ func (s *service) UpdateUser(userID string, update *UserUpdate) error {
 	if update.Roles != nil {
 		account.Roles = update.Roles
 	}
-	return s.as.UpdateAccountInDB(account)
+	return s.as.UpdateAccountInDB(context.TODO(), account)
 }
 
 // UpdateUserFromPlatform - Update a user from a platform
@@ -114,7 +114,7 @@ func (s *service) UpdateUserFromPlatform(platform link.Platform, platformID stri
 	if err != nil {
 		return nil, err
 	}
-	a, err := s.as.GetAccountByID(userID)
+	a, err := s.as.GetAccountByID(context.TODO(), userID)
 	if err != nil {
 		return nil, err
 	}
@@ -123,15 +123,15 @@ func (s *service) UpdateUserFromPlatform(platform link.Platform, platformID stri
 
 // DeleteUser - Delete a user
 func (s *service) DeleteUser(userID string) error {
-	return s.as.DeleteAccountFromDB(userID)
+	return s.as.DeleteAccountFromDB(context.TODO(), userID)
 }
 
 // GetAccountSettings - Get a user's account settings
 func (s *service) GetAccountSettings(userID string) (*account.AccountSettings, error) {
-	return s.ass.GetAccountSettings(userID)
+	return s.ass.GetAccountSettings(context.TODO(), userID)
 }
 
 // SetPasswordAuthEnabled - Toggle whether a user's password can log in
 func (s *service) SetPasswordAuthEnabled(userID string, enabled bool) error {
-	return s.ass.SetPasswordAuthEnabled(userID, enabled)
+	return s.ass.SetPasswordAuthEnabled(context.TODO(), userID, enabled)
 }

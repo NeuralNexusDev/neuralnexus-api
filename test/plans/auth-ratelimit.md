@@ -11,6 +11,7 @@
 | RL-05 | SetRateLimit | Error Path | `store.SetRateLimit` fails | | Error propagated unchanged | P2 |  |
 | RL-06 | IncrRateLimit | Happy Path | `store.IncrementRateLimit` succeeds | | Returns nil | P1 |  |
 | RL-07 | IncrRateLimit | Error Path | `store.IncrementRateLimit` fails | | Error propagated unchanged | P2 |  |
+| RL-08 | GetRateLimit | Happy Path | a context value set on the call | fake `Store` | The store receives the same context, so the value reads back from it | P1 |  |
 
 ## store.go
 

@@ -33,13 +33,13 @@ type stubAccountService struct {
 
 var _ account.Service = (*stubAccountService)(nil)
 
-func (s *stubAccountService) AddAccount(*account.Account) error { return nil }
+func (s *stubAccountService) AddAccount(context.Context, *account.Account) error { return nil }
 
-func (s *stubAccountService) GetAccountByID(string) (*account.Account, error) {
+func (s *stubAccountService) GetAccountByID(context.Context, string) (*account.Account, error) {
 	return nil, account.ErrNotFound
 }
 
-func (s *stubAccountService) GetAccountByUsername(string) (*account.Account, error) {
+func (s *stubAccountService) GetAccountByUsername(context.Context, string) (*account.Account, error) {
 	if s.lookupErr != nil {
 		return nil, s.lookupErr
 	}
@@ -49,7 +49,7 @@ func (s *stubAccountService) GetAccountByUsername(string) (*account.Account, err
 	return nil, account.ErrNotFound
 }
 
-func (s *stubAccountService) GetAccountByEmail(string) (*account.Account, error) {
+func (s *stubAccountService) GetAccountByEmail(context.Context, string) (*account.Account, error) {
 	if s.lookupErr != nil {
 		return nil, s.lookupErr
 	}
@@ -59,11 +59,11 @@ func (s *stubAccountService) GetAccountByEmail(string) (*account.Account, error)
 	return nil, account.ErrNotFound
 }
 
-func (s *stubAccountService) UpdateAccount(*account.Account) error { return nil }
+func (s *stubAccountService) UpdateAccount(context.Context, *account.Account) error { return nil }
 
-func (s *stubAccountService) DeleteAccount(string) error { return nil }
+func (s *stubAccountService) DeleteAccount(context.Context, string) error { return nil }
 
-func (s *stubAccountService) IsPasswordAuthEnabled(string) (bool, error) {
+func (s *stubAccountService) IsPasswordAuthEnabled(context.Context, string) (bool, error) {
 	return !s.passwordAuthDisabled, s.passwordAuthErr
 }
 
@@ -126,18 +126,18 @@ type stubSessionService struct {
 
 var _ session.Service = (*stubSessionService)(nil)
 
-func (s *stubSessionService) AddSession(session *session.Session) error {
+func (s *stubSessionService) AddSession(_ context.Context, session *session.Session) error {
 	s.added = append(s.added, session)
 	return s.addSessionErr
 }
 
-func (s *stubSessionService) GetSession(string) (*session.Session, error) {
+func (s *stubSessionService) GetSession(context.Context, string) (*session.Session, error) {
 	return nil, account.ErrNotFound
 }
 
-func (s *stubSessionService) UpdateSession(*session.Session) error { return nil }
+func (s *stubSessionService) UpdateSession(context.Context, *session.Session) error { return nil }
 
-func (s *stubSessionService) DeleteSession(id string) error {
+func (s *stubSessionService) DeleteSession(_ context.Context, id string) error {
 	s.deletedIDs = append(s.deletedIDs, id)
 	return s.deleteSessionErr
 }
@@ -149,7 +149,7 @@ func (s *stubSessionService) CreateJWT(session *session.Session) (string, error)
 	return "", nil
 }
 
-func (s *stubSessionService) ReadJWT(string) (*session.Session, error) {
+func (s *stubSessionService) ReadJWT(context.Context, string) (*session.Session, error) {
 	return nil, account.ErrNotFound
 }
 

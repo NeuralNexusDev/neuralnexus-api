@@ -15,13 +15,13 @@ type RoleStore interface {
 
 // Service - The account service interface
 type Service interface {
-	AddAccount(account *Account) error
-	GetAccountByID(userID string) (*Account, error)
-	GetAccountByUsername(username string) (*Account, error)
-	GetAccountByEmail(email string) (*Account, error)
-	UpdateAccount(account *Account) error
-	DeleteAccount(userID string) error
-	IsPasswordAuthEnabled(userID string) (bool, error)
+	AddAccount(ctx context.Context, account *Account) error
+	GetAccountByID(ctx context.Context, userID string) (*Account, error)
+	GetAccountByUsername(ctx context.Context, username string) (*Account, error)
+	GetAccountByEmail(ctx context.Context, email string) (*Account, error)
+	UpdateAccount(ctx context.Context, account *Account) error
+	DeleteAccount(ctx context.Context, userID string) error
+	IsPasswordAuthEnabled(ctx context.Context, userID string) (bool, error)
 	NewSession(ctx context.Context, account *Account, expiresAt int64) (*session.Session, error)
 }
 
@@ -38,38 +38,38 @@ func NewService(as Store, ass SettingsStore, rs RoleStore) Service {
 }
 
 // GetAccountByID - Get an account by its ID
-func (s *service) GetAccountByID(userID string) (*Account, error) {
-	return s.as.GetAccountByID(userID)
+func (s *service) GetAccountByID(ctx context.Context, userID string) (*Account, error) {
+	return s.as.GetAccountByID(ctx, userID)
 }
 
 // GetAccountByUsername -  Get an account by its username
-func (s *service) GetAccountByUsername(username string) (*Account, error) {
-	return s.as.GetAccountByUsername(username)
+func (s *service) GetAccountByUsername(ctx context.Context, username string) (*Account, error) {
+	return s.as.GetAccountByUsername(ctx, username)
 }
 
 // GetAccountByEmail - Get an account by its email
-func (s *service) GetAccountByEmail(email string) (*Account, error) {
-	return s.as.GetAccountByEmail(email)
+func (s *service) GetAccountByEmail(ctx context.Context, email string) (*Account, error) {
+	return s.as.GetAccountByEmail(ctx, email)
 }
 
 // AddAccount - Add an account to the database
-func (s *service) AddAccount(account *Account) error {
-	return s.as.AddAccountToDB(account)
+func (s *service) AddAccount(ctx context.Context, account *Account) error {
+	return s.as.AddAccountToDB(context.WithoutCancel(ctx), account)
 }
 
 // UpdateAccount - Update an account in the database
-func (s *service) UpdateAccount(account *Account) error {
-	return s.as.UpdateAccountInDB(account)
+func (s *service) UpdateAccount(ctx context.Context, account *Account) error {
+	return s.as.UpdateAccountInDB(ctx, account)
 }
 
 // DeleteAccount - Delete an account from the database
-func (s *service) DeleteAccount(userID string) error {
-	return s.as.DeleteAccountFromDB(userID)
+func (s *service) DeleteAccount(ctx context.Context, userID string) error {
+	return s.as.DeleteAccountFromDB(ctx, userID)
 }
 
 // IsPasswordAuthEnabled - Check whether userID's password can be used to log in
-func (s *service) IsPasswordAuthEnabled(userID string) (bool, error) {
-	settings, err := s.ass.GetAccountSettings(userID)
+func (s *service) IsPasswordAuthEnabled(ctx context.Context, userID string) (bool, error) {
+	settings, err := s.ass.GetAccountSettings(ctx, userID)
 	if err != nil {
 		return false, err
 	}

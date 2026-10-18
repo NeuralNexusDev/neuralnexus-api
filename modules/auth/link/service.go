@@ -1,6 +1,7 @@
 package link
 
 import (
+	"context"
 	"log"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
@@ -54,7 +55,7 @@ func (s *service) UpdateFromPlatform(platform Platform, platformID string, data 
 		if err != nil {
 			return "", err
 		}
-		err = s.as.AddAccountToDB(a)
+		err = s.as.AddAccountToDB(context.TODO(), a)
 		if err != nil {
 			return "", err
 		}
@@ -67,7 +68,7 @@ func (s *service) UpdateFromPlatform(platform Platform, platformID string, data 
 		if err != nil {
 			// Whatever went wrong, the placeholder account created above is
 			// now orphaned - clean it up before deciding how to handle err.
-			if delErr := s.as.DeleteAccountFromDB(a.UserID); delErr != nil {
+			if delErr := s.as.DeleteAccountFromDB(context.TODO(), a.UserID); delErr != nil {
 				log.Println(logLinkCleanupFailed, err)
 				return "", delErr
 			}
