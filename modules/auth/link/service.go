@@ -2,19 +2,19 @@ package link
 
 import (
 	"context"
-	"log"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 )
 
 const logLinkCleanupFailed = "Failed to link account, and failed to clean up the orphaned placeholder account:\n\t"
 
 // Service - The link service
 type Service interface {
-	GetUserLinkedAccounts(userID string) ([]*LinkedAccount, error)
-	UnlinkPlatform(userID string, platform Platform) error
-	SetPlatformLoginEnabled(userID string, platform Platform, enabled bool) error
-	UpdateFromPlatform(platform Platform, platformID string, data PlatformData) (string, error)
+	GetUserLinkedAccounts(ctx context.Context, userID string) ([]*LinkedAccount, error)
+	UnlinkPlatform(ctx context.Context, userID string, platform Platform) error
+	SetPlatformLoginEnabled(ctx context.Context, userID string, platform Platform, enabled bool) error
+	UpdateFromPlatform(ctx context.Context, platform Platform, platformID string, data PlatformData) (string, error)
 }
 
 // service - The link service struct
@@ -29,24 +29,24 @@ func NewService(als Store, as account.Store) Service {
 }
 
 // GetUserLinkedAccounts - List every platform linked to a user
-func (s *service) GetUserLinkedAccounts(userID string) ([]*LinkedAccount, error) {
-	return s.als.GetLinkedAccountsByUserID(userID)
+func (s *service) GetUserLinkedAccounts(ctx context.Context, userID string) ([]*LinkedAccount, error) {
+	return s.als.GetLinkedAccountsByUserID(ctx, userID)
 }
 
 // UnlinkPlatform - Unlink a platform from a user
-func (s *service) UnlinkPlatform(userID string, platform Platform) error {
-	return s.als.DeleteLinkedAccount(userID, platform)
+func (s *service) UnlinkPlatform(ctx context.Context, userID string, platform Platform) error {
+	return s.als.DeleteLinkedAccount(ctx, userID, platform)
 }
 
 // SetPlatformLoginEnabled - Toggle whether a linked platform can log in
-func (s *service) SetPlatformLoginEnabled(userID string, platform Platform, enabled bool) error {
-	return s.als.SetLinkedAccountLoginEnabled(userID, platform, enabled)
+func (s *service) SetPlatformLoginEnabled(ctx context.Context, userID string, platform Platform, enabled bool) error {
+	return s.als.SetLinkedAccountLoginEnabled(ctx, userID, platform, enabled)
 }
 
 // UpdateFromPlatform - Update the linked account for a platform identity, creating a placeholder account when none exists, and return the ID of the user it belongs to
-func (s *service) UpdateFromPlatform(platform Platform, platformID string, data PlatformData) (string, error) {
+func (s *service) UpdateFromPlatform(ctx context.Context, platform Platform, platformID string, data PlatformData) (string, error) {
 	// If the user doesn't exist, create a new account
-	la, err := s.als.GetLinkedAccountByPlatformID(platform, platformID)
+	la, err := s.als.GetLinkedAccountByPlatformID(ctx, platform, platformID)
 	if err != nil {
 		if err != account.ErrNotFound {
 			return "", err
@@ -55,7 +55,7 @@ func (s *service) UpdateFromPlatform(platform Platform, platformID string, data 
 		if err != nil {
 			return "", err
 		}
-		err = s.as.AddAccountToDB(context.TODO(), a)
+		err = s.as.AddAccountToDB(ctx, a)
 		if err != nil {
 			return "", err
 		}
@@ -64,12 +64,12 @@ func (s *service) UpdateFromPlatform(platform Platform, platformID string, data 
 			username = data.GetUsername()
 		}
 		la = NewLinkedAccount(a.UserID, platform, username, platformID, data)
-		err = s.als.AddLinkedAccountToDB(la)
+		err = s.als.AddLinkedAccountToDB(ctx, la)
 		if err != nil {
 			// Whatever went wrong, the placeholder account created above is
 			// now orphaned - clean it up before deciding how to handle err.
-			if delErr := s.as.DeleteAccountFromDB(context.TODO(), a.UserID); delErr != nil {
-				log.Println(logLinkCleanupFailed, err)
+			if delErr := s.as.DeleteAccountFromDB(ctx, a.UserID); delErr != nil {
+				reqctx.Log(ctx, logLinkCleanupFailed, err.Error())
 				return "", delErr
 			}
 			if err != ErrAlreadyLinked {
@@ -78,7 +78,7 @@ func (s *service) UpdateFromPlatform(platform Platform, platformID string, data 
 			// Lost the race to link this platform account: another
 			// request's insert won between our lookup and our own insert.
 			// Use the winner's linked account instead.
-			la, err = s.als.GetLinkedAccountByPlatformID(platform, platformID)
+			la, err = s.als.GetLinkedAccountByPlatformID(ctx, platform, platformID)
 			if err != nil {
 				return "", err
 			}
@@ -87,7 +87,7 @@ func (s *service) UpdateFromPlatform(platform Platform, platformID string, data 
 
 	// Update the linked account
 	la.Data = data
-	err = s.als.UpdateLinkedAccount(la)
+	err = s.als.UpdateLinkedAccount(ctx, la)
 	if err != nil {
 		return "", err
 	}

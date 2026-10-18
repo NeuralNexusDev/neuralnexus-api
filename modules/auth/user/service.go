@@ -50,7 +50,7 @@ func (s *service) GetUser(userID string) (*User, error) {
 
 // GetUserFromPlatform - Get a user by their platform ID
 func (s *service) GetUserFromPlatform(platform link.Platform, platformID string) (*User, error) {
-	la, err := s.als.GetLinkedAccountByPlatformID(platform, platformID)
+	la, err := s.als.GetLinkedAccountByPlatformID(context.TODO(), platform, platformID)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +110,7 @@ func (s *service) UpdateUser(userID string, update *UserUpdate) error {
 
 // UpdateUserFromPlatform - Update a user from a platform
 func (s *service) UpdateUserFromPlatform(platform link.Platform, platformID string, data link.PlatformData) (*User, error) {
-	userID, err := s.links.UpdateFromPlatform(platform, platformID, data)
+	userID, err := s.links.UpdateFromPlatform(context.TODO(), platform, platformID, data)
 	if err != nil {
 		return nil, err
 	}

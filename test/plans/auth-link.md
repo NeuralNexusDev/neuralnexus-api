@@ -137,6 +137,8 @@
 | LKS-27 | ProcessSteamLink | Error Path | No session in request context | Plain request, no context value | Returns `ErrSessionNotFound` | P1 |  |
 | LKS-28 | ProcessSteamLink | Error Path | Session expired | `session.IsValid()` false | Returns `ErrSessionExpired` | P1 |  |
 | LKS-29 | ProcessSteamLink | Error Path | Identity already linked to a different account | `linkPlatformUserToSession` returns `ErrPlatformAlreadyLinkedToDifferentAccount` | Error propagated | P2 |  |
+| LKS-74 | VerifySteamOpenIDCallback | Happy Path | the caller's ctx reaches the check_authentication request | transport records the request ctx and fails; ctx carries a marker value | The recorded request ctx holds the marker value | P1 |  |
+| LKS-75 | GetSteamUser | Happy Path | the caller's ctx reaches the player summary request | transport records the request ctx and fails; ctx carries a marker value | The recorded request ctx holds the marker value | P1 |  |
 
 ## microsoft.go
 
@@ -200,6 +202,11 @@
 | MS-56 | GetXboxAndMinecraftUser | Edge Case | `minecraftLoginWithXbox` fails, but the Xbox Live identity still resolves | mc-login leg fails; XSTS-xboxlive leg succeeds | Returns `(xbox, nil, minecraftErr)` — xbox is not discarded | P0 |  |
 | MS-57 | GetXboxAndMinecraftUser | Error Path | `minecraftLoginWithXbox` fails AND the Xbox Live identity fetch also fails | Both mc-login and XSTS-xboxlive legs fail | Returns `(nil, nil, xboxErr)` — the Xbox Live error takes precedence | P1 |  |
 | MS-58 | GetXboxAndMinecraftUser | Edge Case | `getMinecraftProfile` fails after a successful login-with-xbox, Xbox identity still resolves | mc-profile leg fails; XSTS-xboxlive succeeds | Returns `(xbox, nil, minecraftErr)` | P1 |  |
+| MS-59 | GetMicrosoftUser | Happy Path | the caller's ctx reaches the userinfo request | transport records the request ctx and fails; ctx carries a marker value | The recorded request ctx holds the marker value | P1 |  |
+| MS-60 | xblAuthenticate | Happy Path | the caller's ctx reaches the Xbox Live authenticate request | transport records the request ctx and fails; ctx carries a marker value | The recorded request ctx holds the marker value | P1 |  |
+| MS-61 | xstsAuthorize | Happy Path | the caller's ctx reaches the XSTS authorize request | transport records the request ctx and fails; ctx carries a marker value | The recorded request ctx holds the marker value | P1 |  |
+| MS-62 | minecraftLoginWithXbox | Happy Path | the caller's ctx reaches the login_with_xbox request | transport records the request ctx and fails; ctx carries a marker value | The recorded request ctx holds the marker value | P1 |  |
+| MS-63 | getMinecraftProfile | Happy Path | the caller's ctx reaches the profile request | transport records the request ctx and fails; ctx carries a marker value | The recorded request ctx holds the marker value | P1 |  |
 
 ## minecraft.go
 
@@ -283,6 +290,7 @@
 | LKV-23 | UpdateFromPlatform | Error Path | `als.UpdateLinkedAccount` fails | | Error propagated | P2 |  |
 | LKV-25 | UpdateFromPlatform | Concurrency Invariant | Two concurrent callers race to resolve/create an account for the same, brand-new platform identity | Two goroutines call `UpdateUserFromPlatform` simultaneously against a shared, mutex-serialized fake store enforcing the real `(platform, platformID)` uniqueness constraint (the losing `AddLinkedAccountToDB` call gets `ErrAlreadyLinked`) | Both goroutines return without error and resolve to the same user ID; exactly one account row exists afterward (the loser's placeholder was cleaned up) | P0 | design: 50 trials x 8 concurrent callers; a barrier holds each goroutine's first lookup until all 8 arrive, since an untimed trial isn't guaranteed to hit the "lost the race" branch |
 | LKV-38 | UpdateFromPlatform | Error Path | Same as LKV-20, asserting the cleanup error | `AddLinkedAccountToDB` fails with `testutil.ErrInsertFailed`; `DeleteAccountFromDB` fails with `testutil.ErrBoom` | Returns an error matching `testutil.ErrBoom` (the cleanup failure) | P2 | |
+| LKV-39 | GetUserLinkedAccounts | Happy Path | a context value set on the call | fake `Store` | The store receives the same context, so the value reads back from it | P1 |  |
 
 ## handler.go
 

@@ -2,7 +2,6 @@ package link
 
 import (
 	"encoding/base64"
-	"log"
 	"net/http"
 	"net/url"
 
@@ -45,9 +44,10 @@ const (
 // OAuthHandler handles the OAuth route
 func OAuthHandler(as account.Service, las Store, ss session.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
 		code := r.URL.Query().Get("code")
 		if code == "" {
-			log.Println("No code provided")
+			reqctx.Log(ctx, "No code provided")
 			redirectBadRequest(w, r, session.NN_SITE_URL, msgInvalidRequest)
 			return
 		}
@@ -64,12 +64,12 @@ func OAuthHandler(as account.Service, las Store, ss session.Service) http.Handle
 		var err error
 		switch state.Mode {
 		case ModeLogin:
-			session, err = ProcessOAuthLogin(r.Context(), as, las, ss, code, &state)
+			session, err = ProcessOAuthLogin(ctx, as, las, ss, code, &state)
 		case ModeLink:
 			session, err = ProcessOAuthLink(r, las, code, &state)
 		}
 		if err != nil {
-			log.Println("Failed to process OAuth:\n\t", err)
+			reqctx.Log(ctx, "Failed to process OAuth:\n\t", err.Error())
 			switch err {
 			case ErrSessionNotFound:
 				redirectUnauthorized(w, r, state.RedirectURI, msgLoginRequiredToLink)
@@ -92,7 +92,7 @@ func OAuthHandler(as account.Service, las Store, ss session.Service) http.Handle
 		}
 
 		if err := account.SetSessionCookie(ss, w, session); err != nil {
-			log.Println(logFailedToCreateJWT, err)
+			reqctx.Log(ctx, logFailedToCreateJWT, err.Error())
 			redirectInternalServerError(w, r, state.RedirectURI, msgAuthenticationFailed)
 			return
 		}
@@ -103,6 +103,7 @@ func OAuthHandler(as account.Service, las Store, ss session.Service) http.Handle
 // OpenIDHandler handles the Steam OpenID 2.0 login/link callback.
 func OpenIDHandler(as account.Service, las Store, ss session.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
 		state, ok := decodeAndValidateState(w, r)
 		if !ok {
 			return
@@ -111,9 +112,9 @@ func OpenIDHandler(as account.Service, las Store, ss session.Service) http.Handl
 			return
 		}
 
-		steamID64, err := VerifySteamOpenIDCallback(r.URL.Query())
+		steamID64, err := VerifySteamOpenIDCallback(ctx, r.URL.Query())
 		if err != nil {
-			log.Println("Failed to verify Steam OpenID callback:\n\t", err)
+			reqctx.Log(ctx, "Failed to verify Steam OpenID callback:\n\t", err.Error())
 			switch err {
 			case ErrInvalidAssertion:
 				redirectBadRequest(w, r, state.RedirectURI, msgInvalidState)
@@ -123,9 +124,9 @@ func OpenIDHandler(as account.Service, las Store, ss session.Service) http.Handl
 			return
 		}
 
-		user, err := GetSteamUser(steamID64)
+		user, err := GetSteamUser(ctx, steamID64)
 		if err != nil {
-			log.Println("Failed to get Steam user:\n\t", err)
+			reqctx.Log(ctx, "Failed to get Steam user:\n\t", err.Error())
 			switch err {
 			case ErrSteamNoPlayers:
 				redirectProblem(w, r, state.RedirectURI, http.StatusNotFound, msgSteamAccountNotFound)
@@ -140,12 +141,12 @@ func OpenIDHandler(as account.Service, las Store, ss session.Service) http.Handl
 		var session *session.Session
 		switch state.Mode {
 		case ModeLogin:
-			session, err = ProcessSteamLogin(r.Context(), as, las, ss, user)
+			session, err = ProcessSteamLogin(ctx, as, las, ss, user)
 		case ModeLink:
 			session, err = ProcessSteamLink(r, las, user)
 		}
 		if err != nil {
-			log.Println("Failed to process Steam OpenID:\n\t", err)
+			reqctx.Log(ctx, "Failed to process Steam OpenID:\n\t", err.Error())
 			switch err {
 			case ErrSessionNotFound:
 				redirectUnauthorized(w, r, state.RedirectURI, msgLoginRequiredToLink)
@@ -162,7 +163,7 @@ func OpenIDHandler(as account.Service, las Store, ss session.Service) http.Handl
 		}
 
 		if err := account.SetSessionCookie(ss, w, session); err != nil {
-			log.Println(logFailedToCreateJWT, err)
+			reqctx.Log(ctx, logFailedToCreateJWT, err.Error())
 			redirectInternalServerError(w, r, state.RedirectURI, msgAuthenticationFailed)
 			return
 		}
@@ -177,40 +178,40 @@ func decodeAndValidateState(w http.ResponseWriter, r *http.Request) (OAuthState,
 
 	stateB64 := r.URL.Query().Get("state")
 	if stateB64 == "" {
-		log.Println("No state provided")
+		reqctx.Log(r.Context(), "No state provided")
 		redirectBadRequest(w, r, session.NN_SITE_URL, msgInvalidRequest)
 		return state, false
 	}
 	stateBytes, err := base64.URLEncoding.DecodeString(stateB64)
 	if err != nil {
-		log.Println("Failed to decode state:\n\t", err)
+		reqctx.Log(r.Context(), "Failed to decode state:\n\t", err.Error())
 		redirectBadRequest(w, r, session.NN_SITE_URL, msgInvalidState)
 		return state, false
 	}
 	if err := json.Unmarshal(stateBytes, &state); err != nil {
-		log.Println("Failed to unmarshal state:\n\t", err)
+		reqctx.Log(r.Context(), "Failed to unmarshal state:\n\t", err.Error())
 		redirectBadRequest(w, r, session.NN_SITE_URL, msgInvalidState)
 		return state, false
 	}
 	if state.Platform == "" || state.Nonce == "" || state.RedirectURI == "" || state.Mode == "" {
-		log.Println(logInvalidState)
+		reqctx.Log(r.Context(), logInvalidState)
 		redirectBadRequest(w, r, session.NN_SITE_URL, msgInvalidState)
 		return state, false
 	}
 	if !isAllowedRedirect(state.RedirectURI) {
-		log.Println("Redirect URI is not allowed:\n\t", state.RedirectURI)
+		reqctx.Log(r.Context(), "Redirect URI is not allowed:\n\t", state.RedirectURI)
 		redirectBadRequest(w, r, session.NN_SITE_URL, msgInvalidState)
 		return state, false
 	}
 
 	cookie, err := r.Cookie("nonce")
 	if err != nil {
-		log.Println("Failed to get nonce cookie:\n\t", err)
+		reqctx.Log(r.Context(), "Failed to get nonce cookie:\n\t", err.Error())
 		redirectBadRequest(w, r, session.NN_SITE_URL, msgInvalidState)
 		return state, false
 	}
 	if cookie.Value != state.Nonce {
-		log.Println("Nonce does not match")
+		reqctx.Log(r.Context(), "Nonce does not match")
 		redirectBadRequest(w, r, session.NN_SITE_URL, msgInvalidState)
 		return state, false
 	}
@@ -231,7 +232,7 @@ func requireValidModeAndSession(w http.ResponseWriter, r *http.Request, mode Mod
 		redirectUnauthorized(w, r, redirectURI, msgLoginRequiredToLink)
 		return false
 	default:
-		log.Println("Invalid mode")
+		reqctx.Log(r.Context(), "Invalid mode")
 		redirectBadRequest(w, r, redirectURI, msgInvalidState)
 		return false
 	}
@@ -242,7 +243,7 @@ func requireValidModeAndSession(w http.ResponseWriter, r *http.Request, mode Mod
 func redirectWithError(w http.ResponseWriter, r *http.Request, target string, status int, title, detail string) {
 	problemJSON, err := json.Marshal(responses.NewProblem("about:blank", status, title, detail, "").Problem)
 	if err != nil {
-		log.Println("Failed to marshal error problem:\n\t", err)
+		reqctx.Log(r.Context(), "Failed to marshal error problem:\n\t", err.Error())
 		http.Redirect(w, r, target, http.StatusSeeOther)
 		return
 	}
@@ -295,7 +296,7 @@ func GetUserLinkedAccountsHandler(service Service) http.HandlerFunc {
 			responses.Forbidden(w, r, msgNoPermissionToViewLinkedAccounts)
 			return
 		}
-		links, err := service.GetUserLinkedAccounts(userID)
+		links, err := service.GetUserLinkedAccounts(r.Context(), userID)
 		if err != nil {
 			responses.InternalServerError(w, r, msgFailedToGetLinkedAccounts)
 			return
@@ -314,7 +315,7 @@ func UnlinkPlatformHandler(service Service) http.HandlerFunc {
 			return
 		}
 		platform := Platform(r.PathValue("platform"))
-		err := service.UnlinkPlatform(userID, platform)
+		err := service.UnlinkPlatform(r.Context(), userID, platform)
 		switch err {
 		case nil:
 			responses.NoContent(w, r)
@@ -351,7 +352,7 @@ func SetPlatformLoginEnabledHandler(service Service) http.HandlerFunc {
 			return
 		}
 
-		err := service.SetPlatformLoginEnabled(userID, platform, *body.LoginEnabled)
+		err := service.SetPlatformLoginEnabled(r.Context(), userID, platform, *body.LoginEnabled)
 		switch err {
 		case nil:
 			responses.NoContent(w, r)
