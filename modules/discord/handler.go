@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
-	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"github.com/bwmarrin/discordgo"
 	"github.com/goccy/go-json"
@@ -27,18 +27,18 @@ func HandleDiscordWebhook() http.HandlerFunc {
 		ctx := r.Context()
 		var event WebhookPayload
 		if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
-			mw.LogRequest(ctx, "Invalid Discord webhook request body:\n\t", err.Error())
+			reqctx.Log(ctx, "Invalid Discord webhook request body:\n\t", err.Error())
 			responses.BadRequest(w, r, msgInvalidRequestBody)
 			return
 		}
 		if event.Version != 1 {
-			mw.LogRequest(ctx,
+			reqctx.Log(ctx,
 				fmt.Sprintf("Unknown Discord webhook version, %d. Attempting to process regardless.", event.Version))
 		}
 
 		switch event.Type {
 		case WebhookTypePing:
-			mw.LogRequest(ctx, "Discord webhook PING")
+			reqctx.Log(ctx, "Discord webhook PING")
 			responses.NoContent(w, r)
 			return
 		case WebhookTypeEvent:
@@ -47,27 +47,27 @@ func HandleDiscordWebhook() http.HandlerFunc {
 				data := event.Event.ApplicationAuthorizedData()
 				switch {
 				case data.IntegrationType == nil:
-					mw.LogRequest(ctx, "Received authorized event with no integration type, assuming user login: ", data.User.ID)
+					reqctx.Log(ctx, "Received authorized event with no integration type, assuming user login: ", data.User.ID)
 				case *data.IntegrationType == GuildInstall:
-					mw.LogRequest(ctx, fmt.Sprintf("Received authorized event for Discord Guild: %s", data.Guild.ID))
+					reqctx.Log(ctx, fmt.Sprintf("Received authorized event for Discord Guild: %s", data.Guild.ID))
 				case *data.IntegrationType == UserInstall:
-					mw.LogRequest(ctx, fmt.Sprintf("Received authorized event for Discord User: %s", data.User.ID))
+					reqctx.Log(ctx, fmt.Sprintf("Received authorized event for Discord User: %s", data.User.ID))
 				default:
-					mw.LogRequest(ctx, "Invalid integration type")
+					reqctx.Log(ctx, "Invalid integration type")
 					responses.BadRequest(w, r, msgInvalidEventData)
 					return
 				}
 			case ApplicationDeauthorized:
 				data := event.Event.ApplicationDeauthorizedData()
-				mw.LogRequest(ctx, fmt.Sprintf("Received deauthorized event for Discord User: %s", data.User.ID))
+				reqctx.Log(ctx, fmt.Sprintf("Received deauthorized event for Discord User: %s", data.User.ID))
 			case EntitlementCreate, EntitlementUpdate, EntitlementDelete, QuestUserEnrollment, LobbyMessageCreate,
 				LobbyMessageUpdate, LobbyMessageDelete, GameDirectMessageCreate, GameDirectMessageUpdate, GameDirectMessageDelete:
-				mw.LogRequest(ctx, fmt.Sprintf("Unhandled Discord webhook event type: %s", event.Event.Type.String()))
+				reqctx.Log(ctx, fmt.Sprintf("Unhandled Discord webhook event type: %s", event.Event.Type.String()))
 			default:
-				mw.LogRequest(ctx, fmt.Sprintf("Unknown Discord webhook event type: %s", event.Event.Type.String()))
+				reqctx.Log(ctx, fmt.Sprintf("Unknown Discord webhook event type: %s", event.Event.Type.String()))
 			}
 		default:
-			mw.LogRequest(ctx, fmt.Sprintf("Unknown Webhook type: %s", event.Type.String()))
+			reqctx.Log(ctx, fmt.Sprintf("Unknown Webhook type: %s", event.Type.String()))
 		}
 		responses.NoContent(w, r)
 	}
@@ -90,14 +90,14 @@ func HandleDiscordInteraction() http.HandlerFunc {
 
 		switch interaction.Type {
 		case discordgo.InteractionPing:
-			mw.LogRequest(ctx, "Discord interaction PING")
+			reqctx.Log(ctx, "Discord interaction PING")
 			responses.SendStruct(w, r, http.StatusOK, discordgo.Interaction{Type: discordgo.InteractionPing})
 			return
 		case discordgo.InteractionApplicationCommand, discordgo.InteractionMessageComponent,
 			discordgo.InteractionApplicationCommandAutocomplete, discordgo.InteractionModalSubmit:
-			mw.LogRequest(ctx, fmt.Sprintf("Unhandled Discord Interaction type: %s", interaction.Type.String()))
+			reqctx.Log(ctx, fmt.Sprintf("Unhandled Discord Interaction type: %s", interaction.Type.String()))
 		default:
-			mw.LogRequest(ctx, fmt.Sprintf("Unknown Discord Interaction type: %v", interaction.Type.String()))
+			reqctx.Log(ctx, fmt.Sprintf("Unknown Discord Interaction type: %v", interaction.Type.String()))
 		}
 		responses.NoContent(w, r)
 	}

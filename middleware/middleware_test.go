@@ -134,14 +134,14 @@ func mwCaptureLog(t *testing.T) func() string {
 	return buf.String
 }
 
-func TestLogRequest(t *testing.T) {
+func TestMiddlewareLog(t *testing.T) {
 	t.Run("MW-01_SessionInContextLogsUserID", func(t *testing.T) {
 		getLog := mwCaptureLog(t)
 		ctx := mwBaseCtx()
 		ctx = context.WithValue(ctx, SessionKey, &session.Session{ID: "s1", UserID: "u1"})
 		ctx = context.WithValue(ctx, reqctx.UserIDKey, "u1")
 
-		LogRequest(ctx, "hello", "world")
+		reqctx.Log(ctx, "hello", "world")
 
 		out := getLog()
 		if !strings.Contains(out, "u1") {
@@ -156,7 +156,7 @@ func TestLogRequest(t *testing.T) {
 		getLog := mwCaptureLog(t)
 		ctx := mwBaseCtx()
 
-		LogRequest(ctx, "msg")
+		reqctx.Log(ctx, "msg")
 
 		out := getLog()
 		if !strings.Contains(out, "N/A") {
@@ -168,7 +168,7 @@ func TestLogRequest(t *testing.T) {
 		getLog := mwCaptureLog(t)
 		ctx := mwBaseCtx()
 
-		LogRequest(ctx)
+		reqctx.Log(ctx)
 
 		out := getLog()
 		if !strings.Contains(out, "1 N/A 127.0.0.1") {

@@ -4,9 +4,9 @@
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| MW-01 | LogRequest | Happy Path | Log a request that has an authenticated session in context | `ctx` has `reqctx.RemoteAddrKey`, `reqctx.RequestIDKey`, and `reqctx.UserIDKey` set to `"u1"` | Log line contains the request ID, `"u1"`, the remote addr, and the joined message | P2 |  |
-| MW-02 | LogRequest | Happy Path | Log a request with no session in context | `ctx` has `reqctx.RemoteAddrKey` and `reqctx.RequestIDKey` set; `reqctx.UserIDKey` absent | Log line contains `"N/A"` in place of a user ID | P2 |  |
-| MW-03 | LogRequest | Edge Case | Called with zero variadic message arguments | `ctx` fully populated, `message` omitted | Log line still contains request ID/user/remote-addr with an empty joined-message segment, no panic | P3 |  |
+| MW-01 | reqctx.Log | Happy Path | Log a request that has an authenticated session in context | `ctx` has `reqctx.RemoteAddrKey`, `reqctx.RequestIDKey`, and `reqctx.UserIDKey` set to `"u1"` | Log line contains the request ID, `"u1"`, the remote addr, and the joined message | P2 |  |
+| MW-02 | reqctx.Log | Happy Path | Log a request with no session in context | `ctx` has `reqctx.RemoteAddrKey` and `reqctx.RequestIDKey` set; `reqctx.UserIDKey` absent | Log line contains `"N/A"` in place of a user ID | P2 |  |
+| MW-03 | reqctx.Log | Edge Case | Called with zero variadic message arguments | `ctx` fully populated, `message` omitted | Log line still contains request ID/user/remote-addr with an empty joined-message segment, no panic | P3 |  |
 | MW-05 | CreateStack | Happy Path | Compose several middlewares into one stack | 3 middlewares, each appending its own name to a shared slice before calling `next` | Execution order matches declaration order (first-declared middleware runs first/outermost) | P1 |  |
 | MW-06 | CreateStack | Edge Case | Called with zero middlewares | `middlewares` is empty | Returned `Middleware` is a pure passthrough — passes straight through to the final handler; the final handler is called exactly once | P3 |  |
 | MW-07 | WrappedWriter.WriteHeader | Accessor | Set a status code through the wrapper | `WrappedWriter` wraps an `httptest.ResponseRecorder` | `w.statusCode` equals the given code, and the underlying recorder's `Code` is also set to it | P2 |  |

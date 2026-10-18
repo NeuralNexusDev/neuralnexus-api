@@ -1,8 +1,8 @@
 package twitch
 
 import (
-	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/link"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"io"
 	"net/http"
@@ -33,7 +33,7 @@ const (
 func HandleEventSub(eventsub EventSubService, tokens link.OAuthTokenStore, linked link.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get(EventSubMessageType) == "" {
-			mw.LogRequest(r.Context(), "EventSub message type not set")
+			reqctx.Log(r.Context(), "EventSub message type not set")
 			responses.BadRequest(w, r, "")
 			return
 		}
@@ -42,7 +42,7 @@ func HandleEventSub(eventsub EventSubService, tokens link.OAuthTokenStore, linke
 		var body []byte
 		body, err = io.ReadAll(r.Body)
 		if err != nil {
-			mw.LogRequest(r.Context(), "Failed to read EventSub body:", err.Error())
+			reqctx.Log(r.Context(), "Failed to read EventSub body:", err.Error())
 			responses.BadRequest(w, r, "")
 			return
 		}
@@ -50,7 +50,7 @@ func HandleEventSub(eventsub EventSubService, tokens link.OAuthTokenStore, linke
 
 		vals, err := validateEventSubNotification(r.Header, body)
 		if err != nil {
-			mw.LogRequest(r.Context(), "Failed to validate EventSub notification:", err.Error())
+			reqctx.Log(r.Context(), "Failed to validate EventSub notification:", err.Error())
 			responses.BadRequest(w, r, "")
 			return
 		}
@@ -65,12 +65,12 @@ func HandleEventSub(eventsub EventSubService, tokens link.OAuthTokenStore, linke
 		case EventSubTypeNotification:
 			err = handleNotification(r.Context(), userId, eventsub, tokens, *vals, linked)
 		default:
-			mw.LogRequest(r.Context(), userId, "Unexpected EventSub message type:", messageType)
+			reqctx.Log(r.Context(), userId, "Unexpected EventSub message type:", messageType)
 			responses.BadRequest(w, r, "")
 			return
 		}
 		if err != nil {
-			mw.LogRequest(r.Context(), userId, "Failed to handle EventSub event:", err.Error())
+			reqctx.Log(r.Context(), userId, "Failed to handle EventSub event:", err.Error())
 			responses.InternalServerError(w, r, msgFailedToHandleEventSubEvent)
 			return
 		}
