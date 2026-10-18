@@ -90,7 +90,7 @@ func TestSV01to04RoleValidation(t *testing.T) {
 	valid := []string{"a", "admin", "r2_d2", "a09", strings.Repeat("a", 200)}
 	invalid := []string{"", "Admin", "1abc", "_a", "a-b", "a b", "a:b", "aB", "a\x00"}
 
-	t.Run("SV-01_ValidNamesAreCreated", func(t *testing.T) {
+	t.Run("RCV-01_ValidNamesAreCreated", func(t *testing.T) {
 		for _, name := range valid {
 			f := &fakeStore{}
 			role, err := NewService(f).CreateRole(name, "")
@@ -99,7 +99,7 @@ func TestSV01to04RoleValidation(t *testing.T) {
 			}
 		}
 	})
-	t.Run("SV-02_InvalidNamesAreRejectedBeforeTheStore", func(t *testing.T) {
+	t.Run("RCV-02_InvalidNamesAreRejectedBeforeTheStore", func(t *testing.T) {
 		for _, name := range invalid {
 			f := &fakeStore{}
 			if _, err := NewService(f).CreateRole(name, ""); !errors.Is(err, ErrInvalidRoleName) {
@@ -110,7 +110,7 @@ func TestSV01to04RoleValidation(t *testing.T) {
 			}
 		}
 	})
-	t.Run("SV-03_LongDescriptionsAreAccepted", func(t *testing.T) {
+	t.Run("RCV-03_LongDescriptionsAreAccepted", func(t *testing.T) {
 		f := &fakeStore{}
 		long := strings.Repeat("d", 10000)
 		if _, err := NewService(f).CreateRole("a", long); err != nil {
@@ -123,7 +123,7 @@ func TestSV01to04RoleValidation(t *testing.T) {
 			t.Fatalf("store got %d characters, want %d", len(f.created[1]), len(long))
 		}
 	})
-	t.Run("SV-04_CreatedRoleCarriesTheGeneratedSnowflake", func(t *testing.T) {
+	t.Run("RCV-04_CreatedRoleCarriesTheGeneratedSnowflake", func(t *testing.T) {
 		f := &fakeStore{}
 		role, err := NewService(f).CreateRole("a", "d")
 		if err != nil {
@@ -139,7 +139,7 @@ func TestSV01to04RoleValidation(t *testing.T) {
 }
 
 func TestSV05to06NodeValidation(t *testing.T) {
-	t.Run("SV-05_InvalidNodesAreRejectedBeforeTheStore", func(t *testing.T) {
+	t.Run("RCV-05_InvalidNodesAreRejectedBeforeTheStore", func(t *testing.T) {
 		bad := []string{"", "A", "aB", "1a", "a.1b", "a._b", "_a", "a..b", ".a", "a.", "a-b", "a:b", "a b", "a|b", "a\x00", "é", "a.é"}
 		for _, node := range bad {
 			f := &fakeStore{}
@@ -151,7 +151,7 @@ func TestSV05to06NodeValidation(t *testing.T) {
 			}
 		}
 	})
-	t.Run("SV-06_ValidNodesAreCreatedUnchanged", func(t *testing.T) {
+	t.Run("RCV-06_ValidNodesAreCreatedUnchanged", func(t *testing.T) {
 		for _, node := range []string{"a", "roles.admin", "a_b.c2.d_3", "a0", strings.Repeat("a", 300)} {
 			f := &fakeStore{}
 			p, err := NewService(f).CreatePermission(node, "d", "", "")
@@ -160,7 +160,7 @@ func TestSV05to06NodeValidation(t *testing.T) {
 			}
 		}
 	})
-	t.Run("SV-12_ValueTypesAndMergeRulesMustPair", func(t *testing.T) {
+	t.Run("RCV-12_ValueTypesAndMergeRulesMustPair", func(t *testing.T) {
 		valid := [][3]string{
 			{"", "", ""}, {"int", "max", "max"}, {"int", "min", "min"},
 			{"string", "", "first"}, {"string", "first", "first"},
@@ -180,7 +180,7 @@ func TestSV05to06NodeValidation(t *testing.T) {
 			}
 		}
 	})
-	t.Run("SV-13_TextRulesApplyToDescriptions", func(t *testing.T) {
+	t.Run("RCV-13_TextRulesApplyToDescriptions", func(t *testing.T) {
 		for _, d := range []string{"a\x00b", "\xff", "a\ufffdb"} {
 			f := &fakeStore{}
 			if _, err := NewService(f).CreateRole("a", d); !errors.Is(err, ErrInvalidDescription) || len(f.calls) != 0 {
@@ -195,7 +195,7 @@ func TestSV05to06NodeValidation(t *testing.T) {
 			t.Fatalf("a description with a newline and a joined emoji was refused: %v", err)
 		}
 	})
-	t.Run("SV-14_LookupsOfNamesThatCannotExistNeverReachTheStore", func(t *testing.T) {
+	t.Run("RCV-14_LookupsOfNamesThatCannotExistNeverReachTheStore", func(t *testing.T) {
 		f := &fakeStore{role: &Role{}, permission: &Permission{}}
 		s := NewService(f)
 		for _, name := range []string{"own\x00er", "Owner", "123", ""} {
@@ -223,7 +223,7 @@ func TestSV05to06NodeValidation(t *testing.T) {
 func TestSV07to09IDs(t *testing.T) {
 	bad := []string{"", "abc", "0", "-5", "1.5", "99999999999999999999", "007", "+8", " 8"}
 
-	t.Run("SV-07_BadIDsAreRejectedBeforeTheStoreByEveryIDMethod", func(t *testing.T) {
+	t.Run("RCV-07_BadIDsAreRejectedBeforeTheStoreByEveryIDMethod", func(t *testing.T) {
 		for _, id := range bad {
 			f := &fakeStore{}
 			s := NewService(f)
@@ -252,7 +252,7 @@ func TestSV07to09IDs(t *testing.T) {
 			}
 		}
 	})
-	t.Run("SV-08_AttachAndDetachPassTheParsedIDsInOrder", func(t *testing.T) {
+	t.Run("RCV-08_AttachAndDetachPassTheParsedIDsInOrder", func(t *testing.T) {
 		f := &fakeStore{role: &Role{Name: "mod"}, permission: &Permission{}}
 		s := NewService(f)
 		if err := s.AttachPermission("11", "22", nil); err != nil || f.attached != [2]string{"11", "22"} {
@@ -263,7 +263,7 @@ func TestSV07to09IDs(t *testing.T) {
 			t.Fatalf("detach: %v %v", err, f.attached)
 		}
 	})
-	t.Run("SV-09_StoreErrorsPassThroughUnchanged", func(t *testing.T) {
+	t.Run("RCV-09_StoreErrorsPassThroughUnchanged", func(t *testing.T) {
 		f := &fakeStore{err: errSvcStore, role: &Role{}, permission: &Permission{}}
 		s := NewService(f)
 		name := "x"
@@ -303,7 +303,7 @@ func TestSV10UpdateRoleMerge(t *testing.T) {
 	newStore := func() *fakeStore { return &fakeStore{role: &Role{ID: "1", Name: "old", Description: "olddesc"}} }
 	str := func(s string) *string { return &s }
 
-	t.Run("SV-10_OmittedFieldsKeepTheirCurrentValue", func(t *testing.T) {
+	t.Run("RCV-10_OmittedFieldsKeepTheirCurrentValue", func(t *testing.T) {
 		f := newStore()
 		role, err := NewService(f).UpdateRole("1", str("new"), nil)
 		if err != nil || role.Name != "new" || role.Description != "olddesc" {
@@ -321,7 +321,7 @@ func TestSV10UpdateRoleMerge(t *testing.T) {
 			t.Fatalf("store got %v", f.calls)
 		}
 	})
-	t.Run("SV-11_InvalidUpdatesNeverWrite", func(t *testing.T) {
+	t.Run("RCV-11_InvalidUpdatesNeverWrite", func(t *testing.T) {
 		for _, c := range []struct {
 			name, desc *string
 			want       error
@@ -345,7 +345,7 @@ func TestSV10UpdateRoleMerge(t *testing.T) {
 func TestSV15to18BuiltinRoles(t *testing.T) {
 	str := func(s string) *string { return &s }
 
-	t.Run("SV-15_BuiltinRolesCannotBeDeleted", func(t *testing.T) {
+	t.Run("RCV-15_BuiltinRolesCannotBeDeleted", func(t *testing.T) {
 		for _, name := range []string{"system", "owner"} {
 			f := &fakeStore{role: &Role{ID: "5", Name: name}}
 			if err := NewService(f).DeleteRole("5"); !errors.Is(err, ErrBuiltinRole) {
@@ -364,7 +364,7 @@ func TestSV15to18BuiltinRoles(t *testing.T) {
 			}
 		}
 	})
-	t.Run("SV-16_BuiltinRolesCannotBeRenamedButCanBeDescribed", func(t *testing.T) {
+	t.Run("RCV-16_BuiltinRolesCannotBeRenamedButCanBeDescribed", func(t *testing.T) {
 		f := &fakeStore{role: &Role{ID: "5", Name: "owner", Description: "d"}}
 		if _, err := NewService(f).UpdateRole("5", str("boss"), nil); !errors.Is(err, ErrBuiltinRole) {
 			t.Fatalf("rename err = %v, want ErrBuiltinRole", err)
@@ -381,7 +381,7 @@ func TestSV15to18BuiltinRoles(t *testing.T) {
 			t.Fatalf("store got %v", f.calls)
 		}
 	})
-	t.Run("SV-17_RolesPermissionStaysOnSystemAndOwner", func(t *testing.T) {
+	t.Run("RCV-17_RolesPermissionStaysOnSystemAndOwner", func(t *testing.T) {
 		for _, name := range []string{"system", "owner"} {
 			f := &fakeStore{role: &Role{ID: "5", Name: name}, permission: &Permission{ID: "6", Node: "roles.admin"}}
 			if err := NewService(f).DetachPermission("5", "6"); !errors.Is(err, ErrBuiltinRole) {
@@ -394,7 +394,7 @@ func TestSV15to18BuiltinRoles(t *testing.T) {
 			}
 		}
 	})
-	t.Run("SV-18_OtherDetachesAreAllowed", func(t *testing.T) {
+	t.Run("RCV-18_OtherDetachesAreAllowed", func(t *testing.T) {
 		for _, c := range []struct{ role, node string }{
 			{"owner", "users.admin"}, {"owner", "roles"}, {"owner", "roles.administrator"}, {"mod", "roles.admin"}, {"bee_admin", "roles.admin"},
 		} {
@@ -412,7 +412,7 @@ func TestSV19to23GrantedValues(t *testing.T) {
 		return f, NewService(f).AttachPermission("5", "6", value)
 	}
 
-	t.Run("SV-19_PermissionsWithoutATypeTakeNoValue", func(t *testing.T) {
+	t.Run("RCV-19_PermissionsWithoutATypeTakeNoValue", func(t *testing.T) {
 		f, err := attach("", nil)
 		if err != nil || f.attachedValue != nil || f.calls[len(f.calls)-1] != "AttachPermission" {
 			t.Fatalf("no value: err %v, stored %q", err, f.attachedValue)
@@ -424,7 +424,7 @@ func TestSV19to23GrantedValues(t *testing.T) {
 			}
 		}
 	})
-	t.Run("SV-20_IntValuesMustBeSafeWholeNumbers", func(t *testing.T) {
+	t.Run("RCV-20_IntValuesMustBeSafeWholeNumbers", func(t *testing.T) {
 		for _, v := range []any{json.Number("1000"), float64(1000), 1000, int64(1000)} {
 			f, err := attach("int", v)
 			if err != nil || string(f.attachedValue) != "1000" {
@@ -454,7 +454,7 @@ func TestSV19to23GrantedValues(t *testing.T) {
 			}
 		}
 	})
-	t.Run("SV-21_StringValuesFollowTheTextRules", func(t *testing.T) {
+	t.Run("RCV-21_StringValuesFollowTheTextRules", func(t *testing.T) {
 		f, err := attach("string", "abc:d")
 		if err != nil || string(f.attachedValue) != `"abc:d"` {
 			t.Fatalf("err %v, stored %q", err, f.attachedValue)
@@ -469,7 +469,7 @@ func TestSV19to23GrantedValues(t *testing.T) {
 			}
 		}
 	})
-	t.Run("SV-22_ListValuesAreSortedAndDeduplicated", func(t *testing.T) {
+	t.Run("RCV-22_ListValuesAreSortedAndDeduplicated", func(t *testing.T) {
 		for _, v := range []any{[]any{"b", "a", "a"}, []string{"b", "a", "a"}} {
 			f, err := attach("string_list", v)
 			if err != nil || string(f.attachedValue) != `["a","b"]` {
@@ -490,7 +490,7 @@ func TestSV19to23GrantedValues(t *testing.T) {
 			t.Fatalf("a list of 1000 items was refused: %v", err)
 		}
 	})
-	t.Run("SV-23_UnknownPermissionsFailBeforeTheValueIsChecked", func(t *testing.T) {
+	t.Run("RCV-23_UnknownPermissionsFailBeforeTheValueIsChecked", func(t *testing.T) {
 		f := &fakeStore{err: ErrPermissionNotFound}
 		if err := NewService(f).AttachPermission("5", "6", "x"); !errors.Is(err, ErrPermissionNotFound) || slices.Contains(f.calls, "AttachPermission") {
 			t.Fatalf("err %v, calls %v, want ErrPermissionNotFound without an attach", err, f.calls)
