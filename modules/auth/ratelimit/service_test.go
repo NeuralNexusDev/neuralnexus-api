@@ -1,13 +1,16 @@
 package ratelimit
 
 import (
+	"context"
 	"errors"
 	"testing"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
 type rlFakeRateLimitStore struct {
+	getCtx    context.Context
 	getVal    int
 	getErr    error
 	getCalls  int
@@ -17,15 +20,16 @@ type rlFakeRateLimitStore struct {
 	incrCalls int
 }
 
-func (f *rlFakeRateLimitStore) GetRateLimit(_ string) (int, error) {
+func (f *rlFakeRateLimitStore) GetRateLimit(ctx context.Context, _ string) (int, error) {
+	f.getCtx = ctx
 	f.getCalls++
 	return f.getVal, f.getErr
 }
-func (f *rlFakeRateLimitStore) SetRateLimit(_ string, _ int) error {
+func (f *rlFakeRateLimitStore) SetRateLimit(_ context.Context, _ string, _ int) error {
 	f.setCalls++
 	return f.setErr
 }
-func (f *rlFakeRateLimitStore) IncrementRateLimit(_ string) error {
+func (f *rlFakeRateLimitStore) IncrementRateLimit(_ context.Context, _ string) error {
 	f.incrCalls++
 	return f.incrErr
 }
@@ -35,7 +39,7 @@ func TestRL01NewService(t *testing.T) {
 		rl := &rlFakeRateLimitStore{getVal: 7}
 		svc := NewService(rl)
 
-		got, err := svc.GetRateLimit("k")
+		got, err := svc.GetRateLimit(context.Background(), "k")
 		if err != nil || got != 7 {
 			t.Errorf("GetRateLimit() = (%d, %v), want (7, nil)", got, err)
 		}
@@ -50,7 +54,7 @@ func TestRL02to03GetRateLimit(t *testing.T) {
 		rl := &rlFakeRateLimitStore{getVal: 5}
 		svc := NewService(rl)
 
-		got, err := svc.GetRateLimit("k")
+		got, err := svc.GetRateLimit(context.Background(), "k")
 		if err != nil || got != 5 {
 			t.Errorf("GetRateLimit() = (%d, %v), want (5, nil)", got, err)
 		}
@@ -61,7 +65,7 @@ func TestRL02to03GetRateLimit(t *testing.T) {
 		rl := &rlFakeRateLimitStore{getErr: wantErr}
 		svc := NewService(rl)
 
-		_, err := svc.GetRateLimit("k")
+		_, err := svc.GetRateLimit(context.Background(), "k")
 		if !errors.Is(err, wantErr) {
 			t.Errorf("GetRateLimit() err = %v, want %v", err, wantErr)
 		}
@@ -73,7 +77,7 @@ func TestRL04to05SetRateLimit(t *testing.T) {
 		rl := &rlFakeRateLimitStore{}
 		svc := NewService(rl)
 
-		if err := svc.SetRateLimit("k", 3); err != nil {
+		if err := svc.SetRateLimit(context.Background(), "k", 3); err != nil {
 			t.Errorf("SetRateLimit() = %v, want nil", err)
 		}
 		if rl.setCalls != 1 {
@@ -86,7 +90,7 @@ func TestRL04to05SetRateLimit(t *testing.T) {
 		rl := &rlFakeRateLimitStore{setErr: wantErr}
 		svc := NewService(rl)
 
-		err := svc.SetRateLimit("k", 3)
+		err := svc.SetRateLimit(context.Background(), "k", 3)
 		if !errors.Is(err, wantErr) {
 			t.Errorf("SetRateLimit() err = %v, want %v", err, wantErr)
 		}
@@ -98,7 +102,7 @@ func TestRL06to07IncrRateLimit(t *testing.T) {
 		rl := &rlFakeRateLimitStore{}
 		svc := NewService(rl)
 
-		if err := svc.IncrRateLimit("k"); err != nil {
+		if err := svc.IncrRateLimit(context.Background(), "k"); err != nil {
 			t.Errorf("IncrRateLimit() = %v, want nil", err)
 		}
 		if rl.incrCalls != 1 {
@@ -111,9 +115,23 @@ func TestRL06to07IncrRateLimit(t *testing.T) {
 		rl := &rlFakeRateLimitStore{incrErr: wantErr}
 		svc := NewService(rl)
 
-		err := svc.IncrRateLimit("k")
+		err := svc.IncrRateLimit(context.Background(), "k")
 		if !errors.Is(err, wantErr) {
 			t.Errorf("IncrRateLimit() err = %v, want %v", err, wantErr)
+		}
+	})
+}
+
+func TestRL08RequestContextReachesStore(t *testing.T) {
+	t.Run("RL-08_RequestContextReachesStore", func(t *testing.T) {
+		rl := &rlFakeRateLimitStore{}
+		ctx := context.WithValue(context.Background(), reqctx.UserIDKey, "u1")
+
+		if _, err := NewService(rl).GetRateLimit(ctx, "k"); err != nil {
+			t.Fatalf("GetRateLimit() error = %v", err)
+		}
+		if got := rl.getCtx.Value(reqctx.UserIDKey); got != "u1" {
+			t.Errorf("store context user ID = %v, want %q", got, "u1")
 		}
 	})
 }

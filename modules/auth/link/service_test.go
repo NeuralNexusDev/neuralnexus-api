@@ -1,6 +1,7 @@
 package link
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"testing"
@@ -196,38 +197,38 @@ type usFakeAccountStore struct {
 	deleteLastUserID string
 }
 
-func (f *usFakeAccountStore) AddAccountToDB(a *account.Account) error {
+func (f *usFakeAccountStore) AddAccountToDB(_ context.Context, a *account.Account) error {
 	f.addCalls++
 	f.addLastAccount = a
 	return f.addErr
 }
 
-func (f *usFakeAccountStore) DeleteAccountFromDB(userID string) error {
+func (f *usFakeAccountStore) DeleteAccountFromDB(_ context.Context, userID string) error {
 	f.deleteCalls++
 	f.deleteLastUserID = userID
 	return f.deleteErr
 }
 
-func (f *usFakeAccountStore) GetAccountByID(userID string) (*account.Account, error) {
+func (f *usFakeAccountStore) GetAccountByID(_ context.Context, userID string) (*account.Account, error) {
 	f.getByIDCalls++
 	f.getByIDLastUserID = userID
 	return f.getByIDAccount, f.getByIDErr
 }
 
-func (f *usFakeAccountStore) GetAccountByUsername(_ string) (*account.Account, error) {
+func (f *usFakeAccountStore) GetAccountByUsername(_ context.Context, _ string) (*account.Account, error) {
 	return nil, account.ErrNotFound
 }
 
-func (f *usFakeAccountStore) GetAccountByEmail(_ string) (*account.Account, error) {
+func (f *usFakeAccountStore) GetAccountByEmail(_ context.Context, _ string) (*account.Account, error) {
 	return nil, account.ErrNotFound
 }
 
-func (f *usFakeAccountStore) ListAccounts(_, _ int) ([]*account.Account, error) {
+func (f *usFakeAccountStore) ListAccounts(_ context.Context, _, _ int) ([]*account.Account, error) {
 	f.listCalls++
 	return f.listAccounts, f.listErr
 }
 
-func (f *usFakeAccountStore) UpdateAccountInDB(a *account.Account) error {
+func (f *usFakeAccountStore) UpdateAccountInDB(_ context.Context, a *account.Account) error {
 	f.updateCalls++
 	f.updateLastAccount = a
 	return f.updateErr
@@ -254,14 +255,14 @@ func usLinkKey(platform Platform, platformID string) string {
 	return string(platform) + "|" + platformID
 }
 
-func (s *usConcurrentStore) AddAccountToDB(a *account.Account) error {
+func (s *usConcurrentStore) AddAccountToDB(_ context.Context, a *account.Account) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.accounts[a.UserID] = a
 	return nil
 }
 
-func (s *usConcurrentStore) GetAccountByID(userID string) (*account.Account, error) {
+func (s *usConcurrentStore) GetAccountByID(_ context.Context, userID string) (*account.Account, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	a, ok := s.accounts[userID]
@@ -271,19 +272,23 @@ func (s *usConcurrentStore) GetAccountByID(userID string) (*account.Account, err
 	return a, nil
 }
 
-func (s *usConcurrentStore) GetAccountByUsername(_ string) (*account.Account, error) {
+func (s *usConcurrentStore) GetAccountByUsername(_ context.Context, _ string) (*account.Account, error) {
 	return nil, account.ErrNotFound
 }
 
-func (s *usConcurrentStore) GetAccountByEmail(_ string) (*account.Account, error) {
+func (s *usConcurrentStore) GetAccountByEmail(_ context.Context, _ string) (*account.Account, error) {
 	return nil, account.ErrNotFound
 }
 
-func (s *usConcurrentStore) ListAccounts(_, _ int) ([]*account.Account, error) { return nil, nil }
+func (s *usConcurrentStore) ListAccounts(_ context.Context, _, _ int) ([]*account.Account, error) {
+	return nil, nil
+}
 
-func (s *usConcurrentStore) UpdateAccountInDB(_ *account.Account) error { return nil }
+func (s *usConcurrentStore) UpdateAccountInDB(_ context.Context, _ *account.Account) error {
+	return nil
+}
 
-func (s *usConcurrentStore) DeleteAccountFromDB(userID string) error {
+func (s *usConcurrentStore) DeleteAccountFromDB(_ context.Context, userID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.accounts, userID)

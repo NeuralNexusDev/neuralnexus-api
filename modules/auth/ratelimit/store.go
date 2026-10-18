@@ -12,9 +12,9 @@ const rateLimitKeyPrefix = "rl:"
 
 // Store - Rate limit store interface
 type Store interface {
-	GetRateLimit(key string) (int, error)
-	SetRateLimit(key string, val int) error
-	IncrementRateLimit(key string) error
+	GetRateLimit(ctx context.Context, key string) (int, error)
+	SetRateLimit(ctx context.Context, key string, val int) error
+	IncrementRateLimit(ctx context.Context, key string) error
 }
 
 type store struct {
@@ -29,11 +29,11 @@ func NewStore(rdb *redis.Client) Store {
 }
 
 // GetRateLimit gets the rate limit for a key
-func (s *store) GetRateLimit(key string) (int, error) {
-	val, err := s.rdb.Get(context.Background(), rateLimitKeyPrefix+key).Int()
+func (s *store) GetRateLimit(ctx context.Context, key string) (int, error) {
+	val, err := s.rdb.Get(ctx, rateLimitKeyPrefix+key).Int()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
-			err = s.SetRateLimit(key, 1)
+			err = s.SetRateLimit(ctx, key, 1)
 			if err != nil {
 				return 0, err
 			}
@@ -45,8 +45,8 @@ func (s *store) GetRateLimit(key string) (int, error) {
 }
 
 // SetRateLimit sets the rate limit for a key
-func (s *store) SetRateLimit(key string, val int) error {
-	_, err := s.rdb.Set(context.Background(), rateLimitKeyPrefix+key, val, time.Minute).Result()
+func (s *store) SetRateLimit(ctx context.Context, key string, val int) error {
+	_, err := s.rdb.Set(ctx, rateLimitKeyPrefix+key, val, time.Minute).Result()
 	if err != nil {
 		return err
 	}
@@ -54,15 +54,15 @@ func (s *store) SetRateLimit(key string, val int) error {
 }
 
 // IncrementRateLimit increments the rate limit for a key
-func (s *store) IncrementRateLimit(key string) error {
+func (s *store) IncrementRateLimit(ctx context.Context, key string) error {
 	rediskey := rateLimitKeyPrefix + key
-	_, err := s.rdb.Incr(context.Background(), rediskey).Result()
+	_, err := s.rdb.Incr(ctx, rediskey).Result()
 	if err != nil {
 		return err
 	}
 	// Only set the TTL if this increment created the key, so an existing
 	// key's window doesn't reset on every request.
-	_, err = s.rdb.ExpireNX(context.Background(), rediskey, time.Minute).Result()
+	_, err = s.rdb.ExpireNX(ctx, rediskey, time.Minute).Result()
 	if err != nil {
 		return err
 	}

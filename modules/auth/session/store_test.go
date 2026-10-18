@@ -29,14 +29,14 @@ func stStoreWithUnreachableRedis(t *testing.T) *store {
 func TestST19AddSessionToDB(t *testing.T) {
 	s := stStoreWithUnreachableDB(t)
 	t.Run("SES-19_ConnectionErrorNoPanicFromDeferredCleanup", func(t *testing.T) {
-		stAssertRawConnectionError(t, s.AddSessionToDB(&Session{ID: "s1"}))
+		stAssertRawConnectionError(t, s.AddSessionToDB(testutil.LogContext(context.Background()), &Session{ID: "s1"}))
 	})
 }
 
 func TestST20GetSessionFromDB(t *testing.T) {
 	s := stStoreWithUnreachableDB(t)
 	t.Run("SES-20_ConnectionError", func(t *testing.T) {
-		got, err := s.GetSessionFromDB("s1")
+		got, err := s.GetSessionFromDB(testutil.LogContext(context.Background()), "s1")
 		if got != nil {
 			t.Errorf("expected nil session, got %v", got)
 		}
@@ -47,28 +47,28 @@ func TestST20GetSessionFromDB(t *testing.T) {
 func TestST21DeleteSessionInDB(t *testing.T) {
 	s := stStoreWithUnreachableDB(t)
 	t.Run("SES-21_ConnectionError", func(t *testing.T) {
-		stAssertRawConnectionError(t, s.DeleteSessionInDB("s1"))
+		stAssertRawConnectionError(t, s.DeleteSessionInDB(testutil.LogContext(context.Background()), "s1"))
 	})
 }
 
 func TestST22UpdateSessionInDB(t *testing.T) {
 	s := stStoreWithUnreachableDB(t)
 	t.Run("SES-22_ConnectionError", func(t *testing.T) {
-		stAssertRawConnectionError(t, s.UpdateSessionInDB(&Session{ID: "s1"}))
+		stAssertRawConnectionError(t, s.UpdateSessionInDB(testutil.LogContext(context.Background()), &Session{ID: "s1"}))
 	})
 }
 
 func TestST23ClearExpiredSessions(t *testing.T) {
 	s := stStoreWithUnreachableDB(t)
 	t.Run("SES-23_SwallowsErrorWithoutPanicking", func(t *testing.T) {
-		s.ClearExpiredSessions()
+		s.ClearExpiredSessions(testutil.LogContext(context.Background()))
 	})
 }
 
 func TestST24to25AddSessionToCache(t *testing.T) {
 	t.Run("SES-24_PastExpirySkipsRedisEntirely", func(t *testing.T) {
 		s := &store{}
-		err := s.AddSessionToCache(&Session{ID: "s1", ExpiresAt: time.Now().Add(-time.Hour).Unix()})
+		err := s.AddSessionToCache(testutil.LogContext(context.Background()), &Session{ID: "s1", ExpiresAt: time.Now().Add(-time.Hour).Unix()})
 		if err != nil {
 			t.Errorf("AddSessionToCache() = %v, want nil", err)
 		}
@@ -76,7 +76,7 @@ func TestST24to25AddSessionToCache(t *testing.T) {
 
 	t.Run("SES-25_NeverExpiringAttemptsCacheWrite", func(t *testing.T) {
 		s := stStoreWithUnreachableRedis(t)
-		err := s.AddSessionToCache(&Session{ID: "s1", ExpiresAt: 0})
+		err := s.AddSessionToCache(testutil.LogContext(context.Background()), &Session{ID: "s1", ExpiresAt: 0})
 		stAssertRawConnectionError(t, err)
 	})
 }
@@ -84,7 +84,7 @@ func TestST24to25AddSessionToCache(t *testing.T) {
 func TestST26GetSessionFromCache(t *testing.T) {
 	s := stStoreWithUnreachableRedis(t)
 	t.Run("SES-26_ConnectionErrorNotTreatedAsMiss", func(t *testing.T) {
-		got, err := s.GetSessionFromCache("s1")
+		got, err := s.GetSessionFromCache(testutil.LogContext(context.Background()), "s1")
 		if got != nil {
 			t.Errorf("expected nil session, got %v", got)
 		}
@@ -95,7 +95,7 @@ func TestST26GetSessionFromCache(t *testing.T) {
 func TestST27DeleteSessionFromCache(t *testing.T) {
 	s := stStoreWithUnreachableRedis(t)
 	t.Run("SES-27_ConnectionError", func(t *testing.T) {
-		stAssertRawConnectionError(t, s.DeleteSessionFromCache("s1"))
+		stAssertRawConnectionError(t, s.DeleteSessionFromCache(testutil.LogContext(context.Background()), "s1"))
 	})
 }
 
@@ -107,7 +107,7 @@ func stLiveSessionStore(t *testing.T) Store {
 		t.Skip("TEST_POSTGRES_URL must be set to run these store tests")
 	}
 
-	db, err := pgxpool.New(context.Background(), pgURL)
+	db, err := pgxpool.New(testutil.LogContext(context.Background()), pgURL)
 	if err != nil {
 		t.Fatalf("failed to connect to postgres: %v", err)
 	}
@@ -132,7 +132,7 @@ func stLiveSessionStore(t *testing.T) Store {
 			FOREIGN KEY (user_id) REFERENCES accounts(user_id)
 		)`,
 	} {
-		if _, err := db.Exec(context.Background(), ddl); err != nil {
+		if _, err := db.Exec(testutil.LogContext(context.Background()), ddl); err != nil {
 			db.Close()
 			t.Fatalf("failed to create test schema: %v", err)
 		}
@@ -146,7 +146,7 @@ func TestST76_GetSessionFromDBNotFound(t *testing.T) {
 	s := stLiveSessionStore(t)
 
 	t.Run("SES-76_GetSessionFromDBNotFound", func(t *testing.T) {
-		got, err := s.GetSessionFromDB("910000000000000101")
+		got, err := s.GetSessionFromDB(testutil.LogContext(context.Background()), "910000000000000101")
 		if got != nil || !errors.Is(err, ErrNotFound) {
 			t.Errorf("GetSessionFromDB() = (%v, %v), want (nil, %v)", got, err, ErrNotFound)
 		}
@@ -167,7 +167,7 @@ func TestST80_GetSessionFromCacheMiss(t *testing.T) {
 	s := &store{rdb: rdb}
 
 	t.Run("SES-80_GetSessionFromCacheNotFound", func(t *testing.T) {
-		got, err := s.GetSessionFromCache("910000000000000201")
+		got, err := s.GetSessionFromCache(testutil.LogContext(context.Background()), "910000000000000201")
 		if got != nil || !errors.Is(err, ErrNotFound) {
 			t.Errorf("GetSessionFromCache() = (%v, %v), want (nil, %v)", got, err, ErrNotFound)
 		}

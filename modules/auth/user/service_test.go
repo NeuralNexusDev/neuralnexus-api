@@ -78,39 +78,39 @@ type usFakeAccountStore struct {
 	deleteLastUserID string
 }
 
-func (f *usFakeAccountStore) AddAccountToDB(a *account.Account) error {
+func (f *usFakeAccountStore) AddAccountToDB(_ context.Context, a *account.Account) error {
 	f.addCalls++
 	f.addLastAccount = a
 	return f.addErr
 }
 
-func (f *usFakeAccountStore) GetAccountByID(userID string) (*account.Account, error) {
+func (f *usFakeAccountStore) GetAccountByID(_ context.Context, userID string) (*account.Account, error) {
 	f.getByIDCalls++
 	f.getByIDLastUserID = userID
 	return f.getByIDAccount, f.getByIDErr
 }
 
-func (f *usFakeAccountStore) GetAccountByUsername(_ string) (*account.Account, error) {
+func (f *usFakeAccountStore) GetAccountByUsername(_ context.Context, _ string) (*account.Account, error) {
 	return nil, account.ErrNotFound
 }
 
-func (f *usFakeAccountStore) GetAccountByEmail(_ string) (*account.Account, error) {
+func (f *usFakeAccountStore) GetAccountByEmail(_ context.Context, _ string) (*account.Account, error) {
 	return nil, account.ErrNotFound
 }
 
-func (f *usFakeAccountStore) ListAccounts(limit, offset int) ([]*account.Account, error) {
+func (f *usFakeAccountStore) ListAccounts(_ context.Context, limit, offset int) ([]*account.Account, error) {
 	f.listCalls++
 	f.listLastLimit, f.listLastOffset = limit, offset
 	return f.listAccounts, f.listErr
 }
 
-func (f *usFakeAccountStore) UpdateAccountInDB(a *account.Account) error {
+func (f *usFakeAccountStore) UpdateAccountInDB(_ context.Context, a *account.Account) error {
 	f.updateCalls++
 	f.updateLastAccount = a
 	return f.updateErr
 }
 
-func (f *usFakeAccountStore) DeleteAccountFromDB(userID string) error {
+func (f *usFakeAccountStore) DeleteAccountFromDB(_ context.Context, userID string) error {
 	f.deleteCalls++
 	f.deleteLastUserID = userID
 	return f.deleteErr
@@ -195,11 +195,11 @@ type usFakeAccountSettingsStore struct {
 	setCalls int
 }
 
-func (f *usFakeAccountSettingsStore) GetAccountSettings(_ string) (*account.AccountSettings, error) {
+func (f *usFakeAccountSettingsStore) GetAccountSettings(_ context.Context, _ string) (*account.AccountSettings, error) {
 	return f.settings, f.getErr
 }
 
-func (f *usFakeAccountSettingsStore) SetPasswordAuthEnabled(_ string, _ bool) error {
+func (f *usFakeAccountSettingsStore) SetPasswordAuthEnabled(_ context.Context, _ string, _ bool) error {
 	f.setCalls++
 	return f.setErr
 }

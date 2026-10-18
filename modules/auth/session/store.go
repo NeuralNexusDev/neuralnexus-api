@@ -3,13 +3,14 @@ package session
 import (
 	"context"
 	"errors"
-	"log"
 	"time"
 
 	"github.com/goccy/go-json"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 )
 
 const sessionKeyPrefix = "session:"
@@ -42,20 +43,20 @@ func NewStore(db *pgxpool.Pool, rdb *redis.Client) Store {
 
 // Store - The session store interface
 type Store interface {
-	AddSessionToDB(session *Session) error
-	GetSessionFromDB(id string) (*Session, error)
-	UpdateSessionInDB(session *Session) error
-	DeleteSessionInDB(id string) error
-	AddSessionToCache(session *Session) error
-	GetSessionFromCache(id string) (*Session, error)
-	DeleteSessionFromCache(id string) error
+	AddSessionToDB(ctx context.Context, session *Session) error
+	GetSessionFromDB(ctx context.Context, id string) (*Session, error)
+	UpdateSessionInDB(ctx context.Context, session *Session) error
+	DeleteSessionInDB(ctx context.Context, id string) error
+	AddSessionToCache(ctx context.Context, session *Session) error
+	GetSessionFromCache(ctx context.Context, id string) (*Session, error)
+	DeleteSessionFromCache(ctx context.Context, id string) error
 }
 
 // AddSessionToDB creates a session and inserts it into the database
-func (s *store) AddSessionToDB(session *Session) error {
-	defer s.ClearExpiredSessions()
+func (s *store) AddSessionToDB(ctx context.Context, session *Session) error {
+	defer s.ClearExpiredSessions(ctx)
 
-	_, err := s.db.Exec(context.Background(),
+	_, err := s.db.Exec(ctx,
 		"INSERT INTO sessions (session_id, user_id, permissions, iat, lua, exp) VALUES ($1, $2, $3, $4, $5, $6)",
 		session.ID, session.UserID, session.Permissions, session.IssuedAt, session.LastUsedAt, session.ExpiresAt,
 	)
@@ -66,11 +67,11 @@ func (s *store) AddSessionToDB(session *Session) error {
 }
 
 // GetSessionFromDB gets a session by ID
-func (s *store) GetSessionFromDB(id string) (*Session, error) {
-	defer s.ClearExpiredSessions()
+func (s *store) GetSessionFromDB(ctx context.Context, id string) (*Session, error) {
+	defer s.ClearExpiredSessions(ctx)
 
 	var session *Session
-	rows, err := s.db.Query(context.Background(), "SELECT * FROM sessions WHERE session_id = $1", id)
+	rows, err := s.db.Query(ctx, "SELECT * FROM sessions WHERE session_id = $1", id)
 	if err != nil {
 		return nil, err
 	}
@@ -86,10 +87,10 @@ func (s *store) GetSessionFromDB(id string) (*Session, error) {
 }
 
 // DeleteSessionInDB deletes a session by ID
-func (s *store) DeleteSessionInDB(id string) error {
-	defer s.ClearExpiredSessions()
+func (s *store) DeleteSessionInDB(ctx context.Context, id string) error {
+	defer s.ClearExpiredSessions(ctx)
 
-	_, err := s.db.Exec(context.Background(), "DELETE FROM sessions WHERE session_id = $1", id)
+	_, err := s.db.Exec(ctx, "DELETE FROM sessions WHERE session_id = $1", id)
 	if err != nil {
 		return err
 	}
@@ -97,10 +98,10 @@ func (s *store) DeleteSessionInDB(id string) error {
 }
 
 // UpdateSessionInDB updates a session
-func (s *store) UpdateSessionInDB(session *Session) error {
-	defer s.ClearExpiredSessions()
+func (s *store) UpdateSessionInDB(ctx context.Context, session *Session) error {
+	defer s.ClearExpiredSessions(ctx)
 
-	_, err := s.db.Exec(context.Background(),
+	_, err := s.db.Exec(ctx,
 		"UPDATE sessions SET user_id = $2, permissions = $3, iat = $4, lua = $5, exp = $6 WHERE session_id = $1",
 		session.ID, session.UserID, session.Permissions, session.IssuedAt, session.LastUsedAt, session.ExpiresAt,
 	)
@@ -112,18 +113,18 @@ func (s *store) UpdateSessionInDB(session *Session) error {
 
 // ClearExpiredSessions clear expired sessions
 // TODO: Add this to interface and handle the error outside of it
-func (s *store) ClearExpiredSessions() {
-	_, err := s.db.Exec(context.Background(), "DELETE FROM sessions WHERE exp < $1 AND exp != 0", time.Now().Unix())
+func (s *store) ClearExpiredSessions(ctx context.Context) {
+	_, err := s.db.Exec(ctx, "DELETE FROM sessions WHERE exp < $1 AND exp != 0", time.Now().Unix())
 	if err != nil {
-		log.Println("Unable to clear expired sessions:")
-		log.Println(err)
+		reqctx.Log(ctx, "Unable to clear expired sessions:")
+		reqctx.Log(ctx, err.Error())
 	}
 }
 
 // -------------- Cache Functions --------------
 
 // AddSessionToCache adds a session to the cache
-func (s *store) AddSessionToCache(session *Session) error {
+func (s *store) AddSessionToCache(ctx context.Context, session *Session) error {
 	stringSession, err := json.Marshal(session)
 	if err != nil {
 		return err
@@ -139,7 +140,7 @@ func (s *store) AddSessionToCache(session *Session) error {
 		}
 	}
 
-	_, err = s.rdb.Set(context.Background(), sessionKeyPrefix+session.ID, stringSession, ttl).Result()
+	_, err = s.rdb.Set(ctx, sessionKeyPrefix+session.ID, stringSession, ttl).Result()
 	if err != nil {
 		return err
 	}
@@ -147,9 +148,9 @@ func (s *store) AddSessionToCache(session *Session) error {
 }
 
 // GetSessionFromCache gets a session from the cache
-func (s *store) GetSessionFromCache(id string) (*Session, error) {
+func (s *store) GetSessionFromCache(ctx context.Context, id string) (*Session, error) {
 	var session Session
-	stringSession, err := s.rdb.Get(context.Background(), sessionKeyPrefix+id).Result()
+	stringSession, err := s.rdb.Get(ctx, sessionKeyPrefix+id).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
 			return nil, ErrNotFound
@@ -165,8 +166,8 @@ func (s *store) GetSessionFromCache(id string) (*Session, error) {
 }
 
 // DeleteSessionFromCache deletes a session from the cache
-func (s *store) DeleteSessionFromCache(id string) error {
-	_, err := s.rdb.Del(context.Background(), sessionKeyPrefix+id).Result()
+func (s *store) DeleteSessionFromCache(ctx context.Context, id string) error {
+	_, err := s.rdb.Del(ctx, sessionKeyPrefix+id).Result()
 	if err != nil {
 		return err
 	}

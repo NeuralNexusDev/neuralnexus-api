@@ -1,11 +1,13 @@
 package ratelimit
 
+import "context"
+
 // Service - Rate limit service interface
 // If there is no session fall back to the request's IP
 type Service interface {
-	GetRateLimit(key string) (int, error)
-	SetRateLimit(key string, limit int) error
-	IncrRateLimit(key string) error
+	GetRateLimit(ctx context.Context, key string) (int, error)
+	SetRateLimit(ctx context.Context, key string, limit int) error
+	IncrRateLimit(ctx context.Context, key string) error
 }
 
 type service struct {
@@ -20,16 +22,16 @@ func NewService(store Store) Service {
 }
 
 // GetRateLimit Get the rate limit by key
-func (s *service) GetRateLimit(key string) (int, error) {
-	return s.store.GetRateLimit(key)
+func (s *service) GetRateLimit(ctx context.Context, key string) (int, error) {
+	return s.store.GetRateLimit(ctx, key)
 }
 
 // SetRateLimit Set the rate limit for a key
-func (s *service) SetRateLimit(key string, limit int) error {
-	return s.store.SetRateLimit(key, limit)
+func (s *service) SetRateLimit(ctx context.Context, key string, limit int) error {
+	return s.store.SetRateLimit(ctx, key, limit)
 }
 
 // IncrRateLimit Increment the rate limit for a key
-func (s *service) IncrRateLimit(key string) error {
-	return s.store.IncrementRateLimit(key)
+func (s *service) IncrRateLimit(ctx context.Context, key string) error {
+	return s.store.IncrementRateLimit(context.WithoutCancel(ctx), key)
 }

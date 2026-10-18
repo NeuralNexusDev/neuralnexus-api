@@ -132,7 +132,7 @@ func ProcessOAuthLogin(ctx context.Context, as account.Service, las Store, ss se
 		if xboxErr != nil {
 			return nil, xboxErr
 		}
-		a, err = resolveOrCreateAccountForMicrosoftUser(as, las, xbox, java)
+		a, err = resolveOrCreateAccountForMicrosoftUser(ctx, as, las, xbox, java)
 		if err != nil {
 			return nil, err
 		}
@@ -151,7 +151,7 @@ func ProcessOAuthLogin(ctx context.Context, as account.Service, las Store, ss se
 		if err != nil {
 			return nil, err
 		}
-		a, err = resolveOrCreateAccountForPlatformUser(as, las, state.Platform, user)
+		a, err = resolveOrCreateAccountForPlatformUser(ctx, as, las, state.Platform, user)
 		if err != nil {
 			return nil, err
 		}
@@ -162,7 +162,7 @@ func ProcessOAuthLogin(ctx context.Context, as account.Service, las Store, ss se
 		return nil, err
 	}
 
-	if err = ss.AddSession(session); err != nil {
+	if err = ss.AddSession(ctx, session); err != nil {
 		return nil, err
 	}
 	return session, nil
@@ -187,13 +187,13 @@ var ErrPlatformLoginDisabled = errors.New("this platform account is linked but d
 // winner's linked account/account are re-fetched and returned instead of
 // treating it as a hard failure; any other error is returned as-is (wrapped
 // together with a cleanup failure, if the cleanup itself also failed).
-func resolveOrCreateAccountForPlatformUser(as account.Service, las Store, platform Platform, user PlatformData) (*account.Account, error) {
+func resolveOrCreateAccountForPlatformUser(ctx context.Context, as account.Service, las Store, platform Platform, user PlatformData) (*account.Account, error) {
 	la, err := las.GetLinkedAccountByPlatformID(platform, user.GetID())
 	if err == nil {
 		if !(la.Verified && la.LoginEnabled) {
 			return nil, ErrPlatformLoginDisabled
 		}
-		return as.GetAccountByID(la.UserID)
+		return as.GetAccountByID(ctx, la.UserID)
 	}
 	if err != account.ErrNotFound {
 		return nil, err
@@ -203,7 +203,7 @@ func resolveOrCreateAccountForPlatformUser(as account.Service, las Store, platfo
 	if err != nil {
 		return nil, err
 	}
-	if err := as.AddAccount(a); err != nil {
+	if err := as.AddAccount(ctx, a); err != nil {
 		return nil, err
 	}
 
@@ -211,7 +211,7 @@ func resolveOrCreateAccountForPlatformUser(as account.Service, las Store, platfo
 	if err := las.AddLinkedAccountToDB(la); err != nil {
 		// Whatever went wrong, the account created above is now orphaned -
 		// clean it up before deciding how to handle err.
-		if delErr := as.DeleteAccount(a.UserID); delErr != nil {
+		if delErr := as.DeleteAccount(ctx, a.UserID); delErr != nil {
 			log.Println(logLinkCleanupFailed, err)
 			return nil, delErr
 		}
@@ -223,7 +223,7 @@ func resolveOrCreateAccountForPlatformUser(as account.Service, las Store, platfo
 		if err != nil {
 			return nil, err
 		}
-		a, err = as.GetAccountByID(la.UserID)
+		a, err = as.GetAccountByID(ctx, la.UserID)
 		if err != nil {
 			return nil, err
 		}
@@ -336,7 +336,7 @@ var ErrConflictingMicrosoftIdentities = errors.New("this Microsoft account's Xbo
 // (always present) and Java Edition profile (present only if owned).
 // Whichever identity/identities aren't linked yet get linked to the
 // resolved (or freshly created) account.
-func resolveOrCreateAccountForMicrosoftUser(as account.Service, las Store, xbox *XboxLiveData, java *MinecraftData) (*account.Account, error) {
+func resolveOrCreateAccountForMicrosoftUser(ctx context.Context, as account.Service, las Store, xbox *XboxLiveData, java *MinecraftData) (*account.Account, error) {
 	xboxLA, err := las.GetLinkedAccountByPlatformID(PlatformXboxLive, xbox.GetID())
 	if err != nil {
 		if err != account.ErrNotFound {
@@ -392,24 +392,24 @@ func resolveOrCreateAccountForMicrosoftUser(as account.Service, las Store, xbox 
 		if err != nil {
 			return nil, err
 		}
-		if err := as.AddAccount(a); err != nil {
+		if err := as.AddAccount(ctx, a); err != nil {
 			return nil, err
 		}
 	} else {
-		a, err = as.GetAccountByID(accountID)
+		a, err = as.GetAccountByID(ctx, accountID)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	if xboxAccountID == "" {
-		a, isNewAccount, err = ensureMicrosoftIdentityLinked(as, las, a, isNewAccount, PlatformXboxLive, xbox)
+		a, isNewAccount, err = ensureMicrosoftIdentityLinked(ctx, as, las, a, isNewAccount, PlatformXboxLive, xbox)
 		if err != nil {
 			return nil, err
 		}
 	}
 	if java != nil && javaAccountID == "" {
-		a, _, err = ensureMicrosoftIdentityLinked(as, las, a, isNewAccount, PlatformMinecraft, java)
+		a, _, err = ensureMicrosoftIdentityLinked(ctx, as, las, a, isNewAccount, PlatformMinecraft, java)
 		if err != nil {
 			return nil, err
 		}
@@ -422,7 +422,7 @@ func resolveOrCreateAccountForMicrosoftUser(as account.Service, las Store, xbox 
 // isNewAccount marks a as a bare placeholder with nothing else linked to it
 // yet, the only state where it's safe to delete on a lost race; otherwise a
 // lost race surfaces as a conflict for the caller to retry.
-func ensureMicrosoftIdentityLinked(as account.Service, las Store, a *account.Account, isNewAccount bool, platform Platform, user PlatformData) (*account.Account, bool, error) {
+func ensureMicrosoftIdentityLinked(ctx context.Context, as account.Service, las Store, a *account.Account, isNewAccount bool, platform Platform, user PlatformData) (*account.Account, bool, error) {
 	la := NewLinkedAccount(a.UserID, platform, user.GetUsername(), user.GetID(), user)
 	err := las.AddLinkedAccountToDB(la)
 	if err == nil {
@@ -430,7 +430,7 @@ func ensureMicrosoftIdentityLinked(as account.Service, las Store, a *account.Acc
 	}
 	if err != ErrAlreadyLinked {
 		if isNewAccount {
-			if delErr := as.DeleteAccount(a.UserID); delErr != nil {
+			if delErr := as.DeleteAccount(ctx, a.UserID); delErr != nil {
 				log.Println(logLinkCleanupFailed, err)
 				return nil, false, delErr
 			}
@@ -443,7 +443,7 @@ func ensureMicrosoftIdentityLinked(as account.Service, las Store, a *account.Acc
 	actualOwnerLA, lookupErr := las.GetLinkedAccountByPlatformID(platform, user.GetID())
 	if lookupErr != nil && lookupErr != account.ErrNotFound {
 		if isNewAccount {
-			if delErr := as.DeleteAccount(a.UserID); delErr != nil {
+			if delErr := as.DeleteAccount(ctx, a.UserID); delErr != nil {
 				log.Println(logLinkCleanupFailed, lookupErr)
 				return nil, false, delErr
 			}
@@ -461,11 +461,11 @@ func ensureMicrosoftIdentityLinked(as account.Service, las Store, a *account.Acc
 		return nil, false, ErrConflictingMicrosoftIdentities
 	}
 
-	if delErr := as.DeleteAccount(a.UserID); delErr != nil {
+	if delErr := as.DeleteAccount(ctx, a.UserID); delErr != nil {
 		log.Println(logLinkCleanupFailed, err)
 		return nil, false, delErr
 	}
-	winner, getErr := as.GetAccountByID(actualOwnerID)
+	winner, getErr := as.GetAccountByID(ctx, actualOwnerID)
 	if getErr != nil {
 		return nil, false, getErr
 	}

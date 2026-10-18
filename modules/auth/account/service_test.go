@@ -9,10 +9,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
 type acFakeAccountStore struct {
+	getByIDCtx        context.Context
 	getByIDAccount    *Account
 	getByIDErr        error
 	getByIDCalls      int
@@ -30,28 +32,31 @@ type acFakeAccountStore struct {
 	deleteCalls       int
 }
 
-func (f *acFakeAccountStore) AddAccountToDB(_ *Account) error {
+func (f *acFakeAccountStore) AddAccountToDB(_ context.Context, _ *Account) error {
 	f.addCalls++
 	return f.addErr
 }
-func (f *acFakeAccountStore) GetAccountByID(_ string) (*Account, error) {
+func (f *acFakeAccountStore) GetAccountByID(ctx context.Context, _ string) (*Account, error) {
+	f.getByIDCtx = ctx
 	f.getByIDCalls++
 	return f.getByIDAccount, f.getByIDErr
 }
-func (f *acFakeAccountStore) GetAccountByUsername(_ string) (*Account, error) {
+func (f *acFakeAccountStore) GetAccountByUsername(_ context.Context, _ string) (*Account, error) {
 	f.getByUserCalls++
 	return f.getByUserAccount, f.getByUserErr
 }
-func (f *acFakeAccountStore) GetAccountByEmail(_ string) (*Account, error) {
+func (f *acFakeAccountStore) GetAccountByEmail(_ context.Context, _ string) (*Account, error) {
 	f.getByEmailCalls++
 	return f.getByEmailAccount, f.getByEmailErr
 }
-func (f *acFakeAccountStore) ListAccounts(_, _ int) ([]*Account, error) { return nil, nil }
-func (f *acFakeAccountStore) UpdateAccountInDB(_ *Account) error {
+func (f *acFakeAccountStore) ListAccounts(_ context.Context, _, _ int) ([]*Account, error) {
+	return nil, nil
+}
+func (f *acFakeAccountStore) UpdateAccountInDB(_ context.Context, _ *Account) error {
 	f.updateCalls++
 	return f.updateErr
 }
-func (f *acFakeAccountStore) DeleteAccountFromDB(_ string) error {
+func (f *acFakeAccountStore) DeleteAccountFromDB(_ context.Context, _ string) error {
 	f.deleteCalls++
 	return f.deleteErr
 }
@@ -62,11 +67,11 @@ type acFakeAccountSettingsStore struct {
 	calls    int
 }
 
-func (f *acFakeAccountSettingsStore) GetAccountSettings(_ string) (*AccountSettings, error) {
+func (f *acFakeAccountSettingsStore) GetAccountSettings(_ context.Context, _ string) (*AccountSettings, error) {
 	f.calls++
 	return f.settings, f.err
 }
-func (f *acFakeAccountSettingsStore) SetPasswordAuthEnabled(_ string, _ bool) error {
+func (f *acFakeAccountSettingsStore) SetPasswordAuthEnabled(_ context.Context, _ string, _ bool) error {
 	return errors.New("acFakeAccountSettingsStore: SetPasswordAuthEnabled not implemented")
 }
 
@@ -76,7 +81,7 @@ func TestAC01NewService(t *testing.T) {
 		ass := &acFakeAccountSettingsStore{settings: &AccountSettings{UserID: "u1", PasswordAuthEnabled: true}}
 		svc := NewService(as, ass, nil)
 
-		got, err := svc.GetAccountByID("u1")
+		got, err := svc.GetAccountByID(context.Background(), "u1")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -87,7 +92,7 @@ func TestAC01NewService(t *testing.T) {
 			t.Errorf("expected the fake Store to be called once, got %d", as.getByIDCalls)
 		}
 
-		enabled, err := svc.IsPasswordAuthEnabled("u1")
+		enabled, err := svc.IsPasswordAuthEnabled(context.Background(), "u1")
 		if err != nil || !enabled {
 			t.Errorf("IsPasswordAuthEnabled() = (%v, %v), want (true, nil) from the SettingsStore passed to NewService", enabled, err)
 		}
@@ -103,7 +108,7 @@ func TestAC02to03GetAccountByID(t *testing.T) {
 		as := &acFakeAccountStore{getByIDAccount: want}
 		svc := NewService(as, &acFakeAccountSettingsStore{}, nil)
 
-		got, err := svc.GetAccountByID("u1")
+		got, err := svc.GetAccountByID(context.Background(), "u1")
 		if err != nil || got != want {
 			t.Errorf("GetAccountByID() = (%v, %v), want (%v, nil)", got, err, want)
 		}
@@ -113,7 +118,7 @@ func TestAC02to03GetAccountByID(t *testing.T) {
 		as := &acFakeAccountStore{getByIDErr: ErrNotFound}
 		svc := NewService(as, &acFakeAccountSettingsStore{}, nil)
 
-		_, err := svc.GetAccountByID("u1")
+		_, err := svc.GetAccountByID(context.Background(), "u1")
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("GetAccountByID() err = %v, want ErrNotFound", err)
 		}
@@ -126,7 +131,7 @@ func TestAC04to05GetAccountByUsername(t *testing.T) {
 		as := &acFakeAccountStore{getByUserAccount: want}
 		svc := NewService(as, &acFakeAccountSettingsStore{}, nil)
 
-		got, err := svc.GetAccountByUsername("alice")
+		got, err := svc.GetAccountByUsername(context.Background(), "alice")
 		if err != nil || got != want {
 			t.Errorf("GetAccountByUsername() = (%v, %v), want (%v, nil)", got, err, want)
 		}
@@ -137,7 +142,7 @@ func TestAC04to05GetAccountByUsername(t *testing.T) {
 		as := &acFakeAccountStore{getByUserErr: wantErr}
 		svc := NewService(as, &acFakeAccountSettingsStore{}, nil)
 
-		_, err := svc.GetAccountByUsername("alice")
+		_, err := svc.GetAccountByUsername(context.Background(), "alice")
 		if !errors.Is(err, wantErr) {
 			t.Errorf("GetAccountByUsername() err = %v, want %v", err, wantErr)
 		}
@@ -150,7 +155,7 @@ func TestAC06to07GetAccountByEmail(t *testing.T) {
 		as := &acFakeAccountStore{getByEmailAccount: want}
 		svc := NewService(as, &acFakeAccountSettingsStore{}, nil)
 
-		got, err := svc.GetAccountByEmail("a@b.com")
+		got, err := svc.GetAccountByEmail(context.Background(), "a@b.com")
 		if err != nil || got != want {
 			t.Errorf("GetAccountByEmail() = (%v, %v), want (%v, nil)", got, err, want)
 		}
@@ -161,7 +166,7 @@ func TestAC06to07GetAccountByEmail(t *testing.T) {
 		as := &acFakeAccountStore{getByEmailErr: wantErr}
 		svc := NewService(as, &acFakeAccountSettingsStore{}, nil)
 
-		_, err := svc.GetAccountByEmail("a@b.com")
+		_, err := svc.GetAccountByEmail(context.Background(), "a@b.com")
 		if !errors.Is(err, wantErr) {
 			t.Errorf("GetAccountByEmail() err = %v, want %v", err, wantErr)
 		}
@@ -173,7 +178,7 @@ func TestAC08to09AddAccount(t *testing.T) {
 		as := &acFakeAccountStore{}
 		svc := NewService(as, &acFakeAccountSettingsStore{}, nil)
 
-		if err := svc.AddAccount(&Account{UserID: "u1"}); err != nil {
+		if err := svc.AddAccount(context.Background(), &Account{UserID: "u1"}); err != nil {
 			t.Errorf("AddAccount() = %v, want nil", err)
 		}
 		if as.addCalls != 1 {
@@ -185,7 +190,7 @@ func TestAC08to09AddAccount(t *testing.T) {
 		as := &acFakeAccountStore{addErr: ErrUsernameAlreadyExists}
 		svc := NewService(as, &acFakeAccountSettingsStore{}, nil)
 
-		err := svc.AddAccount(&Account{UserID: "u1"})
+		err := svc.AddAccount(context.Background(), &Account{UserID: "u1"})
 		if !errors.Is(err, ErrUsernameAlreadyExists) {
 			t.Errorf("AddAccount() err = %v, want ErrUsernameAlreadyExists", err)
 		}
@@ -197,7 +202,7 @@ func TestAC10to11UpdateAccount(t *testing.T) {
 		as := &acFakeAccountStore{}
 		svc := NewService(as, &acFakeAccountSettingsStore{}, nil)
 
-		if err := svc.UpdateAccount(&Account{UserID: "u1"}); err != nil {
+		if err := svc.UpdateAccount(context.Background(), &Account{UserID: "u1"}); err != nil {
 			t.Errorf("UpdateAccount() = %v, want nil", err)
 		}
 		if as.updateCalls != 1 {
@@ -210,7 +215,7 @@ func TestAC10to11UpdateAccount(t *testing.T) {
 		as := &acFakeAccountStore{updateErr: wantErr}
 		svc := NewService(as, &acFakeAccountSettingsStore{}, nil)
 
-		err := svc.UpdateAccount(&Account{UserID: "u1"})
+		err := svc.UpdateAccount(context.Background(), &Account{UserID: "u1"})
 		if !errors.Is(err, wantErr) {
 			t.Errorf("UpdateAccount() err = %v, want %v", err, wantErr)
 		}
@@ -222,7 +227,7 @@ func TestAC12to13DeleteAccount(t *testing.T) {
 		as := &acFakeAccountStore{}
 		svc := NewService(as, &acFakeAccountSettingsStore{}, nil)
 
-		if err := svc.DeleteAccount("u1"); err != nil {
+		if err := svc.DeleteAccount(context.Background(), "u1"); err != nil {
 			t.Errorf("DeleteAccount() = %v, want nil", err)
 		}
 		if as.deleteCalls != 1 {
@@ -235,7 +240,7 @@ func TestAC12to13DeleteAccount(t *testing.T) {
 		as := &acFakeAccountStore{deleteErr: wantErr}
 		svc := NewService(as, &acFakeAccountSettingsStore{}, nil)
 
-		err := svc.DeleteAccount("u1")
+		err := svc.DeleteAccount(context.Background(), "u1")
 		if !errors.Is(err, wantErr) {
 			t.Errorf("DeleteAccount() err = %v, want %v", err, wantErr)
 		}
@@ -247,7 +252,7 @@ func TestAC14to16IsPasswordAuthEnabled(t *testing.T) {
 		ass := &acFakeAccountSettingsStore{settings: &AccountSettings{UserID: "u1", PasswordAuthEnabled: true}}
 		svc := NewService(&acFakeAccountStore{}, ass, nil)
 
-		got, err := svc.IsPasswordAuthEnabled("u1")
+		got, err := svc.IsPasswordAuthEnabled(context.Background(), "u1")
 		if err != nil || got != true {
 			t.Errorf("IsPasswordAuthEnabled() = (%v, %v), want (true, nil)", got, err)
 		}
@@ -257,7 +262,7 @@ func TestAC14to16IsPasswordAuthEnabled(t *testing.T) {
 		ass := &acFakeAccountSettingsStore{settings: &AccountSettings{UserID: "u1", PasswordAuthEnabled: false}}
 		svc := NewService(&acFakeAccountStore{}, ass, nil)
 
-		got, err := svc.IsPasswordAuthEnabled("u1")
+		got, err := svc.IsPasswordAuthEnabled(context.Background(), "u1")
 		if err != nil || got != false {
 			t.Errorf("IsPasswordAuthEnabled() = (%v, %v), want (false, nil)", got, err)
 		}
@@ -268,7 +273,7 @@ func TestAC14to16IsPasswordAuthEnabled(t *testing.T) {
 		ass := &acFakeAccountSettingsStore{err: wantErr}
 		svc := NewService(&acFakeAccountStore{}, ass, nil)
 
-		got, err := svc.IsPasswordAuthEnabled("u1")
+		got, err := svc.IsPasswordAuthEnabled(context.Background(), "u1")
 		if got != false || !errors.Is(err, wantErr) {
 			t.Errorf("IsPasswordAuthEnabled() = (%v, %v), want (false, %v)", got, err, wantErr)
 		}
@@ -387,6 +392,20 @@ func TestAC17to21NewSession(t *testing.T) {
 
 		if s != nil || !errors.Is(err, wantErr) {
 			t.Errorf("NewSession() = (%v, %v), want (nil, %v)", s, err, wantErr)
+		}
+	})
+}
+
+func TestAC23RequestContextReachesStore(t *testing.T) {
+	t.Run("AC-23_RequestContextReachesStore", func(t *testing.T) {
+		as := &acFakeAccountStore{getByIDAccount: &Account{UserID: "u1"}}
+		ctx := context.WithValue(context.Background(), reqctx.UserIDKey, "u1")
+
+		if _, err := NewService(as, &acFakeAccountSettingsStore{}, testutil.DefaultRoleStore()).GetAccountByID(ctx, "u1"); err != nil {
+			t.Fatalf("GetAccountByID() error = %v", err)
+		}
+		if got := as.getByIDCtx.Value(reqctx.UserIDKey); got != "u1" {
+			t.Errorf("store context user ID = %v, want %q", got, "u1")
 		}
 	})
 }

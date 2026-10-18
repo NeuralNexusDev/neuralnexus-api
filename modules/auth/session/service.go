@@ -1,11 +1,14 @@
 package session
 
 import (
+	"context"
 	"errors"
 	"github.com/golang-jwt/jwt/v5"
 	"log"
 	"os"
 	"time"
+
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 )
 
 //goland:noinspection GoSnakeCaseUsage
@@ -39,12 +42,12 @@ func init() {
 
 // Service - The session service interface
 type Service interface {
-	AddSession(session *Session) error
-	GetSession(id string) (*Session, error)
-	UpdateSession(session *Session) error
-	DeleteSession(id string) error
+	AddSession(ctx context.Context, session *Session) error
+	GetSession(ctx context.Context, id string) (*Session, error)
+	UpdateSession(ctx context.Context, session *Session) error
+	DeleteSession(ctx context.Context, id string) error
 	CreateJWT(*Session) (string, error)
-	ReadJWT(token string) (*Session, error)
+	ReadJWT(ctx context.Context, token string) (*Session, error)
 }
 
 // service - The session service implementation
@@ -60,53 +63,55 @@ func NewService(store Store) Service {
 }
 
 // AddSession adds a session to the database and cache
-func (s *service) AddSession(session *Session) error {
-	err := s.store.AddSessionToDB(session)
+func (s *service) AddSession(ctx context.Context, session *Session) error {
+	ctx = context.WithoutCancel(ctx)
+	err := s.store.AddSessionToDB(ctx, session)
 	if err != nil {
 		return err
 	}
-	if err := s.store.AddSessionToCache(session); err != nil {
-		log.Println("failed to add session to cache:\n\t", err)
+	if err := s.store.AddSessionToCache(ctx, session); err != nil {
+		reqctx.Log(ctx, "failed to add session to cache:\n\t", err.Error())
 	}
 	return nil
 }
 
 // GetSession gets a session by ID
-func (s *service) GetSession(id string) (*Session, error) {
-	session, err := s.store.GetSessionFromCache(id)
+func (s *service) GetSession(ctx context.Context, id string) (*Session, error) {
+	session, err := s.store.GetSessionFromCache(ctx, id)
 	if err != nil {
-		session, err = s.store.GetSessionFromDB(id)
+		session, err = s.store.GetSessionFromDB(ctx, id)
 		if err != nil {
 			return nil, err
 		}
-		if err := s.store.AddSessionToCache(session); err != nil {
-			log.Println("failed to re-populate session cache after a cache miss:\n\t", err)
+		if err := s.store.AddSessionToCache(ctx, session); err != nil {
+			reqctx.Log(ctx, "failed to re-populate session cache after a cache miss:\n\t", err.Error())
 		}
 	}
 	return session, nil
 }
 
 // UpdateSession updates a session
-func (s *service) UpdateSession(session *Session) error {
-	err := s.store.UpdateSessionInDB(session)
+func (s *service) UpdateSession(ctx context.Context, session *Session) error {
+	ctx = context.WithoutCancel(ctx)
+	err := s.store.UpdateSessionInDB(ctx, session)
 	if err != nil {
 		return err
 	}
-	if err := s.store.AddSessionToCache(session); err != nil {
-		log.Println("failed to update session in cache:\n\t", err)
+	if err := s.store.AddSessionToCache(ctx, session); err != nil {
+		reqctx.Log(ctx, "failed to update session in cache:\n\t", err.Error())
 	}
 	return nil
 }
 
 // DeleteSession deletes a session by ID
-func (s *service) DeleteSession(id string) error {
-	err := s.store.DeleteSessionInDB(id)
+func (s *service) DeleteSession(ctx context.Context, id string) error {
+	err := s.store.DeleteSessionInDB(ctx, id)
 	if err != nil {
 		return err
 	}
 	// Unlike AddSessionToCache, this can't be fail-open: a stale cache entry would keep a revoked session valid until it expires.
-	if err := s.store.DeleteSessionFromCache(id); err != nil {
-		log.Println("Session deleted from DB but failed to evict from cache:\n\t", err)
+	if err := s.store.DeleteSessionFromCache(ctx, id); err != nil {
+		reqctx.Log(ctx, "Session deleted from DB but failed to evict from cache:\n\t", err.Error())
 		return err
 	}
 	return nil
@@ -136,7 +141,7 @@ func (s *service) CreateJWT(session *Session) (string, error) {
 }
 
 // ReadJWT reads a JWT and returns the session
-func (s *service) ReadJWT(tokenStr string) (*Session, error) {
+func (s *service) ReadJWT(ctx context.Context, tokenStr string) (*Session, error) {
 	claims := &SessionClaims{}
 	_, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
 		return JWT_SECRET, nil
@@ -160,14 +165,14 @@ func (s *service) ReadJWT(tokenStr string) (*Session, error) {
 			}
 		}
 		if !valid {
-			log.Println(ErrInvalidAudience, aud)
+			reqctx.Log(ctx, ErrInvalidAudience.Error(), aud)
 			return nil, ErrInvalidAudience
 		}
 	}
 
 	// The session must still exist in the store; a deleted/logged-out
 	// session must not be revivable just because its JWT hasn't expired yet.
-	session, err := s.GetSession(claims.ID)
+	session, err := s.GetSession(ctx, claims.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +181,7 @@ func (s *service) ReadJWT(tokenStr string) (*Session, error) {
 	}
 
 	session.LastUsedAt = time.Now().Unix()
-	err = s.UpdateSession(session)
+	err = s.UpdateSession(ctx, session)
 	if err != nil {
 		return nil, err
 	}

@@ -203,7 +203,7 @@ func GetSteamUser(steamID64 string) (*SteamData, error) {
 // ProcessSteamLogin resolves or creates an account for the given,
 // already-verified Steam identity and returns a new session for it.
 func ProcessSteamLogin(ctx context.Context, as account.Service, las Store, ss session.Service, user *SteamData) (*session.Session, error) {
-	a, err := resolveOrCreateAccountForPlatformUser(as, las, PlatformSteam, user)
+	a, err := resolveOrCreateAccountForPlatformUser(ctx, as, las, PlatformSteam, user)
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +211,7 @@ func ProcessSteamLogin(ctx context.Context, as account.Service, las Store, ss se
 	if err != nil {
 		return nil, err
 	}
-	if err = ss.AddSession(session); err != nil {
+	if err = ss.AddSession(ctx, session); err != nil {
 		return nil, err
 	}
 	return session, nil

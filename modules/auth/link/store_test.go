@@ -148,7 +148,7 @@ func (s stLiveSet) OAuthToken() OAuthTokenStore { return NewOAuthTokenStore(s.db
 
 func stSeedBareAccount(t *testing.T, as account.Store, userID string) {
 	t.Helper()
-	if err := as.AddAccountToDB(&account.Account{UserID: userID, Username: "sttest-" + userID}); err != nil {
+	if err := as.AddAccountToDB(context.Background(), &account.Account{UserID: userID, Username: "sttest-" + userID}); err != nil {
 		t.Fatalf("failed to seed account %s: %v", userID, err)
 	}
 }
@@ -159,7 +159,7 @@ func stSeedPasswordAccount(t *testing.T, as account.Store, userID string) *accou
 	if err := a.HashPassword("sttest-password"); err != nil {
 		t.Fatalf("HashPassword returned error: %v", err)
 	}
-	if err := as.AddAccountToDB(a); err != nil {
+	if err := as.AddAccountToDB(context.Background(), a); err != nil {
 		t.Fatalf("failed to seed passworded account %s: %v", userID, err)
 	}
 	return a
@@ -334,7 +334,7 @@ func TestLS59DeleteLinkedAccountBlockedWhenPasswordAuthDisabled(t *testing.T) {
 	t.Run("LS-59_BlockedWhenPasswordAuthDisabled", func(t *testing.T) {
 		a := stSeedPasswordAccount(t, as, "910000000000000015")
 		stSeedLink(t, las, a.UserID, PlatformDiscord, "sttest-discord-15", true, true)
-		if err := ass.SetPasswordAuthEnabled(a.UserID, false); err != nil {
+		if err := ass.SetPasswordAuthEnabled(context.Background(), a.UserID, false); err != nil {
 			t.Fatalf("expected disabling password auth to succeed with a linked account present, got: %v", err)
 		}
 
@@ -464,7 +464,7 @@ func TestLS65SetLinkedAccountLoginEnabledBlockedWhenPasswordAuthDisabled(t *test
 	t.Run("LS-65_BlockedWhenPasswordAuthDisabled", func(t *testing.T) {
 		a := stSeedPasswordAccount(t, as, "910000000000000020")
 		stSeedLink(t, las, a.UserID, PlatformDiscord, "sttest-discord-20", true, true)
-		if err := ass.SetPasswordAuthEnabled(a.UserID, false); err != nil {
+		if err := ass.SetPasswordAuthEnabled(context.Background(), a.UserID, false); err != nil {
 			t.Fatalf("expected disabling password auth to succeed, got: %v", err)
 		}
 
@@ -597,13 +597,13 @@ func TestST69SetPasswordAuthEnabledEnableAllowedWithPassword(t *testing.T) {
 		a := stSeedPasswordAccount(t, as, "910000000000000023")
 		stSeedLink(t, las, a.UserID, PlatformDiscord, "sttest-discord-23", true, true)
 
-		if err := ass.SetPasswordAuthEnabled(a.UserID, false); err != nil {
+		if err := ass.SetPasswordAuthEnabled(context.Background(), a.UserID, false); err != nil {
 			t.Fatalf("expected the disable to succeed, got: %v", err)
 		}
-		if err := ass.SetPasswordAuthEnabled(a.UserID, true); err != nil {
+		if err := ass.SetPasswordAuthEnabled(context.Background(), a.UserID, true); err != nil {
 			t.Fatalf("expected the re-enable to succeed, got: %v", err)
 		}
-		settings, err := ass.GetAccountSettings(a.UserID)
+		settings, err := ass.GetAccountSettings(context.Background(), a.UserID)
 		if err != nil {
 			t.Fatalf("GetAccountSettings returned error: %v", err)
 		}
@@ -619,10 +619,10 @@ func TestST71SetPasswordAuthEnabledDisableAllowedWithLinkedAccount(t *testing.T)
 		a := stSeedPasswordAccount(t, as, "910000000000000025")
 		stSeedLink(t, las, a.UserID, PlatformDiscord, "sttest-discord-25", true, true)
 
-		if err := ass.SetPasswordAuthEnabled(a.UserID, false); err != nil {
+		if err := ass.SetPasswordAuthEnabled(context.Background(), a.UserID, false); err != nil {
 			t.Fatalf("expected the disable to succeed, got: %v", err)
 		}
-		settings, err := ass.GetAccountSettings(a.UserID)
+		settings, err := ass.GetAccountSettings(context.Background(), a.UserID)
 		if err != nil {
 			t.Fatalf("GetAccountSettings returned error: %v", err)
 		}
@@ -644,7 +644,10 @@ func TestST72SetPasswordAuthEnabledConcurrentWithDeleteLinkedAccountNeverBothSuc
 			var wg sync.WaitGroup
 			results := make([]error, 2)
 			wg.Add(2)
-			go func() { defer wg.Done(); results[0] = ass.SetPasswordAuthEnabled(a.UserID, false) }()
+			go func() {
+				defer wg.Done()
+				results[0] = ass.SetPasswordAuthEnabled(context.Background(), a.UserID, false)
+			}()
 			go func() { defer wg.Done(); results[1] = las.DeleteLinkedAccount(a.UserID, PlatformDiscord) }()
 			wg.Wait()
 
@@ -662,7 +665,7 @@ func TestST72SetPasswordAuthEnabledConcurrentWithDeleteLinkedAccountNeverBothSuc
 				t.Fatalf("trial %d: expected exactly 1 of 2 concurrent operations to succeed, got %d (results: %v)", i, successes, results)
 			}
 
-			settings, err := ass.GetAccountSettings(userID)
+			settings, err := ass.GetAccountSettings(context.Background(), userID)
 			if err != nil {
 				t.Fatalf("trial %d: GetAccountSettings returned error: %v", i, err)
 			}
@@ -689,7 +692,10 @@ func TestST73SetPasswordAuthEnabledConcurrentWithSetLinkedAccountLoginEnabledNev
 			var wg sync.WaitGroup
 			results := make([]error, 2)
 			wg.Add(2)
-			go func() { defer wg.Done(); results[0] = ass.SetPasswordAuthEnabled(a.UserID, false) }()
+			go func() {
+				defer wg.Done()
+				results[0] = ass.SetPasswordAuthEnabled(context.Background(), a.UserID, false)
+			}()
 			go func() {
 				defer wg.Done()
 				results[1] = las.SetLinkedAccountLoginEnabled(a.UserID, PlatformDiscord, false)
@@ -710,7 +716,7 @@ func TestST73SetPasswordAuthEnabledConcurrentWithSetLinkedAccountLoginEnabledNev
 				t.Fatalf("trial %d: expected exactly 1 of 2 concurrent operations to succeed, got %d (results: %v)", i, successes, results)
 			}
 
-			settings, err := ass.GetAccountSettings(userID)
+			settings, err := ass.GetAccountSettings(context.Background(), userID)
 			if err != nil {
 				t.Fatalf("trial %d: GetAccountSettings returned error: %v", i, err)
 			}
