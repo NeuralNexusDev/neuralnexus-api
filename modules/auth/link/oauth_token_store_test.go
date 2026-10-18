@@ -1,10 +1,10 @@
-package linking
+package link
 
 import (
 	"errors"
 	"testing"
 
-	authaccount "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 )
 
 func TestOT43AddOAuthTokenToDB(t *testing.T) {
@@ -44,8 +44,8 @@ func TestOT79GetOAuthTokenByUserIDNotFound(t *testing.T) {
 
 	t.Run("OT-79_GetOAuthTokenByUserIDNotFound", func(t *testing.T) {
 		got, err := s.OAuthToken().GetOAuthTokenByUserID("910000000000000104", PlatformDiscord)
-		if got != nil || !errors.Is(err, authaccount.ErrNotFound) {
-			t.Errorf("GetOAuthTokenByUserID() = (%v, %v), want (nil, %v)", got, err, authaccount.ErrNotFound)
+		if got != nil || !errors.Is(err, account.ErrNotFound) {
+			t.Errorf("GetOAuthTokenByUserID() = (%v, %v), want (nil, %v)", got, err, account.ErrNotFound)
 		}
 	})
 }

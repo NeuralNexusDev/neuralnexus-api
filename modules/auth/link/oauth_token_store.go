@@ -1,4 +1,4 @@
-package linking
+package link
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	authaccount "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 )
 
 // NewOAuthTokenStore - Create a new OAuth token store
@@ -64,7 +64,7 @@ func (s *store) GetOAuthTokenByUserID(userID string, platform Platform) (*OAuthT
 	token, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[OAuthToken])
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, authaccount.ErrNotFound
+			return nil, account.ErrNotFound
 		}
 		return nil, err
 	}

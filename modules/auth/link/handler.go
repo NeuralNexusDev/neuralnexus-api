@@ -1,4 +1,4 @@
-package linking
+package link
 
 import (
 	"encoding/base64"
@@ -8,9 +8,9 @@ import (
 	"net/url"
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
-	authaccount "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
-	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
-	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"github.com/goccy/go-json"
 )
@@ -44,12 +44,12 @@ const (
 )
 
 // OAuthHandler handles the OAuth route
-func OAuthHandler(as authaccount.AccountService, las LinkAccountStore, ss authsession.SessionService) http.HandlerFunc {
+func OAuthHandler(as account.AccountService, las LinkAccountStore, ss session.SessionService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		code := r.URL.Query().Get("code")
 		if code == "" {
 			log.Println("No code provided")
-			redirectBadRequest(w, r, authsession.NN_SITE_URL, msgInvalidRequest)
+			redirectBadRequest(w, r, session.NN_SITE_URL, msgInvalidRequest)
 			return
 		}
 
@@ -61,7 +61,7 @@ func OAuthHandler(as authaccount.AccountService, las LinkAccountStore, ss authse
 			return
 		}
 
-		var session *authsession.Session
+		var session *session.Session
 		var err error
 		switch state.Mode {
 		case ModeLogin:
@@ -92,7 +92,7 @@ func OAuthHandler(as authaccount.AccountService, las LinkAccountStore, ss authse
 			return
 		}
 
-		if err := authaccount.SetSessionCookie(ss, w, session); err != nil {
+		if err := account.SetSessionCookie(ss, w, session); err != nil {
 			log.Println(logFailedToCreateJWT, err)
 			redirectInternalServerError(w, r, state.RedirectURI, msgAuthenticationFailed)
 			return
@@ -102,7 +102,7 @@ func OAuthHandler(as authaccount.AccountService, las LinkAccountStore, ss authse
 }
 
 // OpenIDHandler handles the Steam OpenID 2.0 login/link callback.
-func OpenIDHandler(as authaccount.AccountService, las LinkAccountStore, ss authsession.SessionService) http.HandlerFunc {
+func OpenIDHandler(as account.AccountService, las LinkAccountStore, ss session.SessionService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		state, ok := decodeAndValidateState(w, r)
 		if !ok {
@@ -138,7 +138,7 @@ func OpenIDHandler(as authaccount.AccountService, las LinkAccountStore, ss auths
 			return
 		}
 
-		var session *authsession.Session
+		var session *session.Session
 		switch state.Mode {
 		case ModeLogin:
 			session, err = ProcessSteamLogin(as, las, ss, user)
@@ -162,7 +162,7 @@ func OpenIDHandler(as authaccount.AccountService, las LinkAccountStore, ss auths
 			return
 		}
 
-		if err := authaccount.SetSessionCookie(ss, w, session); err != nil {
+		if err := account.SetSessionCookie(ss, w, session); err != nil {
 			log.Println(logFailedToCreateJWT, err)
 			redirectInternalServerError(w, r, state.RedirectURI, msgAuthenticationFailed)
 			return
@@ -179,40 +179,40 @@ func decodeAndValidateState(w http.ResponseWriter, r *http.Request) (OAuthState,
 	stateB64 := r.URL.Query().Get("state")
 	if stateB64 == "" {
 		log.Println("No state provided")
-		redirectBadRequest(w, r, authsession.NN_SITE_URL, msgInvalidRequest)
+		redirectBadRequest(w, r, session.NN_SITE_URL, msgInvalidRequest)
 		return state, false
 	}
 	stateBytes, err := base64.URLEncoding.DecodeString(stateB64)
 	if err != nil {
 		log.Println("Failed to decode state:\n\t", err)
-		redirectBadRequest(w, r, authsession.NN_SITE_URL, msgInvalidState)
+		redirectBadRequest(w, r, session.NN_SITE_URL, msgInvalidState)
 		return state, false
 	}
 	if err := json.Unmarshal(stateBytes, &state); err != nil {
 		log.Println("Failed to unmarshal state:\n\t", err)
-		redirectBadRequest(w, r, authsession.NN_SITE_URL, msgInvalidState)
+		redirectBadRequest(w, r, session.NN_SITE_URL, msgInvalidState)
 		return state, false
 	}
 	if state.Platform == "" || state.Nonce == "" || state.RedirectURI == "" || state.Mode == "" {
 		log.Println(logInvalidState)
-		redirectBadRequest(w, r, authsession.NN_SITE_URL, msgInvalidState)
+		redirectBadRequest(w, r, session.NN_SITE_URL, msgInvalidState)
 		return state, false
 	}
 	if !isAllowedRedirect(state.RedirectURI) {
 		log.Println("Redirect URI is not allowed:\n\t", state.RedirectURI)
-		redirectBadRequest(w, r, authsession.NN_SITE_URL, msgInvalidState)
+		redirectBadRequest(w, r, session.NN_SITE_URL, msgInvalidState)
 		return state, false
 	}
 
 	cookie, err := r.Cookie("nonce")
 	if err != nil {
 		log.Println("Failed to get nonce cookie:\n\t", err)
-		redirectBadRequest(w, r, authsession.NN_SITE_URL, msgInvalidState)
+		redirectBadRequest(w, r, session.NN_SITE_URL, msgInvalidState)
 		return state, false
 	}
 	if cookie.Value != state.Nonce {
 		log.Println("Nonce does not match")
-		redirectBadRequest(w, r, authsession.NN_SITE_URL, msgInvalidState)
+		redirectBadRequest(w, r, session.NN_SITE_URL, msgInvalidState)
 		return state, false
 	}
 
@@ -226,7 +226,7 @@ func requireValidModeAndSession(w http.ResponseWriter, r *http.Request, mode Mod
 	case ModeLogin:
 		return true
 	case ModeLink:
-		if session, ok := r.Context().Value(mw.SessionKey).(*authsession.Session); ok && session != nil && session.IsValid() {
+		if session, ok := r.Context().Value(mw.SessionKey).(*session.Session); ok && session != nil && session.IsValid() {
 			return true
 		}
 		redirectUnauthorized(w, r, redirectURI, msgLoginRequiredToLink)
@@ -276,7 +276,7 @@ func redirectInternalServerError(w http.ResponseWriter, r *http.Request, target,
 
 // isAllowedRedirect reports whether redirectURI's scheme and host match NN_SITE_URL.
 func isAllowedRedirect(redirectURI string) bool {
-	siteURL, err := url.Parse(authsession.NN_SITE_URL)
+	siteURL, err := url.Parse(session.NN_SITE_URL)
 	if err != nil {
 		return false
 	}
@@ -290,7 +290,7 @@ func isAllowedRedirect(redirectURI string) bool {
 // GetUserLinkedAccountsHandler - List a user's linked platforms
 func GetUserLinkedAccountsHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
+		session := r.Context().Value(mw.SessionKey).(*session.Session)
 		userID := r.PathValue("user_id")
 		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
 			responses.Forbidden(w, r, msgNoPermissionToViewLinkedAccounts)
@@ -308,7 +308,7 @@ func GetUserLinkedAccountsHandler(service Service) http.HandlerFunc {
 // UnlinkPlatformHandler - Unlink a platform from a user
 func UnlinkPlatformHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
+		session := r.Context().Value(mw.SessionKey).(*session.Session)
 		userID := r.PathValue("user_id")
 		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
 			responses.Forbidden(w, r, msgNoPermissionToUnlinkPlatforms)
@@ -319,9 +319,9 @@ func UnlinkPlatformHandler(service Service) http.HandlerFunc {
 		switch {
 		case err == nil:
 			responses.NoContent(w, r)
-		case errors.Is(err, authaccount.ErrNotFound):
+		case errors.Is(err, account.ErrNotFound):
 			responses.NotFound(w, r, msgPlatformNotLinked)
-		case errors.Is(err, authaccount.ErrWouldLockAccount):
+		case errors.Is(err, account.ErrWouldLockAccount):
 			responses.BadRequest(w, r, msgSetPasswordOrLinkBeforeUnlinking)
 		default:
 			responses.InternalServerError(w, r, msgFailedToUnlinkPlatform)
@@ -339,7 +339,7 @@ type SetPlatformLoginEnabledRequest struct {
 // SetPlatformLoginEnabledHandler - Toggle whether a linked platform can log in
 func SetPlatformLoginEnabledHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
+		session := r.Context().Value(mw.SessionKey).(*session.Session)
 		userID := r.PathValue("user_id")
 		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
 			responses.Forbidden(w, r, msgNoPermissionToUpdatePlatforms)
@@ -356,9 +356,9 @@ func SetPlatformLoginEnabledHandler(service Service) http.HandlerFunc {
 		switch {
 		case err == nil:
 			responses.NoContent(w, r)
-		case errors.Is(err, authaccount.ErrNotFound):
+		case errors.Is(err, account.ErrNotFound):
 			responses.NotFound(w, r, msgPlatformNotLinked)
-		case errors.Is(err, authaccount.ErrWouldLockAccount):
+		case errors.Is(err, account.ErrWouldLockAccount):
 			responses.BadRequest(w, r, msgSetPasswordOrLinkBeforeDisabling)
 		case errors.Is(err, ErrLinkedAccountUnverified):
 			responses.BadRequest(w, r, msgLinkedAccountUnverified)

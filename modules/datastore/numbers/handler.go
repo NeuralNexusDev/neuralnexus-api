@@ -5,8 +5,8 @@ import (
 	"net/http"
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
-	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
-	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
@@ -23,7 +23,7 @@ const (
 // CreateNumberHandler - Create a new number
 func CreateNumberHandler(s NumberService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
+		session := r.Context().Value(mw.SessionKey).(*session.Session)
 		if !session.HasPermission(perms.ScopeAdminNumberStore) {
 			responses.Forbidden(w, r, msgNoPermissionToCreateNumberstore)
 			return
@@ -71,7 +71,7 @@ func ReadNumberHandler(s NumberService) http.HandlerFunc {
 // UpdateNumberHandler - Update a number
 func UpdateNumberHandler(s NumberService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
+		session := r.Context().Value(mw.SessionKey).(*session.Session)
 		if !session.HasPermission(perms.ScopeAdminNumberStore) {
 			responses.Forbidden(w, r, msgNoPermissionToUpdateNumberstore)
 			return

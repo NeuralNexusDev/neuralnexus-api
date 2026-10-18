@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/ratelimit"
-	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"golang.org/x/crypto/ed25519"
 )
@@ -63,7 +63,7 @@ const (
 func LogRequest(ctx context.Context, message ...string) {
 	remoteAddr := ctx.Value(RemoteAddrKey).(string)
 	requestId := ctx.Value(RequestIDKey).(int)
-	session, ok := ctx.Value(SessionKey).(*authsession.Session)
+	session, ok := ctx.Value(SessionKey).(*session.Session)
 	if !ok {
 		session = nil
 	}
@@ -137,7 +137,7 @@ func IPMiddleware(next http.Handler) http.Handler {
 }
 
 // SessionMiddleware - Read the session from the request
-func SessionMiddleware(service authsession.SessionService) Middleware {
+func SessionMiddleware(service session.SessionService) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if authHeader := r.Header.Get(AuthHeader); authHeader != "" {
@@ -186,7 +186,7 @@ func SessionMiddleware(service authsession.SessionService) Middleware {
 func RateLimitMiddleware(service ratelimit.RateLimitService, prefix string, sessionLimit int, ipLimit int) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			session, ok := r.Context().Value(SessionKey).(*authsession.Session)
+			session, ok := r.Context().Value(SessionKey).(*session.Session)
 			if ok && session != nil {
 				err := service.IncrRateLimit(prefix + ":" + session.UserID)
 				if err != nil {
@@ -297,10 +297,10 @@ func RequestLoggerMiddleware(next http.Handler) http.Handler {
 }
 
 // Auth - Authenticate requests
-func Auth(service authsession.SessionService) Middleware {
+func Auth(service session.SessionService) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			session, ok := r.Context().Value(SessionKey).(*authsession.Session)
+			session, ok := r.Context().Value(SessionKey).(*session.Session)
 			if !ok || session == nil {
 				responses.Unauthorized(w, r, "")
 				return
@@ -324,7 +324,7 @@ func Auth(service authsession.SessionService) Middleware {
 // user ID, so a {user_id}-shaped handler can be reused for a "me" route.
 func SelfUserID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		session, ok := r.Context().Value(SessionKey).(*authsession.Session)
+		session, ok := r.Context().Value(SessionKey).(*session.Session)
 		if !ok || session == nil {
 			responses.Unauthorized(w, r, "")
 			return

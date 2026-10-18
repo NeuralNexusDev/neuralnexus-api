@@ -2,16 +2,16 @@ package user
 
 import (
 	"errors"
-	authaccount "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
-	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"log"
 	"net/http"
 	"strconv"
 
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
-	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/link"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
@@ -53,15 +53,15 @@ const (
 
 func respondUpdateUserFailure(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
-	case errors.Is(err, authaccount.ErrNotFound):
+	case errors.Is(err, account.ErrNotFound):
 		responses.NotFound(w, r, msgUserNotFound)
-	case errors.Is(err, authaccount.ErrEmailAlreadyExists):
+	case errors.Is(err, account.ErrEmailAlreadyExists):
 		responses.Conflict(w, r, msgEmailAlreadyExists)
-	case errors.Is(err, authaccount.ErrUsernameAlreadyExists):
+	case errors.Is(err, account.ErrUsernameAlreadyExists):
 		responses.Conflict(w, r, msgUsernameAlreadyExists)
-	case errors.Is(err, authaccount.ErrInvalidRoleID):
+	case errors.Is(err, account.ErrInvalidRoleID):
 		responses.BadRequest(w, r, msgInvalidRoleID)
-	case errors.Is(err, authaccount.ErrUnknownRoleID):
+	case errors.Is(err, account.ErrUnknownRoleID):
 		responses.BadRequest(w, r, msgUnknownRoleID)
 	default:
 		log.Println(logFailedToUpdateUser, err)
@@ -72,7 +72,7 @@ func respondUpdateUserFailure(w http.ResponseWriter, r *http.Request, err error)
 // ListUsersHandler - List a page of users
 func ListUsersHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
+		session := r.Context().Value(mw.SessionKey).(*session.Session)
 		if !session.HasPermission(perms.ScopeAdminUsers) {
 			responses.Forbidden(w, r, msgNoPermissionToGetUsers)
 			return
@@ -111,7 +111,7 @@ func ListUsersHandler(service Service) http.HandlerFunc {
 // GetUserHandler - Get a user
 func GetUserHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
+		session := r.Context().Value(mw.SessionKey).(*session.Session)
 		userID := r.PathValue("user_id")
 		// Locked down to self-lookup and admins for now. Cross-user lookup
 		// with the target's consent is a planned feature (for account-link
@@ -123,7 +123,7 @@ func GetUserHandler(service Service) http.HandlerFunc {
 		}
 		user, err := service.GetUser(userID)
 		if err != nil {
-			if errors.Is(err, authaccount.ErrNotFound) {
+			if errors.Is(err, account.ErrNotFound) {
 				responses.NotFound(w, r, msgUserNotFound)
 				return
 			}
@@ -138,16 +138,16 @@ func GetUserHandler(service Service) http.HandlerFunc {
 // GetUserFromPlatformHandler - Get a user from a platform
 func GetUserFromPlatformHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
+		session := r.Context().Value(mw.SessionKey).(*session.Session)
 		if !session.HasPermission(perms.ScopeAdminUsers) {
 			responses.Forbidden(w, r, msgNoPermissionToGetUsers)
 			return
 		}
-		platform := linking.Platform(r.PathValue("platform"))
+		platform := link.Platform(r.PathValue("platform"))
 		platformID := r.PathValue("platform_id")
 		user, err := service.GetUserFromPlatform(platform, platformID)
 		if err != nil {
-			if errors.Is(err, authaccount.ErrNotFound) {
+			if errors.Is(err, account.ErrNotFound) {
 				responses.NotFound(w, r, msgUserNotFound)
 				return
 			}
@@ -162,7 +162,7 @@ func GetUserFromPlatformHandler(service Service) http.HandlerFunc {
 // GetUserPermissionsHandler - Get a user's permissions
 func GetUserPermissionsHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
+		session := r.Context().Value(mw.SessionKey).(*session.Session)
 		userID := r.PathValue("user_id")
 		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
 			responses.Forbidden(w, r, msgNoPermissionToGetUserPermissions)
@@ -170,7 +170,7 @@ func GetUserPermissionsHandler(service Service) http.HandlerFunc {
 		}
 		permissions, err := service.GetUserPermissions(userID)
 		if err != nil {
-			if errors.Is(err, authaccount.ErrNotFound) {
+			if errors.Is(err, account.ErrNotFound) {
 				responses.NotFound(w, r, msgUserNotFound)
 				return
 			}
@@ -185,7 +185,7 @@ func GetUserPermissionsHandler(service Service) http.HandlerFunc {
 // UpdateUserHandler - Update a user
 func UpdateUserHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
+		session := r.Context().Value(mw.SessionKey).(*session.Session)
 		if !session.HasPermission(perms.ScopeAdminUsers) {
 			responses.Forbidden(w, r, msgNoPermissionToUpdateUsers)
 			return
@@ -214,46 +214,46 @@ func UpdateUserHandler(service Service) http.HandlerFunc {
 // UpdateUserFromPlatformHandler - Update a user from a platform
 func UpdateUserFromPlatformHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
+		session := r.Context().Value(mw.SessionKey).(*session.Session)
 		if !session.HasPermission(perms.ScopeAdminUsers) {
 			responses.Forbidden(w, r, msgNoPermissionToUpdateUsers)
 			return
 		}
-		platform := linking.Platform(r.PathValue("platform"))
+		platform := link.Platform(r.PathValue("platform"))
 		platformID := r.PathValue("platform_id")
 
-		var data linking.PlatformData
+		var data link.PlatformData
 		switch platform {
-		case linking.PlatformDiscord:
-			var d linking.DiscordData
+		case link.PlatformDiscord:
+			var d link.DiscordData
 			if err := responses.DecodeStruct(r, &d); err != nil {
 				responses.BadRequest(w, r, msgInvalidRequestBody)
 				return
 			}
 			data = &d
-		case linking.PlatformMinecraft:
-			var d linking.MinecraftData
+		case link.PlatformMinecraft:
+			var d link.MinecraftData
 			if err := responses.DecodeStruct(r, &d); err != nil {
 				responses.BadRequest(w, r, msgInvalidRequestBody)
 				return
 			}
 			data = &d
-		case linking.PlatformTwitch:
-			var d linking.TwitchData
+		case link.PlatformTwitch:
+			var d link.TwitchData
 			if err := responses.DecodeStruct(r, &d); err != nil {
 				responses.BadRequest(w, r, msgInvalidRequestBody)
 				return
 			}
 			data = &d
-		case linking.PlatformXboxLive:
-			var d linking.XboxLiveData
+		case link.PlatformXboxLive:
+			var d link.XboxLiveData
 			if err := responses.DecodeStruct(r, &d); err != nil {
 				responses.BadRequest(w, r, msgInvalidRequestBody)
 				return
 			}
 			data = &d
-		case linking.PlatformMicrosoft:
-			var d linking.MicrosoftUserData
+		case link.PlatformMicrosoft:
+			var d link.MicrosoftUserData
 			if err := responses.DecodeStruct(r, &d); err != nil {
 				responses.BadRequest(w, r, msgInvalidRequestBody)
 				return
@@ -276,7 +276,7 @@ func UpdateUserFromPlatformHandler(service Service) http.HandlerFunc {
 // DeleteUserHandler - Delete a user
 func DeleteUserHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
+		session := r.Context().Value(mw.SessionKey).(*session.Session)
 		if !session.HasPermission(perms.ScopeAdminUsers) {
 			responses.Forbidden(w, r, msgNoPermissionToDeleteUsers)
 			return
@@ -295,7 +295,7 @@ func DeleteUserHandler(service Service) http.HandlerFunc {
 // GetAccountSettingsHandler - Get a user's account settings
 func GetAccountSettingsHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
+		session := r.Context().Value(mw.SessionKey).(*session.Session)
 		userID := r.PathValue("user_id")
 		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
 			responses.Forbidden(w, r, msgNoPermissionToViewSettings)
@@ -303,7 +303,7 @@ func GetAccountSettingsHandler(service Service) http.HandlerFunc {
 		}
 		settings, err := service.GetAccountSettings(userID)
 		if err != nil {
-			if errors.Is(err, authaccount.ErrNotFound) {
+			if errors.Is(err, account.ErrNotFound) {
 				responses.NotFound(w, r, msgUserNotFound)
 				return
 			}
@@ -325,7 +325,7 @@ type UpdateAccountSettingsRequest struct {
 // UpdateAccountSettingsHandler - Update a user's account settings
 func UpdateAccountSettingsHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(mw.SessionKey).(*authsession.Session)
+		session := r.Context().Value(mw.SessionKey).(*session.Session)
 		userID := r.PathValue("user_id")
 		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
 			responses.Forbidden(w, r, msgNoPermissionToUpdateSettings)
@@ -341,11 +341,11 @@ func UpdateAccountSettingsHandler(service Service) http.HandlerFunc {
 		switch {
 		case err == nil:
 			responses.NoContent(w, r)
-		case errors.Is(err, authaccount.ErrNotFound):
+		case errors.Is(err, account.ErrNotFound):
 			responses.NotFound(w, r, msgUserNotFound)
-		case errors.Is(err, authaccount.ErrWouldLockAccount):
+		case errors.Is(err, account.ErrWouldLockAccount):
 			responses.BadRequest(w, r, msgEnableLoginMethodBeforeDisablingPassword)
-		case errors.Is(err, authaccount.ErrNoPasswordSet):
+		case errors.Is(err, account.ErrNoPasswordSet):
 			responses.BadRequest(w, r, msgSetPasswordBeforeEnablingPasswordLogin)
 		default:
 			responses.InternalServerError(w, r, msgFailedToUpdateUserSettings)

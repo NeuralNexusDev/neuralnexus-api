@@ -1,4 +1,4 @@
-package linking
+package link
 
 import (
 	"context"
@@ -11,13 +11,13 @@ import (
 
 	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
-	authaccount "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
-	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/goccy/go-json"
 )
 
 type stMockAccountService struct {
-	accounts        map[string]*authaccount.Account
+	accounts        map[string]*account.Account
 	addAccountErr   error
 	getByIDErr      error
 	deleteErr       error
@@ -25,13 +25,13 @@ type stMockAccountService struct {
 	addAccountCalls int
 }
 
-var _ authaccount.AccountService = (*stMockAccountService)(nil)
+var _ account.AccountService = (*stMockAccountService)(nil)
 
 func newSTMockAccountService() *stMockAccountService {
-	return &stMockAccountService{accounts: map[string]*authaccount.Account{}}
+	return &stMockAccountService{accounts: map[string]*account.Account{}}
 }
 
-func (m *stMockAccountService) AddAccount(a *authaccount.Account) error {
+func (m *stMockAccountService) AddAccount(a *account.Account) error {
 	m.addAccountCalls++
 	if m.addAccountErr != nil {
 		return m.addAccountErr
@@ -39,23 +39,23 @@ func (m *stMockAccountService) AddAccount(a *authaccount.Account) error {
 	m.accounts[a.UserID] = a
 	return nil
 }
-func (m *stMockAccountService) GetAccountByID(userID string) (*authaccount.Account, error) {
+func (m *stMockAccountService) GetAccountByID(userID string) (*account.Account, error) {
 	if m.getByIDErr != nil {
 		return nil, m.getByIDErr
 	}
 	a, ok := m.accounts[userID]
 	if !ok {
-		return nil, authaccount.ErrNotFound
+		return nil, account.ErrNotFound
 	}
 	return a, nil
 }
-func (m *stMockAccountService) GetAccountByUsername(string) (*authaccount.Account, error) {
-	return nil, authaccount.ErrNotFound
+func (m *stMockAccountService) GetAccountByUsername(string) (*account.Account, error) {
+	return nil, account.ErrNotFound
 }
-func (m *stMockAccountService) GetAccountByEmail(string) (*authaccount.Account, error) {
-	return nil, authaccount.ErrNotFound
+func (m *stMockAccountService) GetAccountByEmail(string) (*account.Account, error) {
+	return nil, account.ErrNotFound
 }
-func (m *stMockAccountService) UpdateAccount(a *authaccount.Account) error {
+func (m *stMockAccountService) UpdateAccount(a *account.Account) error {
 	m.accounts[a.UserID] = a
 	return nil
 }
@@ -68,8 +68,8 @@ func (m *stMockAccountService) DeleteAccount(userID string) error {
 	return nil
 }
 func (m *stMockAccountService) IsPasswordAuthEnabled(string) (bool, error) { return false, nil }
-func (m *stMockAccountService) NewSession(a *authaccount.Account, expiresAt int64) (*authsession.Session, error) {
-	return &authsession.Session{ID: "stub-session", UserID: a.UserID, Permissions: []string{"stub:perm"}, ExpiresAt: expiresAt}, nil
+func (m *stMockAccountService) NewSession(a *account.Account, expiresAt int64) (*session.Session, error) {
+	return &session.Session{ID: "stub-session", UserID: a.UserID, Permissions: []string{"stub:perm"}, ExpiresAt: expiresAt}, nil
 }
 
 type stMockLinkAccountStore struct {
@@ -103,15 +103,15 @@ func (m *stMockLinkAccountStore) GetLinkedAccountByPlatformID(platform Platform,
 	}
 	la, ok := m.byPlatformID[platform][platformID]
 	if !ok {
-		return nil, authaccount.ErrNotFound
+		return nil, account.ErrNotFound
 	}
 	return la, nil
 }
 func (m *stMockLinkAccountStore) GetLinkedAccountByPlatformName(Platform, string) (*LinkedAccount, error) {
-	return nil, authaccount.ErrNotFound
+	return nil, account.ErrNotFound
 }
 func (m *stMockLinkAccountStore) GetLinkedAccountByUserID(string, Platform) (*LinkedAccount, error) {
-	return nil, authaccount.ErrNotFound
+	return nil, account.ErrNotFound
 }
 func (m *stMockLinkAccountStore) GetLinkedAccountsByUserID(string) ([]*LinkedAccount, error) {
 	return nil, nil
@@ -123,29 +123,29 @@ func (m *stMockLinkAccountStore) SetLinkedAccountLoginEnabled(string, Platform, 
 
 type stMockSessionService struct {
 	addSessionErr error
-	added         []*authsession.Session
+	added         []*session.Session
 }
 
-var _ authsession.SessionService = (*stMockSessionService)(nil)
+var _ session.SessionService = (*stMockSessionService)(nil)
 
-func (m *stMockSessionService) AddSession(session *authsession.Session) error {
+func (m *stMockSessionService) AddSession(session *session.Session) error {
 	if m.addSessionErr != nil {
 		return m.addSessionErr
 	}
 	m.added = append(m.added, session)
 	return nil
 }
-func (m *stMockSessionService) GetSession(string) (*authsession.Session, error) {
-	return nil, authaccount.ErrNotFound
+func (m *stMockSessionService) GetSession(string) (*session.Session, error) {
+	return nil, account.ErrNotFound
 }
-func (m *stMockSessionService) UpdateSession(*authsession.Session) error       { return nil }
-func (m *stMockSessionService) DeleteSession(string) error                     { return nil }
-func (m *stMockSessionService) CreateJWT(*authsession.Session) (string, error) { return "", nil }
-func (m *stMockSessionService) ReadJWT(string) (*authsession.Session, error) {
-	return nil, authaccount.ErrNotFound
+func (m *stMockSessionService) UpdateSession(*session.Session) error       { return nil }
+func (m *stMockSessionService) DeleteSession(string) error                 { return nil }
+func (m *stMockSessionService) CreateJWT(*session.Session) (string, error) { return "", nil }
+func (m *stMockSessionService) ReadJWT(string) (*session.Session, error) {
+	return nil, account.ErrNotFound
 }
 
-func stRequestWithSession(session *authsession.Session) *http.Request {
+func stRequestWithSession(session *session.Session) *http.Request {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	if session == nil {
 		return req
@@ -512,7 +512,7 @@ func TestST26to29ProcessSteamLink(t *testing.T) {
 
 	t.Run("ST-26_LinksToSession", func(t *testing.T) {
 		las := newSTMockLinkAccountStore()
-		session := &authsession.Session{ID: "sess-1", UserID: "user-1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
+		session := &session.Session{ID: "sess-1", UserID: "user-1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
 		req := stRequestWithSession(session)
 
 		got, err := ProcessSteamLink(req, las, user)
@@ -539,7 +539,7 @@ func TestST26to29ProcessSteamLink(t *testing.T) {
 
 	t.Run("ST-28_ExpiredSessionRejected", func(t *testing.T) {
 		las := newSTMockLinkAccountStore()
-		session := &authsession.Session{ID: "sess-1", UserID: "user-1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
+		session := &session.Session{ID: "sess-1", UserID: "user-1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
 		req := stRequestWithSession(session)
 
 		_, err := ProcessSteamLink(req, las, user)
@@ -553,7 +553,7 @@ func TestST26to29ProcessSteamLink(t *testing.T) {
 		las.byPlatformID[PlatformSteam] = map[string]*LinkedAccount{
 			user.SteamID64: {UserID: "other-user", Platform: PlatformSteam, PlatformID: user.SteamID64},
 		}
-		session := &authsession.Session{ID: "sess-1", UserID: "user-1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
+		session := &session.Session{ID: "sess-1", UserID: "user-1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
 		req := stRequestWithSession(session)
 
 		_, err := ProcessSteamLink(req, las, user)

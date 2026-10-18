@@ -1,4 +1,4 @@
-package linking
+package link
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	authaccount "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 )
 
 // store - Postgres-backed linked account and OAuth token store
@@ -91,7 +91,7 @@ func (s *store) GetLinkedAccountByPlatformID(platform Platform, platformID strin
 	al, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[LinkedAccount])
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, authaccount.ErrNotFound
+			return nil, account.ErrNotFound
 		}
 		if errors.Is(err, pgx.ErrTooManyRows) {
 			return nil, ErrDuplicateLinkedAccount
@@ -111,7 +111,7 @@ func (s *store) GetLinkedAccountByPlatformName(platform Platform, platformName s
 	al, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[LinkedAccount])
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, authaccount.ErrNotFound
+			return nil, account.ErrNotFound
 		}
 		if errors.Is(err, pgx.ErrTooManyRows) {
 			return nil, ErrDuplicateLinkedAccount
@@ -131,7 +131,7 @@ func (s *store) GetLinkedAccountByUserID(userID string, platform Platform) (*Lin
 	al, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[LinkedAccount])
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, authaccount.ErrNotFound
+			return nil, account.ErrNotFound
 		}
 		if errors.Is(err, pgx.ErrTooManyRows) {
 			return nil, ErrDuplicateLinkedAccount
@@ -185,7 +185,7 @@ func (s *store) DeleteLinkedAccount(userID string, platform Platform) error {
 	if _, err := s.GetLinkedAccountByUserID(userID, platform); err != nil {
 		return err
 	}
-	return authaccount.ErrWouldLockAccount
+	return account.ErrWouldLockAccount
 }
 
 // SetLinkedAccountLoginEnabled toggles login eligibility for a linked
@@ -235,5 +235,5 @@ func (s *store) SetLinkedAccountLoginEnabled(userID string, platform Platform, e
 	if enabled {
 		return ErrLinkedAccountUnverified
 	}
-	return authaccount.ErrWouldLockAccount
+	return account.ErrWouldLockAccount
 }

@@ -10,7 +10,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 )
 

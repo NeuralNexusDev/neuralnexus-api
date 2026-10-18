@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 )
 
 func TestSE01ToProto(t *testing.T) {

@@ -3,7 +3,7 @@ package account
 import (
 	"time"
 
-	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 )
 
@@ -21,7 +21,7 @@ type AccountService interface {
 	UpdateAccount(account *Account) error
 	DeleteAccount(userID string) error
 	IsPasswordAuthEnabled(userID string) (bool, error)
-	NewSession(account *Account, expiresAt int64) (*authsession.Session, error)
+	NewSession(account *Account, expiresAt int64) (*session.Session, error)
 }
 
 // accountService - The accountService struct
@@ -76,7 +76,7 @@ func (s *accountService) IsPasswordAuthEnabled(userID string) (bool, error) {
 }
 
 // NewSession - Create a session for an account with the permissions of its roles
-func (s *accountService) NewSession(account *Account, expiresAt int64) (*authsession.Session, error) {
+func (s *accountService) NewSession(account *Account, expiresAt int64) (*session.Session, error) {
 	permissions := []string{}
 	if len(account.Roles) > 0 {
 		var err error
@@ -92,7 +92,7 @@ func (s *accountService) NewSession(account *Account, expiresAt int64) (*authses
 		return nil, err
 	}
 	now := time.Now().Unix()
-	return &authsession.Session{
+	return &session.Session{
 		ID:          id,
 		UserID:      account.UserID,
 		Permissions: permissions,
