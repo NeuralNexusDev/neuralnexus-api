@@ -75,13 +75,15 @@ func (f *fakeStore) DeletePermission(_ context.Context, id string) error {
 	f.calls = append(f.calls, "DeletePermission")
 	return f.err
 }
-func (f *fakeStore) AttachPermission(_ context.Context, roleID, permissionID string, value []byte) error {
+func (f *fakeStore) AttachPermission(ctx context.Context, roleID, permissionID string, value []byte) error {
+	f.ctx = ctx
 	f.calls = append(f.calls, "AttachPermission")
 	f.attached = [2]string{roleID, permissionID}
 	f.attachedValue = value
 	return f.err
 }
-func (f *fakeStore) DetachPermission(_ context.Context, roleID, permissionID string) error {
+func (f *fakeStore) DetachPermission(ctx context.Context, roleID, permissionID string) error {
+	f.ctx = ctx
 	f.calls = append(f.calls, "DetachPermission")
 	f.attached = [2]string{roleID, permissionID}
 	return f.err
@@ -512,6 +514,29 @@ func TestSV24RequestContextReachesStore(t *testing.T) {
 		}
 		if got := f.ctx.Value(reqctx.UserIDKey); got != "u1" {
 			t.Errorf("store context user ID = %v, want %q", got, "u1")
+		}
+	})
+}
+
+func TestSV25GrantWritesIgnoreCancelledContext(t *testing.T) {
+	t.Run("RCV-25_GrantWritesIgnoreCancelledContext", func(t *testing.T) {
+		writes := map[string]func(Service, context.Context) error{
+			"AttachPermission": func(s Service, ctx context.Context) error { return s.AttachPermission(ctx, "1", "2", nil) },
+			"DetachPermission": func(s Service, ctx context.Context) error { return s.DetachPermission(ctx, "1", "2") },
+		}
+		for name, write := range writes {
+			f := &fakeStore{role: &Role{ID: "1"}, permission: &Permission{ID: "2"}}
+			ctx, cancel := context.WithCancel(context.WithValue(context.Background(), reqctx.UserIDKey, "u1"))
+			cancel()
+			if err := write(NewService(f), ctx); err != nil {
+				t.Fatalf("%s() error = %v", name, err)
+			}
+			if err := f.ctx.Err(); err != nil {
+				t.Errorf("%s() store context Err() = %v, want nil", name, err)
+			}
+			if got := f.ctx.Value(reqctx.UserIDKey); got != "u1" {
+				t.Errorf("%s() store context user ID = %v, want %q", name, got, "u1")
+			}
 		}
 	})
 }
