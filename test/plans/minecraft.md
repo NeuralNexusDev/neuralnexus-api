@@ -249,6 +249,9 @@
 | SV-132 | resolveProfile | Edge Case | DB lookup returns ErrPlayerNotFound | profile store reports not found; fake Mojang succeeds | No DB failure line is logged; falls through to Mojang fetch | P2 |  |
 | SV-133 | resolveProfile | Edge Case | DB lookup returns an error other than ErrPlayerNotFound | profile store returns a plain error; fake Mojang succeeds | The DB failure line is logged; falls through to Mojang fetch | P2 |  |
 | SV-134 | GetMojangPlayerByName | Happy Path | The caller's ctx reaches the store | cache-hit store records the ctx it receives; ctx carries a marker value | The recorded ctx holds the marker value | P1 |  |
+| SV-135 | GetMojangPlayerByName | Error Path | Cancelling the ctx stops the outbound GET | cache and DB miss; fake Mojang endpoint blocks until the client goes away; ctx cancelled once the endpoint is reached | Returns an error wrapping `context.Canceled` without waiting for the endpoint | P1 |  |
+| SV-136 | GetMojangPlayerByName | Happy Path | Writes after a fetch run on a ctx that outlives the cancelled request | ctx carries a marker value and is cancelled once the Mojang body is read; store records `ctx.Err()` and the marker in `UpsertPlayer` and `SetPlayerInCache` | Both writes see `ctx.Err() == nil` and the marker value | P1 |  |
+| SV-137 | GetMojangPlayersByNames | Error Path | Cancelling the ctx stops the bulk POST | cache and DB miss; fake bulk endpoint blocks until the client goes away; ctx cancelled once the endpoint is reached | Returns an error wrapping `context.Canceled` without waiting for the endpoint | P1 |  |
 
 ## store.go
 

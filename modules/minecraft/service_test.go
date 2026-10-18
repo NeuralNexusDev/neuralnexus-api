@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1872,6 +1873,139 @@ func TestSV134_GetMojangPlayerByName_CtxReachesStore(t *testing.T) {
 		}
 		if store.got == nil || store.got.Value(mcCtxKey{}) != "marker" {
 			t.Error("store did not receive the caller's ctx")
+		}
+	})
+}
+
+func mcBlockingMojang(started chan<- struct{}) http.HandlerFunc {
+	var once sync.Once
+	return func(w http.ResponseWriter, r *http.Request) {
+		io.Copy(io.Discard, r.Body)
+		once.Do(func() { close(started) })
+		select {
+		case <-r.Context().Done():
+		case <-time.After(2 * time.Second):
+			io.WriteString(w, "[]")
+		}
+	}
+}
+
+func mcRequireCancelStopsCall(t *testing.T, started <-chan struct{}, call func(ctx context.Context) error) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(mcCtx)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- call(ctx) }()
+
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("upstream was never called")
+	}
+	cancel()
+
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("err = %v, want context.Canceled", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("call kept waiting on the upstream after ctx was cancelled")
+	}
+}
+
+func TestSV135to137_OutboundCallsCancelWithCtx(t *testing.T) {
+	t.Run("SV-135_GetCancelsWithCtx", func(t *testing.T) {
+		started := make(chan struct{})
+		s := mcNewService(t, &mcMockStore{}, mcBlockingMojang(started))
+		mcRequireCancelStopsCall(t, started, func(ctx context.Context) error {
+			_, err := s.GetMojangPlayerByName(ctx, "Steve")
+			return err
+		})
+	})
+
+	t.Run("SV-137_BulkPostCancelsWithCtx", func(t *testing.T) {
+		started := make(chan struct{})
+		s := mcNewService(t, &mcMockStore{}, mcBlockingMojang(started))
+		mcRequireCancelStopsCall(t, started, func(ctx context.Context) error {
+			_, err := s.GetMojangPlayersByNames(ctx, []string{"a"})
+			return err
+		})
+	})
+}
+
+type mcWriteCtxStore struct {
+	*mcMockStore
+	errs    []error
+	markers []any
+}
+
+func (m *mcWriteCtxStore) record(ctx context.Context) {
+	m.errs = append(m.errs, ctx.Err())
+	m.markers = append(m.markers, ctx.Value(mcCtxKey{}))
+}
+
+func (m *mcWriteCtxStore) UpsertPlayer(ctx context.Context, player *Player, updateProfile bool) error {
+	m.record(ctx)
+	return nil
+}
+
+func (m *mcWriteCtxStore) SetPlayerInCache(ctx context.Context, player *Player) error {
+	m.record(ctx)
+	return nil
+}
+
+type mcRoundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f mcRoundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+// mcCancelAfterRead cancels once the whole body has been handed to the reader.
+type mcCancelAfterRead struct {
+	*strings.Reader
+	cancel context.CancelFunc
+}
+
+func (b mcCancelAfterRead) Read(p []byte) (int, error) {
+	n, err := b.Reader.Read(p)
+	if b.Reader.Len() == 0 {
+		b.cancel()
+	}
+	return n, err
+}
+
+func (mcCancelAfterRead) Close() error { return nil }
+
+func TestSV136_WritesSurviveCtxCancel(t *testing.T) {
+	t.Run("SV-136_WritesSurviveCtxCancel", func(t *testing.T) {
+		store := &mcWriteCtxStore{mcMockStore: &mcMockStore{}}
+		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) {})
+		ctx, cancel := context.WithCancel(context.WithValue(mcCtx, mcCtxKey{}, "marker"))
+		defer cancel()
+		s.client = &http.Client{Transport: mcRoundTripFunc(func(r *http.Request) (*http.Response, error) {
+			body := mcMustJSON(t, Player{ID: "fetched", Name: "Steve"})
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       mcCancelAfterRead{Reader: strings.NewReader(body), cancel: cancel},
+				Request:    r,
+			}, nil
+		})}
+
+		if _, err := s.GetMojangPlayerByName(ctx, "Steve"); err != nil {
+			t.Fatalf("GetMojangPlayerByName() error = %v", err)
+		}
+		if ctx.Err() == nil {
+			t.Fatal("ctx was not cancelled before the writes")
+		}
+		if len(store.errs) != 2 {
+			t.Fatalf("recorded %d writes, want 2 (upsert and cache set)", len(store.errs))
+		}
+		for i := range store.errs {
+			if store.errs[i] != nil {
+				t.Errorf("write %d: ctx.Err() = %v, want nil", i, store.errs[i])
+			}
+			if store.markers[i] != "marker" {
+				t.Errorf("write %d: ctx lost its values", i)
+			}
 		}
 	})
 }
