@@ -1,7 +1,6 @@
 package user
 
 import (
-	"errors"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"log"
@@ -52,16 +51,16 @@ const (
 )
 
 func respondUpdateUserFailure(w http.ResponseWriter, r *http.Request, err error) {
-	switch {
-	case errors.Is(err, account.ErrNotFound):
+	switch err {
+	case account.ErrNotFound:
 		responses.NotFound(w, r, msgUserNotFound)
-	case errors.Is(err, account.ErrEmailAlreadyExists):
+	case account.ErrEmailAlreadyExists:
 		responses.Conflict(w, r, msgEmailAlreadyExists)
-	case errors.Is(err, account.ErrUsernameAlreadyExists):
+	case account.ErrUsernameAlreadyExists:
 		responses.Conflict(w, r, msgUsernameAlreadyExists)
-	case errors.Is(err, account.ErrInvalidRoleID):
+	case account.ErrInvalidRoleID:
 		responses.BadRequest(w, r, msgInvalidRoleID)
-	case errors.Is(err, account.ErrUnknownRoleID):
+	case account.ErrUnknownRoleID:
 		responses.BadRequest(w, r, msgUnknownRoleID)
 	default:
 		log.Println(logFailedToUpdateUser, err)
@@ -123,7 +122,7 @@ func GetUserHandler(service Service) http.HandlerFunc {
 		}
 		user, err := service.GetUser(userID)
 		if err != nil {
-			if errors.Is(err, account.ErrNotFound) {
+			if err == account.ErrNotFound {
 				responses.NotFound(w, r, msgUserNotFound)
 				return
 			}
@@ -147,7 +146,7 @@ func GetUserFromPlatformHandler(service Service) http.HandlerFunc {
 		platformID := r.PathValue("platform_id")
 		user, err := service.GetUserFromPlatform(platform, platformID)
 		if err != nil {
-			if errors.Is(err, account.ErrNotFound) {
+			if err == account.ErrNotFound {
 				responses.NotFound(w, r, msgUserNotFound)
 				return
 			}
@@ -170,7 +169,7 @@ func GetUserPermissionsHandler(service Service) http.HandlerFunc {
 		}
 		permissions, err := service.GetUserPermissions(userID)
 		if err != nil {
-			if errors.Is(err, account.ErrNotFound) {
+			if err == account.ErrNotFound {
 				responses.NotFound(w, r, msgUserNotFound)
 				return
 			}
@@ -303,7 +302,7 @@ func GetAccountSettingsHandler(service Service) http.HandlerFunc {
 		}
 		settings, err := service.GetAccountSettings(userID)
 		if err != nil {
-			if errors.Is(err, account.ErrNotFound) {
+			if err == account.ErrNotFound {
 				responses.NotFound(w, r, msgUserNotFound)
 				return
 			}
@@ -338,14 +337,14 @@ func UpdateAccountSettingsHandler(service Service) http.HandlerFunc {
 		}
 
 		err := service.SetPasswordAuthEnabled(userID, *body.PasswordAuthEnabled)
-		switch {
-		case err == nil:
+		switch err {
+		case nil:
 			responses.NoContent(w, r)
-		case errors.Is(err, account.ErrNotFound):
+		case account.ErrNotFound:
 			responses.NotFound(w, r, msgUserNotFound)
-		case errors.Is(err, account.ErrWouldLockAccount):
+		case account.ErrWouldLockAccount:
 			responses.BadRequest(w, r, msgEnableLoginMethodBeforeDisablingPassword)
-		case errors.Is(err, account.ErrNoPasswordSet):
+		case account.ErrNoPasswordSet:
 			responses.BadRequest(w, r, msgSetPasswordBeforeEnablingPasswordLogin)
 		default:
 			responses.InternalServerError(w, r, msgFailedToUpdateUserSettings)
