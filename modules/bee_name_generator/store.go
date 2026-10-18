@@ -15,13 +15,13 @@ var ErrBeeNameSuggestionExists = errors.New("bee name suggestion already exists"
 
 // BNGStore - Bee Name Generator Store
 type BNGStore interface {
-	GetBeeName() (string, error)
-	UploadBeeName(beeName string) (string, error)
-	DeleteBeeName(beeName string) (string, error)
-	SubmitBeeName(beeName string) (string, error)
-	GetBeeNameSuggestions(amount int64) ([]string, error)
-	AcceptBeeNameSuggestion(beeName string) (string, error)
-	RejectBeeNameSuggestion(beeName string) (string, error)
+	GetBeeName(ctx context.Context) (string, error)
+	UploadBeeName(ctx context.Context, beeName string) (string, error)
+	DeleteBeeName(ctx context.Context, beeName string) (string, error)
+	SubmitBeeName(ctx context.Context, beeName string) (string, error)
+	GetBeeNameSuggestions(ctx context.Context, amount int64) ([]string, error)
+	AcceptBeeNameSuggestion(ctx context.Context, beeName string) (string, error)
+	RejectBeeNameSuggestion(ctx context.Context, beeName string) (string, error)
 }
 
 // store - Bee Name Generator Store PG implementation
@@ -35,9 +35,9 @@ func NewStore(db *pgxpool.Pool) BNGStore {
 }
 
 // GetBeeName returns a random bee name from the database
-func (s *store) GetBeeName() (string, error) {
+func (s *store) GetBeeName(ctx context.Context) (string, error) {
 	var beeName string
-	err := s.db.QueryRow(context.Background(), "SELECT name FROM bee_name ORDER BY random() LIMIT 1").Scan(&beeName)
+	err := s.db.QueryRow(ctx, "SELECT name FROM bee_name ORDER BY random() LIMIT 1").Scan(&beeName)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", ErrBeeNameNotFound
@@ -48,8 +48,8 @@ func (s *store) GetBeeName() (string, error) {
 }
 
 // UploadBeeName uploads a bee name to the database
-func (s *store) UploadBeeName(beeName string) (string, error) {
-	_, err := s.db.Exec(context.Background(), "INSERT INTO bee_name (name) VALUES ($1)", beeName)
+func (s *store) UploadBeeName(ctx context.Context, beeName string) (string, error) {
+	_, err := s.db.Exec(ctx, "INSERT INTO bee_name (name) VALUES ($1)", beeName)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -61,8 +61,8 @@ func (s *store) UploadBeeName(beeName string) (string, error) {
 }
 
 // DeleteBeeName deletes a bee name from the database
-func (s *store) DeleteBeeName(beeName string) (string, error) {
-	_, err := s.db.Exec(context.Background(), "DELETE FROM bee_name WHERE name = $1", beeName)
+func (s *store) DeleteBeeName(ctx context.Context, beeName string) (string, error) {
+	_, err := s.db.Exec(ctx, "DELETE FROM bee_name WHERE name = $1", beeName)
 	if err != nil {
 		return "", err
 	}
@@ -70,8 +70,8 @@ func (s *store) DeleteBeeName(beeName string) (string, error) {
 }
 
 // SubmitBeeName submits a bee name to the suggestion database
-func (s *store) SubmitBeeName(beeName string) (string, error) {
-	_, err := s.db.Exec(context.Background(), "INSERT INTO bee_name_suggestion (name) VALUES ($1)", beeName)
+func (s *store) SubmitBeeName(ctx context.Context, beeName string) (string, error) {
+	_, err := s.db.Exec(ctx, "INSERT INTO bee_name_suggestion (name) VALUES ($1)", beeName)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -83,9 +83,9 @@ func (s *store) SubmitBeeName(beeName string) (string, error) {
 }
 
 // GetBeeNameSuggestions returns a list of bee name suggestions
-func (s *store) GetBeeNameSuggestions(amount int64) ([]string, error) {
+func (s *store) GetBeeNameSuggestions(ctx context.Context, amount int64) ([]string, error) {
 	var beeNames []string
-	rows, err := s.db.Query(context.Background(), "SELECT name FROM bee_name_suggestion ORDER BY random() LIMIT $1", amount)
+	rows, err := s.db.Query(ctx, "SELECT name FROM bee_name_suggestion ORDER BY random() LIMIT $1", amount)
 	if err != nil {
 		return []string{}, err
 	}
@@ -111,8 +111,8 @@ func (s *store) GetBeeNameSuggestions(amount int64) ([]string, error) {
 }
 
 // AcceptBeeNameSuggestion accepts a bee name suggestion
-func (s *store) AcceptBeeNameSuggestion(beeName string) (string, error) {
-	_, err := s.db.Exec(context.Background(), "INSERT INTO bee_name (name) VALUES ($1)", beeName)
+func (s *store) AcceptBeeNameSuggestion(ctx context.Context, beeName string) (string, error) {
+	_, err := s.db.Exec(ctx, "INSERT INTO bee_name (name) VALUES ($1)", beeName)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -121,7 +121,7 @@ func (s *store) AcceptBeeNameSuggestion(beeName string) (string, error) {
 		return "", err
 	}
 
-	_, err = s.db.Exec(context.Background(), "DELETE FROM bee_name_suggestion WHERE name = $1", beeName)
+	_, err = s.db.Exec(ctx, "DELETE FROM bee_name_suggestion WHERE name = $1", beeName)
 	if err != nil {
 		return "", err
 	}
@@ -129,8 +129,8 @@ func (s *store) AcceptBeeNameSuggestion(beeName string) (string, error) {
 }
 
 // RejectBeeNameSuggestion rejects a bee name suggestion
-func (s *store) RejectBeeNameSuggestion(beeName string) (string, error) {
-	_, err := s.db.Exec(context.Background(), "DELETE FROM bee_name_suggestion WHERE name = $1", beeName)
+func (s *store) RejectBeeNameSuggestion(ctx context.Context, beeName string) (string, error) {
+	_, err := s.db.Exec(ctx, "DELETE FROM bee_name_suggestion WHERE name = $1", beeName)
 	if err != nil {
 		return "", err
 	}

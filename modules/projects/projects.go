@@ -1,12 +1,13 @@
 package projects
 
 import (
+	"context"
 	"errors"
-	"log"
 	"net/http"
 	"os"
 	"strings"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/goccy/go-json"
 )
 
@@ -64,13 +65,13 @@ const (
 )
 
 // -------------- Functions --------------
-func getReleases(group string, project string) ([]Release, error) {
+func getReleases(ctx context.Context, group string, project string) ([]Release, error) {
 	if githubToken == "" {
 		return nil, ErrGitHubTokenUnset
 	}
 
 	githubURL := "https://api.github.com/repos/" + group + "/" + project + "/releases"
-	req, err := http.NewRequest("GET", githubURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", githubURL, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -129,9 +130,9 @@ func GetReleasesHandler(w http.ResponseWriter, r *http.Request) {
 
 	format := r.URL.Query().Get("format")
 
-	releases, err := getReleases(group, project)
+	releases, err := getReleases(r.Context(), group, project)
 	if err != nil {
-		log.Println(err.Error())
+		reqctx.Log(r.Context(), err.Error())
 		if err == ErrGitHubTokenUnset {
 			http.Error(w, msgGitHubTokenUnset, http.StatusInternalServerError)
 			return

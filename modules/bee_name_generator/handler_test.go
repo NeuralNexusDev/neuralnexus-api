@@ -27,23 +27,23 @@ type bngMockStore struct {
 
 var _ BNGStore = (*bngMockStore)(nil)
 
-func (m *bngMockStore) GetBeeName() (string, error) { return m.getBeeName() }
-func (m *bngMockStore) UploadBeeName(beeName string) (string, error) {
+func (m *bngMockStore) GetBeeName(_ context.Context) (string, error) { return m.getBeeName() }
+func (m *bngMockStore) UploadBeeName(_ context.Context, beeName string) (string, error) {
 	return m.uploadBeeName(beeName)
 }
-func (m *bngMockStore) DeleteBeeName(beeName string) (string, error) {
+func (m *bngMockStore) DeleteBeeName(_ context.Context, beeName string) (string, error) {
 	return m.deleteBeeName(beeName)
 }
-func (m *bngMockStore) SubmitBeeName(beeName string) (string, error) {
+func (m *bngMockStore) SubmitBeeName(_ context.Context, beeName string) (string, error) {
 	return m.submitBeeName(beeName)
 }
-func (m *bngMockStore) GetBeeNameSuggestions(amount int64) ([]string, error) {
+func (m *bngMockStore) GetBeeNameSuggestions(_ context.Context, amount int64) ([]string, error) {
 	return m.getBeeNameSuggestions(amount)
 }
-func (m *bngMockStore) AcceptBeeNameSuggestion(beeName string) (string, error) {
+func (m *bngMockStore) AcceptBeeNameSuggestion(_ context.Context, beeName string) (string, error) {
 	return m.acceptBeeNameSuggestion(beeName)
 }
-func (m *bngMockStore) RejectBeeNameSuggestion(beeName string) (string, error) {
+func (m *bngMockStore) RejectBeeNameSuggestion(_ context.Context, beeName string) (string, error) {
 	return m.rejectBeeNameSuggestion(beeName)
 }
 
@@ -54,7 +54,7 @@ var (
 
 func bngRequest(t *testing.T, method, target string, pathValues map[string]string, session *session.Session) *http.Request {
 	t.Helper()
-	r := httptest.NewRequest(method, target, nil)
+	r := testutil.NewRequest(method, target, nil)
 	for k, v := range pathValues {
 		r.SetPathValue(k, v)
 	}
@@ -372,5 +372,30 @@ func TestHD28to30_StoreConflictMapping(t *testing.T) {
 		h(w, bngRequest(t, http.MethodPost, "/Buzzy", map[string]string{"name": "Buzzy"}, bngAuthorizedSession))
 		bngRequireStatus(t, w, http.StatusConflict)
 		bngRequireDetail(t, w, "That bee name already exists")
+	})
+}
+
+type bngCtxStore struct {
+	bngMockStore
+	got context.Context
+}
+
+func (m *bngCtxStore) GetBeeName(ctx context.Context) (string, error) {
+	m.got = ctx
+	return "Buzzy", nil
+}
+
+func TestHD31_CtxReachesStore(t *testing.T) {
+	t.Run("BNH-31_CtxReachesStore", func(t *testing.T) {
+		type ctxKey struct{}
+		s := &bngCtxStore{}
+		r := bngRequest(t, http.MethodGet, "/", nil, nil)
+		r = r.WithContext(context.WithValue(r.Context(), ctxKey{}, "marker"))
+		h := GetBeeNameHandler(s)
+		w := httptest.NewRecorder()
+		h(w, r)
+		if s.got == nil || s.got.Value(ctxKey{}) != "marker" {
+			t.Error("store did not receive the request's ctx")
+		}
 	})
 }
