@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/proto/sessionpb"
 	"github.com/golang-jwt/jwt/v5"
 	"google.golang.org/protobuf/proto"

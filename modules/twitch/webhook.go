@@ -5,7 +5,7 @@ import (
 	"context"
 	"errors"
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/link"
 	"github.com/goccy/go-json"
 	"github.com/nicklaw5/helix/v2"
 	"log"
@@ -44,12 +44,12 @@ func validateEventSubNotification(header http.Header, body []byte) (*eventSubNot
 }
 
 // handleRevocation handles the EventSub revocation notifications
-func handleRevocation(ctx context.Context, userId string, eventsub EventSubService, tokens linking.OAuthTokenStore, vals eventSubNotification) error {
+func handleRevocation(ctx context.Context, userId string, eventsub EventSubService, tokens link.OAuthTokenStore, vals eventSubNotification) error {
 	var err error
 	switch vals.Subscription.Status {
 	case helix.EventSubStatusAuthorizationRevoked:
 		mw.LogRequest(ctx, userId, "EventSub authorization revoked")
-		err = tokens.DeleteOAuthToken(vals.Subscription.Condition.BroadcasterUserID, linking.PlatformTwitch)
+		err = tokens.DeleteOAuthToken(vals.Subscription.Condition.BroadcasterUserID, link.PlatformTwitch)
 		if err != nil {
 			mw.LogRequest(ctx, userId, "Failed to delete OAuth token:", err.Error())
 			return errors.New("failed to delete OAuth token")
@@ -90,7 +90,7 @@ func handleVerification(w http.ResponseWriter, ctx context.Context, userId strin
 }
 
 // handleNotification handles the EventSub notifications
-func handleNotification(ctx context.Context, userId string, eventsub EventSubService, tokens linking.OAuthTokenStore, vals eventSubNotification, linked linking.LinkAccountStore) error {
+func handleNotification(ctx context.Context, userId string, eventsub EventSubService, tokens link.OAuthTokenStore, vals eventSubNotification, linked link.LinkAccountStore) error {
 	var err error
 	mw.LogRequest(ctx, userId, "EventSub notification type:", vals.Subscription.Type)
 	switch vals.Subscription.Type {
@@ -108,7 +108,7 @@ func handleNotification(ctx context.Context, userId string, eventsub EventSubSer
 }
 
 // handleChannelChatMessage handles the EventSub chat message notifications
-func handleChannelChatMessage(ctx context.Context, userId string, eventsub EventSubService, tokens linking.OAuthTokenStore, vals eventSubNotification, linked linking.LinkAccountStore) error {
+func handleChannelChatMessage(ctx context.Context, userId string, eventsub EventSubService, tokens link.OAuthTokenStore, vals eventSubNotification, linked link.LinkAccountStore) error {
 	var err error
 	var chatEvent helix.EventSubChannelChatMessageEvent
 	err = json.NewDecoder(bytes.NewReader(vals.Event)).Decode(&chatEvent)
@@ -130,13 +130,13 @@ func handleChannelChatMessage(ctx context.Context, userId string, eventsub Event
 	switch args[0] {
 	// !link platform platformNameOrId
 	case "link":
-		fromPlatform := linking.PlatformTwitch
+		fromPlatform := link.PlatformTwitch
 		fromPlatformId := chatEvent.ChatterUserID
 
-		toPlatform := linking.Platform(args[1])
+		toPlatform := link.Platform(args[1])
 		toPlatformId := args[2]
 
-		if toPlatform == linking.PlatformMinecraft {
+		if toPlatform == link.PlatformMinecraft {
 			fromLinkedAccount, _ := linked.GetLinkedAccountByPlatformID(fromPlatform, fromPlatformId)
 			alreadyLinkedAccount, _ := linked.GetLinkedAccountByUserID(fromLinkedAccount.UserID, toPlatform)
 			toLinkedAccount, _ := linked.GetLinkedAccountByPlatformName(toPlatform, toPlatformId)

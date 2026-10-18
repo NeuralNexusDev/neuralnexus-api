@@ -10,10 +10,10 @@ import (
 
 	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
-	authaccount "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
-	perms "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
-	authsession "github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/link"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
@@ -40,7 +40,7 @@ type stubUserService struct {
 
 	deleteUserErr error
 
-	settings       *authaccount.AccountSettings
+	settings       *account.AccountSettings
 	getSettingsErr error
 
 	setPasswordAuthErr   error
@@ -51,7 +51,7 @@ var _ Service = (*stubUserService)(nil)
 
 func (s *stubUserService) GetUser(string) (*User, error) { return s.user, s.userErr }
 
-func (s *stubUserService) GetUserFromPlatform(linking.Platform, string) (*User, error) {
+func (s *stubUserService) GetUserFromPlatform(link.Platform, string) (*User, error) {
 	return s.user, s.userErr
 }
 
@@ -71,14 +71,14 @@ func (s *stubUserService) UpdateUser(userID string, update *UserUpdate) error {
 	return s.updateUserErr
 }
 
-func (s *stubUserService) UpdateUserFromPlatform(linking.Platform, string, linking.PlatformData) (*User, error) {
+func (s *stubUserService) UpdateUserFromPlatform(link.Platform, string, link.PlatformData) (*User, error) {
 	s.updateFromPlatformCalled = true
 	return s.updatedUser, s.updateFromPlatformErr
 }
 
 func (s *stubUserService) DeleteUser(string) error { return s.deleteUserErr }
 
-func (s *stubUserService) GetAccountSettings(string) (*authaccount.AccountSettings, error) {
+func (s *stubUserService) GetAccountSettings(string) (*account.AccountSettings, error) {
 	return s.settings, s.getSettingsErr
 }
 
@@ -87,7 +87,7 @@ func (s *stubUserService) SetPasswordAuthEnabled(_ string, enabled bool) error {
 	return s.setPasswordAuthErr
 }
 
-func newSessionRequest(method string, session *authsession.Session, userID, platform, body string) *http.Request {
+func newSessionRequest(method string, session *session.Session, userID, platform, body string) *http.Request {
 	ctx := context.WithValue(context.Background(), mw.SessionKey, session)
 	var r *http.Request
 	if body != "" {
@@ -105,12 +105,12 @@ func newSessionRequest(method string, session *authsession.Session, userID, plat
 	return r
 }
 
-func selfSession(userID string) *authsession.Session {
-	return &authsession.Session{UserID: userID}
+func selfSession(userID string) *session.Session {
+	return &session.Session{UserID: userID}
 }
 
-func adminUsersSession(userID string) *authsession.Session {
-	return &authsession.Session{UserID: userID, Permissions: []string{perms.ScopeAdminUsers.Node}}
+func adminUsersSession(userID string) *session.Session {
+	return &session.Session{UserID: userID, Permissions: []string{perms.ScopeAdminUsers.Node}}
 }
 
 func expectStatus(t *testing.T, w *httptest.ResponseRecorder, want int) {
@@ -203,7 +203,7 @@ func TestUR06GetUserFromPlatformHandlerForbidden(t *testing.T) {
 }
 
 func TestUR07GetUserFromPlatformHandlerServiceErrorMapsTo404(t *testing.T) {
-	svc := &stubUserService{userErr: authaccount.ErrNotFound}
+	svc := &stubUserService{userErr: account.ErrNotFound}
 	r := newSessionRequest(http.MethodGet, adminUsersSession("admin1"), "", "discord", "")
 	r.SetPathValue("platform_id", "12345")
 	w := httptest.NewRecorder()
@@ -393,7 +393,7 @@ func TestUR23UpdateUserFromPlatformHandlerMalformedBody(t *testing.T) {
 }
 
 func TestUR56UpdateUserFromPlatformHandlerMalformedBodyOtherPlatforms(t *testing.T) {
-	for _, platform := range []linking.Platform{linking.PlatformMinecraft, linking.PlatformTwitch, linking.PlatformXboxLive, linking.PlatformMicrosoft} {
+	for _, platform := range []link.Platform{link.PlatformMinecraft, link.PlatformTwitch, link.PlatformXboxLive, link.PlatformMicrosoft} {
 		t.Run("UR-56_MalformedBody_"+string(platform), func(t *testing.T) {
 			svc := &stubUserService{}
 			r := newSessionRequest(http.MethodPatch, adminUsersSession("admin1"), "", string(platform), `not json`)
@@ -460,7 +460,7 @@ func TestUR27DeleteUserHandlerServiceErrorMapsTo500(t *testing.T) {
 }
 
 func TestUR45GetAccountSettingsHandlerSelfHappyPath(t *testing.T) {
-	svc := &stubUserService{settings: &authaccount.AccountSettings{UserID: "u1", PasswordAuthEnabled: true}}
+	svc := &stubUserService{settings: &account.AccountSettings{UserID: "u1", PasswordAuthEnabled: true}}
 	r := newSessionRequest(http.MethodGet, selfSession("u1"), "u1", "", "")
 	w := httptest.NewRecorder()
 
@@ -471,7 +471,7 @@ func TestUR45GetAccountSettingsHandlerSelfHappyPath(t *testing.T) {
 }
 
 func TestUR46GetAccountSettingsHandlerAdminHappyPath(t *testing.T) {
-	svc := &stubUserService{settings: &authaccount.AccountSettings{UserID: "someone-else", PasswordAuthEnabled: true}}
+	svc := &stubUserService{settings: &account.AccountSettings{UserID: "someone-else", PasswordAuthEnabled: true}}
 	r := newSessionRequest(http.MethodGet, adminUsersSession("admin1"), "someone-else", "", "")
 	w := httptest.NewRecorder()
 
@@ -562,7 +562,7 @@ func TestUR52UpdateAccountSettingsHandlerMissingField(t *testing.T) {
 }
 
 func TestUR53UpdateAccountSettingsHandlerWouldLockAccountMapsTo400(t *testing.T) {
-	svc := &stubUserService{setPasswordAuthErr: authaccount.ErrWouldLockAccount}
+	svc := &stubUserService{setPasswordAuthErr: account.ErrWouldLockAccount}
 	r := newSessionRequest(http.MethodPatch, selfSession("u1"), "u1", "", `{"password_auth":false}`)
 	w := httptest.NewRecorder()
 
@@ -574,7 +574,7 @@ func TestUR53UpdateAccountSettingsHandlerWouldLockAccountMapsTo400(t *testing.T)
 }
 
 func TestUR54UpdateAccountSettingsHandlerNoPasswordSetMapsTo400(t *testing.T) {
-	svc := &stubUserService{setPasswordAuthErr: authaccount.ErrNoPasswordSet}
+	svc := &stubUserService{setPasswordAuthErr: account.ErrNoPasswordSet}
 	r := newSessionRequest(http.MethodPatch, selfSession("u1"), "u1", "", `{"password_auth":true}`)
 	w := httptest.NewRecorder()
 
@@ -611,7 +611,7 @@ func TestUR57GetUserFromPlatformHandlerServiceErrorMapsTo500(t *testing.T) {
 }
 
 func TestUR58GetUserHandlerNotFoundMapsTo404(t *testing.T) {
-	svc := &stubUserService{userErr: authaccount.ErrNotFound}
+	svc := &stubUserService{userErr: account.ErrNotFound}
 	r := newSessionRequest(http.MethodGet, selfSession("u1"), "u1", "", "")
 	w := httptest.NewRecorder()
 
@@ -623,7 +623,7 @@ func TestUR58GetUserHandlerNotFoundMapsTo404(t *testing.T) {
 }
 
 func TestUR59GetUserPermissionsHandlerNotFoundMapsTo404(t *testing.T) {
-	svc := &stubUserService{permissionsErr: authaccount.ErrNotFound}
+	svc := &stubUserService{permissionsErr: account.ErrNotFound}
 	r := newSessionRequest(http.MethodGet, selfSession("u1"), "u1", "", "")
 	w := httptest.NewRecorder()
 
@@ -635,7 +635,7 @@ func TestUR59GetUserPermissionsHandlerNotFoundMapsTo404(t *testing.T) {
 }
 
 func TestUR60UpdateUserHandlerNotFoundMapsTo404(t *testing.T) {
-	svc := &stubUserService{updateUserErr: authaccount.ErrNotFound}
+	svc := &stubUserService{updateUserErr: account.ErrNotFound}
 	r := newSessionRequest(http.MethodPatch, adminUsersSession("admin1"), "u1", "", `{"username":"newname"}`)
 	w := httptest.NewRecorder()
 
@@ -647,7 +647,7 @@ func TestUR60UpdateUserHandlerNotFoundMapsTo404(t *testing.T) {
 }
 
 func TestUR61UpdateUserHandlerEmailExistsMapsTo409(t *testing.T) {
-	svc := &stubUserService{updateUserErr: authaccount.ErrEmailAlreadyExists}
+	svc := &stubUserService{updateUserErr: account.ErrEmailAlreadyExists}
 	r := newSessionRequest(http.MethodPatch, adminUsersSession("admin1"), "u1", "", `{"username":"newname"}`)
 	w := httptest.NewRecorder()
 
@@ -659,7 +659,7 @@ func TestUR61UpdateUserHandlerEmailExistsMapsTo409(t *testing.T) {
 }
 
 func TestUR62UpdateUserHandlerUsernameExistsMapsTo409(t *testing.T) {
-	svc := &stubUserService{updateUserErr: authaccount.ErrUsernameAlreadyExists}
+	svc := &stubUserService{updateUserErr: account.ErrUsernameAlreadyExists}
 	r := newSessionRequest(http.MethodPatch, adminUsersSession("admin1"), "u1", "", `{"username":"newname"}`)
 	w := httptest.NewRecorder()
 
@@ -671,7 +671,7 @@ func TestUR62UpdateUserHandlerUsernameExistsMapsTo409(t *testing.T) {
 }
 
 func TestUR63UpdateUserFromPlatformHandlerNotFoundMapsTo404(t *testing.T) {
-	svc := &stubUserService{updateFromPlatformErr: authaccount.ErrNotFound}
+	svc := &stubUserService{updateFromPlatformErr: account.ErrNotFound}
 	r := newSessionRequest(http.MethodPatch, adminUsersSession("admin1"), "", "discord", `{"id":"123"}`)
 	r.SetPathValue("platform_id", "123")
 	w := httptest.NewRecorder()
@@ -684,7 +684,7 @@ func TestUR63UpdateUserFromPlatformHandlerNotFoundMapsTo404(t *testing.T) {
 }
 
 func TestUR64UpdateUserFromPlatformHandlerEmailExistsMapsTo409(t *testing.T) {
-	svc := &stubUserService{updateFromPlatformErr: authaccount.ErrEmailAlreadyExists}
+	svc := &stubUserService{updateFromPlatformErr: account.ErrEmailAlreadyExists}
 	r := newSessionRequest(http.MethodPatch, adminUsersSession("admin1"), "", "discord", `{"id":"123"}`)
 	r.SetPathValue("platform_id", "123")
 	w := httptest.NewRecorder()
@@ -697,7 +697,7 @@ func TestUR64UpdateUserFromPlatformHandlerEmailExistsMapsTo409(t *testing.T) {
 }
 
 func TestUR65UpdateUserFromPlatformHandlerUsernameExistsMapsTo409(t *testing.T) {
-	svc := &stubUserService{updateFromPlatformErr: authaccount.ErrUsernameAlreadyExists}
+	svc := &stubUserService{updateFromPlatformErr: account.ErrUsernameAlreadyExists}
 	r := newSessionRequest(http.MethodPatch, adminUsersSession("admin1"), "", "discord", `{"id":"123"}`)
 	r.SetPathValue("platform_id", "123")
 	w := httptest.NewRecorder()
@@ -710,7 +710,7 @@ func TestUR65UpdateUserFromPlatformHandlerUsernameExistsMapsTo409(t *testing.T) 
 }
 
 func TestUR66GetAccountSettingsHandlerNotFoundMapsTo404(t *testing.T) {
-	svc := &stubUserService{getSettingsErr: authaccount.ErrNotFound}
+	svc := &stubUserService{getSettingsErr: account.ErrNotFound}
 	r := newSessionRequest(http.MethodGet, selfSession("u1"), "u1", "", "")
 	w := httptest.NewRecorder()
 
@@ -722,7 +722,7 @@ func TestUR66GetAccountSettingsHandlerNotFoundMapsTo404(t *testing.T) {
 }
 
 func TestUR67UpdateAccountSettingsHandlerNotFoundMapsTo404(t *testing.T) {
-	svc := &stubUserService{setPasswordAuthErr: authaccount.ErrNotFound}
+	svc := &stubUserService{setPasswordAuthErr: account.ErrNotFound}
 	r := newSessionRequest(http.MethodPatch, selfSession("u1"), "u1", "", `{"password_auth":true}`)
 	w := httptest.NewRecorder()
 
@@ -739,8 +739,8 @@ func TestUR68to71UpdateUserRoleIDFailures(t *testing.T) {
 		err error
 		msg string
 	}{
-		{"UR-68_UpdateUserInvalidRoleIDMapsTo400", authaccount.ErrInvalidRoleID, msgInvalidRoleID},
-		{"UR-69_UpdateUserUnknownRoleIDMapsTo400", authaccount.ErrUnknownRoleID, msgUnknownRoleID},
+		{"UR-68_UpdateUserInvalidRoleIDMapsTo400", account.ErrInvalidRoleID, msgInvalidRoleID},
+		{"UR-69_UpdateUserUnknownRoleIDMapsTo400", account.ErrUnknownRoleID, msgUnknownRoleID},
 	}
 	for _, c := range cases {
 		t.Run(c.id, func(t *testing.T) {
@@ -757,8 +757,8 @@ func TestUR68to71UpdateUserRoleIDFailures(t *testing.T) {
 		err error
 		msg string
 	}{
-		{"UR-70_UpdateUserFromPlatformInvalidRoleIDMapsTo400", authaccount.ErrInvalidRoleID, msgInvalidRoleID},
-		{"UR-71_UpdateUserFromPlatformUnknownRoleIDMapsTo400", authaccount.ErrUnknownRoleID, msgUnknownRoleID},
+		{"UR-70_UpdateUserFromPlatformInvalidRoleIDMapsTo400", account.ErrInvalidRoleID, msgInvalidRoleID},
+		{"UR-71_UpdateUserFromPlatformUnknownRoleIDMapsTo400", account.ErrUnknownRoleID, msgUnknownRoleID},
 	}
 	for _, c := range platformCases {
 		t.Run(c.id, func(t *testing.T) {
@@ -802,7 +802,7 @@ func TestUR72to73UpdateUserRespondsWithTheStoredAccount(t *testing.T) {
 	})
 }
 
-func newListUsersRequest(session *authsession.Session, query string) *http.Request {
+func newListUsersRequest(session *session.Session, query string) *http.Request {
 	ctx := context.WithValue(context.Background(), mw.SessionKey, session)
 	return httptest.NewRequest(http.MethodGet, "/api/v1/users"+query, nil).WithContext(ctx)
 }

@@ -3,7 +3,7 @@ package events
 import (
 	"context"
 	"errors"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/linking"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/link"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/goccy/go-json"
 	"github.com/jackc/pgx/v5"
@@ -56,18 +56,18 @@ const (
 
 // Event represents a generic event in the system
 type Event struct {
-	ID        string           `json:"id" db:"id"`
-	UserID    string           `json:"user_id" db:"user_id"`
-	Platform  linking.Platform `json:"platform" db:"platform"`
-	Type      EventType        `json:"type" db:"type"`
-	Status    EventStatus      `json:"status" db:"status"`
-	Payload   json.RawMessage  `json:"payload" db:"payload"`
-	CreatedAt time.Time        `json:"created_at" db:"created_at"`
-	UpdatedAt time.Time        `json:"updated_at" db:"updated_at"`
+	ID        string          `json:"id" db:"id"`
+	UserID    string          `json:"user_id" db:"user_id"`
+	Platform  link.Platform   `json:"platform" db:"platform"`
+	Type      EventType       `json:"type" db:"type"`
+	Status    EventStatus     `json:"status" db:"status"`
+	Payload   json.RawMessage `json:"payload" db:"payload"`
+	CreatedAt time.Time       `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time       `json:"updated_at" db:"updated_at"`
 }
 
 // NewEvent creates a new event
-func NewEvent(userId string, platform linking.Platform, eventType EventType, payload json.RawMessage) (*Event, error) {
+func NewEvent(userId string, platform link.Platform, eventType EventType, payload json.RawMessage) (*Event, error) {
 	id, err := database.GenSnowflake()
 	if err != nil {
 		return nil, err
@@ -85,7 +85,7 @@ func NewEvent(userId string, platform linking.Platform, eventType EventType, pay
 // EventStore interface for storing events
 type EventStore interface {
 	GetEvent(id string) (*Event, error)
-	GetEventsByPlatform(platform linking.Platform) ([]*Event, error)
+	GetEventsByPlatform(platform link.Platform) ([]*Event, error)
 	CreateEvent(event *Event) error
 	UpdateEvent(event *Event) error
 }
@@ -116,7 +116,7 @@ func (s *store) GetEvent(id string) (*Event, error) {
 }
 
 // GetEventsByPlatform retrieves all events for a specific platform
-func (s *store) GetEventsByPlatform(platform linking.Platform) ([]*Event, error) {
+func (s *store) GetEventsByPlatform(platform link.Platform) ([]*Event, error) {
 	rows, err := s.db.Query(context.Background(), "SELECT * FROM event_log WHERE platform = $1", platform)
 	if err != nil {
 		log.Println(ErrEventsQueryFailed, err)
@@ -150,7 +150,7 @@ func (s *store) UpdateEvent(event *Event) error {
 // EventService interface for handling events
 type EventService interface {
 	GetEvent(id string) (*Event, error)
-	GetEventsByPlatform(platform linking.Platform) ([]*Event, error)
+	GetEventsByPlatform(platform link.Platform) ([]*Event, error)
 	CreateEvent(event *Event) error
 	UpdateEventStatus(id string, status EventStatus) error
 	ReplayEventById(id string) error
@@ -172,7 +172,7 @@ func (s *service) GetEvent(id string) (*Event, error) {
 }
 
 // GetEventsByPlatform retrieves all events for a specific platform
-func (s *service) GetEventsByPlatform(platform linking.Platform) ([]*Event, error) {
+func (s *service) GetEventsByPlatform(platform link.Platform) ([]*Event, error) {
 	return s.store.GetEventsByPlatform(platform)
 }
 
