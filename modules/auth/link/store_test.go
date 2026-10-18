@@ -628,7 +628,7 @@ func TestLS77to78_NotFoundSentinels(t *testing.T) {
 
 func TestST69SetPasswordAuthEnabledEnableAllowedWithPassword(t *testing.T) {
 	as, las, ass := stLiveStore(t)
-	t.Run("ST-69_EnableAllowedWithPassword", func(t *testing.T) {
+	t.Run("LKS-69_EnableAllowedWithPassword", func(t *testing.T) {
 		a := stSeedPasswordAccount(t, as, "910000000000000023")
 		stSeedLink(t, las, a.UserID, PlatformDiscord, "sttest-discord-23", true, true)
 
@@ -650,7 +650,7 @@ func TestST69SetPasswordAuthEnabledEnableAllowedWithPassword(t *testing.T) {
 
 func TestST71SetPasswordAuthEnabledDisableAllowedWithLinkedAccount(t *testing.T) {
 	as, las, ass := stLiveStore(t)
-	t.Run("ST-71_DisableAllowedWithLinkedAccount", func(t *testing.T) {
+	t.Run("LKS-71_DisableAllowedWithLinkedAccount", func(t *testing.T) {
 		a := stSeedPasswordAccount(t, as, "910000000000000025")
 		stSeedLink(t, las, a.UserID, PlatformDiscord, "sttest-discord-25", true, true)
 
@@ -669,7 +669,7 @@ func TestST71SetPasswordAuthEnabledDisableAllowedWithLinkedAccount(t *testing.T)
 
 func TestST72SetPasswordAuthEnabledConcurrentWithDeleteLinkedAccountNeverBothSucceed(t *testing.T) {
 	as, las, ass := stLiveStore(t)
-	t.Run("ST-72_ConcurrentWithDeleteLinkedAccountNeverBothSucceed", func(t *testing.T) {
+	t.Run("LKS-72_ConcurrentWithDeleteLinkedAccountNeverBothSucceed", func(t *testing.T) {
 		const trials = 50
 		for i := 0; i < trials; i++ {
 			userID := fmt.Sprintf("91000000000003%04d", i)
@@ -714,7 +714,7 @@ func TestST72SetPasswordAuthEnabledConcurrentWithDeleteLinkedAccountNeverBothSuc
 
 func TestST73SetPasswordAuthEnabledConcurrentWithSetLinkedAccountLoginEnabledNeverBothSucceed(t *testing.T) {
 	as, las, ass := stLiveStore(t)
-	t.Run("ST-73_ConcurrentWithSetLinkedAccountLoginEnabledNeverBothSucceed", func(t *testing.T) {
+	t.Run("LKS-73_ConcurrentWithSetLinkedAccountLoginEnabledNeverBothSucceed", func(t *testing.T) {
 		const trials = 50
 		for i := 0; i < trials; i++ {
 			userID := fmt.Sprintf("91000000000004%04d", i)

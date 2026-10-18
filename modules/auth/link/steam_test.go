@@ -157,22 +157,22 @@ func stRequestWithSession(session *session.Session) *http.Request {
 func TestST01to04SteamDataAccessors(t *testing.T) {
 	s := &SteamData{SteamID64: "76500000000000001", PersonaName: "bob", ProfileURL: "https://steamcommunity.com/id/bob", AvatarURL: "https://avatar.test/bob.png"}
 
-	t.Run("ST-01_GetID", func(t *testing.T) {
+	t.Run("LKS-01_GetID", func(t *testing.T) {
 		if got := s.GetID(); got != "76500000000000001" {
 			t.Errorf("GetID() = %q, want %q", got, "76500000000000001")
 		}
 	})
-	t.Run("ST-02_GetUsername", func(t *testing.T) {
+	t.Run("LKS-02_GetUsername", func(t *testing.T) {
 		if got := s.GetUsername(); got != "bob" {
 			t.Errorf("GetUsername() = %q, want %q", got, "bob")
 		}
 	})
-	t.Run("ST-03_GetEmail", func(t *testing.T) {
+	t.Run("LKS-03_GetEmail", func(t *testing.T) {
 		if got := s.GetEmail(); got != "" {
 			t.Errorf("GetEmail() = %q, want empty string", got)
 		}
 	})
-	t.Run("ST-04_GetData", func(t *testing.T) {
+	t.Run("LKS-04_GetData", func(t *testing.T) {
 		data := s.GetData()
 		var roundTripped SteamData
 		if err := json.Unmarshal([]byte(data), &roundTripped); err != nil {
@@ -185,7 +185,7 @@ func TestST01to04SteamDataAccessors(t *testing.T) {
 }
 
 func TestST05CreateLinkedAccount(t *testing.T) {
-	t.Run("ST-05_CreateLinkedAccount", func(t *testing.T) {
+	t.Run("LKS-05_CreateLinkedAccount", func(t *testing.T) {
 		s := &SteamData{SteamID64: "76500000000000001", PersonaName: "bob"}
 		la := s.CreateLinkedAccount("user-1")
 
@@ -210,7 +210,7 @@ func validSteamQuery(claimedID string) url.Values {
 }
 
 func TestST06to12VerifySteamOpenIDCallback(t *testing.T) {
-	t.Run("ST-06_Success", func(t *testing.T) {
+	t.Run("LKS-06_Success", func(t *testing.T) {
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path != "/" {
 				t.Errorf("unexpected path: %s", r.URL.Path)
@@ -236,7 +236,7 @@ func TestST06to12VerifySteamOpenIDCallback(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-07_WrongMode", func(t *testing.T) {
+	t.Run("LKS-07_WrongMode", func(t *testing.T) {
 		q := validSteamQuery("76500000000000001")
 		q.Set("openid.mode", "cancel")
 		_, err := VerifySteamOpenIDCallback(q)
@@ -245,7 +245,7 @@ func TestST06to12VerifySteamOpenIDCallback(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-08_InvalidClaimedID", func(t *testing.T) {
+	t.Run("LKS-08_InvalidClaimedID", func(t *testing.T) {
 		q := validSteamQuery("76500000000000001")
 		q.Set("openid.claimed_id", "not-a-steam-url")
 		_, err := VerifySteamOpenIDCallback(q)
@@ -254,7 +254,7 @@ func TestST06to12VerifySteamOpenIDCallback(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-09_SignedDoesNotCoverClaimedID", func(t *testing.T) {
+	t.Run("LKS-09_SignedDoesNotCoverClaimedID", func(t *testing.T) {
 		q := validSteamQuery("76500000000000001")
 		q.Set("openid.signed", "op_endpoint,identity,return_to")
 		_, err := VerifySteamOpenIDCallback(q)
@@ -263,7 +263,7 @@ func TestST06to12VerifySteamOpenIDCallback(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-10_NetworkErrorIsNotInvalidAssertion", func(t *testing.T) {
+	t.Run("LKS-10_NetworkErrorIsNotInvalidAssertion", func(t *testing.T) {
 		restore := setSteamURLs("http://127.0.0.1:1", "")
 		defer restore()
 
@@ -276,7 +276,7 @@ func TestST06to12VerifySteamOpenIDCallback(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-11_NonOKStatus", func(t *testing.T) {
+	t.Run("LKS-11_NonOKStatus", func(t *testing.T) {
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 		}))
@@ -293,7 +293,7 @@ func TestST06to12VerifySteamOpenIDCallback(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-12_RejectedByServer", func(t *testing.T) {
+	t.Run("LKS-12_RejectedByServer", func(t *testing.T) {
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte("ns:http://specs.openid.net/auth/2.0\nis_valid:false\n"))
 		}))
@@ -328,9 +328,9 @@ func TestST13to15ResponseIsValid(t *testing.T) {
 		body string
 		want bool
 	}{
-		{"ST-13_IsValidTrue", "ns:foo\nis_valid:true\n", true},
-		{"ST-14_IsValidFalseOrAbsent", "ns:foo\nis_valid:false\n", false},
-		{"ST-15_EmptyBody", "", false},
+		{"LKS-13_IsValidTrue", "ns:foo\nis_valid:true\n", true},
+		{"LKS-14_IsValidFalseOrAbsent", "ns:foo\nis_valid:false\n", false},
+		{"LKS-15_EmptyBody", "", false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -342,7 +342,7 @@ func TestST13to15ResponseIsValid(t *testing.T) {
 }
 
 func TestST16to22GetSteamUser(t *testing.T) {
-	t.Run("ST-16_Success", func(t *testing.T) {
+	t.Run("LKS-16_Success", func(t *testing.T) {
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte(`{"response":{"players":[{"steamid":"76500000000000001","personaname":"bob","profileurl":"https://steamcommunity.com/id/bob","avatarfull":"https://avatar.test/bob.png"}]}}`))
 		}))
@@ -361,7 +361,7 @@ func TestST16to22GetSteamUser(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-17_MissingAPIKey", func(t *testing.T) {
+	t.Run("LKS-17_MissingAPIKey", func(t *testing.T) {
 		restoreKey := setSteamAPIKeyForTest(t, "")
 		defer restoreKey()
 
@@ -371,7 +371,7 @@ func TestST16to22GetSteamUser(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-18_NetworkError", func(t *testing.T) {
+	t.Run("LKS-18_NetworkError", func(t *testing.T) {
 		restore := setSteamURLs("", "http://127.0.0.1:1/")
 		restoreKey := setSteamAPIKeyForTest(t, "test-key")
 		defer restore()
@@ -383,7 +383,7 @@ func TestST16to22GetSteamUser(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-19_NonOKStatus", func(t *testing.T) {
+	t.Run("LKS-19_NonOKStatus", func(t *testing.T) {
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 		}))
@@ -399,7 +399,7 @@ func TestST16to22GetSteamUser(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-20_MalformedJSON", func(t *testing.T) {
+	t.Run("LKS-20_MalformedJSON", func(t *testing.T) {
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte(`{not-json`))
 		}))
@@ -415,7 +415,7 @@ func TestST16to22GetSteamUser(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-21_NoPlayersReturned", func(t *testing.T) {
+	t.Run("LKS-21_NoPlayersReturned", func(t *testing.T) {
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte(`{"response":{"players":[]}}`))
 		}))
@@ -431,7 +431,7 @@ func TestST16to22GetSteamUser(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-22_MismatchedSteamID", func(t *testing.T) {
+	t.Run("LKS-22_MismatchedSteamID", func(t *testing.T) {
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte(`{"response":{"players":[{"steamid":"76500000000000099","personaname":"bob"}]}}`))
 		}))
@@ -460,7 +460,7 @@ func setSteamAPIKeyForTest(t *testing.T, value string) func() {
 func TestST23to25ProcessSteamLogin(t *testing.T) {
 	user := &SteamData{SteamID64: "76500000000000001", PersonaName: "bob"}
 
-	t.Run("ST-23_CreatesAccount", func(t *testing.T) {
+	t.Run("LKS-23_CreatesAccount", func(t *testing.T) {
 		as := newSTMockAccountService()
 		las := newSTMockLinkAccountStore()
 		ss := &stMockSessionService{}
@@ -483,7 +483,7 @@ func TestST23to25ProcessSteamLogin(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-24_AccountResolutionFails", func(t *testing.T) {
+	t.Run("LKS-24_AccountResolutionFails", func(t *testing.T) {
 		as := newSTMockAccountService()
 		as.addAccountErr = testerrors.ErrDBDown
 		las := newSTMockLinkAccountStore()
@@ -495,7 +495,7 @@ func TestST23to25ProcessSteamLogin(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-25_AddSessionFails", func(t *testing.T) {
+	t.Run("LKS-25_AddSessionFails", func(t *testing.T) {
 		as := newSTMockAccountService()
 		las := newSTMockLinkAccountStore()
 		ss := &stMockSessionService{addSessionErr: testerrors.ErrDBDown}
@@ -510,7 +510,7 @@ func TestST23to25ProcessSteamLogin(t *testing.T) {
 func TestST26to29ProcessSteamLink(t *testing.T) {
 	user := &SteamData{SteamID64: "76500000000000001", PersonaName: "bob"}
 
-	t.Run("ST-26_LinksToSession", func(t *testing.T) {
+	t.Run("LKS-26_LinksToSession", func(t *testing.T) {
 		las := newSTMockLinkAccountStore()
 		session := &session.Session{ID: "sess-1", UserID: "user-1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
 		req := stRequestWithSession(session)
@@ -527,7 +527,7 @@ func TestST26to29ProcessSteamLink(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-27_NoSessionRejected", func(t *testing.T) {
+	t.Run("LKS-27_NoSessionRejected", func(t *testing.T) {
 		las := newSTMockLinkAccountStore()
 		req := stRequestWithSession(nil)
 
@@ -537,7 +537,7 @@ func TestST26to29ProcessSteamLink(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-28_ExpiredSessionRejected", func(t *testing.T) {
+	t.Run("LKS-28_ExpiredSessionRejected", func(t *testing.T) {
 		las := newSTMockLinkAccountStore()
 		session := &session.Session{ID: "sess-1", UserID: "user-1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
 		req := stRequestWithSession(session)
@@ -548,7 +548,7 @@ func TestST26to29ProcessSteamLink(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-29_AlreadyLinkedToDifferentAccountRejected", func(t *testing.T) {
+	t.Run("LKS-29_AlreadyLinkedToDifferentAccountRejected", func(t *testing.T) {
 		las := newSTMockLinkAccountStore()
 		las.byPlatformID[PlatformSteam] = map[string]*LinkedAccount{
 			user.SteamID64: {UserID: "other-user", Platform: PlatformSteam, PlatformID: user.SteamID64},
