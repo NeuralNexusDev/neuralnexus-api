@@ -1,9 +1,11 @@
 package minecraft
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -1803,6 +1805,43 @@ func TestSV128to131_GeyserProfileSkinStepRejection(t *testing.T) {
 		_, err := s.GetGeyserProfileByGamertag("Notch")
 		if !errors.Is(err, ErrInvalidGeyserRequest) {
 			t.Errorf("err = %v, want %v", err, ErrInvalidGeyserRequest)
+		}
+	})
+}
+
+func TestSV132to133_ResolveProfileDBErrorLogging(t *testing.T) {
+	captureLog := func(t *testing.T) *bytes.Buffer {
+		var buf bytes.Buffer
+		prev := log.Writer()
+		log.SetOutput(&buf)
+		t.Cleanup(func() { log.SetOutput(prev) })
+		return &buf
+	}
+	mojang := func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, mcMustJSON(t, Player{ID: "fetched", ProfileActions: []string{}}))
+	}
+
+	t.Run("SV-132_DBPlayerNotFoundNotLogged", func(t *testing.T) {
+		buf := captureLog(t)
+		store := &mcMockStore{getProfileByUUID: func(string) (*Profile, error) { return nil, ErrPlayerNotFound }}
+		s := mcNewService(t, store, mojang)
+		if _, err := s.resolveProfile("id"); err != nil {
+			t.Fatalf("err = %v, want nil", err)
+		}
+		if strings.Contains(buf.String(), "Failed to get profile from DB") {
+			t.Errorf("log = %q, want no DB failure line", buf.String())
+		}
+	})
+
+	t.Run("SV-133_DBOtherErrorLogged", func(t *testing.T) {
+		buf := captureLog(t)
+		store := &mcMockStore{getProfileByUUID: func(string) (*Profile, error) { return nil, testutil.ErrBoom }}
+		s := mcNewService(t, store, mojang)
+		if _, err := s.resolveProfile("id"); err != nil {
+			t.Fatalf("err = %v, want nil", err)
+		}
+		if !strings.Contains(buf.String(), "Failed to get profile from DB") {
+			t.Errorf("log = %q, want the DB failure line", buf.String())
 		}
 	})
 }

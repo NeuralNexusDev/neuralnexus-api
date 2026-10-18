@@ -1,7 +1,6 @@
 package minecraft
 
 import (
-	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -45,16 +44,15 @@ func GetMojangPlayerByNameHandler(s Service) http.HandlerFunc {
 		}
 
 		player, err := s.GetMojangPlayerByName(name)
-		if err != nil {
-			if errors.Is(err, ErrPlayerNotFound) {
-				responses.NotFound(w, r, msgPlayerNotFound)
-				return
-			}
+		switch err {
+		case ErrPlayerNotFound:
+			responses.NotFound(w, r, msgPlayerNotFound)
+		case nil:
+			responses.StructOK(w, r, player)
+		default:
 			log.Println("Failed to get player by name:\n\t", err)
 			responses.InternalServerError(w, r, msgFailedToGetPlayer)
-			return
 		}
-		responses.StructOK(w, r, player)
 	}
 }
 
@@ -68,16 +66,15 @@ func GetMojangPlayerByUUIDHandler(s Service) http.HandlerFunc {
 		}
 
 		player, err := s.GetMojangPlayerByUUID(id)
-		if err != nil {
-			if errors.Is(err, ErrPlayerNotFound) {
-				responses.NotFound(w, r, msgPlayerNotFound)
-				return
-			}
+		switch err {
+		case ErrPlayerNotFound:
+			responses.NotFound(w, r, msgPlayerNotFound)
+		case nil:
+			responses.StructOK(w, r, player)
+		default:
 			log.Println("Failed to get player by UUID:\n\t", err)
 			responses.InternalServerError(w, r, msgFailedToGetPlayer)
-			return
 		}
-		responses.StructOK(w, r, player)
 	}
 }
 
@@ -129,16 +126,15 @@ func GetMojangProfileHandler(s Service) http.HandlerFunc {
 		signed := r.URL.Query().Get("unsigned") == "false"
 
 		player, err := s.GetMojangProfile(id, signed)
-		if err != nil {
-			if errors.Is(err, ErrPlayerNotFound) {
-				responses.NoContent(w, r)
-				return
-			}
+		switch err {
+		case ErrPlayerNotFound:
+			responses.NoContent(w, r)
+		case nil:
+			responses.StructOK(w, r, player)
+		default:
 			log.Println(logFailedToGetPlayerProfile, err)
 			responses.InternalServerError(w, r, msgFailedToGetPlayerProfile)
-			return
 		}
-		responses.StructOK(w, r, player)
 	}
 }
 
@@ -152,16 +148,15 @@ func GetProfileHandler(s Service) http.HandlerFunc {
 		}
 
 		profile, err := s.GetProfile(id)
-		if err != nil {
-			if errors.Is(err, ErrPlayerNotFound) {
-				responses.NoContent(w, r)
-				return
-			}
+		switch err {
+		case ErrPlayerNotFound:
+			responses.NoContent(w, r)
+		case nil:
+			responses.StructOK(w, r, profile)
+		default:
 			log.Println(logFailedToGetPlayerProfile, err)
 			responses.InternalServerError(w, r, msgFailedToGetPlayerProfile)
-			return
 		}
-		responses.StructOK(w, r, profile)
 	}
 }
 
@@ -175,16 +170,15 @@ func GetProfileByNameHandler(s Service) http.HandlerFunc {
 		}
 
 		profile, err := s.GetProfileByName(name)
-		if err != nil {
-			if errors.Is(err, ErrPlayerNotFound) {
-				responses.NoContent(w, r)
-				return
-			}
+		switch err {
+		case ErrPlayerNotFound:
+			responses.NoContent(w, r)
+		case nil:
+			responses.StructOK(w, r, profile)
+		default:
 			log.Println("Failed to get player profile by name:\n\t", err)
 			responses.InternalServerError(w, r, msgFailedToGetPlayerProfile)
-			return
 		}
-		responses.StructOK(w, r, profile)
 	}
 }
 
@@ -198,20 +192,17 @@ func GetGeyserXUIDHandler(s Service) http.HandlerFunc {
 		}
 
 		player, err := s.GetGeyserXUID(gamertag)
-		if err != nil {
-			if errors.Is(err, ErrPlayerNotFound) {
-				responses.NotFound(w, r, msgPlayerNotFound)
-				return
-			}
-			if errors.Is(err, ErrInvalidGeyserRequest) {
-				responses.BadRequest(w, r, msgInvalidGamertag)
-				return
-			}
+		switch err {
+		case ErrPlayerNotFound:
+			responses.NotFound(w, r, msgPlayerNotFound)
+		case ErrInvalidGeyserRequest:
+			responses.BadRequest(w, r, msgInvalidGamertag)
+		case nil:
+			responses.StructOK(w, r, player)
+		default:
 			log.Println("Failed to get Geyser XUID:\n\t", err)
 			responses.InternalServerError(w, r, msgFailedToGetGeyserXUID)
-			return
 		}
-		responses.StructOK(w, r, player)
 	}
 }
 
@@ -225,20 +216,17 @@ func GetGeyserSkinHandler(s Service) http.HandlerFunc {
 		}
 
 		skin, err := s.GetGeyserSkin(xuid)
-		if err != nil {
-			if errors.Is(err, ErrSkinNotFound) {
-				responses.NoContent(w, r)
-				return
-			}
-			if errors.Is(err, ErrInvalidGeyserRequest) {
-				responses.BadRequest(w, r, msgInvalidXuid)
-				return
-			}
+		switch err {
+		case ErrSkinNotFound:
+			responses.NoContent(w, r)
+		case ErrInvalidGeyserRequest:
+			responses.BadRequest(w, r, msgInvalidXuid)
+		case nil:
+			responses.StructOK(w, r, skin)
+		default:
 			log.Println("Failed to get Geyser skin:\n\t", err)
 			responses.InternalServerError(w, r, msgFailedToGetGeyserSkin)
-			return
 		}
-		responses.StructOK(w, r, skin)
 	}
 }
 
@@ -253,20 +241,17 @@ func GetGeyserProfileHandler(s Service) http.HandlerFunc {
 		}
 
 		profile, err := s.GetGeyserProfile(xuid)
-		if err != nil {
-			if errors.Is(err, ErrPlayerNotFound) {
-				responses.NotFound(w, r, msgPlayerNotFound)
-				return
-			}
-			if errors.Is(err, ErrInvalidGeyserRequest) {
-				responses.BadRequest(w, r, msgInvalidXuid)
-				return
-			}
+		switch err {
+		case ErrPlayerNotFound:
+			responses.NotFound(w, r, msgPlayerNotFound)
+		case ErrInvalidGeyserRequest:
+			responses.BadRequest(w, r, msgInvalidXuid)
+		case nil:
+			responses.StructOK(w, r, profile)
+		default:
 			log.Println("Failed to get Geyser profile:\n\t", err)
 			responses.InternalServerError(w, r, msgFailedToGetGeyserProfile)
-			return
 		}
-		responses.StructOK(w, r, profile)
 	}
 }
 
@@ -280,20 +265,17 @@ func GetGeyserProfileByNameHandler(s Service) http.HandlerFunc {
 		}
 
 		profile, err := s.GetGeyserProfileByGamertag(gamertag)
-		if err != nil {
-			if errors.Is(err, ErrPlayerNotFound) {
-				responses.NotFound(w, r, msgPlayerNotFound)
-				return
-			}
-			if errors.Is(err, ErrInvalidGeyserRequest) {
-				responses.BadRequest(w, r, msgInvalidGamertag)
-				return
-			}
+		switch err {
+		case ErrPlayerNotFound:
+			responses.NotFound(w, r, msgPlayerNotFound)
+		case ErrInvalidGeyserRequest:
+			responses.BadRequest(w, r, msgInvalidGamertag)
+		case nil:
+			responses.StructOK(w, r, profile)
+		default:
 			log.Println("Failed to get Geyser profile by name:\n\t", err)
 			responses.InternalServerError(w, r, msgFailedToGetGeyserProfile)
-			return
 		}
-		responses.StructOK(w, r, profile)
 	}
 }
 
@@ -308,7 +290,7 @@ func GetTextureHandler(s Service) http.HandlerFunc {
 
 		result, err := s.GetTextureContent(hash)
 		if err != nil {
-			if errors.Is(err, ErrTextureNotFound) {
+			if err == ErrTextureNotFound {
 				responses.NotFound(w, r, msgTextureNotFound)
 				return
 			}
@@ -334,7 +316,7 @@ func GetGeyserTextureHandler(s Service) http.HandlerFunc {
 
 		result, err := s.GetGeyserTextureContent(hash)
 		if err != nil {
-			if errors.Is(err, ErrTextureNotFound) {
+			if err == ErrTextureNotFound {
 				responses.NotFound(w, r, msgTextureNotFound)
 				return
 			}

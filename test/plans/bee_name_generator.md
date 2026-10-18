@@ -40,6 +40,9 @@
 | BNH-25 | RejectBeeNameSuggestionHandler | Edge Case | Empty name path value | session has the node; name = "" | 400 Bad Request, store not called, `detail` is `msgInvalidName` | P2 |  |
 | BNH-26 | RejectBeeNameSuggestionHandler | Happy Path | Valid name, authorized session | fake.RejectBeeNameSuggestion -> (name, nil) | 204 No Content | P1 |  |
 | BNH-27 | RejectBeeNameSuggestionHandler | Error Path | Store returns an error | fake.RejectBeeNameSuggestion -> ("", err) | 500 Internal Server Error (`msgFailedToRejectBeeNameSuggestion`) | P2 |  |
+| BNH-28 | UploadBeeNameHandler | Error Path | Store reports the name already exists | fake.UploadBeeName -> ("", ErrBeeNameExists) | 409 Conflict, detail is "That bee name already exists" | P2 |  |
+| BNH-29 | SubmitBeeNameHandler | Error Path | Store reports the suggestion already exists | fake.SubmitBeeName -> ("", ErrBeeNameSuggestionExists) | 409 Conflict, detail is "That bee name has already been suggested" | P2 |  |
+| BNH-30 | AcceptBeeNameSuggestionHandler | Error Path | Store reports the name already exists | fake.AcceptBeeNameSuggestion -> ("", ErrBeeNameExists) | 409 Conflict, detail is "That bee name already exists" | P2 |  |
 
 ## store.go
 

@@ -345,3 +345,32 @@ func TestHD24to27_RejectBeeNameSuggestionHandler(t *testing.T) {
 		bngRequireDetail(t, w, msgFailedToRejectBeeNameSuggestion)
 	})
 }
+
+func TestHD28to30_StoreConflictMapping(t *testing.T) {
+	t.Run("BNH-28_UploadBeeNameExistsConflict", func(t *testing.T) {
+		s := &bngMockStore{uploadBeeName: func(string) (string, error) { return "", ErrBeeNameExists }}
+		h := UploadBeeNameHandler(s)
+		w := httptest.NewRecorder()
+		h(w, bngRequest(t, http.MethodPut, "/Buzzy", map[string]string{"name": "Buzzy"}, bngAuthorizedSession))
+		bngRequireStatus(t, w, http.StatusConflict)
+		bngRequireDetail(t, w, "That bee name already exists")
+	})
+
+	t.Run("BNH-29_SubmitBeeNameSuggestionExistsConflict", func(t *testing.T) {
+		s := &bngMockStore{submitBeeName: func(string) (string, error) { return "", ErrBeeNameSuggestionExists }}
+		h := SubmitBeeNameHandler(s)
+		w := httptest.NewRecorder()
+		h(w, bngRequest(t, http.MethodPost, "/Buzzy", map[string]string{"name": "Buzzy"}, nil))
+		bngRequireStatus(t, w, http.StatusConflict)
+		bngRequireDetail(t, w, "That bee name has already been suggested")
+	})
+
+	t.Run("BNH-30_AcceptBeeNameSuggestionExistsConflict", func(t *testing.T) {
+		s := &bngMockStore{acceptBeeNameSuggestion: func(string) (string, error) { return "", ErrBeeNameExists }}
+		h := AcceptBeeNameSuggestionHandler(s)
+		w := httptest.NewRecorder()
+		h(w, bngRequest(t, http.MethodPost, "/Buzzy", map[string]string{"name": "Buzzy"}, bngAuthorizedSession))
+		bngRequireStatus(t, w, http.StatusConflict)
+		bngRequireDetail(t, w, "That bee name already exists")
+	})
+}

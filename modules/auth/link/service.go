@@ -1,7 +1,6 @@
 package link
 
 import (
-	"errors"
 	"log"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
@@ -48,7 +47,7 @@ func (s *service) UpdateFromPlatform(platform Platform, platformID string, data 
 	// If the user doesn't exist, create a new account
 	la, err := s.als.GetLinkedAccountByPlatformID(platform, platformID)
 	if err != nil {
-		if !errors.Is(err, account.ErrNotFound) {
+		if err != account.ErrNotFound {
 			return "", err
 		}
 		a, err := account.NewIDOnlyAccount()
@@ -72,7 +71,7 @@ func (s *service) UpdateFromPlatform(platform Platform, platformID string, data 
 				log.Println(logLinkCleanupFailed, err)
 				return "", delErr
 			}
-			if !errors.Is(err, ErrAlreadyLinked) {
+			if err != ErrAlreadyLinked {
 				return "", err
 			}
 			// Lost the race to link this platform account: another

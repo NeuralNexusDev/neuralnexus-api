@@ -1,7 +1,6 @@
 package account
 
 import (
-	"errors"
 	"log"
 	"net/http"
 	"time"
@@ -43,7 +42,7 @@ func LoginHandler(as Service, ss session.Service) http.HandlerFunc {
 			account, err = as.GetAccountByEmail(login.Email)
 		}
 		if err != nil {
-			if !errors.Is(err, ErrNotFound) {
+			if err != ErrNotFound {
 				log.Println("Failed to look up account:\n\t", err)
 				responses.InternalServerError(w, r, msgAuthenticationFailed)
 				return
