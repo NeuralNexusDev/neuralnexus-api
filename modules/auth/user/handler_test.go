@@ -48,13 +48,13 @@ type stubService struct {
 
 var _ Service = (*stubService)(nil)
 
-func (s *stubService) GetUser(string) (*User, error) { return s.user, s.userErr }
+func (s *stubService) GetUser(context.Context, string) (*User, error) { return s.user, s.userErr }
 
-func (s *stubService) GetUserFromPlatform(link.Platform, string) (*User, error) {
+func (s *stubService) GetUserFromPlatform(context.Context, link.Platform, string) (*User, error) {
 	return s.user, s.userErr
 }
 
-func (s *stubService) ListUsers(limit, offset int) ([]*User, error) {
+func (s *stubService) ListUsers(_ context.Context, limit, offset int) ([]*User, error) {
 	s.listCalls++
 	s.listLimit, s.listOffset = limit, offset
 	return s.listed, s.listErr
@@ -64,24 +64,24 @@ func (s *stubService) GetUserPermissions(context.Context, string) ([]string, err
 	return s.permissions, s.permissionsErr
 }
 
-func (s *stubService) UpdateUser(userID string, update *UserUpdate) error {
+func (s *stubService) UpdateUser(_ context.Context, userID string, update *UserUpdate) error {
 	s.updatedUserID = userID
 	s.updatedUpdate = update
 	return s.updateUserErr
 }
 
-func (s *stubService) UpdateUserFromPlatform(link.Platform, string, link.PlatformData) (*User, error) {
+func (s *stubService) UpdateUserFromPlatform(context.Context, link.Platform, string, link.PlatformData) (*User, error) {
 	s.updateFromPlatformCalled = true
 	return s.updatedUser, s.updateFromPlatformErr
 }
 
-func (s *stubService) DeleteUser(string) error { return s.deleteUserErr }
+func (s *stubService) DeleteUser(context.Context, string) error { return s.deleteUserErr }
 
-func (s *stubService) GetAccountSettings(string) (*account.AccountSettings, error) {
+func (s *stubService) GetAccountSettings(context.Context, string) (*account.AccountSettings, error) {
 	return s.settings, s.getSettingsErr
 }
 
-func (s *stubService) SetPasswordAuthEnabled(_ string, enabled bool) error {
+func (s *stubService) SetPasswordAuthEnabled(_ context.Context, _ string, enabled bool) error {
 	s.setPasswordAuthCalls = append(s.setPasswordAuthCalls, enabled)
 	return s.setPasswordAuthErr
 }
@@ -758,8 +758,8 @@ func TestUR72to73UpdateUserRespondsWithTheStoredAccount(t *testing.T) {
 }
 
 func newListUsersRequest(session *session.Session, query string) *http.Request {
-	ctx := context.WithValue(context.Background(), reqctx.SessionKey, session)
-	return httptest.NewRequest(http.MethodGet, "/api/v1/users"+query, nil).WithContext(ctx)
+	r := testutil.NewRequest(http.MethodGet, "/api/v1/users"+query, nil)
+	return r.WithContext(context.WithValue(r.Context(), reqctx.SessionKey, session))
 }
 
 func TestUR74to82ListUsersHandler(t *testing.T) {
