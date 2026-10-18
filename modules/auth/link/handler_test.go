@@ -1063,7 +1063,7 @@ func TestAU72to74OAuthAndOpenIDFailuresUseMapping(t *testing.T) {
 	})
 }
 
-type stubLinkService struct {
+type stubService struct {
 	links    []*LinkedAccount
 	linksErr error
 
@@ -1074,25 +1074,25 @@ type stubLinkService struct {
 	setEnableCalls []bool
 }
 
-var _ Service = (*stubLinkService)(nil)
+var _ Service = (*stubService)(nil)
 
-func (s *stubLinkService) GetUserLinkedAccounts(string) ([]*LinkedAccount, error) {
+func (s *stubService) GetUserLinkedAccounts(string) ([]*LinkedAccount, error) {
 	return s.links, s.linksErr
 }
-func (s *stubLinkService) UnlinkPlatform(_ string, platform Platform) error {
+func (s *stubService) UnlinkPlatform(_ string, platform Platform) error {
 	s.unlinkCalls = append(s.unlinkCalls, platform)
 	return s.unlinkErr
 }
-func (s *stubLinkService) SetPlatformLoginEnabled(_ string, _ Platform, enabled bool) error {
+func (s *stubService) SetPlatformLoginEnabled(_ string, _ Platform, enabled bool) error {
 	s.setEnableCalls = append(s.setEnableCalls, enabled)
 	return s.setEnableErr
 }
-func (s *stubLinkService) UpdateFromPlatform(Platform, string, PlatformData) (string, error) {
+func (s *stubService) UpdateFromPlatform(Platform, string, PlatformData) (string, error) {
 	return "", nil
 }
 
 func TestUR28GetUserLinkedAccountsHandlerSelfHappyPath(t *testing.T) {
-	svc := &stubLinkService{links: []*LinkedAccount{{Platform: PlatformDiscord}}}
+	svc := &stubService{links: []*LinkedAccount{{Platform: PlatformDiscord}}}
 	r := authtest.NewSessionRequest(http.MethodGet, authtest.SelfSession("u1"), "u1", "", "")
 	w := httptest.NewRecorder()
 
@@ -1103,7 +1103,7 @@ func TestUR28GetUserLinkedAccountsHandlerSelfHappyPath(t *testing.T) {
 }
 
 func TestUR29GetUserLinkedAccountsHandlerAdminHappyPath(t *testing.T) {
-	svc := &stubLinkService{links: []*LinkedAccount{{Platform: PlatformDiscord}}}
+	svc := &stubService{links: []*LinkedAccount{{Platform: PlatformDiscord}}}
 	r := authtest.NewSessionRequest(http.MethodGet, authtest.AdminUsersSession("admin1"), "someone-else", "", "")
 	w := httptest.NewRecorder()
 
@@ -1114,7 +1114,7 @@ func TestUR29GetUserLinkedAccountsHandlerAdminHappyPath(t *testing.T) {
 }
 
 func TestUR30GetUserLinkedAccountsHandlerForbidden(t *testing.T) {
-	svc := &stubLinkService{}
+	svc := &stubService{}
 	r := authtest.NewSessionRequest(http.MethodGet, authtest.SelfSession("u1"), "someone-else", "", "")
 	w := httptest.NewRecorder()
 
@@ -1126,7 +1126,7 @@ func TestUR30GetUserLinkedAccountsHandlerForbidden(t *testing.T) {
 }
 
 func TestUR31GetUserLinkedAccountsHandlerServiceErrorMapsTo500(t *testing.T) {
-	svc := &stubLinkService{linksErr: testerrors.ErrDBDown}
+	svc := &stubService{linksErr: testerrors.ErrDBDown}
 	r := authtest.NewSessionRequest(http.MethodGet, authtest.SelfSession("u1"), "u1", "", "")
 	w := httptest.NewRecorder()
 
@@ -1138,7 +1138,7 @@ func TestUR31GetUserLinkedAccountsHandlerServiceErrorMapsTo500(t *testing.T) {
 }
 
 func TestUR32UnlinkPlatformHandlerHappyPath(t *testing.T) {
-	svc := &stubLinkService{}
+	svc := &stubService{}
 	r := authtest.NewSessionRequest(http.MethodDelete, authtest.SelfSession("u1"), "u1", "discord", "")
 	w := httptest.NewRecorder()
 
@@ -1152,7 +1152,7 @@ func TestUR32UnlinkPlatformHandlerHappyPath(t *testing.T) {
 }
 
 func TestUR33UnlinkPlatformHandlerForbidden(t *testing.T) {
-	svc := &stubLinkService{}
+	svc := &stubService{}
 	r := authtest.NewSessionRequest(http.MethodDelete, authtest.SelfSession("u1"), "someone-else", "discord", "")
 	w := httptest.NewRecorder()
 
@@ -1167,7 +1167,7 @@ func TestUR33UnlinkPlatformHandlerForbidden(t *testing.T) {
 }
 
 func TestUR34UnlinkPlatformHandlerNotFoundMapsTo404(t *testing.T) {
-	svc := &stubLinkService{unlinkErr: account.ErrNotFound}
+	svc := &stubService{unlinkErr: account.ErrNotFound}
 	r := authtest.NewSessionRequest(http.MethodDelete, authtest.SelfSession("u1"), "u1", "discord", "")
 	w := httptest.NewRecorder()
 
@@ -1179,7 +1179,7 @@ func TestUR34UnlinkPlatformHandlerNotFoundMapsTo404(t *testing.T) {
 }
 
 func TestUR35UnlinkPlatformHandlerWouldLockAccountMapsTo400(t *testing.T) {
-	svc := &stubLinkService{unlinkErr: account.ErrWouldLockAccount}
+	svc := &stubService{unlinkErr: account.ErrWouldLockAccount}
 	r := authtest.NewSessionRequest(http.MethodDelete, authtest.SelfSession("u1"), "u1", "discord", "")
 	w := httptest.NewRecorder()
 
@@ -1191,7 +1191,7 @@ func TestUR35UnlinkPlatformHandlerWouldLockAccountMapsTo400(t *testing.T) {
 }
 
 func TestUR36UnlinkPlatformHandlerUnclassifiedErrorMapsTo500(t *testing.T) {
-	svc := &stubLinkService{unlinkErr: testerrors.ErrDBDown}
+	svc := &stubService{unlinkErr: testerrors.ErrDBDown}
 	r := authtest.NewSessionRequest(http.MethodDelete, authtest.SelfSession("u1"), "u1", "discord", "")
 	w := httptest.NewRecorder()
 
@@ -1203,7 +1203,7 @@ func TestUR36UnlinkPlatformHandlerUnclassifiedErrorMapsTo500(t *testing.T) {
 }
 
 func TestUR37SetPlatformLoginEnabledHandlerHappyPath(t *testing.T) {
-	svc := &stubLinkService{}
+	svc := &stubService{}
 	r := authtest.NewSessionRequest(http.MethodPatch, authtest.SelfSession("u1"), "u1", "discord", `{"login_enabled":true}`)
 	w := httptest.NewRecorder()
 
@@ -1217,7 +1217,7 @@ func TestUR37SetPlatformLoginEnabledHandlerHappyPath(t *testing.T) {
 }
 
 func TestUR38SetPlatformLoginEnabledHandlerForbidden(t *testing.T) {
-	svc := &stubLinkService{}
+	svc := &stubService{}
 	r := authtest.NewSessionRequest(http.MethodPatch, authtest.SelfSession("u1"), "someone-else", "discord", `{"login_enabled":true}`)
 	w := httptest.NewRecorder()
 
@@ -1229,7 +1229,7 @@ func TestUR38SetPlatformLoginEnabledHandlerForbidden(t *testing.T) {
 }
 
 func TestUR39SetPlatformLoginEnabledHandlerMalformedBody(t *testing.T) {
-	svc := &stubLinkService{}
+	svc := &stubService{}
 	r := authtest.NewSessionRequest(http.MethodPatch, authtest.SelfSession("u1"), "u1", "discord", `not json`)
 	w := httptest.NewRecorder()
 
@@ -1244,7 +1244,7 @@ func TestUR39SetPlatformLoginEnabledHandlerMalformedBody(t *testing.T) {
 }
 
 func TestUR40SetPlatformLoginEnabledHandlerMissingField(t *testing.T) {
-	svc := &stubLinkService{}
+	svc := &stubService{}
 	r := authtest.NewSessionRequest(http.MethodPatch, authtest.SelfSession("u1"), "u1", "discord", `{}`)
 	w := httptest.NewRecorder()
 
@@ -1259,7 +1259,7 @@ func TestUR40SetPlatformLoginEnabledHandlerMissingField(t *testing.T) {
 }
 
 func TestUR41SetPlatformLoginEnabledHandlerNotFoundMapsTo404(t *testing.T) {
-	svc := &stubLinkService{setEnableErr: account.ErrNotFound}
+	svc := &stubService{setEnableErr: account.ErrNotFound}
 	r := authtest.NewSessionRequest(http.MethodPatch, authtest.SelfSession("u1"), "u1", "discord", `{"login_enabled":true}`)
 	w := httptest.NewRecorder()
 
@@ -1271,7 +1271,7 @@ func TestUR41SetPlatformLoginEnabledHandlerNotFoundMapsTo404(t *testing.T) {
 }
 
 func TestUR42SetPlatformLoginEnabledHandlerWouldLockAccountMapsTo400(t *testing.T) {
-	svc := &stubLinkService{setEnableErr: account.ErrWouldLockAccount}
+	svc := &stubService{setEnableErr: account.ErrWouldLockAccount}
 	r := authtest.NewSessionRequest(http.MethodPatch, authtest.SelfSession("u1"), "u1", "discord", `{"login_enabled":false}`)
 	w := httptest.NewRecorder()
 
@@ -1283,7 +1283,7 @@ func TestUR42SetPlatformLoginEnabledHandlerWouldLockAccountMapsTo400(t *testing.
 }
 
 func TestUR43SetPlatformLoginEnabledHandlerUnverifiedMapsTo400(t *testing.T) {
-	svc := &stubLinkService{setEnableErr: ErrLinkedAccountUnverified}
+	svc := &stubService{setEnableErr: ErrLinkedAccountUnverified}
 	r := authtest.NewSessionRequest(http.MethodPatch, authtest.SelfSession("u1"), "u1", "discord", `{"login_enabled":true}`)
 	w := httptest.NewRecorder()
 
@@ -1295,7 +1295,7 @@ func TestUR43SetPlatformLoginEnabledHandlerUnverifiedMapsTo400(t *testing.T) {
 }
 
 func TestUR44SetPlatformLoginEnabledHandlerUnclassifiedErrorMapsTo500(t *testing.T) {
-	svc := &stubLinkService{setEnableErr: testerrors.ErrDBDown}
+	svc := &stubService{setEnableErr: testerrors.ErrDBDown}
 	r := authtest.NewSessionRequest(http.MethodPatch, authtest.SelfSession("u1"), "u1", "discord", `{"login_enabled":true}`)
 	w := httptest.NewRecorder()
 

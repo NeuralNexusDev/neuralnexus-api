@@ -15,7 +15,7 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
-type stubAccountService struct {
+type stubService struct {
 	account              *Account
 	lookupErr            error
 	passwordAuthDisabled bool
@@ -23,15 +23,15 @@ type stubAccountService struct {
 	newSessionErr        error
 }
 
-var _ Service = (*stubAccountService)(nil)
+var _ Service = (*stubService)(nil)
 
-func (s *stubAccountService) AddAccount(*Account) error { return nil }
+func (s *stubService) AddAccount(*Account) error { return nil }
 
-func (s *stubAccountService) GetAccountByID(string) (*Account, error) {
+func (s *stubService) GetAccountByID(string) (*Account, error) {
 	return nil, ErrNotFound
 }
 
-func (s *stubAccountService) GetAccountByUsername(string) (*Account, error) {
+func (s *stubService) GetAccountByUsername(string) (*Account, error) {
 	if s.lookupErr != nil {
 		return nil, s.lookupErr
 	}
@@ -41,7 +41,7 @@ func (s *stubAccountService) GetAccountByUsername(string) (*Account, error) {
 	return nil, ErrNotFound
 }
 
-func (s *stubAccountService) GetAccountByEmail(string) (*Account, error) {
+func (s *stubService) GetAccountByEmail(string) (*Account, error) {
 	if s.lookupErr != nil {
 		return nil, s.lookupErr
 	}
@@ -51,17 +51,17 @@ func (s *stubAccountService) GetAccountByEmail(string) (*Account, error) {
 	return nil, ErrNotFound
 }
 
-func (s *stubAccountService) UpdateAccount(*Account) error { return nil }
+func (s *stubService) UpdateAccount(*Account) error { return nil }
 
-func (s *stubAccountService) DeleteAccount(string) error { return nil }
+func (s *stubService) DeleteAccount(string) error { return nil }
 
-func (s *stubAccountService) IsPasswordAuthEnabled(string) (bool, error) {
+func (s *stubService) IsPasswordAuthEnabled(string) (bool, error) {
 	return !s.passwordAuthDisabled, s.passwordAuthErr
 }
 
 const stubSessionPermission = "stub:perm"
 
-func (s *stubAccountService) NewSession(a *Account, expiresAt int64) (*session.Session, error) {
+func (s *stubService) NewSession(a *Account, expiresAt int64) (*session.Session, error) {
 	if s.newSessionErr != nil {
 		return nil, s.newSessionErr
 	}
@@ -110,7 +110,7 @@ func TestAU01LoginHandlerUsernameHappyPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to build account: %v", err)
 	}
-	as := &stubAccountService{account: account}
+	as := &stubService{account: account}
 	ss := &stubSessionService{createJWT: func(*session.Session) (string, error) { return "test-jwt", nil }}
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
 	w := httptest.NewRecorder()
@@ -136,7 +136,7 @@ func TestAU02LoginHandlerEmailHappyPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to build account: %v", err)
 	}
-	as := &stubAccountService{account: account}
+	as := &stubService{account: account}
 	ss := &stubSessionService{createJWT: func(*session.Session) (string, error) { return "test-jwt", nil }}
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"email":"test@example.com","password":"correct-password"}`))
 	w := httptest.NewRecorder()
@@ -154,7 +154,7 @@ func TestAU02LoginHandlerEmailHappyPath(t *testing.T) {
 }
 
 func TestAU03LoginHandlerMalformedBody(t *testing.T) {
-	as := &stubAccountService{}
+	as := &stubService{}
 	ss := &stubSessionService{}
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`not json`))
 	w := httptest.NewRecorder()
@@ -170,7 +170,7 @@ func TestAU03LoginHandlerMalformedBody(t *testing.T) {
 }
 
 func TestAU04LoginHandlerAccountLookupFails(t *testing.T) {
-	as := &stubAccountService{}
+	as := &stubService{}
 	ss := &stubSessionService{}
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"no-such-user","password":"whatever"}`))
 	w := httptest.NewRecorder()
@@ -193,7 +193,7 @@ func TestAU05LoginHandlerWrongPassword(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to build account: %v", err)
 	}
-	as := &stubAccountService{account: account}
+	as := &stubService{account: account}
 	ss := &stubSessionService{}
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"wrong-password"}`))
 	w := httptest.NewRecorder()
@@ -216,7 +216,7 @@ func TestAU06LoginHandlerPasswordAuthCheckErrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to build account: %v", err)
 	}
-	as := &stubAccountService{account: account, passwordAuthErr: testerrors.ErrDBDown}
+	as := &stubService{account: account, passwordAuthErr: testerrors.ErrDBDown}
 	ss := &stubSessionService{}
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
 	w := httptest.NewRecorder()
@@ -236,7 +236,7 @@ func TestAU07LoginHandlerPasswordAuthDisabled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to build account: %v", err)
 	}
-	as := &stubAccountService{account: account, passwordAuthDisabled: true}
+	as := &stubService{account: account, passwordAuthDisabled: true}
 	ss := &stubSessionService{}
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
 	w := httptest.NewRecorder()
@@ -259,7 +259,7 @@ func TestAU08LoginHandlerAddSessionFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to build account: %v", err)
 	}
-	as := &stubAccountService{account: account}
+	as := &stubService{account: account}
 	ss := &stubSessionService{addSessionErr: testerrors.ErrDBDown}
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
 	w := httptest.NewRecorder()
@@ -282,7 +282,7 @@ func TestAU09LoginHandlerCreateJWTFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to build account: %v", err)
 	}
-	as := &stubAccountService{account: account}
+	as := &stubService{account: account}
 	ss := &stubSessionService{createJWT: func(*session.Session) (string, error) { return "", testerrors.ErrSigningFailed }}
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
 	w := httptest.NewRecorder()
@@ -373,7 +373,7 @@ func TestAU58LoginHandlerNewSessionFails(t *testing.T) {
 	if err := account.HashPassword("correct-password"); err != nil {
 		t.Fatalf("failed to hash password: %v", err)
 	}
-	as := &stubAccountService{account: account, newSessionErr: testerrors.ErrBoom}
+	as := &stubService{account: account, newSessionErr: testerrors.ErrBoom}
 	ss := &stubSessionService{createJWT: func(*session.Session) (string, error) { return "test-jwt", nil }}
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
 	w := httptest.NewRecorder()
@@ -465,7 +465,7 @@ func TestAU49SessionCookie(t *testing.T) {
 }
 
 func TestAU59LoginHandlerAccountLookupInfraFails(t *testing.T) {
-	as := &stubAccountService{lookupErr: testerrors.ErrDBDown}
+	as := &stubService{lookupErr: testerrors.ErrDBDown}
 	ss := &stubSessionService{}
 	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"someone","password":"whatever"}`))
 	w := httptest.NewRecorder()

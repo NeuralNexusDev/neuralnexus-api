@@ -20,7 +20,7 @@
 | US-14 | UpdateUser | Error Path | `as.UpdateAccountInDB` fails | | Error propagated unchanged | P2 |  |
 | US-24 | UpdateUserFromPlatform | Error Path | Final `as.GetAccountByID` fails | | Error propagated | P2 |  |
 | US-83 | UpdateUserFromPlatform | Happy Path | The link service returns a user ID | `Service` built with a stub `link.Service` returning `"resolved"`; `as.GetAccountByID` returns an account | Returns the user whose JSON equals the account's JSON, nil; `GetAccountByID` called with `"resolved"` | P1 |  |
-| US-84 | UpdateUserFromPlatform | Error Path | The link service fails | stub `link.Service` returns `testerrors.ErrBoom` | Returns nil and the linking error; `GetAccountByID` never called | P1 |  |
+| US-84 | UpdateUserFromPlatform | Error Path | The link service fails | stub `link.Service` returns `testerrors.ErrBoom` | Returns nil and the link service's error; `GetAccountByID` never called | P1 |  |
 | US-26 | DeleteUser | Happy Path | `as.DeleteAccountFromDB` succeeds | | Returns nil | P1 |  |
 | US-27 | DeleteUser | Error Path | `as.DeleteAccountFromDB` fails | | Error propagated unchanged | P2 |  |
 | US-34 | GetAccountSettings | Happy Path | `ass.GetAccountSettings` succeeds | | Returns the settings, nil | P1 |  |
@@ -43,18 +43,18 @@
 | UR-01 | GetUserHandler | Happy Path | Self-lookup | session.UserID == path user_id | 200 OK with the user struct | P1 |  |
 | UR-02 | GetUserHandler | Happy Path | Admin looks up another user | session.UserID != path user_id, session has ScopeAdminUsers | 200 OK with the user struct | P1 |  |
 | UR-03 | GetUserHandler | Error Path | No permission | session.UserID != path user_id, no ScopeAdminUsers | 403 Forbidden `msgNoPermissionToGetUser` | P2 |  |
-| UR-04 | GetUserHandler | Error Path | UserService.GetUser fails with a non-not-found error | Permission check passes, service.GetUser returns `testerrors.ErrDBDown` | 500 Internal Server Error `msgFailedToGetUser` | P2 |  |
+| UR-04 | GetUserHandler | Error Path | Service.GetUser fails with a non-not-found error | Permission check passes, service.GetUser returns `testerrors.ErrDBDown` | 500 Internal Server Error `msgFailedToGetUser` | P2 |  |
 | UR-05 | GetUserFromPlatformHandler | Happy Path | Admin fetches a user by platform ID | session has ScopeAdminUsers, service.GetUserFromPlatform succeeds | 200 OK with the user struct | P1 |  |
 | UR-06 | GetUserFromPlatformHandler | Error Path | No permission | session lacks ScopeAdminUsers | 403 Forbidden `msgNoPermissionToGetUsers` | P2 |  |
-| UR-07 | GetUserFromPlatformHandler | Error Path | UserService.GetUserFromPlatform errors | Admin session, service returns `account.ErrNotFound` | 404 Not Found `msgUserNotFound` | P2 |  |
+| UR-07 | GetUserFromPlatformHandler | Error Path | Service.GetUserFromPlatform errors | Admin session, service returns `account.ErrNotFound` | 404 Not Found `msgUserNotFound` | P2 |  |
 | UR-08 | GetUserPermissionsHandler | Happy Path | Self-lookup | session.UserID == path user_id | 200 OK with the permissions list | P1 |  |
 | UR-09 | GetUserPermissionsHandler | Happy Path | Admin looks up another user's permissions | session.UserID != path user_id, session has ScopeAdminUsers | 200 OK with the permissions list | P2 |  |
 | UR-10 | GetUserPermissionsHandler | Error Path | No permission | session.UserID != path user_id, no ScopeAdminUsers | 403 Forbidden `msgNoPermissionToGetUserPermissions` | P2 |  |
-| UR-11 | GetUserPermissionsHandler | Error Path | UserService.GetUserPermissions fails with a non-not-found error | Permission check passes, service returns `testerrors.ErrDBDown` | 500 Internal Server Error `msgFailedToGetUser` | P2 |  |
+| UR-11 | GetUserPermissionsHandler | Error Path | Service.GetUserPermissions fails with a non-not-found error | Permission check passes, service returns `testerrors.ErrDBDown` | 500 Internal Server Error `msgFailedToGetUser` | P2 |  |
 | UR-12 | UpdateUserHandler | Happy Path | Admin updates a user | session has ScopeAdminUsers, valid JSON body, service.UpdateUser succeeds | 200 OK with the account the service reads back; `UpdateUser` receives the path user_id (overriding the body's) | P1 |  |
 | UR-13 | UpdateUserHandler | Error Path | No permission | session lacks ScopeAdminUsers | 403 Forbidden `msgNoPermissionToUpdateUsers` | P2 |  |
 | UR-14 | UpdateUserHandler | Error Path | Malformed body | Admin session, body is not valid JSON | 400 Bad Request `msgInvalidRequestBody` | P2 |  |
-| UR-15 | UpdateUserHandler | Error Path | UserService.UpdateUser fails with an unclassified error | Admin session, valid body, service returns `testerrors.ErrDBDown` | 500 Internal Server Error `msgFailedToUpdateUser` | P2 |  |
+| UR-15 | UpdateUserHandler | Error Path | Service.UpdateUser fails with an unclassified error | Admin session, valid body, service returns `testerrors.ErrDBDown` | 500 Internal Server Error `msgFailedToUpdateUser` | P2 |  |
 | UR-16 | UpdateUserFromPlatformHandler | Happy Path | platform=discord, valid body | Admin session, body decodes into link.DiscordData, service succeeds | 200 OK with the user struct | P1 |  |
 | UR-17 | UpdateUserFromPlatformHandler | Happy Path | platform=minecraft, valid body | Admin session, body decodes into link.MinecraftData, service succeeds | 200 OK with the user struct | P2 |  |
 | UR-18 | UpdateUserFromPlatformHandler | Happy Path | platform=twitch, valid body | Admin session, body decodes into twitch.Data, service succeeds | 200 OK with the user struct | P2 |  |
@@ -63,14 +63,14 @@
 | UR-21 | UpdateUserFromPlatformHandler | Error Path | Unsupported platform value | platform path value matches none of the five known platforms | 400 Bad Request `msgUnsupportedPlatform` | P2 |  |
 | UR-22 | UpdateUserFromPlatformHandler | Error Path | No permission | session lacks ScopeAdminUsers | 403 Forbidden `msgNoPermissionToUpdateUsers` | P2 |  |
 | UR-23 | UpdateUserFromPlatformHandler | Error Path | Malformed body for the given platform | Admin session, platform=discord, body is not valid JSON | 400 Bad Request `msgInvalidRequestBody` | P2 |  |
-| UR-24 | UpdateUserFromPlatformHandler | Error Path | UserService.UpdateUserFromPlatform fails with an unclassified error | Admin session, valid body, service returns `testerrors.ErrDBDown` | 500 Internal Server Error `msgFailedToUpdateUser` | P2 |  |
+| UR-24 | UpdateUserFromPlatformHandler | Error Path | Service.UpdateUserFromPlatform fails with an unclassified error | Admin session, valid body, service returns `testerrors.ErrDBDown` | 500 Internal Server Error `msgFailedToUpdateUser` | P2 |  |
 | UR-25 | DeleteUserHandler | Happy Path | Admin deletes a user | session has ScopeAdminUsers, service.DeleteUser succeeds | 204 No Content | P1 |  |
 | UR-26 | DeleteUserHandler | Error Path | No permission | session lacks ScopeAdminUsers | 403 Forbidden `msgNoPermissionToDeleteUsers` | P2 |  |
-| UR-27 | DeleteUserHandler | Error Path | UserService.DeleteUser fails with an unclassified error | Admin session, service returns `testerrors.ErrDBDown` | 500 Internal Server Error `msgFailedToDeleteUser` | P2 |  |
+| UR-27 | DeleteUserHandler | Error Path | Service.DeleteUser fails with an unclassified error | Admin session, service returns `testerrors.ErrDBDown` | 500 Internal Server Error `msgFailedToDeleteUser` | P2 |  |
 | UR-45 | GetAccountSettingsHandler | Happy Path | Self-lookup | session.UserID == path user_id | 200 OK with the account settings | P1 |  |
 | UR-46 | GetAccountSettingsHandler | Happy Path | Admin looks up another user's settings | session.UserID != path user_id, session has ScopeAdminUsers | 200 OK with the account settings | P2 |  |
 | UR-47 | GetAccountSettingsHandler | Error Path | No permission | session.UserID != path user_id, no ScopeAdminUsers | 403 Forbidden `msgNoPermissionToViewSettings` | P2 |  |
-| UR-48 | GetAccountSettingsHandler | Error Path | UserService.GetAccountSettings errors | Permission check passes, service returns an error | 500 Internal Server Error `msgFailedToGetAccountSettings` | P2 |  |
+| UR-48 | GetAccountSettingsHandler | Error Path | Service.GetAccountSettings errors | Permission check passes, service returns an error | 500 Internal Server Error `msgFailedToGetAccountSettings` | P2 |  |
 | UR-49 | UpdateAccountSettingsHandler | Happy Path | Self updates settings | session.UserID == path user_id, body {"password_auth":true}, service succeeds | 204 No Content | P1 |  |
 | UR-50 | UpdateAccountSettingsHandler | Error Path | No permission | session.UserID != path user_id, no ScopeAdminUsers | 403 Forbidden `msgNoPermissionToUpdateSettings` | P2 |  |
 | UR-51 | UpdateAccountSettingsHandler | Error Path | Malformed body | Permission check passes, body is not valid JSON | 400 Bad Request `msgInvalidRequestBody` | P2 |  |
@@ -79,21 +79,21 @@
 | UR-54 | UpdateAccountSettingsHandler | Error Path | No password set | service.SetPasswordAuthEnabled returns account.ErrNoPasswordSet | 400 Bad Request `msgSetPasswordBeforeEnablingPasswordLogin` | P2 |  |
 | UR-55 | UpdateAccountSettingsHandler | Error Path | Unclassified service error | service.SetPasswordAuthEnabled returns some other error | 500 Internal Server Error `msgFailedToUpdateUserSettings` | P2 |  |
 | UR-56 | UpdateUserFromPlatformHandler | Error Path | Malformed body for the Minecraft, Twitch, Xbox Live and Microsoft platforms | Admin session, body is not valid JSON | 400 Bad Request `msgInvalidRequestBody`; `UpdateUserFromPlatform` never called | P2 | |
-| UR-57 | GetUserFromPlatformHandler | Error Path | UserService.GetUserFromPlatform fails with a non-not-found error | Admin session, service returns `testerrors.ErrDBDown` | 500 Internal Server Error `msgFailedToGetUser` | P2 |  |
-| UR-58 | GetUserHandler | Error Path | UserService.GetUser returns not found | Permission check passes, service returns `account.ErrNotFound` | 404 Not Found `msgUserNotFound` | P2 |  |
-| UR-59 | GetUserPermissionsHandler | Error Path | UserService.GetUserPermissions returns not found | Permission check passes, service returns `account.ErrNotFound` | 404 Not Found `msgUserNotFound` | P2 |  |
-| UR-60 | UpdateUserHandler | Error Path | UserService.UpdateUser returns not found | Admin session, valid body, service returns `account.ErrNotFound` | 404 Not Found `msgUserNotFound` | P2 |  |
-| UR-61 | UpdateUserHandler | Error Path | UserService.UpdateUser returns a duplicate email | Admin session, valid body, service returns `account.ErrEmailAlreadyExists` | 409 Conflict `msgEmailAlreadyExists` | P2 |  |
-| UR-62 | UpdateUserHandler | Error Path | UserService.UpdateUser returns a duplicate username | Admin session, valid body, service returns `account.ErrUsernameAlreadyExists` | 409 Conflict `msgUsernameAlreadyExists` | P2 |  |
-| UR-63 | UpdateUserFromPlatformHandler | Error Path | UserService.UpdateUserFromPlatform returns not found | Admin session, valid body, service returns `account.ErrNotFound` | 404 Not Found `msgUserNotFound` | P2 |  |
-| UR-64 | UpdateUserFromPlatformHandler | Error Path | UserService.UpdateUserFromPlatform returns a duplicate email | Admin session, valid body, service returns `account.ErrEmailAlreadyExists` | 409 Conflict `msgEmailAlreadyExists` | P2 |  |
-| UR-65 | UpdateUserFromPlatformHandler | Error Path | UserService.UpdateUserFromPlatform returns a duplicate username | Admin session, valid body, service returns `account.ErrUsernameAlreadyExists` | 409 Conflict `msgUsernameAlreadyExists` | P2 |  |
-| UR-66 | GetAccountSettingsHandler | Error Path | UserService.GetAccountSettings returns not found | Permission check passes, service returns `account.ErrNotFound` | 404 Not Found `msgUserNotFound` | P2 |  |
-| UR-67 | UpdateAccountSettingsHandler | Error Path | UserService.SetPasswordAuthEnabled returns not found | Permission check passes, valid body, service returns `account.ErrNotFound` | 404 Not Found `msgUserNotFound` | P2 |  |
-| UR-68 | UpdateUserHandler | Error Path | UserService.UpdateUser returns an invalid role id | Admin session, valid body, service returns `account.ErrInvalidRoleID` | 400 Bad Request `msgInvalidRoleID` | P1 |  |
-| UR-69 | UpdateUserHandler | Error Path | UserService.UpdateUser returns an unknown role id | Admin session, valid body, service returns `account.ErrUnknownRoleID` | 400 Bad Request `msgUnknownRoleID` | P1 |  |
-| UR-70 | UpdateUserFromPlatformHandler | Error Path | UserService.UpdateUserFromPlatform returns an invalid role id | Admin session, valid body, service returns `account.ErrInvalidRoleID` | 400 Bad Request `msgInvalidRoleID` | P2 |  |
-| UR-71 | UpdateUserFromPlatformHandler | Error Path | UserService.UpdateUserFromPlatform returns an unknown role id | Admin session, valid body, service returns `account.ErrUnknownRoleID` | 400 Bad Request `msgUnknownRoleID` | P2 |  |
+| UR-57 | GetUserFromPlatformHandler | Error Path | Service.GetUserFromPlatform fails with a non-not-found error | Admin session, service returns `testerrors.ErrDBDown` | 500 Internal Server Error `msgFailedToGetUser` | P2 |  |
+| UR-58 | GetUserHandler | Error Path | Service.GetUser returns not found | Permission check passes, service returns `account.ErrNotFound` | 404 Not Found `msgUserNotFound` | P2 |  |
+| UR-59 | GetUserPermissionsHandler | Error Path | Service.GetUserPermissions returns not found | Permission check passes, service returns `account.ErrNotFound` | 404 Not Found `msgUserNotFound` | P2 |  |
+| UR-60 | UpdateUserHandler | Error Path | Service.UpdateUser returns not found | Admin session, valid body, service returns `account.ErrNotFound` | 404 Not Found `msgUserNotFound` | P2 |  |
+| UR-61 | UpdateUserHandler | Error Path | Service.UpdateUser returns a duplicate email | Admin session, valid body, service returns `account.ErrEmailAlreadyExists` | 409 Conflict `msgEmailAlreadyExists` | P2 |  |
+| UR-62 | UpdateUserHandler | Error Path | Service.UpdateUser returns a duplicate username | Admin session, valid body, service returns `account.ErrUsernameAlreadyExists` | 409 Conflict `msgUsernameAlreadyExists` | P2 |  |
+| UR-63 | UpdateUserFromPlatformHandler | Error Path | Service.UpdateUserFromPlatform returns not found | Admin session, valid body, service returns `account.ErrNotFound` | 404 Not Found `msgUserNotFound` | P2 |  |
+| UR-64 | UpdateUserFromPlatformHandler | Error Path | Service.UpdateUserFromPlatform returns a duplicate email | Admin session, valid body, service returns `account.ErrEmailAlreadyExists` | 409 Conflict `msgEmailAlreadyExists` | P2 |  |
+| UR-65 | UpdateUserFromPlatformHandler | Error Path | Service.UpdateUserFromPlatform returns a duplicate username | Admin session, valid body, service returns `account.ErrUsernameAlreadyExists` | 409 Conflict `msgUsernameAlreadyExists` | P2 |  |
+| UR-66 | GetAccountSettingsHandler | Error Path | Service.GetAccountSettings returns not found | Permission check passes, service returns `account.ErrNotFound` | 404 Not Found `msgUserNotFound` | P2 |  |
+| UR-67 | UpdateAccountSettingsHandler | Error Path | Service.SetPasswordAuthEnabled returns not found | Permission check passes, valid body, service returns `account.ErrNotFound` | 404 Not Found `msgUserNotFound` | P2 |  |
+| UR-68 | UpdateUserHandler | Error Path | Service.UpdateUser returns an invalid role id | Admin session, valid body, service returns `account.ErrInvalidRoleID` | 400 Bad Request `msgInvalidRoleID` | P1 |  |
+| UR-69 | UpdateUserHandler | Error Path | Service.UpdateUser returns an unknown role id | Admin session, valid body, service returns `account.ErrUnknownRoleID` | 400 Bad Request `msgUnknownRoleID` | P1 |  |
+| UR-70 | UpdateUserFromPlatformHandler | Error Path | Service.UpdateUserFromPlatform returns an invalid role id | Admin session, valid body, service returns `account.ErrInvalidRoleID` | 400 Bad Request `msgInvalidRoleID` | P2 |  |
+| UR-71 | UpdateUserFromPlatformHandler | Error Path | Service.UpdateUserFromPlatform returns an unknown role id | Admin session, valid body, service returns `account.ErrUnknownRoleID` | 400 Bad Request `msgUnknownRoleID` | P2 |  |
 | UR-72 | UpdateUserHandler | Edge Case | the body repeats a role id | Admin session, body roles `["1","1","3"]`, the service reads back roles `["1","3"]` | 200 OK whose roles are the stored roles, without the duplicate | P1 |  |
 | UR-73 | UpdateUserHandler | Error Path | reading the account back fails after the update | Admin session, `UpdateUser` succeeds, `GetUser` returns `testerrors.ErrDBDown` | 500 `msgFailedToUpdateUser` after `UpdateUser` was called | P2 |  |
 | UR-74 | ListUsersHandler | Happy Path | list users with no query | Admin session, service returns two accounts | 200 OK with the two users in order and no email, hashed secret or salt; the service got limit 50 and offset 0 | P1 |  |
