@@ -16,8 +16,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
+	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 	"github.com/dreamscached/minequery/v2"
 )
 
@@ -278,7 +278,7 @@ func TestServerStatusHandler(t *testing.T) {
 	}{
 		{"JavaStatus", ErrJavaStatus, http.StatusNotFound, msgJavaStatusFailed},
 		{"BedrockStatus", ErrBedrockStatus, http.StatusNotFound, msgBedrockStatusFailed},
-		{"Unrecognized", testerrors.ErrBoom, http.StatusInternalServerError, msgFailedToGetServerStatus},
+		{"Unrecognized", testutil.ErrBoom, http.StatusInternalServerError, msgFailedToGetServerStatus},
 	} {
 		t.Run("CSH-16_"+tc.name, func(t *testing.T) {
 			mock := &hdMockService{serverErr: tc.err}
@@ -590,7 +590,7 @@ func TestServerStatusHandler(t *testing.T) {
 	})
 
 	t.Run("CSH-48_UnrecognizedErrorProblemHasNoHostOrPort", func(t *testing.T) {
-		mock := &hdMockService{serverErr: testerrors.ErrBoom}
+		mock := &hdMockService{serverErr: testutil.ErrBoom}
 		req := hdRequest(t, "example.com:25570", "")
 		w := httptest.NewRecorder()
 
@@ -719,7 +719,7 @@ func TestIconHandler(t *testing.T) {
 	})
 
 	t.Run("CSH-17_UnrecognizedErrorReturnsInternalServerError", func(t *testing.T) {
-		mock := &hdMockService{javaErr: testerrors.ErrBoom}
+		mock := &hdMockService{javaErr: testutil.ErrBoom}
 		req := hdRequest(t, "example.com:25565", "")
 		w := httptest.NewRecorder()
 

@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 	"github.com/bwmarrin/discordgo"
 	"github.com/google/uuid"
 	"golang.org/x/oauth2"
@@ -584,7 +584,7 @@ func TestOA09to16ProcessOAuthLogin(t *testing.T) {
 		oaSetupDiscordPlatform(t)
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{}
-		ss := &oaMockSessionService{AddSessionFunc: func(*session.Session) error { return testerrors.ErrDBDown }}
+		ss := &oaMockSessionService{AddSessionFunc: func(*session.Session) error { return testutil.ErrDBDown }}
 
 		session, err := ProcessOAuthLogin(as, las, ss, "code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLogin})
 		if err == nil {
@@ -747,7 +747,7 @@ func TestOA17to26and83ResolveOrCreateAccountForPlatformUser(t *testing.T) {
 	})
 
 	t.Run("OA-20_LookupErrorPropagates", func(t *testing.T) {
-		wantErr := testerrors.ErrDBDown
+		wantErr := testutil.ErrDBDown
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{GetLinkedAccountByPlatformIDFunc: func(Platform, string) (*LinkedAccount, error) { return nil, wantErr }}
 
@@ -758,7 +758,7 @@ func TestOA17to26and83ResolveOrCreateAccountForPlatformUser(t *testing.T) {
 	})
 
 	t.Run("OA-21_AddAccountFails", func(t *testing.T) {
-		wantErr := testerrors.ErrInsertFailed
+		wantErr := testutil.ErrInsertFailed
 		as := &oaMockAccountService{AddAccountFunc: func(*account.Account) error { return wantErr }}
 		las := &oaMockLinkAccountStore{}
 
@@ -772,7 +772,7 @@ func TestOA17to26and83ResolveOrCreateAccountForPlatformUser(t *testing.T) {
 	})
 
 	t.Run("OA-22_AddLinkFailsCleanupSucceeds", func(t *testing.T) {
-		wantErr := testerrors.ErrInsertFailed
+		wantErr := testutil.ErrInsertFailed
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*LinkedAccount) error { return wantErr }}
 
@@ -786,8 +786,8 @@ func TestOA17to26and83ResolveOrCreateAccountForPlatformUser(t *testing.T) {
 	})
 
 	t.Run("OA-23_AddLinkFailsCleanupAlsoFails", func(t *testing.T) {
-		linkErr := testerrors.ErrInsertFailed
-		cleanupErr := testerrors.ErrBoom
+		linkErr := testutil.ErrInsertFailed
+		cleanupErr := testutil.ErrBoom
 		as := &oaMockAccountService{DeleteAccountFunc: func(string) error { return cleanupErr }}
 		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*LinkedAccount) error { return linkErr }}
 
@@ -833,7 +833,7 @@ func TestOA17to26and83ResolveOrCreateAccountForPlatformUser(t *testing.T) {
 	})
 
 	t.Run("OA-25_RaceLostWinnerLookupFails", func(t *testing.T) {
-		wantErr := testerrors.ErrDBDown
+		wantErr := testutil.ErrDBDown
 		as := &oaMockAccountService{}
 		var lookupCalls int
 		las := &oaMockLinkAccountStore{
@@ -854,7 +854,7 @@ func TestOA17to26and83ResolveOrCreateAccountForPlatformUser(t *testing.T) {
 	})
 
 	t.Run("OA-26_RaceLostWinnerAccountFetchFails", func(t *testing.T) {
-		wantErr := testerrors.ErrDBDown
+		wantErr := testutil.ErrDBDown
 		as := &oaMockAccountService{GetAccountByIDFunc: func(string) (*account.Account, error) { return nil, wantErr }}
 		var lookupCalls int
 		las := &oaMockLinkAccountStore{
@@ -875,12 +875,12 @@ func TestOA17to26and83ResolveOrCreateAccountForPlatformUser(t *testing.T) {
 	})
 
 	t.Run("OA-83_AddLinkAndCleanupFailReturnsTheCleanupError", func(t *testing.T) {
-		as := &oaMockAccountService{DeleteAccountFunc: func(string) error { return testerrors.ErrBoom }}
-		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*LinkedAccount) error { return testerrors.ErrInsertFailed }}
+		as := &oaMockAccountService{DeleteAccountFunc: func(string) error { return testutil.ErrBoom }}
+		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*LinkedAccount) error { return testutil.ErrInsertFailed }}
 
 		_, err := resolveOrCreateAccountForPlatformUser(as, las, PlatformDiscord, user)
-		if !errors.Is(err, testerrors.ErrBoom) {
-			t.Errorf("error = %v, want the cleanup error %v", err, testerrors.ErrBoom)
+		if !errors.Is(err, testutil.ErrBoom) {
+			t.Errorf("error = %v, want the cleanup error %v", err, testutil.ErrBoom)
 		}
 	})
 }
@@ -1041,7 +1041,7 @@ func TestOA27to42ProcessOAuthLink(t *testing.T) {
 	})
 
 	t.Run("OA-36_XboxPrecheckLookupErrorPropagates", func(t *testing.T) {
-		wantErr := testerrors.ErrDBDown
+		wantErr := testutil.ErrDBDown
 		oaSetupMicrosoftChain(t, oaMicrosoftChainOpts{})
 		las := &oaMockLinkAccountStore{
 			GetLinkedAccountByPlatformIDFunc: func(platform Platform, id string) (*LinkedAccount, error) {
@@ -1063,7 +1063,7 @@ func TestOA27to42ProcessOAuthLink(t *testing.T) {
 	})
 
 	t.Run("OA-37_JavaPrecheckLookupErrorPropagates", func(t *testing.T) {
-		wantErr := testerrors.ErrDBDown
+		wantErr := testutil.ErrDBDown
 		javaUUID := "55555555-5555-5555-5555-555555555555"
 		oaSetupMicrosoftChain(t, oaMicrosoftChainOpts{javaUUID: javaUUID})
 		las := &oaMockLinkAccountStore{
@@ -1128,7 +1128,7 @@ func TestOA27to42ProcessOAuthLink(t *testing.T) {
 	t.Run("OA-40_XboxLinkWriteFailsJavaNeverAttempted", func(t *testing.T) {
 		javaUUID := "77777777-7777-7777-7777-777777777777"
 		oaSetupMicrosoftChain(t, oaMicrosoftChainOpts{javaUUID: javaUUID})
-		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*LinkedAccount) error { return testerrors.ErrInsertFailed }}
+		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*LinkedAccount) error { return testutil.ErrInsertFailed }}
 		req := oaRequestWithSession(activeSession("user-1"))
 
 		_, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: PlatformMinecraft, Mode: ModeLink})
@@ -1156,7 +1156,7 @@ func TestOA27to42ProcessOAuthLink(t *testing.T) {
 
 	t.Run("OA-42_FinalLinkWriteFails", func(t *testing.T) {
 		oaSetupDiscordPlatform(t)
-		wantErr := testerrors.ErrInsertFailed
+		wantErr := testutil.ErrInsertFailed
 		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*LinkedAccount) error { return wantErr }}
 		req := oaRequestWithSession(activeSession("user-1"))
 
@@ -1417,7 +1417,7 @@ func TestOA43to55ResolveOrCreateAccountForMicrosoftUser(t *testing.T) {
 	})
 
 	t.Run("OA-51_XboxLookupErrorPropagates", func(t *testing.T) {
-		wantErr := testerrors.ErrDBDown
+		wantErr := testutil.ErrDBDown
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{
 			GetLinkedAccountByPlatformIDFunc: func(platform Platform, id string) (*LinkedAccount, error) {
@@ -1435,7 +1435,7 @@ func TestOA43to55ResolveOrCreateAccountForMicrosoftUser(t *testing.T) {
 	})
 
 	t.Run("OA-52_JavaLookupErrorPropagates", func(t *testing.T) {
-		wantErr := testerrors.ErrDBDown
+		wantErr := testutil.ErrDBDown
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{
 			GetLinkedAccountByPlatformIDFunc: func(platform Platform, id string) (*LinkedAccount, error) {
@@ -1453,7 +1453,7 @@ func TestOA43to55ResolveOrCreateAccountForMicrosoftUser(t *testing.T) {
 	})
 
 	t.Run("OA-53_AddAccountFails", func(t *testing.T) {
-		wantErr := testerrors.ErrInsertFailed
+		wantErr := testutil.ErrInsertFailed
 		as := &oaMockAccountService{AddAccountFunc: func(*account.Account) error { return wantErr }}
 		las := notFoundStore()
 
@@ -1464,7 +1464,7 @@ func TestOA43to55ResolveOrCreateAccountForMicrosoftUser(t *testing.T) {
 	})
 
 	t.Run("OA-54_GetAccountByIDFails", func(t *testing.T) {
-		wantErr := testerrors.ErrDBDown
+		wantErr := testutil.ErrDBDown
 		as := &oaMockAccountService{GetAccountByIDFunc: func(string) (*account.Account, error) { return nil, wantErr }}
 		las := &oaMockLinkAccountStore{
 			GetLinkedAccountByPlatformIDFunc: func(platform Platform, id string) (*LinkedAccount, error) {
@@ -1482,7 +1482,7 @@ func TestOA43to55ResolveOrCreateAccountForMicrosoftUser(t *testing.T) {
 	})
 
 	t.Run("OA-55_EnsureIdentityLinkedFails", func(t *testing.T) {
-		wantErr := testerrors.ErrInsertFailed
+		wantErr := testutil.ErrInsertFailed
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{
 			GetLinkedAccountByPlatformIDFunc: func(Platform, string) (*LinkedAccount, error) { return nil, account.ErrNotFound },
@@ -1514,7 +1514,7 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 	})
 
 	t.Run("OA-57_LinkFailsNewAccountCleanupSucceeds", func(t *testing.T) {
-		wantErr := testerrors.ErrInsertFailed
+		wantErr := testutil.ErrInsertFailed
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*LinkedAccount) error { return wantErr }}
 
@@ -1528,7 +1528,7 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 	})
 
 	t.Run("OA-58_LinkFailsExistingAccountNoCleanup", func(t *testing.T) {
-		wantErr := testerrors.ErrInsertFailed
+		wantErr := testutil.ErrInsertFailed
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*LinkedAccount) error { return wantErr }}
 
@@ -1542,8 +1542,8 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 	})
 
 	t.Run("OA-59_LinkFailsCleanupAlsoFails", func(t *testing.T) {
-		linkErr := testerrors.ErrInsertFailed
-		cleanupErr := testerrors.ErrBoom
+		linkErr := testutil.ErrInsertFailed
+		cleanupErr := testutil.ErrBoom
 		as := &oaMockAccountService{DeleteAccountFunc: func(string) error { return cleanupErr }}
 		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*LinkedAccount) error { return linkErr }}
 
@@ -1575,7 +1575,7 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 	})
 
 	t.Run("OA-61_AlreadyLinkedRefetchFailsNewAccountCleanupSucceeds", func(t *testing.T) {
-		wantErr := testerrors.ErrDBDown
+		wantErr := testutil.ErrDBDown
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{
 			AddLinkedAccountToDBFunc:         func(*LinkedAccount) error { return ErrAlreadyLinked },
@@ -1592,8 +1592,8 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 	})
 
 	t.Run("OA-62_AlreadyLinkedRefetchFailsCleanupAlsoFails", func(t *testing.T) {
-		lookupErr := testerrors.ErrDBDown
-		cleanupErr := testerrors.ErrBoom
+		lookupErr := testutil.ErrDBDown
+		cleanupErr := testutil.ErrBoom
 		as := &oaMockAccountService{DeleteAccountFunc: func(string) error { return cleanupErr }}
 		las := &oaMockLinkAccountStore{
 			AddLinkedAccountToDBFunc:         func(*LinkedAccount) error { return ErrAlreadyLinked },
@@ -1649,7 +1649,7 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 	})
 
 	t.Run("OA-65_RealConflictNewAccountCleanupFails", func(t *testing.T) {
-		cleanupErr := testerrors.ErrBoom
+		cleanupErr := testutil.ErrBoom
 		as := &oaMockAccountService{DeleteAccountFunc: func(string) error { return cleanupErr }}
 		las := &oaMockLinkAccountStore{
 			AddLinkedAccountToDBFunc: func(*LinkedAccount) error { return ErrAlreadyLinked },
@@ -1665,7 +1665,7 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 	})
 
 	t.Run("OA-66_RealConflictNewAccountWinnerFetchFails", func(t *testing.T) {
-		wantErr := testerrors.ErrDBDown
+		wantErr := testutil.ErrDBDown
 		as := &oaMockAccountService{GetAccountByIDFunc: func(string) (*account.Account, error) { return nil, wantErr }}
 		las := &oaMockLinkAccountStore{
 			AddLinkedAccountToDBFunc: func(*LinkedAccount) error { return ErrAlreadyLinked },
@@ -1681,12 +1681,12 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 	})
 
 	t.Run("OA-84_LinkAndCleanupFailReturnsTheCleanupError", func(t *testing.T) {
-		as := &oaMockAccountService{DeleteAccountFunc: func(string) error { return testerrors.ErrBoom }}
-		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*LinkedAccount) error { return testerrors.ErrInsertFailed }}
+		as := &oaMockAccountService{DeleteAccountFunc: func(string) error { return testutil.ErrBoom }}
+		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*LinkedAccount) error { return testutil.ErrInsertFailed }}
 
 		_, _, err := ensureMicrosoftIdentityLinked(as, las, acct, true, PlatformXboxLive, xbox)
-		if !errors.Is(err, testerrors.ErrBoom) {
-			t.Errorf("error = %v, want the cleanup error %v", err, testerrors.ErrBoom)
+		if !errors.Is(err, testutil.ErrBoom) {
+			t.Errorf("error = %v, want the cleanup error %v", err, testutil.ErrBoom)
 		}
 	})
 }
@@ -1736,7 +1736,7 @@ func TestOA67to71and85LinkPlatformUserToSession(t *testing.T) {
 	})
 
 	t.Run("OA-70_LookupErrorPropagates", func(t *testing.T) {
-		wantErr := testerrors.ErrDBDown
+		wantErr := testutil.ErrDBDown
 		las := &oaMockLinkAccountStore{GetLinkedAccountByPlatformIDFunc: func(Platform, string) (*LinkedAccount, error) { return nil, wantErr }}
 
 		err := linkPlatformUserToSession(las, "user-1", PlatformDiscord, user)
@@ -1746,7 +1746,7 @@ func TestOA67to71and85LinkPlatformUserToSession(t *testing.T) {
 	})
 
 	t.Run("OA-71_AddLinkedAccountFails", func(t *testing.T) {
-		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*LinkedAccount) error { return testerrors.ErrInsertFailed }}
+		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*LinkedAccount) error { return testutil.ErrInsertFailed }}
 
 		err := linkPlatformUserToSession(las, "user-1", PlatformDiscord, user)
 		if !errors.Is(err, ErrLinkAccountFailed) {

@@ -11,7 +11,7 @@ import (
 
 	"github.com/goccy/go-json"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
+	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
 // fakeRoundTripper is swapped in for http.DefaultTransport: getReleases
@@ -117,7 +117,7 @@ func TestGetReleases(t *testing.T) {
 
 	t.Run("PJ-04_ErrorPath_TransportError", func(t *testing.T) {
 		swapGithubToken(t, "test-token")
-		wantErr := testerrors.ErrTransportFailed
+		wantErr := testutil.ErrTransportFailed
 		swapTransport(t, &fakeRoundTripper{err: wantErr})
 
 		releases, err := getReleases("group", "project")
@@ -368,7 +368,7 @@ func TestGetReleasesHandler(t *testing.T) {
 	})
 	t.Run("PJ-15_ErrorPath_OtherFailureHidesCause", func(t *testing.T) {
 		swapGithubToken(t, "test-token")
-		swapTransport(t, &fakeRoundTripper{err: testerrors.ErrTransportFailed})
+		swapTransport(t, &fakeRoundTripper{err: testutil.ErrTransportFailed})
 
 		req := httptest.NewRequest(http.MethodGet, "/projects/releases/group/project", nil)
 		req.SetPathValue("group", "group")

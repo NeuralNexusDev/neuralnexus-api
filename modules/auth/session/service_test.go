@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
+	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -99,7 +99,7 @@ func TestSE08to10AddSession(t *testing.T) {
 	})
 
 	t.Run("SE-09_DBFailurePropagates", func(t *testing.T) {
-		wantErr := testerrors.ErrDBDown
+		wantErr := testutil.ErrDBDown
 		fs := &seFakeSessionStore{addToDBErr: wantErr}
 		svc := NewService(fs)
 
@@ -113,7 +113,7 @@ func TestSE08to10AddSession(t *testing.T) {
 	})
 
 	t.Run("SE-10_CacheFailureIsFailOpen", func(t *testing.T) {
-		fs := &seFakeSessionStore{addToCacheErr: testerrors.ErrCacheDown}
+		fs := &seFakeSessionStore{addToCacheErr: testutil.ErrCacheDown}
 		svc := NewService(fs)
 
 		if err := svc.AddSession(&Session{ID: "s1"}); err != nil {
@@ -164,7 +164,7 @@ func TestSE11to14GetSession(t *testing.T) {
 
 	t.Run("SE-14_RepopulateFailureIsFailOpen", func(t *testing.T) {
 		want := &Session{ID: "s1"}
-		fs := &seFakeSessionStore{getFromCacheErr: ErrNotFound, getFromDBSession: want, addToCacheErr: testerrors.ErrCacheDown}
+		fs := &seFakeSessionStore{getFromCacheErr: ErrNotFound, getFromDBSession: want, addToCacheErr: testutil.ErrCacheDown}
 		svc := NewService(fs)
 
 		got, err := svc.GetSession("s1")
@@ -185,7 +185,7 @@ func TestSE15to17UpdateSession(t *testing.T) {
 	})
 
 	t.Run("SE-16_DBFailurePropagates", func(t *testing.T) {
-		wantErr := testerrors.ErrDBDown
+		wantErr := testutil.ErrDBDown
 		fs := &seFakeSessionStore{updateInDBErr: wantErr}
 		svc := NewService(fs)
 
@@ -199,7 +199,7 @@ func TestSE15to17UpdateSession(t *testing.T) {
 	})
 
 	t.Run("SE-17_CacheFailureIsFailOpen", func(t *testing.T) {
-		fs := &seFakeSessionStore{addToCacheErr: testerrors.ErrCacheDown}
+		fs := &seFakeSessionStore{addToCacheErr: testutil.ErrCacheDown}
 		svc := NewService(fs)
 
 		if err := svc.UpdateSession(&Session{ID: "s1"}); err != nil {
@@ -219,7 +219,7 @@ func TestSE18to20DeleteSession(t *testing.T) {
 	})
 
 	t.Run("SE-19_DBFailurePropagates", func(t *testing.T) {
-		wantErr := testerrors.ErrDBDown
+		wantErr := testutil.ErrDBDown
 		fs := &seFakeSessionStore{deleteInDBErr: wantErr}
 		svc := NewService(fs)
 
@@ -233,12 +233,12 @@ func TestSE18to20DeleteSession(t *testing.T) {
 	})
 
 	t.Run("SE-20_CacheEvictFailureIsFailClosed", func(t *testing.T) {
-		fs := &seFakeSessionStore{deleteFromCacheErr: testerrors.ErrCacheDown}
+		fs := &seFakeSessionStore{deleteFromCacheErr: testutil.ErrCacheDown}
 		svc := NewService(fs)
 
 		err := svc.DeleteSession("s1")
-		if !errors.Is(err, testerrors.ErrCacheDown) {
-			t.Fatalf("DeleteSession() error = %v, want it to wrap %v (this must be fail-closed, unlike Add/Update)", err, testerrors.ErrCacheDown)
+		if !errors.Is(err, testutil.ErrCacheDown) {
+			t.Fatalf("DeleteSession() error = %v, want it to wrap %v (this must be fail-closed, unlike Add/Update)", err, testutil.ErrCacheDown)
 		}
 	})
 }
@@ -412,11 +412,11 @@ func TestSE23to31ReadJWT(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to build fixture token: %v", err)
 		}
-		fs.updateInDBErr = testerrors.ErrDBDown
+		fs.updateInDBErr = testutil.ErrDBDown
 
 		got, err := svc.ReadJWT(tok)
-		if got != nil || !errors.Is(err, testerrors.ErrDBDown) {
-			t.Errorf("ReadJWT() = (%v, %v), want (nil, %v)", got, err, testerrors.ErrDBDown)
+		if got != nil || !errors.Is(err, testutil.ErrDBDown) {
+			t.Errorf("ReadJWT() = (%v, %v), want (nil, %v)", got, err, testutil.ErrDBDown)
 		}
 	})
 }

@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/internal/testerrors"
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
+	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
 type hdMockStore struct {
@@ -192,7 +192,7 @@ func TestHD01to05_CreatePetHandler(t *testing.T) {
 	})
 
 	t.Run("PPH-05_StoreErrorInternalServerError", func(t *testing.T) {
-		mock := &hdMockStore{createPetErr: testerrors.ErrDBDown}
+		mock := &hdMockStore{createPetErr: testutil.ErrDBDown}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPost, "/pets/Rex", nil)
 		req.SetPathValue("name", "Rex")
@@ -347,7 +347,7 @@ func TestHD11to14and35_UpdatePetHandler(t *testing.T) {
 	})
 
 	t.Run("PPH-14_StoreErrorInternalServerError", func(t *testing.T) {
-		mock := &hdMockStore{updatePetErr: testerrors.ErrDBDown}
+		mock := &hdMockStore{updatePetErr: testutil.ErrDBDown}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPut, "/pets", strings.NewReader(`{"id":1,"name":"Rex"}`))
 		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.pets:Rex")))
@@ -581,7 +581,7 @@ func TestHD23to27and36_UpdatePetPictureHandler(t *testing.T) {
 	t.Run("PPH-27_StoreErrorInternalServerError", func(t *testing.T) {
 		mock := &hdMockStore{
 			getPetResult:        &Pet{ID: 1, Name: "Rex"},
-			updatePetPictureErr: testerrors.ErrDBDown,
+			updatePetPictureErr: testutil.ErrDBDown,
 		}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPut, "/pictures", strings.NewReader(`{"id":"abc123","prime_subj":1}`))
@@ -736,7 +736,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 		mock := &hdMockStore{
 			getPetPictureResult: &PetPicture{ID: "abc123", PrimarySubject: 1},
 			getPetResult:        &Pet{ID: 1, Name: "Rex"},
-			deletePetPictureErr: testerrors.ErrDBDown,
+			deletePetPictureErr: testutil.ErrDBDown,
 		}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodDelete, "/pictures/abc123", nil)
@@ -786,7 +786,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 	})
 
 	t.Run("PPH-39_GetPetStoreFailureInternalServerError", func(t *testing.T) {
-		mock := &hdMockStore{getPetErr: testerrors.ErrDBDown}
+		mock := &hdMockStore{getPetErr: testutil.ErrDBDown}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodGet, "/pets/7", nil)
 		req.SetPathValue("id", "7")
@@ -816,7 +816,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 	})
 
 	t.Run("PPH-40_GetRandPetPictureStoreFailureInternalServerError", func(t *testing.T) {
-		mock := &hdMockStore{getRandPetPictureByNameErr: testerrors.ErrDBDown}
+		mock := &hdMockStore{getRandPetPictureByNameErr: testutil.ErrDBDown}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodGet, "/pets/Rex/picture", nil)
 		req.SetPathValue("name", "Rex")
@@ -831,7 +831,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 	})
 
 	t.Run("PPH-41_GetPetPictureStoreFailureInternalServerError", func(t *testing.T) {
-		mock := &hdMockStore{getPetPictureErr: testerrors.ErrDBDown}
+		mock := &hdMockStore{getPetPictureErr: testutil.ErrDBDown}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodGet, "/pictures/abc123", nil)
 		req.SetPathValue("id", "abc123")
@@ -846,7 +846,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 	})
 
 	t.Run("PPH-42_UpdatePetPictureGetPetFailureInternalServerError", func(t *testing.T) {
-		mock := &hdMockStore{getPetErr: testerrors.ErrDBDown}
+		mock := &hdMockStore{getPetErr: testutil.ErrDBDown}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodPut, "/pictures", strings.NewReader(`{"id":"abc123","prime_subj":1}`))
 		w := httptest.NewRecorder()
@@ -863,7 +863,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 	})
 
 	t.Run("PPH-43_DeletePetPictureGetPetPictureFailureInternalServerError", func(t *testing.T) {
-		mock := &hdMockStore{getPetPictureErr: testerrors.ErrDBDown}
+		mock := &hdMockStore{getPetPictureErr: testutil.ErrDBDown}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodDelete, "/pictures/abc123", nil)
 		req.SetPathValue("id", "abc123")
@@ -883,7 +883,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 	t.Run("PPH-44_DeletePetPictureGetPetFailureInternalServerError", func(t *testing.T) {
 		mock := &hdMockStore{
 			getPetPictureResult: &PetPicture{ID: "abc123", PrimarySubject: 1},
-			getPetErr:           testerrors.ErrDBDown,
+			getPetErr:           testutil.ErrDBDown,
 		}
 		svc := NewService(mock)
 		req := httptest.NewRequest(http.MethodDelete, "/pictures/abc123", nil)
