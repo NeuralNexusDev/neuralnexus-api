@@ -8,14 +8,14 @@ import (
 )
 
 func TestOT43AddOAuthTokenToDB(t *testing.T) {
-	s := stStoreWithUnreachableDB(t)
+	s := &oAuthTokenStore{db: stUnreachablePool(t)}
 	t.Run("OT-43_ConnectionError", func(t *testing.T) {
 		stAssertRawConnectionError(t, s.AddOAuthTokenToDB(&OAuthToken{UserID: "u1", Platform: PlatformDiscord}))
 	})
 }
 
 func TestOT44GetOAuthTokenByUserID(t *testing.T) {
-	s := stStoreWithUnreachableDB(t)
+	s := &oAuthTokenStore{db: stUnreachablePool(t)}
 	t.Run("OT-44_ConnectionError", func(t *testing.T) {
 		got, err := s.GetOAuthTokenByUserID("u1", PlatformDiscord)
 		if got != nil {
@@ -26,14 +26,14 @@ func TestOT44GetOAuthTokenByUserID(t *testing.T) {
 }
 
 func TestOT45UpdateOAuthToken(t *testing.T) {
-	s := stStoreWithUnreachableDB(t)
+	s := &oAuthTokenStore{db: stUnreachablePool(t)}
 	t.Run("OT-45_ConnectionError", func(t *testing.T) {
 		stAssertRawConnectionError(t, s.UpdateOAuthToken(&OAuthToken{UserID: "u1", Platform: PlatformDiscord}))
 	})
 }
 
 func TestOT46DeleteOAuthToken(t *testing.T) {
-	s := stStoreWithUnreachableDB(t)
+	s := &oAuthTokenStore{db: stUnreachablePool(t)}
 	t.Run("OT-46_ConnectionError", func(t *testing.T) {
 		stAssertRawConnectionError(t, s.DeleteOAuthToken("u1", PlatformDiscord))
 	})

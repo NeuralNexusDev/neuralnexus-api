@@ -31,7 +31,7 @@ type mwFakeSessionSvc struct {
 	readJWTCalled bool
 }
 
-var _ session.SessionService = (*mwFakeSessionSvc)(nil)
+var _ session.Service = (*mwFakeSessionSvc)(nil)
 
 func (f *mwFakeSessionSvc) AddSession(*session.Session) error { return nil }
 func (f *mwFakeSessionSvc) GetSession(string) (*session.Session, error) {
@@ -66,7 +66,7 @@ type mwFakeRateLimitSvc struct {
 	getCalls  []string
 }
 
-var _ ratelimit.RateLimitService = (*mwFakeRateLimitSvc)(nil)
+var _ ratelimit.Service = (*mwFakeRateLimitSvc)(nil)
 
 func (f *mwFakeRateLimitSvc) IncrRateLimit(key string) error {
 	f.incrCalls = append(f.incrCalls, key)
@@ -88,7 +88,7 @@ type mwSyncedRateLimitSvc struct {
 	counts map[string]int
 }
 
-var _ ratelimit.RateLimitService = (*mwSyncedRateLimitSvc)(nil)
+var _ ratelimit.Service = (*mwSyncedRateLimitSvc)(nil)
 
 func (f *mwSyncedRateLimitSvc) IncrRateLimit(key string) error {
 	f.mu.Lock()
@@ -348,7 +348,7 @@ func TestIPMiddleware(t *testing.T) {
 	})
 }
 
-func mwRunSession(svc session.SessionService, r *http.Request) (rec *httptest.ResponseRecorder, nextCalls int, gotSession *session.Session) {
+func mwRunSession(svc session.Service, r *http.Request) (rec *httptest.ResponseRecorder, nextCalls int, gotSession *session.Session) {
 	rec = httptest.NewRecorder()
 	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		nextCalls++
@@ -570,7 +570,7 @@ func TestSessionMiddleware(t *testing.T) {
 	})
 }
 
-func mwRunRateLimit(svc ratelimit.RateLimitService, prefix string, sessionLimit, ipLimit int, r *http.Request) (rec *httptest.ResponseRecorder, nextCalls int) {
+func mwRunRateLimit(svc ratelimit.Service, prefix string, sessionLimit, ipLimit int, r *http.Request) (rec *httptest.ResponseRecorder, nextCalls int) {
 	rec = httptest.NewRecorder()
 	next := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		nextCalls++
@@ -1015,7 +1015,7 @@ func TestRequestLoggerMiddleware(t *testing.T) {
 	})
 }
 
-func mwRunAuth(svc session.SessionService, r *http.Request) (rec *httptest.ResponseRecorder, nextCalls int) {
+func mwRunAuth(svc session.Service, r *http.Request) (rec *httptest.ResponseRecorder, nextCalls int) {
 	rec = httptest.NewRecorder()
 	next := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		nextCalls++

@@ -26,7 +26,7 @@ type stubAccountService struct {
 	newSessionErr        error
 }
 
-var _ AccountService = (*stubAccountService)(nil)
+var _ Service = (*stubAccountService)(nil)
 
 func (s *stubAccountService) AddAccount(*Account) error { return nil }
 
@@ -79,7 +79,7 @@ type stubSessionService struct {
 	added            []*session.Session
 }
 
-var _ session.SessionService = (*stubSessionService)(nil)
+var _ session.Service = (*stubSessionService)(nil)
 
 func (s *stubSessionService) AddSession(session *session.Session) error {
 	s.added = append(s.added, session)

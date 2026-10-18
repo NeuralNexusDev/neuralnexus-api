@@ -4,7 +4,7 @@
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| US-01 | NewService | Happy Path | Service wired to the store's sub-stores | fake sub-stores | Returned `Service` delegates to the exact `AccountStore`/`LinkAccountStore`/`AccountSettingsStore` instances returned | P2 |  |
+| US-01 | NewService | Happy Path | Service wired to the store's sub-stores | fake sub-stores | Returned `Service` delegates to the exact `account.Store`/`link.Store`/`account.SettingsStore` instances returned | P2 |  |
 | US-02 | GetUser | Happy Path | `as.GetAccountByID` succeeds | | Returns the user for the account, nil | P1 |  |
 | US-03 | GetUser | Error Path | `as.GetAccountByID` fails | | Error propagated unchanged | P2 |  |
 | US-04 | GetUserFromPlatform | Happy Path | `als.GetLinkedAccountByPlatformID` then `as.GetAccountByID` both succeed | | Returns the resolved user whose JSON equals the account's JSON (user_id, username, roles, updated_at only), nil | P1 |  |

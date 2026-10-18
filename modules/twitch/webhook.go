@@ -90,7 +90,7 @@ func handleVerification(w http.ResponseWriter, ctx context.Context, userId strin
 }
 
 // handleNotification handles the EventSub notifications
-func handleNotification(ctx context.Context, userId string, eventsub EventSubService, tokens link.OAuthTokenStore, vals eventSubNotification, linked link.LinkAccountStore) error {
+func handleNotification(ctx context.Context, userId string, eventsub EventSubService, tokens link.OAuthTokenStore, vals eventSubNotification, linked link.Store) error {
 	var err error
 	mw.LogRequest(ctx, userId, "EventSub notification type:", vals.Subscription.Type)
 	switch vals.Subscription.Type {
@@ -108,7 +108,7 @@ func handleNotification(ctx context.Context, userId string, eventsub EventSubSer
 }
 
 // handleChannelChatMessage handles the EventSub chat message notifications
-func handleChannelChatMessage(ctx context.Context, userId string, eventsub EventSubService, tokens link.OAuthTokenStore, vals eventSubNotification, linked link.LinkAccountStore) error {
+func handleChannelChatMessage(ctx context.Context, userId string, eventsub EventSubService, tokens link.OAuthTokenStore, vals eventSubNotification, linked link.Store) error {
 	var err error
 	var chatEvent helix.EventSubChannelChatMessageEvent
 	err = json.NewDecoder(bytes.NewReader(vals.Event)).Decode(&chatEvent)

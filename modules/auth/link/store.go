@@ -11,13 +11,13 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 )
 
-// store - Postgres-backed linked account and OAuth token store
+// store - Postgres-backed linked account store
 type store struct {
 	db *pgxpool.Pool
 }
 
-// NewLinkAccountStore - Create a new linked account store
-func NewLinkAccountStore(db *pgxpool.Pool) LinkAccountStore {
+// NewStore - Create a new linked account store
+func NewStore(db *pgxpool.Pool) Store {
 	return &store{db: db}
 }
 
@@ -41,8 +41,8 @@ func NewLinkAccountStore(db *pgxpool.Pool) LinkAccountStore {
 //   CONSTRAINT linked_accounts_platform_unique UNIQUE (platform, platform_id)
 // );
 
-// LinkAccountStore - Account Link Store
-type LinkAccountStore interface {
+// Store - Account Link Store
+type Store interface {
 	AddLinkedAccountToDB(la *LinkedAccount) error
 	UpdateLinkedAccount(la *LinkedAccount) error
 	GetLinkedAccountByPlatformID(platform Platform, platformID string) (*LinkedAccount, error)

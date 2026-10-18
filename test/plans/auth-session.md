@@ -4,7 +4,7 @@
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| SE-07 | NewSessionService | Happy Path | Service wired to `store.Session()` | fake `Store` | Returned service delegates to the exact `SessionStore` the fake `Store` returned | P2 |  |
+| SE-07 | NewService | Happy Path | Service wired to `store.Session()` | fake `Store` | Returned service delegates to the exact `Store` the fake `Store` returned | P2 |  |
 | SE-08 | AddSession | Happy Path | `store.AddSessionToDB` and `store.AddSessionToCache` both succeed | | Returns nil; both called exactly once | P1 |  |
 | SE-09 | AddSession | Error Path | `store.AddSessionToDB` fails | | Returns that error; `AddSessionToCache` never called | P1 |  |
 | SE-10 | AddSession | Edge Case | `AddSessionToDB` succeeds but `AddSessionToCache` fails | | Returns nil anyway (cache failure is fail-open, only logged) | P0 |  |

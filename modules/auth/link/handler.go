@@ -44,7 +44,7 @@ const (
 )
 
 // OAuthHandler handles the OAuth route
-func OAuthHandler(as account.AccountService, las LinkAccountStore, ss session.SessionService) http.HandlerFunc {
+func OAuthHandler(as account.Service, las Store, ss session.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		code := r.URL.Query().Get("code")
 		if code == "" {
@@ -102,7 +102,7 @@ func OAuthHandler(as account.AccountService, las LinkAccountStore, ss session.Se
 }
 
 // OpenIDHandler handles the Steam OpenID 2.0 login/link callback.
-func OpenIDHandler(as account.AccountService, las LinkAccountStore, ss session.SessionService) http.HandlerFunc {
+func OpenIDHandler(as account.Service, las Store, ss session.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		state, ok := decodeAndValidateState(w, r)
 		if !ok {

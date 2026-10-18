@@ -47,7 +47,7 @@ type oaMockAccountService struct {
 	DeleteAccountCalls  int
 }
 
-var _ account.AccountService = (*oaMockAccountService)(nil)
+var _ account.Service = (*oaMockAccountService)(nil)
 
 func (m *oaMockAccountService) AddAccount(a *account.Account) error {
 	m.AddAccountCalls++
@@ -91,7 +91,7 @@ type oaMockLinkAccountStore struct {
 	AddedLinkedAccounts               []*LinkedAccount
 }
 
-var _ LinkAccountStore = (*oaMockLinkAccountStore)(nil)
+var _ Store = (*oaMockLinkAccountStore)(nil)
 
 func (m *oaMockLinkAccountStore) AddLinkedAccountToDB(la *LinkedAccount) error {
 	m.AddLinkedAccountToDBCalls++
@@ -130,7 +130,7 @@ type oaMockSessionService struct {
 	AddSessionCalls int
 }
 
-var _ session.SessionService = (*oaMockSessionService)(nil)
+var _ session.Service = (*oaMockSessionService)(nil)
 
 func (m *oaMockSessionService) AddSession(session *session.Session) error {
 	m.AddSessionCalls++
@@ -1776,7 +1776,7 @@ type oaConcurrentAccountService struct {
 	accounts map[string]*account.Account
 }
 
-var _ account.AccountService = (*oaConcurrentAccountService)(nil)
+var _ account.Service = (*oaConcurrentAccountService)(nil)
 
 func newOAConcurrentAccountService() *oaConcurrentAccountService {
 	return &oaConcurrentAccountService{accounts: map[string]*account.Account{}}
@@ -1835,7 +1835,7 @@ type oaConcurrentLinkAccountStore struct {
 	byKey map[string]*LinkedAccount
 }
 
-var _ LinkAccountStore = (*oaConcurrentLinkAccountStore)(nil)
+var _ Store = (*oaConcurrentLinkAccountStore)(nil)
 
 func newOAConcurrentLinkAccountStore() *oaConcurrentLinkAccountStore {
 	return &oaConcurrentLinkAccountStore{byKey: map[string]*LinkedAccount{}}
@@ -2071,7 +2071,7 @@ type oaBarrierLinkAccountStore struct {
 	barrierCount int
 }
 
-var _ LinkAccountStore = (*oaBarrierLinkAccountStore)(nil)
+var _ Store = (*oaBarrierLinkAccountStore)(nil)
 
 func newOABarrierLinkAccountStore(barrierN int) *oaBarrierLinkAccountStore {
 	s := &oaBarrierLinkAccountStore{byKey: map[string]*LinkedAccount{}, barrierN: barrierN}

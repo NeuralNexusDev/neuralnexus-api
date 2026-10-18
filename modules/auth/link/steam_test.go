@@ -25,7 +25,7 @@ type stMockAccountService struct {
 	addAccountCalls int
 }
 
-var _ account.AccountService = (*stMockAccountService)(nil)
+var _ account.Service = (*stMockAccountService)(nil)
 
 func newSTMockAccountService() *stMockAccountService {
 	return &stMockAccountService{accounts: map[string]*account.Account{}}
@@ -79,7 +79,7 @@ type stMockLinkAccountStore struct {
 	addCalls     int
 }
 
-var _ LinkAccountStore = (*stMockLinkAccountStore)(nil)
+var _ Store = (*stMockLinkAccountStore)(nil)
 
 func newSTMockLinkAccountStore() *stMockLinkAccountStore {
 	return &stMockLinkAccountStore{byPlatformID: map[Platform]map[string]*LinkedAccount{}}
@@ -126,7 +126,7 @@ type stMockSessionService struct {
 	added         []*session.Session
 }
 
-var _ session.SessionService = (*stMockSessionService)(nil)
+var _ session.Service = (*stMockSessionService)(nil)
 
 func (m *stMockSessionService) AddSession(session *session.Session) error {
 	if m.addSessionErr != nil {

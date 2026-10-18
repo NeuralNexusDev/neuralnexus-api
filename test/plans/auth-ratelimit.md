@@ -4,7 +4,7 @@
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| RL-01 | NewRateLimitService | Happy Path | Service delegates to the `RateLimitStore` it is built with | fake `RateLimitStore` | `GetRateLimit` reaches the fake store exactly once and returns its value | P2 |  |
+| RL-01 | NewService | Happy Path | Service delegates to the `Store` it is built with | fake `Store` | `GetRateLimit` reaches the fake store exactly once and returns its value | P2 |  |
 | RL-02 | GetRateLimit | Happy Path | `store.GetRateLimit` succeeds | fake store returns `(5, nil)` | Returns `(5, nil)` | P1 |  |
 | RL-03 | GetRateLimit | Error Path | `store.GetRateLimit` fails | | Error propagated unchanged | P2 |  |
 | RL-04 | SetRateLimit | Happy Path | `store.SetRateLimit` succeeds | | Returns nil | P1 |  |
@@ -16,7 +16,7 @@
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| ST-01 | NewStore | Happy Path | Given a redis client | | Returns a non-nil `RateLimitStore` wrapping that client | P2 |  |
+| ST-01 | NewStore | Happy Path | Given a redis client | | Returns a non-nil `Store` wrapping that client | P2 |  |
 | ST-40 | GetRateLimit | Error Path | Redis unreachable | `Get` fails with a non-`redis.Nil` error | Returns `(0, err)`; the auto-provision-on-miss branch is never taken | P1 |  |
 | ST-41 | SetRateLimit | Error Path | Redis unreachable | | Returns raw error | P2 |  |
 | ST-42 | IncrementRateLimit | Error Path | Redis unreachable | `Incr` fails | Returns raw error; `ExpireNX` never attempted | P2 |  |

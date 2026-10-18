@@ -65,7 +65,7 @@ const stLiveLockKey = 910000
 // stLiveStore's cleanup deletes rows in userID range
 // 910000000000000000..910000000000049999, so stLiveLockKey keeps the live
 // tests of every package from running at once.
-func stLiveStore(t *testing.T) (account.AccountStore, LinkAccountStore, account.AccountSettingsStore) {
+func stLiveStore(t *testing.T) (account.Store, Store, account.SettingsStore) {
 	t.Helper()
 	s := stLiveFullStore(t)
 	return s.Account(), s.LinkAccount(), s.AccountSettings()
@@ -171,24 +171,24 @@ type stLiveSet struct {
 	db *pgxpool.Pool
 }
 
-func (s stLiveSet) Account() account.AccountStore { return account.NewStore(s.db) }
+func (s stLiveSet) Account() account.Store { return account.NewStore(s.db) }
 
-func (s stLiveSet) AccountSettings() account.AccountSettingsStore {
-	return account.NewStore(s.db)
+func (s stLiveSet) AccountSettings() account.SettingsStore {
+	return account.NewSettingsStore(s.db)
 }
 
-func (s stLiveSet) LinkAccount() LinkAccountStore { return NewLinkAccountStore(s.db) }
+func (s stLiveSet) LinkAccount() Store { return NewStore(s.db) }
 
 func (s stLiveSet) OAuthToken() OAuthTokenStore { return NewOAuthTokenStore(s.db) }
 
-func stSeedBareAccount(t *testing.T, as account.AccountStore, userID string) {
+func stSeedBareAccount(t *testing.T, as account.Store, userID string) {
 	t.Helper()
 	if err := as.AddAccountToDB(&account.Account{UserID: userID, Username: "sttest-" + userID}); err != nil {
 		t.Fatalf("failed to seed account %s: %v", userID, err)
 	}
 }
 
-func stSeedPasswordAccount(t *testing.T, as account.AccountStore, userID string) *account.Account {
+func stSeedPasswordAccount(t *testing.T, as account.Store, userID string) *account.Account {
 	t.Helper()
 	a := &account.Account{UserID: userID, Username: "sttest-" + userID}
 	if err := a.HashPassword("sttest-password"); err != nil {
@@ -200,7 +200,7 @@ func stSeedPasswordAccount(t *testing.T, as account.AccountStore, userID string)
 	return a
 }
 
-func stSeedLink(t *testing.T, las LinkAccountStore, userID string, platform Platform, platformID string, verified, loginEnabled bool) {
+func stSeedLink(t *testing.T, las Store, userID string, platform Platform, platformID string, verified, loginEnabled bool) {
 	t.Helper()
 	if err := las.AddLinkedAccountToDB(&LinkedAccount{
 		UserID:           userID,

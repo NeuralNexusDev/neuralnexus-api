@@ -18,17 +18,17 @@ type Service interface {
 	SetPasswordAuthEnabled(userID string, enabled bool) error
 }
 
-type userService struct {
-	as    account.AccountStore
-	als   link.LinkAccountStore
+type service struct {
+	as    account.Store
+	als   link.Store
 	links link.Service
-	ass   account.AccountSettingsStore
+	ass   account.SettingsStore
 	rs    account.RoleStore
 }
 
 // NewService - Create a new user Service
-func NewService(as account.AccountStore, als link.LinkAccountStore, links link.Service, ass account.AccountSettingsStore, rs account.RoleStore) Service {
-	return &userService{as, als, links, ass, rs}
+func NewService(as account.Store, als link.Store, links link.Service, ass account.SettingsStore, rs account.RoleStore) Service {
+	return &service{as, als, links, ass, rs}
 }
 
 func userFromAccount(a *account.Account) *User {
@@ -39,7 +39,7 @@ func userFromAccount(a *account.Account) *User {
 }
 
 // GetUser - Get a user by their ID
-func (s *userService) GetUser(userID string) (*User, error) {
+func (s *service) GetUser(userID string) (*User, error) {
 	a, err := s.as.GetAccountByID(userID)
 	if err != nil {
 		return nil, err
@@ -48,7 +48,7 @@ func (s *userService) GetUser(userID string) (*User, error) {
 }
 
 // GetUserFromPlatform - Get a user by their platform ID
-func (s *userService) GetUserFromPlatform(platform link.Platform, platformID string) (*User, error) {
+func (s *service) GetUserFromPlatform(platform link.Platform, platformID string) (*User, error) {
 	la, err := s.als.GetLinkedAccountByPlatformID(platform, platformID)
 	if err != nil {
 		return nil, err
@@ -61,7 +61,7 @@ func (s *userService) GetUserFromPlatform(platform link.Platform, platformID str
 }
 
 // ListUsers - List a page of users ordered by ID
-func (s *userService) ListUsers(limit, offset int) ([]*User, error) {
+func (s *service) ListUsers(limit, offset int) ([]*User, error) {
 	accounts, err := s.as.ListAccounts(limit, offset)
 	if err != nil {
 		return nil, err
@@ -74,7 +74,7 @@ func (s *userService) ListUsers(limit, offset int) ([]*User, error) {
 }
 
 // GetUserPermissions - Get a user's permissions
-func (s *userService) GetUserPermissions(userID string) ([]string, error) {
+func (s *service) GetUserPermissions(userID string) ([]string, error) {
 	a, err := s.as.GetAccountByID(userID)
 	if err != nil {
 		return nil, err
@@ -93,7 +93,7 @@ func (s *userService) GetUserPermissions(userID string) ([]string, error) {
 }
 
 // UpdateUser - Update a user's username and roles
-func (s *userService) UpdateUser(userID string, update *UserUpdate) error {
+func (s *service) UpdateUser(userID string, update *UserUpdate) error {
 	account, err := s.as.GetAccountByID(userID)
 	if err != nil {
 		return err
@@ -108,7 +108,7 @@ func (s *userService) UpdateUser(userID string, update *UserUpdate) error {
 }
 
 // UpdateUserFromPlatform - Update a user from a platform
-func (s *userService) UpdateUserFromPlatform(platform link.Platform, platformID string, data link.PlatformData) (*User, error) {
+func (s *service) UpdateUserFromPlatform(platform link.Platform, platformID string, data link.PlatformData) (*User, error) {
 	userID, err := s.links.UpdateFromPlatform(platform, platformID, data)
 	if err != nil {
 		return nil, err
@@ -121,16 +121,16 @@ func (s *userService) UpdateUserFromPlatform(platform link.Platform, platformID 
 }
 
 // DeleteUser - Delete a user
-func (s *userService) DeleteUser(userID string) error {
+func (s *service) DeleteUser(userID string) error {
 	return s.as.DeleteAccountFromDB(userID)
 }
 
 // GetAccountSettings - Get a user's account settings
-func (s *userService) GetAccountSettings(userID string) (*account.AccountSettings, error) {
+func (s *service) GetAccountSettings(userID string) (*account.AccountSettings, error) {
 	return s.ass.GetAccountSettings(userID)
 }
 
 // SetPasswordAuthEnabled - Toggle whether a user's password can log in
-func (s *userService) SetPasswordAuthEnabled(userID string, enabled bool) error {
+func (s *service) SetPasswordAuthEnabled(userID string, enabled bool) error {
 	return s.ass.SetPasswordAuthEnabled(userID, enabled)
 }
