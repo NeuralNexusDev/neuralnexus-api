@@ -1,5 +1,5 @@
-// Package testutil holds helpers shared by the store tests. Only _test.go
-// files import it.
+// Package testutil holds helpers shared by the store, handler and service
+// tests. Only _test.go files import it.
 package testutil
 
 import (
