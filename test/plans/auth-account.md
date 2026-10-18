@@ -4,7 +4,7 @@
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| AC-01 | NewService | Happy Path | Service is wired to the store's own sub-stores | fake `Store` returns distinct fake `Store`/`SettingsStore` | Returned `Service`, when exercised, delegates to the exact `Store`/`SettingsStore` instances `store.Account()`/`store.AccountSettings()` returned | P2 |  |
+| AC-01 | NewService | Happy Path | Service is wired to the store's own sub-stores | fake `Store` and fake `SettingsStore` passed to `NewService` | Returned `Service`, when exercised, delegates account methods to the exact `Store` passed in (built by `NewStore`) and settings methods to the exact `SettingsStore` passed in (built by `NewSettingsStore`) | P2 |  |
 | AC-02 | GetAccountByID | Happy Path | `as.GetAccountByID` succeeds | fake store returns a known `*Account` | Returns that `*Account`, nil error | P1 |  |
 | AC-03 | GetAccountByID | Error Path | `as.GetAccountByID` fails | fake store returns `ErrNotFound` | Returns nil, `ErrNotFound` propagated unchanged | P2 |  |
 | AC-04 | GetAccountByUsername | Happy Path | `as.GetAccountByUsername` succeeds | | Returns the account, nil | P1 |  |
