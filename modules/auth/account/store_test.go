@@ -197,14 +197,14 @@ func stSeedPasswordAccount(t *testing.T, as Store, userID string) *Account {
 }
 
 func TestST08to12TranslateAccountConstraintErr(t *testing.T) {
-	t.Run("ST-08_NonPgError", func(t *testing.T) {
+	t.Run("ACS-08_NonPgError", func(t *testing.T) {
 		orig := testerrors.ErrBoom
 		if got := translateAccountConstraintErr(orig); !errors.Is(got, orig) {
 			t.Errorf("translateAccountConstraintErr() = %v, want unchanged %v", got, orig)
 		}
 	})
 
-	t.Run("ST-09_WrongCode", func(t *testing.T) {
+	t.Run("ACS-09_WrongCode", func(t *testing.T) {
 		pgErr := &pgconn.PgError{Code: "23503", ConstraintName: "accounts_email_key"}
 		got := translateAccountConstraintErr(pgErr)
 		if !errors.Is(got, pgErr) {
@@ -212,7 +212,7 @@ func TestST08to12TranslateAccountConstraintErr(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-10_UnrecognizedConstraint", func(t *testing.T) {
+	t.Run("ACS-10_UnrecognizedConstraint", func(t *testing.T) {
 		pgErr := &pgconn.PgError{Code: "23505", ConstraintName: "some_other_constraint"}
 		got := translateAccountConstraintErr(pgErr)
 		if !errors.Is(got, pgErr) {
@@ -220,7 +220,7 @@ func TestST08to12TranslateAccountConstraintErr(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-11_EmailConstraint", func(t *testing.T) {
+	t.Run("ACS-11_EmailConstraint", func(t *testing.T) {
 		pgErr := &pgconn.PgError{Code: "23505", ConstraintName: "accounts_email_key"}
 		got := translateAccountConstraintErr(pgErr)
 		if !errors.Is(got, ErrEmailAlreadyExists) {
@@ -228,7 +228,7 @@ func TestST08to12TranslateAccountConstraintErr(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-12_UsernameConstraint", func(t *testing.T) {
+	t.Run("ACS-12_UsernameConstraint", func(t *testing.T) {
 		pgErr := &pgconn.PgError{Code: "23505", ConstraintName: "accounts_username_key"}
 		got := translateAccountConstraintErr(pgErr)
 		if !errors.Is(got, ErrUsernameAlreadyExists) {
@@ -239,14 +239,14 @@ func TestST08to12TranslateAccountConstraintErr(t *testing.T) {
 
 func TestST13AddAccountToDB(t *testing.T) {
 	s := stStoreWithUnreachableDB(t)
-	t.Run("ST-13_ConnectionErrorPassesThroughUnchanged", func(t *testing.T) {
+	t.Run("ACS-13_ConnectionErrorPassesThroughUnchanged", func(t *testing.T) {
 		stAssertRawConnectionError(t, s.AddAccountToDB(&Account{UserID: "u1", Username: "alice"}))
 	})
 }
 
 func TestST14GetAccountByID(t *testing.T) {
 	s := stStoreWithUnreachableDB(t)
-	t.Run("ST-14_ConnectionError", func(t *testing.T) {
+	t.Run("ACS-14_ConnectionError", func(t *testing.T) {
 		got, err := s.GetAccountByID("u1")
 		if got != nil {
 			t.Errorf("expected nil account, got %v", got)
@@ -257,7 +257,7 @@ func TestST14GetAccountByID(t *testing.T) {
 
 func TestST15GetAccountByUsername(t *testing.T) {
 	s := stStoreWithUnreachableDB(t)
-	t.Run("ST-15_ConnectionError", func(t *testing.T) {
+	t.Run("ACS-15_ConnectionError", func(t *testing.T) {
 		got, err := s.GetAccountByUsername("alice")
 		if got != nil {
 			t.Errorf("expected nil account, got %v", got)
@@ -268,7 +268,7 @@ func TestST15GetAccountByUsername(t *testing.T) {
 
 func TestST16GetAccountByEmail(t *testing.T) {
 	s := stStoreWithUnreachableDB(t)
-	t.Run("ST-16_ConnectionError", func(t *testing.T) {
+	t.Run("ACS-16_ConnectionError", func(t *testing.T) {
 		got, err := s.GetAccountByEmail("a@b.com")
 		if got != nil {
 			t.Errorf("expected nil account, got %v", got)
@@ -279,21 +279,21 @@ func TestST16GetAccountByEmail(t *testing.T) {
 
 func TestST17UpdateAccountInDB(t *testing.T) {
 	s := stStoreWithUnreachableDB(t)
-	t.Run("ST-17_ConnectionErrorPassesThroughUnchanged", func(t *testing.T) {
+	t.Run("ACS-17_ConnectionErrorPassesThroughUnchanged", func(t *testing.T) {
 		stAssertRawConnectionError(t, s.UpdateAccountInDB(&Account{UserID: "u1"}))
 	})
 }
 
 func TestST18DeleteAccountFromDB(t *testing.T) {
 	s := stStoreWithUnreachableDB(t)
-	t.Run("ST-18_ConnectionError", func(t *testing.T) {
+	t.Run("ACS-18_ConnectionError", func(t *testing.T) {
 		stAssertRawConnectionError(t, s.DeleteAccountFromDB("u1"))
 	})
 }
 
 func TestST37GetAccountSettings(t *testing.T) {
 	s := &settingsStore{db: stUnreachablePool(t)}
-	t.Run("ST-37_ConnectionErrorNotDefaultsFallback", func(t *testing.T) {
+	t.Run("ACS-37_ConnectionErrorNotDefaultsFallback", func(t *testing.T) {
 		got, err := s.GetAccountSettings("u1")
 		if got != nil {
 			t.Errorf("expected nil settings (not the DefaultAccountSettings fallback), got %v", got)
@@ -303,12 +303,12 @@ func TestST37GetAccountSettings(t *testing.T) {
 }
 
 func TestST38to39SetPasswordAuthEnabled(t *testing.T) {
-	t.Run("ST-38_EnableBeginFails", func(t *testing.T) {
+	t.Run("ACS-38_EnableBeginFails", func(t *testing.T) {
 		s := &settingsStore{db: stUnreachablePool(t)}
 		stAssertRawConnectionError(t, s.SetPasswordAuthEnabled("u1", true))
 	})
 
-	t.Run("ST-39_DisableBeginFails", func(t *testing.T) {
+	t.Run("ACS-39_DisableBeginFails", func(t *testing.T) {
 		s := &settingsStore{db: stUnreachablePool(t)}
 		stAssertRawConnectionError(t, s.SetPasswordAuthEnabled("u1", false))
 	})
@@ -316,7 +316,7 @@ func TestST38to39SetPasswordAuthEnabled(t *testing.T) {
 
 func TestST47GetAccountByID(t *testing.T) {
 	as, _ := stLiveStore(t)
-	t.Run("ST-47_NotFound", func(t *testing.T) {
+	t.Run("ACS-47_NotFound", func(t *testing.T) {
 		got, err := as.GetAccountByID("910000000000000001")
 		if got != nil {
 			t.Errorf("expected nil account, got %v", got)
@@ -329,7 +329,7 @@ func TestST47GetAccountByID(t *testing.T) {
 
 func TestST48GetAccountByUsername(t *testing.T) {
 	as, _ := stLiveStore(t)
-	t.Run("ST-48_NotFound", func(t *testing.T) {
+	t.Run("ACS-48_NotFound", func(t *testing.T) {
 		got, err := as.GetAccountByUsername("sttest-nonexistent")
 		if got != nil {
 			t.Errorf("expected nil account, got %v", got)
@@ -342,7 +342,7 @@ func TestST48GetAccountByUsername(t *testing.T) {
 
 func TestST49GetAccountByEmail(t *testing.T) {
 	as, _ := stLiveStore(t)
-	t.Run("ST-49_NotFound", func(t *testing.T) {
+	t.Run("ACS-49_NotFound", func(t *testing.T) {
 		got, err := as.GetAccountByEmail("sttest-nonexistent@example.test")
 		if got != nil {
 			t.Errorf("expected nil account, got %v", got)
@@ -355,7 +355,7 @@ func TestST49GetAccountByEmail(t *testing.T) {
 
 func TestST50AddAccountToDBNilEmailsDoNotCollide(t *testing.T) {
 	as, _ := stLiveStore(t)
-	t.Run("ST-50_NilEmailsDoNotCollide", func(t *testing.T) {
+	t.Run("ACS-50_NilEmailsDoNotCollide", func(t *testing.T) {
 		a1 := &Account{UserID: "910000000000000002", Username: "sttest-noemail1"}
 		if err := as.AddAccountToDB(a1); err != nil {
 			t.Fatalf("first no-email AddAccountToDB returned error: %v", err)
@@ -369,7 +369,7 @@ func TestST50AddAccountToDBNilEmailsDoNotCollide(t *testing.T) {
 
 func TestST51AddAccountToDBEmptyUsernamesDoNotCollide(t *testing.T) {
 	as, _ := stLiveStore(t)
-	t.Run("ST-51_EmptyUsernamesDoNotCollide", func(t *testing.T) {
+	t.Run("ACS-51_EmptyUsernamesDoNotCollide", func(t *testing.T) {
 		a1, err := NewIDOnlyAccount()
 		if err != nil {
 			t.Fatalf("NewIDOnlyAccount returned error: %v", err)
@@ -392,7 +392,7 @@ func TestST51AddAccountToDBEmptyUsernamesDoNotCollide(t *testing.T) {
 
 func TestST52AddAccountToDBDuplicateUsername(t *testing.T) {
 	as, _ := stLiveStore(t)
-	t.Run("ST-52_DuplicateUsernameTranslatesToSentinel", func(t *testing.T) {
+	t.Run("ACS-52_DuplicateUsernameTranslatesToSentinel", func(t *testing.T) {
 		if err := as.AddAccountToDB(&Account{UserID: "910000000000000006", Username: "sttest-dupuser"}); err != nil {
 			t.Fatalf("first insert returned error: %v", err)
 		}
@@ -405,7 +405,7 @@ func TestST52AddAccountToDBDuplicateUsername(t *testing.T) {
 
 func TestST53AddAccountToDBDuplicateEmail(t *testing.T) {
 	as, _ := stLiveStore(t)
-	t.Run("ST-53_DuplicateEmailTranslatesToSentinel", func(t *testing.T) {
+	t.Run("ACS-53_DuplicateEmailTranslatesToSentinel", func(t *testing.T) {
 		email := "sttest-dupemail@example.test"
 		if err := as.AddAccountToDB(&Account{UserID: "910000000000000008", Username: "sttest-dupemail1", Email: &email}); err != nil {
 			t.Fatalf("first insert returned error: %v", err)
@@ -419,7 +419,7 @@ func TestST53AddAccountToDBDuplicateEmail(t *testing.T) {
 
 func TestST67GetAccountSettingsDefaultsWhenNoRow(t *testing.T) {
 	as, ass := stLiveStore(t)
-	t.Run("ST-67_DefaultsWhenNoRow", func(t *testing.T) {
+	t.Run("ACS-67_DefaultsWhenNoRow", func(t *testing.T) {
 		stSeedBareAccount(t, as, "910000000000000021")
 
 		settings, err := ass.GetAccountSettings("910000000000000021")
@@ -434,7 +434,7 @@ func TestST67GetAccountSettingsDefaultsWhenNoRow(t *testing.T) {
 
 func TestST68SetPasswordAuthEnabledEnableBlockedWithNoPassword(t *testing.T) {
 	as, ass := stLiveStore(t)
-	t.Run("ST-68_EnableBlockedWithNoPassword", func(t *testing.T) {
+	t.Run("ACS-68_EnableBlockedWithNoPassword", func(t *testing.T) {
 		stSeedBareAccount(t, as, "910000000000000022")
 		err := ass.SetPasswordAuthEnabled("910000000000000022", true)
 		if !errors.Is(err, ErrNoPasswordSet) {
@@ -445,7 +445,7 @@ func TestST68SetPasswordAuthEnabledEnableBlockedWithNoPassword(t *testing.T) {
 
 func TestST70SetPasswordAuthEnabledDisableBlockedAsLastLoginMethod(t *testing.T) {
 	as, ass := stLiveStore(t)
-	t.Run("ST-70_DisableBlockedAsLastLoginMethod", func(t *testing.T) {
+	t.Run("ACS-70_DisableBlockedAsLastLoginMethod", func(t *testing.T) {
 		a := stSeedPasswordAccount(t, as, "910000000000000024")
 
 		err := ass.SetPasswordAuthEnabled(a.UserID, false)
@@ -466,21 +466,21 @@ func TestST81to83_AccountSettingsUnknownUser(t *testing.T) {
 	_, ass := stLiveStore(t)
 	const unknownID = "910000000000000031"
 
-	t.Run("ST-81_GetAccountSettingsUnknownUser", func(t *testing.T) {
+	t.Run("ACS-81_GetAccountSettingsUnknownUser", func(t *testing.T) {
 		got, err := ass.GetAccountSettings(unknownID)
 		if got != nil || !errors.Is(err, ErrNotFound) {
 			t.Errorf("GetAccountSettings() = (%v, %v), want (nil, %v)", got, err, ErrNotFound)
 		}
 	})
 
-	t.Run("ST-82_EnablePasswordAuthUnknownUser", func(t *testing.T) {
+	t.Run("ACS-82_EnablePasswordAuthUnknownUser", func(t *testing.T) {
 		err := ass.SetPasswordAuthEnabled(unknownID, true)
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("SetPasswordAuthEnabled(true) err = %v, want %v", err, ErrNotFound)
 		}
 	})
 
-	t.Run("ST-83_DisablePasswordAuthUnknownUser", func(t *testing.T) {
+	t.Run("ACS-83_DisablePasswordAuthUnknownUser", func(t *testing.T) {
 		err := ass.SetPasswordAuthEnabled(unknownID, false)
 		if !errors.Is(err, ErrNotFound) {
 			t.Errorf("SetPasswordAuthEnabled(false) err = %v, want %v", err, ErrNotFound)
@@ -494,7 +494,7 @@ func TestST84_SetPasswordAuthEnabledAccountDeletedConcurrently(t *testing.T) {
 	a := stSeedPasswordAccount(t, full, "910000000000000032")
 	ctx := context.Background()
 
-	t.Run("ST-84_AccountDeletedWhileEnabling", func(t *testing.T) {
+	t.Run("ACS-84_AccountDeletedWhileEnabling", func(t *testing.T) {
 		tx, err := db.Begin(ctx)
 		if err != nil {
 			t.Fatalf("failed to begin the deleting transaction: %v", err)
@@ -540,7 +540,7 @@ func TestST85to95AccountRoleIDs(t *testing.T) {
 	as := full
 	stSeedRoles(t, full.db, 910000000000000301, 910000000000000302, 910000000000000303)
 
-	t.Run("ST-85_RoleIDsRoundTrip", func(t *testing.T) {
+	t.Run("ACS-85_RoleIDsRoundTrip", func(t *testing.T) {
 		const userID = "910000000000000040"
 		email := "sttest-" + userID + "@example.com"
 		a := &Account{UserID: userID, Username: "sttest-" + userID, Email: &email, Roles: []string{"910000000000000301", "910000000000000302"}}
@@ -565,7 +565,7 @@ func TestST85to95AccountRoleIDs(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-86_UpdateReplacesRoleIDs", func(t *testing.T) {
+	t.Run("ACS-86_UpdateReplacesRoleIDs", func(t *testing.T) {
 		const userID = "910000000000000041"
 		stSeedBareAccount(t, as, userID)
 		a, err := as.GetAccountByID(userID)
@@ -584,7 +584,7 @@ func TestST85to95AccountRoleIDs(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-87_NilRolesAreStoredAsEmpty", func(t *testing.T) {
+	t.Run("ACS-87_NilRolesAreStoredAsEmpty", func(t *testing.T) {
 		const userID = "910000000000000042"
 		stSeedBareAccount(t, as, userID)
 
@@ -595,7 +595,7 @@ func TestST85to95AccountRoleIDs(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-88_NonNumericRoleIDRefusedOnAdd", func(t *testing.T) {
+	t.Run("ACS-88_NonNumericRoleIDRefusedOnAdd", func(t *testing.T) {
 		const userID = "910000000000000043"
 
 		err := as.AddAccountToDB(&Account{UserID: userID, Username: "sttest-" + userID, Roles: []string{"910000000000000301", "admin"}})
@@ -608,7 +608,7 @@ func TestST85to95AccountRoleIDs(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-89_NonNumericRoleIDRefusedOnUpdate", func(t *testing.T) {
+	t.Run("ACS-89_NonNumericRoleIDRefusedOnUpdate", func(t *testing.T) {
 		const userID = "910000000000000044"
 		stSeedBareAccount(t, as, userID)
 		a, _ := as.GetAccountByID(userID)
@@ -621,7 +621,7 @@ func TestST85to95AccountRoleIDs(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-91_UnknownRoleIDRefusedOnAdd", func(t *testing.T) {
+	t.Run("ACS-91_UnknownRoleIDRefusedOnAdd", func(t *testing.T) {
 		const userID = "910000000000000045"
 
 		err := as.AddAccountToDB(&Account{UserID: userID, Username: "sttest-" + userID, Roles: []string{"910000000000000301", "910000000000000399"}})
@@ -634,7 +634,7 @@ func TestST85to95AccountRoleIDs(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-92_UnknownRoleIDRefusedOnUpdate", func(t *testing.T) {
+	t.Run("ACS-92_UnknownRoleIDRefusedOnUpdate", func(t *testing.T) {
 		const userID = "910000000000000046"
 		stSeedBareAccount(t, as, userID)
 		a, _ := as.GetAccountByID(userID)
@@ -650,7 +650,7 @@ func TestST85to95AccountRoleIDs(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-93_NonCanonicalRoleIDsRefused", func(t *testing.T) {
+	t.Run("ACS-93_NonCanonicalRoleIDsRefused", func(t *testing.T) {
 		const userID = "910000000000000047"
 		stSeedBareAccount(t, as, userID)
 		a, _ := as.GetAccountByID(userID)
@@ -662,7 +662,7 @@ func TestST85to95AccountRoleIDs(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-95_AssignmentWaitsForAnInFlightRoleDeleteAndThenRefuses", func(t *testing.T) {
+	t.Run("ACS-95_AssignmentWaitsForAnInFlightRoleDeleteAndThenRefuses", func(t *testing.T) {
 		const userID = "910000000000000049"
 		const roleID = 910000000000000311
 		db := full.db
@@ -695,7 +695,7 @@ func TestST85to95AccountRoleIDs(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-94_RepeatedRoleIDIsStoredOnce", func(t *testing.T) {
+	t.Run("ACS-94_RepeatedRoleIDIsStoredOnce", func(t *testing.T) {
 		const userID = "910000000000000048"
 		stSeedBareAccount(t, as, userID)
 		a, _ := as.GetAccountByID(userID)
@@ -736,7 +736,7 @@ func TestST96to98ListAccounts(t *testing.T) {
 		return -1
 	}
 
-	t.Run("ST-96_OrdersByNumericID", func(t *testing.T) {
+	t.Run("ACS-96_OrdersByNumericID", func(t *testing.T) {
 		all, err := as.ListAccounts(100000, 0)
 		if err != nil {
 			t.Fatalf("ListAccounts() err = %v", err)
@@ -759,7 +759,7 @@ func TestST96to98ListAccounts(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-97_LimitAndOffsetSelectAPage", func(t *testing.T) {
+	t.Run("ACS-97_LimitAndOffsetSelectAPage", func(t *testing.T) {
 		all, err := as.ListAccounts(100000, 0)
 		if err != nil {
 			t.Fatalf("ListAccounts() err = %v", err)
@@ -782,7 +782,7 @@ func TestST96to98ListAccounts(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-98_AnOffsetPastTheEndIsAnEmptyPage", func(t *testing.T) {
+	t.Run("ACS-98_AnOffsetPastTheEndIsAnEmptyPage", func(t *testing.T) {
 		page, err := as.ListAccounts(10, 1000000)
 		if err != nil || len(page) != 0 {
 			t.Errorf("ListAccounts(10, 1000000) = (%v, %v), want an empty page and no error", page, err)
