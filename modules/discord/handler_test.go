@@ -2,31 +2,24 @@ package discord
 
 import (
 	"bytes"
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
+	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 	"github.com/bwmarrin/discordgo"
 	"github.com/goccy/go-json"
 )
 
 // dcRequest builds a POST request with the given body and Content-Type.
-// mw.LogRequest, called on most branches under test, does an unchecked type
-// assertion on ctx.Value(mw.RemoteAddrKey).(string) and
-// ctx.Value(mw.RequestIDKey).(int); a request missing either would panic
-// there instead of in the code path under test, so every request carries both.
 func dcRequest(t *testing.T, body string, contentType string) *http.Request {
 	t.Helper()
-	r := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString(body))
+	r := testutil.NewRequest(http.MethodPost, "/", bytes.NewBufferString(body))
 	if contentType != "" {
 		r.Header.Set(ContentType, contentType)
 	}
-	ctx := context.WithValue(r.Context(), mw.RemoteAddrKey, "127.0.0.1")
-	ctx = context.WithValue(ctx, mw.RequestIDKey, 1)
-	return r.WithContext(ctx)
+	return r
 }
 
 func dcRequireDetail(t *testing.T, w *httptest.ResponseRecorder, want string) {
