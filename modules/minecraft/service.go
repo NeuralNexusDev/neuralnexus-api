@@ -2,7 +2,6 @@ package minecraft
 
 import (
 	"bytes"
-	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -102,7 +101,7 @@ func (s *service) GetMojangPlayerByName(name string) (*Player, error) {
 	if err == nil {
 		return cached, nil
 	}
-	if !errors.Is(err, ErrCacheMiss) {
+	if err != ErrCacheMiss {
 		return nil, err
 	}
 
@@ -150,7 +149,7 @@ func (s *service) GetMojangPlayerByUUID(id string) (*Player, error) {
 	if err == nil {
 		return cached, nil
 	}
-	if !errors.Is(err, ErrCacheMiss) {
+	if err != ErrCacheMiss {
 		return nil, err
 	}
 
@@ -272,7 +271,7 @@ func (s *service) GetMojangProfile(id string, signed bool) (*Player, error) {
 		if err == nil {
 			return cached, nil
 		}
-		if !errors.Is(err, ErrCacheMiss) {
+		if err != ErrCacheMiss {
 			return nil, err
 		}
 		player, _, err := s.fetchProfileFromMojang(id, true)
@@ -321,12 +320,12 @@ func (s *service) resolveProfile(id string) (*Profile, error) {
 	if err == nil {
 		return cached, nil
 	}
-	if !errors.Is(err, ErrCacheMiss) {
+	if err != ErrCacheMiss {
 		return nil, err
 	}
 
 	dbProfile, err := s.store.GetProfileByUUID(id)
-	if err != nil && !errors.Is(err, ErrPlayerNotFound) {
+	if err != nil && err != ErrPlayerNotFound {
 		log.Println("Failed to get profile from DB:\n\t", err)
 	}
 	if dbProfile != nil {
@@ -534,7 +533,7 @@ func (s *service) resolveGeyserPlayerByXUID(xuid int64) (*GeyserPlayer, error) {
 // skinStepFailure reports a skin-lookup failure for an xuid that was already
 // resolved. It must not wrap ErrInvalidGeyserRequest, which the handlers map to 400.
 func skinStepFailure(err error) error {
-	if errors.Is(err, ErrInvalidGeyserRequest) {
+	if err == ErrInvalidGeyserRequest {
 		log.Println(ErrGeyserAPI, "- skin lookup rejected a resolved xuid")
 		return ErrGeyserAPI
 	}
@@ -549,7 +548,7 @@ func (s *service) GetGeyserProfile(xuid int64) (*GeyserProfile, error) {
 		return nil, err
 	}
 	skin, err := s.GetGeyserSkin(xuid)
-	if err != nil && !errors.Is(err, ErrSkinNotFound) {
+	if err != nil && err != ErrSkinNotFound {
 		return nil, skinStepFailure(err)
 	}
 	return &GeyserProfile{UUID: player.UUID, XUID: player.XUID, Gamertag: player.Gamertag, Skin: skin}, nil
@@ -562,7 +561,7 @@ func (s *service) GetGeyserProfileByGamertag(gamertag string) (*GeyserProfile, e
 		return nil, err
 	}
 	skin, err := s.GetGeyserSkin(player.XUID)
-	if err != nil && !errors.Is(err, ErrSkinNotFound) {
+	if err != nil && err != ErrSkinNotFound {
 		return nil, skinStepFailure(err)
 	}
 	return &GeyserProfile{UUID: player.UUID, XUID: player.XUID, Gamertag: player.Gamertag, Skin: skin}, nil

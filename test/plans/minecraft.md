@@ -246,6 +246,8 @@
 | SV-129 | GetGeyserProfileByGamertag | Error Path | Skin lookup answers 400 after the gamertag resolved | player by gamertag fresh in the DB; fake Geyser skin endpoint answers 400 | Error wraps `ErrGeyserAPI` and does not satisfy `ErrInvalidGeyserRequest` | P1 |  |
 | SV-130 | GetGeyserProfile | Error Path | Player lookup by xuid answers 400 | empty DB; fake Geyser endpoint answers 400 | Error is `ErrInvalidGeyserRequest` | P2 |  |
 | SV-131 | GetGeyserProfileByGamertag | Error Path | Gamertag lookup answers 400 | empty DB; fake Geyser endpoint answers 400 | Error is `ErrInvalidGeyserRequest` | P2 |  |
+| SV-132 | resolveProfile | Edge Case | DB lookup returns ErrPlayerNotFound | profile store reports not found; fake Mojang succeeds | No DB failure line is logged; falls through to Mojang fetch | P2 |  |
+| SV-133 | resolveProfile | Edge Case | DB lookup returns an error other than ErrPlayerNotFound | profile store returns a plain error; fake Mojang succeeds | The DB failure line is logged; falls through to Mojang fetch | P2 |  |
 
 ## store.go
 
