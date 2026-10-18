@@ -5,10 +5,10 @@ import (
 	"errors"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/link"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/goccy/go-json"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"log"
 	"time"
 )
 
@@ -84,10 +84,10 @@ func NewEvent(userId string, platform link.Platform, eventType EventType, payloa
 
 // EventStore interface for storing events
 type EventStore interface {
-	GetEvent(id string) (*Event, error)
-	GetEventsByPlatform(platform link.Platform) ([]*Event, error)
-	CreateEvent(event *Event) error
-	UpdateEvent(event *Event) error
+	GetEvent(ctx context.Context, id string) (*Event, error)
+	GetEventsByPlatform(ctx context.Context, platform link.Platform) ([]*Event, error)
+	CreateEvent(ctx context.Context, event *Event) error
+	UpdateEvent(ctx context.Context, event *Event) error
 }
 
 // store implements the EventStore interface
@@ -101,9 +101,9 @@ func NewEventStore(db *pgxpool.Pool) EventStore {
 }
 
 // GetEvent retrieves an event by its ID
-func (s *store) GetEvent(id string) (*Event, error) {
+func (s *store) GetEvent(ctx context.Context, id string) (*Event, error) {
 	var event Event
-	err := s.db.QueryRow(context.Background(), "SELECT * FROM event_log WHERE id = $1", id).Scan(
+	err := s.db.QueryRow(ctx, "SELECT * FROM event_log WHERE id = $1", id).Scan(
 		&event.ID, &event.Platform, &event.Type, &event.Payload, &event.Status, &event.CreatedAt, &event.UpdatedAt,
 	)
 	if err != nil {
@@ -116,10 +116,10 @@ func (s *store) GetEvent(id string) (*Event, error) {
 }
 
 // GetEventsByPlatform retrieves all events for a specific platform
-func (s *store) GetEventsByPlatform(platform link.Platform) ([]*Event, error) {
-	rows, err := s.db.Query(context.Background(), "SELECT * FROM event_log WHERE platform = $1", platform)
+func (s *store) GetEventsByPlatform(ctx context.Context, platform link.Platform) ([]*Event, error) {
+	rows, err := s.db.Query(ctx, "SELECT * FROM event_log WHERE platform = $1", platform)
 	if err != nil {
-		log.Println(ErrEventsQueryFailed, err)
+		reqctx.Log(ctx, ErrEventsQueryFailed.Error(), err.Error())
 		return nil, ErrEventsQueryFailed
 	}
 	defer rows.Close()
@@ -127,33 +127,33 @@ func (s *store) GetEventsByPlatform(platform link.Platform) ([]*Event, error) {
 	var events []*Event
 	events, err = pgx.CollectRows(rows, pgx.RowToAddrOfStructByName[Event])
 	if err != nil {
-		log.Println(ErrEventsQueryFailed, err)
+		reqctx.Log(ctx, ErrEventsQueryFailed.Error(), err.Error())
 		return nil, ErrEventsQueryFailed
 	}
 	return events, nil
 }
 
 // CreateEvent inserts a new event into the database
-func (s *store) CreateEvent(event *Event) error {
-	_, err := s.db.Exec(context.Background(), "INSERT INTO event_log (id, platform, type, payload, status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+func (s *store) CreateEvent(ctx context.Context, event *Event) error {
+	_, err := s.db.Exec(ctx, "INSERT INTO event_log (id, platform, type, payload, status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7)",
 		event.ID, event.Platform, event.Type, event.Payload, event.Status, event.CreatedAt, event.UpdatedAt)
 	return err
 }
 
 // UpdateEvent updates an existing event in the database
-func (s *store) UpdateEvent(event *Event) error {
-	_, err := s.db.Exec(context.Background(), "UPDATE event_log SET platform = $1, type = $2, payload = $3, status = $4, updated_at = $5 WHERE id = $6",
+func (s *store) UpdateEvent(ctx context.Context, event *Event) error {
+	_, err := s.db.Exec(ctx, "UPDATE event_log SET platform = $1, type = $2, payload = $3, status = $4, updated_at = $5 WHERE id = $6",
 		event.Platform, event.Type, event.Payload, event.Status, time.Now(), event.ID)
 	return err
 }
 
 // EventService interface for handling events
 type EventService interface {
-	GetEvent(id string) (*Event, error)
-	GetEventsByPlatform(platform link.Platform) ([]*Event, error)
-	CreateEvent(event *Event) error
-	UpdateEventStatus(id string, status EventStatus) error
-	ReplayEventById(id string) error
+	GetEvent(ctx context.Context, id string) (*Event, error)
+	GetEventsByPlatform(ctx context.Context, platform link.Platform) ([]*Event, error)
+	CreateEvent(ctx context.Context, event *Event) error
+	UpdateEventStatus(ctx context.Context, id string, status EventStatus) error
+	ReplayEventById(ctx context.Context, id string) error
 }
 
 // service implements the EventService interface
@@ -167,33 +167,33 @@ func NewEventService(store EventStore) EventService {
 }
 
 // GetEvent retrieves an event by its ID
-func (s *service) GetEvent(id string) (*Event, error) {
-	return s.store.GetEvent(id)
+func (s *service) GetEvent(ctx context.Context, id string) (*Event, error) {
+	return s.store.GetEvent(ctx, id)
 }
 
 // GetEventsByPlatform retrieves all events for a specific platform
-func (s *service) GetEventsByPlatform(platform link.Platform) ([]*Event, error) {
-	return s.store.GetEventsByPlatform(platform)
+func (s *service) GetEventsByPlatform(ctx context.Context, platform link.Platform) ([]*Event, error) {
+	return s.store.GetEventsByPlatform(ctx, platform)
 }
 
 // CreateEvent creates a new event
-func (s *service) CreateEvent(event *Event) error {
-	return s.store.CreateEvent(event)
+func (s *service) CreateEvent(ctx context.Context, event *Event) error {
+	return s.store.CreateEvent(ctx, event)
 }
 
 // UpdateEventStatus updates the status of an event
-func (s *service) UpdateEventStatus(id string, status EventStatus) error {
-	event, err := s.store.GetEvent(id)
+func (s *service) UpdateEventStatus(ctx context.Context, id string, status EventStatus) error {
+	event, err := s.store.GetEvent(ctx, id)
 	if err != nil {
 		return err
 	}
 	event.Status = status
-	return s.store.UpdateEvent(event)
+	return s.store.UpdateEvent(ctx, event)
 }
 
 // ReplayEventById replays an event based on an older event's ID
-func (s *service) ReplayEventById(id string) error {
-	event, err := s.store.GetEvent(id)
+func (s *service) ReplayEventById(ctx context.Context, id string) error {
+	event, err := s.store.GetEvent(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -201,5 +201,5 @@ func (s *service) ReplayEventById(id string) error {
 	if err != nil {
 		return err
 	}
-	return s.CreateEvent(replay)
+	return s.CreateEvent(ctx, replay)
 }
