@@ -80,7 +80,7 @@ func closedTCPPort(t *testing.T) int {
 }
 
 func TestNewService(t *testing.T) {
-	t.Run("SV-01_Accessor_ReturnsUsableService", func(t *testing.T) {
+	t.Run("GSV-01_Accessor_ReturnsUsableService", func(t *testing.T) {
 		svc := NewService()
 		if svc == nil {
 			t.Fatal("NewService() = nil, want non-nil")
@@ -94,7 +94,7 @@ func TestNewService(t *testing.T) {
 func TestQueryGameQ(t *testing.T) {
 	svc := NewService()
 
-	t.Run("SV-02_HappyPath_DecodesFirstMapEntry", func(t *testing.T) {
+	t.Run("GSV-02_HappyPath_DecodesFirstMapEntry", func(t *testing.T) {
 		swapTransport(t, &fakeRoundTripper{resp: fakeResponse(http.StatusOK, `{"srv":{"gq_hostname":"host1","gq_port_query":1234,"gq_name":"Name1","gq_mapname":"map1","gq_maxplayers":10,"gq_numplayers":2,"gq_online":true,"players":["p1","p2"]}}`)})
 
 		resp, err := svc.QueryGameQ("cs16", "1.2.3.4", 27015)
@@ -112,7 +112,7 @@ func TestQueryGameQ(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-03_ErrorPath_TransportError", func(t *testing.T) {
+	t.Run("GSV-03_ErrorPath_TransportError", func(t *testing.T) {
 		swapTransport(t, &fakeRoundTripper{err: testerrors.ErrTransportFailed})
 
 		resp, err := svc.QueryGameQ("cs16", "1.2.3.4", 27015)
@@ -127,7 +127,7 @@ func TestQueryGameQ(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-04_ErrorPath_NonOKStatus", func(t *testing.T) {
+	t.Run("GSV-04_ErrorPath_NonOKStatus", func(t *testing.T) {
 		swapTransport(t, &fakeRoundTripper{resp: fakeResponse(http.StatusInternalServerError, "upstream exploded")})
 
 		resp, err := svc.QueryGameQ("cs16", "1.2.3.4", 27015)
@@ -142,7 +142,7 @@ func TestQueryGameQ(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-05_ErrorPath_InvalidJSONBody", func(t *testing.T) {
+	t.Run("GSV-05_ErrorPath_InvalidJSONBody", func(t *testing.T) {
 		swapTransport(t, &fakeRoundTripper{resp: fakeResponse(http.StatusOK, "not json")})
 
 		resp, err := svc.QueryGameQ("cs16", "1.2.3.4", 27015)
@@ -157,7 +157,7 @@ func TestQueryGameQ(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-06_EdgeCase_EmptyResponseMap", func(t *testing.T) {
+	t.Run("GSV-06_EdgeCase_EmptyResponseMap", func(t *testing.T) {
 		swapTransport(t, &fakeRoundTripper{resp: fakeResponse(http.StatusOK, "{}")})
 
 		resp, err := svc.QueryGameQ("cs16", "1.2.3.4", 27015)
@@ -172,7 +172,7 @@ func TestQueryGameQ(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-30_ErrorPath_NonOKStatusBodyUnreadable", func(t *testing.T) {
+	t.Run("GSV-30_ErrorPath_NonOKStatusBodyUnreadable", func(t *testing.T) {
 		resp := &http.Response{StatusCode: http.StatusInternalServerError, Body: io.NopCloser(iotest.ErrReader(testerrors.ErrBodyRead)), Header: make(http.Header)}
 		swapTransport(t, &fakeRoundTripper{resp: resp})
 
@@ -189,7 +189,7 @@ func TestQueryGameQ(t *testing.T) {
 func TestQueryGameDig(t *testing.T) {
 	svc := NewService()
 
-	t.Run("SV-07_HappyPath_DecodesBody", func(t *testing.T) {
+	t.Run("GSV-07_HappyPath_DecodesBody", func(t *testing.T) {
 		swapTransport(t, &fakeRoundTripper{resp: fakeResponse(http.StatusOK, `{"name":"n","map":"m","numplayers":2,"maxplayers":10,"connect":"1.2.3.4:25566","queryPort":25566,"players":[{"name":"p1"},{"name":"p2"}]}`)})
 
 		resp, err := svc.QueryGameDig("factorio", "1.2.3.4", 25566)
@@ -207,7 +207,7 @@ func TestQueryGameDig(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-08_ErrorPath_TransportError", func(t *testing.T) {
+	t.Run("GSV-08_ErrorPath_TransportError", func(t *testing.T) {
 		swapTransport(t, &fakeRoundTripper{err: testerrors.ErrTransportFailed})
 
 		resp, err := svc.QueryGameDig("factorio", "1.2.3.4", 25566)
@@ -222,7 +222,7 @@ func TestQueryGameDig(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-09_ErrorPath_NonOKStatus", func(t *testing.T) {
+	t.Run("GSV-09_ErrorPath_NonOKStatus", func(t *testing.T) {
 		swapTransport(t, &fakeRoundTripper{resp: fakeResponse(http.StatusInternalServerError, "upstream exploded")})
 
 		resp, err := svc.QueryGameDig("factorio", "1.2.3.4", 25566)
@@ -237,7 +237,7 @@ func TestQueryGameDig(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-10_ErrorPath_InvalidJSONBody", func(t *testing.T) {
+	t.Run("GSV-10_ErrorPath_InvalidJSONBody", func(t *testing.T) {
 		swapTransport(t, &fakeRoundTripper{resp: fakeResponse(http.StatusOK, "not json")})
 
 		resp, err := svc.QueryGameDig("factorio", "1.2.3.4", 25566)
@@ -252,7 +252,7 @@ func TestQueryGameDig(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-31_ErrorPath_NonOKStatusBodyUnreadable", func(t *testing.T) {
+	t.Run("GSV-31_ErrorPath_NonOKStatusBodyUnreadable", func(t *testing.T) {
 		resp := &http.Response{StatusCode: http.StatusInternalServerError, Body: io.NopCloser(iotest.ErrReader(testerrors.ErrBodyRead)), Header: make(http.Header)}
 		swapTransport(t, &fakeRoundTripper{resp: resp})
 
@@ -274,16 +274,16 @@ func TestDetermineOrVerifyQueryType(t *testing.T) {
 		wantType  QueryType
 		wantValid bool
 	}{
-		{"SV-11_HappyPath_MinecraftExclusiveExplicitMatch", "bedrock", QueryTypeMinecraft, QueryTypeMinecraft, true},
-		{"SV-12_HappyPath_MinecraftExclusiveUnknownResolves", "bedrock", QueryTypeUnknown, QueryTypeMinecraft, true},
-		{"SV-13_EdgeCase_MinecraftExclusiveWrongListType", "bedrock", QueryTypeGameQ, QueryTypeUnknown, false},
-		{"SV-14_HappyPath_GameQExclusiveExplicitMatch", "aa3", QueryTypeGameQ, QueryTypeGameQ, true},
-		{"SV-15_HappyPath_GameQExclusiveUnknownResolves", "aa3", QueryTypeUnknown, QueryTypeGameQ, true},
-		{"SV-16_EdgeCase_GameQExclusiveWrongListType", "aa3", QueryTypeGameDig, QueryTypeUnknown, false},
-		{"SV-17_HappyPath_GameDigExclusiveExplicitMatch", "aoc", QueryTypeGameDig, QueryTypeGameDig, true},
-		{"SV-18_HappyPath_GameDigExclusiveUnknownResolves", "aoc", QueryTypeUnknown, QueryTypeGameDig, true},
-		{"SV-19_EdgeCase_GameNotInAnyList", "not-a-real-game-xyz", QueryTypeUnknown, QueryTypeUnknown, false},
-		{"SV-20_EdgeCase_MultiListGameFallsThroughToMatchingList", "minecraft", QueryTypeGameQ, QueryTypeGameQ, true},
+		{"GSV-11_HappyPath_MinecraftExclusiveExplicitMatch", "bedrock", QueryTypeMinecraft, QueryTypeMinecraft, true},
+		{"GSV-12_HappyPath_MinecraftExclusiveUnknownResolves", "bedrock", QueryTypeUnknown, QueryTypeMinecraft, true},
+		{"GSV-13_EdgeCase_MinecraftExclusiveWrongListType", "bedrock", QueryTypeGameQ, QueryTypeUnknown, false},
+		{"GSV-14_HappyPath_GameQExclusiveExplicitMatch", "aa3", QueryTypeGameQ, QueryTypeGameQ, true},
+		{"GSV-15_HappyPath_GameQExclusiveUnknownResolves", "aa3", QueryTypeUnknown, QueryTypeGameQ, true},
+		{"GSV-16_EdgeCase_GameQExclusiveWrongListType", "aa3", QueryTypeGameDig, QueryTypeUnknown, false},
+		{"GSV-17_HappyPath_GameDigExclusiveExplicitMatch", "aoc", QueryTypeGameDig, QueryTypeGameDig, true},
+		{"GSV-18_HappyPath_GameDigExclusiveUnknownResolves", "aoc", QueryTypeUnknown, QueryTypeGameDig, true},
+		{"GSV-19_EdgeCase_GameNotInAnyList", "not-a-real-game-xyz", QueryTypeUnknown, QueryTypeUnknown, false},
+		{"GSV-20_EdgeCase_MultiListGameFallsThroughToMatchingList", "minecraft", QueryTypeGameQ, QueryTypeGameQ, true},
 	}
 
 	for _, tc := range tests {
@@ -300,7 +300,7 @@ func TestDetermineOrVerifyQueryType(t *testing.T) {
 func TestQueryGameServer(t *testing.T) {
 	svc := NewService()
 
-	t.Run("SV-21_ErrorPath_UnsupportedGame", func(t *testing.T) {
+	t.Run("GSV-21_ErrorPath_UnsupportedGame", func(t *testing.T) {
 		status, err := svc.QueryGameServer("not-a-real-game-xyz", "1.2.3.4", 25565, QueryTypeUnknown)
 		if err == nil {
 			t.Fatal("QueryGameServer() error = nil, want non-nil")
@@ -313,7 +313,7 @@ func TestQueryGameServer(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-22_ErrorPath_JavaDispatchPropagatesError", func(t *testing.T) {
+	t.Run("GSV-22_ErrorPath_JavaDispatchPropagatesError", func(t *testing.T) {
 		port := closedTCPPort(t)
 		status, err := svc.QueryGameServer("minecraft", "127.0.0.1", port, QueryTypeMinecraft)
 		if err == nil {
@@ -324,7 +324,7 @@ func TestQueryGameServer(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-23_ErrorPath_BedrockDispatchPropagatesError", func(t *testing.T) {
+	t.Run("GSV-23_ErrorPath_BedrockDispatchPropagatesError", func(t *testing.T) {
 		port := closedTCPPort(t)
 		status, err := svc.QueryGameServer("bedrock", "127.0.0.1", port, QueryTypeMinecraft)
 		if err == nil {
@@ -335,7 +335,7 @@ func TestQueryGameServer(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-24_HappyPath_MinecraftDispatch", func(t *testing.T) {
+	t.Run("GSV-24_HappyPath_MinecraftDispatch", func(t *testing.T) {
 		host, port := mcLiveServer(t)
 		game := "minecraft"
 		if os.Getenv("MC_LIVE_TEST_BEDROCK") != "" {
@@ -353,7 +353,7 @@ func TestQueryGameServer(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-25_HappyPath_GameQDispatch", func(t *testing.T) {
+	t.Run("GSV-25_HappyPath_GameQDispatch", func(t *testing.T) {
 		swapTransport(t, &fakeRoundTripper{resp: fakeResponse(http.StatusOK, `{"srv":{"gq_hostname":"host1","gq_port_query":1234,"gq_name":"Name1","gq_mapname":"map1","gq_maxplayers":10,"gq_numplayers":2,"gq_online":true,"players":["p1"]}}`)})
 
 		status, err := svc.QueryGameServer("aa3", "1.2.3.4", 27015, QueryTypeGameQ)
@@ -375,7 +375,7 @@ func TestQueryGameServer(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-26_ErrorPath_GameQDispatchOffline", func(t *testing.T) {
+	t.Run("GSV-26_ErrorPath_GameQDispatchOffline", func(t *testing.T) {
 		swapTransport(t, &fakeRoundTripper{resp: fakeResponse(http.StatusOK, `{"srv":{"gq_hostname":"host1","gq_online":false}}`)})
 
 		status, err := svc.QueryGameServer("aa3", "1.2.3.4", 27015, QueryTypeGameQ)
@@ -390,7 +390,7 @@ func TestQueryGameServer(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-27_ErrorPath_GameQDispatchTransportError", func(t *testing.T) {
+	t.Run("GSV-27_ErrorPath_GameQDispatchTransportError", func(t *testing.T) {
 		swapTransport(t, &fakeRoundTripper{err: testerrors.ErrTransportFailed})
 
 		status, err := svc.QueryGameServer("aa3", "1.2.3.4", 27015, QueryTypeGameQ)
@@ -405,7 +405,7 @@ func TestQueryGameServer(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-28_HappyPath_GameDigDispatch", func(t *testing.T) {
+	t.Run("GSV-28_HappyPath_GameDigDispatch", func(t *testing.T) {
 		swapTransport(t, &fakeRoundTripper{resp: fakeResponse(http.StatusOK, `{"name":"n","map":"m","numplayers":2,"maxplayers":10,"connect":"1.2.3.4:25566","queryPort":25566,"players":[{"name":"p1"}]}`)})
 
 		status, err := svc.QueryGameServer("aoc", "1.2.3.4", 25566, QueryTypeGameDig)
@@ -427,7 +427,7 @@ func TestQueryGameServer(t *testing.T) {
 		}
 	})
 
-	t.Run("SV-29_ErrorPath_GameDigDispatchTransportError", func(t *testing.T) {
+	t.Run("GSV-29_ErrorPath_GameDigDispatchTransportError", func(t *testing.T) {
 		swapTransport(t, &fakeRoundTripper{err: testerrors.ErrTransportFailed})
 
 		status, err := svc.QueryGameServer("aoc", "1.2.3.4", 25566, QueryTypeGameDig)
