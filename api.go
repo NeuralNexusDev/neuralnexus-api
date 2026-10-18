@@ -257,6 +257,12 @@ func (s *APIServer) Setup() http.Handler {
 		return nil
 	}
 
+	siteUrl := os.Getenv("NN_SITE_URL")
+	if siteUrl == "" {
+		log.Fatal("NN_SITE_URL is not set")
+		return nil
+	}
+
 	db := database.GetDB(dbUrl + "/neuralnexus")
 	rdb := database.GetRedis()
 	sess := session.NewService(session.NewStore(db, rdb))
@@ -268,7 +274,7 @@ func (s *APIServer) Setup() http.Handler {
 	middlewareStack := mw.CreateStack(
 		mw.NoSniffMiddleware,
 		cors.New(cors.Options{
-			AllowedOrigins:   []string{session.NN_SITE_URL},
+			AllowedOrigins:   []string{siteUrl},
 			AllowedMethods:   []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete},
 			AllowedHeaders:   []string{"Content-Type", "Authorization"},
 			AllowCredentials: true,
