@@ -1,7 +1,6 @@
 package petpictures
 
 import (
-	"errors"
 	"log"
 	"net/http"
 	"strconv"
@@ -58,7 +57,7 @@ func CreatePetHandler(s PetPicService) http.HandlerFunc {
 		petResponse, err := s.GetStore().CreatePet(petName)
 		if err != nil {
 			log.Println("[Error]: Unable to create pet:\n\t", err)
-			if errors.Is(err, ErrPetNameEmpty) {
+			if err == ErrPetNameEmpty {
 				responses.BadRequest(w, r, msgPetNameMustNotBeEmpty)
 				return
 			}
@@ -96,7 +95,7 @@ func GetPetHandler(s PetPicService) http.HandlerFunc {
 		pet, err := s.GetStore().GetPet(petID)
 		if err != nil {
 			log.Println(logUnableToGetPet, err)
-			if errors.Is(err, ErrPetNotFound) {
+			if err == ErrPetNotFound {
 				responses.NotFound(w, r, msgPetNotFound)
 				return
 			}
@@ -126,15 +125,14 @@ func UpdatePetHandler(s PetPicService) http.HandlerFunc {
 		_, err = s.GetStore().UpdatePet(pet)
 		if err != nil {
 			log.Println("[Error]: Unable to update pet:\n\t", err)
-			if errors.Is(err, ErrPetNotFound) {
+			switch err {
+			case ErrPetNotFound:
 				responses.NotFound(w, r, msgPetNotFound)
-				return
-			}
-			if errors.Is(err, ErrPetNameEmpty) {
+			case ErrPetNameEmpty:
 				responses.BadRequest(w, r, msgPetNameMustNotBeEmpty)
-				return
+			default:
+				responses.InternalServerError(w, r, msgUnableToUpdatePet)
 			}
-			responses.InternalServerError(w, r, msgUnableToUpdatePet)
 			return
 		}
 		responses.StructOK(w, r, pet)
@@ -160,15 +158,14 @@ func GetRandPetPictureByNameHandler(s PetPicService) http.HandlerFunc {
 		petPicture, err := s.GetStore().GetRandPetPictureByName(petName)
 		if err != nil {
 			log.Println("[Error]: Unable to get random pet picture:\n\t", err)
-			if errors.Is(err, ErrPetNotFound) {
+			switch err {
+			case ErrPetNotFound:
 				responses.NotFound(w, r, msgPetNotFound)
-				return
-			}
-			if errors.Is(err, ErrPetPictureNotFound) {
+			case ErrPetPictureNotFound:
 				responses.NotFound(w, r, msgPetPictureNotFound)
-				return
+			default:
+				responses.InternalServerError(w, r, msgUnableToGetRandomPetPicture)
 			}
-			responses.InternalServerError(w, r, msgUnableToGetRandomPetPicture)
 			return
 		}
 		responses.StructOK(w, r, petPicture)
@@ -194,7 +191,7 @@ func GetPetPictureHandler(s PetPicService) http.HandlerFunc {
 		petPicture, err := s.GetStore().GetPetPicture(petPictureID)
 		if err != nil {
 			log.Println(logUnableToGetPetPicture, err)
-			if errors.Is(err, ErrPetPictureNotFound) {
+			if err == ErrPetPictureNotFound {
 				responses.NotFound(w, r, msgPetPictureNotFound)
 				return
 			}
@@ -218,7 +215,7 @@ func UpdatePetPictureHandler(s PetPicService) http.HandlerFunc {
 		pet, err := s.GetStore().GetPet(petPicture.PrimarySubject)
 		if err != nil {
 			log.Println(logUnableToGetPet, err)
-			if errors.Is(err, ErrPetNotFound) {
+			if err == ErrPetNotFound {
 				responses.NotFound(w, r, msgPetNotFound)
 				return
 			}
@@ -235,7 +232,7 @@ func UpdatePetPictureHandler(s PetPicService) http.HandlerFunc {
 		_, err = s.GetStore().UpdatePetPicture(petPicture)
 		if err != nil {
 			log.Println("[Error]: Unable to update pet picture:\n\t", err)
-			if errors.Is(err, ErrPetPictureNotFound) {
+			if err == ErrPetPictureNotFound {
 				responses.NotFound(w, r, msgPetPictureNotFound)
 				return
 			}
@@ -265,7 +262,7 @@ func DeletePetPictureHandler(s PetPicService) http.HandlerFunc {
 		petPicture, err := s.GetStore().GetPetPicture(petPictureID)
 		if err != nil {
 			log.Println(logUnableToGetPetPicture, err)
-			if errors.Is(err, ErrPetPictureNotFound) {
+			if err == ErrPetPictureNotFound {
 				responses.NotFound(w, r, msgPetPictureNotFound)
 				return
 			}
@@ -276,7 +273,7 @@ func DeletePetPictureHandler(s PetPicService) http.HandlerFunc {
 		pet, err := s.GetStore().GetPet(petPicture.PrimarySubject)
 		if err != nil {
 			log.Println(logUnableToGetPet, err)
-			if errors.Is(err, ErrPetNotFound) {
+			if err == ErrPetNotFound {
 				responses.NotFound(w, r, msgPetNotFound)
 				return
 			}
