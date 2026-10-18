@@ -293,7 +293,8 @@ func TestSV09_UploadCtxReachesStore(t *testing.T) {
 		mock := &svCtxStore{}
 		svc := NewService(mock)
 		file := svTempFile(t, "sv09-upload-*.jpg", []byte("some picture bytes"))
-		swapTransport(t, &svFakeRoundTripper{resp: svOKResponse()})
+		rt := &svFakeRoundTripper{resp: svOKResponse()}
+		swapTransport(t, rt)
 
 		ctx, cancel := context.WithCancel(context.WithValue(svCtx, ctxKey{}, "marker"))
 		cancel()
@@ -306,6 +307,9 @@ func TestSV09_UploadCtxReachesStore(t *testing.T) {
 		}
 		if mock.got != nil && mock.got.Err() != nil {
 			t.Errorf("store ctx Err() = %v, want nil: the record write must outlive a cancelled request", mock.got.Err())
+		}
+		if rt.lastReq == nil || rt.lastReq.Context().Value(ctxKey{}) != "marker" {
+			t.Error("CDN request did not carry the caller's ctx")
 		}
 	})
 }
