@@ -201,7 +201,7 @@ func GetSteamUser(steamID64 string) (*SteamData, error) {
 
 // ProcessSteamLogin resolves or creates an account for the given,
 // already-verified Steam identity and returns a new session for it.
-func ProcessSteamLogin(as account.AccountService, las LinkAccountStore, ss session.SessionService, user *SteamData) (*session.Session, error) {
+func ProcessSteamLogin(as account.Service, las Store, ss session.Service, user *SteamData) (*session.Session, error) {
 	a, err := resolveOrCreateAccountForPlatformUser(as, las, PlatformSteam, user)
 	if err != nil {
 		return nil, err
@@ -218,7 +218,7 @@ func ProcessSteamLogin(as account.AccountService, las LinkAccountStore, ss sessi
 
 // ProcessSteamLink links the given, already-verified Steam identity to the
 // session already in r's context.
-func ProcessSteamLink(r *http.Request, las LinkAccountStore, user *SteamData) (*session.Session, error) {
+func ProcessSteamLink(r *http.Request, las Store, user *SteamData) (*session.Session, error) {
 	session, ok := r.Context().Value(mw.SessionKey).(*session.Session)
 	if !ok || session == nil {
 		return nil, ErrSessionNotFound

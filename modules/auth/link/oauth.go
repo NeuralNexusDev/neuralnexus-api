@@ -98,7 +98,7 @@ func RefreshToken(config *oauth2.Config, token *oauth2.Token) (*OAuthToken, erro
 }
 
 // ProcessOAuthLogin processes the OAuth2 code and returns a session
-func ProcessOAuthLogin(as account.AccountService, las LinkAccountStore, ss session.SessionService, code string, state *OAuthState) (*session.Session, error) {
+func ProcessOAuthLogin(as account.Service, las Store, ss session.Service, code string, state *OAuthState) (*session.Session, error) {
 	var err error
 	var config *oauth2.Config
 	switch state.Platform {
@@ -187,7 +187,7 @@ var ErrPlatformLoginDisabled = errors.New("this platform account is linked but d
 // winner's linked account/account are re-fetched and returned instead of
 // treating it as a hard failure; any other error is returned as-is (wrapped
 // together with a cleanup failure, if the cleanup itself also failed).
-func resolveOrCreateAccountForPlatformUser(as account.AccountService, las LinkAccountStore, platform Platform, user PlatformData) (*account.Account, error) {
+func resolveOrCreateAccountForPlatformUser(as account.Service, las Store, platform Platform, user PlatformData) (*account.Account, error) {
 	la, err := las.GetLinkedAccountByPlatformID(platform, user.GetID())
 	if err == nil {
 		if !(la.Verified && la.LoginEnabled) {
@@ -232,7 +232,7 @@ func resolveOrCreateAccountForPlatformUser(as account.AccountService, las LinkAc
 }
 
 // ProcessOAuthLink links an account to an existing user
-func ProcessOAuthLink(r *http.Request, las LinkAccountStore, code string, state *OAuthState) (*session.Session, error) {
+func ProcessOAuthLink(r *http.Request, las Store, code string, state *OAuthState) (*session.Session, error) {
 	// Get session from request context first: there's no point exchanging
 	// the OAuth code or calling out to the platform's API for a session
 	// that's missing or already expired.
@@ -336,7 +336,7 @@ var ErrConflictingMicrosoftIdentities = errors.New("this Microsoft account's Xbo
 // (always present) and Java Edition profile (present only if owned).
 // Whichever identity/identities aren't linked yet get linked to the
 // resolved (or freshly created) account.
-func resolveOrCreateAccountForMicrosoftUser(as account.AccountService, las LinkAccountStore, xbox *XboxLiveData, java *MinecraftData) (*account.Account, error) {
+func resolveOrCreateAccountForMicrosoftUser(as account.Service, las Store, xbox *XboxLiveData, java *MinecraftData) (*account.Account, error) {
 	xboxLA, err := las.GetLinkedAccountByPlatformID(PlatformXboxLive, xbox.GetID())
 	if err != nil {
 		if !errors.Is(err, account.ErrNotFound) {
@@ -422,7 +422,7 @@ func resolveOrCreateAccountForMicrosoftUser(as account.AccountService, las LinkA
 // isNewAccount marks a as a bare placeholder with nothing else linked to it
 // yet, the only state where it's safe to delete on a lost race; otherwise a
 // lost race surfaces as a conflict for the caller to retry.
-func ensureMicrosoftIdentityLinked(as account.AccountService, las LinkAccountStore, a *account.Account, isNewAccount bool, platform Platform, user PlatformData) (*account.Account, bool, error) {
+func ensureMicrosoftIdentityLinked(as account.Service, las Store, a *account.Account, isNewAccount bool, platform Platform, user PlatformData) (*account.Account, bool, error) {
 	la := NewLinkedAccount(a.UserID, platform, user.GetUsername(), user.GetID(), user)
 	err := las.AddLinkedAccountToDB(la)
 	if err == nil {
@@ -477,7 +477,7 @@ var ErrPlatformAlreadyLinkedToDifferentAccount = errors.New("this platform accou
 // linkPlatformUserToSession links the given platform identity to userID. If
 // it's already linked to a different account, that's returned as an error;
 // if it's already linked to this same account, linking is a no-op.
-func linkPlatformUserToSession(las LinkAccountStore, userID string, platform Platform, user PlatformData) error {
+func linkPlatformUserToSession(las Store, userID string, platform Platform, user PlatformData) error {
 	la, err := las.GetLinkedAccountByPlatformID(platform, user.GetID())
 	switch {
 	case err == nil:

@@ -55,11 +55,11 @@ func ApplyRoutes(
 	mux *http.ServeMux,
 	nndb *pgxpool.Pool,
 	rdb *redis.Client,
-	session session.SessionService,
+	session session.Service,
 	accountStore account.Store,
-	linkAccountStore link.LinkAccountStore,
+	linkAccountStore link.Store,
 	oauthTokenStore link.OAuthTokenStore,
-	rateLimit ratelimit.RateLimitService) *http.ServeMux {
+	rateLimit ratelimit.Service) *http.ServeMux {
 	mwAuth := mw.Auth(session)
 
 	dbUrl := os.Getenv("DATABASE_URL")
@@ -76,9 +76,10 @@ func ApplyRoutes(
 
 	// --------------- Auth ---------------
 	rbacService := rbac.NewService(rbac.NewStore(nndb))
-	acct := account.NewAccountService(accountStore, accountStore, rbacService)
+	settingsStore := account.NewSettingsStore(nndb)
+	acct := account.NewService(accountStore, settingsStore, rbacService)
 	linkingService := link.NewService(linkAccountStore, accountStore)
-	usr := user.NewService(accountStore, linkAccountStore, linkingService, accountStore, rbacService)
+	usr := user.NewService(accountStore, linkAccountStore, linkingService, settingsStore, rbacService)
 
 	loginRateLimit := mw.RateLimitMiddleware(rateLimit, "login", 5, 5)
 
@@ -258,11 +259,11 @@ func (s *APIServer) Setup() http.Handler {
 
 	db := database.GetDB(dbUrl + "/neuralnexus")
 	rdb := database.GetRedis()
-	sess := session.NewSessionService(session.NewStore(db, rdb))
+	sess := session.NewService(session.NewStore(db, rdb))
 	accountStore := account.NewStore(db)
-	linkAccountStore := link.NewLinkAccountStore(db)
+	linkAccountStore := link.NewStore(db)
 	oauthTokenStore := link.NewOAuthTokenStore(db)
-	rateLimit := ratelimit.NewRateLimitService(ratelimit.NewStore(rdb))
+	rateLimit := ratelimit.NewService(ratelimit.NewStore(rdb))
 
 	middlewareStack := mw.CreateStack(
 		mw.NoSniffMiddleware,

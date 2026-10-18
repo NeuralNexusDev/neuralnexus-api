@@ -30,17 +30,17 @@ func (f *rlFakeRateLimitStore) IncrementRateLimit(_ string) error {
 	return f.incrErr
 }
 
-func TestRL01NewRateLimitService(t *testing.T) {
+func TestRL01NewService(t *testing.T) {
 	t.Run("RL-01_WiresGivenSubStore", func(t *testing.T) {
 		rl := &rlFakeRateLimitStore{getVal: 7}
-		svc := NewRateLimitService(rl)
+		svc := NewService(rl)
 
 		got, err := svc.GetRateLimit("k")
 		if err != nil || got != 7 {
 			t.Errorf("GetRateLimit() = (%d, %v), want (7, nil)", got, err)
 		}
 		if rl.getCalls != 1 {
-			t.Errorf("expected the fake RateLimitStore to be called once, got %d", rl.getCalls)
+			t.Errorf("expected the fake Store to be called once, got %d", rl.getCalls)
 		}
 	})
 }
@@ -48,7 +48,7 @@ func TestRL01NewRateLimitService(t *testing.T) {
 func TestRL02to03GetRateLimit(t *testing.T) {
 	t.Run("RL-02_Success", func(t *testing.T) {
 		rl := &rlFakeRateLimitStore{getVal: 5}
-		svc := NewRateLimitService(rl)
+		svc := NewService(rl)
 
 		got, err := svc.GetRateLimit("k")
 		if err != nil || got != 5 {
@@ -59,7 +59,7 @@ func TestRL02to03GetRateLimit(t *testing.T) {
 	t.Run("RL-03_StoreError", func(t *testing.T) {
 		wantErr := testerrors.ErrBoom
 		rl := &rlFakeRateLimitStore{getErr: wantErr}
-		svc := NewRateLimitService(rl)
+		svc := NewService(rl)
 
 		_, err := svc.GetRateLimit("k")
 		if !errors.Is(err, wantErr) {
@@ -71,7 +71,7 @@ func TestRL02to03GetRateLimit(t *testing.T) {
 func TestRL04to05SetRateLimit(t *testing.T) {
 	t.Run("RL-04_Success", func(t *testing.T) {
 		rl := &rlFakeRateLimitStore{}
-		svc := NewRateLimitService(rl)
+		svc := NewService(rl)
 
 		if err := svc.SetRateLimit("k", 3); err != nil {
 			t.Errorf("SetRateLimit() = %v, want nil", err)
@@ -84,7 +84,7 @@ func TestRL04to05SetRateLimit(t *testing.T) {
 	t.Run("RL-05_StoreError", func(t *testing.T) {
 		wantErr := testerrors.ErrBoom
 		rl := &rlFakeRateLimitStore{setErr: wantErr}
-		svc := NewRateLimitService(rl)
+		svc := NewService(rl)
 
 		err := svc.SetRateLimit("k", 3)
 		if !errors.Is(err, wantErr) {
@@ -96,7 +96,7 @@ func TestRL04to05SetRateLimit(t *testing.T) {
 func TestRL06to07IncrRateLimit(t *testing.T) {
 	t.Run("RL-06_Success", func(t *testing.T) {
 		rl := &rlFakeRateLimitStore{}
-		svc := NewRateLimitService(rl)
+		svc := NewService(rl)
 
 		if err := svc.IncrRateLimit("k"); err != nil {
 			t.Errorf("IncrRateLimit() = %v, want nil", err)
@@ -109,7 +109,7 @@ func TestRL06to07IncrRateLimit(t *testing.T) {
 	t.Run("RL-07_StoreError", func(t *testing.T) {
 		wantErr := testerrors.ErrBoom
 		rl := &rlFakeRateLimitStore{incrErr: wantErr}
-		svc := NewRateLimitService(rl)
+		svc := NewService(rl)
 
 		err := svc.IncrRateLimit("k")
 		if !errors.Is(err, wantErr) {

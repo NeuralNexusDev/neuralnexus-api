@@ -10,8 +10,8 @@ import (
 
 const rateLimitKeyPrefix = "rl:"
 
-// RateLimitStore interface
-type RateLimitStore interface {
+// Store - Rate limit store interface
+type Store interface {
 	GetRateLimit(key string) (int, error)
 	SetRateLimit(key string, val int) error
 	IncrementRateLimit(key string) error
@@ -22,7 +22,7 @@ type store struct {
 }
 
 // NewStore - Create a new rate limit store
-func NewStore(rdb *redis.Client) RateLimitStore {
+func NewStore(rdb *redis.Client) Store {
 	return &store{
 		rdb: rdb,
 	}

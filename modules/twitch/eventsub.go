@@ -30,7 +30,7 @@ const (
 )
 
 // HandleEventSub handles the EventSub notifications
-func HandleEventSub(eventsub EventSubService, tokens link.OAuthTokenStore, linked link.LinkAccountStore) http.HandlerFunc {
+func HandleEventSub(eventsub EventSubService, tokens link.OAuthTokenStore, linked link.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get(EventSubMessageType) == "" {
 			mw.LogRequest(r.Context(), "EventSub message type not set")

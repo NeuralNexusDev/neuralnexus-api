@@ -19,12 +19,12 @@ type Service interface {
 
 // service - The link service struct
 type service struct {
-	als LinkAccountStore
-	as  account.AccountStore
+	als Store
+	as  account.Store
 }
 
 // NewService - Create a new link service
-func NewService(als LinkAccountStore, as account.AccountStore) Service {
+func NewService(als Store, as account.Store) Service {
 	return &service{als, as}
 }
 

@@ -27,7 +27,7 @@ type Login struct {
 }
 
 // LoginHandler handles the login route
-func LoginHandler(as AccountService, ss session.SessionService) http.HandlerFunc {
+func LoginHandler(as Service, ss session.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var login Login
 		err := responses.DecodeStruct(r, &login)
@@ -92,7 +92,7 @@ func LoginHandler(as AccountService, ss session.SessionService) http.HandlerFunc
 }
 
 // LogoutHandler handles the logout route
-func LogoutHandler(ss session.SessionService) http.HandlerFunc {
+func LogoutHandler(ss session.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session := r.Context().Value(mw.SessionKey).(*session.Session)
 		if session == nil {
@@ -112,7 +112,7 @@ func LogoutHandler(ss session.SessionService) http.HandlerFunc {
 
 // SetSessionCookie creates a JWT for an already-persisted
 // session and sets it as the session cookie.
-func SetSessionCookie(ss session.SessionService, w http.ResponseWriter, session *session.Session) error {
+func SetSessionCookie(ss session.Service, w http.ResponseWriter, session *session.Session) error {
 	jwtString, err := ss.CreateJWT(session)
 	if err != nil {
 		return err

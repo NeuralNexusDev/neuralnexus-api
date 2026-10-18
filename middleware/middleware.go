@@ -137,7 +137,7 @@ func IPMiddleware(next http.Handler) http.Handler {
 }
 
 // SessionMiddleware - Read the session from the request
-func SessionMiddleware(service session.SessionService) Middleware {
+func SessionMiddleware(service session.Service) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if authHeader := r.Header.Get(AuthHeader); authHeader != "" {
@@ -183,7 +183,7 @@ func SessionMiddleware(service session.SessionService) Middleware {
 }
 
 // RateLimitMiddleware - Rate limit requests
-func RateLimitMiddleware(service ratelimit.RateLimitService, prefix string, sessionLimit int, ipLimit int) Middleware {
+func RateLimitMiddleware(service ratelimit.Service, prefix string, sessionLimit int, ipLimit int) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			session, ok := r.Context().Value(SessionKey).(*session.Session)
@@ -297,7 +297,7 @@ func RequestLoggerMiddleware(next http.Handler) http.Handler {
 }
 
 // Auth - Authenticate requests
-func Auth(service session.SessionService) Middleware {
+func Auth(service session.Service) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			session, ok := r.Context().Value(SessionKey).(*session.Session)

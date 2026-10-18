@@ -218,7 +218,7 @@ func TestUS01NewService(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if as.getByIDCalls != 1 {
-			t.Errorf("expected GetUser to delegate to the AccountStore passed to NewService")
+			t.Errorf("expected GetUser to delegate to the Store passed to NewService")
 		}
 	})
 }

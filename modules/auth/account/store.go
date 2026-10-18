@@ -19,20 +19,23 @@ var (
 	ErrUnknownRoleID = errors.New("unknown role id")
 )
 
-// Store - the account and account settings store
-type Store interface {
-	AccountStore
-	AccountSettingsStore
-}
-
 // store - the Postgres implementation of Store
 type store struct {
 	db *pgxpool.Pool
 }
 
-// NewStore - Create a store for accounts and account settings
+// NewStore - Create a store for accounts
 func NewStore(db *pgxpool.Pool) Store {
 	return &store{db: db}
+}
+
+type settingsStore struct {
+	db *pgxpool.Pool
+}
+
+// NewSettingsStore - Create a store for account settings
+func NewSettingsStore(db *pgxpool.Pool) SettingsStore {
+	return &settingsStore{db: db}
 }
 
 //CREATE TRIGGER update_accounts_modtime
@@ -50,8 +53,8 @@ func NewStore(db *pgxpool.Pool) Store {
 //  updated_at timestamp with time zone default current_timestamp
 // );
 
-// AccountStore interface
-type AccountStore interface {
+// Store - The account store interface
+type Store interface {
 	AddAccountToDB(account *Account) error
 	GetAccountByID(userID string) (*Account, error)
 	GetAccountByUsername(username string) (*Account, error)
@@ -173,8 +176,8 @@ func (s *store) DeleteAccountFromDB(userID string) error {
 //   updated_at timestamp with time zone default current_timestamp
 // );
 
-// AccountSettingsStore interface
-type AccountSettingsStore interface {
+// SettingsStore - The account settings store interface
+type SettingsStore interface {
 	GetAccountSettings(userID string) (*AccountSettings, error)
 	SetPasswordAuthEnabled(userID string, enabled bool) error
 }
@@ -185,7 +188,7 @@ var ErrWouldLockAccount = errors.New("this is the account's last usable login me
 
 // GetAccountSettings returns userID's settings, the defaults if the account
 // has no account_settings row yet, or ErrNotFound if the account does not exist.
-func (s *store) GetAccountSettings(userID string) (*AccountSettings, error) {
+func (s *settingsStore) GetAccountSettings(userID string) (*AccountSettings, error) {
 	rows, err := s.db.Query(context.Background(), "SELECT * FROM account_settings WHERE user_id = $1", userID)
 	if err != nil {
 		return nil, err
@@ -213,7 +216,7 @@ func (s *store) GetAccountSettings(userID string) (*AccountSettings, error) {
 // guard: it's refused if the account has no other verified, login-enabled
 // linked platform. Enabling is refused if the account has no password to
 // enable in the first place.
-func (s *store) SetPasswordAuthEnabled(userID string, enabled bool) error {
+func (s *settingsStore) SetPasswordAuthEnabled(userID string, enabled bool) error {
 	ctx := context.Background()
 	tx, err := s.db.Begin(ctx)
 	if err != nil {

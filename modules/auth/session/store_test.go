@@ -146,7 +146,7 @@ func TestST27DeleteSessionFromCache(t *testing.T) {
 	})
 }
 
-func stLiveSessionStore(t *testing.T) SessionStore {
+func stLiveSessionStore(t *testing.T) Store {
 	t.Helper()
 
 	pgURL := os.Getenv("TEST_POSTGRES_URL")

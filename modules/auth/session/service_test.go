@@ -73,14 +73,14 @@ func (f *seFakeSessionStore) DeleteSessionFromCache(_ string) error {
 	return f.deleteFromCacheErr
 }
 
-func TestSE07NewSessionService(t *testing.T) {
+func TestSE07NewService(t *testing.T) {
 	t.Run("SE-07_WiresGivenSubStore", func(t *testing.T) {
 		fs := &seFakeSessionStore{getFromDBErr: ErrNotFound, getFromCacheErr: ErrNotFound}
-		svc := NewSessionService(fs)
+		svc := NewService(fs)
 
 		_, _ = svc.GetSession("s1")
 		if fs.getFromCacheCalls != 1 {
-			t.Errorf("expected GetSession to delegate to the SessionStore passed to NewSessionService, got %d cache calls", fs.getFromCacheCalls)
+			t.Errorf("expected GetSession to delegate to the Store passed to NewService, got %d cache calls", fs.getFromCacheCalls)
 		}
 	})
 }
@@ -88,7 +88,7 @@ func TestSE07NewSessionService(t *testing.T) {
 func TestSE08to10AddSession(t *testing.T) {
 	t.Run("SE-08_Success", func(t *testing.T) {
 		fs := &seFakeSessionStore{}
-		svc := NewSessionService(fs)
+		svc := NewService(fs)
 
 		if err := svc.AddSession(&Session{ID: "s1"}); err != nil {
 			t.Errorf("AddSession() = %v, want nil", err)
@@ -101,7 +101,7 @@ func TestSE08to10AddSession(t *testing.T) {
 	t.Run("SE-09_DBFailurePropagates", func(t *testing.T) {
 		wantErr := testerrors.ErrDBDown
 		fs := &seFakeSessionStore{addToDBErr: wantErr}
-		svc := NewSessionService(fs)
+		svc := NewService(fs)
 
 		err := svc.AddSession(&Session{ID: "s1"})
 		if !errors.Is(err, wantErr) {
@@ -114,7 +114,7 @@ func TestSE08to10AddSession(t *testing.T) {
 
 	t.Run("SE-10_CacheFailureIsFailOpen", func(t *testing.T) {
 		fs := &seFakeSessionStore{addToCacheErr: testerrors.ErrCacheDown}
-		svc := NewSessionService(fs)
+		svc := NewService(fs)
 
 		if err := svc.AddSession(&Session{ID: "s1"}); err != nil {
 			t.Errorf("AddSession() = %v, want nil (cache failure should be fail-open)", err)
@@ -126,7 +126,7 @@ func TestSE11to14GetSession(t *testing.T) {
 	t.Run("SE-11_CacheHit", func(t *testing.T) {
 		want := &Session{ID: "s1"}
 		fs := &seFakeSessionStore{getFromCacheSession: want}
-		svc := NewSessionService(fs)
+		svc := NewService(fs)
 
 		got, err := svc.GetSession("s1")
 		if err != nil || got != want {
@@ -140,7 +140,7 @@ func TestSE11to14GetSession(t *testing.T) {
 	t.Run("SE-12_CacheMissFallsBackToDB", func(t *testing.T) {
 		want := &Session{ID: "s1"}
 		fs := &seFakeSessionStore{getFromCacheErr: ErrNotFound, getFromDBSession: want}
-		svc := NewSessionService(fs)
+		svc := NewService(fs)
 
 		got, err := svc.GetSession("s1")
 		if err != nil || got != want {
@@ -154,7 +154,7 @@ func TestSE11to14GetSession(t *testing.T) {
 	t.Run("SE-13_CacheMissAndDBMiss", func(t *testing.T) {
 		wantErr := ErrNotFound
 		fs := &seFakeSessionStore{getFromCacheErr: ErrNotFound, getFromDBErr: wantErr}
-		svc := NewSessionService(fs)
+		svc := NewService(fs)
 
 		got, err := svc.GetSession("s1")
 		if got != nil || !errors.Is(err, wantErr) {
@@ -165,7 +165,7 @@ func TestSE11to14GetSession(t *testing.T) {
 	t.Run("SE-14_RepopulateFailureIsFailOpen", func(t *testing.T) {
 		want := &Session{ID: "s1"}
 		fs := &seFakeSessionStore{getFromCacheErr: ErrNotFound, getFromDBSession: want, addToCacheErr: testerrors.ErrCacheDown}
-		svc := NewSessionService(fs)
+		svc := NewService(fs)
 
 		got, err := svc.GetSession("s1")
 		if err != nil || got != want {
@@ -177,7 +177,7 @@ func TestSE11to14GetSession(t *testing.T) {
 func TestSE15to17UpdateSession(t *testing.T) {
 	t.Run("SE-15_Success", func(t *testing.T) {
 		fs := &seFakeSessionStore{}
-		svc := NewSessionService(fs)
+		svc := NewService(fs)
 
 		if err := svc.UpdateSession(&Session{ID: "s1"}); err != nil {
 			t.Errorf("UpdateSession() = %v, want nil", err)
@@ -187,7 +187,7 @@ func TestSE15to17UpdateSession(t *testing.T) {
 	t.Run("SE-16_DBFailurePropagates", func(t *testing.T) {
 		wantErr := testerrors.ErrDBDown
 		fs := &seFakeSessionStore{updateInDBErr: wantErr}
-		svc := NewSessionService(fs)
+		svc := NewService(fs)
 
 		err := svc.UpdateSession(&Session{ID: "s1"})
 		if !errors.Is(err, wantErr) {
@@ -200,7 +200,7 @@ func TestSE15to17UpdateSession(t *testing.T) {
 
 	t.Run("SE-17_CacheFailureIsFailOpen", func(t *testing.T) {
 		fs := &seFakeSessionStore{addToCacheErr: testerrors.ErrCacheDown}
-		svc := NewSessionService(fs)
+		svc := NewService(fs)
 
 		if err := svc.UpdateSession(&Session{ID: "s1"}); err != nil {
 			t.Errorf("UpdateSession() = %v, want nil (cache failure should be fail-open)", err)
@@ -211,7 +211,7 @@ func TestSE15to17UpdateSession(t *testing.T) {
 func TestSE18to20DeleteSession(t *testing.T) {
 	t.Run("SE-18_Success", func(t *testing.T) {
 		fs := &seFakeSessionStore{}
-		svc := NewSessionService(fs)
+		svc := NewService(fs)
 
 		if err := svc.DeleteSession("s1"); err != nil {
 			t.Errorf("DeleteSession() = %v, want nil", err)
@@ -221,7 +221,7 @@ func TestSE18to20DeleteSession(t *testing.T) {
 	t.Run("SE-19_DBFailurePropagates", func(t *testing.T) {
 		wantErr := testerrors.ErrDBDown
 		fs := &seFakeSessionStore{deleteInDBErr: wantErr}
-		svc := NewSessionService(fs)
+		svc := NewService(fs)
 
 		err := svc.DeleteSession("s1")
 		if !errors.Is(err, wantErr) {
@@ -234,7 +234,7 @@ func TestSE18to20DeleteSession(t *testing.T) {
 
 	t.Run("SE-20_CacheEvictFailureIsFailClosed", func(t *testing.T) {
 		fs := &seFakeSessionStore{deleteFromCacheErr: testerrors.ErrCacheDown}
-		svc := NewSessionService(fs)
+		svc := NewService(fs)
 
 		err := svc.DeleteSession("s1")
 		if !errors.Is(err, testerrors.ErrCacheDown) {
@@ -244,7 +244,7 @@ func TestSE18to20DeleteSession(t *testing.T) {
 }
 
 func TestSE21to22CreateJWT(t *testing.T) {
-	svc := NewSessionService(&seFakeSessionStore{})
+	svc := NewService(&seFakeSessionStore{})
 
 	t.Run("SE-21_Success", func(t *testing.T) {
 		s := &Session{ID: "s1", UserID: "u1", Permissions: []string{"a.b:c"}, IssuedAt: time.Now().Unix(), ExpiresAt: time.Now().Add(time.Hour).Unix()}
@@ -280,9 +280,9 @@ func TestSE21to22CreateJWT(t *testing.T) {
 }
 
 func TestSE23to31ReadJWT(t *testing.T) {
-	newSvcAndToken := func(session *Session) (SessionService, *seFakeSessionStore, string) {
+	newSvcAndToken := func(session *Session) (Service, *seFakeSessionStore, string) {
 		fs := &seFakeSessionStore{getFromCacheErr: ErrNotFound, getFromDBSession: session}
-		svc := NewSessionService(fs)
+		svc := NewService(fs)
 		tok, err := svc.CreateJWT(session)
 		if err != nil {
 			t.Fatalf("failed to build a token fixture: %v", err)
@@ -307,7 +307,7 @@ func TestSE23to31ReadJWT(t *testing.T) {
 	})
 
 	t.Run("SE-24_MalformedToken", func(t *testing.T) {
-		svc := NewSessionService(&seFakeSessionStore{})
+		svc := NewService(&seFakeSessionStore{})
 		if _, err := svc.ReadJWT("not-a-jwt"); err == nil {
 			t.Fatal("expected an error for a malformed token")
 		}
@@ -322,7 +322,7 @@ func TestSE23to31ReadJWT(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to build fixture token: %v", err)
 		}
-		svc := NewSessionService(&seFakeSessionStore{})
+		svc := NewService(&seFakeSessionStore{})
 		if _, err := svc.ReadJWT(tok); err == nil {
 			t.Fatal("expected an error for a token signed with the wrong secret")
 		}
@@ -337,7 +337,7 @@ func TestSE23to31ReadJWT(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to build fixture token: %v", err)
 		}
-		svc := NewSessionService(&seFakeSessionStore{})
+		svc := NewService(&seFakeSessionStore{})
 		if _, err := svc.ReadJWT(tok); !errors.Is(err, ErrMissingAudience) {
 			t.Fatalf("ReadJWT() error = %v, want %v", err, ErrMissingAudience)
 		}
@@ -352,7 +352,7 @@ func TestSE23to31ReadJWT(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to build fixture token: %v", err)
 		}
-		svc := NewSessionService(&seFakeSessionStore{})
+		svc := NewService(&seFakeSessionStore{})
 		if _, err := svc.ReadJWT(tok); !errors.Is(err, ErrEmptyAudienceEntry) {
 			t.Fatalf("ReadJWT() error = %v, want %v", err, ErrEmptyAudienceEntry)
 		}
@@ -367,7 +367,7 @@ func TestSE23to31ReadJWT(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to build fixture token: %v", err)
 		}
-		svc := NewSessionService(&seFakeSessionStore{})
+		svc := NewService(&seFakeSessionStore{})
 		if _, err := svc.ReadJWT(tok); !errors.Is(err, ErrInvalidAudience) {
 			t.Fatalf("ReadJWT() error = %v, want %v", err, ErrInvalidAudience)
 		}
@@ -376,7 +376,7 @@ func TestSE23to31ReadJWT(t *testing.T) {
 	t.Run("SE-29_RevokedSessionRejected", func(t *testing.T) {
 		session := &Session{ID: "s1", UserID: "u1", IssuedAt: time.Now().Unix(), ExpiresAt: time.Now().Add(time.Hour).Unix()}
 		fs := &seFakeSessionStore{getFromCacheErr: ErrNotFound, getFromDBSession: session}
-		svc := NewSessionService(fs)
+		svc := NewService(fs)
 		tok, err := svc.CreateJWT(session)
 		if err != nil {
 			t.Fatalf("failed to build fixture token: %v", err)
@@ -392,7 +392,7 @@ func TestSE23to31ReadJWT(t *testing.T) {
 	t.Run("SE-30_SubjectMismatch", func(t *testing.T) {
 		signedFor := &Session{ID: "s1", UserID: "user-A", IssuedAt: time.Now().Unix(), ExpiresAt: time.Now().Add(time.Hour).Unix()}
 		fs := &seFakeSessionStore{getFromCacheErr: ErrNotFound}
-		svc := NewSessionService(fs)
+		svc := NewService(fs)
 		tok, err := svc.CreateJWT(signedFor)
 		if err != nil {
 			t.Fatalf("failed to build fixture token: %v", err)
@@ -407,7 +407,7 @@ func TestSE23to31ReadJWT(t *testing.T) {
 	t.Run("SE-31_UpdateSessionFailurePropagates", func(t *testing.T) {
 		session := &Session{ID: "s1", UserID: "u1", IssuedAt: time.Now().Unix(), ExpiresAt: time.Now().Add(time.Hour).Unix()}
 		fs := &seFakeSessionStore{getFromCacheErr: ErrNotFound, getFromDBSession: session}
-		svc := NewSessionService(fs)
+		svc := NewService(fs)
 		tok, err := svc.CreateJWT(session)
 		if err != nil {
 			t.Fatalf("failed to build fixture token: %v", err)
