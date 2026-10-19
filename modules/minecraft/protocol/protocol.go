@@ -130,11 +130,10 @@ func GetStatusLegacy(ctx context.Context, addr, host string, port uint32, protoc
 		return nil, 0, err
 	}
 
-	body, err := io.ReadAll(r)
+	body, err := receiveNoLen(r)
 	if err != nil {
 		return nil, 0, err
 	}
-
 	delta := time.Since(start)
 
 	var pingResponse LegacyPingResponse
@@ -165,13 +164,10 @@ func GetQueryStatusBasic(ctx context.Context, addr string) (*QueryBasicStatRespo
 		return nil, 0, err
 	}
 
-	body := make([]byte, 18)
-	n, err := r.Read(body)
+	body, err := receiveMax(r, 18)
 	if err != nil {
 		return nil, 0, err
 	}
-	body = body[:n]
-
 	delta := time.Since(start)
 
 	var challengeResponse QueryChallengeResponse
@@ -224,13 +220,10 @@ func GetQueryStatus(ctx context.Context, addr string) (*QueryStatResponse, time.
 		return nil, 0, err
 	}
 
-	body := make([]byte, 18)
-	n, err := r.Read(body)
+	body, err := receiveMax(r, 18)
 	if err != nil {
 		return nil, 0, err
 	}
-	body = body[:n]
-
 	delta := time.Since(start)
 
 	var challengeResponse QueryChallengeResponse
@@ -283,12 +276,10 @@ func GetBedrockStatus(ctx context.Context, addr string) (*UnconnectedPongPacket,
 		return nil, 0, err
 	}
 
-	body := make([]byte, 1024)
-	n, err := r.Read(body)
+	body, err := receiveMax(r, 1024)
 	if err != nil {
 		return nil, 0, err
 	}
-	body = body[:n]
 
 	delta := time.Since(start)
 

@@ -47,3 +47,27 @@ func receive(r *bufio.Reader) ([]byte, error) {
 	}
 	return body, nil
 }
+
+func receiveNoLen(r *bufio.Reader) ([]byte, error) {
+	body, err := io.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+	return body, nil
+}
+
+func receiveMax(r *bufio.Reader, size int) ([]byte, error) {
+	if size < 0 {
+		return nil, ErrNegativePacketSize
+	}
+	if size > MaxPacketSize {
+		return nil, ErrPacketTooLarge
+	}
+
+	body := make([]byte, size)
+	n, err := r.Read(body)
+	if err != nil {
+		return nil, err
+	}
+	return body[:n], nil
+}
