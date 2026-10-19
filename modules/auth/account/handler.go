@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"time"
 
-	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
@@ -17,6 +16,17 @@ const (
 	msgFailedToDeleteSession     = "Failed to delete session"
 	logFailedToCreateJWT         = "Failed to create JWT:\n\t"
 )
+
+var VoidCookie = &http.Cookie{
+	Name:     session.CookieName,
+	Value:    "",
+	Domain:   ".neuralnexus.dev",
+	Path:     "/",
+	Expires:  time.Unix(0, 0),
+	Secure:   true,
+	HttpOnly: true,
+	SameSite: http.SameSiteLaxMode,
+}
 
 // Login struct for login request
 type Login struct {
@@ -34,16 +44,17 @@ func LoginHandler(as Service, ss session.Service) http.HandlerFunc {
 			responses.BadRequest(w, r, msgInvalidUsernameOrPassword)
 			return
 		}
+		ctx := r.Context()
 
 		var account *Account
 		if login.Username != "" {
-			account, err = as.GetAccountByUsername(r.Context(), login.Username)
+			account, err = as.GetAccountByUsername(ctx, login.Username)
 		} else {
-			account, err = as.GetAccountByEmail(r.Context(), login.Email)
+			account, err = as.GetAccountByEmail(ctx, login.Email)
 		}
 		if err != nil {
 			if err != ErrNotFound {
-				reqctx.Log(r.Context(), "Failed to look up account:\n\t", err.Error())
+				reqctx.Log(ctx, "Failed to look up account:\n\t", err.Error())
 				responses.InternalServerError(w, r, msgAuthenticationFailed)
 				return
 			}
@@ -57,9 +68,9 @@ func LoginHandler(as Service, ss session.Service) http.HandlerFunc {
 			return
 		}
 
-		enabled, err := as.IsPasswordAuthEnabled(r.Context(), account.UserID)
+		enabled, err := as.IsPasswordAuthEnabled(ctx, account.UserID)
 		if err != nil {
-			reqctx.Log(r.Context(), "Failed to check password auth setting:\n\t", err.Error())
+			reqctx.Log(ctx, "Failed to check password auth setting:\n\t", err.Error())
 			responses.InternalServerError(w, r, msgAuthenticationFailed)
 			return
 		}
@@ -68,21 +79,21 @@ func LoginHandler(as Service, ss session.Service) http.HandlerFunc {
 			return
 		}
 
-		session, err := as.NewSession(r.Context(), account, time.Now().Add(time.Hour*24).Unix())
+		session, err := as.NewSession(ctx, account, time.Now().Add(time.Hour*24).Unix())
 		if err != nil {
-			reqctx.Log(r.Context(), "Failed to create session:\n\t", err.Error())
+			reqctx.Log(ctx, "Failed to create session:\n\t", err.Error())
 			responses.InternalServerError(w, r, msgAuthenticationFailed)
 			return
 		}
 
-		if err = ss.AddSession(r.Context(), session); err != nil {
-			reqctx.Log(r.Context(), "Failed to add session:\n\t", err.Error())
+		if err = ss.AddSession(ctx, session); err != nil {
+			reqctx.Log(ctx, "Failed to add session:\n\t", err.Error())
 			responses.InternalServerError(w, r, msgAuthenticationFailed)
 			return
 		}
 
-		if err := SetSessionCookie(ss, w, session); err != nil {
-			reqctx.Log(r.Context(), logFailedToCreateJWT, err.Error())
+		if err := ss.SetSessionCookie(ctx, w, session); err != nil {
+			reqctx.Log(ctx, logFailedToCreateJWT, err.Error())
 			responses.InternalServerError(w, r, msgAuthenticationFailed)
 			return
 		}
@@ -104,32 +115,7 @@ func LogoutHandler(ss session.Service) http.HandlerFunc {
 			responses.InternalServerError(w, r, msgFailedToDeleteSession)
 			return
 		}
-		http.SetCookie(w, sessionCookie("", time.Unix(0, 0)))
+		http.SetCookie(w, VoidCookie)
 		responses.NoContent(w, r)
-	}
-}
-
-// SetSessionCookie creates a JWT for an already-persisted
-// session and sets it as the session cookie.
-func SetSessionCookie(ss session.Service, w http.ResponseWriter, session *session.Session) error {
-	jwtString, err := ss.CreateJWT(session)
-	if err != nil {
-		return err
-	}
-	http.SetCookie(w, sessionCookie(jwtString, time.Unix(session.ExpiresAt, 0)))
-	return nil
-}
-
-// sessionCookie builds the session cookie
-func sessionCookie(value string, expires time.Time) *http.Cookie {
-	return &http.Cookie{
-		Name:     mw.SessionCookieName,
-		Value:    value,
-		Domain:   ".neuralnexus.dev",
-		Path:     "/",
-		Expires:  expires,
-		Secure:   true,
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
 	}
 }

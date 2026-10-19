@@ -118,6 +118,3 @@
 | ACH-12 | LogoutHandler | Error Path | session.Service.DeleteSession fails | Valid session in context, ss.DeleteSession returns an error | 500 Internal Server Error `msgFailedToDeleteSession` | P2 |  |
 | ACH-58 | LoginHandler | Error Path | the account service fails to build the session | Account/password/enabled all valid; `NewSession` returns `testutil.ErrBoom` | 500 Internal Server Error, `detail` is `msgAuthenticationFailed`, and no session is stored | P2 |  |
 | ACH-59 | LoginHandler | Error Path | Account lookup fails with a non-not-found error | Service.GetAccountByUsername returns `testutil.ErrDBDown` | 500 Internal Server Error `msgAuthenticationFailed`; no session cookie | P2 |  |
-| ACH-36 | SetSessionCookie | Happy Path | ss.CreateJWT succeeds | Valid session, ss.CreateJWT returns a JWT string | Returns nil error; Set-Cookie header carries the JWT value with Expires == time.Unix(session.ExpiresAt,0) | P1 |  |
-| ACH-37 | SetSessionCookie | Error Path | ss.CreateJWT fails | ss.CreateJWT returns an error | Returns that error; no Set-Cookie header written | P2 |  |
-| ACH-49 | sessionCookie | Accessor | Build a cookie for a given value/expiry | value="abc", expires=fixed time | Returns *http.Cookie with Name=mw.SessionCookieName, Domain=".neuralnexus.dev", Path="/", Expires=expires, Secure=true, HttpOnly=true, SameSite=Lax | P2 |  |

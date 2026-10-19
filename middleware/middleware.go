@@ -38,7 +38,6 @@ type Middleware func(http.Handler) http.Handler
 
 const (
 	AuthHeader           = "Authorization"
-	SessionCookieName    = "session"
 	XRequestIDHeader     = "X-Request-ID"
 	XForwardedForHeader  = "X-Forwarded-For"
 	CFConnectingIPHeader = "CF-Connecting-IP"
@@ -133,7 +132,7 @@ func SessionMiddleware(service session.Service) Middleware {
 				ctx := context.WithValue(r.Context(), reqctx.SessionKey, session)
 				ctx = context.WithValue(ctx, reqctx.UserIDKey, session.UserID)
 				r = r.WithContext(ctx)
-			} else if cookie, err := r.Cookie(SessionCookieName); err == nil {
+			} else if cookie, err := r.Cookie(session.CookieName); err == nil {
 				session, jwtErr := service.ReadJWT(r.Context(), cookie.Value)
 				if jwtErr != nil {
 					reqctx.Log(r.Context(), logErrorReadingJWTFromCookie, jwtErr.Error())

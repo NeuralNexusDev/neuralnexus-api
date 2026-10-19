@@ -19,7 +19,6 @@ const (
 	logInvalidState                     = "Invalid state"
 	msgInvalidState                     = "Invalid state"
 	msgLoginRequiredToLink              = "You must be logged in to link an account"
-	logFailedToCreateJWT                = "Failed to create JWT:\n\t"
 	msgInvalidPlatform                  = "Invalid platform"
 	msgSessionExpired                   = "Your session has expired"
 	msgMissingOAuthScope                = "The platform did not grant the required access"
@@ -91,8 +90,7 @@ func OAuthHandler(as account.Service, las Store, ss session.Service) http.Handle
 			return
 		}
 
-		if err := account.SetSessionCookie(ss, w, session); err != nil {
-			reqctx.Log(ctx, logFailedToCreateJWT, err.Error())
+		if err := ss.SetSessionCookie(ctx, w, session); err != nil {
 			redirectInternalServerError(w, r, state.RedirectURI, msgAuthenticationFailed)
 			return
 		}
@@ -162,8 +160,7 @@ func OpenIDHandler(as account.Service, las Store, ss session.Service) http.Handl
 			return
 		}
 
-		if err := account.SetSessionCookie(ss, w, session); err != nil {
-			reqctx.Log(ctx, logFailedToCreateJWT, err.Error())
+		if err := ss.SetSessionCookie(ctx, w, session); err != nil {
 			redirectInternalServerError(w, r, state.RedirectURI, msgAuthenticationFailed)
 			return
 		}
