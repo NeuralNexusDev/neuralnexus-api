@@ -261,47 +261,11 @@ func TestSE18to20DeleteSession(t *testing.T) {
 	})
 }
 
-func TestSE21to22CreateJWT(t *testing.T) {
-	svc := NewService(&seFakeSessionStore{})
-
-	t.Run("SE-21_Success", func(t *testing.T) {
-		s := &Session{ID: "s1", UserID: "u1", Permissions: []string{"a.b:c"}, IssuedAt: time.Now().Unix(), ExpiresAt: time.Now().Add(time.Hour).Unix()}
-		tok, err := svc.CreateJWT(s)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		parsed, err := jwt.ParseWithClaims(tok, &SessionClaims{}, func(*jwt.Token) (interface{}, error) { return JWT_SECRET, nil })
-		if err != nil {
-			t.Fatalf("failed to parse the created token: %v", err)
-		}
-		claims := parsed.Claims.(*SessionClaims)
-		if claims.Subject != "u1" || claims.ID != "s1" {
-			t.Errorf("claims = %+v, want Subject=u1 ID=s1", claims)
-		}
-	})
-
-	t.Run("SE-22_NeverExpiringOmitsExpClaim", func(t *testing.T) {
-		s := &Session{ID: "s1", UserID: "u1", IssuedAt: time.Now().Unix(), ExpiresAt: 0}
-		tok, err := svc.CreateJWT(s)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		parsed, err := jwt.ParseWithClaims(tok, &SessionClaims{}, func(*jwt.Token) (interface{}, error) { return JWT_SECRET, nil })
-		if err != nil {
-			t.Fatalf("failed to parse the created token: %v", err)
-		}
-		claims := parsed.Claims.(*SessionClaims)
-		if claims.ExpiresAt != nil {
-			t.Errorf("ExpiresAt claim = %v, want nil (omitted) for a never-expiring session", claims.ExpiresAt)
-		}
-	})
-}
-
 func TestSE23to31ReadJWT(t *testing.T) {
 	newSvcAndToken := func(session *Session) (Service, *seFakeSessionStore, string) {
 		fs := &seFakeSessionStore{getFromCacheErr: ErrNotFound, getFromDBSession: session}
 		svc := NewService(fs)
-		tok, err := svc.CreateJWT(session)
+		tok, err := session.AsJWT()
 		if err != nil {
 			t.Fatalf("failed to build a token fixture: %v", err)
 		}
@@ -395,7 +359,7 @@ func TestSE23to31ReadJWT(t *testing.T) {
 		session := &Session{ID: "s1", UserID: "u1", IssuedAt: time.Now().Unix(), ExpiresAt: time.Now().Add(time.Hour).Unix()}
 		fs := &seFakeSessionStore{getFromCacheErr: ErrNotFound, getFromDBSession: session}
 		svc := NewService(fs)
-		tok, err := svc.CreateJWT(session)
+		tok, err := session.AsJWT()
 		if err != nil {
 			t.Fatalf("failed to build fixture token: %v", err)
 		}
@@ -411,7 +375,7 @@ func TestSE23to31ReadJWT(t *testing.T) {
 		signedFor := &Session{ID: "s1", UserID: "user-A", IssuedAt: time.Now().Unix(), ExpiresAt: time.Now().Add(time.Hour).Unix()}
 		fs := &seFakeSessionStore{getFromCacheErr: ErrNotFound}
 		svc := NewService(fs)
-		tok, err := svc.CreateJWT(signedFor)
+		tok, err := signedFor.AsJWT()
 		if err != nil {
 			t.Fatalf("failed to build fixture token: %v", err)
 		}
@@ -426,7 +390,7 @@ func TestSE23to31ReadJWT(t *testing.T) {
 		session := &Session{ID: "s1", UserID: "u1", IssuedAt: time.Now().Unix(), ExpiresAt: time.Now().Add(time.Hour).Unix()}
 		fs := &seFakeSessionStore{getFromCacheErr: ErrNotFound, getFromDBSession: session}
 		svc := NewService(fs)
-		tok, err := svc.CreateJWT(session)
+		tok, err := session.AsJWT()
 		if err != nil {
 			t.Fatalf("failed to build fixture token: %v", err)
 		}

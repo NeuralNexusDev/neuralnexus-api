@@ -18,8 +18,6 @@
 | SE-18 | DeleteSession | Happy Path | `DeleteSessionInDB` and `DeleteSessionFromCache` both succeed | | Returns nil | P1 |  |
 | SE-19 | DeleteSession | Error Path | `DeleteSessionInDB` fails | | Returns that error; cache eviction never attempted | P1 |  |
 | SE-20 | DeleteSession | Error Path | `DeleteSessionInDB` succeeds, `DeleteSessionFromCache` fails | | Returns an error wrapping `testutil.ErrCacheDown` (fail-closed, unlike Add/Update) | P0 |  |
-| SE-21 | CreateJWT | Happy Path | Session with nonzero `ExpiresAt` | | Returns a signed JWT string, err nil; decodes back to matching claims | P1 |  |
-| SE-22 | CreateJWT | Edge Case | `Session.ExpiresAt == 0` | | Returned JWT omits the `exp` claim entirely | P0 |  |
 | SE-23 | ReadJWT | Happy Path | Valid JWT for an existing session whose `UserID` matches the token subject | `store.GetSession` finds it | Returns the session, nil error; `LastUsedAt` bumped via `UpdateSession` | P1 |  |
 | SE-24 | ReadJWT | Error Path | Malformed/garbage token string | | Returns nil, parse error | P2 |  |
 | SE-25 | ReadJWT | Error Path | Token signed with a different secret / wrong algorithm | | Returns nil, error (signature/alg validation failure) | P1 |  |

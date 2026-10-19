@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -51,7 +52,6 @@ type Service interface {
 	UpdateSession(ctx context.Context, session *Session) error
 	DeleteSession(ctx context.Context, id string) error
 	SetSessionCookie(ctx context.Context, w http.ResponseWriter, session *Session) error
-	CreateJWT(*Session) (string, error)
 	ReadJWT(ctx context.Context, token string) (*Session, error)
 }
 
@@ -122,32 +122,9 @@ func (s *service) DeleteSession(ctx context.Context, id string) error {
 	return nil
 }
 
-// CreateJWT creates a JWT for a session
-func (s *service) CreateJWT(session *Session) (string, error) {
-	// ExpiresAt == 0 means the session never expires (see Session.IsValid and
-	// store.AddSessionToCache). Encoding that literally would set the JWT's
-	// exp claim to 1970-01-01, which ReadJWT would immediately reject as
-	// expired, so omit the exp claim entirely in that case instead.
-	var expiresAt *jwt.NumericDate
-	if session.ExpiresAt != 0 {
-		expiresAt = jwt.NewNumericDate(time.Unix(session.ExpiresAt, 0))
-	}
-	return jwt.NewWithClaims(jwt.SigningMethodHS256, SessionClaims{
-		session.Permissions,
-		jwt.RegisteredClaims{
-			ExpiresAt: expiresAt,
-			IssuedAt:  jwt.NewNumericDate(time.Unix(session.IssuedAt, 0)),
-			Issuer:    NN_API_URL,
-			Subject:   session.UserID,
-			Audience:  validAudiences,
-			ID:        session.ID,
-		},
-	}).SignedString(JWT_SECRET)
-}
-
 // SetSessionCookie creates a JWT for an already-persisted session and sets it as the session cookie.
 func (s *service) SetSessionCookie(ctx context.Context, w http.ResponseWriter, session *Session) error {
-	jwtString, err := s.CreateJWT(session)
+	jwtString, err := session.AsJWT()
 	if err != nil {
 		reqctx.Log(ctx, logFailedToCreateJWT, err.Error())
 		return err
@@ -169,7 +146,7 @@ func (s *service) SetSessionCookie(ctx context.Context, w http.ResponseWriter, s
 // ReadJWT reads a JWT and returns the session
 func (s *service) ReadJWT(ctx context.Context, tokenStr string) (*Session, error) {
 	claims := &SessionClaims{}
-	_, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
+	_, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (any, error) {
 		return JWT_SECRET, nil
 	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
 	if err != nil {
@@ -183,13 +160,7 @@ func (s *service) ReadJWT(ctx context.Context, tokenStr string) (*Session, error
 		if aud == "" {
 			return nil, ErrEmptyAudienceEntry
 		}
-		valid := false
-		for _, validAud := range validAudiences {
-			if aud == validAud {
-				valid = true
-				break
-			}
-		}
+		valid := slices.Contains(validAudiences, aud)
 		if !valid {
 			reqctx.Log(ctx, ErrInvalidAudience.Error(), aud)
 			return nil, ErrInvalidAudience
