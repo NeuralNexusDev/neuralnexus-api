@@ -14,7 +14,6 @@ import (
 
 	"github.com/goccy/go-json"
 
-	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
@@ -297,7 +296,7 @@ func TestAU50OAuthHandlerLoginHappyPath(t *testing.T) {
 		if loc := w.Header().Get("Location"); loc != state.RedirectURI {
 			t.Errorf("expected redirect straight to %q with no problem param, got %q", state.RedirectURI, loc)
 		}
-		cookie := testutil.FindCookie(w, mw.SessionCookieName)
+		cookie := testutil.FindCookie(w, session.CookieName)
 		if cookie == nil || cookie.Value != "test-jwt" {
 			t.Errorf("expected session cookie with value %q, got %+v", "test-jwt", cookie)
 		}
@@ -345,7 +344,7 @@ func TestAU51OpenIDHandlerLoginHappyPath(t *testing.T) {
 		if loc := w.Header().Get("Location"); loc != state.RedirectURI {
 			t.Errorf("expected redirect straight to %q with no problem param, got %q", state.RedirectURI, loc)
 		}
-		cookie := testutil.FindCookie(w, mw.SessionCookieName)
+		cookie := testutil.FindCookie(w, session.CookieName)
 		if cookie == nil || cookie.Value != "test-jwt" {
 			t.Errorf("expected session cookie with value %q, got %+v", "test-jwt", cookie)
 		}

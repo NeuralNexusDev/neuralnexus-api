@@ -3,10 +3,12 @@ package session
 import (
 	"context"
 	"errors"
-	"github.com/golang-jwt/jwt/v5"
 	"log"
+	"net/http"
 	"os"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 )
@@ -27,8 +29,10 @@ var (
 )
 
 const (
-	msgJWTSecretUnset  = "JWT_SECRET environment variable must be set"
-	msgSiteAPIURLUnset = "NN_SITE_URL and NN_API_URL environment variables must be set"
+	CookieName           = "session"
+	msgJWTSecretUnset    = "JWT_SECRET environment variable must be set"
+	msgSiteAPIURLUnset   = "NN_SITE_URL and NN_API_URL environment variables must be set"
+	logFailedToCreateJWT = "Failed to create JWT:\n\t"
 )
 
 func init() {
@@ -46,6 +50,7 @@ type Service interface {
 	GetSession(ctx context.Context, id string) (*Session, error)
 	UpdateSession(ctx context.Context, session *Session) error
 	DeleteSession(ctx context.Context, id string) error
+	SetSessionCookie(ctx context.Context, w http.ResponseWriter, session *Session) error
 	CreateJWT(*Session) (string, error)
 	ReadJWT(ctx context.Context, token string) (*Session, error)
 }
@@ -138,6 +143,27 @@ func (s *service) CreateJWT(session *Session) (string, error) {
 			ID:        session.ID,
 		},
 	}).SignedString(JWT_SECRET)
+}
+
+// SetSessionCookie creates a JWT for an already-persisted session and sets it as the session cookie.
+func (s *service) SetSessionCookie(ctx context.Context, w http.ResponseWriter, session *Session) error {
+	jwtString, err := s.CreateJWT(session)
+	if err != nil {
+		reqctx.Log(ctx, logFailedToCreateJWT, err.Error())
+		return err
+	}
+	cookie := &http.Cookie{
+		Name:     CookieName,
+		Value:    jwtString,
+		Domain:   ".neuralnexus.dev",
+		Path:     "/",
+		Expires:  time.Unix(session.ExpiresAt, 0),
+		Secure:   true,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	}
+	http.SetCookie(w, cookie)
+	return nil
 }
 
 // ReadJWT reads a JWT and returns the session
