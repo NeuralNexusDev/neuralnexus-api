@@ -25,10 +25,10 @@ var ErrDataStoreNotFound = errors.New("data store not found")
 
 // DSStore - Data Store Interface
 type DSStore interface {
-	CreateNewDataStore(storeID, userID string) (*Store, error)
-	GetDataStore(storeID string) (*Store, error)
-	UpdateDataStore(storeID, userID string) (*Store, error)
-	DeleteDataStore(storeID string) error
+	CreateNewDataStore(ctx context.Context, storeID, userID string) (*Store, error)
+	GetDataStore(ctx context.Context, storeID string) (*Store, error)
+	UpdateDataStore(ctx context.Context, storeID, userID string) (*Store, error)
+	DeleteDataStore(ctx context.Context, storeID string) error
 }
 
 // DataStore - Data Store
@@ -42,8 +42,8 @@ func NewStore(db *pgxpool.Pool) DSStore {
 }
 
 // RunQueryAndReturn - Run a query and return the result
-func RunQueryAndReturn(db *pgxpool.Pool, query string, args ...any) (*Store, error) {
-	rows, err := db.Query(context.Background(), query, args...)
+func RunQueryAndReturn(ctx context.Context, db *pgxpool.Pool, query string, args ...any) (*Store, error) {
+	rows, err := db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -60,23 +60,23 @@ func RunQueryAndReturn(db *pgxpool.Pool, query string, args ...any) (*Store, err
 }
 
 // CreateNewDataStore - Create a new Data store
-func (s *dataStore) CreateNewDataStore(storeID, ownerID string) (*Store, error) {
-	return RunQueryAndReturn(s.db, "INSERT INTO datastores (store_id, owner_id) VALUES ($1, $2) RETURNING *", storeID, ownerID)
+func (s *dataStore) CreateNewDataStore(ctx context.Context, storeID, ownerID string) (*Store, error) {
+	return RunQueryAndReturn(ctx, s.db, "INSERT INTO datastores (store_id, owner_id) VALUES ($1, $2) RETURNING *", storeID, ownerID)
 }
 
 // GetDataStore - Get a Data store
-func (s *dataStore) GetDataStore(storeID string) (*Store, error) {
-	return RunQueryAndReturn(s.db, "SELECT * FROM datastores WHERE store_id = $1", storeID)
+func (s *dataStore) GetDataStore(ctx context.Context, storeID string) (*Store, error) {
+	return RunQueryAndReturn(ctx, s.db, "SELECT * FROM datastores WHERE store_id = $1", storeID)
 }
 
 // UpdateDataStore - Update a Data store
-func (s *dataStore) UpdateDataStore(storeID string, ownerID string) (*Store, error) {
-	return RunQueryAndReturn(s.db, "UPDATE datastores SET owner_id = $2 WHERE store_id = $1 RETURNING *", storeID, ownerID)
+func (s *dataStore) UpdateDataStore(ctx context.Context, storeID string, ownerID string) (*Store, error) {
+	return RunQueryAndReturn(ctx, s.db, "UPDATE datastores SET owner_id = $2 WHERE store_id = $1 RETURNING *", storeID, ownerID)
 }
 
 // DeleteDataStore - Delete a Data store
-func (s *dataStore) DeleteDataStore(storeID string) error {
-	_, err := s.db.Exec(context.Background(), "DELETE FROM datastores WHERE store_id = $1", storeID)
+func (s *dataStore) DeleteDataStore(ctx context.Context, storeID string) error {
+	_, err := s.db.Exec(ctx, "DELETE FROM datastores WHERE store_id = $1", storeID)
 	if err != nil {
 		return err
 	}

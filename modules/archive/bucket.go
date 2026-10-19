@@ -11,7 +11,7 @@ import (
 // S3Store interface for an S3 store
 type S3Store interface {
 	MakeBucket()
-	UploadFile(objectName string, reader io.Reader, size int64) (*minio.UploadInfo, error)
+	UploadFile(ctx context.Context, objectName string, reader io.Reader, size int64) (*minio.UploadInfo, error)
 }
 
 // s3store implementation of S3Store
@@ -43,8 +43,8 @@ func (s *s3store) MakeBucket() {
 }
 
 // UploadFile uploads a file to the S3 store
-func (s *s3store) UploadFile(objectName string, reader io.Reader, size int64) (*minio.UploadInfo, error) {
-	info, err := s.minioClient.PutObject(context.Background(), s.bucketName, objectName, reader, size,
+func (s *s3store) UploadFile(ctx context.Context, objectName string, reader io.Reader, size int64) (*minio.UploadInfo, error) {
+	info, err := s.minioClient.PutObject(ctx, s.bucketName, objectName, reader, size,
 		minio.PutObjectOptions{ContentType: "application/octet-stream"})
 	if err != nil {
 		return nil, err

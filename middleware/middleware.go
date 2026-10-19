@@ -115,7 +115,7 @@ func SessionMiddleware(service session.Service) Middleware {
 					responses.Unauthorized(w, r, "")
 					return
 				}
-				session, err := service.ReadJWT(authStrings[1])
+				session, err := service.ReadJWT(r.Context(), authStrings[1])
 				if err != nil {
 					reqctx.Log(r.Context(), "Error reading JWT:\n\t", err.Error())
 					responses.Unauthorized(w, r, "")
@@ -124,7 +124,7 @@ func SessionMiddleware(service session.Service) Middleware {
 
 				if !session.IsValid() {
 					responses.Unauthorized(w, r, "")
-					if delErr := service.DeleteSession(session.ID); delErr != nil {
+					if delErr := service.DeleteSession(context.WithoutCancel(r.Context()), session.ID); delErr != nil {
 						reqctx.Log(r.Context(), logErrorDeletingSession, delErr.Error())
 					}
 					return
@@ -134,11 +134,11 @@ func SessionMiddleware(service session.Service) Middleware {
 				ctx = context.WithValue(ctx, reqctx.UserIDKey, session.UserID)
 				r = r.WithContext(ctx)
 			} else if cookie, err := r.Cookie(SessionCookieName); err == nil {
-				session, jwtErr := service.ReadJWT(cookie.Value)
+				session, jwtErr := service.ReadJWT(r.Context(), cookie.Value)
 				if jwtErr != nil {
 					reqctx.Log(r.Context(), logErrorReadingJWTFromCookie, jwtErr.Error())
 				} else if !session.IsValid() {
-					if delErr := service.DeleteSession(session.ID); delErr != nil {
+					if delErr := service.DeleteSession(context.WithoutCancel(r.Context()), session.ID); delErr != nil {
 						reqctx.Log(r.Context(), logErrorDeletingSession, delErr.Error())
 					}
 				} else {
@@ -159,13 +159,13 @@ func RateLimitMiddleware(service ratelimit.Service, prefix string, sessionLimit 
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			session, ok := r.Context().Value(reqctx.SessionKey).(*session.Session)
 			if ok && session != nil {
-				err := service.IncrRateLimit(prefix + ":" + session.UserID)
+				err := service.IncrRateLimit(r.Context(), prefix+":"+session.UserID)
 				if err != nil {
 					reqctx.Log(r.Context(), logErrorIncrementingRateLimit, err.Error())
 					next.ServeHTTP(w, r)
 					return
 				}
-				limit, err := service.GetRateLimit(prefix + ":" + session.UserID)
+				limit, err := service.GetRateLimit(r.Context(), prefix+":"+session.UserID)
 				if err != nil {
 					reqctx.Log(r.Context(), logErrorGettingRateLimit, err.Error())
 					next.ServeHTTP(w, r)
@@ -180,13 +180,13 @@ func RateLimitMiddleware(service ratelimit.Service, prefix string, sessionLimit 
 				if err != nil {
 					ip = r.RemoteAddr
 				}
-				err = service.IncrRateLimit(prefix + ":" + ip)
+				err = service.IncrRateLimit(r.Context(), prefix+":"+ip)
 				if err != nil {
 					reqctx.Log(r.Context(), logErrorIncrementingRateLimit, err.Error())
 					next.ServeHTTP(w, r)
 					return
 				}
-				limit, err := service.GetRateLimit(prefix + ":" + ip)
+				limit, err := service.GetRateLimit(r.Context(), prefix+":"+ip)
 				if err != nil {
 					reqctx.Log(r.Context(), logErrorGettingRateLimit, err.Error())
 					next.ServeHTTP(w, r)
@@ -279,7 +279,7 @@ func Auth(service session.Service) Middleware {
 
 			if !session.IsValid() {
 				responses.Unauthorized(w, r, "")
-				err := service.DeleteSession(session.ID)
+				err := service.DeleteSession(context.WithoutCancel(r.Context()), session.ID)
 				if err != nil {
 					reqctx.Log(r.Context(), logErrorDeletingSession, err.Error())
 				}

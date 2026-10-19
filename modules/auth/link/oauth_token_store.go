@@ -41,15 +41,15 @@ type oAuthTokenStore struct {
 
 // OAuthTokenStore interface
 type OAuthTokenStore interface {
-	AddOAuthTokenToDB(token *OAuthToken) error
-	GetOAuthTokenByUserID(userID string, platform Platform) (*OAuthToken, error)
-	UpdateOAuthToken(token *OAuthToken) error
-	DeleteOAuthToken(userID string, platform Platform) error
+	AddOAuthTokenToDB(ctx context.Context, token *OAuthToken) error
+	GetOAuthTokenByUserID(ctx context.Context, userID string, platform Platform) (*OAuthToken, error)
+	UpdateOAuthToken(ctx context.Context, token *OAuthToken) error
+	DeleteOAuthToken(ctx context.Context, userID string, platform Platform) error
 }
 
 // AddOAuthTokenToDB adds an OAuth token to the database
-func (s *oAuthTokenStore) AddOAuthTokenToDB(token *OAuthToken) error {
-	_, err := s.db.Exec(context.Background(),
+func (s *oAuthTokenStore) AddOAuthTokenToDB(ctx context.Context, token *OAuthToken) error {
+	_, err := s.db.Exec(ctx,
 		"INSERT INTO oauth_tokens (user_id, platform, access_token, token_type, refresh_token, expiry, expires_in, scope) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
 		token.UserID, token.Platform, token.AccessToken, token.TokenType, token.RefreshToken, token.Expiry, token.ExpiresIn, token.Scope)
 	if err != nil {
@@ -59,8 +59,8 @@ func (s *oAuthTokenStore) AddOAuthTokenToDB(token *OAuthToken) error {
 }
 
 // GetOAuthTokenByUserID gets an OAuth token by user ID and platform
-func (s *oAuthTokenStore) GetOAuthTokenByUserID(userID string, platform Platform) (*OAuthToken, error) {
-	rows, err := s.db.Query(context.Background(), "SELECT * FROM oauth_tokens WHERE user_id = $1 AND platform = $2", userID, platform)
+func (s *oAuthTokenStore) GetOAuthTokenByUserID(ctx context.Context, userID string, platform Platform) (*OAuthToken, error) {
+	rows, err := s.db.Query(ctx, "SELECT * FROM oauth_tokens WHERE user_id = $1 AND platform = $2", userID, platform)
 	if err != nil {
 		return nil, err
 	}
@@ -76,8 +76,8 @@ func (s *oAuthTokenStore) GetOAuthTokenByUserID(userID string, platform Platform
 }
 
 // UpdateOAuthToken updates an OAuth token in the database
-func (s *oAuthTokenStore) UpdateOAuthToken(token *OAuthToken) error {
-	_, err := s.db.Exec(context.Background(),
+func (s *oAuthTokenStore) UpdateOAuthToken(ctx context.Context, token *OAuthToken) error {
+	_, err := s.db.Exec(ctx,
 		"UPDATE oauth_tokens SET access_token = $2, token_type = $3, refresh_token = $4, expiry = $5, expires_in = $6, scope = $7 WHERE user_id = $1 AND platform = $8",
 		token.UserID, token.AccessToken, token.TokenType, token.RefreshToken, token.Expiry, token.ExpiresIn, token.Scope, token.Platform)
 	if err != nil {
@@ -87,8 +87,8 @@ func (s *oAuthTokenStore) UpdateOAuthToken(token *OAuthToken) error {
 }
 
 // DeleteOAuthToken deletes an OAuth token from the database
-func (s *oAuthTokenStore) DeleteOAuthToken(userID string, platform Platform) error {
-	_, err := s.db.Exec(context.Background(), "DELETE FROM oauth_tokens WHERE user_id = $1 AND platform = $2", userID, platform)
+func (s *oAuthTokenStore) DeleteOAuthToken(ctx context.Context, userID string, platform Platform) error {
+	_, err := s.db.Exec(ctx, "DELETE FROM oauth_tokens WHERE user_id = $1 AND platform = $2", userID, platform)
 	if err != nil {
 		return err
 	}

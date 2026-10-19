@@ -31,7 +31,7 @@ func newSTMockAccountService() *stMockAccountService {
 	return &stMockAccountService{accounts: map[string]*account.Account{}}
 }
 
-func (m *stMockAccountService) AddAccount(a *account.Account) error {
+func (m *stMockAccountService) AddAccount(_ context.Context, a *account.Account) error {
 	m.addAccountCalls++
 	if m.addAccountErr != nil {
 		return m.addAccountErr
@@ -39,7 +39,7 @@ func (m *stMockAccountService) AddAccount(a *account.Account) error {
 	m.accounts[a.UserID] = a
 	return nil
 }
-func (m *stMockAccountService) GetAccountByID(userID string) (*account.Account, error) {
+func (m *stMockAccountService) GetAccountByID(_ context.Context, userID string) (*account.Account, error) {
 	if m.getByIDErr != nil {
 		return nil, m.getByIDErr
 	}
@@ -49,17 +49,17 @@ func (m *stMockAccountService) GetAccountByID(userID string) (*account.Account, 
 	}
 	return a, nil
 }
-func (m *stMockAccountService) GetAccountByUsername(string) (*account.Account, error) {
+func (m *stMockAccountService) GetAccountByUsername(context.Context, string) (*account.Account, error) {
 	return nil, account.ErrNotFound
 }
-func (m *stMockAccountService) GetAccountByEmail(string) (*account.Account, error) {
+func (m *stMockAccountService) GetAccountByEmail(context.Context, string) (*account.Account, error) {
 	return nil, account.ErrNotFound
 }
-func (m *stMockAccountService) UpdateAccount(a *account.Account) error {
+func (m *stMockAccountService) UpdateAccount(_ context.Context, a *account.Account) error {
 	m.accounts[a.UserID] = a
 	return nil
 }
-func (m *stMockAccountService) DeleteAccount(userID string) error {
+func (m *stMockAccountService) DeleteAccount(_ context.Context, userID string) error {
 	m.deleteCalls++
 	if m.deleteErr != nil {
 		return m.deleteErr
@@ -67,7 +67,9 @@ func (m *stMockAccountService) DeleteAccount(userID string) error {
 	delete(m.accounts, userID)
 	return nil
 }
-func (m *stMockAccountService) IsPasswordAuthEnabled(string) (bool, error) { return false, nil }
+func (m *stMockAccountService) IsPasswordAuthEnabled(context.Context, string) (bool, error) {
+	return false, nil
+}
 func (m *stMockAccountService) NewSession(_ context.Context, a *account.Account, expiresAt int64) (*session.Session, error) {
 	return &session.Session{ID: "stub-session", UserID: a.UserID, Permissions: []string{"stub:perm"}, ExpiresAt: expiresAt}, nil
 }
@@ -85,7 +87,7 @@ func newSTMockLinkAccountStore() *stMockLinkAccountStore {
 	return &stMockLinkAccountStore{byPlatformID: map[Platform]map[string]*LinkedAccount{}}
 }
 
-func (m *stMockLinkAccountStore) AddLinkedAccountToDB(la *LinkedAccount) error {
+func (m *stMockLinkAccountStore) AddLinkedAccountToDB(_ context.Context, la *LinkedAccount) error {
 	m.addCalls++
 	if m.addErr != nil {
 		return m.addErr
@@ -96,8 +98,10 @@ func (m *stMockLinkAccountStore) AddLinkedAccountToDB(la *LinkedAccount) error {
 	m.byPlatformID[la.Platform][la.PlatformID] = la
 	return nil
 }
-func (m *stMockLinkAccountStore) UpdateLinkedAccount(*LinkedAccount) error { return nil }
-func (m *stMockLinkAccountStore) GetLinkedAccountByPlatformID(platform Platform, platformID string) (*LinkedAccount, error) {
+func (m *stMockLinkAccountStore) UpdateLinkedAccount(context.Context, *LinkedAccount) error {
+	return nil
+}
+func (m *stMockLinkAccountStore) GetLinkedAccountByPlatformID(_ context.Context, platform Platform, platformID string) (*LinkedAccount, error) {
 	if m.getErr != nil {
 		return nil, m.getErr
 	}
@@ -107,17 +111,19 @@ func (m *stMockLinkAccountStore) GetLinkedAccountByPlatformID(platform Platform,
 	}
 	return la, nil
 }
-func (m *stMockLinkAccountStore) GetLinkedAccountByPlatformName(Platform, string) (*LinkedAccount, error) {
+func (m *stMockLinkAccountStore) GetLinkedAccountByPlatformName(context.Context, Platform, string) (*LinkedAccount, error) {
 	return nil, account.ErrNotFound
 }
-func (m *stMockLinkAccountStore) GetLinkedAccountByUserID(string, Platform) (*LinkedAccount, error) {
+func (m *stMockLinkAccountStore) GetLinkedAccountByUserID(context.Context, string, Platform) (*LinkedAccount, error) {
 	return nil, account.ErrNotFound
 }
-func (m *stMockLinkAccountStore) GetLinkedAccountsByUserID(string) ([]*LinkedAccount, error) {
+func (m *stMockLinkAccountStore) GetLinkedAccountsByUserID(context.Context, string) ([]*LinkedAccount, error) {
 	return nil, nil
 }
-func (m *stMockLinkAccountStore) DeleteLinkedAccount(string, Platform) error { return nil }
-func (m *stMockLinkAccountStore) SetLinkedAccountLoginEnabled(string, Platform, bool) error {
+func (m *stMockLinkAccountStore) DeleteLinkedAccount(context.Context, string, Platform) error {
+	return nil
+}
+func (m *stMockLinkAccountStore) SetLinkedAccountLoginEnabled(context.Context, string, Platform, bool) error {
 	return nil
 }
 
@@ -128,25 +134,25 @@ type stMockSessionService struct {
 
 var _ session.Service = (*stMockSessionService)(nil)
 
-func (m *stMockSessionService) AddSession(session *session.Session) error {
+func (m *stMockSessionService) AddSession(_ context.Context, session *session.Session) error {
 	if m.addSessionErr != nil {
 		return m.addSessionErr
 	}
 	m.added = append(m.added, session)
 	return nil
 }
-func (m *stMockSessionService) GetSession(string) (*session.Session, error) {
+func (m *stMockSessionService) GetSession(context.Context, string) (*session.Session, error) {
 	return nil, account.ErrNotFound
 }
-func (m *stMockSessionService) UpdateSession(*session.Session) error       { return nil }
-func (m *stMockSessionService) DeleteSession(string) error                 { return nil }
-func (m *stMockSessionService) CreateJWT(*session.Session) (string, error) { return "", nil }
-func (m *stMockSessionService) ReadJWT(string) (*session.Session, error) {
+func (m *stMockSessionService) UpdateSession(context.Context, *session.Session) error { return nil }
+func (m *stMockSessionService) DeleteSession(context.Context, string) error           { return nil }
+func (m *stMockSessionService) CreateJWT(*session.Session) (string, error)            { return "", nil }
+func (m *stMockSessionService) ReadJWT(context.Context, string) (*session.Session, error) {
 	return nil, account.ErrNotFound
 }
 
 func stRequestWithSession(session *session.Session) *http.Request {
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := testutil.NewRequest(http.MethodGet, "/", nil)
 	if session == nil {
 		return req
 	}
@@ -227,7 +233,7 @@ func TestST06to12VerifySteamOpenIDCallback(t *testing.T) {
 		restore := setSteamURLs(ts.URL, "")
 		defer restore()
 
-		got, err := VerifySteamOpenIDCallback(validSteamQuery("76500000000000001"))
+		got, err := VerifySteamOpenIDCallback(testutil.LogContext(context.Background()), validSteamQuery("76500000000000001"))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -239,7 +245,7 @@ func TestST06to12VerifySteamOpenIDCallback(t *testing.T) {
 	t.Run("LKS-07_WrongMode", func(t *testing.T) {
 		q := validSteamQuery("76500000000000001")
 		q.Set("openid.mode", "cancel")
-		_, err := VerifySteamOpenIDCallback(q)
+		_, err := VerifySteamOpenIDCallback(testutil.LogContext(context.Background()), q)
 		if !errors.Is(err, ErrInvalidAssertion) {
 			t.Fatalf("expected ErrInvalidAssertion, got %v", err)
 		}
@@ -248,7 +254,7 @@ func TestST06to12VerifySteamOpenIDCallback(t *testing.T) {
 	t.Run("LKS-08_InvalidClaimedID", func(t *testing.T) {
 		q := validSteamQuery("76500000000000001")
 		q.Set("openid.claimed_id", "not-a-steam-url")
-		_, err := VerifySteamOpenIDCallback(q)
+		_, err := VerifySteamOpenIDCallback(testutil.LogContext(context.Background()), q)
 		if !errors.Is(err, ErrInvalidAssertion) {
 			t.Fatalf("expected ErrInvalidAssertion, got %v", err)
 		}
@@ -257,7 +263,7 @@ func TestST06to12VerifySteamOpenIDCallback(t *testing.T) {
 	t.Run("LKS-09_SignedDoesNotCoverClaimedID", func(t *testing.T) {
 		q := validSteamQuery("76500000000000001")
 		q.Set("openid.signed", "op_endpoint,identity,return_to")
-		_, err := VerifySteamOpenIDCallback(q)
+		_, err := VerifySteamOpenIDCallback(testutil.LogContext(context.Background()), q)
 		if !errors.Is(err, ErrInvalidAssertion) {
 			t.Fatalf("expected ErrInvalidAssertion, got %v", err)
 		}
@@ -267,7 +273,7 @@ func TestST06to12VerifySteamOpenIDCallback(t *testing.T) {
 		restore := setSteamURLs("http://127.0.0.1:1", "")
 		defer restore()
 
-		_, err := VerifySteamOpenIDCallback(validSteamQuery("76500000000000001"))
+		_, err := VerifySteamOpenIDCallback(testutil.LogContext(context.Background()), validSteamQuery("76500000000000001"))
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -284,7 +290,7 @@ func TestST06to12VerifySteamOpenIDCallback(t *testing.T) {
 		restore := setSteamURLs(ts.URL, "")
 		defer restore()
 
-		_, err := VerifySteamOpenIDCallback(validSteamQuery("76500000000000001"))
+		_, err := VerifySteamOpenIDCallback(testutil.LogContext(context.Background()), validSteamQuery("76500000000000001"))
 		if !errors.Is(err, ErrSteamOpenIDCheck) {
 			t.Fatalf("error = %v, want %v", err, ErrSteamOpenIDCheck)
 		}
@@ -301,7 +307,7 @@ func TestST06to12VerifySteamOpenIDCallback(t *testing.T) {
 		restore := setSteamURLs(ts.URL, "")
 		defer restore()
 
-		_, err := VerifySteamOpenIDCallback(validSteamQuery("76500000000000001"))
+		_, err := VerifySteamOpenIDCallback(testutil.LogContext(context.Background()), validSteamQuery("76500000000000001"))
 		if !errors.Is(err, ErrInvalidAssertion) {
 			t.Fatalf("expected ErrInvalidAssertion, got %v", err)
 		}
@@ -352,7 +358,7 @@ func TestST16to22GetSteamUser(t *testing.T) {
 		defer restore()
 		defer restoreKey()
 
-		got, err := GetSteamUser("76500000000000001")
+		got, err := GetSteamUser(testutil.LogContext(context.Background()), "76500000000000001")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -365,7 +371,7 @@ func TestST16to22GetSteamUser(t *testing.T) {
 		restoreKey := setSteamAPIKeyForTest(t, "")
 		defer restoreKey()
 
-		_, err := GetSteamUser("76500000000000001")
+		_, err := GetSteamUser(testutil.LogContext(context.Background()), "76500000000000001")
 		if !errors.Is(err, ErrSteamAPIKeyUnset) {
 			t.Fatalf("GetSteamUser() error = %v, want %v", err, ErrSteamAPIKeyUnset)
 		}
@@ -377,7 +383,7 @@ func TestST16to22GetSteamUser(t *testing.T) {
 		defer restore()
 		defer restoreKey()
 
-		_, err := GetSteamUser("76500000000000001")
+		_, err := GetSteamUser(testutil.LogContext(context.Background()), "76500000000000001")
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -393,7 +399,7 @@ func TestST16to22GetSteamUser(t *testing.T) {
 		defer restore()
 		defer restoreKey()
 
-		_, err := GetSteamUser("76500000000000001")
+		_, err := GetSteamUser(testutil.LogContext(context.Background()), "76500000000000001")
 		if !errors.Is(err, ErrSteamPlayerSummaryLookup) {
 			t.Fatalf("error = %v, want %v", err, ErrSteamPlayerSummaryLookup)
 		}
@@ -409,7 +415,7 @@ func TestST16to22GetSteamUser(t *testing.T) {
 		defer restore()
 		defer restoreKey()
 
-		_, err := GetSteamUser("76500000000000001")
+		_, err := GetSteamUser(testutil.LogContext(context.Background()), "76500000000000001")
 		if err == nil {
 			t.Fatal("expected a decode error")
 		}
@@ -425,7 +431,7 @@ func TestST16to22GetSteamUser(t *testing.T) {
 		defer restore()
 		defer restoreKey()
 
-		_, err := GetSteamUser("76500000000000001")
+		_, err := GetSteamUser(testutil.LogContext(context.Background()), "76500000000000001")
 		if !errors.Is(err, ErrSteamNoPlayers) {
 			t.Fatalf("GetSteamUser() error = %v, want %v", err, ErrSteamNoPlayers)
 		}
@@ -441,7 +447,7 @@ func TestST16to22GetSteamUser(t *testing.T) {
 		defer restore()
 		defer restoreKey()
 
-		_, err := GetSteamUser("76500000000000001")
+		_, err := GetSteamUser(testutil.LogContext(context.Background()), "76500000000000001")
 		if !errors.Is(err, ErrSteamIDMismatch) {
 			t.Fatalf("error = %v, want %v", err, ErrSteamIDMismatch)
 		}
@@ -559,6 +565,38 @@ func TestST26to29ProcessSteamLink(t *testing.T) {
 		_, err := ProcessSteamLink(req, las, user)
 		if !errors.Is(err, ErrPlatformAlreadyLinkedToDifferentAccount) {
 			t.Fatalf("ProcessSteamLink() error = %v, want ErrPlatformAlreadyLinkedToDifferentAccount", err)
+		}
+	})
+}
+
+func TestST30to31RequestContextReachesRequest(t *testing.T) {
+	ctx := context.WithValue(testutil.LogContext(context.Background()), reqctx.UserIDKey, "u1")
+	var got any
+	swapDefaultTransport(t, auRoundTripperFunc(func(r *http.Request) (*http.Response, error) {
+		got = r.Context().Value(reqctx.UserIDKey)
+		return nil, testutil.ErrBoom
+	}))
+
+	t.Run("LKS-74_VerifySteamOpenIDCallback_CtxReachesRequest", func(t *testing.T) {
+		got = nil
+
+		if _, err := VerifySteamOpenIDCallback(ctx, validSteamQuery("76500000000000001")); err == nil {
+			t.Fatal("expected the transport error")
+		}
+		if got != "u1" {
+			t.Errorf("request context user ID = %v, want %q", got, "u1")
+		}
+	})
+
+	t.Run("LKS-75_GetSteamUser_CtxReachesRequest", func(t *testing.T) {
+		got = nil
+		defer setSteamAPIKeyForTest(t, "test-key")()
+
+		if _, err := GetSteamUser(ctx, "76500000000000001"); err == nil {
+			t.Fatal("expected the transport error")
+		}
+		if got != "u1" {
+			t.Errorf("request context user ID = %v, want %q", got, "u1")
 		}
 	})
 }

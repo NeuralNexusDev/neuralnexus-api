@@ -49,35 +49,37 @@ type oaMockAccountService struct {
 
 var _ account.Service = (*oaMockAccountService)(nil)
 
-func (m *oaMockAccountService) AddAccount(a *account.Account) error {
+func (m *oaMockAccountService) AddAccount(_ context.Context, a *account.Account) error {
 	m.AddAccountCalls++
 	if m.AddAccountFunc != nil {
 		return m.AddAccountFunc(a)
 	}
 	return nil
 }
-func (m *oaMockAccountService) GetAccountByID(userID string) (*account.Account, error) {
+func (m *oaMockAccountService) GetAccountByID(_ context.Context, userID string) (*account.Account, error) {
 	m.GetAccountByIDCalls++
 	if m.GetAccountByIDFunc != nil {
 		return m.GetAccountByIDFunc(userID)
 	}
 	return nil, account.ErrNotFound
 }
-func (m *oaMockAccountService) GetAccountByUsername(string) (*account.Account, error) {
+func (m *oaMockAccountService) GetAccountByUsername(context.Context, string) (*account.Account, error) {
 	return nil, account.ErrNotFound
 }
-func (m *oaMockAccountService) GetAccountByEmail(string) (*account.Account, error) {
+func (m *oaMockAccountService) GetAccountByEmail(context.Context, string) (*account.Account, error) {
 	return nil, account.ErrNotFound
 }
-func (m *oaMockAccountService) UpdateAccount(*account.Account) error { return nil }
-func (m *oaMockAccountService) DeleteAccount(userID string) error {
+func (m *oaMockAccountService) UpdateAccount(context.Context, *account.Account) error { return nil }
+func (m *oaMockAccountService) DeleteAccount(_ context.Context, userID string) error {
 	m.DeleteAccountCalls++
 	if m.DeleteAccountFunc != nil {
 		return m.DeleteAccountFunc(userID)
 	}
 	return nil
 }
-func (m *oaMockAccountService) IsPasswordAuthEnabled(string) (bool, error) { return false, nil }
+func (m *oaMockAccountService) IsPasswordAuthEnabled(context.Context, string) (bool, error) {
+	return false, nil
+}
 func (m *oaMockAccountService) NewSession(_ context.Context, a *account.Account, expiresAt int64) (*session.Session, error) {
 	return &session.Session{ID: "stub-session", UserID: a.UserID, Permissions: []string{"stub:perm"}, ExpiresAt: expiresAt}, nil
 }
@@ -93,7 +95,7 @@ type oaMockLinkAccountStore struct {
 
 var _ Store = (*oaMockLinkAccountStore)(nil)
 
-func (m *oaMockLinkAccountStore) AddLinkedAccountToDB(la *LinkedAccount) error {
+func (m *oaMockLinkAccountStore) AddLinkedAccountToDB(_ context.Context, la *LinkedAccount) error {
 	m.AddLinkedAccountToDBCalls++
 	if m.AddLinkedAccountToDBFunc != nil {
 		if err := m.AddLinkedAccountToDBFunc(la); err != nil {
@@ -103,25 +105,29 @@ func (m *oaMockLinkAccountStore) AddLinkedAccountToDB(la *LinkedAccount) error {
 	m.AddedLinkedAccounts = append(m.AddedLinkedAccounts, la)
 	return nil
 }
-func (m *oaMockLinkAccountStore) UpdateLinkedAccount(*LinkedAccount) error { return nil }
-func (m *oaMockLinkAccountStore) GetLinkedAccountByPlatformID(platform Platform, platformID string) (*LinkedAccount, error) {
+func (m *oaMockLinkAccountStore) UpdateLinkedAccount(context.Context, *LinkedAccount) error {
+	return nil
+}
+func (m *oaMockLinkAccountStore) GetLinkedAccountByPlatformID(_ context.Context, platform Platform, platformID string) (*LinkedAccount, error) {
 	m.GetLinkedAccountByPlatformIDCalls++
 	if m.GetLinkedAccountByPlatformIDFunc != nil {
 		return m.GetLinkedAccountByPlatformIDFunc(platform, platformID)
 	}
 	return nil, account.ErrNotFound
 }
-func (m *oaMockLinkAccountStore) GetLinkedAccountByPlatformName(Platform, string) (*LinkedAccount, error) {
+func (m *oaMockLinkAccountStore) GetLinkedAccountByPlatformName(context.Context, Platform, string) (*LinkedAccount, error) {
 	return nil, account.ErrNotFound
 }
-func (m *oaMockLinkAccountStore) GetLinkedAccountByUserID(string, Platform) (*LinkedAccount, error) {
+func (m *oaMockLinkAccountStore) GetLinkedAccountByUserID(context.Context, string, Platform) (*LinkedAccount, error) {
 	return nil, account.ErrNotFound
 }
-func (m *oaMockLinkAccountStore) GetLinkedAccountsByUserID(string) ([]*LinkedAccount, error) {
+func (m *oaMockLinkAccountStore) GetLinkedAccountsByUserID(context.Context, string) ([]*LinkedAccount, error) {
 	return nil, nil
 }
-func (m *oaMockLinkAccountStore) DeleteLinkedAccount(string, Platform) error { return nil }
-func (m *oaMockLinkAccountStore) SetLinkedAccountLoginEnabled(string, Platform, bool) error {
+func (m *oaMockLinkAccountStore) DeleteLinkedAccount(context.Context, string, Platform) error {
+	return nil
+}
+func (m *oaMockLinkAccountStore) SetLinkedAccountLoginEnabled(context.Context, string, Platform, bool) error {
 	return nil
 }
 
@@ -132,25 +138,25 @@ type oaMockSessionService struct {
 
 var _ session.Service = (*oaMockSessionService)(nil)
 
-func (m *oaMockSessionService) AddSession(session *session.Session) error {
+func (m *oaMockSessionService) AddSession(_ context.Context, session *session.Session) error {
 	m.AddSessionCalls++
 	if m.AddSessionFunc != nil {
 		return m.AddSessionFunc(session)
 	}
 	return nil
 }
-func (m *oaMockSessionService) GetSession(string) (*session.Session, error) {
+func (m *oaMockSessionService) GetSession(context.Context, string) (*session.Session, error) {
 	return nil, account.ErrNotFound
 }
-func (m *oaMockSessionService) UpdateSession(*session.Session) error       { return nil }
-func (m *oaMockSessionService) DeleteSession(string) error                 { return nil }
-func (m *oaMockSessionService) CreateJWT(*session.Session) (string, error) { return "", nil }
-func (m *oaMockSessionService) ReadJWT(string) (*session.Session, error) {
+func (m *oaMockSessionService) UpdateSession(context.Context, *session.Session) error { return nil }
+func (m *oaMockSessionService) DeleteSession(context.Context, string) error           { return nil }
+func (m *oaMockSessionService) CreateJWT(*session.Session) (string, error)            { return "", nil }
+func (m *oaMockSessionService) ReadJWT(context.Context, string) (*session.Session, error) {
 	return nil, account.ErrNotFound
 }
 
 func oaRequestWithSession(session *session.Session) *http.Request {
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := testutil.NewRequest(http.MethodGet, "/", nil)
 	if session == nil {
 		return req
 	}
@@ -332,7 +338,7 @@ func TestOA01to04ExtCodeForToken(t *testing.T) {
 		defer ts.Close()
 		config := &oauth2.Config{Endpoint: oauth2.Endpoint{TokenURL: ts.URL, AuthStyle: oauth2.AuthStyleInHeader}}
 
-		got, err := ExtCodeForToken(config, "code")
+		got, err := ExtCodeForToken(context.Background(), config, "code")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -349,7 +355,7 @@ func TestOA01to04ExtCodeForToken(t *testing.T) {
 		defer ts.Close()
 		config := &oauth2.Config{Endpoint: oauth2.Endpoint{TokenURL: ts.URL, AuthStyle: oauth2.AuthStyleInHeader}}
 
-		got, err := ExtCodeForToken(config, "code")
+		got, err := ExtCodeForToken(context.Background(), config, "code")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -363,7 +369,7 @@ func TestOA01to04ExtCodeForToken(t *testing.T) {
 		defer ts.Close()
 		config := &oauth2.Config{Endpoint: oauth2.Endpoint{TokenURL: ts.URL, AuthStyle: oauth2.AuthStyleInHeader}}
 
-		got, err := ExtCodeForToken(config, "bad-code")
+		got, err := ExtCodeForToken(context.Background(), config, "bad-code")
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -377,7 +383,7 @@ func TestOA01to04ExtCodeForToken(t *testing.T) {
 		defer ts.Close()
 		config := &oauth2.Config{Endpoint: oauth2.Endpoint{TokenURL: ts.URL, AuthStyle: oauth2.AuthStyleInHeader}}
 
-		_, err := ExtCodeForToken(config, "code")
+		_, err := ExtCodeForToken(context.Background(), config, "code")
 		if !errors.Is(err, ErrNoScopeInToken) {
 			t.Fatalf("ExtCodeForToken() error = %v, want %v", err, ErrNoScopeInToken)
 		}
@@ -394,7 +400,7 @@ func TestOA05to08RefreshToken(t *testing.T) {
 		defer ts.Close()
 		config := &oauth2.Config{Endpoint: oauth2.Endpoint{TokenURL: ts.URL, AuthStyle: oauth2.AuthStyleInHeader}}
 
-		got, err := RefreshToken(config, expiredToken())
+		got, err := RefreshToken(context.Background(), config, expiredToken())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -408,7 +414,7 @@ func TestOA05to08RefreshToken(t *testing.T) {
 		defer ts.Close()
 		config := &oauth2.Config{Endpoint: oauth2.Endpoint{TokenURL: ts.URL, AuthStyle: oauth2.AuthStyleInHeader}}
 
-		got, err := RefreshToken(config, expiredToken())
+		got, err := RefreshToken(context.Background(), config, expiredToken())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -422,7 +428,7 @@ func TestOA05to08RefreshToken(t *testing.T) {
 		defer ts.Close()
 		config := &oauth2.Config{Endpoint: oauth2.Endpoint{TokenURL: ts.URL, AuthStyle: oauth2.AuthStyleInHeader}}
 
-		got, err := RefreshToken(config, expiredToken())
+		got, err := RefreshToken(context.Background(), config, expiredToken())
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -436,7 +442,7 @@ func TestOA05to08RefreshToken(t *testing.T) {
 		defer ts.Close()
 		config := &oauth2.Config{Endpoint: oauth2.Endpoint{TokenURL: ts.URL, AuthStyle: oauth2.AuthStyleInHeader}}
 
-		_, err := RefreshToken(config, expiredToken())
+		_, err := RefreshToken(context.Background(), config, expiredToken())
 		if !errors.Is(err, ErrNoScopeInToken) {
 			t.Fatalf("RefreshToken() error = %v, want %v", err, ErrNoScopeInToken)
 		}
@@ -571,7 +577,7 @@ func TestOA09to16ProcessOAuthLogin(t *testing.T) {
 		las := &oaMockLinkAccountStore{}
 		ss := &oaMockSessionService{}
 
-		_, err := ProcessOAuthLogin(context.Background(), as, las, ss, "code", &OAuthState{Platform: PlatformMinecraft, Mode: ModeLogin})
+		_, err := ProcessOAuthLogin(testutil.LogContext(context.Background()), as, las, ss, "code", &OAuthState{Platform: PlatformMinecraft, Mode: ModeLogin})
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -702,7 +708,7 @@ func TestOA17to26and83ResolveOrCreateAccountForPlatformUser(t *testing.T) {
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{}
 
-		got, err := resolveOrCreateAccountForPlatformUser(as, las, PlatformDiscord, user)
+		got, err := resolveOrCreateAccountForPlatformUser(context.Background(), as, las, PlatformDiscord, user)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -723,7 +729,7 @@ func TestOA17to26and83ResolveOrCreateAccountForPlatformUser(t *testing.T) {
 			},
 		}
 
-		got, err := resolveOrCreateAccountForPlatformUser(as, las, PlatformDiscord, user)
+		got, err := resolveOrCreateAccountForPlatformUser(context.Background(), as, las, PlatformDiscord, user)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -740,7 +746,7 @@ func TestOA17to26and83ResolveOrCreateAccountForPlatformUser(t *testing.T) {
 			},
 		}
 
-		_, err := resolveOrCreateAccountForPlatformUser(as, las, PlatformDiscord, user)
+		_, err := resolveOrCreateAccountForPlatformUser(context.Background(), as, las, PlatformDiscord, user)
 		if !errors.Is(err, ErrPlatformLoginDisabled) {
 			t.Fatalf("error = %v, want ErrPlatformLoginDisabled", err)
 		}
@@ -751,7 +757,7 @@ func TestOA17to26and83ResolveOrCreateAccountForPlatformUser(t *testing.T) {
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{GetLinkedAccountByPlatformIDFunc: func(Platform, string) (*LinkedAccount, error) { return nil, wantErr }}
 
-		_, err := resolveOrCreateAccountForPlatformUser(as, las, PlatformDiscord, user)
+		_, err := resolveOrCreateAccountForPlatformUser(context.Background(), as, las, PlatformDiscord, user)
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("error = %v, want %v", err, wantErr)
 		}
@@ -762,7 +768,7 @@ func TestOA17to26and83ResolveOrCreateAccountForPlatformUser(t *testing.T) {
 		as := &oaMockAccountService{AddAccountFunc: func(*account.Account) error { return wantErr }}
 		las := &oaMockLinkAccountStore{}
 
-		_, err := resolveOrCreateAccountForPlatformUser(as, las, PlatformDiscord, user)
+		_, err := resolveOrCreateAccountForPlatformUser(context.Background(), as, las, PlatformDiscord, user)
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("error = %v, want %v", err, wantErr)
 		}
@@ -776,7 +782,7 @@ func TestOA17to26and83ResolveOrCreateAccountForPlatformUser(t *testing.T) {
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*LinkedAccount) error { return wantErr }}
 
-		_, err := resolveOrCreateAccountForPlatformUser(as, las, PlatformDiscord, user)
+		_, err := resolveOrCreateAccountForPlatformUser(context.Background(), as, las, PlatformDiscord, user)
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("error = %v, want %v", err, wantErr)
 		}
@@ -791,7 +797,7 @@ func TestOA17to26and83ResolveOrCreateAccountForPlatformUser(t *testing.T) {
 		as := &oaMockAccountService{DeleteAccountFunc: func(string) error { return cleanupErr }}
 		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*LinkedAccount) error { return linkErr }}
 
-		_, err := resolveOrCreateAccountForPlatformUser(as, las, PlatformDiscord, user)
+		_, err := resolveOrCreateAccountForPlatformUser(testutil.LogContext(context.Background()), as, las, PlatformDiscord, user)
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -820,7 +826,7 @@ func TestOA17to26and83ResolveOrCreateAccountForPlatformUser(t *testing.T) {
 			},
 		}
 
-		got, err := resolveOrCreateAccountForPlatformUser(as, las, PlatformDiscord, user)
+		got, err := resolveOrCreateAccountForPlatformUser(context.Background(), as, las, PlatformDiscord, user)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -847,7 +853,7 @@ func TestOA17to26and83ResolveOrCreateAccountForPlatformUser(t *testing.T) {
 			},
 		}
 
-		_, err := resolveOrCreateAccountForPlatformUser(as, las, PlatformDiscord, user)
+		_, err := resolveOrCreateAccountForPlatformUser(context.Background(), as, las, PlatformDiscord, user)
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("error = %v, want %v", err, wantErr)
 		}
@@ -868,7 +874,7 @@ func TestOA17to26and83ResolveOrCreateAccountForPlatformUser(t *testing.T) {
 			},
 		}
 
-		_, err := resolveOrCreateAccountForPlatformUser(as, las, PlatformDiscord, user)
+		_, err := resolveOrCreateAccountForPlatformUser(context.Background(), as, las, PlatformDiscord, user)
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("error = %v, want %v", err, wantErr)
 		}
@@ -878,7 +884,7 @@ func TestOA17to26and83ResolveOrCreateAccountForPlatformUser(t *testing.T) {
 		as := &oaMockAccountService{DeleteAccountFunc: func(string) error { return testutil.ErrBoom }}
 		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*LinkedAccount) error { return testutil.ErrInsertFailed }}
 
-		_, err := resolveOrCreateAccountForPlatformUser(as, las, PlatformDiscord, user)
+		_, err := resolveOrCreateAccountForPlatformUser(testutil.LogContext(context.Background()), as, las, PlatformDiscord, user)
 		if !errors.Is(err, testutil.ErrBoom) {
 			t.Errorf("error = %v, want the cleanup error %v", err, testutil.ErrBoom)
 		}
@@ -1264,7 +1270,7 @@ func TestOA43to55ResolveOrCreateAccountForMicrosoftUser(t *testing.T) {
 		as := &oaMockAccountService{}
 		las := notFoundStore()
 
-		got, err := resolveOrCreateAccountForMicrosoftUser(as, las, xbox, java)
+		got, err := resolveOrCreateAccountForMicrosoftUser(context.Background(), as, las, xbox, java)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1280,7 +1286,7 @@ func TestOA43to55ResolveOrCreateAccountForMicrosoftUser(t *testing.T) {
 		as := &oaMockAccountService{}
 		las := notFoundStore()
 
-		got, err := resolveOrCreateAccountForMicrosoftUser(as, las, xbox, nil)
+		got, err := resolveOrCreateAccountForMicrosoftUser(context.Background(), as, las, xbox, nil)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1304,7 +1310,7 @@ func TestOA43to55ResolveOrCreateAccountForMicrosoftUser(t *testing.T) {
 			},
 		}
 
-		got, err := resolveOrCreateAccountForMicrosoftUser(as, las, xbox, nil)
+		got, err := resolveOrCreateAccountForMicrosoftUser(context.Background(), as, las, xbox, nil)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1328,7 +1334,7 @@ func TestOA43to55ResolveOrCreateAccountForMicrosoftUser(t *testing.T) {
 			},
 		}
 
-		got, err := resolveOrCreateAccountForMicrosoftUser(as, las, xbox, java)
+		got, err := resolveOrCreateAccountForMicrosoftUser(context.Background(), as, las, xbox, java)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1349,7 +1355,7 @@ func TestOA43to55ResolveOrCreateAccountForMicrosoftUser(t *testing.T) {
 			},
 		}
 
-		got, err := resolveOrCreateAccountForMicrosoftUser(as, las, xbox, java)
+		got, err := resolveOrCreateAccountForMicrosoftUser(context.Background(), as, las, xbox, java)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1372,7 +1378,7 @@ func TestOA43to55ResolveOrCreateAccountForMicrosoftUser(t *testing.T) {
 			},
 		}
 
-		_, err := resolveOrCreateAccountForMicrosoftUser(as, las, xbox, java)
+		_, err := resolveOrCreateAccountForMicrosoftUser(context.Background(), as, las, xbox, java)
 		if !errors.Is(err, ErrConflictingMicrosoftIdentities) {
 			t.Fatalf("error = %v, want ErrConflictingMicrosoftIdentities", err)
 		}
@@ -1389,7 +1395,7 @@ func TestOA43to55ResolveOrCreateAccountForMicrosoftUser(t *testing.T) {
 			},
 		}
 
-		_, err := resolveOrCreateAccountForMicrosoftUser(as, las, xbox, nil)
+		_, err := resolveOrCreateAccountForMicrosoftUser(context.Background(), as, las, xbox, nil)
 		if !errors.Is(err, ErrPlatformLoginDisabled) {
 			t.Fatalf("error = %v, want ErrPlatformLoginDisabled", err)
 		}
@@ -1407,7 +1413,7 @@ func TestOA43to55ResolveOrCreateAccountForMicrosoftUser(t *testing.T) {
 			},
 		}
 
-		got, err := resolveOrCreateAccountForMicrosoftUser(as, las, xbox, java)
+		got, err := resolveOrCreateAccountForMicrosoftUser(context.Background(), as, las, xbox, java)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1428,7 +1434,7 @@ func TestOA43to55ResolveOrCreateAccountForMicrosoftUser(t *testing.T) {
 			},
 		}
 
-		_, err := resolveOrCreateAccountForMicrosoftUser(as, las, xbox, nil)
+		_, err := resolveOrCreateAccountForMicrosoftUser(context.Background(), as, las, xbox, nil)
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("error = %v, want %v", err, wantErr)
 		}
@@ -1446,7 +1452,7 @@ func TestOA43to55ResolveOrCreateAccountForMicrosoftUser(t *testing.T) {
 			},
 		}
 
-		_, err := resolveOrCreateAccountForMicrosoftUser(as, las, xbox, java)
+		_, err := resolveOrCreateAccountForMicrosoftUser(context.Background(), as, las, xbox, java)
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("error = %v, want %v", err, wantErr)
 		}
@@ -1457,7 +1463,7 @@ func TestOA43to55ResolveOrCreateAccountForMicrosoftUser(t *testing.T) {
 		as := &oaMockAccountService{AddAccountFunc: func(*account.Account) error { return wantErr }}
 		las := notFoundStore()
 
-		_, err := resolveOrCreateAccountForMicrosoftUser(as, las, xbox, nil)
+		_, err := resolveOrCreateAccountForMicrosoftUser(context.Background(), as, las, xbox, nil)
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("error = %v, want %v", err, wantErr)
 		}
@@ -1475,7 +1481,7 @@ func TestOA43to55ResolveOrCreateAccountForMicrosoftUser(t *testing.T) {
 			},
 		}
 
-		_, err := resolveOrCreateAccountForMicrosoftUser(as, las, xbox, nil)
+		_, err := resolveOrCreateAccountForMicrosoftUser(context.Background(), as, las, xbox, nil)
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("error = %v, want %v", err, wantErr)
 		}
@@ -1489,7 +1495,7 @@ func TestOA43to55ResolveOrCreateAccountForMicrosoftUser(t *testing.T) {
 			AddLinkedAccountToDBFunc:         func(*LinkedAccount) error { return wantErr },
 		}
 
-		_, err := resolveOrCreateAccountForMicrosoftUser(as, las, xbox, nil)
+		_, err := resolveOrCreateAccountForMicrosoftUser(context.Background(), as, las, xbox, nil)
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("error = %v, want %v", err, wantErr)
 		}
@@ -1504,7 +1510,7 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{}
 
-		gotAccount, gotIsNew, err := ensureMicrosoftIdentityLinked(as, las, acct, true, PlatformXboxLive, xbox)
+		gotAccount, gotIsNew, err := ensureMicrosoftIdentityLinked(context.Background(), as, las, acct, true, PlatformXboxLive, xbox)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1518,7 +1524,7 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*LinkedAccount) error { return wantErr }}
 
-		_, _, err := ensureMicrosoftIdentityLinked(as, las, acct, true, PlatformXboxLive, xbox)
+		_, _, err := ensureMicrosoftIdentityLinked(context.Background(), as, las, acct, true, PlatformXboxLive, xbox)
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("error = %v, want %v", err, wantErr)
 		}
@@ -1532,7 +1538,7 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*LinkedAccount) error { return wantErr }}
 
-		_, _, err := ensureMicrosoftIdentityLinked(as, las, acct, false, PlatformXboxLive, xbox)
+		_, _, err := ensureMicrosoftIdentityLinked(context.Background(), as, las, acct, false, PlatformXboxLive, xbox)
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("error = %v, want %v", err, wantErr)
 		}
@@ -1547,7 +1553,7 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 		as := &oaMockAccountService{DeleteAccountFunc: func(string) error { return cleanupErr }}
 		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*LinkedAccount) error { return linkErr }}
 
-		_, _, err := ensureMicrosoftIdentityLinked(as, las, acct, true, PlatformXboxLive, xbox)
+		_, _, err := ensureMicrosoftIdentityLinked(testutil.LogContext(context.Background()), as, las, acct, true, PlatformXboxLive, xbox)
 		if !errors.Is(err, cleanupErr) {
 			t.Errorf("error = %v, want the cleanup error %v", err, cleanupErr)
 		}
@@ -1562,7 +1568,7 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 			},
 		}
 
-		gotAccount, gotIsNew, err := ensureMicrosoftIdentityLinked(as, las, acct, true, PlatformXboxLive, xbox)
+		gotAccount, gotIsNew, err := ensureMicrosoftIdentityLinked(context.Background(), as, las, acct, true, PlatformXboxLive, xbox)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1582,7 +1588,7 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 			GetLinkedAccountByPlatformIDFunc: func(Platform, string) (*LinkedAccount, error) { return nil, wantErr },
 		}
 
-		_, _, err := ensureMicrosoftIdentityLinked(as, las, acct, true, PlatformXboxLive, xbox)
+		_, _, err := ensureMicrosoftIdentityLinked(context.Background(), as, las, acct, true, PlatformXboxLive, xbox)
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("error = %v, want %v", err, wantErr)
 		}
@@ -1598,7 +1604,7 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 			GetLinkedAccountByPlatformIDFunc: func(Platform, string) (*LinkedAccount, error) { return nil, account.ErrNotFound },
 		}
 
-		_, _, err := ensureMicrosoftIdentityLinked(as, las, acct, false, PlatformXboxLive, xbox)
+		_, _, err := ensureMicrosoftIdentityLinked(context.Background(), as, las, acct, false, PlatformXboxLive, xbox)
 		if !errors.Is(err, ErrConflictingMicrosoftIdentities) {
 			t.Fatalf("error = %v, want ErrConflictingMicrosoftIdentities", err)
 		}
@@ -1613,7 +1619,7 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 			GetLinkedAccountByPlatformIDFunc: func(Platform, string) (*LinkedAccount, error) { return nil, lookupErr },
 		}
 
-		_, _, err := ensureMicrosoftIdentityLinked(as, las, acct, true, PlatformXboxLive, xbox)
+		_, _, err := ensureMicrosoftIdentityLinked(testutil.LogContext(context.Background()), as, las, acct, true, PlatformXboxLive, xbox)
 		if !errors.Is(err, cleanupErr) {
 			t.Errorf("error = %v, want the cleanup error %v", err, cleanupErr)
 		}
@@ -1628,7 +1634,7 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 			},
 		}
 
-		_, _, err := ensureMicrosoftIdentityLinked(as, las, acct, false, PlatformXboxLive, xbox)
+		_, _, err := ensureMicrosoftIdentityLinked(context.Background(), as, las, acct, false, PlatformXboxLive, xbox)
 		if !errors.Is(err, ErrConflictingMicrosoftIdentities) {
 			t.Fatalf("error = %v, want ErrConflictingMicrosoftIdentities", err)
 		}
@@ -1649,7 +1655,7 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 			},
 		}
 
-		gotAccount, gotIsNew, err := ensureMicrosoftIdentityLinked(as, las, acct, true, PlatformXboxLive, xbox)
+		gotAccount, gotIsNew, err := ensureMicrosoftIdentityLinked(context.Background(), as, las, acct, true, PlatformXboxLive, xbox)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1671,7 +1677,7 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 			},
 		}
 
-		_, _, err := ensureMicrosoftIdentityLinked(as, las, acct, true, PlatformXboxLive, xbox)
+		_, _, err := ensureMicrosoftIdentityLinked(testutil.LogContext(context.Background()), as, las, acct, true, PlatformXboxLive, xbox)
 		if !errors.Is(err, cleanupErr) {
 			t.Fatalf("error = %v, want the cleanup error %v", err, cleanupErr)
 		}
@@ -1687,7 +1693,7 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 			},
 		}
 
-		_, _, err := ensureMicrosoftIdentityLinked(as, las, acct, true, PlatformXboxLive, xbox)
+		_, _, err := ensureMicrosoftIdentityLinked(context.Background(), as, las, acct, true, PlatformXboxLive, xbox)
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("error = %v, want %v", err, wantErr)
 		}
@@ -1697,7 +1703,7 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 		as := &oaMockAccountService{DeleteAccountFunc: func(string) error { return testutil.ErrBoom }}
 		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*LinkedAccount) error { return testutil.ErrInsertFailed }}
 
-		_, _, err := ensureMicrosoftIdentityLinked(as, las, acct, true, PlatformXboxLive, xbox)
+		_, _, err := ensureMicrosoftIdentityLinked(testutil.LogContext(context.Background()), as, las, acct, true, PlatformXboxLive, xbox)
 		if !errors.Is(err, testutil.ErrBoom) {
 			t.Errorf("error = %v, want the cleanup error %v", err, testutil.ErrBoom)
 		}
@@ -1710,7 +1716,7 @@ func TestOA67to71and85LinkPlatformUserToSession(t *testing.T) {
 	t.Run("OA-67_NotYetLinked", func(t *testing.T) {
 		las := &oaMockLinkAccountStore{}
 
-		err := linkPlatformUserToSession(las, "user-1", PlatformDiscord, user)
+		err := linkPlatformUserToSession(context.Background(), las, "user-1", PlatformDiscord, user)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1726,7 +1732,7 @@ func TestOA67to71and85LinkPlatformUserToSession(t *testing.T) {
 			},
 		}
 
-		err := linkPlatformUserToSession(las, "user-1", PlatformDiscord, user)
+		err := linkPlatformUserToSession(context.Background(), las, "user-1", PlatformDiscord, user)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1742,7 +1748,7 @@ func TestOA67to71and85LinkPlatformUserToSession(t *testing.T) {
 			},
 		}
 
-		err := linkPlatformUserToSession(las, "user-1", PlatformDiscord, user)
+		err := linkPlatformUserToSession(context.Background(), las, "user-1", PlatformDiscord, user)
 		if !errors.Is(err, ErrPlatformAlreadyLinkedToDifferentAccount) {
 			t.Fatalf("error = %v, want ErrPlatformAlreadyLinkedToDifferentAccount", err)
 		}
@@ -1752,7 +1758,7 @@ func TestOA67to71and85LinkPlatformUserToSession(t *testing.T) {
 		wantErr := testutil.ErrDBDown
 		las := &oaMockLinkAccountStore{GetLinkedAccountByPlatformIDFunc: func(Platform, string) (*LinkedAccount, error) { return nil, wantErr }}
 
-		err := linkPlatformUserToSession(las, "user-1", PlatformDiscord, user)
+		err := linkPlatformUserToSession(context.Background(), las, "user-1", PlatformDiscord, user)
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("error = %v, want %v", err, wantErr)
 		}
@@ -1761,7 +1767,7 @@ func TestOA67to71and85LinkPlatformUserToSession(t *testing.T) {
 	t.Run("OA-71_AddLinkedAccountFails", func(t *testing.T) {
 		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*LinkedAccount) error { return testutil.ErrInsertFailed }}
 
-		err := linkPlatformUserToSession(las, "user-1", PlatformDiscord, user)
+		err := linkPlatformUserToSession(testutil.LogContext(context.Background()), las, "user-1", PlatformDiscord, user)
 		if !errors.Is(err, ErrLinkAccountFailed) {
 			t.Fatalf("error = %v, want %v", err, ErrLinkAccountFailed)
 		}
@@ -1770,7 +1776,7 @@ func TestOA67to71and85LinkPlatformUserToSession(t *testing.T) {
 	t.Run("OA-85_AddLinkedAccountAlreadyLinked", func(t *testing.T) {
 		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*LinkedAccount) error { return ErrAlreadyLinked }}
 
-		err := linkPlatformUserToSession(las, "user-1", PlatformDiscord, user)
+		err := linkPlatformUserToSession(testutil.LogContext(context.Background()), las, "user-1", PlatformDiscord, user)
 		if !errors.Is(err, ErrLinkAccountFailed) {
 			t.Fatalf("error = %v, want %v", err, ErrLinkAccountFailed)
 		}
@@ -1795,13 +1801,13 @@ func newOAConcurrentAccountService() *oaConcurrentAccountService {
 	return &oaConcurrentAccountService{accounts: map[string]*account.Account{}}
 }
 
-func (m *oaConcurrentAccountService) AddAccount(a *account.Account) error {
+func (m *oaConcurrentAccountService) AddAccount(_ context.Context, a *account.Account) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.accounts[a.UserID] = a
 	return nil
 }
-func (m *oaConcurrentAccountService) GetAccountByID(userID string) (*account.Account, error) {
+func (m *oaConcurrentAccountService) GetAccountByID(_ context.Context, userID string) (*account.Account, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	a, ok := m.accounts[userID]
@@ -1810,25 +1816,27 @@ func (m *oaConcurrentAccountService) GetAccountByID(userID string) (*account.Acc
 	}
 	return a, nil
 }
-func (m *oaConcurrentAccountService) GetAccountByUsername(string) (*account.Account, error) {
+func (m *oaConcurrentAccountService) GetAccountByUsername(context.Context, string) (*account.Account, error) {
 	return nil, account.ErrNotFound
 }
-func (m *oaConcurrentAccountService) GetAccountByEmail(string) (*account.Account, error) {
+func (m *oaConcurrentAccountService) GetAccountByEmail(context.Context, string) (*account.Account, error) {
 	return nil, account.ErrNotFound
 }
-func (m *oaConcurrentAccountService) UpdateAccount(a *account.Account) error {
+func (m *oaConcurrentAccountService) UpdateAccount(_ context.Context, a *account.Account) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.accounts[a.UserID] = a
 	return nil
 }
-func (m *oaConcurrentAccountService) DeleteAccount(userID string) error {
+func (m *oaConcurrentAccountService) DeleteAccount(_ context.Context, userID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.accounts, userID)
 	return nil
 }
-func (m *oaConcurrentAccountService) IsPasswordAuthEnabled(string) (bool, error) { return false, nil }
+func (m *oaConcurrentAccountService) IsPasswordAuthEnabled(context.Context, string) (bool, error) {
+	return false, nil
+}
 func (m *oaConcurrentAccountService) NewSession(_ context.Context, a *account.Account, expiresAt int64) (*session.Session, error) {
 	return &session.Session{ID: "stub-session", UserID: a.UserID, Permissions: []string{"stub:perm"}, ExpiresAt: expiresAt}, nil
 }
@@ -1854,7 +1862,7 @@ func newOAConcurrentLinkAccountStore() *oaConcurrentLinkAccountStore {
 	return &oaConcurrentLinkAccountStore{byKey: map[string]*LinkedAccount{}}
 }
 
-func (m *oaConcurrentLinkAccountStore) AddLinkedAccountToDB(la *LinkedAccount) error {
+func (m *oaConcurrentLinkAccountStore) AddLinkedAccountToDB(_ context.Context, la *LinkedAccount) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	key := oaLinkKey(la.Platform, la.PlatformID)
@@ -1864,8 +1872,10 @@ func (m *oaConcurrentLinkAccountStore) AddLinkedAccountToDB(la *LinkedAccount) e
 	m.byKey[key] = la
 	return nil
 }
-func (m *oaConcurrentLinkAccountStore) UpdateLinkedAccount(*LinkedAccount) error { return nil }
-func (m *oaConcurrentLinkAccountStore) GetLinkedAccountByPlatformID(platform Platform, platformID string) (*LinkedAccount, error) {
+func (m *oaConcurrentLinkAccountStore) UpdateLinkedAccount(context.Context, *LinkedAccount) error {
+	return nil
+}
+func (m *oaConcurrentLinkAccountStore) GetLinkedAccountByPlatformID(_ context.Context, platform Platform, platformID string) (*LinkedAccount, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	la, ok := m.byKey[oaLinkKey(platform, platformID)]
@@ -1874,17 +1884,19 @@ func (m *oaConcurrentLinkAccountStore) GetLinkedAccountByPlatformID(platform Pla
 	}
 	return la, nil
 }
-func (m *oaConcurrentLinkAccountStore) GetLinkedAccountByPlatformName(Platform, string) (*LinkedAccount, error) {
+func (m *oaConcurrentLinkAccountStore) GetLinkedAccountByPlatformName(context.Context, Platform, string) (*LinkedAccount, error) {
 	return nil, account.ErrNotFound
 }
-func (m *oaConcurrentLinkAccountStore) GetLinkedAccountByUserID(string, Platform) (*LinkedAccount, error) {
+func (m *oaConcurrentLinkAccountStore) GetLinkedAccountByUserID(context.Context, string, Platform) (*LinkedAccount, error) {
 	return nil, account.ErrNotFound
 }
-func (m *oaConcurrentLinkAccountStore) GetLinkedAccountsByUserID(string) ([]*LinkedAccount, error) {
+func (m *oaConcurrentLinkAccountStore) GetLinkedAccountsByUserID(context.Context, string) ([]*LinkedAccount, error) {
 	return nil, nil
 }
-func (m *oaConcurrentLinkAccountStore) DeleteLinkedAccount(string, Platform) error { return nil }
-func (m *oaConcurrentLinkAccountStore) SetLinkedAccountLoginEnabled(string, Platform, bool) error {
+func (m *oaConcurrentLinkAccountStore) DeleteLinkedAccount(context.Context, string, Platform) error {
+	return nil
+}
+func (m *oaConcurrentLinkAccountStore) SetLinkedAccountLoginEnabled(context.Context, string, Platform, bool) error {
 	return nil
 }
 
@@ -1903,7 +1915,7 @@ func TestOA72ResolveOrCreateAccountForPlatformUserConcurrentRace(t *testing.T) {
 			i := i
 			go func() {
 				defer wg.Done()
-				results[i], errs[i] = resolveOrCreateAccountForPlatformUser(as, las, PlatformDiscord, user)
+				results[i], errs[i] = resolveOrCreateAccountForPlatformUser(context.Background(), as, las, PlatformDiscord, user)
 			}()
 		}
 		wg.Wait()
@@ -1933,8 +1945,8 @@ func TestOA73And74EnsureMicrosoftIdentityLinkedConcurrentRace(t *testing.T) {
 
 		placeholderA := &account.Account{UserID: "placeholder-a"}
 		placeholderB := &account.Account{UserID: "placeholder-b"}
-		_ = as.AddAccount(placeholderA)
-		_ = as.AddAccount(placeholderB)
+		_ = as.AddAccount(context.Background(), placeholderA)
+		_ = as.AddAccount(context.Background(), placeholderB)
 
 		var wg sync.WaitGroup
 		var resultA, resultB *account.Account
@@ -1942,11 +1954,11 @@ func TestOA73And74EnsureMicrosoftIdentityLinkedConcurrentRace(t *testing.T) {
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
-			resultA, _, errA = ensureMicrosoftIdentityLinked(as, las, placeholderA, true, PlatformXboxLive, xbox)
+			resultA, _, errA = ensureMicrosoftIdentityLinked(context.Background(), as, las, placeholderA, true, PlatformXboxLive, xbox)
 		}()
 		go func() {
 			defer wg.Done()
-			resultB, _, errB = ensureMicrosoftIdentityLinked(as, las, placeholderB, true, PlatformXboxLive, xbox)
+			resultB, _, errB = ensureMicrosoftIdentityLinked(context.Background(), as, las, placeholderB, true, PlatformXboxLive, xbox)
 		}()
 		wg.Wait()
 
@@ -1971,8 +1983,8 @@ func TestOA73And74EnsureMicrosoftIdentityLinkedConcurrentRace(t *testing.T) {
 
 		existingAccount := &account.Account{UserID: "existing-account"}
 		freshPlaceholder := &account.Account{UserID: "fresh-placeholder"}
-		_ = as.AddAccount(existingAccount)
-		_ = as.AddAccount(freshPlaceholder)
+		_ = as.AddAccount(context.Background(), existingAccount)
+		_ = as.AddAccount(context.Background(), freshPlaceholder)
 
 		var wg sync.WaitGroup
 		var resultA, resultB *account.Account
@@ -1980,15 +1992,15 @@ func TestOA73And74EnsureMicrosoftIdentityLinkedConcurrentRace(t *testing.T) {
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
-			resultA, _, errA = ensureMicrosoftIdentityLinked(as, las, existingAccount, false, PlatformXboxLive, xbox)
+			resultA, _, errA = ensureMicrosoftIdentityLinked(context.Background(), as, las, existingAccount, false, PlatformXboxLive, xbox)
 		}()
 		go func() {
 			defer wg.Done()
-			resultB, _, errB = ensureMicrosoftIdentityLinked(as, las, freshPlaceholder, true, PlatformXboxLive, xbox)
+			resultB, _, errB = ensureMicrosoftIdentityLinked(context.Background(), as, las, freshPlaceholder, true, PlatformXboxLive, xbox)
 		}()
 		wg.Wait()
 
-		if _, err := as.GetAccountByID(existingAccount.UserID); err != nil {
+		if _, err := as.GetAccountByID(context.Background(), existingAccount.UserID); err != nil {
 			t.Fatalf("existing-account was deleted (or is missing) after the race: %v", err)
 		}
 
@@ -2000,7 +2012,7 @@ func TestOA73And74EnsureMicrosoftIdentityLinkedConcurrentRace(t *testing.T) {
 			if resultB.UserID != existingAccount.UserID {
 				t.Errorf("B converged on %s, want the existing account %s", resultB.UserID, existingAccount.UserID)
 			}
-			if _, err := as.GetAccountByID(freshPlaceholder.UserID); !errors.Is(err, account.ErrNotFound) {
+			if _, err := as.GetAccountByID(context.Background(), freshPlaceholder.UserID); !errors.Is(err, account.ErrNotFound) {
 				t.Errorf("expected B's placeholder to have been deleted after losing, got err=%v", err)
 			}
 			if got := as.count(); got != 1 {
@@ -2013,7 +2025,7 @@ func TestOA73And74EnsureMicrosoftIdentityLinkedConcurrentRace(t *testing.T) {
 			if resultB.UserID != freshPlaceholder.UserID {
 				t.Errorf("B resolved to %s, want its own account %s", resultB.UserID, freshPlaceholder.UserID)
 			}
-			if _, err := as.GetAccountByID(freshPlaceholder.UserID); err != nil {
+			if _, err := as.GetAccountByID(context.Background(), freshPlaceholder.UserID); err != nil {
 				t.Errorf("B's account should still exist: %v", err)
 			}
 			if got := as.count(); got != 2 {
@@ -2041,7 +2053,7 @@ func TestOA75ResolveOrCreateAccountForMicrosoftUserConcurrentRace(t *testing.T) 
 			i := i
 			go func() {
 				defer wg.Done()
-				results[i], errs[i] = resolveOrCreateAccountForMicrosoftUser(as, las, xbox, java)
+				results[i], errs[i] = resolveOrCreateAccountForMicrosoftUser(context.Background(), as, las, xbox, java)
 			}()
 		}
 		wg.Wait()
@@ -2058,11 +2070,11 @@ func TestOA75ResolveOrCreateAccountForMicrosoftUserConcurrentRace(t *testing.T) 
 			t.Errorf("account store has %d accounts after the race, want exactly 1", got)
 		}
 
-		xboxLink, err := las.GetLinkedAccountByPlatformID(PlatformXboxLive, xbox.XUID)
+		xboxLink, err := las.GetLinkedAccountByPlatformID(context.Background(), PlatformXboxLive, xbox.XUID)
 		if err != nil || xboxLink.UserID != results[0].UserID {
 			t.Errorf("xbox link = %+v (err=%v), want it linked to %s", xboxLink, err, results[0].UserID)
 		}
-		javaLink, err := las.GetLinkedAccountByPlatformID(PlatformMinecraft, java.ID.String())
+		javaLink, err := las.GetLinkedAccountByPlatformID(context.Background(), PlatformMinecraft, java.ID.String())
 		if err != nil || javaLink.UserID != results[0].UserID {
 			t.Errorf("java link = %+v (err=%v), want it linked to %s", javaLink, err, results[0].UserID)
 		}
@@ -2092,7 +2104,7 @@ func newOABarrierLinkAccountStore(barrierN int) *oaBarrierLinkAccountStore {
 	return s
 }
 
-func (m *oaBarrierLinkAccountStore) GetLinkedAccountByPlatformID(platform Platform, platformID string) (*LinkedAccount, error) {
+func (m *oaBarrierLinkAccountStore) GetLinkedAccountByPlatformID(_ context.Context, platform Platform, platformID string) (*LinkedAccount, error) {
 	m.barrierMu.Lock()
 	participates := m.barrierCount < m.barrierN
 	if participates {
@@ -2113,7 +2125,7 @@ func (m *oaBarrierLinkAccountStore) GetLinkedAccountByPlatformID(platform Platfo
 	cp := *la
 	return &cp, nil
 }
-func (m *oaBarrierLinkAccountStore) AddLinkedAccountToDB(la *LinkedAccount) error {
+func (m *oaBarrierLinkAccountStore) AddLinkedAccountToDB(_ context.Context, la *LinkedAccount) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	key := oaLinkKey(la.Platform, la.PlatformID)
@@ -2124,18 +2136,22 @@ func (m *oaBarrierLinkAccountStore) AddLinkedAccountToDB(la *LinkedAccount) erro
 	m.byKey[key] = &cp
 	return nil
 }
-func (m *oaBarrierLinkAccountStore) UpdateLinkedAccount(*LinkedAccount) error { return nil }
-func (m *oaBarrierLinkAccountStore) GetLinkedAccountByPlatformName(Platform, string) (*LinkedAccount, error) {
+func (m *oaBarrierLinkAccountStore) UpdateLinkedAccount(context.Context, *LinkedAccount) error {
+	return nil
+}
+func (m *oaBarrierLinkAccountStore) GetLinkedAccountByPlatformName(context.Context, Platform, string) (*LinkedAccount, error) {
 	return nil, account.ErrNotFound
 }
-func (m *oaBarrierLinkAccountStore) GetLinkedAccountByUserID(string, Platform) (*LinkedAccount, error) {
+func (m *oaBarrierLinkAccountStore) GetLinkedAccountByUserID(context.Context, string, Platform) (*LinkedAccount, error) {
 	return nil, account.ErrNotFound
 }
-func (m *oaBarrierLinkAccountStore) GetLinkedAccountsByUserID(string) ([]*LinkedAccount, error) {
+func (m *oaBarrierLinkAccountStore) GetLinkedAccountsByUserID(context.Context, string) ([]*LinkedAccount, error) {
 	return nil, nil
 }
-func (m *oaBarrierLinkAccountStore) DeleteLinkedAccount(string, Platform) error { return nil }
-func (m *oaBarrierLinkAccountStore) SetLinkedAccountLoginEnabled(string, Platform, bool) error {
+func (m *oaBarrierLinkAccountStore) DeleteLinkedAccount(context.Context, string, Platform) error {
+	return nil
+}
+func (m *oaBarrierLinkAccountStore) SetLinkedAccountLoginEnabled(context.Context, string, Platform, bool) error {
 	return nil
 }
 
@@ -2149,11 +2165,11 @@ func TestOA82LinkPlatformUserToSessionConcurrentRace(t *testing.T) {
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
-			errs[0] = linkPlatformUserToSession(las, "user-A", PlatformDiscord, user)
+			errs[0] = linkPlatformUserToSession(context.Background(), las, "user-A", PlatformDiscord, user)
 		}()
 		go func() {
 			defer wg.Done()
-			errs[1] = linkPlatformUserToSession(las, "user-B", PlatformDiscord, user)
+			errs[1] = linkPlatformUserToSession(context.Background(), las, "user-B", PlatformDiscord, user)
 		}()
 		wg.Wait()
 
@@ -2167,7 +2183,7 @@ func TestOA82LinkPlatformUserToSessionConcurrentRace(t *testing.T) {
 			t.Fatalf("errs = %v, want exactly one nil (one winner) and one non-nil (the observable loser)", errs)
 		}
 
-		la, err := las.GetLinkedAccountByPlatformID(PlatformDiscord, "race-82")
+		la, err := las.GetLinkedAccountByPlatformID(context.Background(), PlatformDiscord, "race-82")
 		if err != nil {
 			t.Fatalf("expected the linked account to exist after the race, got err=%v", err)
 		}

@@ -34,14 +34,14 @@ type mwFakeSessionSvc struct {
 
 var _ session.Service = (*mwFakeSessionSvc)(nil)
 
-func (f *mwFakeSessionSvc) AddSession(*session.Session) error { return nil }
-func (f *mwFakeSessionSvc) GetSession(string) (*session.Session, error) {
+func (f *mwFakeSessionSvc) AddSession(context.Context, *session.Session) error { return nil }
+func (f *mwFakeSessionSvc) GetSession(context.Context, string) (*session.Session, error) {
 	return nil, errors.New("not implemented")
 }
-func (f *mwFakeSessionSvc) UpdateSession(*session.Session) error       { return nil }
-func (f *mwFakeSessionSvc) CreateJWT(*session.Session) (string, error) { return "", nil }
+func (f *mwFakeSessionSvc) UpdateSession(context.Context, *session.Session) error { return nil }
+func (f *mwFakeSessionSvc) CreateJWT(*session.Session) (string, error)            { return "", nil }
 
-func (f *mwFakeSessionSvc) DeleteSession(id string) error {
+func (f *mwFakeSessionSvc) DeleteSession(_ context.Context, id string) error {
 	f.deletedIDs = append(f.deletedIDs, id)
 	if f.deleteFunc != nil {
 		return f.deleteFunc(id)
@@ -49,7 +49,7 @@ func (f *mwFakeSessionSvc) DeleteSession(id string) error {
 	return nil
 }
 
-func (f *mwFakeSessionSvc) ReadJWT(token string) (*session.Session, error) {
+func (f *mwFakeSessionSvc) ReadJWT(_ context.Context, token string) (*session.Session, error) {
 	f.readJWTCalled = true
 	if f.readJWTFunc != nil {
 		return f.readJWTFunc(token)
@@ -69,12 +69,12 @@ type mwFakeRateLimitSvc struct {
 
 var _ ratelimit.Service = (*mwFakeRateLimitSvc)(nil)
 
-func (f *mwFakeRateLimitSvc) IncrRateLimit(key string) error {
+func (f *mwFakeRateLimitSvc) IncrRateLimit(_ context.Context, key string) error {
 	f.incrCalls = append(f.incrCalls, key)
 	return f.incrErr
 }
 
-func (f *mwFakeRateLimitSvc) GetRateLimit(key string) (int, error) {
+func (f *mwFakeRateLimitSvc) GetRateLimit(_ context.Context, key string) (int, error) {
 	f.getCalls = append(f.getCalls, key)
 	if f.getErr != nil {
 		return f.getErrLimit, f.getErr
@@ -82,7 +82,7 @@ func (f *mwFakeRateLimitSvc) GetRateLimit(key string) (int, error) {
 	return f.getLimit, nil
 }
 
-func (f *mwFakeRateLimitSvc) SetRateLimit(string, int) error { return nil }
+func (f *mwFakeRateLimitSvc) SetRateLimit(context.Context, string, int) error { return nil }
 
 type mwSyncedRateLimitSvc struct {
 	mu     sync.Mutex
@@ -91,7 +91,7 @@ type mwSyncedRateLimitSvc struct {
 
 var _ ratelimit.Service = (*mwSyncedRateLimitSvc)(nil)
 
-func (f *mwSyncedRateLimitSvc) IncrRateLimit(key string) error {
+func (f *mwSyncedRateLimitSvc) IncrRateLimit(_ context.Context, key string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.counts == nil {
@@ -101,13 +101,13 @@ func (f *mwSyncedRateLimitSvc) IncrRateLimit(key string) error {
 	return nil
 }
 
-func (f *mwSyncedRateLimitSvc) GetRateLimit(key string) (int, error) {
+func (f *mwSyncedRateLimitSvc) GetRateLimit(_ context.Context, key string) (int, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.counts[key], nil
 }
 
-func (f *mwSyncedRateLimitSvc) SetRateLimit(key string, limit int) error {
+func (f *mwSyncedRateLimitSvc) SetRateLimit(_ context.Context, key string, limit int) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.counts == nil {

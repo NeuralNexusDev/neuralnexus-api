@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/link"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/goccy/go-json"
 	"github.com/nicklaw5/helix/v2"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -49,7 +49,7 @@ func handleRevocation(ctx context.Context, userId string, eventsub EventSubServi
 	switch vals.Subscription.Status {
 	case helix.EventSubStatusAuthorizationRevoked:
 		reqctx.Log(ctx, userId, "EventSub authorization revoked")
-		err = tokens.DeleteOAuthToken(vals.Subscription.Condition.BroadcasterUserID, link.PlatformTwitch)
+		err = tokens.DeleteOAuthToken(ctx, vals.Subscription.Condition.BroadcasterUserID, link.PlatformTwitch)
 		if err != nil {
 			reqctx.Log(ctx, userId, "Failed to delete OAuth token:", err.Error())
 			return errors.New("failed to delete OAuth token")
@@ -59,7 +59,7 @@ func handleRevocation(ctx context.Context, userId string, eventsub EventSubServi
 		helix.EventSubStatusNotificationFailuresExceeded,
 		EventSubStatusVersionRemoved:
 		reqctx.Log(ctx, userId, "EventSub subscription removed")
-		err = eventsub.RevokeEventSubSubscription(vals.Subscription.ID, vals.Subscription.Status)
+		err = eventsub.RevokeEventSubSubscription(ctx, vals.Subscription.ID, vals.Subscription.Status)
 		if err != nil {
 			reqctx.Log(ctx, userId, "Failed to revoke EventSub subscription:", err.Error())
 			return errors.New("failed to revoke EventSub subscription")
@@ -82,7 +82,7 @@ func handleVerification(w http.ResponseWriter, ctx context.Context, userId strin
 	w.Write([]byte(vals.Challenge))
 	reqctx.Log(ctx, userId, "EventSub challenge received, responding with challenge")
 
-	var err = eventsub.UpdateEventSubSubscriptionStatus(vals.Subscription.ID, helix.EventSubStatusEnabled)
+	var err = eventsub.UpdateEventSubSubscriptionStatus(ctx, vals.Subscription.ID, helix.EventSubStatusEnabled)
 	if err != nil {
 		reqctx.Log(ctx, userId, "Failed to update EventSub subscription:", err.Error())
 	}
@@ -137,9 +137,9 @@ func handleChannelChatMessage(ctx context.Context, userId string, eventsub Event
 		toPlatformId := args[2]
 
 		if toPlatform == link.PlatformMinecraft {
-			fromLinkedAccount, _ := linked.GetLinkedAccountByPlatformID(fromPlatform, fromPlatformId)
-			alreadyLinkedAccount, _ := linked.GetLinkedAccountByUserID(fromLinkedAccount.UserID, toPlatform)
-			toLinkedAccount, _ := linked.GetLinkedAccountByPlatformName(toPlatform, toPlatformId)
+			fromLinkedAccount, _ := linked.GetLinkedAccountByPlatformID(ctx, fromPlatform, fromPlatformId)
+			alreadyLinkedAccount, _ := linked.GetLinkedAccountByUserID(ctx, fromLinkedAccount.UserID, toPlatform)
+			toLinkedAccount, _ := linked.GetLinkedAccountByPlatformName(ctx, toPlatform, toPlatformId)
 
 			// Logic Matrix:
 			// 1. The Twitch user is already linked to this Minecraft account
@@ -165,7 +165,7 @@ func handleChannelChatMessage(ctx context.Context, userId string, eventsub Event
 
 			// Check if the user is already linked to a Minecraft account
 			if fromLinkedAccount != nil {
-				tla, _ := linked.GetLinkedAccountByUserID(fromLinkedAccount.UserID, toPlatform)
+				tla, _ := linked.GetLinkedAccountByUserID(ctx, fromLinkedAccount.UserID, toPlatform)
 				if tla != nil {
 					reqctx.Log(ctx, userId, "User is already linked to a Minecraft account:", tla.PlatformUsername)
 					// return errors.New("user is already linked to Minecraft account")
@@ -182,6 +182,6 @@ func handleChannelChatMessage(ctx context.Context, userId string, eventsub Event
 		}
 	}
 
-	log.Printf("User %s sent a chat message in channel %s: %s\n", chatEvent.ChatterUserID, chatEvent.BroadcasterUserID, chatEvent.Message.Text)
+	reqctx.Log(ctx, fmt.Sprintf("User %s sent a chat message in channel %s: %s", chatEvent.ChatterUserID, chatEvent.BroadcasterUserID, chatEvent.Message.Text))
 	return nil
 }

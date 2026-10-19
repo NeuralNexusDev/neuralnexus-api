@@ -10,7 +10,7 @@ import (
 )
 
 func GetS3(endpoint, accessKey, secretKey string) *s3.Client {
-	cfg, err := config.LoadDefaultConfig(context.TODO(),
+	cfg, err := config.LoadDefaultConfig(context.Background(),
 		config.WithRegion("us-east-1"),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, "")),
 		config.WithBaseEndpoint(endpoint),

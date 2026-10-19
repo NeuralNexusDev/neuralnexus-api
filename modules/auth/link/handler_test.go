@@ -33,13 +33,13 @@ type stubAccountService struct {
 
 var _ account.Service = (*stubAccountService)(nil)
 
-func (s *stubAccountService) AddAccount(*account.Account) error { return nil }
+func (s *stubAccountService) AddAccount(context.Context, *account.Account) error { return nil }
 
-func (s *stubAccountService) GetAccountByID(string) (*account.Account, error) {
+func (s *stubAccountService) GetAccountByID(context.Context, string) (*account.Account, error) {
 	return nil, account.ErrNotFound
 }
 
-func (s *stubAccountService) GetAccountByUsername(string) (*account.Account, error) {
+func (s *stubAccountService) GetAccountByUsername(context.Context, string) (*account.Account, error) {
 	if s.lookupErr != nil {
 		return nil, s.lookupErr
 	}
@@ -49,7 +49,7 @@ func (s *stubAccountService) GetAccountByUsername(string) (*account.Account, err
 	return nil, account.ErrNotFound
 }
 
-func (s *stubAccountService) GetAccountByEmail(string) (*account.Account, error) {
+func (s *stubAccountService) GetAccountByEmail(context.Context, string) (*account.Account, error) {
 	if s.lookupErr != nil {
 		return nil, s.lookupErr
 	}
@@ -59,11 +59,11 @@ func (s *stubAccountService) GetAccountByEmail(string) (*account.Account, error)
 	return nil, account.ErrNotFound
 }
 
-func (s *stubAccountService) UpdateAccount(*account.Account) error { return nil }
+func (s *stubAccountService) UpdateAccount(context.Context, *account.Account) error { return nil }
 
-func (s *stubAccountService) DeleteAccount(string) error { return nil }
+func (s *stubAccountService) DeleteAccount(context.Context, string) error { return nil }
 
-func (s *stubAccountService) IsPasswordAuthEnabled(string) (bool, error) {
+func (s *stubAccountService) IsPasswordAuthEnabled(context.Context, string) (bool, error) {
 	return !s.passwordAuthDisabled, s.passwordAuthErr
 }
 
@@ -84,11 +84,13 @@ type stubLinkAccountStore struct {
 
 var _ Store = (*stubLinkAccountStore)(nil)
 
-func (s *stubLinkAccountStore) AddLinkedAccountToDB(*LinkedAccount) error { return s.addErr }
+func (s *stubLinkAccountStore) AddLinkedAccountToDB(context.Context, *LinkedAccount) error {
+	return s.addErr
+}
 
-func (s *stubLinkAccountStore) UpdateLinkedAccount(*LinkedAccount) error { return nil }
+func (s *stubLinkAccountStore) UpdateLinkedAccount(context.Context, *LinkedAccount) error { return nil }
 
-func (s *stubLinkAccountStore) GetLinkedAccountByPlatformID(platform Platform, _ string) (*LinkedAccount, error) {
+func (s *stubLinkAccountStore) GetLinkedAccountByPlatformID(_ context.Context, platform Platform, _ string) (*LinkedAccount, error) {
 	if la, ok := s.byPlatform[platform]; ok {
 		return la, nil
 	}
@@ -98,21 +100,23 @@ func (s *stubLinkAccountStore) GetLinkedAccountByPlatformID(platform Platform, _
 	return nil, account.ErrNotFound
 }
 
-func (s *stubLinkAccountStore) GetLinkedAccountByPlatformName(Platform, string) (*LinkedAccount, error) {
+func (s *stubLinkAccountStore) GetLinkedAccountByPlatformName(context.Context, Platform, string) (*LinkedAccount, error) {
 	return nil, account.ErrNotFound
 }
 
-func (s *stubLinkAccountStore) GetLinkedAccountByUserID(string, Platform) (*LinkedAccount, error) {
+func (s *stubLinkAccountStore) GetLinkedAccountByUserID(context.Context, string, Platform) (*LinkedAccount, error) {
 	return nil, account.ErrNotFound
 }
 
-func (s *stubLinkAccountStore) GetLinkedAccountsByUserID(string) ([]*LinkedAccount, error) {
+func (s *stubLinkAccountStore) GetLinkedAccountsByUserID(context.Context, string) ([]*LinkedAccount, error) {
 	return nil, nil
 }
 
-func (s *stubLinkAccountStore) DeleteLinkedAccount(string, Platform) error { return nil }
+func (s *stubLinkAccountStore) DeleteLinkedAccount(context.Context, string, Platform) error {
+	return nil
+}
 
-func (s *stubLinkAccountStore) SetLinkedAccountLoginEnabled(string, Platform, bool) error {
+func (s *stubLinkAccountStore) SetLinkedAccountLoginEnabled(context.Context, string, Platform, bool) error {
 	return nil
 }
 
@@ -126,18 +130,18 @@ type stubSessionService struct {
 
 var _ session.Service = (*stubSessionService)(nil)
 
-func (s *stubSessionService) AddSession(session *session.Session) error {
+func (s *stubSessionService) AddSession(_ context.Context, session *session.Session) error {
 	s.added = append(s.added, session)
 	return s.addSessionErr
 }
 
-func (s *stubSessionService) GetSession(string) (*session.Session, error) {
+func (s *stubSessionService) GetSession(context.Context, string) (*session.Session, error) {
 	return nil, account.ErrNotFound
 }
 
-func (s *stubSessionService) UpdateSession(*session.Session) error { return nil }
+func (s *stubSessionService) UpdateSession(context.Context, *session.Session) error { return nil }
 
-func (s *stubSessionService) DeleteSession(id string) error {
+func (s *stubSessionService) DeleteSession(_ context.Context, id string) error {
 	s.deletedIDs = append(s.deletedIDs, id)
 	return s.deleteSessionErr
 }
@@ -149,7 +153,7 @@ func (s *stubSessionService) CreateJWT(session *session.Session) (string, error)
 	return "", nil
 }
 
-func (s *stubSessionService) ReadJWT(string) (*session.Session, error) {
+func (s *stubSessionService) ReadJWT(context.Context, string) (*session.Session, error) {
 	return nil, account.ErrNotFound
 }
 
@@ -186,7 +190,7 @@ func requireProblemRedirect(t *testing.T, w *httptest.ResponseRecorder, wantTarg
 }
 
 func TestAU13OAuthHandlerMissingCode(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/api/oauth", nil)
+	r := testutil.NewRequest(http.MethodGet, "/api/oauth", nil)
 	w := httptest.NewRecorder()
 
 	t.Run("AU-13_OAuthMissingCode", func(t *testing.T) {
@@ -197,7 +201,7 @@ func TestAU13OAuthHandlerMissingCode(t *testing.T) {
 }
 
 func TestAU14OAuthHandlerMissingState(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/api/oauth?code=somecode", nil)
+	r := testutil.NewRequest(http.MethodGet, "/api/oauth?code=somecode", nil)
 	w := httptest.NewRecorder()
 
 	t.Run("AU-14_OAuthMissingState", func(t *testing.T) {
@@ -210,7 +214,7 @@ func TestAU14OAuthHandlerMissingState(t *testing.T) {
 func TestAU15OAuthHandlerLinkModeNoSession(t *testing.T) {
 	state := OAuthState{Platform: PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: ModeLink}
 	stateB64 := encodeState(t, state)
-	r := httptest.NewRequest(http.MethodGet, "/api/oauth?code=somecode&state="+stateB64, nil)
+	r := testutil.NewRequest(http.MethodGet, "/api/oauth?code=somecode&state="+stateB64, nil)
 	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
 	w := httptest.NewRecorder()
 
@@ -277,7 +281,7 @@ func TestAU50OAuthHandlerLoginHappyPath(t *testing.T) {
 
 	state := OAuthState{Platform: PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: ModeLogin}
 	stateB64 := encodeState(t, state)
-	r := httptest.NewRequest(http.MethodGet, "/api/oauth?code=disc-code&state="+stateB64, nil)
+	r := testutil.NewRequest(http.MethodGet, "/api/oauth?code=disc-code&state="+stateB64, nil)
 	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
 	w := httptest.NewRecorder()
 	as := &stubAccountService{}
@@ -325,7 +329,7 @@ func TestAU51OpenIDHandlerLoginHappyPath(t *testing.T) {
 		"openid.return_to":    {"https://neuralnexus.test/api/openid"},
 		"openid.assoc_handle": {"handle1"},
 	}
-	r := httptest.NewRequest(http.MethodGet, "/api/openid?"+q.Encode(), nil)
+	r := testutil.NewRequest(http.MethodGet, "/api/openid?"+q.Encode(), nil)
 	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
 	w := httptest.NewRecorder()
 	as := &stubAccountService{}
@@ -364,7 +368,7 @@ func auDiscordTransport(t *testing.T) {
 
 func auOAuthRequest(t *testing.T, state OAuthState) *http.Request {
 	t.Helper()
-	r := httptest.NewRequest(http.MethodGet, "/api/oauth?code=disc-code&state="+encodeState(t, state), nil)
+	r := testutil.NewRequest(http.MethodGet, "/api/oauth?code=disc-code&state="+encodeState(t, state), nil)
 	r.AddCookie(&http.Cookie{Name: "nonce", Value: state.Nonce})
 	return r
 }
@@ -403,7 +407,7 @@ func auOpenIDRequest(t *testing.T, state OAuthState) *http.Request {
 		"openid.return_to":    {"https://neuralnexus.test/api/openid"},
 		"openid.assoc_handle": {"handle1"},
 	}
-	r := httptest.NewRequest(http.MethodGet, "/api/openid?"+q.Encode(), nil)
+	r := testutil.NewRequest(http.MethodGet, "/api/openid?"+q.Encode(), nil)
 	r.AddCookie(&http.Cookie{Name: "nonce", Value: state.Nonce})
 	return r
 }
@@ -476,7 +480,7 @@ func TestAU52to57OAuthAndOpenIDFailuresHideCause(t *testing.T) {
 }
 
 func TestAU17OpenIDHandlerMissingState(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/api/openid", nil)
+	r := testutil.NewRequest(http.MethodGet, "/api/openid", nil)
 	w := httptest.NewRecorder()
 
 	t.Run("AU-17_OpenIDMissingState", func(t *testing.T) {
@@ -489,7 +493,7 @@ func TestAU17OpenIDHandlerMissingState(t *testing.T) {
 func TestAU18OpenIDHandlerLinkModeNoSession(t *testing.T) {
 	state := OAuthState{Platform: PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: ModeLink}
 	stateB64 := encodeState(t, state)
-	r := httptest.NewRequest(http.MethodGet, "/api/openid?state="+stateB64, nil)
+	r := testutil.NewRequest(http.MethodGet, "/api/openid?state="+stateB64, nil)
 	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
 	w := httptest.NewRecorder()
 
@@ -504,7 +508,7 @@ func TestAU19OpenIDHandlerBadOpenIDMode(t *testing.T) {
 	state := OAuthState{Platform: PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: ModeLogin}
 	stateB64 := encodeState(t, state)
 	q := url.Values{"state": {stateB64}, "openid.mode": {"cancel"}}
-	r := httptest.NewRequest(http.MethodGet, "/api/openid?"+q.Encode(), nil)
+	r := testutil.NewRequest(http.MethodGet, "/api/openid?"+q.Encode(), nil)
 	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
 	w := httptest.NewRecorder()
 
@@ -519,7 +523,7 @@ func TestAU20OpenIDHandlerBadClaimedID(t *testing.T) {
 	state := OAuthState{Platform: PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: ModeLogin}
 	stateB64 := encodeState(t, state)
 	q := url.Values{"state": {stateB64}, "openid.mode": {"id_res"}, "openid.claimed_id": {"not-a-steam-id-url"}}
-	r := httptest.NewRequest(http.MethodGet, "/api/openid?"+q.Encode(), nil)
+	r := testutil.NewRequest(http.MethodGet, "/api/openid?"+q.Encode(), nil)
 	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
 	w := httptest.NewRecorder()
 
@@ -533,7 +537,7 @@ func TestAU20OpenIDHandlerBadClaimedID(t *testing.T) {
 func TestAU22DecodeAndValidateStateHappyPath(t *testing.T) {
 	state := OAuthState{Platform: PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: ModeLogin}
 	stateB64 := encodeState(t, state)
-	r := httptest.NewRequest(http.MethodGet, "/api/oauth?state="+stateB64, nil)
+	r := testutil.NewRequest(http.MethodGet, "/api/oauth?state="+stateB64, nil)
 	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
 	w := httptest.NewRecorder()
 
@@ -549,7 +553,7 @@ func TestAU22DecodeAndValidateStateHappyPath(t *testing.T) {
 }
 
 func TestAU23DecodeAndValidateStateMissingParam(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/api/oauth", nil)
+	r := testutil.NewRequest(http.MethodGet, "/api/oauth", nil)
 	w := httptest.NewRecorder()
 
 	t.Run("AU-23_DecodeAndValidateStateMissingParam", func(t *testing.T) {
@@ -562,7 +566,7 @@ func TestAU23DecodeAndValidateStateMissingParam(t *testing.T) {
 }
 
 func TestAU24DecodeAndValidateStateInvalidBase64(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/api/oauth?state=not-valid-base64!!!", nil)
+	r := testutil.NewRequest(http.MethodGet, "/api/oauth?state=not-valid-base64!!!", nil)
 	w := httptest.NewRecorder()
 
 	t.Run("AU-24_DecodeAndValidateStateInvalidBase64", func(t *testing.T) {
@@ -576,7 +580,7 @@ func TestAU24DecodeAndValidateStateInvalidBase64(t *testing.T) {
 
 func TestAU25DecodeAndValidateStateInvalidJSON(t *testing.T) {
 	stateB64 := base64.URLEncoding.EncodeToString([]byte("not json"))
-	r := httptest.NewRequest(http.MethodGet, "/api/oauth?state="+stateB64, nil)
+	r := testutil.NewRequest(http.MethodGet, "/api/oauth?state="+stateB64, nil)
 	w := httptest.NewRecorder()
 
 	t.Run("AU-25_DecodeAndValidateStateInvalidJSON", func(t *testing.T) {
@@ -591,7 +595,7 @@ func TestAU25DecodeAndValidateStateInvalidJSON(t *testing.T) {
 func TestAU26DecodeAndValidateStateMissingRequiredField(t *testing.T) {
 	state := OAuthState{Platform: "", Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: ModeLogin}
 	stateB64 := encodeState(t, state)
-	r := httptest.NewRequest(http.MethodGet, "/api/oauth?state="+stateB64, nil)
+	r := testutil.NewRequest(http.MethodGet, "/api/oauth?state="+stateB64, nil)
 	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
 	w := httptest.NewRecorder()
 
@@ -607,7 +611,7 @@ func TestAU26DecodeAndValidateStateMissingRequiredField(t *testing.T) {
 func TestAU27DecodeAndValidateStateDisallowedRedirect(t *testing.T) {
 	state := OAuthState{Platform: PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://evil.example.com/phish", Mode: ModeLogin}
 	stateB64 := encodeState(t, state)
-	r := httptest.NewRequest(http.MethodGet, "/api/oauth?state="+stateB64, nil)
+	r := testutil.NewRequest(http.MethodGet, "/api/oauth?state="+stateB64, nil)
 	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
 	w := httptest.NewRecorder()
 
@@ -626,7 +630,7 @@ func TestAU27DecodeAndValidateStateDisallowedRedirect(t *testing.T) {
 func TestAU28DecodeAndValidateStateMissingNonceCookie(t *testing.T) {
 	state := OAuthState{Platform: PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: ModeLogin}
 	stateB64 := encodeState(t, state)
-	r := httptest.NewRequest(http.MethodGet, "/api/oauth?state="+stateB64, nil)
+	r := testutil.NewRequest(http.MethodGet, "/api/oauth?state="+stateB64, nil)
 	w := httptest.NewRecorder()
 
 	t.Run("AU-28_DecodeAndValidateStateMissingNonceCookie", func(t *testing.T) {
@@ -641,7 +645,7 @@ func TestAU28DecodeAndValidateStateMissingNonceCookie(t *testing.T) {
 func TestAU29DecodeAndValidateStateNonceMismatch(t *testing.T) {
 	state := OAuthState{Platform: PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: ModeLogin}
 	stateB64 := encodeState(t, state)
-	r := httptest.NewRequest(http.MethodGet, "/api/oauth?state="+stateB64, nil)
+	r := testutil.NewRequest(http.MethodGet, "/api/oauth?state="+stateB64, nil)
 	r.AddCookie(&http.Cookie{Name: "nonce", Value: "wrong-nonce"})
 	w := httptest.NewRecorder()
 
@@ -655,7 +659,7 @@ func TestAU29DecodeAndValidateStateNonceMismatch(t *testing.T) {
 }
 
 func TestAU30RequireValidModeAndSessionLoginMode(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/api/oauth", nil)
+	r := testutil.NewRequest(http.MethodGet, "/api/oauth", nil)
 	w := httptest.NewRecorder()
 
 	t.Run("AU-30_RequireValidModeAndSessionLoginMode", func(t *testing.T) {
@@ -671,7 +675,7 @@ func TestAU30RequireValidModeAndSessionLoginMode(t *testing.T) {
 func TestAU31RequireValidModeAndSessionLinkModeValidSession(t *testing.T) {
 	session := &session.Session{UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
 	ctx := context.WithValue(context.Background(), reqctx.SessionKey, session)
-	r := httptest.NewRequest(http.MethodGet, "/api/oauth", nil).WithContext(ctx)
+	r := testutil.NewRequest(http.MethodGet, "/api/oauth", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 
 	t.Run("AU-31_RequireValidModeAndSessionLinkModeValidSession", func(t *testing.T) {
@@ -685,7 +689,7 @@ func TestAU31RequireValidModeAndSessionLinkModeValidSession(t *testing.T) {
 }
 
 func TestAU32RequireValidModeAndSessionLinkModeNoSessionKey(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/api/oauth", nil)
+	r := testutil.NewRequest(http.MethodGet, "/api/oauth", nil)
 	w := httptest.NewRecorder()
 
 	t.Run("AU-32_RequireValidModeAndSessionLinkModeNoSessionKey", func(t *testing.T) {
@@ -698,7 +702,7 @@ func TestAU32RequireValidModeAndSessionLinkModeNoSessionKey(t *testing.T) {
 
 func TestAU33RequireValidModeAndSessionLinkModeNilSession(t *testing.T) {
 	ctx := context.WithValue(context.Background(), reqctx.SessionKey, (*session.Session)(nil))
-	r := httptest.NewRequest(http.MethodGet, "/api/oauth", nil).WithContext(ctx)
+	r := testutil.NewRequest(http.MethodGet, "/api/oauth", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 
 	t.Run("AU-33_RequireValidModeAndSessionLinkModeNilSession", func(t *testing.T) {
@@ -712,7 +716,7 @@ func TestAU33RequireValidModeAndSessionLinkModeNilSession(t *testing.T) {
 func TestAU34RequireValidModeAndSessionLinkModeExpiredSession(t *testing.T) {
 	session := &session.Session{UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
 	ctx := context.WithValue(context.Background(), reqctx.SessionKey, session)
-	r := httptest.NewRequest(http.MethodGet, "/api/oauth", nil).WithContext(ctx)
+	r := testutil.NewRequest(http.MethodGet, "/api/oauth", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 
 	t.Run("AU-34_RequireValidModeAndSessionLinkModeExpiredSession", func(t *testing.T) {
@@ -724,7 +728,7 @@ func TestAU34RequireValidModeAndSessionLinkModeExpiredSession(t *testing.T) {
 }
 
 func TestAU35RequireValidModeAndSessionUnrecognizedMode(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/api/oauth", nil)
+	r := testutil.NewRequest(http.MethodGet, "/api/oauth", nil)
 	w := httptest.NewRecorder()
 
 	t.Run("AU-35_RequireValidModeAndSessionUnrecognizedMode", func(t *testing.T) {
@@ -736,7 +740,7 @@ func TestAU35RequireValidModeAndSessionUnrecognizedMode(t *testing.T) {
 }
 
 func TestAU38RedirectWithErrorHappyPath(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r := testutil.NewRequest(http.MethodGet, "/", nil)
 	w := httptest.NewRecorder()
 
 	t.Run("AU-38_RedirectWithErrorHappyPath", func(t *testing.T) {
@@ -746,7 +750,7 @@ func TestAU38RedirectWithErrorHappyPath(t *testing.T) {
 }
 
 func TestAU39RedirectWithErrorUnparseableTarget(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r := testutil.NewRequest(http.MethodGet, "/", nil)
 	w := httptest.NewRecorder()
 	target := "http://example.com/%zz"
 
@@ -763,7 +767,7 @@ func TestAU39RedirectWithErrorUnparseableTarget(t *testing.T) {
 }
 
 func TestAU41RedirectBadRequest(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r := testutil.NewRequest(http.MethodGet, "/", nil)
 	w := httptest.NewRecorder()
 
 	t.Run("AU-41_RedirectBadRequest", func(t *testing.T) {
@@ -773,7 +777,7 @@ func TestAU41RedirectBadRequest(t *testing.T) {
 }
 
 func TestAU42RedirectUnauthorized(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r := testutil.NewRequest(http.MethodGet, "/", nil)
 	w := httptest.NewRecorder()
 
 	t.Run("AU-42_RedirectUnauthorized", func(t *testing.T) {
@@ -783,7 +787,7 @@ func TestAU42RedirectUnauthorized(t *testing.T) {
 }
 
 func TestAU43RedirectInternalServerError(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r := testutil.NewRequest(http.MethodGet, "/", nil)
 	w := httptest.NewRecorder()
 
 	t.Run("AU-43_RedirectInternalServerError", func(t *testing.T) {
@@ -1076,18 +1080,18 @@ type stubService struct {
 
 var _ Service = (*stubService)(nil)
 
-func (s *stubService) GetUserLinkedAccounts(string) ([]*LinkedAccount, error) {
+func (s *stubService) GetUserLinkedAccounts(context.Context, string) ([]*LinkedAccount, error) {
 	return s.links, s.linksErr
 }
-func (s *stubService) UnlinkPlatform(_ string, platform Platform) error {
+func (s *stubService) UnlinkPlatform(_ context.Context, _ string, platform Platform) error {
 	s.unlinkCalls = append(s.unlinkCalls, platform)
 	return s.unlinkErr
 }
-func (s *stubService) SetPlatformLoginEnabled(_ string, _ Platform, enabled bool) error {
+func (s *stubService) SetPlatformLoginEnabled(_ context.Context, _ string, _ Platform, enabled bool) error {
 	s.setEnableCalls = append(s.setEnableCalls, enabled)
 	return s.setEnableErr
 }
-func (s *stubService) UpdateFromPlatform(Platform, string, PlatformData) (string, error) {
+func (s *stubService) UpdateFromPlatform(context.Context, Platform, string, PlatformData) (string, error) {
 	return "", nil
 }
 

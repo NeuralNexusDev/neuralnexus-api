@@ -3,8 +3,8 @@ package link
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -88,15 +88,15 @@ func (s *SteamData) CreateLinkedAccount(userID string) *LinkedAccount {
 
 // VerifySteamOpenIDCallback verifies an OpenID 2.0 assertion by POSTing it
 // back to Steam's own endpoint, returning the caller's SteamID64.
-func VerifySteamOpenIDCallback(query url.Values) (string, error) {
+func VerifySteamOpenIDCallback(ctx context.Context, query url.Values) (string, error) {
 	if query.Get("openid.mode") != "id_res" {
-		log.Println(ErrInvalidAssertion, "- unexpected openid.mode")
+		reqctx.Log(ctx, ErrInvalidAssertion.Error(), "- unexpected openid.mode")
 		return "", ErrInvalidAssertion
 	}
 
 	matches := steamClaimedIDPattern.FindStringSubmatch(query.Get("openid.claimed_id"))
 	if matches == nil {
-		log.Println(ErrInvalidAssertion, "- invalid or missing openid.claimed_id")
+		reqctx.Log(ctx, ErrInvalidAssertion.Error(), "- invalid or missing openid.claimed_id")
 		return "", ErrInvalidAssertion
 	}
 	steamID64 := matches[1]
@@ -105,7 +105,7 @@ func VerifySteamOpenIDCallback(query url.Values) (string, error) {
 	// whatever fields openid.signed lists - it says nothing about whether
 	// claimed_id was one of them, so that has to be checked separately.
 	if !slices.Contains(strings.Split(query.Get("openid.signed"), ","), "claimed_id") {
-		log.Println(ErrInvalidAssertion, "- openid.signed does not cover claimed_id")
+		reqctx.Log(ctx, ErrInvalidAssertion.Error(), "- openid.signed does not cover claimed_id")
 		return "", ErrInvalidAssertion
 	}
 
@@ -115,7 +115,7 @@ func VerifySteamOpenIDCallback(query url.Values) (string, error) {
 	}
 	checkValues.Set("openid.mode", "check_authentication")
 
-	req, err := http.NewRequest(http.MethodPost, steamOpenIDLoginURL, strings.NewReader(checkValues.Encode()))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, steamOpenIDLoginURL, strings.NewReader(checkValues.Encode()))
 	if err != nil {
 		return "", err
 	}
@@ -128,7 +128,7 @@ func VerifySteamOpenIDCallback(query url.Values) (string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		log.Println(ErrSteamOpenIDCheck, resp.Status)
+		reqctx.Log(ctx, ErrSteamOpenIDCheck.Error(), resp.Status)
 		return "", ErrSteamOpenIDCheck
 	}
 
@@ -137,7 +137,7 @@ func VerifySteamOpenIDCallback(query url.Values) (string, error) {
 		return "", err
 	}
 	if !responseIsValid(body) {
-		log.Println(ErrInvalidAssertion, "- steam rejected the openid assertion")
+		reqctx.Log(ctx, ErrInvalidAssertion.Error(), "- steam rejected the openid assertion")
 		return "", ErrInvalidAssertion
 	}
 
@@ -159,13 +159,13 @@ func responseIsValid(body []byte) bool {
 
 // GetSteamUser fetches the caller's public profile via the Steam Web API,
 // for a persona name/avatar beyond the bare SteamID64 OpenID provides.
-func GetSteamUser(steamID64 string) (*SteamData, error) {
+func GetSteamUser(ctx context.Context, steamID64 string) (*SteamData, error) {
 	if STEAM_API_KEY == "" {
 		return nil, ErrSteamAPIKeyUnset
 	}
 
 	reqURL := steamPlayerSummaryURL + "?key=" + url.QueryEscape(STEAM_API_KEY) + "&steamids=" + url.QueryEscape(steamID64)
-	req, err := http.NewRequest(http.MethodGet, reqURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -177,7 +177,7 @@ func GetSteamUser(steamID64 string) (*SteamData, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		log.Println(ErrSteamPlayerSummaryLookup, resp.Status)
+		reqctx.Log(ctx, ErrSteamPlayerSummaryLookup.Error(), resp.Status)
 		return nil, ErrSteamPlayerSummaryLookup
 	}
 
@@ -194,7 +194,7 @@ func GetSteamUser(steamID64 string) (*SteamData, error) {
 	}
 	player := &parsed.Response.Players[0]
 	if player.SteamID64 != steamID64 {
-		log.Printf("%v: got %q, want %q", ErrSteamIDMismatch, player.SteamID64, steamID64)
+		reqctx.Log(ctx, fmt.Sprintf("%v: got %q, want %q", ErrSteamIDMismatch, player.SteamID64, steamID64))
 		return nil, ErrSteamIDMismatch
 	}
 	return player, nil
@@ -203,7 +203,7 @@ func GetSteamUser(steamID64 string) (*SteamData, error) {
 // ProcessSteamLogin resolves or creates an account for the given,
 // already-verified Steam identity and returns a new session for it.
 func ProcessSteamLogin(ctx context.Context, as account.Service, las Store, ss session.Service, user *SteamData) (*session.Session, error) {
-	a, err := resolveOrCreateAccountForPlatformUser(as, las, PlatformSteam, user)
+	a, err := resolveOrCreateAccountForPlatformUser(ctx, as, las, PlatformSteam, user)
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +211,7 @@ func ProcessSteamLogin(ctx context.Context, as account.Service, las Store, ss se
 	if err != nil {
 		return nil, err
 	}
-	if err = ss.AddSession(session); err != nil {
+	if err = ss.AddSession(ctx, session); err != nil {
 		return nil, err
 	}
 	return session, nil
@@ -220,14 +220,15 @@ func ProcessSteamLogin(ctx context.Context, as account.Service, las Store, ss se
 // ProcessSteamLink links the given, already-verified Steam identity to the
 // session already in r's context.
 func ProcessSteamLink(r *http.Request, las Store, user *SteamData) (*session.Session, error) {
-	session, ok := r.Context().Value(reqctx.SessionKey).(*session.Session)
+	ctx := r.Context()
+	session, ok := ctx.Value(reqctx.SessionKey).(*session.Session)
 	if !ok || session == nil {
 		return nil, ErrSessionNotFound
 	}
 	if !session.IsValid() {
 		return nil, ErrSessionExpired
 	}
-	if err := linkPlatformUserToSession(las, session.UserID, PlatformSteam, user); err != nil {
+	if err := linkPlatformUserToSession(ctx, las, session.UserID, PlatformSteam, user); err != nil {
 		return nil, err
 	}
 	return session, nil

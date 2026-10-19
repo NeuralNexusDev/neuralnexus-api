@@ -7,7 +7,6 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"golang.org/x/oauth2"
-	"log"
 	"net/http"
 	"time"
 )
@@ -33,8 +32,8 @@ type OAuthState struct {
 // -------------- Functions --------------
 
 // ExtCodeForToken exchanges the code for an access token and returns a OAuthToken
-func ExtCodeForToken(config *oauth2.Config, code string) (*OAuthToken, error) {
-	token, err := config.Exchange(context.Background(), code)
+func ExtCodeForToken(ctx context.Context, config *oauth2.Config, code string) (*OAuthToken, error) {
+	token, err := config.Exchange(ctx, code)
 	if err != nil {
 		return nil, err
 	}
@@ -66,8 +65,8 @@ func ExtCodeForToken(config *oauth2.Config, code string) (*OAuthToken, error) {
 }
 
 // RefreshToken refreshes the token and returns a OAuthToken
-func RefreshToken(config *oauth2.Config, token *oauth2.Token) (*OAuthToken, error) {
-	newToken, err := config.TokenSource(context.Background(), token).Token()
+func RefreshToken(ctx context.Context, config *oauth2.Config, token *oauth2.Token) (*OAuthToken, error) {
+	newToken, err := config.TokenSource(ctx, token).Token()
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +113,7 @@ func ProcessOAuthLogin(ctx context.Context, as account.Service, las Store, ss se
 		return nil, ErrInvalidPlatform
 	}
 	var token *OAuthToken
-	token, err = ExtCodeForToken(config, code)
+	token, err = ExtCodeForToken(ctx, config, code)
 	if err != nil {
 		return nil, err
 	}
@@ -125,14 +124,14 @@ func ProcessOAuthLogin(ctx context.Context, as account.Service, las Store, ss se
 		var java *MinecraftData
 		var xboxErr error
 		if state.Platform == PlatformXboxLive {
-			xbox, xboxErr = GetXboxUser(token)
+			xbox, xboxErr = GetXboxUser(ctx, token)
 		} else {
-			xbox, java, xboxErr = GetXboxAndMinecraftUser(token)
+			xbox, java, xboxErr = GetXboxAndMinecraftUser(ctx, token)
 		}
 		if xboxErr != nil {
 			return nil, xboxErr
 		}
-		a, err = resolveOrCreateAccountForMicrosoftUser(as, las, xbox, java)
+		a, err = resolveOrCreateAccountForMicrosoftUser(ctx, as, las, xbox, java)
 		if err != nil {
 			return nil, err
 		}
@@ -144,14 +143,14 @@ func ProcessOAuthLogin(ctx context.Context, as account.Service, las Store, ss se
 		case PlatformTwitch:
 			user, err = GetTwitchUser(token)
 		case PlatformMicrosoft:
-			user, err = GetMicrosoftUser(token)
+			user, err = GetMicrosoftUser(ctx, token)
 		default:
 			return nil, ErrInvalidPlatform
 		}
 		if err != nil {
 			return nil, err
 		}
-		a, err = resolveOrCreateAccountForPlatformUser(as, las, state.Platform, user)
+		a, err = resolveOrCreateAccountForPlatformUser(ctx, as, las, state.Platform, user)
 		if err != nil {
 			return nil, err
 		}
@@ -162,7 +161,7 @@ func ProcessOAuthLogin(ctx context.Context, as account.Service, las Store, ss se
 		return nil, err
 	}
 
-	if err = ss.AddSession(session); err != nil {
+	if err = ss.AddSession(ctx, session); err != nil {
 		return nil, err
 	}
 	return session, nil
@@ -187,13 +186,13 @@ var ErrPlatformLoginDisabled = errors.New("this platform account is linked but d
 // winner's linked account/account are re-fetched and returned instead of
 // treating it as a hard failure; any other error is returned as-is (wrapped
 // together with a cleanup failure, if the cleanup itself also failed).
-func resolveOrCreateAccountForPlatformUser(as account.Service, las Store, platform Platform, user PlatformData) (*account.Account, error) {
-	la, err := las.GetLinkedAccountByPlatformID(platform, user.GetID())
+func resolveOrCreateAccountForPlatformUser(ctx context.Context, as account.Service, las Store, platform Platform, user PlatformData) (*account.Account, error) {
+	la, err := las.GetLinkedAccountByPlatformID(ctx, platform, user.GetID())
 	if err == nil {
 		if !(la.Verified && la.LoginEnabled) {
 			return nil, ErrPlatformLoginDisabled
 		}
-		return as.GetAccountByID(la.UserID)
+		return as.GetAccountByID(ctx, la.UserID)
 	}
 	if err != account.ErrNotFound {
 		return nil, err
@@ -203,27 +202,27 @@ func resolveOrCreateAccountForPlatformUser(as account.Service, las Store, platfo
 	if err != nil {
 		return nil, err
 	}
-	if err := as.AddAccount(a); err != nil {
+	if err := as.AddAccount(ctx, a); err != nil {
 		return nil, err
 	}
 
 	la = NewLinkedAccount(a.UserID, platform, user.GetUsername(), user.GetID(), user)
-	if err := las.AddLinkedAccountToDB(la); err != nil {
+	if err := las.AddLinkedAccountToDB(context.WithoutCancel(ctx), la); err != nil {
 		// Whatever went wrong, the account created above is now orphaned -
 		// clean it up before deciding how to handle err.
-		if delErr := as.DeleteAccount(a.UserID); delErr != nil {
-			log.Println(logLinkCleanupFailed, err)
+		if delErr := as.DeleteAccount(context.WithoutCancel(ctx), a.UserID); delErr != nil {
+			reqctx.Log(ctx, logLinkCleanupFailed, err.Error())
 			return nil, delErr
 		}
 		if err != ErrAlreadyLinked {
 			return nil, err
 		}
 		// Lost the race: use the winner's account instead.
-		la, err = las.GetLinkedAccountByPlatformID(platform, user.GetID())
+		la, err = las.GetLinkedAccountByPlatformID(ctx, platform, user.GetID())
 		if err != nil {
 			return nil, err
 		}
-		a, err = as.GetAccountByID(la.UserID)
+		a, err = as.GetAccountByID(ctx, la.UserID)
 		if err != nil {
 			return nil, err
 		}
@@ -233,10 +232,11 @@ func resolveOrCreateAccountForPlatformUser(as account.Service, las Store, platfo
 
 // ProcessOAuthLink links an account to an existing user
 func ProcessOAuthLink(r *http.Request, las Store, code string, state *OAuthState) (*session.Session, error) {
+	ctx := r.Context()
 	// Get session from request context first: there's no point exchanging
 	// the OAuth code or calling out to the platform's API for a session
 	// that's missing or already expired.
-	session, ok := r.Context().Value(reqctx.SessionKey).(*session.Session)
+	session, ok := ctx.Value(reqctx.SessionKey).(*session.Session)
 	if !ok || session == nil {
 		return nil, ErrSessionNotFound
 	}
@@ -259,7 +259,7 @@ func ProcessOAuthLink(r *http.Request, las Store, code string, state *OAuthState
 		return nil, ErrInvalidPlatform
 	}
 	var token *OAuthToken
-	token, err = ExtCodeForToken(config, code)
+	token, err = ExtCodeForToken(ctx, config, code)
 	if err != nil {
 		return nil, err
 	}
@@ -269,9 +269,9 @@ func ProcessOAuthLink(r *http.Request, las Store, code string, state *OAuthState
 		var java *MinecraftData
 		var xboxErr error
 		if state.Platform == PlatformXboxLive {
-			xbox, xboxErr = GetXboxUser(token)
+			xbox, xboxErr = GetXboxUser(ctx, token)
 		} else {
-			xbox, java, xboxErr = GetXboxAndMinecraftUser(token)
+			xbox, java, xboxErr = GetXboxAndMinecraftUser(ctx, token)
 		}
 		if xboxErr != nil {
 			return nil, xboxErr
@@ -280,7 +280,7 @@ func ProcessOAuthLink(r *http.Request, las Store, code string, state *OAuthState
 		// Check both identities up front, before committing either link:
 		// linking Xbox and only then rejecting Java would leave Xbox linked
 		// with no way to undo it (AddLinkedAccountToDB has no delete).
-		if la, err := las.GetLinkedAccountByPlatformID(PlatformXboxLive, xbox.GetID()); err == nil {
+		if la, err := las.GetLinkedAccountByPlatformID(ctx, PlatformXboxLive, xbox.GetID()); err == nil {
 			if la.UserID != session.UserID {
 				return nil, ErrPlatformAlreadyLinkedToDifferentAccount
 			}
@@ -288,7 +288,7 @@ func ProcessOAuthLink(r *http.Request, las Store, code string, state *OAuthState
 			return nil, err
 		}
 		if java != nil {
-			if la, err := las.GetLinkedAccountByPlatformID(PlatformMinecraft, java.GetID()); err == nil {
+			if la, err := las.GetLinkedAccountByPlatformID(ctx, PlatformMinecraft, java.GetID()); err == nil {
 				if la.UserID != session.UserID {
 					return nil, ErrPlatformAlreadyLinkedToDifferentAccount
 				}
@@ -297,11 +297,11 @@ func ProcessOAuthLink(r *http.Request, las Store, code string, state *OAuthState
 			}
 		}
 
-		if err := linkPlatformUserToSession(las, session.UserID, PlatformXboxLive, xbox); err != nil {
+		if err := linkPlatformUserToSession(ctx, las, session.UserID, PlatformXboxLive, xbox); err != nil {
 			return nil, err
 		}
 		if java != nil {
-			if err := linkPlatformUserToSession(las, session.UserID, PlatformMinecraft, java); err != nil {
+			if err := linkPlatformUserToSession(ctx, las, session.UserID, PlatformMinecraft, java); err != nil {
 				return nil, err
 			}
 		}
@@ -315,7 +315,7 @@ func ProcessOAuthLink(r *http.Request, las Store, code string, state *OAuthState
 	case PlatformTwitch:
 		user, err = GetTwitchUser(token)
 	case PlatformMicrosoft:
-		user, err = GetMicrosoftUser(token)
+		user, err = GetMicrosoftUser(ctx, token)
 	default:
 		return nil, ErrInvalidPlatform
 	}
@@ -323,7 +323,7 @@ func ProcessOAuthLink(r *http.Request, las Store, code string, state *OAuthState
 		return nil, err
 	}
 
-	if err := linkPlatformUserToSession(las, session.UserID, state.Platform, user); err != nil {
+	if err := linkPlatformUserToSession(ctx, las, session.UserID, state.Platform, user); err != nil {
 		return nil, err
 	}
 	return session, nil
@@ -336,8 +336,8 @@ var ErrConflictingMicrosoftIdentities = errors.New("this Microsoft account's Xbo
 // (always present) and Java Edition profile (present only if owned).
 // Whichever identity/identities aren't linked yet get linked to the
 // resolved (or freshly created) account.
-func resolveOrCreateAccountForMicrosoftUser(as account.Service, las Store, xbox *XboxLiveData, java *MinecraftData) (*account.Account, error) {
-	xboxLA, err := las.GetLinkedAccountByPlatformID(PlatformXboxLive, xbox.GetID())
+func resolveOrCreateAccountForMicrosoftUser(ctx context.Context, as account.Service, las Store, xbox *XboxLiveData, java *MinecraftData) (*account.Account, error) {
+	xboxLA, err := las.GetLinkedAccountByPlatformID(ctx, PlatformXboxLive, xbox.GetID())
 	if err != nil {
 		if err != account.ErrNotFound {
 			return nil, err
@@ -346,7 +346,7 @@ func resolveOrCreateAccountForMicrosoftUser(as account.Service, las Store, xbox 
 	}
 	var javaLA *LinkedAccount
 	if java != nil {
-		javaLA, err = las.GetLinkedAccountByPlatformID(PlatformMinecraft, java.GetID())
+		javaLA, err = las.GetLinkedAccountByPlatformID(ctx, PlatformMinecraft, java.GetID())
 		if err != nil {
 			if err != account.ErrNotFound {
 				return nil, err
@@ -392,24 +392,24 @@ func resolveOrCreateAccountForMicrosoftUser(as account.Service, las Store, xbox 
 		if err != nil {
 			return nil, err
 		}
-		if err := as.AddAccount(a); err != nil {
+		if err := as.AddAccount(ctx, a); err != nil {
 			return nil, err
 		}
 	} else {
-		a, err = as.GetAccountByID(accountID)
+		a, err = as.GetAccountByID(ctx, accountID)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	if xboxAccountID == "" {
-		a, isNewAccount, err = ensureMicrosoftIdentityLinked(as, las, a, isNewAccount, PlatformXboxLive, xbox)
+		a, isNewAccount, err = ensureMicrosoftIdentityLinked(ctx, as, las, a, isNewAccount, PlatformXboxLive, xbox)
 		if err != nil {
 			return nil, err
 		}
 	}
 	if java != nil && javaAccountID == "" {
-		a, _, err = ensureMicrosoftIdentityLinked(as, las, a, isNewAccount, PlatformMinecraft, java)
+		a, _, err = ensureMicrosoftIdentityLinked(ctx, as, las, a, isNewAccount, PlatformMinecraft, java)
 		if err != nil {
 			return nil, err
 		}
@@ -422,16 +422,16 @@ func resolveOrCreateAccountForMicrosoftUser(as account.Service, las Store, xbox 
 // isNewAccount marks a as a bare placeholder with nothing else linked to it
 // yet, the only state where it's safe to delete on a lost race; otherwise a
 // lost race surfaces as a conflict for the caller to retry.
-func ensureMicrosoftIdentityLinked(as account.Service, las Store, a *account.Account, isNewAccount bool, platform Platform, user PlatformData) (*account.Account, bool, error) {
+func ensureMicrosoftIdentityLinked(ctx context.Context, as account.Service, las Store, a *account.Account, isNewAccount bool, platform Platform, user PlatformData) (*account.Account, bool, error) {
 	la := NewLinkedAccount(a.UserID, platform, user.GetUsername(), user.GetID(), user)
-	err := las.AddLinkedAccountToDB(la)
+	err := las.AddLinkedAccountToDB(context.WithoutCancel(ctx), la)
 	if err == nil {
 		return a, false, nil
 	}
 	if err != ErrAlreadyLinked {
 		if isNewAccount {
-			if delErr := as.DeleteAccount(a.UserID); delErr != nil {
-				log.Println(logLinkCleanupFailed, err)
+			if delErr := as.DeleteAccount(context.WithoutCancel(ctx), a.UserID); delErr != nil {
+				reqctx.Log(ctx, logLinkCleanupFailed, err.Error())
 				return nil, false, delErr
 			}
 		}
@@ -440,11 +440,11 @@ func ensureMicrosoftIdentityLinked(as account.Service, las Store, a *account.Acc
 
 	// We might already be the owner (a concurrent identical login won the
 	// race for both identities) rather than facing a genuine conflict.
-	actualOwnerLA, lookupErr := las.GetLinkedAccountByPlatformID(platform, user.GetID())
+	actualOwnerLA, lookupErr := las.GetLinkedAccountByPlatformID(ctx, platform, user.GetID())
 	if lookupErr != nil && lookupErr != account.ErrNotFound {
 		if isNewAccount {
-			if delErr := as.DeleteAccount(a.UserID); delErr != nil {
-				log.Println(logLinkCleanupFailed, lookupErr)
+			if delErr := as.DeleteAccount(context.WithoutCancel(ctx), a.UserID); delErr != nil {
+				reqctx.Log(ctx, logLinkCleanupFailed, lookupErr.Error())
 				return nil, false, delErr
 			}
 		}
@@ -461,11 +461,11 @@ func ensureMicrosoftIdentityLinked(as account.Service, las Store, a *account.Acc
 		return nil, false, ErrConflictingMicrosoftIdentities
 	}
 
-	if delErr := as.DeleteAccount(a.UserID); delErr != nil {
-		log.Println(logLinkCleanupFailed, err)
+	if delErr := as.DeleteAccount(context.WithoutCancel(ctx), a.UserID); delErr != nil {
+		reqctx.Log(ctx, logLinkCleanupFailed, err.Error())
 		return nil, false, delErr
 	}
-	winner, getErr := as.GetAccountByID(actualOwnerID)
+	winner, getErr := as.GetAccountByID(ctx, actualOwnerID)
 	if getErr != nil {
 		return nil, false, getErr
 	}
@@ -477,8 +477,8 @@ var ErrPlatformAlreadyLinkedToDifferentAccount = errors.New("this platform accou
 // linkPlatformUserToSession links the given platform identity to userID. If
 // it's already linked to a different account, that's returned as an error;
 // if it's already linked to this same account, linking is a no-op.
-func linkPlatformUserToSession(las Store, userID string, platform Platform, user PlatformData) error {
-	la, err := las.GetLinkedAccountByPlatformID(platform, user.GetID())
+func linkPlatformUserToSession(ctx context.Context, las Store, userID string, platform Platform, user PlatformData) error {
+	la, err := las.GetLinkedAccountByPlatformID(ctx, platform, user.GetID())
 	switch err {
 	case nil:
 		if userID == la.UserID {
@@ -492,8 +492,8 @@ func linkPlatformUserToSession(las Store, userID string, platform Platform, user
 
 	// Link account
 	la = NewLinkedAccount(userID, platform, user.GetUsername(), user.GetID(), user)
-	if err := las.AddLinkedAccountToDB(la); err != nil {
-		log.Println(ErrLinkAccountFailed, err)
+	if err := las.AddLinkedAccountToDB(context.WithoutCancel(ctx), la); err != nil {
+		reqctx.Log(ctx, ErrLinkAccountFailed.Error(), err.Error())
 		return ErrLinkAccountFailed
 	}
 

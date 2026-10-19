@@ -1,11 +1,13 @@
 package datastore
 
+import "context"
+
 // DSService - Data Store Service
 type DSService interface {
-	Create(*Store) (*Store, error)
-	Read(*Store) (*Store, error)
-	Update(*Store) (*Store, error)
-	Delete(*Store) error
+	Create(context.Context, *Store) (*Store, error)
+	Read(context.Context, *Store) (*Store, error)
+	Update(context.Context, *Store) (*Store, error)
+	Delete(context.Context, *Store) error
 }
 
 // dsService - Data Store Service implementation
@@ -19,21 +21,21 @@ func NewService(store DSStore) DSService {
 }
 
 // Create - Create a new entry in the datastore
-func (s *dsService) Create(data *Store) (*Store, error) {
-	return s.store.CreateNewDataStore(data.StoreID, data.OwnerID)
+func (s *dsService) Create(ctx context.Context, data *Store) (*Store, error) {
+	return s.store.CreateNewDataStore(ctx, data.StoreID, data.OwnerID)
 }
 
 // Read - Read an entry from the datastore
-func (s *dsService) Read(data *Store) (*Store, error) {
-	return s.store.GetDataStore(data.StoreID)
+func (s *dsService) Read(ctx context.Context, data *Store) (*Store, error) {
+	return s.store.GetDataStore(ctx, data.StoreID)
 }
 
 // Update - Update an entry in the datastore
-func (s *dsService) Update(data *Store) (*Store, error) {
-	return s.store.UpdateDataStore(data.StoreID, data.OwnerID)
+func (s *dsService) Update(ctx context.Context, data *Store) (*Store, error) {
+	return s.store.UpdateDataStore(ctx, data.StoreID, data.OwnerID)
 }
 
 // Delete - Delete an entry from the datastore
-func (s *dsService) Delete(data *Store) error {
-	return s.store.DeleteDataStore(data.StoreID)
+func (s *dsService) Delete(ctx context.Context, data *Store) error {
+	return s.store.DeleteDataStore(ctx, data.StoreID)
 }

@@ -27,11 +27,11 @@ var ErrNumberNotFound = errors.New("number not found")
 
 // NumberStore - Number Store
 type NumberStore interface {
-	Create(storeID, userID string, initVal float64) (float64, error)
-	Read(storeID, userID string) (float64, error)
-	Update(storeID, userID string, newVal float64) (float64, error)
-	Delete(storeID, userID string) error
-	Add(storeID, userID string, value float64) error
+	Create(ctx context.Context, storeID, userID string, initVal float64) (float64, error)
+	Read(ctx context.Context, storeID, userID string) (float64, error)
+	Update(ctx context.Context, storeID, userID string, newVal float64) (float64, error)
+	Delete(ctx context.Context, storeID, userID string) error
+	Add(ctx context.Context, storeID, userID string, value float64) error
 }
 
 // numberStore - Number Store
@@ -45,8 +45,8 @@ func NewStore(db *pgxpool.Pool) NumberStore {
 }
 
 // Add - Add a value to an existing entry in the datastore
-func (s *numberStore) Add(storeID, userID string, value float64) error {
-	_, err := s.db.Exec(context.Background(), "UPDATE datastore_numbers SET value = value + $1 WHERE store_id = $2 AND user_id = $3", value, storeID, userID)
+func (s *numberStore) Add(ctx context.Context, storeID, userID string, value float64) error {
+	_, err := s.db.Exec(ctx, "UPDATE datastore_numbers SET value = value + $1 WHERE store_id = $2 AND user_id = $3", value, storeID, userID)
 	if err != nil {
 		return err
 	}
@@ -54,8 +54,8 @@ func (s *numberStore) Add(storeID, userID string, value float64) error {
 }
 
 // Create - Create a new entry in the datastore
-func (s *numberStore) Create(storeID, userID string, initVal float64) (float64, error) {
-	_, err := s.db.Exec(context.Background(), "INSERT INTO datastore_numbers (store_id, user_id, value) VALUES ($1, $2, $3)", storeID, userID, initVal)
+func (s *numberStore) Create(ctx context.Context, storeID, userID string, initVal float64) (float64, error) {
+	_, err := s.db.Exec(ctx, "INSERT INTO datastore_numbers (store_id, user_id, value) VALUES ($1, $2, $3)", storeID, userID, initVal)
 	if err != nil {
 		return 0, err
 	}
@@ -63,9 +63,9 @@ func (s *numberStore) Create(storeID, userID string, initVal float64) (float64, 
 }
 
 // Read - Read an entry from the datastore
-func (s *numberStore) Read(storeID, userID string) (float64, error) {
+func (s *numberStore) Read(ctx context.Context, storeID, userID string) (float64, error) {
 	var value float64
-	err := s.db.QueryRow(context.Background(), "SELECT value FROM datastore_numbers WHERE store_id = $1 AND user_id = $2", storeID, userID).Scan(&value)
+	err := s.db.QueryRow(ctx, "SELECT value FROM datastore_numbers WHERE store_id = $1 AND user_id = $2", storeID, userID).Scan(&value)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return 0, ErrNumberNotFound
@@ -76,8 +76,8 @@ func (s *numberStore) Read(storeID, userID string) (float64, error) {
 }
 
 // Update - Update an entry in the datastore
-func (s *numberStore) Update(storeID, userID string, value float64) (float64, error) {
-	_, err := s.db.Exec(context.Background(), "UPDATE datastore_numbers SET value = $1 WHERE store_id = $2 AND user_id = $3", value, storeID, userID)
+func (s *numberStore) Update(ctx context.Context, storeID, userID string, value float64) (float64, error) {
+	_, err := s.db.Exec(ctx, "UPDATE datastore_numbers SET value = $1 WHERE store_id = $2 AND user_id = $3", value, storeID, userID)
 	if err != nil {
 		return 0, err
 	}
@@ -85,8 +85,8 @@ func (s *numberStore) Update(storeID, userID string, value float64) (float64, er
 }
 
 // Delete - Delete an entry from the datastore
-func (s *numberStore) Delete(storeID, userID string) error {
-	_, err := s.db.Exec(context.Background(), "DELETE FROM datastore_numbers WHERE store_id = $1 AND user_id = $2", storeID, userID)
+func (s *numberStore) Delete(ctx context.Context, storeID, userID string) error {
+	_, err := s.db.Exec(ctx, "DELETE FROM datastore_numbers WHERE store_id = $1 AND user_id = $2", storeID, userID)
 	if err != nil {
 		return err
 	}

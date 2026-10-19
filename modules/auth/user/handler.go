@@ -3,7 +3,6 @@ package user
 import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
-	"log"
 	"net/http"
 	"strconv"
 
@@ -63,7 +62,7 @@ func respondUpdateUserFailure(w http.ResponseWriter, r *http.Request, err error)
 	case account.ErrUnknownRoleID:
 		responses.BadRequest(w, r, msgUnknownRoleID)
 	default:
-		log.Println(logFailedToUpdateUser, err)
+		reqctx.Log(r.Context(), logFailedToUpdateUser, err.Error())
 		responses.InternalServerError(w, r, msgFailedToUpdateUser)
 	}
 }
@@ -94,9 +93,9 @@ func ListUsersHandler(service Service) http.HandlerFunc {
 			}
 			offset = n
 		}
-		users, err := service.ListUsers(limit, offset)
+		users, err := service.ListUsers(r.Context(), limit, offset)
 		if err != nil {
-			log.Println(logFailedToListUsers, err)
+			reqctx.Log(r.Context(), logFailedToListUsers, err.Error())
 			responses.InternalServerError(w, r, msgFailedToListUsers)
 			return
 		}
@@ -120,13 +119,13 @@ func GetUserHandler(service Service) http.HandlerFunc {
 			responses.Forbidden(w, r, msgNoPermissionToGetUser)
 			return
 		}
-		user, err := service.GetUser(userID)
+		user, err := service.GetUser(r.Context(), userID)
 		if err != nil {
 			if err == account.ErrNotFound {
 				responses.NotFound(w, r, msgUserNotFound)
 				return
 			}
-			log.Println(logFailedToGetUser, err)
+			reqctx.Log(r.Context(), logFailedToGetUser, err.Error())
 			responses.InternalServerError(w, r, msgFailedToGetUser)
 			return
 		}
@@ -144,13 +143,13 @@ func GetUserFromPlatformHandler(service Service) http.HandlerFunc {
 		}
 		platform := link.Platform(r.PathValue("platform"))
 		platformID := r.PathValue("platform_id")
-		user, err := service.GetUserFromPlatform(platform, platformID)
+		user, err := service.GetUserFromPlatform(r.Context(), platform, platformID)
 		if err != nil {
 			if err == account.ErrNotFound {
 				responses.NotFound(w, r, msgUserNotFound)
 				return
 			}
-			log.Println(logFailedToGetUser, err)
+			reqctx.Log(r.Context(), logFailedToGetUser, err.Error())
 			responses.InternalServerError(w, r, msgFailedToGetUser)
 			return
 		}
@@ -173,7 +172,7 @@ func GetUserPermissionsHandler(service Service) http.HandlerFunc {
 				responses.NotFound(w, r, msgUserNotFound)
 				return
 			}
-			log.Println(logFailedToGetUser, err)
+			reqctx.Log(r.Context(), logFailedToGetUser, err.Error())
 			responses.InternalServerError(w, r, msgFailedToGetUser)
 			return
 		}
@@ -196,12 +195,12 @@ func UpdateUserHandler(service Service) http.HandlerFunc {
 			responses.BadRequest(w, r, msgInvalidRequestBody)
 			return
 		}
-		err = service.UpdateUser(userID, &update)
+		err = service.UpdateUser(r.Context(), userID, &update)
 		if err != nil {
 			respondUpdateUserFailure(w, r, err)
 			return
 		}
-		stored, err := service.GetUser(userID)
+		stored, err := service.GetUser(r.Context(), userID)
 		if err != nil {
 			respondUpdateUserFailure(w, r, err)
 			return
@@ -263,7 +262,7 @@ func UpdateUserFromPlatformHandler(service Service) http.HandlerFunc {
 			return
 		}
 
-		user, err := service.UpdateUserFromPlatform(platform, platformID, data)
+		user, err := service.UpdateUserFromPlatform(r.Context(), platform, platformID, data)
 		if err != nil {
 			respondUpdateUserFailure(w, r, err)
 			return
@@ -281,9 +280,9 @@ func DeleteUserHandler(service Service) http.HandlerFunc {
 			return
 		}
 		userID := r.PathValue("user_id")
-		err := service.DeleteUser(userID)
+		err := service.DeleteUser(r.Context(), userID)
 		if err != nil {
-			log.Println(logFailedToDeleteUser, err)
+			reqctx.Log(r.Context(), logFailedToDeleteUser, err.Error())
 			responses.InternalServerError(w, r, msgFailedToDeleteUser)
 			return
 		}
@@ -300,7 +299,7 @@ func GetAccountSettingsHandler(service Service) http.HandlerFunc {
 			responses.Forbidden(w, r, msgNoPermissionToViewSettings)
 			return
 		}
-		settings, err := service.GetAccountSettings(userID)
+		settings, err := service.GetAccountSettings(r.Context(), userID)
 		if err != nil {
 			if err == account.ErrNotFound {
 				responses.NotFound(w, r, msgUserNotFound)
@@ -336,7 +335,7 @@ func UpdateAccountSettingsHandler(service Service) http.HandlerFunc {
 			return
 		}
 
-		err := service.SetPasswordAuthEnabled(userID, *body.PasswordAuthEnabled)
+		err := service.SetPasswordAuthEnabled(r.Context(), userID, *body.PasswordAuthEnabled)
 		switch err {
 		case nil:
 			responses.NoContent(w, r)
