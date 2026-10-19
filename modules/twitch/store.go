@@ -47,15 +47,15 @@ type EventSubEntry struct {
 
 // Store struct for storing Twitch data
 type Store interface {
-	GetEventSubSubscription(id string) (*EventSubEntry, error)
-	GetEventSubSubscriptions(userID string) ([]*EventSubEntry, error)
-	CreateEventSubSubscription(entry *EventSubEntry) error
-	UpdateEventSubSubscription(entry *EventSubEntry) error
+	GetEventSubSubscription(ctx context.Context, id string) (*EventSubEntry, error)
+	GetEventSubSubscriptions(ctx context.Context, userID string) ([]*EventSubEntry, error)
+	CreateEventSubSubscription(ctx context.Context, entry *EventSubEntry) error
+	UpdateEventSubSubscription(ctx context.Context, entry *EventSubEntry) error
 }
 
 // GetEventSubSubscription gets an EventSub subscription by ID
-func (s *store) GetEventSubSubscription(id string) (*EventSubEntry, error) {
-	rows, err := s.db.Query(context.Background(), "SELECT * FROM eventsub_subscriptions WHERE id = $1", id)
+func (s *store) GetEventSubSubscription(ctx context.Context, id string) (*EventSubEntry, error) {
+	rows, err := s.db.Query(ctx, "SELECT * FROM eventsub_subscriptions WHERE id = $1", id)
 	if err != nil {
 		return nil, err
 	}
@@ -72,8 +72,8 @@ func (s *store) GetEventSubSubscription(id string) (*EventSubEntry, error) {
 }
 
 // GetEventSubSubscriptions gets all EventSub subscriptions for a user
-func (s *store) GetEventSubSubscriptions(userID string) ([]*EventSubEntry, error) {
-	rows, err := s.db.Query(context.Background(), "SELECT * FROM eventsub_subscriptions WHERE user_id = $1", userID)
+func (s *store) GetEventSubSubscriptions(ctx context.Context, userID string) ([]*EventSubEntry, error) {
+	rows, err := s.db.Query(ctx, "SELECT * FROM eventsub_subscriptions WHERE user_id = $1", userID)
 	if err != nil {
 		return nil, err
 	}
@@ -87,8 +87,8 @@ func (s *store) GetEventSubSubscriptions(userID string) ([]*EventSubEntry, error
 }
 
 // CreateEventSubSubscription creates a new EventSub subscription
-func (s *store) CreateEventSubSubscription(entry *EventSubEntry) error {
-	_, err := s.db.Exec(context.Background(), "INSERT INTO eventsub_subscriptions (id, user_id, status, type, version, created_at, revoked_at, cost) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+func (s *store) CreateEventSubSubscription(ctx context.Context, entry *EventSubEntry) error {
+	_, err := s.db.Exec(ctx, "INSERT INTO eventsub_subscriptions (id, user_id, status, type, version, created_at, revoked_at, cost) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
 		entry.ID, entry.UserID, entry.Status, entry.Type, entry.Version, entry.CreatedAt, entry.RevokedAt, entry.Cost)
 	if err != nil {
 		return err
@@ -97,8 +97,8 @@ func (s *store) CreateEventSubSubscription(entry *EventSubEntry) error {
 }
 
 // UpdateEventSubSubscription updates an EventSub subscription
-func (s *store) UpdateEventSubSubscription(entry *EventSubEntry) error {
-	_, err := s.db.Exec(context.Background(), "UPDATE eventsub_subscriptions SET status = $1, type = $2, version = $3, created_at = $4, revoked_at = $5, cost = $6 WHERE id = $7",
+func (s *store) UpdateEventSubSubscription(ctx context.Context, entry *EventSubEntry) error {
+	_, err := s.db.Exec(ctx, "UPDATE eventsub_subscriptions SET status = $1, type = $2, version = $3, created_at = $4, revoked_at = $5, cost = $6 WHERE id = $7",
 		entry.Status, entry.Type, entry.Version, entry.CreatedAt, entry.RevokedAt, entry.Cost, entry.ID)
 	if err != nil {
 		return err
@@ -108,11 +108,11 @@ func (s *store) UpdateEventSubSubscription(entry *EventSubEntry) error {
 
 // EventSubService interface for handling EventSub subscriptions
 type EventSubService interface {
-	GetEventSubSubscription(id string) (*EventSubEntry, error)
-	GetEventSubSubscriptions(userID string) ([]*EventSubEntry, error)
-	CreateEventSubSubscription(entry *EventSubEntry) error
-	UpdateEventSubSubscriptionStatus(id string, status string) error
-	RevokeEventSubSubscription(id string, status string) error
+	GetEventSubSubscription(ctx context.Context, id string) (*EventSubEntry, error)
+	GetEventSubSubscriptions(ctx context.Context, userID string) ([]*EventSubEntry, error)
+	CreateEventSubSubscription(ctx context.Context, entry *EventSubEntry) error
+	UpdateEventSubSubscriptionStatus(ctx context.Context, id string, status string) error
+	RevokeEventSubSubscription(ctx context.Context, id string, status string) error
 }
 
 // service struct for handling EventSub subscriptions
@@ -126,37 +126,37 @@ func NewService(store Store) EventSubService {
 }
 
 // GetEventSubSubscription gets an EventSub subscription by ID
-func (s *service) GetEventSubSubscription(id string) (*EventSubEntry, error) {
-	return s.store.GetEventSubSubscription(id)
+func (s *service) GetEventSubSubscription(ctx context.Context, id string) (*EventSubEntry, error) {
+	return s.store.GetEventSubSubscription(ctx, id)
 }
 
 // GetEventSubSubscriptions gets all EventSub subscriptions for a user
-func (s *service) GetEventSubSubscriptions(userID string) ([]*EventSubEntry, error) {
-	return s.store.GetEventSubSubscriptions(userID)
+func (s *service) GetEventSubSubscriptions(ctx context.Context, userID string) ([]*EventSubEntry, error) {
+	return s.store.GetEventSubSubscriptions(ctx, userID)
 }
 
 // CreateEventSubSubscription creates a new EventSub subscription
-func (s *service) CreateEventSubSubscription(entry *EventSubEntry) error {
-	return s.store.CreateEventSubSubscription(entry)
+func (s *service) CreateEventSubSubscription(ctx context.Context, entry *EventSubEntry) error {
+	return s.store.CreateEventSubSubscription(ctx, entry)
 }
 
 // UpdateEventSubSubscriptionStatus updates an EventSub subscription's status
-func (s *service) UpdateEventSubSubscriptionStatus(id string, status string) error {
-	entry, err := s.store.GetEventSubSubscription(id)
+func (s *service) UpdateEventSubSubscriptionStatus(ctx context.Context, id string, status string) error {
+	entry, err := s.store.GetEventSubSubscription(ctx, id)
 	if err != nil {
 		return err
 	}
 	entry.Status = status
-	return s.store.UpdateEventSubSubscription(entry)
+	return s.store.UpdateEventSubSubscription(context.WithoutCancel(ctx), entry)
 }
 
 // RevokeEventSubSubscription revokes an EventSub subscription
-func (s *service) RevokeEventSubSubscription(id string, status string) error {
-	entry, err := s.store.GetEventSubSubscription(id)
+func (s *service) RevokeEventSubSubscription(ctx context.Context, id string, status string) error {
+	entry, err := s.store.GetEventSubSubscription(ctx, id)
 	if err != nil {
 		return err
 	}
 	entry.Status = status
 	entry.RevokedAt = time.Now()
-	return s.store.UpdateEventSubSubscription(entry)
+	return s.store.UpdateEventSubSubscription(context.WithoutCancel(ctx), entry)
 }

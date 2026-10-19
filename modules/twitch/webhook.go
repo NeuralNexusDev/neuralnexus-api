@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/link"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/goccy/go-json"
 	"github.com/nicklaw5/helix/v2"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -59,7 +59,7 @@ func handleRevocation(ctx context.Context, userId string, eventsub EventSubServi
 		helix.EventSubStatusNotificationFailuresExceeded,
 		EventSubStatusVersionRemoved:
 		reqctx.Log(ctx, userId, "EventSub subscription removed")
-		err = eventsub.RevokeEventSubSubscription(vals.Subscription.ID, vals.Subscription.Status)
+		err = eventsub.RevokeEventSubSubscription(ctx, vals.Subscription.ID, vals.Subscription.Status)
 		if err != nil {
 			reqctx.Log(ctx, userId, "Failed to revoke EventSub subscription:", err.Error())
 			return errors.New("failed to revoke EventSub subscription")
@@ -82,7 +82,7 @@ func handleVerification(w http.ResponseWriter, ctx context.Context, userId strin
 	w.Write([]byte(vals.Challenge))
 	reqctx.Log(ctx, userId, "EventSub challenge received, responding with challenge")
 
-	var err = eventsub.UpdateEventSubSubscriptionStatus(vals.Subscription.ID, helix.EventSubStatusEnabled)
+	var err = eventsub.UpdateEventSubSubscriptionStatus(ctx, vals.Subscription.ID, helix.EventSubStatusEnabled)
 	if err != nil {
 		reqctx.Log(ctx, userId, "Failed to update EventSub subscription:", err.Error())
 	}
@@ -182,6 +182,6 @@ func handleChannelChatMessage(ctx context.Context, userId string, eventsub Event
 		}
 	}
 
-	log.Printf("User %s sent a chat message in channel %s: %s\n", chatEvent.ChatterUserID, chatEvent.BroadcasterUserID, chatEvent.Message.Text)
+	reqctx.Log(ctx, fmt.Sprintf("User %s sent a chat message in channel %s: %s", chatEvent.ChatterUserID, chatEvent.BroadcasterUserID, chatEvent.Message.Text))
 	return nil
 }
