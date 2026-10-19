@@ -61,3 +61,26 @@ type SessionClaims struct {
 	Scope []string `json:"scope"`
 	jwt.RegisteredClaims
 }
+
+// AsJWT creates a JWT for a session
+func (s *Session) AsJWT() (string, error) {
+	// ExpiresAt == 0 means the session never expires (see Session.IsValid and
+	// store.AddSessionToCache). Encoding that literally would set the JWT's
+	// exp claim to 1970-01-01, which ReadJWT would immediately reject as
+	// expired, so omit the exp claim entirely in that case instead.
+	var expiresAt *jwt.NumericDate
+	if s.ExpiresAt != 0 {
+		expiresAt = jwt.NewNumericDate(time.Unix(s.ExpiresAt, 0))
+	}
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, SessionClaims{
+		s.Permissions,
+		jwt.RegisteredClaims{
+			ExpiresAt: expiresAt,
+			IssuedAt:  jwt.NewNumericDate(time.Unix(s.IssuedAt, 0)),
+			Issuer:    NN_API_URL,
+			Subject:   s.UserID,
+			Audience:  validAudiences,
+			ID:        s.ID,
+		},
+	}).SignedString(JWT_SECRET)
+}
