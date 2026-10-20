@@ -171,6 +171,9 @@ func (s *service) ReadJWT(ctx context.Context, tokenStr string) (*Session, error
 	// session must not be revivable just because its JWT hasn't expired yet.
 	session, err := s.GetSession(ctx, claims.ID)
 	if err != nil {
+		if err == ErrNotFound {
+			reqctx.Log(ctx, "Session not found for JWT ID ", claims.ID)
+		}
 		return nil, err
 	}
 	if session.UserID != claims.Subject {
