@@ -114,35 +114,35 @@ func SessionMiddleware(service session.Service) Middleware {
 					responses.Unauthorized(w, r, "")
 					return
 				}
-				session, err := service.ReadJWT(r.Context(), authStrings[1])
+				s, err := service.ReadJWT(r.Context(), authStrings[1])
 				if err != nil {
 					reqctx.Log(r.Context(), "Error reading JWT:\n\t", err.Error())
 					responses.Unauthorized(w, r, "")
 					return
 				}
 
-				if !session.IsValid() {
+				if !s.IsValid() {
 					responses.Unauthorized(w, r, "")
-					if delErr := service.DeleteSession(context.WithoutCancel(r.Context()), session.ID); delErr != nil {
+					if delErr := service.DeleteSession(context.WithoutCancel(r.Context()), s.ID); delErr != nil {
 						reqctx.Log(r.Context(), logErrorDeletingSession, delErr.Error())
 					}
 					return
 				}
 
-				ctx := context.WithValue(r.Context(), reqctx.SessionKey, session)
-				ctx = context.WithValue(ctx, reqctx.UserIDKey, session.UserID)
+				ctx := context.WithValue(r.Context(), reqctx.SessionKey, s)
+				ctx = context.WithValue(ctx, reqctx.UserIDKey, s.UserID)
 				r = r.WithContext(ctx)
 			} else if cookie, err := r.Cookie(session.CookieName); err == nil {
-				session, jwtErr := service.ReadJWT(r.Context(), cookie.Value)
+				s, jwtErr := service.ReadJWT(r.Context(), cookie.Value)
 				if jwtErr != nil {
 					reqctx.Log(r.Context(), logErrorReadingJWTFromCookie, jwtErr.Error())
-				} else if !session.IsValid() {
-					if delErr := service.DeleteSession(context.WithoutCancel(r.Context()), session.ID); delErr != nil {
+				} else if !s.IsValid() {
+					if delErr := service.DeleteSession(context.WithoutCancel(r.Context()), s.ID); delErr != nil {
 						reqctx.Log(r.Context(), logErrorDeletingSession, delErr.Error())
 					}
 				} else {
-					ctx := context.WithValue(r.Context(), reqctx.SessionKey, session)
-					ctx = context.WithValue(ctx, reqctx.UserIDKey, session.UserID)
+					ctx := context.WithValue(r.Context(), reqctx.SessionKey, s)
+					ctx = context.WithValue(ctx, reqctx.UserIDKey, s.UserID)
 					r = r.WithContext(ctx)
 				}
 			}
@@ -156,15 +156,15 @@ func SessionMiddleware(service session.Service) Middleware {
 func RateLimitMiddleware(service ratelimit.Service, prefix string, sessionLimit int, ipLimit int) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			session, ok := r.Context().Value(reqctx.SessionKey).(*session.Session)
-			if ok && session != nil {
-				err := service.IncrRateLimit(r.Context(), prefix+":"+session.UserID)
+			s, ok := r.Context().Value(reqctx.SessionKey).(*session.Session)
+			if ok && s != nil {
+				err := service.IncrRateLimit(r.Context(), prefix+":"+s.UserID)
 				if err != nil {
 					reqctx.Log(r.Context(), logErrorIncrementingRateLimit, err.Error())
 					next.ServeHTTP(w, r)
 					return
 				}
-				limit, err := service.GetRateLimit(r.Context(), prefix+":"+session.UserID)
+				limit, err := service.GetRateLimit(r.Context(), prefix+":"+s.UserID)
 				if err != nil {
 					reqctx.Log(r.Context(), logErrorGettingRateLimit, err.Error())
 					next.ServeHTTP(w, r)
@@ -270,15 +270,15 @@ func RequestLoggerMiddleware(next http.Handler) http.Handler {
 func Auth(service session.Service) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			session, ok := r.Context().Value(reqctx.SessionKey).(*session.Session)
-			if !ok || session == nil {
+			s, ok := r.Context().Value(reqctx.SessionKey).(*session.Session)
+			if !ok || s == nil {
 				responses.Unauthorized(w, r, "")
 				return
 			}
 
-			if !session.IsValid() {
+			if !s.IsValid() {
 				responses.Unauthorized(w, r, "")
-				err := service.DeleteSession(context.WithoutCancel(r.Context()), session.ID)
+				err := service.DeleteSession(context.WithoutCancel(r.Context()), s.ID)
 				if err != nil {
 					reqctx.Log(r.Context(), logErrorDeletingSession, err.Error())
 				}
@@ -294,12 +294,12 @@ func Auth(service session.Service) Middleware {
 // user ID, so a {user_id}-shaped handler can be reused for a "me" route.
 func SelfUserID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		session, ok := r.Context().Value(reqctx.SessionKey).(*session.Session)
-		if !ok || session == nil {
+		s, ok := r.Context().Value(reqctx.SessionKey).(*session.Session)
+		if !ok || s == nil {
 			responses.Unauthorized(w, r, "")
 			return
 		}
-		r.SetPathValue("user_id", session.UserID)
+		r.SetPathValue("user_id", s.UserID)
 		next.ServeHTTP(w, r)
 	})
 }

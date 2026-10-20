@@ -79,20 +79,20 @@ func LoginHandler(as Service, ss session.Service) http.HandlerFunc {
 			return
 		}
 
-		session, err := as.NewSession(ctx, account, time.Now().Add(time.Hour*24).Unix())
+		s, err := as.NewSession(ctx, account, time.Now().Add(time.Hour*24).Unix())
 		if err != nil {
 			reqctx.Log(ctx, "Failed to create session:\n\t", err.Error())
 			responses.InternalServerError(w, r, msgAuthenticationFailed)
 			return
 		}
 
-		if err = ss.AddSession(ctx, session); err != nil {
+		if err = ss.AddSession(ctx, s); err != nil {
 			reqctx.Log(ctx, "Failed to add session:\n\t", err.Error())
 			responses.InternalServerError(w, r, msgAuthenticationFailed)
 			return
 		}
 
-		if err := ss.SetSessionCookie(ctx, w, session); err != nil {
+		if err := ss.SetSessionCookie(ctx, w, s); err != nil {
 			reqctx.Log(ctx, logFailedToCreateJWT, err.Error())
 			responses.InternalServerError(w, r, msgAuthenticationFailed)
 			return
@@ -104,12 +104,12 @@ func LoginHandler(as Service, ss session.Service) http.HandlerFunc {
 // LogoutHandler handles the logout route
 func LogoutHandler(ss session.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
-		if session == nil {
+		s := r.Context().Value(reqctx.SessionKey).(*session.Session)
+		if s == nil {
 			responses.BadRequest(w, r, msgInvalidSession)
 			return
 		}
-		err := ss.DeleteSession(r.Context(), session.ID)
+		err := ss.DeleteSession(r.Context(), s.ID)
 		if err != nil {
 			reqctx.Log(r.Context(), "Failed to delete session:\n\t", err.Error())
 			responses.InternalServerError(w, r, msgFailedToDeleteSession)
