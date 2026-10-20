@@ -56,8 +56,8 @@ func (s *Session) IsValid() bool {
 	return time.Now().Unix() < s.ExpiresAt
 }
 
-// SessionClaims custom JWT claims for session
-type SessionClaims struct {
+// Claims custom JWT claims for session
+type Claims struct {
 	Scope []string `json:"scope"`
 	jwt.RegisteredClaims
 }
@@ -72,7 +72,7 @@ func (s *Session) AsJWT() (string, error) {
 	if s.ExpiresAt != 0 {
 		expiresAt = jwt.NewNumericDate(time.Unix(s.ExpiresAt, 0))
 	}
-	return jwt.NewWithClaims(jwt.SigningMethodHS256, SessionClaims{
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{
 		s.Permissions,
 		jwt.RegisteredClaims{
 			ExpiresAt: expiresAt,
