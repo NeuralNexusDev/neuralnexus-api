@@ -145,7 +145,7 @@ func (s *service) SetSessionCookie(ctx context.Context, w http.ResponseWriter, s
 
 // ReadJWT reads a JWT and returns the session
 func (s *service) ReadJWT(ctx context.Context, tokenStr string) (*Session, error) {
-	claims := &SessionClaims{}
+	claims := &Claims{}
 	_, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (any, error) {
 		return JWT_SECRET, nil
 	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))

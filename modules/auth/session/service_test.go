@@ -296,7 +296,7 @@ func TestSE23to31ReadJWT(t *testing.T) {
 	})
 
 	t.Run("SE-25_WrongSigningSecret", func(t *testing.T) {
-		claims := SessionClaims{RegisteredClaims: jwt.RegisteredClaims{
+		claims := Claims{RegisteredClaims: jwt.RegisteredClaims{
 			Subject: "u1", ID: "s1", Audience: validAudiences, IssuedAt: jwt.NewNumericDate(time.Now()),
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
 		}}
@@ -311,7 +311,7 @@ func TestSE23to31ReadJWT(t *testing.T) {
 	})
 
 	t.Run("SE-26_EmptyAudience", func(t *testing.T) {
-		claims := SessionClaims{RegisteredClaims: jwt.RegisteredClaims{
+		claims := Claims{RegisteredClaims: jwt.RegisteredClaims{
 			Subject: "u1", ID: "s1", IssuedAt: jwt.NewNumericDate(time.Now()),
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
 		}}
@@ -326,7 +326,7 @@ func TestSE23to31ReadJWT(t *testing.T) {
 	})
 
 	t.Run("SE-27_EmptyAudienceEntry", func(t *testing.T) {
-		claims := SessionClaims{RegisteredClaims: jwt.RegisteredClaims{
+		claims := Claims{RegisteredClaims: jwt.RegisteredClaims{
 			Subject: "u1", ID: "s1", Audience: []string{""}, IssuedAt: jwt.NewNumericDate(time.Now()),
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
 		}}
@@ -341,7 +341,7 @@ func TestSE23to31ReadJWT(t *testing.T) {
 	})
 
 	t.Run("SE-28_InvalidAudience", func(t *testing.T) {
-		claims := SessionClaims{RegisteredClaims: jwt.RegisteredClaims{
+		claims := Claims{RegisteredClaims: jwt.RegisteredClaims{
 			Subject: "u1", ID: "s1", Audience: []string{"https://evil.example"}, IssuedAt: jwt.NewNumericDate(time.Now()),
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
 		}}
