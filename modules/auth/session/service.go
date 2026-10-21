@@ -3,23 +3,14 @@ package session
 import (
 	"context"
 	"errors"
-	"log"
 	"net/http"
-	"os"
 	"slices"
 	"time"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
 	"github.com/golang-jwt/jwt/v5"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
-)
-
-//goland:noinspection GoSnakeCaseUsage
-var (
-	NN_API_URL     = os.Getenv("NN_API_URL")
-	NN_SITE_URL    = os.Getenv("NN_SITE_URL")
-	JWT_SECRET     = []byte(os.Getenv("JWT_SECRET"))
-	validAudiences = []string{NN_SITE_URL, NN_API_URL}
 )
 
 var (
@@ -31,19 +22,8 @@ var (
 
 const (
 	CookieName           = "session"
-	msgJWTSecretUnset    = "JWT_SECRET environment variable must be set"
-	msgSiteAPIURLUnset   = "NN_SITE_URL and NN_API_URL environment variables must be set"
 	logFailedToCreateJWT = "Failed to create JWT:\n\t"
 )
-
-func init() {
-	if len(JWT_SECRET) == 0 {
-		log.Fatal(msgJWTSecretUnset)
-	}
-	if NN_SITE_URL == "" || NN_API_URL == "" {
-		log.Fatal(msgSiteAPIURLUnset)
-	}
-}
 
 // Service - The session service interface
 type Service interface {
@@ -52,18 +32,27 @@ type Service interface {
 	UpdateSession(ctx context.Context, session *Session) error
 	DeleteSession(ctx context.Context, id string) error
 	SetSessionCookie(ctx context.Context, w http.ResponseWriter, session *Session) error
+	CreateJWT(ctx context.Context, session *Session) (string, error)
 	ReadJWT(ctx context.Context, token string) (*Session, error)
 }
 
 // service - The session service implementation
 type service struct {
-	store Store
+	store          Store
+	apiUrl         string
+	siteUrl        string
+	jwtSecret      []byte
+	validAudiences []string
 }
 
 // NewService - Create a new session service
-func NewService(store Store) Service {
+func NewService(cfg *config.Config, store Store) Service {
 	return &service{
-		store: store,
+		store:          store,
+		apiUrl:         cfg.ApiUrl,
+		siteUrl:        cfg.SiteUrl,
+		jwtSecret:      cfg.Auth.Session.JwtSecret,
+		validAudiences: cfg.Auth.Session.ValidAudiences,
 	}
 }
 
@@ -124,7 +113,7 @@ func (s *service) DeleteSession(ctx context.Context, id string) error {
 
 // SetSessionCookie creates a JWT for an already-persisted session and sets it as the session cookie.
 func (s *service) SetSessionCookie(ctx context.Context, w http.ResponseWriter, session *Session) error {
-	jwtString, err := session.AsJWT()
+	jwtString, err := s.CreateJWT(ctx, session)
 	if err != nil {
 		reqctx.Log(ctx, logFailedToCreateJWT, err.Error())
 		return err
@@ -143,11 +132,34 @@ func (s *service) SetSessionCookie(ctx context.Context, w http.ResponseWriter, s
 	return nil
 }
 
+// CreateJWT creates a JWT for a session
+func (s *service) CreateJWT(ctx context.Context, session *Session) (string, error) {
+	// ExpiresAt == 0 means the session never expires (see Session.IsValid and
+	// store.AddSessionToCache). Encoding that literally would set the JWT's
+	// exp claim to 1970-01-01, which ReadJWT would immediately reject as
+	// expired, so omit the exp claim entirely in that case instead.
+	var expiresAt *jwt.NumericDate
+	if session.ExpiresAt != 0 {
+		expiresAt = jwt.NewNumericDate(time.Unix(session.ExpiresAt, 0))
+	}
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{
+		session.Permissions,
+		jwt.RegisteredClaims{
+			ExpiresAt: expiresAt,
+			IssuedAt:  jwt.NewNumericDate(time.Unix(session.IssuedAt, 0)),
+			Issuer:    s.apiUrl,
+			Subject:   session.UserID,
+			Audience:  s.validAudiences,
+			ID:        session.ID,
+		},
+	}).SignedString(s.jwtSecret)
+}
+
 // ReadJWT reads a JWT and returns the session
 func (s *service) ReadJWT(ctx context.Context, tokenStr string) (*Session, error) {
 	claims := &Claims{}
 	_, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (any, error) {
-		return JWT_SECRET, nil
+		return s.jwtSecret, nil
 	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
 	if err != nil {
 		return nil, err
@@ -160,7 +172,7 @@ func (s *service) ReadJWT(ctx context.Context, tokenStr string) (*Session, error
 		if aud == "" {
 			return nil, ErrEmptyAudienceEntry
 		}
-		valid := slices.Contains(validAudiences, aud)
+		valid := slices.Contains(s.validAudiences, aud)
 		if !valid {
 			reqctx.Log(ctx, ErrInvalidAudience.Error(), aud)
 			return nil, ErrInvalidAudience
