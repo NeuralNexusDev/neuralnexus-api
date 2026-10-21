@@ -33,6 +33,8 @@ const (
 
 // Store - Minecraft player store
 type Store interface {
+	Cache
+	S3
 	GetPlayerByUUID(ctx context.Context, id string) (*Player, error)
 	GetPlayerByName(ctx context.Context, name string) (*Player, error)
 	GetProfileByUUID(ctx context.Context, id string) (*Profile, error)
@@ -41,6 +43,16 @@ type Store interface {
 	UpsertTextures(ctx context.Context, value *TexturesValue) error
 	UpsertTextureHash(ctx context.Context, hash string) error
 
+	GetGeyserPlayerByGamertag(ctx context.Context, gamertag string) (*GeyserPlayer, error)
+	GetGeyserPlayerByXUID(ctx context.Context, xuid int64) (*GeyserPlayer, error)
+	UpsertGeyserPlayer(ctx context.Context, player *GeyserPlayer) error
+
+	GetGeyserSkin(ctx context.Context, xuid int64) (*GeyserSkin, error)
+	GetGeyserSkinByHash(ctx context.Context, hash string) (*GeyserSkin, error)
+	UpsertGeyserSkin(ctx context.Context, xuid int64, skin *GeyserSkin) error
+}
+
+type Cache interface {
 	GetPlayerFromCache(ctx context.Context, key string) (*Player, error)
 	SetPlayerInCache(ctx context.Context, player *Player) error
 
@@ -49,17 +61,11 @@ type Store interface {
 
 	GetSignedProfileFromCache(ctx context.Context, id string) (*Player, error)
 	SetSignedProfileInCache(ctx context.Context, player *Player) error
+}
 
+type S3 interface {
 	IsTextureInS3(ctx context.Context, hash string) (bool, error)
 	PutTextureInS3(ctx context.Context, hash string, body io.ReadCloser) error
-
-	GetGeyserPlayerByGamertag(ctx context.Context, gamertag string) (*GeyserPlayer, error)
-	GetGeyserPlayerByXUID(ctx context.Context, xuid int64) (*GeyserPlayer, error)
-	UpsertGeyserPlayer(ctx context.Context, player *GeyserPlayer) error
-
-	GetGeyserSkin(ctx context.Context, xuid int64) (*GeyserSkin, error)
-	GetGeyserSkinByHash(ctx context.Context, hash string) (*GeyserSkin, error)
-	UpsertGeyserSkin(ctx context.Context, xuid int64, skin *GeyserSkin) error
 
 	IsGeyserTextureInS3(ctx context.Context, hash string) (bool, error)
 	PutGeyserTextureInS3(ctx context.Context, hash string, body io.ReadCloser) error
@@ -67,9 +73,19 @@ type Store interface {
 
 // store - Minecraft player store implementation
 type store struct {
+	cache
+	sThree
 	db  *pgxpool.Pool
 	rdb *redis.Client
 	s3  *s3.Client
+}
+
+type cache struct {
+	rdb *redis.Client
+}
+
+type sThree struct {
+	s3 *s3.Client
 }
 
 // NewStore - Create a new Minecraft player store
@@ -260,8 +276,8 @@ func cacheMiss(err error) error {
 }
 
 // GetPlayerFromCache gets a player from the cache by key (uuid or name)
-func (s *store) GetPlayerFromCache(ctx context.Context, key string) (*Player, error) {
-	val, err := s.rdb.Get(ctx, CachePlayer+key).Result()
+func (c *cache) GetPlayerFromCache(ctx context.Context, key string) (*Player, error) {
+	val, err := c.rdb.Get(ctx, CachePlayer+key).Result()
 	if err != nil {
 		return nil, cacheMiss(err)
 	}
@@ -273,22 +289,22 @@ func (s *store) GetPlayerFromCache(ctx context.Context, key string) (*Player, er
 }
 
 // SetPlayerInCache sets a player in the cache under both uuid and name keys
-func (s *store) SetPlayerInCache(ctx context.Context, player *Player) error {
+func (c *cache) SetPlayerInCache(ctx context.Context, player *Player) error {
 	data, err := json.Marshal(player)
 	if err != nil {
 		return err
 	}
 	blob := string(data)
 
-	if err := s.rdb.Set(ctx, CachePlayer+player.ID, blob, redisTTL).Err(); err != nil {
+	if err := c.rdb.Set(ctx, CachePlayer+player.ID, blob, redisTTL).Err(); err != nil {
 		return err
 	}
-	return s.rdb.Set(ctx, CachePlayer+player.Name, blob, redisTTL).Err()
+	return c.rdb.Set(ctx, CachePlayer+player.Name, blob, redisTTL).Err()
 }
 
 // GetProfileFromCache gets a player's profile from the cache
-func (s *store) GetProfileFromCache(ctx context.Context, id string) (*Profile, error) {
-	val, err := s.rdb.Get(ctx, CacheProfile+id).Result()
+func (c *cache) GetProfileFromCache(ctx context.Context, id string) (*Profile, error) {
+	val, err := c.rdb.Get(ctx, CacheProfile+id).Result()
 	if err != nil {
 		return nil, cacheMiss(err)
 	}
@@ -300,17 +316,17 @@ func (s *store) GetProfileFromCache(ctx context.Context, id string) (*Profile, e
 }
 
 // SetProfileInCache sets a player's profile in the cache
-func (s *store) SetProfileInCache(ctx context.Context, profile *Profile) error {
+func (c *cache) SetProfileInCache(ctx context.Context, profile *Profile) error {
 	data, err := json.Marshal(profile)
 	if err != nil {
 		return err
 	}
-	return s.rdb.Set(ctx, CacheProfile+profile.ID, string(data), redisTTL).Err()
+	return c.rdb.Set(ctx, CacheProfile+profile.ID, string(data), redisTTL).Err()
 }
 
 // GetSignedProfileFromCache gets a player's signed profile from the cache
-func (s *store) GetSignedProfileFromCache(ctx context.Context, id string) (*Player, error) {
-	val, err := s.rdb.Get(ctx, CacheProfileSigned+id).Result()
+func (c *cache) GetSignedProfileFromCache(ctx context.Context, id string) (*Player, error) {
+	val, err := c.rdb.Get(ctx, CacheProfileSigned+id).Result()
 	if err != nil {
 		return nil, cacheMiss(err)
 	}
@@ -322,16 +338,16 @@ func (s *store) GetSignedProfileFromCache(ctx context.Context, id string) (*Play
 }
 
 // SetSignedProfileInCache sets a player's signed profile in the cache
-func (s *store) SetSignedProfileInCache(ctx context.Context, player *Player) error {
+func (c *cache) SetSignedProfileInCache(ctx context.Context, player *Player) error {
 	data, err := json.Marshal(player)
 	if err != nil {
 		return err
 	}
-	return s.rdb.Set(ctx, CacheProfileSigned+player.ID, string(data), redisTTL).Err()
+	return c.rdb.Set(ctx, CacheProfileSigned+player.ID, string(data), redisTTL).Err()
 }
 
 // IsTextureInS3 check if the texture is in S3
-func (s *store) IsTextureInS3(ctx context.Context, hash string) (bool, error) {
+func (s *sThree) IsTextureInS3(ctx context.Context, hash string) (bool, error) {
 	_, err := s.s3.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(S3Bucket),
 		Key:    aws.String(S3KeyPrefix + hash),
@@ -471,7 +487,7 @@ func (s *store) UpsertGeyserSkin(ctx context.Context, xuid int64, skin *GeyserSk
 }
 
 // PutTextureInS3 upload a texture to S3
-func (s *store) PutTextureInS3(ctx context.Context, hash string, body io.ReadCloser) error {
+func (s *sThree) PutTextureInS3(ctx context.Context, hash string, body io.ReadCloser) error {
 	input := &s3.PutObjectInput{
 		Bucket:      aws.String(S3Bucket),
 		Key:         aws.String(S3KeyPrefix + hash),
@@ -491,7 +507,7 @@ func (s *store) PutTextureInS3(ctx context.Context, hash string, body io.ReadClo
 }
 
 // IsGeyserTextureInS3 checks if a Bedrock skin's bytes are archived in S3
-func (s *store) IsGeyserTextureInS3(ctx context.Context, hash string) (bool, error) {
+func (s *sThree) IsGeyserTextureInS3(ctx context.Context, hash string) (bool, error) {
 	_, err := s.s3.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(S3Bucket),
 		Key:    aws.String(GeyserS3KeyPrefix + hash),
@@ -509,7 +525,7 @@ func (s *store) IsGeyserTextureInS3(ctx context.Context, hash string) (bool, err
 }
 
 // PutGeyserTextureInS3 uploads a Bedrock skin's bytes to S3
-func (s *store) PutGeyserTextureInS3(ctx context.Context, hash string, body io.ReadCloser) error {
+func (s *sThree) PutGeyserTextureInS3(ctx context.Context, hash string, body io.ReadCloser) error {
 	input := &s3.PutObjectInput{
 		Bucket:      aws.String(S3Bucket),
 		Key:         aws.String(GeyserS3KeyPrefix + hash),
