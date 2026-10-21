@@ -60,6 +60,26 @@ type Service interface {
 	GetGeyserTextureContent(ctx context.Context, hash string) (*TextureResult, error)
 }
 
+type MojangService interface {
+	GetPlayerByName(ctx context.Context, name string) (*Player, error)
+	GetPlayerByUUID(ctx context.Context, id string) (*Player, error)
+	GetPlayersByNames(ctx context.Context, names []string) ([]*Player, error)
+	GetProfile(ctx context.Context, id string, signed bool) (*Player, error)
+}
+
+type GeyserService interface {
+	GetXUID(ctx context.Context, gamertag string) (*GeyserPlayer, error)
+	GetSkin(ctx context.Context, xuid int64) (*GeyserSkin, error)
+	GetProfile(ctx context.Context, xuid int64) (*GeyserProfile, error)
+	GetProfileByGamertag(ctx context.Context, gamertag string) (*GeyserProfile, error)
+}
+
+type CommonService interface {
+	GetProfile(ctx context.Context, id string) (*Profile, error)
+	GetProfileByName(ctx context.Context, name string) (*Profile, error)
+	GetTextureContent(ctx context.Context, hash string) (*TextureResult, error)
+}
+
 // service - Minecraft player service implementation
 type service struct {
 	store                Store
@@ -72,12 +92,11 @@ type service struct {
 	geyserXUIDLookup     string
 	geyserSkinLookup     string
 	geyserGamertagLookup string
-	nnTextureUrl         string
-	nnGeyserTextureUrl   string
+	s3TextureUrl         string
 }
 
 // NewService - Create a new Minecraft player service
-func NewService(store Store, client *http.Client, nnTextureUrl string) Service {
+func NewService(store Store, client *http.Client, s3TextureUrl string) Service {
 	if client == nil {
 		client = http.DefaultClient
 	}
@@ -92,8 +111,7 @@ func NewService(store Store, client *http.Client, nnTextureUrl string) Service {
 		geyserXUIDLookup:     geyserXUIDLookup,
 		geyserSkinLookup:     geyserSkinLookup,
 		geyserGamertagLookup: geyserGamertagLookup,
-		nnTextureUrl:         nnTextureUrl,
-		nnGeyserTextureUrl:   nnTextureUrl + "geyser/",
+		s3TextureUrl:         s3TextureUrl,
 	}
 }
 
@@ -312,10 +330,10 @@ func (s *service) GetProfile(ctx context.Context, id string) (*Profile, error) {
 		return profile, nil
 	}
 	if profile.Textures.Textures.SKIN != nil {
-		profile.Textures.Textures.SKIN.URL = s.nnTextureUrl + profile.Textures.Textures.SKIN.Hash()
+		profile.Textures.Textures.SKIN.URL = s.s3TextureUrl + S3KeyPrefix + profile.Textures.Textures.SKIN.Hash()
 	}
 	if profile.Textures.Textures.CAPE != nil {
-		profile.Textures.Textures.CAPE.URL = s.nnTextureUrl + profile.Textures.Textures.CAPE.Hash()
+		profile.Textures.Textures.CAPE.URL = s.s3TextureUrl + S3KeyPrefix + profile.Textures.Textures.CAPE.Hash()
 	}
 	return profile, nil
 }
@@ -586,20 +604,20 @@ func (s *service) GetGeyserProfileByGamertag(ctx context.Context, gamertag strin
 // GetTextureContent returns the texture's bytes and content type, fetching from
 // Mojang exactly once on a cache miss instead of round-tripping back through S3.
 func (s *service) GetTextureContent(ctx context.Context, hash string) (*TextureResult, error) {
-	present, err := s.store.IsTextureInS3(ctx, hash)
+	present, err := s.store.IsTextureInS3(ctx, S3KeyPrefix, hash)
 	if err != nil {
 		return nil, err
 	}
 
 	if present {
-		return s.serveFromS3(ctx, hash)
+		return s.serveFromS3(ctx, S3KeyPrefix, hash)
 	}
-	return s.fetchAndArchive(ctx, hash)
+	return s.fetchAndArchive(ctx, S3KeyPrefix, hash)
 }
 
 // serveFromS3 fetches an already-archived texture straight from the CDN/S3
-func (s *service) serveFromS3(ctx context.Context, hash string) (*TextureResult, error) {
-	resp, err := s.get(ctx, s.nnTextureUrl+hash)
+func (s *service) serveFromS3(ctx context.Context, prefix, hash string) (*TextureResult, error) {
+	resp, err := s.get(ctx, s.s3TextureUrl+prefix+hash)
 	if err != nil {
 		return nil, err
 	}
@@ -633,7 +651,7 @@ func (bytesReadCloser) Close() error { return nil }
 // fetchAndArchive fetches a texture from Mojang once, archives it to S3, and
 // returns a second reader over the same bytes to serve the client — no
 // re-fetch through S3 for the request that just caused the miss.
-func (s *service) fetchAndArchive(ctx context.Context, hash string) (*TextureResult, error) {
+func (s *service) fetchAndArchive(ctx context.Context, prefix, hash string) (*TextureResult, error) {
 	resp, err := s.get(ctx, s.lookupTexture+hash)
 	if err != nil {
 		return nil, err
@@ -659,7 +677,7 @@ func (s *service) fetchAndArchive(ctx context.Context, hash string) (*TextureRes
 	}
 
 	// Archival failure shouldn't fail the client's request — degrade gracefully.
-	if err := s.store.PutTextureInS3(context.WithoutCancel(ctx), hash, bytesReadCloser{bytes.NewReader(data)}); err != nil {
+	if err := s.store.PutTextureInS3(context.WithoutCancel(ctx), prefix, hash, bytesReadCloser{bytes.NewReader(data)}); err != nil {
 		reqctx.Log(ctx, "Failed to upload texture to S3:\n\t", err.Error())
 	} else if err := s.store.UpsertTextureHash(context.WithoutCancel(ctx), hash); err != nil {
 		reqctx.Log(ctx, "Failed to store texture hash:\n\t", err.Error())
@@ -671,46 +689,22 @@ func (s *service) fetchAndArchive(ctx context.Context, hash string) (*TextureRes
 // GetGeyserTextureContent returns a Bedrock skin's bytes and content type,
 // archiving to S3 on a miss.
 func (s *service) GetGeyserTextureContent(ctx context.Context, hash string) (*TextureResult, error) {
-	present, err := s.store.IsGeyserTextureInS3(ctx, hash)
+	present, err := s.store.IsTextureInS3(ctx, GeyserS3KeyPrefix, hash)
 	if err != nil {
 		return nil, err
 	}
 
 	if present {
-		return s.serveGeyserFromS3(ctx, hash)
+		return s.serveFromS3(ctx, GeyserS3KeyPrefix, hash)
 	}
-	return s.fetchAndArchiveGeyserTexture(ctx, hash)
-}
-
-// serveGeyserFromS3 fetches an already-archived Bedrock skin straight from the CDN/S3
-func (s *service) serveGeyserFromS3(ctx context.Context, hash string) (*TextureResult, error) {
-	resp, err := s.get(ctx, s.nnGeyserTextureUrl+hash)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode == http.StatusNotFound {
-		resp.Body.Close()
-		return nil, ErrTextureNotFound
-	}
-	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
-		reqctx.Log(ctx, ErrBadStatusS3.Error(), strconv.Itoa(resp.StatusCode))
-		return nil, ErrBadStatusS3
-	}
-
-	contentType := resp.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = "image/png"
-	}
-	return &TextureResult{Body: resp.Body, ContentType: contentType}, nil
+	return s.fetchAndArchiveGeyserTexture(ctx, GeyserS3KeyPrefix, hash)
 }
 
 // fetchAndArchiveGeyserTexture fetches a Bedrock skin's bytes from the URL
 // embedded in its GeyserSkin.Value (Geyser hosts converted skins itself,
 // not on Mojang's texture CDN), archives it to S3, and returns a second
 // reader over the same bytes to serve the client.
-func (s *service) fetchAndArchiveGeyserTexture(ctx context.Context, hash string) (*TextureResult, error) {
+func (s *service) fetchAndArchiveGeyserTexture(ctx context.Context, prefix, hash string) (*TextureResult, error) {
 	skin, err := s.store.GetGeyserSkinByHash(ctx, hash)
 	if err != nil {
 		return nil, err
@@ -748,7 +742,7 @@ func (s *service) fetchAndArchiveGeyserTexture(ctx context.Context, hash string)
 	}
 
 	// Archival failure shouldn't fail the client's request — degrade gracefully.
-	if err := s.store.PutGeyserTextureInS3(context.WithoutCancel(ctx), hash, bytesReadCloser{bytes.NewReader(data)}); err != nil {
+	if err := s.store.PutTextureInS3(context.WithoutCancel(ctx), prefix, hash, bytesReadCloser{bytes.NewReader(data)}); err != nil {
 		reqctx.Log(ctx, "Failed to upload Geyser texture to S3:\n\t", err.Error())
 	}
 

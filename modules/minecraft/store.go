@@ -64,11 +64,8 @@ type Cache interface {
 }
 
 type S3 interface {
-	IsTextureInS3(ctx context.Context, hash string) (bool, error)
-	PutTextureInS3(ctx context.Context, hash string, body io.ReadCloser) error
-
-	IsGeyserTextureInS3(ctx context.Context, hash string) (bool, error)
-	PutGeyserTextureInS3(ctx context.Context, hash string, body io.ReadCloser) error
+	IsTextureInS3(ctx context.Context, prefix, hash string) (bool, error)
+	PutTextureInS3(ctx context.Context, prefix, hash string, body io.ReadCloser) error
 }
 
 // store - Minecraft player store implementation
@@ -346,29 +343,6 @@ func (c *cache) SetSignedProfileInCache(ctx context.Context, player *Player) err
 	return c.rdb.Set(ctx, CacheProfileSigned+player.ID, string(data), redisTTL).Err()
 }
 
-// IsTextureInS3 check if the texture is in S3
-func (s *sThree) IsTextureInS3(ctx context.Context, hash string) (bool, error) {
-	_, err := s.s3.HeadObject(ctx, &s3.HeadObjectInput{
-		Bucket: aws.String(S3Bucket),
-		Key:    aws.String(S3KeyPrefix + hash),
-	})
-
-	if err != nil {
-		var sue smithy.APIError
-		if errors.As(err, &sue) {
-			// Check for standard NotFound or NoSuchKey codes
-			if sue.ErrorCode() == "NotFound" || sue.ErrorCode() == "NoSuchKey" {
-				return false, nil
-			}
-		}
-		// Some S3-compatible stores (or older configs) might return a 404 generic error
-		// You can also check standard HTTP status code if needed, but the above is standard.
-		return false, err
-	}
-
-	return true, nil
-}
-
 // GetGeyserPlayerByGamertag gets a Bedrock player's gamertag->XUID mapping.
 func (s *store) GetGeyserPlayerByGamertag(ctx context.Context, gamertag string) (*GeyserPlayer, error) {
 	rows, err := s.db.Query(ctx, `
@@ -486,31 +460,11 @@ func (s *store) UpsertGeyserSkin(ctx context.Context, xuid int64, skin *GeyserSk
 	return err
 }
 
-// PutTextureInS3 upload a texture to S3
-func (s *sThree) PutTextureInS3(ctx context.Context, hash string, body io.ReadCloser) error {
-	input := &s3.PutObjectInput{
-		Bucket:      aws.String(S3Bucket),
-		Key:         aws.String(S3KeyPrefix + hash),
-		Body:        body,
-		ContentType: aws.String("image/png"),
-	}
-	if lr, ok := body.(interface{ Len() int }); ok {
-		input.ContentLength = aws.Int64(int64(lr.Len()))
-	}
-
-	_, err := s.s3.PutObject(ctx, input)
-	if err != nil {
-		reqctx.Log(ctx, ErrUploadS3.Error(), err.Error())
-		return ErrUploadS3
-	}
-	return nil
-}
-
-// IsGeyserTextureInS3 checks if a Bedrock skin's bytes are archived in S3
-func (s *sThree) IsGeyserTextureInS3(ctx context.Context, hash string) (bool, error) {
+// IsTextureInS3 check if the texture is in S3
+func (s *sThree) IsTextureInS3(ctx context.Context, prefix, hash string) (bool, error) {
 	_, err := s.s3.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(S3Bucket),
-		Key:    aws.String(GeyserS3KeyPrefix + hash),
+		Key:    aws.String(prefix + hash),
 	})
 	if err != nil {
 		var sue smithy.APIError
@@ -524,11 +478,11 @@ func (s *sThree) IsGeyserTextureInS3(ctx context.Context, hash string) (bool, er
 	return true, nil
 }
 
-// PutGeyserTextureInS3 uploads a Bedrock skin's bytes to S3
-func (s *sThree) PutGeyserTextureInS3(ctx context.Context, hash string, body io.ReadCloser) error {
+// PutTextureInS3 upload a texture to S3
+func (s *sThree) PutTextureInS3(ctx context.Context, prefix, hash string, body io.ReadCloser) error {
 	input := &s3.PutObjectInput{
 		Bucket:      aws.String(S3Bucket),
-		Key:         aws.String(GeyserS3KeyPrefix + hash),
+		Key:         aws.String(prefix + hash),
 		Body:        body,
 		ContentType: aws.String("image/png"),
 	}

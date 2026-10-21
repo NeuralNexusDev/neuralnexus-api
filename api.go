@@ -180,7 +180,7 @@ func ApplyRoutes(
 	mcStore := mc.NewStore(
 		database.GetDB(dbUrl2+"/archive?sslmode=require"), rdb,
 		database.GetS3(endpoint, accessKey, secretKey))
-	mcService := mc.NewService(mcStore, nil, "https://"+endpoint+"/"+mc.S3Bucket+"/"+mc.S3KeyPrefix)
+	mcService := mc.NewService(mcStore, nil, "https://"+endpoint+"/"+mc.S3Bucket+"/")
 
 	mux.Handle("GET /api/v1/mc/mojang/lookup/name/{name}", mc.GetMojangPlayerByNameHandler(mcService))
 	mux.Handle("GET /api/v1/mc/mojang/lookup/{uuid}", mc.GetMojangPlayerByUUIDHandler(mcService))
