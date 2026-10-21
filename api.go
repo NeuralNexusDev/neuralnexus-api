@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/discord"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/twitch"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -53,6 +54,7 @@ func NewAPIServer(address string, usingUDS bool) *APIServer {
 // ApplyRoutes - Apply the routes to the API server
 func ApplyRoutes(
 	mux *http.ServeMux,
+	cfg *config.Config,
 	nndb *pgxpool.Pool,
 	rdb *redis.Client,
 	session session.Service,
@@ -86,8 +88,8 @@ func ApplyRoutes(
 	mux.Handle("POST /api/v1/auth/login", loginRateLimit(account.LoginHandler(acct, session)))
 	mux.Handle("POST /api/v1/auth/logout", loginRateLimit(mwAuth(account.LogoutHandler(session))))
 
-	mux.Handle("/api/oauth", loginRateLimit(link.OAuthHandler(acct, linkAccountStore, session)))
-	mux.Handle("/api/openid", loginRateLimit(link.OpenIDHandler(acct, linkAccountStore, session)))
+	mux.Handle("/api/oauth", loginRateLimit(link.OAuthHandler(acct, linkAccountStore, session, cfg.SiteUrl)))
+	mux.Handle("/api/openid", loginRateLimit(link.OpenIDHandler(acct, linkAccountStore, session, cfg.SiteUrl)))
 
 	mux.Handle("GET /api/v1/users", mwAuth(user.ListUsersHandler(usr)))
 	mux.Handle("GET /api/v1/users/{user_id}", mwAuth(user.GetUserHandler(usr)))
@@ -251,6 +253,8 @@ func ApplyRoutes(
 
 // Setup - Setup the API server
 func (s *APIServer) Setup() http.Handler {
+	cfg := config.FromEnv()
+
 	dbUrl := os.Getenv("DATABASE_URL")
 	if dbUrl == "" {
 		log.Fatal("DATABASE_URL is not set")
@@ -265,7 +269,7 @@ func (s *APIServer) Setup() http.Handler {
 
 	db := database.GetDB(dbUrl + "/neuralnexus")
 	rdb := database.GetRedis()
-	sess := session.NewService(session.NewStore(db, rdb))
+	sess := session.NewService(cfg, session.NewStore(db, rdb))
 	accountStore := account.NewStore(db)
 	linkAccountStore := link.NewStore(db)
 	oauthTokenStore := link.NewOAuthTokenStore(db)
@@ -287,7 +291,7 @@ func (s *APIServer) Setup() http.Handler {
 		mw.RequestLoggerMiddleware,
 	)
 
-	router := ApplyRoutes(http.NewServeMux(), db, rdb, sess, accountStore, linkAccountStore, oauthTokenStore, rateLimit)
+	router := ApplyRoutes(http.NewServeMux(), cfg, db, rdb, sess, accountStore, linkAccountStore, oauthTokenStore, rateLimit)
 
 	// --------------- Static Files ---------------
 	router.Handle("/", http.FileServer(http.Dir("./public")))
@@ -327,8 +331,7 @@ func (s *APIServer) Run() error {
 		}
 		log.Printf("API Server listening on %s", s.Address)
 		return server.Serve(socket)
-	} else {
-		log.Printf("API Server listening on %s", s.Address)
-		return server.ListenAndServe()
 	}
+	log.Printf("API Server listening on %s", s.Address)
+	return server.ListenAndServe()
 }

@@ -41,17 +41,17 @@ const (
 )
 
 // OAuthHandler handles the OAuth route
-func OAuthHandler(as account.Service, las Store, ss session.Service) http.HandlerFunc {
+func OAuthHandler(as account.Service, las Store, ss session.Service, siteUrl string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		code := r.URL.Query().Get("code")
 		if code == "" {
 			reqctx.Log(ctx, "No code provided")
-			redirectBadRequest(w, r, session.NN_SITE_URL, msgInvalidRequest)
+			redirectBadRequest(w, r, siteUrl, msgInvalidRequest)
 			return
 		}
 
-		state, ok := decodeAndValidateState(w, r)
+		state, ok := decodeAndValidateState(w, r, siteUrl)
 		if !ok {
 			return
 		}
@@ -99,10 +99,10 @@ func OAuthHandler(as account.Service, las Store, ss session.Service) http.Handle
 }
 
 // OpenIDHandler handles the Steam OpenID 2.0 login/link callback.
-func OpenIDHandler(as account.Service, las Store, ss session.Service) http.HandlerFunc {
+func OpenIDHandler(as account.Service, las Store, ss session.Service, siteUrl string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		state, ok := decodeAndValidateState(w, r)
+		state, ok := decodeAndValidateState(w, r, siteUrl)
 		if !ok {
 			return
 		}
@@ -170,46 +170,46 @@ func OpenIDHandler(as account.Service, las Store, ss session.Service) http.Handl
 
 // decodeAndValidateState decodes state from the query param, checking it
 // against the redirect allowlist and the nonce cookie.
-func decodeAndValidateState(w http.ResponseWriter, r *http.Request) (OAuthState, bool) {
+func decodeAndValidateState(w http.ResponseWriter, r *http.Request, siteUrl string) (OAuthState, bool) {
 	var state OAuthState
 
 	stateB64 := r.URL.Query().Get("state")
 	if stateB64 == "" {
 		reqctx.Log(r.Context(), "No state provided")
-		redirectBadRequest(w, r, session.NN_SITE_URL, msgInvalidRequest)
+		redirectBadRequest(w, r, siteUrl, msgInvalidRequest)
 		return state, false
 	}
 	stateBytes, err := base64.URLEncoding.DecodeString(stateB64)
 	if err != nil {
 		reqctx.Log(r.Context(), "Failed to decode state:\n\t", err.Error())
-		redirectBadRequest(w, r, session.NN_SITE_URL, msgInvalidState)
+		redirectBadRequest(w, r, siteUrl, msgInvalidState)
 		return state, false
 	}
 	if err := json.Unmarshal(stateBytes, &state); err != nil {
 		reqctx.Log(r.Context(), "Failed to unmarshal state:\n\t", err.Error())
-		redirectBadRequest(w, r, session.NN_SITE_URL, msgInvalidState)
+		redirectBadRequest(w, r, siteUrl, msgInvalidState)
 		return state, false
 	}
 	if state.Platform == "" || state.Nonce == "" || state.RedirectURI == "" || state.Mode == "" {
 		reqctx.Log(r.Context(), logInvalidState)
-		redirectBadRequest(w, r, session.NN_SITE_URL, msgInvalidState)
+		redirectBadRequest(w, r, siteUrl, msgInvalidState)
 		return state, false
 	}
-	if !isAllowedRedirect(state.RedirectURI) {
+	if !isAllowedRedirect(state.RedirectURI, siteUrl) {
 		reqctx.Log(r.Context(), "Redirect URI is not allowed:\n\t", state.RedirectURI)
-		redirectBadRequest(w, r, session.NN_SITE_URL, msgInvalidState)
+		redirectBadRequest(w, r, siteUrl, msgInvalidState)
 		return state, false
 	}
 
 	cookie, err := r.Cookie("nonce")
 	if err != nil {
 		reqctx.Log(r.Context(), "Failed to get nonce cookie:\n\t", err.Error())
-		redirectBadRequest(w, r, session.NN_SITE_URL, msgInvalidState)
+		redirectBadRequest(w, r, siteUrl, msgInvalidState)
 		return state, false
 	}
 	if cookie.Value != state.Nonce {
 		reqctx.Log(r.Context(), "Nonce does not match")
-		redirectBadRequest(w, r, session.NN_SITE_URL, msgInvalidState)
+		redirectBadRequest(w, r, siteUrl, msgInvalidState)
 		return state, false
 	}
 
@@ -272,8 +272,8 @@ func redirectInternalServerError(w http.ResponseWriter, r *http.Request, target,
 }
 
 // isAllowedRedirect reports whether redirectURI's scheme and host match NN_SITE_URL.
-func isAllowedRedirect(redirectURI string) bool {
-	siteURL, err := url.Parse(session.NN_SITE_URL)
+func isAllowedRedirect(redirectURI, siteUrl string) bool {
+	siteURL, err := url.Parse(siteUrl)
 	if err != nil {
 		return false
 	}
