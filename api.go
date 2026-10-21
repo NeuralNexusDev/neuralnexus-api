@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/hex"
 	"log"
 	"net"
 	"net/http"
@@ -10,14 +9,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/discord"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/twitch"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/redis/go-redis/v9"
-	"github.com/rs/cors"
-	"golang.org/x/crypto/ed25519"
-
 	mw "github.com/NeuralNexusDev/neuralnexus-api/middleware"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/link"
@@ -25,9 +16,11 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/user"
 	bng "github.com/NeuralNexusDev/neuralnexus-api/modules/bee_name_generator"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	ds "github.com/NeuralNexusDev/neuralnexus-api/modules/datastore"
 	nds "github.com/NeuralNexusDev/neuralnexus-api/modules/datastore/numbers"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/discord"
 	gss "github.com/NeuralNexusDev/neuralnexus-api/modules/game_server_status"
 	mcs "github.com/NeuralNexusDev/neuralnexus-api/modules/mcstatus"
 	mc "github.com/NeuralNexusDev/neuralnexus-api/modules/minecraft"
@@ -36,6 +29,10 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/rbac"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/switchboard"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/teapot"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/twitch"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
+	"github.com/rs/cors"
 )
 
 type APIServer struct {
@@ -155,14 +152,7 @@ func ApplyRoutes(
 	mux.Handle("DELETE /api/v1/datastore/number", mwAuth(nds.DeleteNumberHandler(nService)))
 
 	// --------------- Discord ---------------
-	publicKeyStr := os.Getenv("DISCORD_PUBLIC_KEY")
-	publicKey, err := hex.DecodeString(publicKeyStr)
-	if publicKeyStr == "" || err != nil || len(publicKey) != ed25519.PublicKeySize {
-		log.Fatal("DISCORD_PUBLIC_KEY is not set")
-		return nil
-	}
-	verify := mw.VerifyEd25519Middleware(publicKey)
-
+	verify := mw.VerifyEd25519Middleware(cfg)
 	mux.Handle("POST /api/discord/webhook", verify(discord.HandleDiscordWebhook()))
 	mux.Handle("POST /api/discord/interactions", verify(discord.HandleDiscordInteraction()))
 

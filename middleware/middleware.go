@@ -15,6 +15,7 @@ import (
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/ratelimit"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"golang.org/x/crypto/ed25519"
@@ -306,7 +307,7 @@ func SelfUserID(next http.Handler) http.Handler {
 
 // VerifyEd25519Middleware verifies the body's signature, generally used by Discord
 // https://discord.com/developers/docs/interactions/receiving-and-responding#security-and-authorization
-func VerifyEd25519Middleware(publicKey ed25519.PublicKey) Middleware {
+func VerifyEd25519Middleware(cfg *config.Config) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			signatureStr := r.Header.Get(XSignatureEd25519)
@@ -330,7 +331,7 @@ func VerifyEd25519Middleware(publicKey ed25519.PublicKey) Middleware {
 			var buffer bytes.Buffer
 			buffer.WriteString(timestamp)
 			buffer.Write(bodyBytes)
-			if !ed25519.Verify(publicKey, buffer.Bytes(), signature) {
+			if !ed25519.Verify(cfg.Discord.PublicKey, buffer.Bytes(), signature) {
 				responses.Unauthorized(w, r, msgInvalidSignature)
 				return
 			}
