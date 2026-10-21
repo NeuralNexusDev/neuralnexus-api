@@ -64,8 +64,8 @@ type Cache interface {
 }
 
 type S3 interface {
-	IsTextureInS3(ctx context.Context, prefix, hash string) (bool, error)
-	PutTextureInS3(ctx context.Context, prefix, hash string, body io.ReadCloser) error
+	IsTextureInS3(ctx context.Context, hash string) (bool, error)
+	PutTextureInS3(ctx context.Context, hash string, body io.ReadCloser) error
 }
 
 // store - Minecraft player store implementation
@@ -423,7 +423,7 @@ func (s *store) GetGeyserSkinByHash(ctx context.Context, hash string) (*GeyserSk
 	rows, err := s.db.Query(ctx, `
 		SELECT hash, is_steve, COALESCE(signature, '') AS signature, texture_id, value, first_seen, last_seen
 		FROM geyser_player_textures
-		WHERE hash = $1
+		WHERE texture_id = $1
 		LIMIT 1`, hash)
 	if err != nil {
 		return nil, err
@@ -455,16 +455,16 @@ func (s *store) UpsertGeyserSkin(ctx context.Context, xuid int64, skin *GeyserSk
 			value      = EXCLUDED.value,
 			last_seen  = EXCLUDED.last_seen
 		`,
-		xuid, skin.Hash, skin.IsSteve, signature, skin.TextureID, skin.Value, now,
+		xuid, skin.TextureBytesHash, skin.IsSteve, signature, skin.Hash, skin.Value, now,
 	)
 	return err
 }
 
 // IsTextureInS3 check if the texture is in S3
-func (s *sThree) IsTextureInS3(ctx context.Context, prefix, hash string) (bool, error) {
+func (s *sThree) IsTextureInS3(ctx context.Context, hash string) (bool, error) {
 	_, err := s.s3.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(S3Bucket),
-		Key:    aws.String(prefix + hash),
+		Key:    aws.String(S3KeyPrefix + hash),
 	})
 	if err != nil {
 		var sue smithy.APIError
@@ -479,10 +479,10 @@ func (s *sThree) IsTextureInS3(ctx context.Context, prefix, hash string) (bool, 
 }
 
 // PutTextureInS3 upload a texture to S3
-func (s *sThree) PutTextureInS3(ctx context.Context, prefix, hash string, body io.ReadCloser) error {
+func (s *sThree) PutTextureInS3(ctx context.Context, hash string, body io.ReadCloser) error {
 	input := &s3.PutObjectInput{
 		Bucket:      aws.String(S3Bucket),
-		Key:         aws.String(prefix + hash),
+		Key:         aws.String(S3KeyPrefix + hash),
 		Body:        body,
 		ContentType: aws.String("image/png"),
 	}
