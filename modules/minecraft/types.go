@@ -238,32 +238,18 @@ var ErrInvalidGeyserRequest = errors.New("invalid request")
 
 // GeyserSkin - a Bedrock player's most recently converted skin.
 type GeyserSkin struct {
-	Hash      string `json:"hash"                db:"hash"`
-	IsSteve   bool   `json:"is_steve"            db:"is_steve"`
-	Signature string `json:"signature,omitempty" db:"signature"`
-	TextureID string `json:"texture_id"          db:"texture_id"`
-	Value     string `json:"value"               db:"value"`
-	FirstSeen int64  `json:"-"                   db:"first_seen"`
-	LastSeen  int64  `json:"-"                   db:"last_seen"`
+	TextureBytesHash string `json:"hash"                db:"hash"`
+	IsSteve          bool   `json:"is_steve"            db:"is_steve"`
+	Signature        string `json:"signature,omitempty" db:"signature"`
+	Hash             string `json:"texture_id"          db:"texture_id"`
+	Value            string `json:"value"               db:"value"`
+	FirstSeen        int64  `json:"-"                   db:"first_seen"`
+	LastSeen         int64  `json:"last_updated"        db:"last_seen"`
 }
 
 // IsStale returns true if the skin's last_seen is older than the staleness threshold
 func (s *GeyserSkin) IsStale() bool {
 	return time.Now().UnixMilli()-s.LastSeen > stalenessThreshold.Milliseconds()
-}
-
-// SkinURL decodes the download URL embedded in Value (base64 JSON shaped
-// like a Java textures property), or "" if it can't be decoded.
-func (s *GeyserSkin) SkinURL() string {
-	decoded, err := base64.StdEncoding.DecodeString(s.Value)
-	if err != nil {
-		return ""
-	}
-	var textures TexturesValue
-	if err := json.Unmarshal(decoded, &textures); err != nil || textures.Textures.SKIN == nil {
-		return ""
-	}
-	return textures.Textures.SKIN.URL
 }
 
 // xuidToUUID derives a synthetic UUID from an Xbox XUID: its zero-padded hex

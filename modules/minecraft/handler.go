@@ -304,29 +304,3 @@ func GetTextureHandler(s Service) http.HandlerFunc {
 		_, _ = io.Copy(w, result.Body)
 	}
 }
-
-// GetGeyserTextureHandler - Serve a Bedrock skin's bytes, fetching from the backend exactly once
-func GetGeyserTextureHandler(s Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		hash := r.PathValue("hash")
-		if hash == "" {
-			responses.BadRequest(w, r, msgInvalidHash)
-			return
-		}
-
-		result, err := s.GetGeyserTextureContent(r.Context(), hash)
-		if err != nil {
-			if err == ErrTextureNotFound {
-				responses.NotFound(w, r, msgTextureNotFound)
-				return
-			}
-			responses.BadGateway(w, r, msgFailedToGetTexture)
-			reqctx.Log(r.Context(), "Failed to get Geyser texture:\n\t", err.Error())
-			return
-		}
-		defer result.Body.Close()
-
-		w.Header().Set("Content-Type", result.ContentType)
-		_, _ = io.Copy(w, result.Body)
-	}
-}

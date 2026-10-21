@@ -1163,43 +1163,6 @@
                 }
             }
         },
-        "/mc/texture/geyser/{hash}": {
-            "get": {
-                "summary": "Get a Bedrock skin's raw image bytes",
-                "description": "Fetches from the URL embedded in the skin's Value on first request and archives to S3; served straight from S3/CDN thereafter.",
-                "security": [],
-                "parameters": [
-                    {
-                        "$ref": "#/components/parameters/MCHashSlug"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "content": {
-                            "image/png": {
-                                "schema": {
-                                    "type": "string",
-                                    "format": "binary"
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "$ref": "#/components/responses/401Unauthorized"
-                    },
-                    "404": {
-                        "$ref": "#/components/responses/404NotFound"
-                    },
-                    "429": {
-                        "$ref": "#/components/responses/429TooManyRequests"
-                    },
-                    "502": {
-                        "$ref": "#/components/responses/502BadGateway"
-                    }
-                }
-            }
-        },
         "/mc/texture/{hash}": {
             "get": {
                 "summary": "Get a texture's raw image bytes",
