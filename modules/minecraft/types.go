@@ -63,6 +63,31 @@ func (p *Player) MarshalJSON() ([]byte, error) {
 	return json.Marshal((*Alias)(p))
 }
 
+// ParseTextureValue parse a TEXTURE property
+func ParseTextureValue(ctx context.Context, value string) *TexturesValue {
+	decoded, err := base64.StdEncoding.DecodeString(value)
+	if err != nil {
+		reqctx.Log(ctx, "Failed to base64 decode texture property:\n\t", err.Error())
+		return nil
+	}
+	var textures TexturesValue
+	if err := json.Unmarshal(decoded, &textures); err != nil {
+		reqctx.Log(ctx, "Failed to unmarshal texture property:\n\t", err.Error())
+		return nil
+	}
+	return &textures
+}
+
+// EncodeTextureValue encodes a TexturesValue into a base64'd JSON string
+func EncodeTextureValue(ctx context.Context, textures *TexturesValue) string {
+	encoded, err := json.Marshal(*textures)
+	if err != nil {
+		reqctx.Log(ctx, "Failed to marshal texture property:\n\t", err.Error())
+		return ""
+	}
+	return base64.StdEncoding.EncodeToString(encoded)
+}
+
 // ParseProperties parse the player's properties
 func (p *Player) ParseProperties(ctx context.Context) *TexturesValue {
 	for _, prop := range p.Properties {
@@ -70,17 +95,7 @@ func (p *Player) ParseProperties(ctx context.Context) *TexturesValue {
 			reqctx.Log(ctx, "Unknown property:\n\t"+prop.String())
 			continue
 		}
-		decoded, err := base64.StdEncoding.DecodeString(prop.Value)
-		if err != nil {
-			reqctx.Log(ctx, "Failed to base64 decode texture property:\n\t", err.Error())
-			continue
-		}
-		var textures TexturesValue
-		if err := json.Unmarshal(decoded, &textures); err != nil {
-			reqctx.Log(ctx, "Failed to unmarshal texture property:\n\t", err.Error())
-			continue
-		}
-		return &textures
+		return ParseTextureValue(ctx, prop.Value)
 	}
 	return nil
 }
@@ -220,11 +235,11 @@ func (p *Profile) ToPlayer() (*Player, error) {
 
 // GeyserPlayer - a Bedrock player's identity derived from Geyser's Xbox XUID lookup.
 type GeyserPlayer struct {
-	Gamertag  string `json:"gamertag"     db:"gamertag"`
-	XUID      int64  `json:"xuid"         db:"xuid"`
-	UUID      string `json:"uuid"         db:"-"`
-	FirstSeen int64  `json:"-"            db:"first_seen"`
-	LastSeen  int64  `json:"-"            db:"last_seen"`
+	ID        string `json:"floodgate_uuid" db:"id"`
+	XUID      int64  `json:"xuid"           db:"xuid"`
+	Gamertag  string `json:"gamertag"       db:"gamertag"`
+	FirstSeen int64  `json:"-"              db:"first_seen"`
+	LastSeen  int64  `json:"-"              db:"last_seen"`
 }
 
 // IsStale returns true if the GeyserPlayer's last_seen is older than the staleness threshold
@@ -238,18 +253,31 @@ var ErrInvalidGeyserRequest = errors.New("invalid request")
 
 // GeyserSkin - a Bedrock player's most recently converted skin.
 type GeyserSkin struct {
-	TextureBytesHash string `json:"hash"                db:"hash"`
-	IsSteve          bool   `json:"is_steve"            db:"is_steve"`
-	Signature        string `json:"signature,omitempty" db:"signature"`
-	Hash             string `json:"texture_id"          db:"texture_id"`
-	Value            string `json:"value"               db:"value"`
-	FirstSeen        int64  `json:"-"                   db:"first_seen"`
-	LastSeen         int64  `json:"last_updated"        db:"last_seen"`
+	TextureBytesHash string `json:"hash"`
+	IsSteve          bool   `json:"is_steve"`
+	Signature        string `json:"signature,omitempty"`
+	Hash             string `json:"texture_id"`
+	Value            string `json:"value"`
+	FirstSeen        int64  `json:"-"`
+	LastSeen         int64  `json:"last_update"`
 }
 
 // IsStale returns true if the skin's last_seen is older than the staleness threshold
 func (s *GeyserSkin) IsStale() bool {
 	return time.Now().UnixMilli()-s.LastSeen > stalenessThreshold.Milliseconds()
+}
+
+func (s *GeyserSkin) FromTexturesValue(ctx context.Context, t *TexturesValue) {
+	if t == nil || t.Textures.SKIN == nil {
+		return
+	}
+	s.Hash = t.Textures.SKIN.Hash()
+	s.IsSteve = t.Textures.SKIN.Metadata != nil && t.Textures.SKIN.Metadata.Model == SLIM
+	s.Value = EncodeTextureValue(ctx, t)
+	// TODO: Hash PNG in some manner?
+	s.TextureBytesHash = "TODO"
+	s.FirstSeen = t.Timestamp
+	s.LastSeen = t.Timestamp
 }
 
 // xuidToUUID derives a synthetic UUID from an Xbox XUID: its zero-padded hex
@@ -277,10 +305,12 @@ func uuidToXUID(id string) (int64, error) {
 // GeyserProfile - a Bedrock player's full profile: identity plus their most
 // recently converted skin.
 type GeyserProfile struct {
-	UUID     string      `json:"uuid"`
-	XUID     int64       `json:"xuid"`
-	Gamertag string      `json:"gamertag"`
-	Skin     *GeyserSkin `json:"skin,omitempty"`
+	ID        string         `json:"floodgate_uuid" db:"id"`
+	XUID      int64          `json:"xuid"`
+	Gamertag  string         `json:"gamertag"`
+	Textures  *TexturesValue `json:"textures,omitempty"`
+	FirstSeen int64          `json:"-" db:"first_seen"`
+	LastSeen  int64          `json:"last_updated" db:"last_seen"`
 }
 
 // TexturesRow represents a texture in the database

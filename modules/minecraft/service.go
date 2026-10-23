@@ -36,12 +36,15 @@ const mojangLookupProfile = "https://sessionserver.mojang.com/session/minecraft/
 const mojangTextureURL = "http://textures.minecraft.net/texture/"
 
 // https://api.geysermc.org/v2/xbox/xuid/<gamertag> -- Or Floodgate UUID
+// - 503 on unknown xuid, 400 on invalid xuid value
 const geyserXUIDLookup = "https://api.geysermc.org/v2/xbox/xuid/"
 
 // https://api.geysermc.org/v2/skin/<xuid>
+// - 200 empty object on unknown xuid, 304 on cached resp, 400 on invalid xuid value
 const geyserSkinLookup = "https://api.geysermc.org/v2/skin/"
 
-// https://api.geysermc.org/v2/xbox/gamertag/<xuid>
+// https://api.geysermc.org/v2/xbox/gamertag/<xuid> -- Or Floodgate UUID
+// - 503 on unknown xuid, 400 on invalid xuid value
 const geyserGamertagLookup = "https://api.geysermc.org/v2/xbox/gamertag/"
 
 // Service - Minecraft player service
@@ -50,9 +53,11 @@ type Service interface {
 	GetMojangPlayerByUUID(ctx context.Context, id string) (*Player, error)
 	GetMojangPlayersByNames(ctx context.Context, names []string) ([]*Player, error)
 	GetMojangProfile(ctx context.Context, id string, signed bool) (*Player, error)
+
 	GetProfile(ctx context.Context, id string) (*Profile, error)
 	GetProfileByName(ctx context.Context, name string) (*Profile, error)
 	GetTextureContent(ctx context.Context, hash string) (*TextureResult, error)
+
 	GetGeyserXUID(ctx context.Context, gamertag string) (*GeyserPlayer, error)
 	GetGeyserSkin(ctx context.Context, xuid int64) (*GeyserSkin, error)
 	GetGeyserProfile(ctx context.Context, xuid int64) (*GeyserProfile, error)
@@ -67,7 +72,8 @@ type MojangService interface {
 }
 
 type GeyserService interface {
-	GetXUID(ctx context.Context, gamertag string) (*GeyserPlayer, error)
+	GetPlayerByXUID(ctx context.Context, xuid int64) (*GeyserPlayer, error)
+	GetPlayerByGamertag(ctx context.Context, gamertag string) (*GeyserPlayer, error)
 	GetSkin(ctx context.Context, xuid int64) (*GeyserSkin, error)
 	GetProfile(ctx context.Context, xuid int64) (*GeyserProfile, error)
 	GetProfileByGamertag(ctx context.Context, gamertag string) (*GeyserProfile, error)
@@ -425,7 +431,7 @@ func (s *service) fetchProfileFromMojang(ctx context.Context, id string, signed 
 			}
 		}
 
-		if err := s.store.UpsertTextures(context.WithoutCancel(ctx), profile.Textures); err != nil {
+		if err := s.store.UpsertTextures(context.WithoutCancel(ctx), JavaPlayerTexturesTable, profile.Textures); err != nil {
 			reqctx.Log(ctx, "Failed to store texture:\n\t", err.Error())
 		}
 	}
@@ -478,9 +484,9 @@ func (s *service) GetGeyserXUID(ctx context.Context, gamertag string) (*GeyserPl
 	}
 
 	player := &GeyserPlayer{
+		ID:       xuidToUUID(result.XUID),
 		Gamertag: gamertag,
 		XUID:     result.XUID,
-		UUID:     xuidToUUID(result.XUID),
 	}
 
 	if err := s.store.UpsertGeyserPlayer(context.WithoutCancel(ctx), player); err != nil {
@@ -491,9 +497,25 @@ func (s *service) GetGeyserXUID(ctx context.Context, gamertag string) (*GeyserPl
 
 // GetGeyserSkin gets a Bedrock player's most recently converted skin by XUID.
 func (s *service) GetGeyserSkin(ctx context.Context, xuid int64) (*GeyserSkin, error) {
-	dbSkin, _ := s.store.GetGeyserSkin(ctx, xuid)
-	if dbSkin != nil && !dbSkin.IsStale() {
-		return dbSkin, nil
+	// TODO: Simplify
+	profile, err := s.GetGeyserProfile(ctx, xuid)
+	if err != nil {
+		return nil, err
+	}
+
+	player, err := s.GetGeyserXUID(ctx, profile.Gamertag)
+	if err != nil {
+		return nil, err
+	}
+	var textures *TexturesValue
+	if textures, err = s.store.GetTextures(ctx, GeyserPlayerTexturesTable, player.ID, player.Gamertag); err != nil {
+		return nil, err
+	}
+
+	var skin GeyserSkin
+	if !player.IsStale() && textures != nil {
+		skin.FromTexturesValue(ctx, textures)
+		return &skin, err
 	}
 
 	resp, err := s.get(ctx, s.geyserSkinLookup+strconv.FormatInt(xuid, 10))
@@ -510,7 +532,6 @@ func (s *service) GetGeyserSkin(ctx context.Context, xuid int64) (*GeyserSkin, e
 		return nil, ErrGeyserAPI
 	}
 
-	var skin GeyserSkin
 	if err := json.NewDecoder(resp.Body).Decode(&skin); err != nil {
 		return nil, err
 	}
@@ -519,8 +540,11 @@ func (s *service) GetGeyserSkin(ctx context.Context, xuid int64) (*GeyserSkin, e
 		return nil, ErrSkinNotFound
 	}
 
-	if err := s.store.UpsertGeyserSkin(context.WithoutCancel(ctx), xuid, &skin); err != nil {
-		return nil, err
+	textures = ParseTextureValue(ctx, skin.Value)
+	if textures != nil {
+		if err := s.store.UpsertTextures(context.WithoutCancel(ctx), GeyserPlayerTexturesTable, textures); err != nil {
+			return nil, err
+		}
 	}
 	return &skin, nil
 }
@@ -556,7 +580,7 @@ func (s *service) resolveGeyserPlayerByXUID(ctx context.Context, xuid int64) (*G
 		return nil, ErrPlayerNotFound
 	}
 
-	player := &GeyserPlayer{Gamertag: result.Gamertag, XUID: xuid, UUID: xuidToUUID(xuid)}
+	player := &GeyserPlayer{ID: xuidToUUID(xuid), XUID: xuid, Gamertag: result.Gamertag}
 	if err := s.store.UpsertGeyserPlayer(context.WithoutCancel(ctx), player); err != nil {
 		return nil, err
 	}
@@ -580,11 +604,20 @@ func (s *service) GetGeyserProfile(ctx context.Context, xuid int64) (*GeyserProf
 	if err != nil {
 		return nil, err
 	}
-	skin, err := s.GetGeyserSkin(ctx, xuid)
-	if err != nil && err != ErrSkinNotFound {
-		return nil, skinStepFailure(ctx, err)
+	skin, err := s.GetGeyserSkin(ctx, player.XUID)
+	if err != nil {
+		if err != ErrSkinNotFound {
+			return nil, skinStepFailure(ctx, err)
+		}
+		return nil, err
 	}
-	return &GeyserProfile{UUID: player.UUID, XUID: player.XUID, Gamertag: player.Gamertag, Skin: skin}, nil
+	textures := ParseTextureValue(ctx, skin.Value)
+	if textures != nil {
+		if err := s.store.UpsertTextures(context.WithoutCancel(ctx), GeyserPlayerTexturesTable, textures); err != nil {
+			return nil, err
+		}
+	}
+	return &GeyserProfile{ID: player.ID, XUID: player.XUID, Gamertag: player.Gamertag, Textures: textures}, nil
 }
 
 // GetGeyserProfileByGamertag resolves a Bedrock player's full profile by gamertag.
@@ -594,10 +627,19 @@ func (s *service) GetGeyserProfileByGamertag(ctx context.Context, gamertag strin
 		return nil, err
 	}
 	skin, err := s.GetGeyserSkin(ctx, player.XUID)
-	if err != nil && err != ErrSkinNotFound {
-		return nil, skinStepFailure(ctx, err)
+	if err != nil {
+		if err != ErrSkinNotFound {
+			return nil, skinStepFailure(ctx, err)
+		}
+		return nil, err
 	}
-	return &GeyserProfile{UUID: player.UUID, XUID: player.XUID, Gamertag: player.Gamertag, Skin: skin}, nil
+	textures := ParseTextureValue(ctx, skin.Value)
+	if textures != nil {
+		if err := s.store.UpsertTextures(context.WithoutCancel(ctx), GeyserPlayerTexturesTable, textures); err != nil {
+			return nil, err
+		}
+	}
+	return &GeyserProfile{ID: player.ID, XUID: player.XUID, Gamertag: player.Gamertag, Textures: textures}, nil
 }
 
 // GetTextureContent returns the texture's bytes and content type, fetching from
