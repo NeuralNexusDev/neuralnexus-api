@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS player_names (
 );
 
 CREATE TABLE IF NOT EXISTS geyser_players (
+    id UUID PRIMARY KEY NOT NULL,
     xuid BIGINT PRIMARY KEY NOT NULL,
     gamertag TEXT NOT NULL,
     first_seen BIGINT NOT NULL,
@@ -43,19 +44,26 @@ CREATE TABLE IF NOT EXISTS geyser_players (
 );
 
 CREATE TABLE IF NOT EXISTS geyser_player_textures (
-    xuid BIGINT NOT NULL,
-    hash TEXT NOT NULL,
-    is_steve BOOLEAN NOT NULL,
-    signature TEXT,
-    texture_id TEXT NOT NULL,
-    value TEXT NOT NULL,
+    player_id UUID REFERENCES geyser_players(id),
+    skin TEXT REFERENCES textures(hash),
+    model TEXT,
+    cape TEXT REFERENCES textures(hash),
     first_seen BIGINT NOT NULL,
     last_seen BIGINT NOT NULL,
-    CONSTRAINT geyser_player_textures_hash_not_empty CHECK (hash <> '')
+    CONSTRAINT geyser_player_textures_hash_not_empty CHECK (skin IS NULL OR skin <> ''),
+    CONSTRAINT geyser_player_textures_hash_not_empty CHECK (cape IS NULL OR cape <> '')
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS geyser_player_textures_unique
-    ON geyser_player_textures (xuid, hash);
+    ON geyser_textures (player_id, COALESCE(skin, ''), COALESCE(model, ''), COALESCE(cape, ''));
+
+CREATE TABLE IF NOT EXISTS geyser_player_names (
+    player_id UUID REFERENCES geyser_players(id),
+    name TEXT NOT NULL,
+    first_seen BIGINT NOT NULL,
+    last_seen BIGINT NOT NULL,
+    PRIMARY KEY (player_id, name)
+);
 
 CREATE TABLE IF NOT EXISTS bee_name (
     name TEXT PRIMARY KEY NOT NULL CHECK (name !~ '^\s*$')
