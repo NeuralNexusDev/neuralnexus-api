@@ -38,7 +38,7 @@ dev: export S3_SECRET_KEY_MCA_TEXTURE ?= dev-secret-key
 dev:
 	go tool air
 
-TEST_POSTGRES_URL ?= postgres://neuralnexus:neuralnexus@localhost:55432/neuralnexus_test
+TEST_POSTGRES_URL ?= postgres://neuralnexus:neuralnexus@localhost:55432/neuralnexus
 TEST_REDIS_URL ?= redis://localhost:56379
 
 # Not real secrets - fixed fixture values that the account and session packages
