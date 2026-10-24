@@ -6,7 +6,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 	"github.com/bwmarrin/discordgo"
 	"github.com/goccy/go-json"
@@ -22,17 +21,6 @@ func dcRequest(t *testing.T, body string, contentType string) *http.Request {
 	return r
 }
 
-func dcRequireDetail(t *testing.T, w *httptest.ResponseRecorder, want string) {
-	t.Helper()
-	var p responses.Problem
-	if err := json.Unmarshal(w.Body.Bytes(), &p); err != nil {
-		t.Fatalf("failed to decode problem body %q: %v", w.Body.String(), err)
-	}
-	if p.Detail != want {
-		t.Fatalf("detail = %q, want %q", p.Detail, want)
-	}
-}
-
 func dcRequireStatus(t *testing.T, w *httptest.ResponseRecorder, want int) {
 	t.Helper()
 	if w.Code != want {
@@ -46,7 +34,7 @@ func TestHandleDiscordWebhook(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, dcRequest(t, `{}`, ""))
 		dcRequireStatus(t, w, http.StatusUnsupportedMediaType)
-		dcRequireDetail(t, w, msgRequestMustBeJSON)
+		testutil.ExpectDetail(t, w, msgRequestMustBeJSON)
 	})
 
 	t.Run("HW-02_InvalidJSONBody", func(t *testing.T) {
@@ -54,7 +42,7 @@ func TestHandleDiscordWebhook(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, dcRequest(t, `{not json`, ApplicationJSON))
 		dcRequireStatus(t, w, http.StatusBadRequest)
-		dcRequireDetail(t, w, msgInvalidRequestBody)
+		testutil.ExpectDetail(t, w, msgInvalidRequestBody)
 	})
 
 	t.Run("HW-03_VersionMismatchStillProcessed", func(t *testing.T) {
@@ -101,7 +89,7 @@ func TestHandleDiscordWebhook(t *testing.T) {
 		body := `{"version":1,"type":1,"event":{"type":"APPLICATION_AUTHORIZED","timestamp":"2024-01-01T00:00:00.000000","data":{"integration_type":2}}}`
 		h(w, dcRequest(t, body, ApplicationJSON))
 		dcRequireStatus(t, w, http.StatusBadRequest)
-		dcRequireDetail(t, w, msgInvalidEventData)
+		testutil.ExpectDetail(t, w, msgInvalidEventData)
 	})
 
 	t.Run("HW-09_Deauthorized", func(t *testing.T) {
@@ -150,7 +138,7 @@ func TestHandleDiscordInteraction(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, dcRequest(t, `{}`, ""))
 		dcRequireStatus(t, w, http.StatusUnsupportedMediaType)
-		dcRequireDetail(t, w, msgRequestMustBeJSON)
+		testutil.ExpectDetail(t, w, msgRequestMustBeJSON)
 	})
 
 	t.Run("HI-02_InvalidJSONBody", func(t *testing.T) {
@@ -158,7 +146,7 @@ func TestHandleDiscordInteraction(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, dcRequest(t, `{not json`, ApplicationJSON))
 		dcRequireStatus(t, w, http.StatusBadRequest)
-		dcRequireDetail(t, w, msgInvalidRequestBody)
+		testutil.ExpectDetail(t, w, msgInvalidRequestBody)
 	})
 
 	t.Run("HI-03_Ping", func(t *testing.T) {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"net/url"
 	"reflect"
 	"strings"
@@ -20,19 +19,6 @@ import (
 
 var ppCtx = context.Background()
 
-func ppUnusedTCPPort(t *testing.T) int {
-	t.Helper()
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("failed to find an unused port: %v", err)
-	}
-	port := l.Addr().(*net.TCPAddr).Port
-	if err := l.Close(); err != nil {
-		t.Fatalf("failed to close probe listener: %v", err)
-	}
-	return port
-}
-
 // ppSetUnreachableDatabaseURL points DATABASE_URL at a closed local port. It
 // must stay a bare "scheme://user:pass@host:port" DSN — store.go appends
 // "/pet_pictures" itself. pgxpool.New parses eagerly but dials lazily, so
@@ -40,7 +26,7 @@ func ppUnusedTCPPort(t *testing.T) int {
 // genuine connection-refused error.
 func ppSetUnreachableDatabaseURL(t *testing.T) {
 	t.Helper()
-	port := ppUnusedTCPPort(t)
+	port := testutil.UnusedTCPPort(t)
 	t.Setenv("DATABASE_URL", fmt.Sprintf("postgres://user:pass@127.0.0.1:%d", port))
 }
 
