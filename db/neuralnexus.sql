@@ -1,38 +1,34 @@
 CREATE TABLE IF NOT EXISTS accounts (
-    user_id bigint NOT NULL,
+    user_id bigint PRIMARY KEY NOT NULL,
     username text,
     email text,
     hashed_secret bytea,
     salt bytea,
     updated_at timestamptz DEFAULT CURRENT_TIMESTAMP,
-    role_ids bigint[] DEFAULT '{}' NOT NULL,
-    CONSTRAINT accounts_pkey PRIMARY KEY (user_id)
+    role_ids bigint[] DEFAULT '{}' NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS accounts_email_key ON accounts USING btree (email);
 CREATE UNIQUE INDEX IF NOT EXISTS accounts_username_key ON accounts USING btree (username);
 
 CREATE TABLE IF NOT EXISTS account_settings (
-    user_id bigint NOT NULL REFERENCES accounts(user_id),
+    user_id bigint PRIMARY KEY NOT NULL REFERENCES accounts(user_id),
     password_auth boolean DEFAULT true NOT NULL,
-    updated_at timestamptz DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT account_settings_pkey PRIMARY KEY (user_id)
+    updated_at timestamptz DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS datastores (
-    store_id bigint NOT NULL,
+    store_id bigint PRIMARY KEY NOT NULL,
     owner_id bigint NOT NULL REFERENCES accounts(user_id),
     created_at timestamptz DEFAULT CURRENT_TIMESTAMP,
-    updated_at timestamptz DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT datastores_pkey PRIMARY KEY (store_id)
+    updated_at timestamptz DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS datastore_numbers (
-    store_id bigint NOT NULL REFERENCES datastores(store_id),
+    store_id bigint PRIMARY KEY NOT NULL REFERENCES datastores(store_id),
     user_id bigint NOT NULL REFERENCES accounts(user_id),
     value double precision NOT NULL,
     created_at timestamptz DEFAULT CURRENT_TIMESTAMP,
-    updated_at timestamptz DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT datastore_numbers_pkey PRIMARY KEY (store_id)
+    updated_at timestamptz DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS linked_accounts (
@@ -64,31 +60,28 @@ CREATE TABLE IF NOT EXISTS oauth_tokens (
 CREATE UNIQUE INDEX IF NOT EXISTS oauth_tokens_unique ON oauth_tokens USING btree (user_id, platform);
 
 CREATE TABLE IF NOT EXISTS sessions (
-    session_id bigint NOT NULL,
+    session_id bigint PRIMARY KEY NOT NULL,
     user_id bigint NOT NULL REFERENCES accounts(user_id),
     permissions text[] NOT NULL,
     iat bigint NOT NULL,
     lua bigint NOT NULL,
-    exp bigint NOT NULL,
-    CONSTRAINT sessions_pkey PRIMARY KEY (session_id)
+    exp bigint NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS roles (
-    id bigint NOT NULL,
+    id bigint PRIMARY KEY NOT NULL,
     name text NOT NULL,
     description text DEFAULT '' NOT NULL,
-    CONSTRAINT roles_pkey PRIMARY KEY (id),
     CONSTRAINT roles_name_not_empty CHECK (name <> '')
 );
 CREATE UNIQUE INDEX IF NOT EXISTS roles_name_key ON roles USING btree (name);
 
 CREATE TABLE IF NOT EXISTS permissions (
-    id bigint NOT NULL,
+    id bigint PRIMARY KEY NOT NULL,
     node text NOT NULL,
     description text DEFAULT '' NOT NULL,
     value_type text,
     merge text,
-    CONSTRAINT permissions_pkey PRIMARY KEY (id),
     CONSTRAINT permissions_node_format CHECK (node ~ '^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$'),
     CONSTRAINT permissions_merge_matches_type CHECK (COALESCE(
         (value_type IS NULL AND merge IS NULL)

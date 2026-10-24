@@ -1,18 +1,16 @@
 CREATE TABLE IF NOT EXISTS textures (
-    hash text NOT NULL,
-    CONSTRAINT textures_pkey PRIMARY KEY (hash),
+    hash text PRIMARY KEY NOT NULL,
     CONSTRAINT textures_hash_not_empty CHECK (hash <> '')
 );
 
 CREATE TABLE IF NOT EXISTS players (
-    id uuid NOT NULL,
+    id uuid PRIMARY KEY NOT NULL,
     name text NOT NULL,
     legacy boolean,
     demo boolean,
     profile_actions jsonb,
     first_seen bigint NOT NULL,
-    last_seen bigint NOT NULL,
-    CONSTRAINT players_pkey PRIMARY KEY (id)
+    last_seen bigint NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS player_names (
@@ -36,12 +34,11 @@ CREATE TABLE IF NOT EXISTS player_textures (
 CREATE UNIQUE INDEX IF NOT EXISTS player_textures_unique ON player_textures USING btree (player_id, COALESCE(skin, ''), COALESCE(model, ''), COALESCE(cape, ''));
 
 CREATE TABLE IF NOT EXISTS geyser_players (
-    id uuid NOT NULL,
+    id uuid PRIMARY KEY NOT NULL,
     xuid bigint NOT NULL,
     gamertag text NOT NULL,
     first_seen bigint NOT NULL,
-    last_seen bigint NOT NULL,
-    CONSTRAINT geyser_players_pkey PRIMARY KEY (id)
+    last_seen bigint NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS geyser_player_names (
