@@ -51,13 +51,13 @@ TEST_NN_SITE_URL ?= https://neuralnexus.test
 TEST_NN_API_URL ?= https://api.neuralnexus.test
 
 test-env-up:
-	docker compose -f docker-compose.test.yml up -d --wait
+	docker compose -f test/docker-compose.yml up -d --wait
 
 test-env-down:
-	docker compose -f docker-compose.test.yml down -v
+	docker compose -f test/docker-compose.yml down -v
 
 test-env-logs:
-	docker compose -f docker-compose.test.yml logs -f
+	docker compose -f test/docker-compose.yml logs -f
 
 vet:
 	@out=$$(gofmt -l .); if [ -n "$$out" ]; then echo "$$out"; exit 1; fi
