@@ -54,7 +54,6 @@ CREATE TABLE IF NOT EXISTS geyser_player_names (
 
 CREATE TABLE IF NOT EXISTS geyser_player_textures (
     player_id uuid REFERENCES geyser_players(id),
-    -- A Geyser profile is built from a donor Java account that uploaded the skin.
     skin_id uuid REFERENCES players(id),
     skin text REFERENCES textures(hash),
     model text,
