@@ -6,14 +6,15 @@ import (
 	"fmt"
 	"net"
 	"net/url"
-	"os"
 	"reflect"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -45,18 +46,15 @@ func ppSetUnreachableDatabaseURL(t *testing.T) {
 
 func ppLiveDatabase(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	dsn := os.Getenv("TEST_POSTGRES_URL")
-	if dsn == "" {
-		t.Skip("TEST_POSTGRES_URL not set; skipping live-Postgres test")
-	}
+	dsn := testutil.PostgresURL(t, "pet_pictures")
 	u, err := url.Parse(dsn)
 	if err != nil {
-		t.Fatalf("failed to parse TEST_POSTGRES_URL: %v", err)
+		t.Fatalf("failed to parse the pet_pictures URL: %v", err)
 	}
 	u.Path, u.RawQuery = "", ""
 	t.Setenv("DATABASE_URL", u.String())
 
-	pool, err := pgxpool.New(context.Background(), u.String()+"/pet_pictures")
+	pool, err := pgxpool.New(context.Background(), dsn)
 	if err != nil {
 		t.Fatalf("failed to connect to pet_pictures: %v", err)
 	}
@@ -282,6 +280,47 @@ func TestST13to16_CreatePetPicture(t *testing.T) {
 		want := &PetPicture{ID: id, FileExt: "png", PrimarySubject: 3, OthersSubjects: []int{4, 5}, Aliases: []string{"a", "b"}}
 		if err != nil || !reflect.DeepEqual(got, want) {
 			t.Errorf("CreatePetPicture() = (%+v, %v), want (%+v, nil)", got, err, want)
+		}
+	})
+
+	t.Run("PPS-31_NoOtherSubjects", func(t *testing.T) {
+		pool := ppLiveDatabase(t)
+		s := &store{}
+		id := ppUniqueID("pic")
+		ppCreatePicture(t, pool, s, id, 6, nil, nil)
+		var subjects []int
+		if err := pool.QueryRow(ppCtx, "SELECT subjects FROM pictures WHERE id = $1", id).Scan(&subjects); err != nil || !reflect.DeepEqual(subjects, []int{6}) {
+			t.Fatalf("subjects = (%v, %v), want ([6], nil)", subjects, err)
+		}
+		got, err := s.GetPetPicture(ppCtx, id)
+		if err != nil || got.PrimarySubject != 6 || got.OthersSubjects != nil {
+			t.Errorf("GetPetPicture() = (%+v, %v), want PrimarySubject 6 and nil OthersSubjects", got, err)
+		}
+	})
+
+	t.Run("PPS-32_SubjectsOrder", func(t *testing.T) {
+		pool := ppLiveDatabase(t)
+		s := &store{}
+		id := ppUniqueID("pic")
+		ppCreatePicture(t, pool, s, id, 3, []int{4, 5}, nil)
+		var subjects []int
+		if err := pool.QueryRow(ppCtx, "SELECT subjects FROM pictures WHERE id = $1", id).Scan(&subjects); err != nil || !reflect.DeepEqual(subjects, []int{3, 4, 5}) {
+			t.Fatalf("subjects = (%v, %v), want ([3 4 5], nil)", subjects, err)
+		}
+		got, err := s.GetPetPicture(ppCtx, id)
+		if err != nil || got.PrimarySubject != 3 || !reflect.DeepEqual(got.OthersSubjects, []int{4, 5}) {
+			t.Errorf("GetPetPicture() = (%+v, %v), want PrimarySubject 3 and OthersSubjects [4 5]", got, err)
+		}
+	})
+
+	t.Run("PPS-33_EmptySubjectsRejected", func(t *testing.T) {
+		pool := ppLiveDatabase(t)
+		id := ppUniqueID("pic")
+		t.Cleanup(func() { pool.Exec(context.Background(), "DELETE FROM pictures WHERE id = $1", id) })
+		_, err := pool.Exec(ppCtx, "INSERT INTO pictures (id, file_ext, subjects) VALUES ($1, 'jpg', '{}')", id)
+		var pgErr *pgconn.PgError
+		if !errors.As(err, &pgErr) || pgErr.Code != "23514" || pgErr.ConstraintName != "subjects_check" {
+			t.Errorf("INSERT with empty subjects error = %v, want check violation on subjects_check", err)
 		}
 	})
 

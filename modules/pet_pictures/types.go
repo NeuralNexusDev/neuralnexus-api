@@ -4,8 +4,8 @@ package petpictures
 type PetPicture struct {
 	ID             string   `json:"id" xml:"id" db:"id"`
 	FileExt        string   `json:"file_ext" xml:"file_ext" db:"file_ext"`
-	PrimarySubject int      `json:"prime_subj" xml:"prime_subj" db:"prime_subj"`
-	OthersSubjects []int    `json:"othr_subj" xml:"othr_subj" db:"othr_subj"`
+	PrimarySubject int      `json:"prime_subj" xml:"prime_subj"`
+	OthersSubjects []int    `json:"othr_subj" xml:"othr_subj"`
 	Aliases        []string `json:"aliases" xml:"aliases" db:"aliases"`
 	Created        string   `json:"created" xml:"created" db:"created"`
 }
