@@ -12,35 +12,31 @@ CREATE UNIQUE INDEX IF NOT EXISTS accounts_email_key ON accounts USING btree (em
 CREATE UNIQUE INDEX IF NOT EXISTS accounts_username_key ON accounts USING btree (username);
 
 CREATE TABLE IF NOT EXISTS account_settings (
-    user_id bigint NOT NULL,
+    user_id bigint NOT NULL REFERENCES accounts(user_id),
     password_auth boolean DEFAULT true NOT NULL,
     updated_at timestamptz DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT account_settings_pkey PRIMARY KEY (user_id),
-    CONSTRAINT account_settings_user_id_fkey FOREIGN KEY (user_id) REFERENCES accounts(user_id)
+    CONSTRAINT account_settings_pkey PRIMARY KEY (user_id)
 );
 
 CREATE TABLE IF NOT EXISTS datastores (
     store_id bigint NOT NULL,
-    owner_id bigint NOT NULL,
+    owner_id bigint NOT NULL REFERENCES accounts(user_id),
     created_at timestamptz DEFAULT CURRENT_TIMESTAMP,
     updated_at timestamptz DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT datastores_pkey PRIMARY KEY (store_id),
-    CONSTRAINT datastores_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES accounts(user_id)
+    CONSTRAINT datastores_pkey PRIMARY KEY (store_id)
 );
 
 CREATE TABLE IF NOT EXISTS datastore_numbers (
-    store_id bigint NOT NULL,
-    user_id bigint NOT NULL,
+    store_id bigint NOT NULL REFERENCES datastores(store_id),
+    user_id bigint NOT NULL REFERENCES accounts(user_id),
     value double precision NOT NULL,
     created_at timestamptz DEFAULT CURRENT_TIMESTAMP,
     updated_at timestamptz DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT datastore_numbers_pkey PRIMARY KEY (store_id),
-    CONSTRAINT datastore_numbers_store_id_fkey FOREIGN KEY (store_id) REFERENCES datastores(store_id),
-    CONSTRAINT datastore_numbers_user_id_fkey FOREIGN KEY (user_id) REFERENCES accounts(user_id)
+    CONSTRAINT datastore_numbers_pkey PRIMARY KEY (store_id)
 );
 
 CREATE TABLE IF NOT EXISTS linked_accounts (
-    user_id bigint NOT NULL,
+    user_id bigint NOT NULL REFERENCES accounts(user_id),
     platform text NOT NULL,
     platform_username text NOT NULL,
     platform_id text NOT NULL,
@@ -48,14 +44,13 @@ CREATE TABLE IF NOT EXISTS linked_accounts (
     created_at timestamptz DEFAULT CURRENT_TIMESTAMP,
     updated_at timestamptz DEFAULT CURRENT_TIMESTAMP,
     verified boolean DEFAULT false NOT NULL,
-    login_enabled boolean DEFAULT false NOT NULL,
-    CONSTRAINT linked_accounts_user_id_fkey FOREIGN KEY (user_id) REFERENCES accounts(user_id)
+    login_enabled boolean DEFAULT false NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS linked_accounts_unique ON linked_accounts USING btree (user_id, platform);
 CREATE UNIQUE INDEX IF NOT EXISTS linked_accounts_platform_unique ON linked_accounts USING btree (platform, platform_id);
 
 CREATE TABLE IF NOT EXISTS oauth_tokens (
-    user_id bigint NOT NULL,
+    user_id bigint NOT NULL REFERENCES accounts(user_id),
     platform text NOT NULL,
     access_token text NOT NULL,
     token_type text,
@@ -64,20 +59,18 @@ CREATE TABLE IF NOT EXISTS oauth_tokens (
     expires_in bigint,
     scope text[],
     created_at timestamptz DEFAULT CURRENT_TIMESTAMP,
-    updated_at timestamptz DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT oauth_tokens_user_id_fkey FOREIGN KEY (user_id) REFERENCES accounts(user_id)
+    updated_at timestamptz DEFAULT CURRENT_TIMESTAMP
 );
 CREATE UNIQUE INDEX IF NOT EXISTS oauth_tokens_unique ON oauth_tokens USING btree (user_id, platform);
 
 CREATE TABLE IF NOT EXISTS sessions (
     session_id bigint NOT NULL,
-    user_id bigint NOT NULL,
+    user_id bigint NOT NULL REFERENCES accounts(user_id),
     permissions text[] NOT NULL,
     iat bigint NOT NULL,
     lua bigint NOT NULL,
     exp bigint NOT NULL,
-    CONSTRAINT sessions_pkey PRIMARY KEY (session_id),
-    CONSTRAINT sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES accounts(user_id)
+    CONSTRAINT sessions_pkey PRIMARY KEY (session_id)
 );
 
 CREATE TABLE IF NOT EXISTS roles (
@@ -108,12 +101,10 @@ CREATE TABLE IF NOT EXISTS permissions (
 CREATE UNIQUE INDEX IF NOT EXISTS permissions_node_key ON permissions USING btree (node);
 
 CREATE TABLE IF NOT EXISTS role_permissions (
-    role_id bigint NOT NULL,
-    permission_id bigint NOT NULL,
+    role_id bigint NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+    permission_id bigint NOT NULL REFERENCES permissions(id),
     value jsonb,
-    CONSTRAINT role_permissions_pkey PRIMARY KEY (role_id, permission_id),
-    CONSTRAINT role_permissions_permission_id_fkey FOREIGN KEY (permission_id) REFERENCES permissions(id),
-    CONSTRAINT role_permissions_role_id_fkey FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+    CONSTRAINT role_permissions_pkey PRIMARY KEY (role_id, permission_id)
 );
 
 INSERT INTO roles (id, name, description) VALUES
