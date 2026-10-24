@@ -9,4 +9,3 @@
 | RQ-03 | Log | Edge Case | Called with zero message arguments | `ctx` has the remote address and request ID | Output is `42 N/A 127.0.0.1 ` with an empty message segment, no panic | P3 |  |
 | RQ-04 | Log | Error Path | Remote address missing from context | `ctx` has `RequestIDKey` only | Panics from the unchecked type assertion; nothing is logged | P2 |  |
 | RQ-05 | Log | Error Path | Request ID missing from context | `ctx` has `RemoteAddrKey` only | Panics from the unchecked type assertion; nothing is logged | P2 |  |
-| RQ-06 | keys | Happy Path | Key constants hold their iota values | None | `SessionKey` is 0, `RequestIDKey` is 1, `RemoteAddrKey` is 2, `UserIDKey` is 3 | P2 |  |

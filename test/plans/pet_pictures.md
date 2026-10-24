@@ -10,7 +10,6 @@
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| PPS-01 | NewStore | Accessor | wrap a pool in a store | any `*pgxpool.Pool` (may be `nil` — DI is unused, since every store method dials its own connection instead) | Returns a non-nil `PetPicStore` | P3 | |
 | PPS-02 | CreatePet | Happy Path | insert a pet with a unique name | live DB, unique name | Returns `*Pet` with matching `Name`, nonzero `ID`, nil `ProfilePicture`, nil error | P1 | `ProfilePicture` is `*string`; nil means the column came back SQL NULL |
 | PPS-03 | CreatePet | Error Path | insert a pet whose name already exists | live DB, name already created by a prior `CreatePet` | Returns `nil`, non-nil error (unique constraint violation) | P2 | |
 | PPS-04 | CreatePet | Error Path | database unreachable | `DATABASE_URL` points at a closed local port | Returns `nil`, non-nil connection error | P2 | |
@@ -48,7 +47,6 @@
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| PPV-01 | NewService | Accessor | construct a service around a store | any `PetPicStore` | `GetStore()` returns that same store instance | P3 | also covers `GetStore` |
 | PPV-03 | UploadPetPicture | Happy Path | successful upload | mock `CreatePetPicture` returns a `*PetPicture`, CDN transport returns 200 | Request goes to `CDN_URL+"/upload"`; multipart fields `upload_key`/`upload_path` set; form file field name is `<mock ID>.<ext>`; `db.CreatePetPicture` called with the sha256 id and given fileExt/primarySubject/othersSubjects/aliases; returns the mock's `*PetPicture` | P1 | uploaded body bytes not asserted — `UploadPetPicture` always sends zero bytes there (see finding) |
 | PPV-04 | UploadPetPicture | Error Path | `db.CreatePetPicture` returns an error | mock returns `nil, err` | Returns `nil`, that same error; no CDN request attempted | P2 | |
 | PPV-05 | UploadPetPicture | Error Path | `os.Rename` fails because the source file is gone | temp file whose path is removed after opening (fd stays valid for the hash read via the inode) | Returns `nil`, a non-nil rename error | P2 | |

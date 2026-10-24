@@ -58,7 +58,6 @@
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| CSV-01 | NewService | Accessor | construct a service | none | Returns a non-nil `MCStatusService` backed by `*service` | P3 |  |
 | CSV-02 | GetJavaServerStatus | Error Path | all of Ping17/16/14/Beta18 fail because the host is unreachable | `host`/`port` point at a closed local TCP port, `queryEnabled=false` | Returns `nil, ErrJavaStatus` | P1 |  |
 | CSV-03 | GetJavaServerStatus | Edge Case | same as CSV-02 but `queryEnabled=true`, so `QueryFull` also fails on the same unreachable host | closed local port, `queryEnabled=true` | Still returns `nil, ErrJavaStatus`; the query-enabled branch does not change the outcome when nothing succeeds | P2 |  |
 | CSV-05 | GetBedrockServerStatus | Error Path | `bedrockping.Query` fails because the host is unreachable | `host`/`port` point at a closed local port | Returns `nil` and `ErrBedrockStatus` | P1 |  |

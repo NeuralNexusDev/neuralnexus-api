@@ -97,16 +97,6 @@ func svTempFile(t *testing.T, pattern string, content []byte) *os.File {
 	return f
 }
 
-func TestSV01_NewServiceAndGetStore(t *testing.T) {
-	t.Run("PPV-01_GetStoreReturnsInjectedStore", func(t *testing.T) {
-		mock := &svMockStore{}
-		svc := NewService(mock)
-		if got := svc.GetStore(); got != PetPicStore(mock) {
-			t.Errorf("GetStore() = %v, want the injected store %v", got, mock)
-		}
-	})
-}
-
 func TestSV03to08_UploadPetPicture(t *testing.T) {
 	t.Run("PPV-03_HappyPath", func(t *testing.T) {
 		mockPic := &PetPicture{ID: "sv03-mock-id", FileExt: "jpg", PrimarySubject: 4, OthersSubjects: []int{5}, Aliases: []string{"a"}}

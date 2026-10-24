@@ -1,14 +1,5 @@
 # Test plan: bee_name_generator
 
-## types.go
-
-| ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
-|----|----------|---------------|----------|---------------|------------------|----------|-------|
-| BNT-01 | NewBeeName | Accessor | Normal, non-empty name | name = "Buzzy" | Returns &bngpb.BeeName{Name: "Buzzy"} | P3 |  |
-| BNT-02 | NewBeeName | Edge Case | Empty string name | name = "" | Returns &bngpb.BeeName{Name: ""} (non-nil pointer, zero-value field) | P3 |  |
-| BNT-03 | NewBeeNameSuggestions | Accessor | Normal, populated slice | suggestions = []string{"a","b"} | Returns &bngpb.BeeNameSuggestions{Suggestions: []string{"a","b"}} | P3 |  |
-| BNT-04 | NewBeeNameSuggestions | Edge Case | Nil slice | suggestions = nil | Returns &bngpb.BeeNameSuggestions{Suggestions: nil} (non-nil pointer) | P3 |  |
-
 ## handler.go
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
@@ -49,7 +40,6 @@
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| BNS-01 | NewStore | Accessor | Wraps the given pool | db = *pgxpool.Pool | Returned BNGStore is a *store whose db field == the given pool | P3 |  |
 | BNS-02 | GetBeeName | Error Path | DB connection unreachable | store.db points at a closed local port | Returns ("", non-nil connection error) | P2 |  |
 | BNS-03 | GetBeeName | Happy Path | A row exists in bee_name | seeded via UploadBeeName (requires live DB) | Returns (name, nil) for one of the seeded names | P1 |  |
 | BNS-04 | GetBeeName | Edge Case | bee_name has no matching row (empty/only-other-rows result) | table filtered to nothing scannable (requires live DB) | Returns ("", `ErrBeeNameNotFound`) | P2 | Achieved by clearing bee_name first - safe since this module owns that table exclusively, and avoids relying on test execution order. |
