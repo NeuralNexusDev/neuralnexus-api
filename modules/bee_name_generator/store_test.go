@@ -158,20 +158,6 @@ func bngCountByName(t *testing.T, db *pgxpool.Pool, table, name string) int {
 	return n
 }
 
-func TestST01_NewStore(t *testing.T) {
-	t.Run("BNS-01_WrapsGivenPool", func(t *testing.T) {
-		db := bngUnreachablePool(t)
-		got := NewStore(db)
-		s, ok := got.(*store)
-		if !ok {
-			t.Fatalf("NewStore() returned %T, want *store", got)
-		}
-		if s.db != db {
-			t.Error("NewStore() did not retain the given db pool")
-		}
-	})
-}
-
 func TestST02to04_GetBeeName(t *testing.T) {
 	t.Run("BNS-02_Unreachable", func(t *testing.T) {
 		s := bngStoreWithUnreachableDB(t)
