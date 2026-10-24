@@ -11,8 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// The pictures and pets tables are defined in db/pet_pictures.sql.
-
 // created_at is timestamptz, which to_char renders in the session time zone; the literal Z needs UTC.
 const createdColumn = `COALESCE(to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'), '')`
 

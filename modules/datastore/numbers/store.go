@@ -10,21 +10,6 @@ import (
 
 var ErrNumberNotFound = errors.New("number not found")
 
-// CREATE TRIGGER update_datastore_numbers_modtime
-// BEFORE UPDATE ON datastore_numbers
-// FOR EACH ROW
-// EXECUTE PROCEDURE update_modified_column();
-
-// CREATE TABLE datastore_numbers (
-//  store_id BIGINT PRIMARY KEY NOT NULL,
-// 	user_id BIGINT NOT NULL,
-// 	value FLOAT NOT NULL,
-// 	created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-// 	updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-//  FOREIGN KEY (store_id) REFERENCES datastores(store_id),
-//  FOREIGN KEY (user_id) REFERENCES accounts(user_id)
-// );
-
 // NumberStore - Number Store
 type NumberStore interface {
 	Create(ctx context.Context, storeID, userID string, initVal float64) (float64, error)

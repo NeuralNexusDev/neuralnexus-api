@@ -20,19 +20,6 @@ func NewStore(db *pgxpool.Pool) Store {
 	return &store{db: db}
 }
 
-// CREATE DATABASE twitch;
-
-//CREATE TABLE eventsub_subscriptions (
-//  id UUID PRIMARY KEY,
-//  user_id TEXT NOT NULL,
-//  status TEXT,
-//  type TEXT,
-//  version INTEGER,
-//  created_at TIMESTAMPTZ,
-//  revoked_at TIMESTAMPTZ,
-//  cost INTEGER
-//);
-
 // EventSubEntry struct for storing EventSub subscription data
 type EventSubEntry struct {
 	ID        string    `json:"id" db:"id"`
