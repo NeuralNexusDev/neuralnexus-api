@@ -11,24 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// CREATE TABLE pictures (
-//     id text not null primary key,
-//     file_ext text not null,
-//     prime_subj integer not null,
-//     othr_subj integer[],
-//     aliases text[],
-//     created_at timestamp with time zone default current_timestamp,
-//     CONSTRAINT id_check UNIQUE ( id )
-// );
-
-// CREATE TABLE pets (
-//     id serial not null primary key,
-//     name text not null,
-//     profile_picture text default null,
-//     created_at timestamp with time zone default current_timestamp,
-//     CONSTRAINT name_check UNIQUE ( name ),
-//     CONSTRAINT pets_name_not_empty CHECK ( name <> '' )
-// );
+// The pictures and pets tables are defined in db/pet_pictures.sql.
 
 // created_at is timestamptz, which to_char renders in the session time zone; the literal Z needs UTC.
 const createdColumn = `COALESCE(to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'), '')`
@@ -38,6 +21,27 @@ var (
 	ErrPetNotFound        = errors.New("pet not found")
 	ErrPetPictureNotFound = errors.New("pet picture not found")
 )
+
+func subjectsOf(primary int, others []int) []int {
+	return append([]int{primary}, others...)
+}
+
+func scanPetPicture(row pgx.CollectableRow) (*PetPicture, error) {
+	var (
+		p        PetPicture
+		subjects []int
+	)
+	if err := row.Scan(&p.ID, &p.FileExt, &subjects, &p.Aliases, &p.Created); err != nil {
+		return nil, err
+	}
+	if len(subjects) > 0 {
+		p.PrimarySubject = subjects[0]
+		if len(subjects) > 1 {
+			p.OthersSubjects = subjects[1:]
+		}
+	}
+	return &p, nil
+}
 
 func petPictureNotFound(err error) error {
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -146,8 +150,8 @@ func (s *store) CreatePetPicture(ctx context.Context, id string, fileExt string,
 	defer db.Close()
 
 	_, err := db.Exec(ctx,
-		"INSERT INTO pictures (id, file_ext, prime_subj, othr_subj, aliases) VALUES ($1, $2, $3, $4, $5)",
-		id, fileExt, primarySubject, othersSubjects, aliases,
+		"INSERT INTO pictures (id, file_ext, subjects, aliases) VALUES ($1, $2, $3, $4)",
+		id, fileExt, subjectsOf(primarySubject, othersSubjects), aliases,
 	)
 	if err != nil {
 		return nil, err
@@ -172,13 +176,13 @@ func (s *store) GetRandPetPictureByName(ctx context.Context, name string) (*PetP
 	defer db.Close()
 
 	rows, err := db.Query(ctx,
-		"SELECT id, file_ext, prime_subj, othr_subj, aliases, "+createdColumn+" AS created FROM pictures WHERE prime_subj = $1 OR $2 = ANY(othr_subj) ORDER BY random() LIMIT 1", pet.ID, pet.ID)
+		"SELECT id, file_ext, subjects, aliases, "+createdColumn+" AS created FROM pictures WHERE $1 = ANY(subjects) ORDER BY random() LIMIT 1", pet.ID)
 	if err != nil {
 		return nil, err
 	}
 
 	var picture *PetPicture
-	picture, err = pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[PetPicture])
+	picture, err = pgx.CollectExactlyOneRow(rows, scanPetPicture)
 	if err != nil {
 		return nil, petPictureNotFound(err)
 	}
@@ -190,13 +194,13 @@ func (s *store) GetPetPicture(ctx context.Context, id string) (*PetPicture, erro
 	db := database.GetDB(os.Getenv("DATABASE_URL") + "/pet_pictures")
 	defer db.Close()
 
-	rows, err := db.Query(ctx, "SELECT id, file_ext, prime_subj, othr_subj, aliases, "+createdColumn+" AS created FROM pictures WHERE id = $1", id)
+	rows, err := db.Query(ctx, "SELECT id, file_ext, subjects, aliases, "+createdColumn+" AS created FROM pictures WHERE id = $1", id)
 	if err != nil {
 		return nil, err
 	}
 
 	var picture *PetPicture
-	picture, err = pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[PetPicture])
+	picture, err = pgx.CollectExactlyOneRow(rows, scanPetPicture)
 	if err != nil {
 		return nil, petPictureNotFound(err)
 	}
@@ -209,8 +213,8 @@ func (s *store) UpdatePetPicture(ctx context.Context, picture PetPicture) (*PetP
 	defer db.Close()
 
 	err := db.QueryRow(ctx,
-		"UPDATE pictures SET file_ext = $1, prime_subj = $2, othr_subj = $3, aliases = $4 WHERE id = $5 RETURNING "+createdColumn,
-		picture.FileExt, picture.PrimarySubject, picture.OthersSubjects, picture.Aliases, picture.ID,
+		"UPDATE pictures SET file_ext = $1, subjects = $2, aliases = $3 WHERE id = $4 RETURNING "+createdColumn,
+		picture.FileExt, subjectsOf(picture.PrimarySubject, picture.OthersSubjects), picture.Aliases, picture.ID,
 	).Scan(&picture.Created)
 	if err != nil {
 		return nil, petPictureNotFound(err)

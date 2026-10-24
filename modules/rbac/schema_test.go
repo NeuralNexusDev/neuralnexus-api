@@ -3,17 +3,17 @@ package rbac
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
 func TestEM01EmptyTables(t *testing.T) {
-	pgURL := os.Getenv("TEST_POSTGRES_URL")
-	if pgURL == "" {
-		t.Skip("TEST_POSTGRES_URL must be set to run the empty table test")
-	}
+	pgURL := testutil.PostgresURL(t, "neuralnexus")
 	ctx := context.Background()
 	admin, err := pgx.Connect(ctx, pgURL)
 	if err != nil {
@@ -23,12 +23,16 @@ func TestEM01EmptyTables(t *testing.T) {
 		admin.Exec(ctx, "DROP SCHEMA IF EXISTS rbempty CASCADE")
 		admin.Close(ctx)
 	})
+	schema, err := os.ReadFile(filepath.Join("..", "..", "db", "neuralnexus.sql"))
+	if err != nil {
+		t.Fatalf("failed to read the neuralnexus schema: %v", err)
+	}
 	for _, q := range []string{
 		"DROP SCHEMA IF EXISTS rbempty CASCADE",
 		"CREATE SCHEMA rbempty",
-		"CREATE TABLE rbempty.roles (LIKE public.roles INCLUDING ALL)",
-		"CREATE TABLE rbempty.permissions (LIKE public.permissions INCLUDING ALL)",
-		"CREATE TABLE rbempty.role_permissions (LIKE public.role_permissions INCLUDING ALL)",
+		"SET search_path TO rbempty",
+		string(schema),
+		"TRUNCATE rbempty.role_permissions, rbempty.roles, rbempty.permissions",
 	} {
 		if _, err := admin.Exec(ctx, q); err != nil {
 			t.Fatalf("failed to prepare the empty schema: %v", err)

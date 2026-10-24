@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -18,6 +17,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
 var bnCtx = context.Background()
@@ -59,13 +60,9 @@ func bngStoreWithUnreachableDB(t *testing.T) *store {
 
 func bngLiveDB(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	dsn := os.Getenv("TEST_POSTGRES_URL")
-	if dsn == "" {
-		t.Skip("TEST_POSTGRES_URL not set; skipping live-Postgres test")
-	}
-	pool, err := pgxpool.New(context.Background(), dsn)
+	pool, err := pgxpool.New(context.Background(), testutil.PostgresURL(t, "bee_name_generator"))
 	if err != nil {
-		t.Fatalf("failed to connect to TEST_POSTGRES_URL: %v", err)
+		t.Fatalf("failed to connect to the bee_name_generator database: %v", err)
 	}
 	t.Cleanup(pool.Close)
 	return pool
@@ -133,13 +130,9 @@ func bngCommandCompleteOffset(resp []byte) int {
 
 func bngPoolCuttingFirstResult(t *testing.T) (*pgxpool.Pool, *atomic.Bool) {
 	t.Helper()
-	dsn := os.Getenv("TEST_POSTGRES_URL")
-	if dsn == "" {
-		t.Skip("TEST_POSTGRES_URL not set; skipping live-Postgres test")
-	}
-	cfg, err := pgxpool.ParseConfig(dsn)
+	cfg, err := pgxpool.ParseConfig(testutil.PostgresURL(t, "bee_name_generator"))
 	if err != nil {
-		t.Fatalf("failed to parse TEST_POSTGRES_URL: %v", err)
+		t.Fatalf("failed to parse the bee_name_generator url: %v", err)
 	}
 	var armed atomic.Bool
 	cfg.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
@@ -299,8 +292,8 @@ func TestST05to06and21and24_UploadBeeName(t *testing.T) {
 
 		got, err := s.UploadBeeName(bnCtx, blank)
 		var pgErr *pgconn.PgError
-		if !errors.As(err, &pgErr) || pgErr.Code != "23514" {
-			t.Errorf("UploadBeeName() error = %v, want a CHECK violation (SQLSTATE 23514)", err)
+		if !errors.As(err, &pgErr) || pgErr.Code != "23514" || pgErr.ConstraintName != "bee_name_name_not_blank" {
+			t.Errorf("UploadBeeName() error = %v, want the bee_name_name_not_blank CHECK violation (SQLSTATE 23514)", err)
 		}
 		if got != "" {
 			t.Errorf("UploadBeeName() = %q, want an empty string on error", got)
@@ -417,8 +410,8 @@ func TestST10to11and22and25_SubmitBeeName(t *testing.T) {
 
 		got, err := s.SubmitBeeName(bnCtx, blank)
 		var pgErr *pgconn.PgError
-		if !errors.As(err, &pgErr) || pgErr.Code != "23514" {
-			t.Errorf("SubmitBeeName() error = %v, want a CHECK violation (SQLSTATE 23514)", err)
+		if !errors.As(err, &pgErr) || pgErr.Code != "23514" || pgErr.ConstraintName != "bee_name_suggestion_name_not_blank" {
+			t.Errorf("SubmitBeeName() error = %v, want the bee_name_suggestion_name_not_blank CHECK violation (SQLSTATE 23514)", err)
 		}
 		if got != "" {
 			t.Errorf("SubmitBeeName() = %q, want an empty string on error", got)
@@ -587,8 +580,8 @@ func TestST15to17and26_AcceptBeeNameSuggestion(t *testing.T) {
 
 		got, err := s.AcceptBeeNameSuggestion(bnCtx, blank)
 		var pgErr *pgconn.PgError
-		if !errors.As(err, &pgErr) || pgErr.Code != "23514" {
-			t.Errorf("AcceptBeeNameSuggestion() error = %v, want a CHECK violation (SQLSTATE 23514)", err)
+		if !errors.As(err, &pgErr) || pgErr.Code != "23514" || pgErr.ConstraintName != "bee_name_name_not_blank" {
+			t.Errorf("AcceptBeeNameSuggestion() error = %v, want the bee_name_name_not_blank CHECK violation (SQLSTATE 23514)", err)
 		}
 		if got != "" {
 			t.Errorf("AcceptBeeNameSuggestion() = %q, want an empty string on error", got)

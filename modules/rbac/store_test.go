@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -18,6 +17,7 @@ import (
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
 func rbUnusedPort(t *testing.T) int {
@@ -41,11 +41,7 @@ const (
 func rbLive(t *testing.T) (Service, *pgxpool.Pool) {
 	t.Helper()
 
-	pgURL := os.Getenv("TEST_POSTGRES_URL")
-	if pgURL == "" {
-		t.Skip("TEST_POSTGRES_URL must be set to run these store tests")
-	}
-	db, err := pgxpool.New(context.Background(), pgURL)
+	db, err := pgxpool.New(context.Background(), testutil.PostgresURL(t, "neuralnexus"))
 	if err != nil {
 		t.Fatalf("failed to connect to postgres: %v", err)
 	}
@@ -823,7 +819,7 @@ func mustParse(t *testing.T, id string) int64 {
 
 func rbHashJoinStore(t *testing.T) Store {
 	t.Helper()
-	cfg, err := pgxpool.ParseConfig(os.Getenv("TEST_POSTGRES_URL"))
+	cfg, err := pgxpool.ParseConfig(testutil.PostgresURL(t, "neuralnexus"))
 	if err != nil {
 		t.Fatalf("failed to parse the url: %v", err)
 	}
