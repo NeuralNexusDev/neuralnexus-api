@@ -10,19 +10,6 @@ import (
 
 var ErrDataStoreNotFound = errors.New("data store not found")
 
-// CREATE TRIGGER update_datastores_modtime
-// BEFORE UPDATE ON datastores
-// FOR EACH ROW
-// EXECUTE PROCEDURE update_modified_column();
-
-// CREATE TABLE datastores (
-//  store_id BIGINT PRIMARY KEY NOT NULL,
-// 	owner_id BIGINT NOT NULL,
-// 	created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-// 	updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-//  FOREIGN KEY (owner_id) REFERENCES accounts(user_id)
-// );
-
 // DSStore - Data Store Interface
 type DSStore interface {
 	CreateNewDataStore(ctx context.Context, storeID, userID string) (*Store, error)
