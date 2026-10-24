@@ -94,15 +94,6 @@ func hdSessionWithPermissions(permissions ...string) session.Session {
 	return session.Session{Permissions: permissions}
 }
 
-func hdDecodeJSON(t *testing.T, body []byte) map[string]interface{} {
-	t.Helper()
-	var m map[string]interface{}
-	if err := json.Unmarshal(body, &m); err != nil {
-		t.Fatalf("failed to decode JSON body %q: %v", body, err)
-	}
-	return m
-}
-
 func hdRequireDetail(t *testing.T, w *httptest.ResponseRecorder, want string) {
 	t.Helper()
 	var p responses.Problem
@@ -150,7 +141,7 @@ func TestHD01to05_CreatePetHandler(t *testing.T) {
 		if len(mock.createPetCalls) != 1 || mock.createPetCalls[0] != "Rex" {
 			t.Errorf("CreatePet calls = %v, want [Rex]", mock.createPetCalls)
 		}
-		body := hdDecodeJSON(t, w.Body.Bytes())
+		body := testutil.DecodeJSON(t, w.Body.Bytes())
 		if body["name"] != "Rex" {
 			t.Errorf("response name = %v, want Rex", body["name"])
 		}

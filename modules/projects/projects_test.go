@@ -3,11 +3,9 @@ package projects
 import (
 	"context"
 	"errors"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/goccy/go-json"
@@ -34,23 +32,6 @@ func (f *fakeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 	return f.resp, nil
 }
 
-func fakeResponse(status int, body string) *http.Response {
-	return &http.Response{
-		StatusCode: status,
-		Body:       io.NopCloser(strings.NewReader(body)),
-		Header:     make(http.Header),
-	}
-}
-
-func swapTransport(t *testing.T, rt http.RoundTripper) {
-	t.Helper()
-	orig := http.DefaultTransport
-	http.DefaultTransport = rt
-	t.Cleanup(func() {
-		http.DefaultTransport = orig
-	})
-}
-
 // swapGithubToken is used instead of t.Setenv because githubToken is read
 // once at package-init time from the environment, not per-call.
 func swapGithubToken(t *testing.T, val string) {
@@ -65,8 +46,8 @@ func swapGithubToken(t *testing.T, val string) {
 func TestGetReleases(t *testing.T) {
 	t.Run("PJ-01_HappyPath_DecodesReleases", func(t *testing.T) {
 		swapGithubToken(t, "test-token")
-		rt := &fakeRoundTripper{resp: fakeResponse(http.StatusOK, `[{"tag_name":"v1.20.1","html_url":"https://example/1"}]`)}
-		swapTransport(t, rt)
+		rt := &fakeRoundTripper{resp: testutil.FakeResponse(http.StatusOK, `[{"tag_name":"v1.20.1","html_url":"https://example/1"}]`)}
+		testutil.SwapTransport(t, rt)
 
 		releases, err := getReleases(pjCtx, "group", "project")
 		if err != nil {
@@ -121,7 +102,7 @@ func TestGetReleases(t *testing.T) {
 	t.Run("PJ-04_ErrorPath_TransportError", func(t *testing.T) {
 		swapGithubToken(t, "test-token")
 		wantErr := testutil.ErrTransportFailed
-		swapTransport(t, &fakeRoundTripper{err: wantErr})
+		testutil.SwapTransport(t, &fakeRoundTripper{err: wantErr})
 
 		releases, err := getReleases(pjCtx, "group", "project")
 		if !errors.Is(err, wantErr) {
@@ -134,7 +115,7 @@ func TestGetReleases(t *testing.T) {
 
 	t.Run("PJ-05_ErrorPath_InvalidJSONBody", func(t *testing.T) {
 		swapGithubToken(t, "test-token")
-		swapTransport(t, &fakeRoundTripper{resp: fakeResponse(http.StatusOK, "not json")})
+		testutil.SwapTransport(t, &fakeRoundTripper{resp: testutil.FakeResponse(http.StatusOK, "not json")})
 
 		releases, err := getReleases(pjCtx, "group", "project")
 		if err == nil {
@@ -147,7 +128,7 @@ func TestGetReleases(t *testing.T) {
 
 	t.Run("PJ-06_EdgeCase_EmptyReleaseArray", func(t *testing.T) {
 		swapGithubToken(t, "test-token")
-		swapTransport(t, &fakeRoundTripper{resp: fakeResponse(http.StatusOK, "[]")})
+		testutil.SwapTransport(t, &fakeRoundTripper{resp: testutil.FakeResponse(http.StatusOK, "[]")})
 
 		releases, err := getReleases(pjCtx, "group", "project")
 		if err != nil {
@@ -161,8 +142,8 @@ func TestGetReleases(t *testing.T) {
 	t.Run("PJ-16_EdgeCase_CtxReachesOutboundRequest", func(t *testing.T) {
 		type ctxKey struct{}
 		swapGithubToken(t, "test-token")
-		rt := &fakeRoundTripper{resp: fakeResponse(http.StatusOK, "[]")}
-		swapTransport(t, rt)
+		rt := &fakeRoundTripper{resp: testutil.FakeResponse(http.StatusOK, "[]")}
+		testutil.SwapTransport(t, rt)
 
 		ctx := context.WithValue(pjCtx, ctxKey{}, "marker")
 		if _, err := getReleases(ctx, "group", "project"); err != nil {
@@ -284,7 +265,7 @@ func TestConvertToFMLFormat(t *testing.T) {
 func TestGetReleasesHandler(t *testing.T) {
 	t.Run("PJ-11_HappyPath_DefaultFormat", func(t *testing.T) {
 		swapGithubToken(t, "test-token")
-		swapTransport(t, &fakeRoundTripper{resp: fakeResponse(http.StatusOK, `[{"tag_name":"v1.20.1","html_url":"https://example/1"}]`)})
+		testutil.SwapTransport(t, &fakeRoundTripper{resp: testutil.FakeResponse(http.StatusOK, `[{"tag_name":"v1.20.1","html_url":"https://example/1"}]`)})
 
 		req := testutil.NewRequest(http.MethodGet, "/projects/releases/group/project", nil)
 		req.SetPathValue("group", "group")
@@ -311,7 +292,7 @@ func TestGetReleasesHandler(t *testing.T) {
 
 	t.Run("PJ-12_HappyPath_FMLFormat", func(t *testing.T) {
 		swapGithubToken(t, "test-token")
-		swapTransport(t, &fakeRoundTripper{resp: fakeResponse(http.StatusOK, `[{"tag_name":"v1.20.1","html_url":"https://example/1"}]`)})
+		testutil.SwapTransport(t, &fakeRoundTripper{resp: testutil.FakeResponse(http.StatusOK, `[{"tag_name":"v1.20.1","html_url":"https://example/1"}]`)})
 
 		req := testutil.NewRequest(http.MethodGet, "/projects/releases/group/project?format=fml", nil)
 		req.SetPathValue("group", "group")
@@ -344,7 +325,7 @@ func TestGetReleasesHandler(t *testing.T) {
 
 	t.Run("PJ-14_EdgeCase_FMLFormatEmptyUpstream", func(t *testing.T) {
 		swapGithubToken(t, "test-token")
-		swapTransport(t, &fakeRoundTripper{resp: fakeResponse(http.StatusOK, `[]`)})
+		testutil.SwapTransport(t, &fakeRoundTripper{resp: testutil.FakeResponse(http.StatusOK, `[]`)})
 
 		req := testutil.NewRequest(http.MethodGet, "/projects/releases/group/project?format=fml", nil)
 		req.SetPathValue("group", "group")
@@ -389,7 +370,7 @@ func TestGetReleasesHandler(t *testing.T) {
 	})
 	t.Run("PJ-15_ErrorPath_OtherFailureHidesCause", func(t *testing.T) {
 		swapGithubToken(t, "test-token")
-		swapTransport(t, &fakeRoundTripper{err: testutil.ErrTransportFailed})
+		testutil.SwapTransport(t, &fakeRoundTripper{err: testutil.ErrTransportFailed})
 
 		req := testutil.NewRequest(http.MethodGet, "/projects/releases/group/project", nil)
 		req.SetPathValue("group", "group")
