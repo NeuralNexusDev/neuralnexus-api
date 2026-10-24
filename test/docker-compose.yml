@@ -2,7 +2,7 @@ name: neuralnexus-api-test
 
 services:
   test-postgres:
-    image: postgres:17
+    image: postgres:17-alpine
     environment:
       POSTGRES_USER: neuralnexus
       POSTGRES_PASSWORD: neuralnexus
