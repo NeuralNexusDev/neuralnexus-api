@@ -10,11 +10,10 @@ CREATE TABLE IF NOT EXISTS pets (
 );
 
 CREATE TABLE IF NOT EXISTS pictures (
-    id text NOT NULL,
+    id text PRIMARY KEY NOT NULL,
     file_ext text NOT NULL,
     subjects integer[] NOT NULL,
     aliases text[],
     created_at timestamptz DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT id_check PRIMARY KEY (id),
     CONSTRAINT subjects_check CHECK (subjects <> '{}'::integer[])
 );

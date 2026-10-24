@@ -1,14 +1,12 @@
 CREATE TABLE IF NOT EXISTS accounts (
     user_id bigint PRIMARY KEY NOT NULL,
-    username text,
-    email text,
+    username text UNIQUE,
+    email text UNIQUE,
     hashed_secret bytea,
     salt bytea,
     updated_at timestamptz DEFAULT CURRENT_TIMESTAMP,
     role_ids bigint[] DEFAULT '{}' NOT NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS accounts_email_key ON accounts USING btree (email);
-CREATE UNIQUE INDEX IF NOT EXISTS accounts_username_key ON accounts USING btree (username);
 
 CREATE TABLE IF NOT EXISTS account_settings (
     user_id bigint PRIMARY KEY NOT NULL REFERENCES accounts(user_id),
@@ -70,15 +68,14 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 CREATE TABLE IF NOT EXISTS roles (
     id bigint PRIMARY KEY NOT NULL,
-    name text NOT NULL,
+    name text NOT NULL UNIQUE,
     description text DEFAULT '' NOT NULL,
     CONSTRAINT roles_name_not_empty CHECK (name <> '')
 );
-CREATE UNIQUE INDEX IF NOT EXISTS roles_name_key ON roles USING btree (name);
 
 CREATE TABLE IF NOT EXISTS permissions (
     id bigint PRIMARY KEY NOT NULL,
-    node text NOT NULL,
+    node text NOT NULL UNIQUE,
     description text DEFAULT '' NOT NULL,
     value_type text,
     merge text,
@@ -91,7 +88,6 @@ CREATE TABLE IF NOT EXISTS permissions (
         FALSE
     ))
 );
-CREATE UNIQUE INDEX IF NOT EXISTS permissions_node_key ON permissions USING btree (node);
 
 CREATE TABLE IF NOT EXISTS role_permissions (
     role_id bigint NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
