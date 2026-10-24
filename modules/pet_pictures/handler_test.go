@@ -2,7 +2,6 @@ package petpictures
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,7 +9,6 @@ import (
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
-	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
@@ -94,26 +92,6 @@ func hdSessionWithPermissions(permissions ...string) session.Session {
 	return session.Session{Permissions: permissions}
 }
 
-func hdDecodeJSON(t *testing.T, body []byte) map[string]interface{} {
-	t.Helper()
-	var m map[string]interface{}
-	if err := json.Unmarshal(body, &m); err != nil {
-		t.Fatalf("failed to decode JSON body %q: %v", body, err)
-	}
-	return m
-}
-
-func hdRequireDetail(t *testing.T, w *httptest.ResponseRecorder, want string) {
-	t.Helper()
-	var p responses.Problem
-	if err := json.Unmarshal(w.Body.Bytes(), &p); err != nil {
-		t.Fatalf("failed to decode problem body %q: %v", w.Body.String(), err)
-	}
-	if p.Detail != want {
-		t.Fatalf("detail = %q, want %q", p.Detail, want)
-	}
-}
-
 func TestHD01to05_CreatePetHandler(t *testing.T) {
 	t.Run("PPH-01_NoPermissionForbidden", func(t *testing.T) {
 		mock := &hdMockStore{createPetResult: &Pet{ID: 1, Name: "Rex"}}
@@ -128,7 +106,7 @@ func TestHD01to05_CreatePetHandler(t *testing.T) {
 		if w.Code != http.StatusForbidden {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusForbidden)
 		}
-		hdRequireDetail(t, w, msgNoPermissionToCreatePet)
+		testutil.ExpectDetail(t, w, msgNoPermissionToCreatePet)
 		if len(mock.createPetCalls) != 0 {
 			t.Errorf("CreatePet called %d times, want 0", len(mock.createPetCalls))
 		}
@@ -150,7 +128,7 @@ func TestHD01to05_CreatePetHandler(t *testing.T) {
 		if len(mock.createPetCalls) != 1 || mock.createPetCalls[0] != "Rex" {
 			t.Errorf("CreatePet calls = %v, want [Rex]", mock.createPetCalls)
 		}
-		body := hdDecodeJSON(t, w.Body.Bytes())
+		body := testutil.DecodeJSON(t, w.Body.Bytes())
 		if body["name"] != "Rex" {
 			t.Errorf("response name = %v, want Rex", body["name"])
 		}
@@ -185,7 +163,7 @@ func TestHD01to05_CreatePetHandler(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
 		}
-		hdRequireDetail(t, w, msgPetNameIsRequired)
+		testutil.ExpectDetail(t, w, msgPetNameIsRequired)
 		if len(mock.createPetCalls) != 0 {
 			t.Errorf("CreatePet called %d times, want 0", len(mock.createPetCalls))
 		}
@@ -204,7 +182,7 @@ func TestHD01to05_CreatePetHandler(t *testing.T) {
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
 		}
-		hdRequireDetail(t, w, msgUnableToCreatePet)
+		testutil.ExpectDetail(t, w, msgUnableToCreatePet)
 	})
 }
 
@@ -253,7 +231,7 @@ func TestHD06to10_GetPetHandler(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
 		}
-		hdRequireDetail(t, w, msgPetIDIsRequired)
+		testutil.ExpectDetail(t, w, msgPetIDIsRequired)
 		if len(mock.getPetCalls) != 0 {
 			t.Errorf("GetPet called %d times, want 0", len(mock.getPetCalls))
 		}
@@ -271,7 +249,7 @@ func TestHD06to10_GetPetHandler(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
 		}
-		hdRequireDetail(t, w, msgPetIDIsRequired)
+		testutil.ExpectDetail(t, w, msgPetIDIsRequired)
 		if len(mock.getPetCalls) != 0 {
 			t.Errorf("GetPet called %d times, want 0", len(mock.getPetCalls))
 		}
@@ -289,7 +267,7 @@ func TestHD06to10_GetPetHandler(t *testing.T) {
 		if w.Code != http.StatusNotFound {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
 		}
-		hdRequireDetail(t, w, msgPetNotFound)
+		testutil.ExpectDetail(t, w, msgPetNotFound)
 	})
 }
 
@@ -305,7 +283,7 @@ func TestHD11to14and35_UpdatePetHandler(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
 		}
-		hdRequireDetail(t, w, msgUnableToParseBody)
+		testutil.ExpectDetail(t, w, msgUnableToParseBody)
 		if len(mock.updatePetCalls) != 0 {
 			t.Errorf("UpdatePet called %d times, want 0", len(mock.updatePetCalls))
 		}
@@ -323,7 +301,7 @@ func TestHD11to14and35_UpdatePetHandler(t *testing.T) {
 		if w.Code != http.StatusForbidden {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusForbidden)
 		}
-		hdRequireDetail(t, w, msgNoPermissionToUpdatePet)
+		testutil.ExpectDetail(t, w, msgNoPermissionToUpdatePet)
 		if len(mock.updatePetCalls) != 0 {
 			t.Errorf("UpdatePet called %d times, want 0", len(mock.updatePetCalls))
 		}
@@ -358,7 +336,7 @@ func TestHD11to14and35_UpdatePetHandler(t *testing.T) {
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
 		}
-		hdRequireDetail(t, w, msgUnableToUpdatePet)
+		testutil.ExpectDetail(t, w, msgUnableToUpdatePet)
 	})
 
 	t.Run("PPH-35_StoreNoRowsNotFound", func(t *testing.T) {
@@ -373,7 +351,7 @@ func TestHD11to14and35_UpdatePetHandler(t *testing.T) {
 		if w.Code != http.StatusNotFound {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
 		}
-		hdRequireDetail(t, w, msgPetNotFound)
+		testutil.ExpectDetail(t, w, msgPetNotFound)
 	})
 }
 
@@ -422,7 +400,7 @@ func TestHD15to18_GetRandPetPictureByNameHandler(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
 		}
-		hdRequireDetail(t, w, msgPetNameIsRequired)
+		testutil.ExpectDetail(t, w, msgPetNameIsRequired)
 	})
 
 	t.Run("PPH-18_StoreErrorNotFound", func(t *testing.T) {
@@ -437,7 +415,7 @@ func TestHD15to18_GetRandPetPictureByNameHandler(t *testing.T) {
 		if w.Code != http.StatusNotFound {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
 		}
-		hdRequireDetail(t, w, msgPetPictureNotFound)
+		testutil.ExpectDetail(t, w, msgPetPictureNotFound)
 	})
 }
 
@@ -486,7 +464,7 @@ func TestHD19to22_GetPetPictureHandler(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
 		}
-		hdRequireDetail(t, w, msgPetPictureIDIsRequired)
+		testutil.ExpectDetail(t, w, msgPetPictureIDIsRequired)
 	})
 
 	t.Run("PPH-22_StoreErrorNotFound", func(t *testing.T) {
@@ -501,7 +479,7 @@ func TestHD19to22_GetPetPictureHandler(t *testing.T) {
 		if w.Code != http.StatusNotFound {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
 		}
-		hdRequireDetail(t, w, msgPetPictureNotFound)
+		testutil.ExpectDetail(t, w, msgPetPictureNotFound)
 	})
 }
 
@@ -517,7 +495,7 @@ func TestHD23to27and36_UpdatePetPictureHandler(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
 		}
-		hdRequireDetail(t, w, msgUnableToParseBody)
+		testutil.ExpectDetail(t, w, msgUnableToParseBody)
 		if len(mock.getPetCalls) != 0 || len(mock.updatePetPictureCalls) != 0 {
 			t.Errorf("expected no store calls, got GetPet=%v UpdatePetPicture=%v", mock.getPetCalls, mock.updatePetPictureCalls)
 		}
@@ -534,7 +512,7 @@ func TestHD23to27and36_UpdatePetPictureHandler(t *testing.T) {
 		if w.Code != http.StatusNotFound {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
 		}
-		hdRequireDetail(t, w, msgPetNotFound)
+		testutil.ExpectDetail(t, w, msgPetNotFound)
 		if len(mock.updatePetPictureCalls) != 0 {
 			t.Errorf("UpdatePetPicture called %d times, want 0", len(mock.updatePetPictureCalls))
 		}
@@ -552,7 +530,7 @@ func TestHD23to27and36_UpdatePetPictureHandler(t *testing.T) {
 		if w.Code != http.StatusForbidden {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusForbidden)
 		}
-		hdRequireDetail(t, w, msgNoPermissionToUpdatePet)
+		testutil.ExpectDetail(t, w, msgNoPermissionToUpdatePet)
 		if len(mock.updatePetPictureCalls) != 0 {
 			t.Errorf("UpdatePetPicture called %d times, want 0", len(mock.updatePetPictureCalls))
 		}
@@ -593,7 +571,7 @@ func TestHD23to27and36_UpdatePetPictureHandler(t *testing.T) {
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
 		}
-		hdRequireDetail(t, w, msgUnableToUpdatePetPicture)
+		testutil.ExpectDetail(t, w, msgUnableToUpdatePetPicture)
 	})
 
 	t.Run("PPH-36_StoreNoRowsNotFound", func(t *testing.T) {
@@ -611,7 +589,7 @@ func TestHD23to27and36_UpdatePetPictureHandler(t *testing.T) {
 		if w.Code != http.StatusNotFound {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
 		}
-		hdRequireDetail(t, w, msgPetPictureNotFound)
+		testutil.ExpectDetail(t, w, msgPetPictureNotFound)
 	})
 }
 
@@ -668,7 +646,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
 		}
-		hdRequireDetail(t, w, msgPetPictureIDIsRequired)
+		testutil.ExpectDetail(t, w, msgPetPictureIDIsRequired)
 	})
 
 	t.Run("PPH-31_GetPetPictureErrorNotFound", func(t *testing.T) {
@@ -683,7 +661,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 		if w.Code != http.StatusNotFound {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
 		}
-		hdRequireDetail(t, w, msgPetPictureNotFound)
+		testutil.ExpectDetail(t, w, msgPetPictureNotFound)
 		if len(mock.deletePetPictureCalls) != 0 {
 			t.Errorf("DeletePetPicture called %d times, want 0", len(mock.deletePetPictureCalls))
 		}
@@ -704,7 +682,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 		if w.Code != http.StatusNotFound {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
 		}
-		hdRequireDetail(t, w, msgPetNotFound)
+		testutil.ExpectDetail(t, w, msgPetNotFound)
 		if len(mock.deletePetPictureCalls) != 0 {
 			t.Errorf("DeletePetPicture called %d times, want 0", len(mock.deletePetPictureCalls))
 		}
@@ -726,7 +704,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 		if w.Code != http.StatusForbidden {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusForbidden)
 		}
-		hdRequireDetail(t, w, msgNoPermissionToUpdatePet)
+		testutil.ExpectDetail(t, w, msgNoPermissionToUpdatePet)
 		if len(mock.deletePetPictureCalls) != 0 {
 			t.Errorf("DeletePetPicture called %d times, want 0", len(mock.deletePetPictureCalls))
 		}
@@ -749,7 +727,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
 		}
-		hdRequireDetail(t, w, msgUnableToDeletePetPicture)
+		testutil.ExpectDetail(t, w, msgUnableToDeletePetPicture)
 	})
 }
 
@@ -767,7 +745,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
 		}
-		hdRequireDetail(t, w, msgPetNameMustNotBeEmpty)
+		testutil.ExpectDetail(t, w, msgPetNameMustNotBeEmpty)
 	})
 
 	t.Run("PPH-38_UpdatePetNameEmptyBadRequest", func(t *testing.T) {
@@ -782,7 +760,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
 		}
-		hdRequireDetail(t, w, msgPetNameMustNotBeEmpty)
+		testutil.ExpectDetail(t, w, msgPetNameMustNotBeEmpty)
 	})
 
 	t.Run("PPH-39_GetPetStoreFailureInternalServerError", func(t *testing.T) {
@@ -797,7 +775,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
 		}
-		hdRequireDetail(t, w, msgUnableToGetPet)
+		testutil.ExpectDetail(t, w, msgUnableToGetPet)
 	})
 
 	t.Run("PPH-45_GetRandPetPicturePetNotFound", func(t *testing.T) {
@@ -812,7 +790,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 		if w.Code != http.StatusNotFound {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
 		}
-		hdRequireDetail(t, w, msgPetNotFound)
+		testutil.ExpectDetail(t, w, msgPetNotFound)
 	})
 
 	t.Run("PPH-40_GetRandPetPictureStoreFailureInternalServerError", func(t *testing.T) {
@@ -827,7 +805,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
 		}
-		hdRequireDetail(t, w, msgUnableToGetRandomPetPicture)
+		testutil.ExpectDetail(t, w, msgUnableToGetRandomPetPicture)
 	})
 
 	t.Run("PPH-41_GetPetPictureStoreFailureInternalServerError", func(t *testing.T) {
@@ -842,7 +820,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
 		}
-		hdRequireDetail(t, w, msgUnableToGetPetPicture)
+		testutil.ExpectDetail(t, w, msgUnableToGetPetPicture)
 	})
 
 	t.Run("PPH-42_UpdatePetPictureGetPetFailureInternalServerError", func(t *testing.T) {
@@ -856,7 +834,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
 		}
-		hdRequireDetail(t, w, msgUnableToGetPet)
+		testutil.ExpectDetail(t, w, msgUnableToGetPet)
 		if len(mock.updatePetPictureCalls) != 0 {
 			t.Errorf("UpdatePetPicture called %d times, want 0", len(mock.updatePetPictureCalls))
 		}
@@ -874,7 +852,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
 		}
-		hdRequireDetail(t, w, msgUnableToGetPetPicture)
+		testutil.ExpectDetail(t, w, msgUnableToGetPetPicture)
 		if len(mock.deletePetPictureCalls) != 0 {
 			t.Errorf("DeletePetPicture called %d times, want 0", len(mock.deletePetPictureCalls))
 		}
@@ -895,7 +873,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
 		}
-		hdRequireDetail(t, w, msgUnableToGetPet)
+		testutil.ExpectDetail(t, w, msgUnableToGetPet)
 		if len(mock.deletePetPictureCalls) != 0 {
 			t.Errorf("DeletePetPicture called %d times, want 0", len(mock.deletePetPictureCalls))
 		}

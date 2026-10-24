@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"sort"
 	"strconv"
 	"strings"
@@ -19,19 +18,6 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
-
-func rbUnusedPort(t *testing.T) int {
-	t.Helper()
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("failed to find an unused port: %v", err)
-	}
-	port := l.Addr().(*net.TCPAddr).Port
-	if err := l.Close(); err != nil {
-		t.Fatalf("failed to close probe listener: %v", err)
-	}
-	return port
-}
 
 const (
 	rbAccountIDBase = 920000000000000000
@@ -659,7 +645,7 @@ func TestST22to26GetPermissionsForRoles(t *testing.T) {
 
 func TestST24ConnectionErrors(t *testing.T) {
 	t.Run("RCS-24_UnreachableDatabasePassesTheErrorThroughEveryStoreMethod", func(t *testing.T) {
-		cfg, err := pgxpool.ParseConfig(fmt.Sprintf("postgres://user:pass@127.0.0.1:%d/db?sslmode=disable&connect_timeout=2", rbUnusedPort(t)))
+		cfg, err := pgxpool.ParseConfig(fmt.Sprintf("postgres://user:pass@127.0.0.1:%d/db?sslmode=disable&connect_timeout=2", testutil.UnusedTCPPort(t)))
 		if err != nil {
 			t.Fatalf("failed to parse pool config: %v", err)
 		}

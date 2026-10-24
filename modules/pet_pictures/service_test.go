@@ -76,18 +76,6 @@ func (rt *svFakeRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 	return rt.resp, nil
 }
 
-// swapTransport replaces the package-level http.DefaultTransport (which
-// UploadPetPicture's client implicitly uses) for the duration of a subtest
-// and restores the original afterward.
-func swapTransport(t *testing.T, rt http.RoundTripper) {
-	t.Helper()
-	orig := http.DefaultTransport
-	http.DefaultTransport = rt
-	t.Cleanup(func() {
-		http.DefaultTransport = orig
-	})
-}
-
 func svOKResponse() *http.Response {
 	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(nil)), Header: make(http.Header)}
 }
@@ -129,7 +117,7 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 		file := svTempFile(t, "sv03-upload-*.jpg", []byte("some picture bytes"))
 
 		rt := &svFakeRoundTripper{resp: svOKResponse()}
-		swapTransport(t, rt)
+		testutil.SwapTransport(t, rt)
 
 		origKey := CDN_KEY
 		CDN_KEY = "test-cdn-key"
@@ -188,7 +176,7 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 		file := svTempFile(t, "sv04-upload-*.jpg", []byte("bytes"))
 
 		rt := &svFakeRoundTripper{}
-		swapTransport(t, rt)
+		testutil.SwapTransport(t, rt)
 
 		got, err := svc.UploadPetPicture(svCtx, file, 1, nil, nil)
 		if got != nil {
@@ -227,7 +215,7 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 		file := svTempFile(t, "sv06-upload-*.jpg", []byte("bytes"))
 
 		wantErr := testutil.ErrTransportFailed
-		swapTransport(t, &svFakeRoundTripper{err: wantErr})
+		testutil.SwapTransport(t, &svFakeRoundTripper{err: wantErr})
 
 		got, err := svc.UploadPetPicture(svCtx, file, 1, nil, nil)
 		if got != nil {
@@ -245,7 +233,7 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 		svc := NewService(mock)
 		file := svTempFile(t, "sv07-photo-*.tar.gz", []byte("bytes"))
 
-		swapTransport(t, &svFakeRoundTripper{resp: svOKResponse()})
+		testutil.SwapTransport(t, &svFakeRoundTripper{resp: svOKResponse()})
 
 		if _, err := svc.UploadPetPicture(svCtx, file, 1, nil, nil); err != nil {
 			t.Fatalf("UploadPetPicture() error = %v, want nil", err)
@@ -264,7 +252,7 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 		renamed := "sv08-mock-id." + base
 		t.Cleanup(func() { os.Remove(renamed) })
 
-		swapTransport(t, &svFakeRoundTripper{resp: svOKResponse()})
+		testutil.SwapTransport(t, &svFakeRoundTripper{resp: svOKResponse()})
 
 		if _, err := svc.UploadPetPicture(svCtx, file, 1, nil, nil); err != nil {
 			t.Fatalf("UploadPetPicture() error = %v, want nil", err)
@@ -294,7 +282,7 @@ func TestSV09_UploadCtxReachesStore(t *testing.T) {
 		svc := NewService(mock)
 		file := svTempFile(t, "sv09-upload-*.jpg", []byte("some picture bytes"))
 		rt := &svFakeRoundTripper{resp: svOKResponse()}
-		swapTransport(t, rt)
+		testutil.SwapTransport(t, rt)
 
 		ctx, cancel := context.WithCancel(context.WithValue(svCtx, ctxKey{}, "marker"))
 		cancel()

@@ -75,15 +75,6 @@ func hdRequest(t *testing.T, host string, rawQuery string) *http.Request {
 	return req
 }
 
-func hdDecodeJSON(t *testing.T, body []byte) map[string]interface{} {
-	t.Helper()
-	var m map[string]interface{}
-	if err := json.Unmarshal(body, &m); err != nil {
-		t.Fatalf("failed to decode JSON body %q: %v", body, err)
-	}
-	return m
-}
-
 func hdDecodeProblem(t *testing.T, body []byte) responses.Problem {
 	t.Helper()
 	var p responses.Problem
@@ -144,7 +135,7 @@ func TestServerStatusHandler(t *testing.T) {
 		if w.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d", w.Code)
 		}
-		body := hdDecodeJSON(t, w.Body.Bytes())
+		body := testutil.DecodeJSON(t, w.Body.Bytes())
 		if _, ok := body["raw"]; ok {
 			t.Fatalf("expected \"raw\" key to be omitted, got %v", body["raw"])
 		}
@@ -163,7 +154,7 @@ func TestServerStatusHandler(t *testing.T) {
 		if w.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d", w.Code)
 		}
-		body := hdDecodeJSON(t, w.Body.Bytes())
+		body := testutil.DecodeJSON(t, w.Body.Bytes())
 		if body["raw"] != "raw-marker" {
 			t.Fatalf("expected raw %q, got %v", "raw-marker", body["raw"])
 		}

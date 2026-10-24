@@ -58,3 +58,13 @@ func ExpectDetail(t *testing.T, w *httptest.ResponseRecorder, want string) {
 		t.Fatalf("detail = %q, want %q", p.Detail, want)
 	}
 }
+
+// DecodeJSON decodes body into a generic map and fails the test on invalid JSON.
+func DecodeJSON(t *testing.T, body []byte) map[string]interface{} {
+	t.Helper()
+	var m map[string]interface{}
+	if err := json.Unmarshal(body, &m); err != nil {
+		t.Fatalf("failed to decode JSON body %q: %v", body, err)
+	}
+	return m
+}

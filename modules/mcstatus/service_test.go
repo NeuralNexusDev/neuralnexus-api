@@ -20,23 +20,6 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
-// svUnusedPort binds and immediately releases a TCP port, which then refuses
-// connections fast and deterministically - the only reliable, networkless
-// way to exercise service.go's error paths, since its three methods call raw
-// TCP/UDP libraries with no injectable transport seam.
-func svUnusedPort(t *testing.T) int {
-	t.Helper()
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("failed to find an unused port: %v", err)
-	}
-	port := l.Addr().(*net.TCPAddr).Port
-	if err := l.Close(); err != nil {
-		t.Fatalf("failed to close probe listener: %v", err)
-	}
-	return port
-}
-
 func svUnusedUDPPort(t *testing.T) int {
 	t.Helper()
 	l, err := net.ListenPacket("udp", "127.0.0.1:0")
@@ -98,7 +81,7 @@ func TestNewService(t *testing.T) {
 
 func TestService_GetJavaServerStatus(t *testing.T) {
 	t.Run("CSV-02_UnreachableHostReturnsError", func(t *testing.T) {
-		port := svUnusedPort(t)
+		port := testutil.UnusedTCPPort(t)
 		s := NewService()
 
 		status, err := s.GetJavaServerStatus(testutil.LogContext(context.Background()), "127.0.0.1", port, false, 0)
@@ -112,7 +95,7 @@ func TestService_GetJavaServerStatus(t *testing.T) {
 	})
 
 	t.Run("CSV-03_UnreachableHostWithQueryEnabledStillErrors", func(t *testing.T) {
-		port := svUnusedPort(t)
+		port := testutil.UnusedTCPPort(t)
 		s := NewService()
 
 		status, err := s.GetJavaServerStatus(testutil.LogContext(context.Background()), "127.0.0.1", port, true, port)
@@ -148,7 +131,7 @@ func TestService_GetJavaServerStatus(t *testing.T) {
 
 func TestService_GetBedrockServerStatus(t *testing.T) {
 	t.Run("CSV-05_UnreachableHostReturnsError", func(t *testing.T) {
-		port := svUnusedPort(t)
+		port := testutil.UnusedTCPPort(t)
 		s := NewService()
 
 		status, err := s.GetBedrockServerStatus(testutil.LogContext(context.Background()), "127.0.0.1", port)
@@ -178,7 +161,7 @@ func TestService_GetBedrockServerStatus(t *testing.T) {
 
 func TestService_GetServerStatus(t *testing.T) {
 	t.Run("CSV-07_JavaDispatch", func(t *testing.T) {
-		port := svUnusedPort(t)
+		port := testutil.UnusedTCPPort(t)
 		s := NewService()
 
 		_, err := s.GetServerStatus(testutil.LogContext(context.Background()), "127.0.0.1", port, false, false, 0)
@@ -189,7 +172,7 @@ func TestService_GetServerStatus(t *testing.T) {
 	})
 
 	t.Run("CSV-08_BedrockDispatch", func(t *testing.T) {
-		port := svUnusedPort(t)
+		port := testutil.UnusedTCPPort(t)
 		s := NewService()
 
 		_, err := s.GetServerStatus(testutil.LogContext(context.Background()), "127.0.0.1", port, true, false, 0)
@@ -544,7 +527,7 @@ func TestService_GetJavaServerStatusQueryMerge(t *testing.T) {
 
 func TestService_GetJavaServerStatusQueryConcurrency(t *testing.T) {
 	t.Run("CSV-21_DeadPingAndDeadQueryReturnsError", func(t *testing.T) {
-		port := svUnusedPort(t)
+		port := testutil.UnusedTCPPort(t)
 		queryPort := svUnusedUDPPort(t)
 
 		start := time.Now()
@@ -580,7 +563,7 @@ func TestService_GetJavaServerStatusQueryConcurrency(t *testing.T) {
 	})
 
 	t.Run("CSV-23_QueryAnswersWhenEveryPingFails", func(t *testing.T) {
-		port := svUnusedPort(t)
+		port := testutil.UnusedTCPPort(t)
 		queryPort := svNewQueryServer(t, 0)
 
 		status, err := NewService().GetJavaServerStatus(testutil.LogContext(context.Background()), "127.0.0.1", port, true, queryPort)
@@ -611,7 +594,7 @@ func TestService_GetJavaServerStatusQueryConcurrency(t *testing.T) {
 	})
 
 	t.Run("CSV-25_QueryOnlyStatusWaitsForSlowQuery", func(t *testing.T) {
-		port := svUnusedPort(t)
+		port := testutil.UnusedTCPPort(t)
 		queryPort := svNewQueryServer(t, 500*time.Millisecond)
 
 		status, err := NewService().GetJavaServerStatus(testutil.LogContext(context.Background()), "127.0.0.1", port, true, queryPort)
