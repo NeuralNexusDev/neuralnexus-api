@@ -16,8 +16,6 @@ var ErrEventNotFound = errors.New("event not found")
 
 var ErrEventsQueryFailed = errors.New("failed to query events")
 
-// The event_log table is defined in db/events.sql.
-
 type EventType string
 
 type EventStatus int
