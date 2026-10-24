@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS geyser_players (
 
 CREATE TABLE IF NOT EXISTS geyser_player_textures (
     player_id UUID REFERENCES geyser_players(id),
+    skin_id UUID REFERENCES players(id),
     skin TEXT REFERENCES textures(hash),
     model TEXT,
     cape TEXT REFERENCES textures(hash),

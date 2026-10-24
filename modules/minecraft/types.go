@@ -19,6 +19,9 @@ var (
 	ErrPlayerNotFound  = errors.New("player not found")
 	ErrTextureNotFound = errors.New("texture not found")
 
+	ErrSkinNotFound         = errors.New("skin not found")
+	ErrInvalidGeyserRequest = errors.New("invalid request")
+
 	ErrCacheMiss             = errors.New("cache miss")
 	ErrMojangAPI             = errors.New("mojang API error")
 	ErrGeyserAPI             = errors.New("geyser API error")
@@ -197,7 +200,7 @@ type Model string
 // SLIM The only known value for Metadata.Model
 const SLIM Model = "slim"
 
-// Profile - a player's full profile, decoded and canonical.
+// Profile - a player's full profile
 type Profile struct {
 	ID             string         `json:"id"`
 	Name           string         `json:"name"`
@@ -233,86 +236,6 @@ func (p *Profile) ToPlayer() (*Player, error) {
 	return player, nil
 }
 
-// GeyserPlayer - a Bedrock player's identity derived from Geyser's Xbox XUID lookup.
-type GeyserPlayer struct {
-	ID        string `json:"floodgate_uuid" db:"id"`
-	XUID      int64  `json:"xuid"           db:"xuid"`
-	Gamertag  string `json:"gamertag"       db:"gamertag"`
-	FirstSeen int64  `json:"-"              db:"first_seen"`
-	LastSeen  int64  `json:"-"              db:"last_seen"`
-}
-
-// IsStale returns true if the GeyserPlayer's last_seen is older than the staleness threshold
-func (p *GeyserPlayer) IsStale() bool {
-	return time.Now().UnixMilli()-p.LastSeen > stalenessThreshold.Milliseconds()
-}
-
-var ErrSkinNotFound = errors.New("skin not found")
-
-var ErrInvalidGeyserRequest = errors.New("invalid request")
-
-// GeyserSkin - a Bedrock player's most recently converted skin.
-type GeyserSkin struct {
-	TextureBytesHash string `json:"hash"`
-	IsSteve          bool   `json:"is_steve"`
-	Signature        string `json:"signature,omitempty"`
-	Hash             string `json:"texture_id"`
-	Value            string `json:"value"`
-	FirstSeen        int64  `json:"-"`
-	LastSeen         int64  `json:"last_update"`
-}
-
-// IsStale returns true if the skin's last_seen is older than the staleness threshold
-func (s *GeyserSkin) IsStale() bool {
-	return time.Now().UnixMilli()-s.LastSeen > stalenessThreshold.Milliseconds()
-}
-
-func (s *GeyserSkin) FromTexturesValue(ctx context.Context, t *TexturesValue) {
-	if t == nil || t.Textures.SKIN == nil {
-		return
-	}
-	s.Hash = t.Textures.SKIN.Hash()
-	s.IsSteve = t.Textures.SKIN.Metadata != nil && t.Textures.SKIN.Metadata.Model == SLIM
-	s.Value = EncodeTextureValue(ctx, t)
-	// TODO: Hash PNG in some manner?
-	s.TextureBytesHash = "TODO"
-	s.FirstSeen = t.Timestamp
-	s.LastSeen = t.Timestamp
-}
-
-// xuidToUUID derives a synthetic UUID from an Xbox XUID: its zero-padded hex
-// representation, formatted as a standard UUID.
-func xuidToUUID(xuid int64) string {
-	hex := fmt.Sprintf("%032x", uint64(xuid))
-	return hex[0:8] + "-" + hex[8:12] + "-" + hex[12:16] + "-" + hex[16:20] + "-" + hex[20:32]
-}
-
-// uuidToXUID reverses xuidToUUID. It errors on a malformed UUID or one whose
-// high 64 bits aren't zero (i.e. a real Java UUID, not one of ours).
-func uuidToXUID(id string) (int64, error) {
-	parsed, err := uuid.Parse(id)
-	if err != nil {
-		return 0, err
-	}
-	for _, b := range parsed[:8] {
-		if b != 0 {
-			return 0, ErrNotDerivedBedrockUUID
-		}
-	}
-	return int64(binary.BigEndian.Uint64(parsed[8:16])), nil
-}
-
-// GeyserProfile - a Bedrock player's full profile: identity plus their most
-// recently converted skin.
-type GeyserProfile struct {
-	ID        string         `json:"floodgate_uuid" db:"id"`
-	XUID      int64          `json:"xuid"`
-	Gamertag  string         `json:"gamertag"`
-	Textures  *TexturesValue `json:"textures,omitempty"`
-	FirstSeen int64          `json:"-" db:"first_seen"`
-	LastSeen  int64          `json:"last_updated" db:"last_seen"`
-}
-
 // TexturesRow represents a texture in the database
 type TexturesRow struct {
 	PlayerId string  `db:"player_id"`
@@ -345,4 +268,80 @@ func (t *TexturesRow) Value(playerName, textureUrl string) *TexturesValue {
 		ProfileName: playerName,
 		Textures:    textures,
 	}
+}
+
+// GeyserPlayer - a Bedrock player's identity derived from Geyser's Xbox XUID lookup.
+type GeyserPlayer struct {
+	ID        string `json:"floodgate_uuid" db:"id"`
+	XUID      int64  `json:"xuid"           db:"xuid"`
+	Gamertag  string `json:"gamertag"       db:"gamertag"`
+	FirstSeen int64  `json:"-"              db:"first_seen"`
+	LastSeen  int64  `json:"-"              db:"last_seen"`
+}
+
+// IsStale returns true if the GeyserPlayer's last_seen is older than the staleness threshold
+func (p *GeyserPlayer) IsStale() bool {
+	return time.Now().UnixMilli()-p.LastSeen > stalenessThreshold.Milliseconds()
+}
+
+// GeyserSkin - a Bedrock player's most recently converted skin.
+type GeyserSkin struct {
+	TextureBytesHash string `json:"hash"`
+	IsSteve          bool   `json:"is_steve"`
+	Signature        string `json:"signature,omitempty"`
+	Hash             string `json:"texture_id"`
+	Value            string `json:"value"`
+	FirstSeen        int64  `json:"-"`
+	LastSeen         int64  `json:"last_update"`
+}
+
+// IsStale returns true if the skin's last_seen is older than the staleness threshold
+func (s *GeyserSkin) IsStale() bool {
+	return time.Now().UnixMilli()-s.LastSeen > stalenessThreshold.Milliseconds()
+}
+
+func (s *GeyserSkin) FromTexturesValue(ctx context.Context, t *TexturesValue) {
+	if t == nil || t.Textures.SKIN == nil {
+		return
+	}
+	s.Hash = t.Textures.SKIN.Hash()
+	s.IsSteve = t.Textures.SKIN.Metadata != nil && t.Textures.SKIN.Metadata.Model == SLIM
+	s.Value = EncodeTextureValue(ctx, t)
+	// TODO: Hash PNG in some manner? Check that the "hash" stored in the image DB is actually a hash
+	s.TextureBytesHash = "TODO"
+	s.FirstSeen = t.Timestamp
+	s.LastSeen = t.Timestamp
+}
+
+// xuidToUUID derives a synthetic UUID from an Xbox XUID: its zero-padded hex
+// representation, formatted as a standard UUID.
+func xuidToUUID(xuid int64) string {
+	hex := fmt.Sprintf("%032x", uint64(xuid))
+	return hex[0:8] + "-" + hex[8:12] + "-" + hex[12:16] + "-" + hex[16:20] + "-" + hex[20:32]
+}
+
+// uuidToXUID reverses xuidToUUID. It errors on a malformed UUID or one whose
+// high 64 bits aren't zero (i.e. a real Java UUID, not one of ours).
+func uuidToXUID(id string) (int64, error) {
+	parsed, err := uuid.Parse(id)
+	if err != nil {
+		return 0, err
+	}
+	for _, b := range parsed[:8] {
+		if b != 0 {
+			return 0, ErrNotDerivedBedrockUUID
+		}
+	}
+	return int64(binary.BigEndian.Uint64(parsed[8:16])), nil
+}
+
+// GeyserProfile - a Bedrock player's full profile
+type GeyserProfile struct {
+	ID        string         `json:"floodgate_uuid"`
+	XUID      int64          `json:"xuid"`
+	Gamertag  string         `json:"gamertag"`
+	Textures  *TexturesValue `json:"textures,omitempty"`
+	SkinID    string         `json:"-"`
+	FirstSeen int64          `json:"-"`
+	LastSeen  int64          `json:"last_updated"`
 }
