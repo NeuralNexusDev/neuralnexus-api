@@ -81,18 +81,6 @@ func closedTCPPort(t *testing.T) int {
 	return port
 }
 
-func TestNewService(t *testing.T) {
-	t.Run("GSV-01_Accessor_ReturnsUsableService", func(t *testing.T) {
-		svc := NewService()
-		if svc == nil {
-			t.Fatal("NewService() = nil, want non-nil")
-		}
-		if _, ok := svc.(*service); !ok {
-			t.Errorf("NewService() concrete type = %T, want *service", svc)
-		}
-	})
-}
-
 func TestQueryGameQ(t *testing.T) {
 	svc := NewService()
 

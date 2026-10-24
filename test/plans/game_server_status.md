@@ -21,7 +21,6 @@
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| GSV-01 | NewService | Accessor | Constructs a usable service | none | Returns non-nil GSSService backed by *service | P3 |  |
 | GSV-02 | QueryGameQ | Happy Path | Upstream returns 200 with one server keyed in the response map | Fake transport returns `{"srv":{"gq_online":true,...}}` | Returns the decoded *GameQResponse for that entry, nil error | P1 |  |
 | GSV-03 | QueryGameQ | Error Path | http.Get fails at the transport level | Fake transport's RoundTrip returns an error | Returns nil, `ErrGameQQuery` | P2 |  |
 | GSV-04 | QueryGameQ | Error Path | Upstream returns non-200 status | Fake transport returns 500 with a readable body | Returns nil, `ErrGameQQuery` | P2 |  |

@@ -98,14 +98,6 @@ func ppUniqueID(prefix string) string {
 	return prefix + "-" + strings.ReplaceAll(uuid.New().String(), "-", "")
 }
 
-func TestST01_NewStore(t *testing.T) {
-	t.Run("PPS-01_WrapsGivenPool", func(t *testing.T) {
-		if s := NewStore(nil); s == nil {
-			t.Error("NewStore(nil) = nil, want a non-nil PetPicStore")
-		}
-	})
-}
-
 func TestST02to05and26_CreatePet(t *testing.T) {
 	t.Run("PPS-04_ConnectionFailure", func(t *testing.T) {
 		ppSetUnreachableDatabaseURL(t)

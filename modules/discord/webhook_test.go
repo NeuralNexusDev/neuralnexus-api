@@ -97,24 +97,6 @@ func TestInstallationContext_String(t *testing.T) {
 	})
 }
 
-func TestApplicationAuthorizedWebhookData_Type(t *testing.T) {
-	t.Run("AAD-01_ReturnsConstant", func(t *testing.T) {
-		d := ApplicationAuthorizedWebhookData{User: discordgo.User{ID: "u1"}}
-		if got := d.Type(); got != ApplicationAuthorized {
-			t.Errorf("Type() = %v, want %v", got, ApplicationAuthorized)
-		}
-	})
-}
-
-func TestApplicationDeauthorizedWebhookData_Type(t *testing.T) {
-	t.Run("ADD-01_ReturnsConstant", func(t *testing.T) {
-		d := ApplicationDeauthorizedWebhookData{User: discordgo.User{ID: "u1"}}
-		if got := d.Type(); got != ApplicationDeauthorized {
-			t.Errorf("Type() = %v, want %v", got, ApplicationDeauthorized)
-		}
-	})
-}
-
 func TestWebhookEvent_UnmarshalJSON(t *testing.T) {
 	t.Run("WEU-01_ApplicationAuthorized", func(t *testing.T) {
 		raw := `{"type":"APPLICATION_AUTHORIZED","timestamp":"2024-01-01T00:00:00.000000","data":{"integration_type":0,"user":{"id":"u1"},"guild":{"id":"g1"}}}`

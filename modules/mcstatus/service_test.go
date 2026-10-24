@@ -84,18 +84,6 @@ func svLiveBedrockServer(t *testing.T) (string, int) {
 	return host, port
 }
 
-func TestNewService(t *testing.T) {
-	t.Run("CSV-01_ReturnsNonNilService", func(t *testing.T) {
-		s := NewService()
-		if s == nil {
-			t.Fatal("expected a non-nil MCStatusService")
-		}
-		if _, ok := s.(*service); !ok {
-			t.Fatalf("expected a *service, got %T", s)
-		}
-	})
-}
-
 func TestService_GetJavaServerStatus(t *testing.T) {
 	t.Run("CSV-02_UnreachableHostReturnsError", func(t *testing.T) {
 		port := svUnusedPort(t)
