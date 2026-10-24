@@ -23,25 +23,9 @@ import (
 
 var bnCtx = context.Background()
 
-// bngUnusedTCPPort returns a port that's very likely free when returned, so
-// a connection attempt against it fails fast ("connection refused") rather
-// than hanging.
-func bngUnusedTCPPort(t *testing.T) int {
-	t.Helper()
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("failed to find an unused port: %v", err)
-	}
-	port := l.Addr().(*net.TCPAddr).Port
-	if err := l.Close(); err != nil {
-		t.Fatalf("failed to close probe listener: %v", err)
-	}
-	return port
-}
-
 func bngUnreachablePool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	port := bngUnusedTCPPort(t)
+	port := testutil.UnusedTCPPort(t)
 	cfg, err := pgxpool.ParseConfig(fmt.Sprintf("postgres://user:pass@127.0.0.1:%d/db?sslmode=disable&connect_timeout=2", port))
 	if err != nil {
 		t.Fatalf("failed to parse pool config: %v", err)
