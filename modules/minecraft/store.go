@@ -98,8 +98,6 @@ func (s *store) GetPlayerByUUID(ctx context.Context, id string) (*Player, error)
 	if err != nil {
 		return nil, err
 	}
-	// Lax: this query intentionally omits profile_actions, unlike
-	// GetProfileByUUID, so Player.ProfileActions is left at its zero value.
 	player, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByNameLax[Player])
 	if err != nil {
 		return nil, playerNotFound(err)
@@ -114,7 +112,6 @@ func (s *store) GetPlayerByName(ctx context.Context, name string) (*Player, erro
 	if err != nil {
 		return nil, err
 	}
-	// Lax: see GetPlayerByUUID.
 	player, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByNameLax[Player])
 	if err != nil {
 		return nil, playerNotFound(err)
@@ -362,8 +359,7 @@ func (s *store) GetGeyserPlayerByGamertag(ctx context.Context, gamertag string) 
 	return player, nil
 }
 
-// GetGeyserPlayerByXUID gets a Bedrock player's gamertag->XUID mapping by xuid,
-// the table's primary key.
+// GetGeyserPlayerByXUID gets a Bedrock player's player info by XUID
 func (s *store) GetGeyserPlayerByXUID(ctx context.Context, xuid int64) (*GeyserPlayer, error) {
 	rows, err := s.db.Query(ctx, `
 		SELECT id, xuid, gamertag, first_seen, last_seen
@@ -380,7 +376,7 @@ func (s *store) GetGeyserPlayerByXUID(ctx context.Context, xuid int64) (*GeyserP
 	return player, nil
 }
 
-// UpsertGeyserPlayer upserts a Bedrock player's gamertag->XUID mapping into the database
+// UpsertGeyserPlayer upserts a Bedrock player's info
 func (s *store) UpsertGeyserPlayer(ctx context.Context, player *GeyserPlayer) error {
 	now := time.Now().UnixMilli()
 	_, err := s.db.Exec(ctx, `
@@ -392,97 +388,6 @@ func (s *store) UpsertGeyserPlayer(ctx context.Context, player *GeyserPlayer) er
 		`,
 		player.ID, player.XUID, player.Gamertag, now,
 	)
-	return err
-}
-
-// TODO: Get rid
-// GetGeyserSkin gets a Bedrock player's most recently seen converted skin from the database
-func (s *store) GetGeyserSkin(ctx context.Context, xuid int64) (*GeyserSkin, error) {
-	rows, err := s.db.Query(ctx, `
-		SELECT hash, is_steve, COALESCE(signature, '') AS signature, texture_id, value, first_seen, last_seen
-		FROM geyser_player_textures
-		WHERE xuid = $1
-		ORDER BY last_seen DESC
-		LIMIT 1`, xuid)
-	if err != nil {
-		return nil, err
-	}
-	skin, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[GeyserSkin])
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrSkinNotFound
-		}
-		return nil, err
-	}
-	return skin, nil
-}
-
-// TODO: Get rid
-// GetGeyserSkinByHash gets any row carrying the given hash (multiple xuids
-// can share one, so any match's Value decodes to the same bytes), or nil if
-// the hash isn't known.
-func (s *store) GetGeyserSkinByHash(ctx context.Context, hash string) (*GeyserSkin, error) {
-	rows, err := s.db.Query(ctx, `
-		SELECT hash, is_steve, COALESCE(signature, '') AS signature, texture_id, value, first_seen, last_seen
-		FROM geyser_player_textures
-		WHERE texture_id = $1
-		LIMIT 1`, hash)
-	if err != nil {
-		return nil, err
-	}
-	skin, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[GeyserSkin])
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return skin, nil
-}
-
-// TODO: Get rid
-// UpsertGeyserSkin upserts a Bedrock player's converted skin into the database
-func (s *store) UpsertGeyserSkin(ctx context.Context, xuid int64, skin *GeyserSkin) error {
-	now := time.Now().UnixMilli()
-	var signature *string
-	if skin.Signature != "" {
-		signature = &skin.Signature
-	}
-	_, err := s.db.Exec(ctx, `
-		INSERT INTO geyser_player_textures (xuid, hash, is_steve, signature, texture_id, value, first_seen, last_seen)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
-		ON CONFLICT (xuid, hash) DO UPDATE SET
-			is_steve   = EXCLUDED.is_steve,
-			signature  = EXCLUDED.signature,
-			texture_id = EXCLUDED.texture_id,
-			value      = EXCLUDED.value,
-			last_seen  = EXCLUDED.last_seen
-		`,
-		xuid, skin.TextureBytesHash, skin.IsSteve, signature, skin.Hash, skin.Value, now,
-	)
-	return err
-}
-
-// TODO: get rid
-// UpsertGeyserTextures upserts a player's skin and cape into the database
-func (s *store) UpsertGeyserTextures(ctx context.Context, value *TexturesValue) error {
-	skin := value.Textures.SKIN
-	var model *Model
-	if skin != nil && skin.Metadata != nil {
-		model = &skin.Metadata.Model
-	}
-	cape := value.Textures.CAPE
-
-	// player_textures_unique is an expression index (COALESCE(skin/model/cape, ''))
-	// rather than a plain-column constraint, so it can't be targeted by name
-	// via ON CONFLICT ON CONSTRAINT — the conflict target must repeat the
-	// same expressions instead.
-	_, err := s.db.Exec(ctx, `
-		INSERT INTO geyser_player_textures (player_id, skin, model, cape, first_seen, last_seen)
-		VALUES ($1, $2, $3, $4, $5, $5)
-		ON CONFLICT (player_id, COALESCE(skin, ''), COALESCE(model, ''), COALESCE(cape, '')) DO UPDATE SET
-			last_seen = EXCLUDED.last_seen
-		`, value.ProfileID, textureHash(skin), model, textureHash(cape), value.Timestamp)
 	return err
 }
 
