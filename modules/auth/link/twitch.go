@@ -1,32 +1,12 @@
 package link
 
 import (
+	"context"
 	"errors"
+
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
 	"github.com/goccy/go-json"
 	"github.com/nicklaw5/helix/v2"
-	"golang.org/x/oauth2"
-	"os"
-)
-
-//goland:noinspection GoSnakeCaseUsage
-var (
-	USER_ID       = os.Getenv("TWITCH_USER_ID")
-	CLIENT_ID     = os.Getenv("TWITCH_CLIENT_ID")
-	CLIENT_SECRET = os.Getenv("TWITCH_CLIENT_SECRET")
-	REDIRECT_URI  = os.Getenv("TWITCH_REDIRECT_URI")
-	TwitchConfig  = &oauth2.Config{
-		ClientID:     CLIENT_ID,
-		ClientSecret: CLIENT_SECRET,
-		Endpoint: oauth2.Endpoint{
-			AuthURL:   "https://id.twitch.tv/oauth2/authorize",
-			TokenURL:  "https://id.twitch.tv/oauth2/token",
-			AuthStyle: oauth2.AuthStyleInParams,
-		},
-		RedirectURL: REDIRECT_URI,
-	}
-	// APIBaseURL overrides helix's default Twitch API base URL, letting
-	// tests point it at a local server. Empty uses helix's own default.
-	APIBaseURL string
 )
 
 // TwitchData struct
@@ -61,11 +41,11 @@ func (t *TwitchData) CreateLinkedAccount(userID string) *LinkedAccount {
 }
 
 // GetTwitchUser returns the Twitch user data
-func GetTwitchUser(token *OAuthToken) (*TwitchData, error) {
-	client, err := helix.NewClient(&helix.Options{
-		ClientID:        CLIENT_ID,
+func GetTwitchUser(ctx context.Context, cfg config.Twitch, token *OAuthToken) (*TwitchData, error) {
+	client, err := helix.NewClientWithContext(ctx, &helix.Options{
+		ClientID:        cfg.ClientId,
 		UserAccessToken: token.AccessToken,
-		APIBaseURL:      APIBaseURL,
+		APIBaseURL:      cfg.APIBaseUrl,
 	})
 	if err != nil {
 		return nil, err

@@ -25,7 +25,7 @@ const (
 )
 
 // HandleEventSub handles the EventSub notifications
-func HandleEventSub(cfg *config.Twitch, eventsub EventSubService, tokens link.OAuthTokenStore, linked link.Store) http.HandlerFunc {
+func HandleEventSub(cfg config.Twitch, eventsub EventSubService, tokens link.OAuthTokenStore, linked link.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get(EventSubMessageType) == "" {
 			reqctx.Log(r.Context(), "EventSub message type not set")

@@ -8,6 +8,7 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"github.com/goccy/go-json"
@@ -41,7 +42,7 @@ const (
 )
 
 // OAuthHandler handles the OAuth route
-func OAuthHandler(as account.Service, las Store, ss session.Service, siteUrl string) http.HandlerFunc {
+func OAuthHandler(cfg config.Twitch, as account.Service, las Store, ss session.Service, siteUrl string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		code := r.URL.Query().Get("code")
@@ -63,9 +64,9 @@ func OAuthHandler(as account.Service, las Store, ss session.Service, siteUrl str
 		var err error
 		switch state.Mode {
 		case ModeLogin:
-			session, err = ProcessOAuthLogin(ctx, as, las, ss, code, &state)
+			session, err = ProcessOAuthLogin(ctx, cfg, as, las, ss, code, &state)
 		case ModeLink:
-			session, err = ProcessOAuthLink(r, las, code, &state)
+			session, err = ProcessOAuthLink(r, cfg, las, code, &state)
 		}
 		if err != nil {
 			reqctx.Log(ctx, "Failed to process OAuth:\n\t", err.Error())

@@ -85,7 +85,7 @@ func ApplyRoutes(
 	mux.Handle("POST /api/v1/auth/login", loginRateLimit(account.LoginHandler(acct, session)))
 	mux.Handle("POST /api/v1/auth/logout", loginRateLimit(mwAuth(account.LogoutHandler(session))))
 
-	mux.Handle("/api/oauth", loginRateLimit(link.OAuthHandler(acct, linkAccountStore, session, cfg.SiteUrl)))
+	mux.Handle("/api/oauth", loginRateLimit(link.OAuthHandler(cfg.Twitch, acct, linkAccountStore, session, cfg.SiteUrl)))
 	mux.Handle("/api/openid", loginRateLimit(link.OpenIDHandler(acct, linkAccountStore, session, cfg.SiteUrl)))
 
 	mux.Handle("GET /api/v1/users", mwAuth(user.ListUsersHandler(usr)))
@@ -229,7 +229,7 @@ func ApplyRoutes(
 	// --------------- Twitch ---------------
 	twitchStore := twitch.NewStore(database.GetDB(dbUrl + "/twitch"))
 	twitchService := twitch.NewService(twitchStore)
-	mux.HandleFunc("POST /api/twitch/eventsub", twitch.HandleEventSub(cfg, twitchService, oauthTokenStore, linkAccountStore))
+	mux.HandleFunc("POST /api/twitch/eventsub", twitch.HandleEventSub(cfg.Twitch, twitchService, oauthTokenStore, linkAccountStore))
 
 	// --------------- Health Check ---------------
 	mux.HandleFunc("GET /api/v1/health", func(w http.ResponseWriter, r *http.Request) {
