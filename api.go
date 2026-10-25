@@ -257,7 +257,7 @@ func (s *APIServer) Setup() http.Handler {
 	}
 
 	db := database.GetDB(dbUrl + "/neuralnexus")
-	rdb := database.GetRedis()
+	rdb := database.GetRedis(cfg.Redis)
 	sess := session.NewService(cfg, session.NewStore(db, rdb))
 	accountStore := account.NewStore(db)
 	linkAccountStore := link.NewStore(db)
