@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"golang.org/x/crypto/ed25519"
+	"golang.org/x/oauth2"
 )
 
 var (
@@ -50,6 +51,7 @@ type Twitch struct {
 	EventSubUri    string
 	EventSubSecret string
 	APIBaseUrl     string
+	OAuth2Config   *oauth2.Config
 }
 
 func FromEnv() *Config {
@@ -80,6 +82,7 @@ func FromEnv() *Config {
 	redirectUri := checkEnvVar("TWITCH_REDIRECT_URI")
 	eventSubUri := checkEnvVar("TWITCH_EVENTSUB_URI")
 	eventSubSecret := checkEnvVar("TWITCH_EVENTSUB_SECRET")
+	apiBaseUrl := ""
 
 	return &Config{
 		ApiUrl:  apiUrl,
@@ -100,6 +103,17 @@ func FromEnv() *Config {
 			RedirectUri:    redirectUri,
 			EventSubUri:    eventSubUri,
 			EventSubSecret: eventSubSecret,
+			APIBaseUrl:     apiBaseUrl,
+			OAuth2Config: &oauth2.Config{
+				ClientID:     clientId,
+				ClientSecret: clientSecret,
+				Endpoint: oauth2.Endpoint{
+					AuthURL:   "https://id.twitch.tv/oauth2/authorize",
+					TokenURL:  "https://id.twitch.tv/oauth2/token",
+					AuthStyle: oauth2.AuthStyleInParams,
+				},
+				RedirectURL: redirectUri,
+			},
 		},
 	}
 }

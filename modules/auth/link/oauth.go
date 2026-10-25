@@ -3,12 +3,14 @@ package link
 import (
 	"context"
 	"errors"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
-	"golang.org/x/oauth2"
 	"net/http"
 	"time"
+
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
+	"golang.org/x/oauth2"
 )
 
 // -------------- Structs --------------
@@ -97,14 +99,14 @@ func RefreshToken(ctx context.Context, config *oauth2.Config, token *oauth2.Toke
 }
 
 // ProcessOAuthLogin processes the OAuth2 code and returns a session
-func ProcessOAuthLogin(ctx context.Context, as account.Service, las Store, ss session.Service, code string, state *OAuthState) (*session.Session, error) {
+func ProcessOAuthLogin(ctx context.Context, cfg config.Twitch, as account.Service, las Store, ss session.Service, code string, state *OAuthState) (*session.Session, error) {
 	var err error
 	var config *oauth2.Config
 	switch state.Platform {
 	case PlatformDiscord:
 		config = discordConfig
 	case PlatformTwitch:
-		config = TwitchConfig
+		config = cfg.OAuth2Config
 	case PlatformMinecraft, PlatformXboxLive:
 		config = MicrosoftConfig
 	case PlatformMicrosoft:
@@ -141,7 +143,7 @@ func ProcessOAuthLogin(ctx context.Context, as account.Service, las Store, ss se
 		case PlatformDiscord:
 			user, err = GetDiscordUser(token)
 		case PlatformTwitch:
-			user, err = GetTwitchUser(token)
+			user, err = GetTwitchUser(ctx, cfg, token)
 		case PlatformMicrosoft:
 			user, err = GetMicrosoftUser(ctx, token)
 		default:
@@ -231,7 +233,7 @@ func resolveOrCreateAccountForPlatformUser(ctx context.Context, as account.Servi
 }
 
 // ProcessOAuthLink links an account to an existing user
-func ProcessOAuthLink(r *http.Request, las Store, code string, state *OAuthState) (*session.Session, error) {
+func ProcessOAuthLink(r *http.Request, cfg config.Twitch, las Store, code string, state *OAuthState) (*session.Session, error) {
 	ctx := r.Context()
 	// Get session from request context first: there's no point exchanging
 	// the OAuth code or calling out to the platform's API for a session
@@ -250,7 +252,7 @@ func ProcessOAuthLink(r *http.Request, las Store, code string, state *OAuthState
 	case PlatformDiscord:
 		config = discordConfig
 	case PlatformTwitch:
-		config = TwitchConfig
+		config = cfg.OAuth2Config
 	case PlatformMinecraft, PlatformXboxLive:
 		config = MicrosoftConfig
 	case PlatformMicrosoft:
@@ -313,7 +315,7 @@ func ProcessOAuthLink(r *http.Request, las Store, code string, state *OAuthState
 	case PlatformDiscord:
 		user, err = GetDiscordUser(token)
 	case PlatformTwitch:
-		user, err = GetTwitchUser(token)
+		user, err = GetTwitchUser(ctx, cfg, token)
 	case PlatformMicrosoft:
 		user, err = GetMicrosoftUser(ctx, token)
 	default:
