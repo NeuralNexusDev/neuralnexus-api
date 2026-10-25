@@ -85,7 +85,7 @@ func ApplyRoutes(
 	mux.Handle("POST /api/v1/auth/login", loginRateLimit(account.LoginHandler(acct, session)))
 	mux.Handle("POST /api/v1/auth/logout", loginRateLimit(mwAuth(account.LogoutHandler(session))))
 
-	mux.Handle("/api/oauth", loginRateLimit(link.OAuthHandler(cfg.Twitch, acct, linkAccountStore, session, cfg.SiteUrl)))
+	mux.Handle("/api/oauth", loginRateLimit(link.OAuthHandler(cfg, acct, linkAccountStore, session, cfg.SiteUrl)))
 	mux.Handle("/api/openid", loginRateLimit(link.OpenIDHandler(acct, linkAccountStore, session, cfg.SiteUrl)))
 
 	mux.Handle("GET /api/v1/users", mwAuth(user.ListUsersHandler(usr)))

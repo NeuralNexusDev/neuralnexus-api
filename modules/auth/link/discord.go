@@ -3,27 +3,6 @@ package link
 import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/goccy/go-json"
-	"golang.org/x/oauth2"
-	"os"
-)
-
-// -------------- Global Variables --------------
-
-//goland:noinspection GoSnakeCaseUsage
-var (
-	DISCORD_CLIENT_ID     = os.Getenv("DISCORD_CLIENT_ID")
-	DISCORD_CLIENT_SECRET = os.Getenv("DISCORD_CLIENT_SECRET")
-	DISCORD_REDIRECT_URI  = os.Getenv("DISCORD_REDIRECT_URI")
-	discordConfig         = &oauth2.Config{
-		ClientID:     DISCORD_CLIENT_ID,
-		ClientSecret: DISCORD_CLIENT_SECRET,
-		Endpoint: oauth2.Endpoint{
-			AuthURL:   "https://discord.com/oauth2/authorize",
-			TokenURL:  "https://discord.com/api/oauth2/token",
-			AuthStyle: oauth2.AuthStyleInHeader,
-		},
-		RedirectURL: DISCORD_REDIRECT_URI,
-	}
 )
 
 // -------------- Structs --------------
