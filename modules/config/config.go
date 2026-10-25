@@ -9,11 +9,6 @@ import (
 	"golang.org/x/oauth2"
 )
 
-var (
-	msgJWTSecretUnset  = "JWT_SECRET environment variable must be set"
-	msgSiteAPIURLUnset = "NN_SITE_URL and NN_API_URL environment variables must be set"
-)
-
 func checkEnvVar(varName string) string {
 	envVar := os.Getenv(varName)
 	if envVar == "" {
@@ -25,9 +20,16 @@ func checkEnvVar(varName string) string {
 type Config struct {
 	ApiUrl  string
 	SiteUrl string
+	Redis   Redis
 	Auth    Auth
 	Discord Discord
 	Twitch  Twitch
+}
+
+type Redis struct {
+	Address  string
+	Username string
+	Password string
 }
 
 type Auth struct {
@@ -40,14 +42,18 @@ type Session struct {
 }
 
 type Discord struct {
-	PublicKey ed25519.PublicKey
+	ClientId     string
+	ClientSecret string
+	RedirectUri  string
+	PublicKey    ed25519.PublicKey
+	OAuth2Config *oauth2.Config
 }
 
 type Twitch struct {
-	UserId         string
 	ClientId       string
 	ClientSecret   string
 	RedirectUri    string
+	UserId         string
 	EventSubUri    string
 	EventSubSecret string
 	APIBaseUrl     string
@@ -55,64 +61,71 @@ type Twitch struct {
 }
 
 func FromEnv() *Config {
-	// ---------- Session ---------
-	jwtSecret := []byte(os.Getenv("JWT_SECRET"))
-	if len(jwtSecret) == 0 {
-		log.Fatal(msgJWTSecretUnset)
-	}
-
-	apiUrl := os.Getenv("NN_API_URL")
-	siteUrl := os.Getenv("NN_SITE_URL")
-	if siteUrl == "" || apiUrl == "" {
-		log.Fatal(msgSiteAPIURLUnset)
-	}
+	apiUrl := checkEnvVar("NN_API_URL")
+	siteUrl := checkEnvVar("NN_SITE_URL")
 
 	// ---------- Discord ---------
-	publicKeyStr := os.Getenv("DISCORD_PUBLIC_KEY")
-	publicKey, err := hex.DecodeString(publicKeyStr)
-	if publicKeyStr == "" || err != nil || len(publicKey) != ed25519.PublicKeySize {
-		log.Fatal("DISCORD_PUBLIC_KEY is not set")
+	discordClientId := checkEnvVar("DISCORD_CLIENT_ID")
+	discordClientSecret := checkEnvVar("DISCORD_CLIENT_SECRET")
+	discordRedirectUri := checkEnvVar("DISCORD_REDIRECT_URI")
+	publicKey, err := hex.DecodeString(checkEnvVar("DISCORD_PUBLIC_KEY"))
+	if err != nil || len(publicKey) != ed25519.PublicKeySize {
+		log.Fatal("DISCORD_PUBLIC_KEY is not the correct length")
 		return nil
 	}
 
 	// ---------- Twitch ----------
-	userId := checkEnvVar("TWITCH_USER_ID")
-	clientId := checkEnvVar("TWITCH_CLIENT_ID")
-	clientSecret := checkEnvVar("TWITCH_CLIENT_SECRET")
-	redirectUri := checkEnvVar("TWITCH_REDIRECT_URI")
-	eventSubUri := checkEnvVar("TWITCH_EVENTSUB_URI")
-	eventSubSecret := checkEnvVar("TWITCH_EVENTSUB_SECRET")
-	apiBaseUrl := ""
+	twitchClientId := checkEnvVar("TWITCH_CLIENT_ID")
+	twitchClientSecret := checkEnvVar("TWITCH_CLIENT_SECRET")
+	twitchRedirectUri := checkEnvVar("TWITCH_REDIRECT_URI")
 
 	return &Config{
 		ApiUrl:  apiUrl,
 		SiteUrl: siteUrl,
+		Redis: Redis{
+			Address:  checkEnvVar("REDIS_ADDRESS"),
+			Username: checkEnvVar("REDIS_USERNAME"),
+			Password: checkEnvVar("REDIS_PASSWORD"),
+		},
 		Auth: Auth{
 			Session: Session{
-				JwtSecret:      jwtSecret,
+				JwtSecret:      []byte(checkEnvVar("JWT_SECRET")),
 				ValidAudiences: []string{siteUrl, apiUrl},
 			},
 		},
 		Discord: Discord{
-			PublicKey: publicKey,
+			ClientId:     discordClientId,
+			ClientSecret: discordClientSecret,
+			RedirectUri:  discordRedirectUri,
+			PublicKey:    publicKey,
+			OAuth2Config: &oauth2.Config{
+				ClientID:     discordClientId,
+				ClientSecret: discordClientSecret,
+				Endpoint: oauth2.Endpoint{
+					AuthURL:   "https://discord.com/oauth2/authorize",
+					TokenURL:  "https://discord.com/api/oauth2/token",
+					AuthStyle: oauth2.AuthStyleInHeader,
+				},
+				RedirectURL: discordRedirectUri,
+			},
 		},
 		Twitch: Twitch{
-			UserId:         userId,
-			ClientId:       clientId,
-			ClientSecret:   clientSecret,
-			RedirectUri:    redirectUri,
-			EventSubUri:    eventSubUri,
-			EventSubSecret: eventSubSecret,
-			APIBaseUrl:     apiBaseUrl,
+			ClientId:       twitchClientId,
+			ClientSecret:   twitchClientSecret,
+			RedirectUri:    twitchRedirectUri,
+			UserId:         checkEnvVar("TWITCH_USER_ID"),
+			EventSubUri:    checkEnvVar("TWITCH_EVENTSUB_URI"),
+			EventSubSecret: checkEnvVar("TWITCH_EVENTSUB_SECRET"),
+			APIBaseUrl:     "",
 			OAuth2Config: &oauth2.Config{
-				ClientID:     clientId,
-				ClientSecret: clientSecret,
+				ClientID:     twitchClientId,
+				ClientSecret: twitchClientSecret,
+				RedirectURL:  twitchRedirectUri,
 				Endpoint: oauth2.Endpoint{
 					AuthURL:   "https://id.twitch.tv/oauth2/authorize",
 					TokenURL:  "https://id.twitch.tv/oauth2/token",
 					AuthStyle: oauth2.AuthStyleInParams,
 				},
-				RedirectURL: redirectUri,
 			},
 		},
 	}

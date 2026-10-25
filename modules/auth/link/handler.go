@@ -42,7 +42,7 @@ const (
 )
 
 // OAuthHandler handles the OAuth route
-func OAuthHandler(cfg config.Twitch, as account.Service, las Store, ss session.Service, siteUrl string) http.HandlerFunc {
+func OAuthHandler(cfg *config.Config, as account.Service, las Store, ss session.Service, siteUrl string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		code := r.URL.Query().Get("code")
