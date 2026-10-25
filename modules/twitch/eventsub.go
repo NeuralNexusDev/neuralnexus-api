@@ -1,24 +1,19 @@
 package twitch
 
 import (
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/link"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
-	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"io"
 	"net/http"
-	"os"
 	"strings"
+
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/link"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
+	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
 // channel:bot -- send/listen to chat events
 // moderator:read:chatters -- Get a list of users in the chat room.
 // channel:manage:redemptions -- Manage Channel Points custom rewards and their redemptions on a channel.
-
-//goland:noinspection GoSnakeCaseUsage
-var (
-	EVENTSUB_URI    = os.Getenv("TWITCH_EVENTSUB_URI")
-	EVENTSUB_SECRET = os.Getenv("TWITCH_EVENTSUB_SECRET")
-)
 
 const (
 	EventSubMessageType = "twitch-eventsub-message-type"
@@ -30,7 +25,7 @@ const (
 )
 
 // HandleEventSub handles the EventSub notifications
-func HandleEventSub(eventsub EventSubService, tokens link.OAuthTokenStore, linked link.Store) http.HandlerFunc {
+func HandleEventSub(cfg *config.Twitch, eventsub EventSubService, tokens link.OAuthTokenStore, linked link.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get(EventSubMessageType) == "" {
 			reqctx.Log(r.Context(), "EventSub message type not set")
@@ -48,7 +43,7 @@ func HandleEventSub(eventsub EventSubService, tokens link.OAuthTokenStore, linke
 		}
 		defer r.Body.Close()
 
-		vals, err := validateEventSubNotification(r.Header, body)
+		vals, err := validateEventSubNotification(cfg.EventSubSecret, r.Header, body)
 		if err != nil {
 			reqctx.Log(r.Context(), "Failed to validate EventSub notification:", err.Error())
 			responses.BadRequest(w, r, "")

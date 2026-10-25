@@ -13,11 +13,20 @@ var (
 	msgSiteAPIURLUnset = "NN_SITE_URL and NN_API_URL environment variables must be set"
 )
 
+func checkEnvVar(varName string) string {
+	envVar := os.Getenv(varName)
+	if envVar == "" {
+		log.Fatal(varName + " is not set")
+	}
+	return envVar
+}
+
 type Config struct {
 	ApiUrl  string
 	SiteUrl string
 	Auth    Auth
 	Discord Discord
+	Twitch  Twitch
 }
 
 type Auth struct {
@@ -31,6 +40,16 @@ type Session struct {
 
 type Discord struct {
 	PublicKey ed25519.PublicKey
+}
+
+type Twitch struct {
+	UserId         string
+	ClientId       string
+	ClientSecret   string
+	RedirectUri    string
+	EventSubUri    string
+	EventSubSecret string
+	APIBaseUrl     string
 }
 
 func FromEnv() *Config {
@@ -54,6 +73,14 @@ func FromEnv() *Config {
 		return nil
 	}
 
+	// ---------- Twitch ----------
+	userId := checkEnvVar("TWITCH_USER_ID")
+	clientId := checkEnvVar("TWITCH_CLIENT_ID")
+	clientSecret := checkEnvVar("TWITCH_CLIENT_SECRET")
+	redirectUri := checkEnvVar("TWITCH_REDIRECT_URI")
+	eventSubUri := checkEnvVar("TWITCH_EVENTSUB_URI")
+	eventSubSecret := checkEnvVar("TWITCH_EVENTSUB_SECRET")
+
 	return &Config{
 		ApiUrl:  apiUrl,
 		SiteUrl: siteUrl,
@@ -65,6 +92,14 @@ func FromEnv() *Config {
 		},
 		Discord: Discord{
 			PublicKey: publicKey,
+		},
+		Twitch: Twitch{
+			UserId:         userId,
+			ClientId:       clientId,
+			ClientSecret:   clientSecret,
+			RedirectUri:    redirectUri,
+			EventSubUri:    eventSubUri,
+			EventSubSecret: eventSubSecret,
 		},
 	}
 }

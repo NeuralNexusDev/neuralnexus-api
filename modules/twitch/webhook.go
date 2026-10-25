@@ -5,13 +5,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"strings"
+	"time"
+
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/link"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/goccy/go-json"
 	"github.com/nicklaw5/helix/v2"
-	"net/http"
-	"strings"
-	"time"
 )
 
 const (
@@ -28,8 +29,8 @@ type eventSubNotification struct {
 }
 
 // validateEventSubNotification validates the EventSub notification
-func validateEventSubNotification(header http.Header, body []byte) (*eventSubNotification, error) {
-	if !helix.VerifyEventSubNotification(EVENTSUB_SECRET, header, string(body)) {
+func validateEventSubNotification(eventSubSecret string, header http.Header, body []byte) (*eventSubNotification, error) {
+	if !helix.VerifyEventSubNotification(eventSubSecret, header, string(body)) {
 		return nil, errors.New("invalid signature")
 	}
 	var vals eventSubNotification
