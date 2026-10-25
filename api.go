@@ -229,7 +229,7 @@ func ApplyRoutes(
 	// --------------- Twitch ---------------
 	twitchStore := twitch.NewStore(database.GetDB(dbUrl + "/twitch"))
 	twitchService := twitch.NewService(twitchStore)
-	mux.HandleFunc("POST /api/twitch/eventsub", twitch.HandleEventSub(twitchService, oauthTokenStore, linkAccountStore))
+	mux.HandleFunc("POST /api/twitch/eventsub", twitch.HandleEventSub(cfg, twitchService, oauthTokenStore, linkAccountStore))
 
 	// --------------- Health Check ---------------
 	mux.HandleFunc("GET /api/v1/health", func(w http.ResponseWriter, r *http.Request) {
