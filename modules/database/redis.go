@@ -3,32 +3,16 @@ package database
 import (
 	"context"
 	"log"
-	"os"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
 	"github.com/redis/go-redis/v9"
 )
 
-// -------------- Globals --------------
-
-//goland:noinspection GoSnakeCaseUsage
-var (
-	REDIS_URL      = os.Getenv("REDIS_ADDRESS")
-	REDIS_USERNAME = os.Getenv("REDIS_USERNAME")
-	REDIS_PASSWORD = os.Getenv("REDIS_PASSWORD")
-)
-
-// -------------- Functions --------------
-
-func GetRedis() *redis.Client {
-	if REDIS_URL == "" {
-		log.Fatal("REDIS_URL is not set")
-		return nil
-	}
-
+func GetRedis(cfg config.Redis) *redis.Client {
 	client := redis.NewClient(&redis.Options{
-		Addr:     REDIS_URL,
-		Username: REDIS_USERNAME,
-		Password: REDIS_PASSWORD,
+		Addr:     cfg.Address,
+		Username: cfg.Username,
+		Password: cfg.Password,
 		DB:       0,
 	})
 
