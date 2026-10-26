@@ -24,6 +24,7 @@ type Config struct {
 	S3        S3
 	Auth      Auth
 	Discord   Discord
+	GitHub    GitHub
 	Microsoft Microsoft
 	Steam     Steam
 	Twitch    Twitch
@@ -66,6 +67,10 @@ type Discord struct {
 	RedirectUri  string
 	PublicKey    ed25519.PublicKey
 	OAuth2Config *oauth2.Config
+}
+
+type GitHub struct {
+	Token string
 }
 
 type Microsoft struct {
@@ -155,6 +160,9 @@ func FromEnv() *Config {
 					AuthStyle: oauth2.AuthStyleInHeader,
 				},
 			},
+		},
+		GitHub: GitHub{
+			Token: checkEnvVar("GITHUB_TOKEN"),
 		},
 		Microsoft: Microsoft{
 			ClientId:     microsoftClientId,

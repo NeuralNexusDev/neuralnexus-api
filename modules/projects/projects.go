@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
@@ -13,8 +12,6 @@ import (
 
 // -------------- Globals --------------
 var (
-	githubToken = os.Getenv("GITHUB_TOKEN")
-
 	forgeModVersions = []string{
 		"1.7.10",
 		"1.8.9",
@@ -65,11 +62,7 @@ const (
 )
 
 // -------------- Functions --------------
-func getReleases(ctx context.Context, group string, project string) ([]Release, error) {
-	if githubToken == "" {
-		return nil, ErrGitHubTokenUnset
-	}
-
+func getReleases(ctx context.Context, githubToken, group, project string) ([]Release, error) {
 	githubURL := "https://api.github.com/repos/" + group + "/" + project + "/releases"
 	req, err := http.NewRequestWithContext(ctx, "GET", githubURL, nil)
 	if err != nil {
@@ -124,31 +117,33 @@ func ConvertToFMLFormat(gitHubReleasesURL string, releases []Release) map[string
 }
 
 // GetReleasesHandler - Get the releases
-func GetReleasesHandler(w http.ResponseWriter, r *http.Request) {
-	group := r.PathValue("group")
-	project := r.PathValue("project")
+func GetReleasesHandler(githubToken string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		group := r.PathValue("group")
+		project := r.PathValue("project")
 
-	format := r.URL.Query().Get("format")
+		format := r.URL.Query().Get("format")
 
-	releases, err := getReleases(r.Context(), group, project)
-	if err != nil {
-		reqctx.Log(r.Context(), err.Error())
-		if err == ErrGitHubTokenUnset {
-			http.Error(w, msgGitHubTokenUnset, http.StatusInternalServerError)
+		releases, err := getReleases(r.Context(), githubToken, group, project)
+		if err != nil {
+			reqctx.Log(r.Context(), err.Error())
+			if err == ErrGitHubTokenUnset {
+				http.Error(w, msgGitHubTokenUnset, http.StatusInternalServerError)
+				return
+			}
+			http.Error(w, msgFailedToGetReleases, http.StatusInternalServerError)
 			return
 		}
-		http.Error(w, msgFailedToGetReleases, http.StatusInternalServerError)
-		return
-	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
 
-	if format == "fml" {
-		gitHubReleasesURL := "https://github.com/" + group + "/" + project + "/releases"
-		forgeModUpdates := ConvertToFMLFormat(gitHubReleasesURL, releases)
-		json.NewEncoder(w).Encode(forgeModUpdates)
-		return
+		if format == "fml" {
+			gitHubReleasesURL := "https://github.com/" + group + "/" + project + "/releases"
+			forgeModUpdates := ConvertToFMLFormat(gitHubReleasesURL, releases)
+			json.NewEncoder(w).Encode(forgeModUpdates)
+			return
+		}
+		json.NewEncoder(w).Encode(releases)
 	}
-	json.NewEncoder(w).Encode(releases)
 }

@@ -203,7 +203,7 @@ func ApplyRoutes(
 	mux.Handle("DELETE /api/v1/pet-pictures/pictures", mwAuth(petpics.DeletePetPictureHandler(petService)))
 
 	// --------------- Projects ---------------
-	mux.HandleFunc("GET /api/v1/projects/releases/{group}/{project}", projects.GetReleasesHandler)
+	mux.HandleFunc("GET /api/v1/projects/releases/{group}/{project}", projects.GetReleasesHandler(cfg.GitHub.Token))
 
 	// --------------- Switchboard ---------------
 	// mux.HandleFunc("GET /ws/v1/switchboard/relay", switchboard.ebSocketRelayHandler)
