@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"regexp"
 	"slices"
 	"strings"
@@ -21,9 +20,6 @@ import (
 )
 
 // -------------- Global Variables --------------
-
-//goland:noinspection GoSnakeCaseUsage
-var STEAM_API_KEY = os.Getenv("STEAM_API_KEY")
 
 var steamHTTPClient = &http.Client{Timeout: 10 * time.Second}
 
@@ -44,7 +40,6 @@ var (
 	ErrSteamOpenIDCheck         = errors.New("steam openid check_authentication error")
 	ErrSteamPlayerSummaryLookup = errors.New("steam player summary lookup error")
 	ErrSteamIDMismatch          = errors.New("steam player summary response steamid does not match requested")
-	ErrSteamAPIKeyUnset         = errors.New("STEAM_API_KEY is not set")
 	ErrSteamNoPlayers           = errors.New("steam player summary response contained no players")
 )
 
@@ -159,12 +154,8 @@ func responseIsValid(body []byte) bool {
 
 // GetSteamUser fetches the caller's public profile via the Steam Web API,
 // for a persona name/avatar beyond the bare SteamID64 OpenID provides.
-func GetSteamUser(ctx context.Context, steamID64 string) (*SteamData, error) {
-	if STEAM_API_KEY == "" {
-		return nil, ErrSteamAPIKeyUnset
-	}
-
-	reqURL := steamPlayerSummaryURL + "?key=" + url.QueryEscape(STEAM_API_KEY) + "&steamids=" + url.QueryEscape(steamID64)
+func GetSteamUser(ctx context.Context, apiKey, steamID64 string) (*SteamData, error) {
+	reqURL := steamPlayerSummaryURL + "?key=" + url.QueryEscape(apiKey) + "&steamids=" + url.QueryEscape(steamID64)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
 		return nil, err

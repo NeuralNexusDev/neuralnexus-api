@@ -24,6 +24,7 @@ type Config struct {
 	Auth      Auth
 	Discord   Discord
 	Microsoft Microsoft
+	Steam     Steam
 	Twitch    Twitch
 }
 
@@ -61,6 +62,10 @@ type Microsoft struct {
 	RedirectUri       string
 	OAuth2Config      *oauth2.Config
 	LoginOAuth2Config *oauth2.Config
+}
+
+type Steam struct {
+	APIKey string
 }
 
 type Twitch struct {
@@ -155,6 +160,9 @@ func FromEnv() *Config {
 				},
 				Scopes: []string{"openid", "profile", "email", "offline_access"},
 			},
+		},
+		Steam: Steam{
+			APIKey: checkEnvVar("STEAM_API_KEY"),
 		},
 		Twitch: Twitch{
 			ClientId:       twitchClientId,
