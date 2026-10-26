@@ -29,6 +29,7 @@ type Config struct {
 	Discord   Discord
 	GitHub    GitHub
 	Microsoft Microsoft
+	Minecraft Minecraft
 	Steam     Steam
 	Twitch    Twitch
 }
@@ -88,6 +89,17 @@ type Microsoft struct {
 	LoginOAuth2Config *oauth2.Config
 }
 
+type Minecraft struct {
+	LookupByName         string
+	LookupByUUID         string
+	LookupBulk           string
+	LookupProfile        string
+	LookupTexture        string
+	GeyserXUIDLookup     string
+	GeyserSkinLookup     string
+	GeyserGamertagLookup string
+}
+
 type Steam struct {
 	APIKey string
 }
@@ -128,6 +140,38 @@ func FromEnv() *Config {
 	microsoftClientId := checkEnvVar("MICROSOFT_CLIENT_ID")
 	microsoftClientSecret := checkEnvVar("MICROSOFT_CLIENT_SECRET")
 	microsoftRedirectUri := checkEnvVar("MICROSOFT_REDIRECT_URI")
+
+	// ---------- Minecraft ----------
+	// Alternatives:
+	//	https://api.mojang.com/users/profiles/minecraft/<name>   (occasional 403 due to Mojang misconfiguration)
+	//	https://api.mojang.com/minecraft/profile/lookup/name/<name>
+	const mojangLookupByName = "https://api.minecraftservices.com/minecraft/profile/lookup/name/"
+
+	// https://api.minecraftservices.com/minecraft/profile/lookup/<uuid>
+	const mojangLookupByUUID = "https://api.minecraftservices.com/minecraft/profile/lookup/"
+
+	// Alternatives:
+	//	https://api.mojang.com/profiles/minecraft
+	//	https://api.mojang.com/minecraft/profile/lookup/bulk/byname
+	const mojangLookupBulk = "https://api.minecraftservices.com/minecraft/profile/lookup/bulk/byname"
+
+	// https://sessionserver.mojang.com/session/minecraft/profile/<uuid>
+	const mojangLookupProfile = "https://sessionserver.mojang.com/session/minecraft/profile/"
+
+	// http://textures.minecraft.net/texture/<hash>
+	const mojangTextureURL = "http://textures.minecraft.net/texture/"
+
+	// https://api.geysermc.org/v2/xbox/xuid/<gamertag> -- Or Floodgate UUID
+	// - 503 on unknown xuid, 400 on invalid xuid value
+	const geyserXUIDLookup = "https://api.geysermc.org/v2/xbox/xuid/"
+
+	// https://api.geysermc.org/v2/skin/<xuid>
+	// - 200 empty object on unknown xuid, 304 on cached resp, 400 on invalid xuid value
+	const geyserSkinLookup = "https://api.geysermc.org/v2/skin/"
+
+	// https://api.geysermc.org/v2/xbox/gamertag/<xuid> -- Or Floodgate UUID
+	// - 503 on unknown xuid, 400 on invalid xuid value
+	const geyserGamertagLookup = "https://api.geysermc.org/v2/xbox/gamertag/"
 
 	// ---------- Twitch ----------
 	twitchClientId := checkEnvVar("TWITCH_CLIENT_ID")
@@ -202,6 +246,16 @@ func FromEnv() *Config {
 				},
 				Scopes: []string{"openid", "profile", "email", "offline_access"},
 			},
+		},
+		Minecraft: Minecraft{
+			LookupByName:         mojangLookupByName,
+			LookupByUUID:         mojangLookupByUUID,
+			LookupBulk:           mojangLookupBulk,
+			LookupProfile:        mojangLookupProfile,
+			LookupTexture:        mojangTextureURL,
+			GeyserXUIDLookup:     geyserXUIDLookup,
+			GeyserSkinLookup:     geyserSkinLookup,
+			GeyserGamertagLookup: geyserGamertagLookup,
 		},
 		Steam: Steam{
 			APIKey: checkEnvVar("STEAM_API_KEY"),
