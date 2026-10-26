@@ -100,7 +100,7 @@ func OAuthHandler(cfg *config.Config, as account.Service, las Store, ss session.
 }
 
 // OpenIDHandler handles the Steam OpenID 2.0 login/link callback.
-func OpenIDHandler(as account.Service, las Store, ss session.Service, siteUrl string) http.HandlerFunc {
+func OpenIDHandler(cfg config.Steam, as account.Service, las Store, ss session.Service, siteUrl string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		state, ok := decodeAndValidateState(w, r, siteUrl)
@@ -123,7 +123,7 @@ func OpenIDHandler(as account.Service, las Store, ss session.Service, siteUrl st
 			return
 		}
 
-		user, err := GetSteamUser(ctx, steamID64)
+		user, err := GetSteamUser(ctx, cfg.APIKey, steamID64)
 		if err != nil {
 			reqctx.Log(ctx, "Failed to get Steam user:\n\t", err.Error())
 			switch err {
