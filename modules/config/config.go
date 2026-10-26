@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"log"
 	"os"
+	"strconv"
 
 	"golang.org/x/crypto/ed25519"
 	"golang.org/x/oauth2"
@@ -21,6 +22,7 @@ type Config struct {
 	ApiUrl    string
 	SiteUrl   string
 	Database  Database
+	Snowflake Snowflake
 	Redis     Redis
 	S3        S3
 	Auth      Auth
@@ -34,6 +36,11 @@ type Config struct {
 type Database struct {
 	DBURL  string
 	DBURL2 string
+}
+
+type Snowflake struct {
+	NodeId   uint64
+	WorkerId uint64
 }
 
 type Redis struct {
@@ -98,6 +105,18 @@ func FromEnv() *Config {
 	apiUrl := checkEnvVar("NN_API_URL")
 	siteUrl := checkEnvVar("NN_SITE_URL")
 
+	// ---------- Snowflake ----------
+	nodeID, err := strconv.ParseUint(checkEnvVar("SNOWFLAKE_NODE_ID"), 10, 64)
+	if err != nil {
+		nodeID = 1
+		log.Println("Failed to parse SNOWFLAKE_NODE_ID, defaulting to 1")
+	}
+	workerID, err := strconv.ParseUint(checkEnvVar("SNOWFLAKE_WORKER_ID"), 10, 64)
+	if err != nil {
+		workerID = 1
+		log.Println("Failed to parse SNOWFLAKE_WORKER_ID, defaulting to 1")
+	}
+
 	// ---------- Discord ---------
 	publicKey, err := hex.DecodeString(checkEnvVar("DISCORD_PUBLIC_KEY"))
 	if err != nil || len(publicKey) != ed25519.PublicKeySize {
@@ -119,6 +138,10 @@ func FromEnv() *Config {
 		Database: Database{
 			DBURL:  checkEnvVar("DATABASE_URL"),
 			DBURL2: checkEnvVar("DATABASE_URL_2"),
+		},
+		Snowflake: Snowflake{
+			NodeId:   nodeID,
+			WorkerId: workerID,
 		},
 		Redis: Redis{
 			Address:  checkEnvVar("REDIS_ADDRESS"),
