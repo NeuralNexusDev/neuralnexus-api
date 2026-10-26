@@ -162,25 +162,11 @@ func ApplyRoutes(
 	mux.Handle("GET /api/v1/game-server-status/simple/{game}", gss.SimpleGameServerStatus(gssService))
 
 	// --------------- Minecraft ---------------
-	endpoint := os.Getenv("S3_API_URL")
-	if endpoint == "" {
-		log.Fatal("S3_API_URL environment variable not set")
-		return nil
-	}
-	accessKey := os.Getenv("S3_ACCESS_KEY_MCA_TEXTURE")
-	if accessKey == "" {
-		log.Fatal("S3_ACCESS_KEY_MCA_TEXTURE environment variable not set")
-		return nil
-	}
-	secretKey := os.Getenv("S3_SECRET_KEY_MCA_TEXTURE")
-	if secretKey == "" {
-		log.Fatal("S3_SECRET_KEY_MCA_TEXTURE environment variable not set")
-		return nil
-	}
 	mcStore := mc.NewStore(
 		database.GetDB(dbUrl2+"/archive?sslmode=require"), rdb,
-		database.GetS3(endpoint, accessKey, secretKey))
-	mcService := mc.NewService(mcStore, nil, "https://"+endpoint+"/"+mc.S3Bucket+"/")
+		database.GetS3(cfg.S3.APIUrl, cfg.S3.MCATexture.AccessKey, cfg.S3.MCATexture.SecretKey),
+		cfg.S3.MCATexture.Bucket)
+	mcService := mc.NewService(mcStore, nil, "https://"+cfg.S3.APIUrl+"/"+cfg.S3.MCATexture.Bucket+"/")
 
 	mux.Handle("GET /api/v1/mc/mojang/lookup/name/{name}", mc.GetMojangPlayerByNameHandler(mcService))
 	mux.Handle("GET /api/v1/mc/mojang/lookup/{uuid}", mc.GetMojangPlayerByUUIDHandler(mcService))
