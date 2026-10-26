@@ -33,7 +33,12 @@ type Redis struct {
 }
 
 type Auth struct {
+	Account Account
 	Session Session
+}
+
+type Account struct {
+	Pepper []byte
 }
 
 type Session struct {
@@ -88,6 +93,9 @@ func FromEnv() *Config {
 			Password: checkEnvVar("REDIS_PASSWORD"),
 		},
 		Auth: Auth{
+			Account: Account{
+				Pepper: []byte(checkEnvVar("PEPPER")),
+			},
 			Session: Session{
 				JwtSecret:      []byte(checkEnvVar("JWT_SECRET")),
 				ValidAudiences: []string{siteUrl, apiUrl},

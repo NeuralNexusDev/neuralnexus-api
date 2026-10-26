@@ -3,23 +3,11 @@ package account
 import (
 	"crypto/rand"
 	"crypto/subtle"
-	"log"
-	"os"
 	"time"
 	_ "unsafe"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 )
-
-var pepper = []byte(os.Getenv("PEPPER"))
-
-const msgPepperUnset = "PEPPER environment variable must be set"
-
-func init() {
-	if len(pepper) == 0 {
-		log.Fatal(msgPepperUnset)
-	}
-}
 
 // Account struct
 type Account struct {
@@ -33,7 +21,7 @@ type Account struct {
 }
 
 // NewAccount creates a new account
-func NewAccount(username, email, password string) (*Account, error) {
+func NewAccount(pepper []byte, username, email, password string) (*Account, error) {
 	id, err := database.GenSnowflake()
 	if err != nil {
 		return nil, err
@@ -45,7 +33,7 @@ func NewAccount(username, email, password string) (*Account, error) {
 	if email != "" {
 		user.Email = &email
 	}
-	err = user.HashPassword(password)
+	err = user.HashPassword(pepper, password)
 	if err != nil {
 		return user, err
 	}
@@ -97,7 +85,7 @@ func IDKeyWithSecret(password, salt []byte, secret []byte, time, memory uint32, 
 }
 
 // HashPassword hashes the password
-func (user *Account) HashPassword(password string) error {
+func (user *Account) HashPassword(pepper []byte, password string) error {
 	salt := make([]byte, 16)
 	_, err := rand.Read(salt)
 	if err != nil {
@@ -110,7 +98,7 @@ func (user *Account) HashPassword(password string) error {
 }
 
 // ValidateUser validate the user's password
-func (user *Account) ValidateUser(password string) bool {
+func (user *Account) ValidateUser(pepper []byte, password string) bool {
 	if user.HashedSecret == nil || user.Salt == nil {
 		return false
 	}
@@ -122,7 +110,7 @@ func (user *Account) ValidateUser(password string) bool {
 // without checking anything, so a failed account lookup can take as long as
 // a real one with a wrong password - otherwise response timing would leak
 // which usernames/emails have accounts.
-func DummyValidateUser(password string) {
+func DummyValidateUser(pepper []byte, password string) {
 	salt := make([]byte, 16)
 	_, _ = rand.Read(salt)
 	IDKeyWithSecret([]byte(password), salt, pepper, 3, 64*1024, 4, 32)

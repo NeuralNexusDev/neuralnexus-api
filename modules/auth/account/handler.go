@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
@@ -36,7 +37,7 @@ type Login struct {
 }
 
 // LoginHandler handles the login route
-func LoginHandler(as Service, ss session.Service) http.HandlerFunc {
+func LoginHandler(cfg config.Account, as Service, ss session.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var login Login
 		err := responses.DecodeStruct(r, &login)
@@ -58,12 +59,12 @@ func LoginHandler(as Service, ss session.Service) http.HandlerFunc {
 				responses.InternalServerError(w, r, msgAuthenticationFailed)
 				return
 			}
-			DummyValidateUser(login.Password)
+			DummyValidateUser(cfg.Pepper, login.Password)
 			responses.BadRequest(w, r, msgInvalidUsernameOrPassword)
 			return
 		}
 
-		if !account.ValidateUser(login.Password) {
+		if !account.ValidateUser(cfg.Pepper, login.Password) {
 			responses.BadRequest(w, r, msgInvalidUsernameOrPassword)
 			return
 		}

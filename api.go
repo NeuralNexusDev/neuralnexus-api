@@ -82,7 +82,7 @@ func ApplyRoutes(
 
 	loginRateLimit := mw.RateLimitMiddleware(rateLimit, "login", 5, 5)
 
-	mux.Handle("POST /api/v1/auth/login", loginRateLimit(account.LoginHandler(acct, session)))
+	mux.Handle("POST /api/v1/auth/login", loginRateLimit(account.LoginHandler(cfg.Auth.Account, acct, session)))
 	mux.Handle("POST /api/v1/auth/logout", loginRateLimit(mwAuth(account.LogoutHandler(session))))
 
 	mux.Handle("/api/oauth", loginRateLimit(link.OAuthHandler(cfg, acct, linkAccountStore, session, cfg.SiteUrl)))
