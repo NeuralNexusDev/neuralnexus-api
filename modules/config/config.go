@@ -62,9 +62,6 @@ type Session struct {
 }
 
 type Discord struct {
-	ClientId     string
-	ClientSecret string
-	RedirectUri  string
 	PublicKey    ed25519.PublicKey
 	OAuth2Config *oauth2.Config
 }
@@ -74,9 +71,6 @@ type GitHub struct {
 }
 
 type Microsoft struct {
-	ClientId          string
-	ClientSecret      string
-	RedirectUri       string
 	OAuth2Config      *oauth2.Config
 	LoginOAuth2Config *oauth2.Config
 }
@@ -87,8 +81,6 @@ type Steam struct {
 
 type Twitch struct {
 	ClientId       string
-	ClientSecret   string
-	RedirectUri    string
 	UserId         string
 	EventSubUri    string
 	EventSubSecret string
@@ -101,9 +93,6 @@ func FromEnv() *Config {
 	siteUrl := checkEnvVar("NN_SITE_URL")
 
 	// ---------- Discord ---------
-	discordClientId := checkEnvVar("DISCORD_CLIENT_ID")
-	discordClientSecret := checkEnvVar("DISCORD_CLIENT_SECRET")
-	discordRedirectUri := checkEnvVar("DISCORD_REDIRECT_URI")
 	publicKey, err := hex.DecodeString(checkEnvVar("DISCORD_PUBLIC_KEY"))
 	if err != nil || len(publicKey) != ed25519.PublicKeySize {
 		log.Fatal("DISCORD_PUBLIC_KEY is not the correct length")
@@ -117,8 +106,6 @@ func FromEnv() *Config {
 
 	// ---------- Twitch ----------
 	twitchClientId := checkEnvVar("TWITCH_CLIENT_ID")
-	twitchClientSecret := checkEnvVar("TWITCH_CLIENT_SECRET")
-	twitchRedirectUri := checkEnvVar("TWITCH_REDIRECT_URI")
 
 	return &Config{
 		ApiUrl:  apiUrl,
@@ -146,14 +133,11 @@ func FromEnv() *Config {
 			},
 		},
 		Discord: Discord{
-			ClientId:     discordClientId,
-			ClientSecret: discordClientSecret,
-			RedirectUri:  discordRedirectUri,
-			PublicKey:    publicKey,
+			PublicKey: publicKey,
 			OAuth2Config: &oauth2.Config{
-				ClientID:     discordClientId,
-				ClientSecret: discordClientSecret,
-				RedirectURL:  discordRedirectUri,
+				ClientID:     checkEnvVar("DISCORD_CLIENT_ID"),
+				ClientSecret: checkEnvVar("DISCORD_CLIENT_SECRET"),
+				RedirectURL:  checkEnvVar("DISCORD_REDIRECT_URI"),
 				Endpoint: oauth2.Endpoint{
 					AuthURL:   "https://discord.com/oauth2/authorize",
 					TokenURL:  "https://discord.com/api/oauth2/token",
@@ -165,9 +149,6 @@ func FromEnv() *Config {
 			Token: checkEnvVar("GITHUB_TOKEN"),
 		},
 		Microsoft: Microsoft{
-			ClientId:     microsoftClientId,
-			ClientSecret: microsoftClientSecret,
-			RedirectUri:  microsoftRedirectUri,
 			OAuth2Config: &oauth2.Config{
 				ClientID:     microsoftClientId,
 				ClientSecret: microsoftClientSecret,
@@ -194,16 +175,14 @@ func FromEnv() *Config {
 		},
 		Twitch: Twitch{
 			ClientId:       twitchClientId,
-			ClientSecret:   twitchClientSecret,
-			RedirectUri:    twitchRedirectUri,
 			UserId:         checkEnvVar("TWITCH_USER_ID"),
 			EventSubUri:    checkEnvVar("TWITCH_EVENTSUB_URI"),
 			EventSubSecret: checkEnvVar("TWITCH_EVENTSUB_SECRET"),
 			APIBaseUrl:     "",
 			OAuth2Config: &oauth2.Config{
 				ClientID:     twitchClientId,
-				ClientSecret: twitchClientSecret,
-				RedirectURL:  twitchRedirectUri,
+				ClientSecret: checkEnvVar("TWITCH_CLIENT_SECRET"),
+				RedirectURL:  checkEnvVar("TWITCH_REDIRECT_URI"),
 				Endpoint: oauth2.Endpoint{
 					AuthURL:   "https://id.twitch.tv/oauth2/authorize",
 					TokenURL:  "https://id.twitch.tv/oauth2/token",
