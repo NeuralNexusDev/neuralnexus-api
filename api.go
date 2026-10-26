@@ -61,18 +61,6 @@ func ApplyRoutes(
 	rateLimit ratelimit.Service) *http.ServeMux {
 	mwAuth := mw.Auth(session)
 
-	dbUrl := os.Getenv("DATABASE_URL")
-	if dbUrl == "" {
-		log.Fatal("DATABASE_URL is not set")
-		return nil
-	}
-
-	dbUrl2 := os.Getenv("DATABASE_URL_2")
-	if dbUrl2 == "" {
-		log.Fatal("DATABASE_URL_2 is not set")
-		return nil
-	}
-
 	// --------------- Auth ---------------
 	rbacService := rbac.NewService(rbac.NewStore(nndb))
 	settingsStore := account.NewSettingsStore(nndb)
@@ -123,7 +111,7 @@ func ApplyRoutes(
 	mux.Handle("DELETE /api/v1/permissions/{id}", mwAuth(rbac.DeletePermissionHandler(rbacService)))
 
 	// --------------- Bee Name Generator ---------------
-	bngStore := bng.NewStore(database.GetDB(dbUrl + "/bee_name_generator"))
+	bngStore := bng.NewStore(database.GetDB(cfg.Database.DBURL + "/bee_name_generator"))
 
 	mux.Handle("GET /api/v1/bee-name-generator/name", bng.GetBeeNameHandler(bngStore))
 	mux.Handle("POST /api/v1/bee-name-generator/name/{name}", mwAuth(bng.UploadBeeNameHandler(bngStore)))
@@ -163,7 +151,7 @@ func ApplyRoutes(
 
 	// --------------- Minecraft ---------------
 	mcStore := mc.NewStore(
-		database.GetDB(dbUrl2+"/archive?sslmode=require"), rdb,
+		database.GetDB(cfg.Database.DBURL2+"/archive?sslmode=require"), rdb,
 		database.GetS3(cfg.S3.APIUrl, cfg.S3.MCATexture.AccessKey, cfg.S3.MCATexture.SecretKey),
 		cfg.S3.MCATexture.Bucket)
 	mcService := mc.NewService(mcStore, nil, "https://"+cfg.S3.APIUrl+"/"+cfg.S3.MCATexture.Bucket+"/")
@@ -187,7 +175,7 @@ func ApplyRoutes(
 	mux.Handle("GET /api/v1/mcstatus/simple/{host}", mcs.SimpleStatusHandler(mcsService))
 
 	// --------------- Pet Pictures ---------------
-	petStore := petpics.NewStore(database.GetDB(dbUrl + "/pet_pictures"))
+	petStore := petpics.NewStore(database.GetDB(cfg.Database.DBURL2 + "/pet_pictures"))
 	petService := petpics.NewService(petStore)
 
 	mux.Handle("POST /api/v1/pet-pictures/pets/{name}", mwAuth(petpics.CreatePetHandler(petService)))
@@ -213,7 +201,7 @@ func ApplyRoutes(
 	mux.HandleFunc("GET /api/v1/teapot", teapot.HandleTeapot)
 
 	// --------------- Twitch ---------------
-	twitchStore := twitch.NewStore(database.GetDB(dbUrl + "/twitch"))
+	twitchStore := twitch.NewStore(database.GetDB(cfg.Database.DBURL + "/twitch"))
 	twitchService := twitch.NewService(twitchStore)
 	mux.HandleFunc("POST /api/twitch/eventsub", twitch.HandleEventSub(cfg.Twitch, twitchService, oauthTokenStore, linkAccountStore))
 
@@ -229,20 +217,7 @@ func ApplyRoutes(
 // Setup - Setup the API server
 func (s *APIServer) Setup() http.Handler {
 	cfg := config.FromEnv()
-
-	dbUrl := os.Getenv("DATABASE_URL")
-	if dbUrl == "" {
-		log.Fatal("DATABASE_URL is not set")
-		return nil
-	}
-
-	siteUrl := os.Getenv("NN_SITE_URL")
-	if siteUrl == "" {
-		log.Fatal("NN_SITE_URL is not set")
-		return nil
-	}
-
-	db := database.GetDB(dbUrl + "/neuralnexus")
+	db := database.GetDB(cfg.Database.DBURL + "/neuralnexus")
 	rdb := database.GetRedis(cfg.Redis)
 	sess := session.NewService(cfg, session.NewStore(db, rdb))
 	accountStore := account.NewStore(db)
@@ -253,7 +228,7 @@ func (s *APIServer) Setup() http.Handler {
 	middlewareStack := mw.CreateStack(
 		mw.NoSniffMiddleware,
 		cors.New(cors.Options{
-			AllowedOrigins:   []string{siteUrl},
+			AllowedOrigins:   []string{cfg.SiteUrl},
 			AllowedMethods:   []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete},
 			AllowedHeaders:   []string{"Content-Type", "Authorization"},
 			AllowCredentials: true,
