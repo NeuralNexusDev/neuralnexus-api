@@ -9,43 +9,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
 	"github.com/goccy/go-json"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 )
-
-// Alternatives:
-//
-//	https://api.mojang.com/users/profiles/minecraft/<name>   (occasional 403 due to Mojang misconfiguration)
-//	https://api.mojang.com/minecraft/profile/lookup/name/<name>
-const mojangLookupByName = "https://api.minecraftservices.com/minecraft/profile/lookup/name/"
-
-// https://api.minecraftservices.com/minecraft/profile/lookup/<uuid>
-const mojangLookupByUUID = "https://api.minecraftservices.com/minecraft/profile/lookup/"
-
-// Alternatives:
-//
-//	https://api.mojang.com/profiles/minecraft
-//	https://api.mojang.com/minecraft/profile/lookup/bulk/byname
-const mojangLookupBulk = "https://api.minecraftservices.com/minecraft/profile/lookup/bulk/byname"
-
-// https://sessionserver.mojang.com/session/minecraft/profile/<uuid>
-const mojangLookupProfile = "https://sessionserver.mojang.com/session/minecraft/profile/"
-
-// http://textures.minecraft.net/texture/<hash>
-const mojangTextureURL = "http://textures.minecraft.net/texture/"
-
-// https://api.geysermc.org/v2/xbox/xuid/<gamertag> -- Or Floodgate UUID
-// - 503 on unknown xuid, 400 on invalid xuid value
-const geyserXUIDLookup = "https://api.geysermc.org/v2/xbox/xuid/"
-
-// https://api.geysermc.org/v2/skin/<xuid>
-// - 200 empty object on unknown xuid, 304 on cached resp, 400 on invalid xuid value
-const geyserSkinLookup = "https://api.geysermc.org/v2/skin/"
-
-// https://api.geysermc.org/v2/xbox/gamertag/<xuid> -- Or Floodgate UUID
-// - 503 on unknown xuid, 400 on invalid xuid value
-const geyserGamertagLookup = "https://api.geysermc.org/v2/xbox/gamertag/"
 
 // Service - Minecraft player service
 type Service interface {
@@ -87,36 +55,22 @@ type CommonService interface {
 
 // service - Minecraft player service implementation
 type service struct {
-	store                Store
-	client               *http.Client
-	lookupByName         string
-	lookupByUUID         string
-	lookupBulk           string
-	lookupProfile        string
-	lookupTexture        string
-	geyserXUIDLookup     string
-	geyserSkinLookup     string
-	geyserGamertagLookup string
-	s3TextureUrl         string
+	cfg          config.Minecraft
+	store        Store
+	client       *http.Client
+	s3TextureUrl string
 }
 
 // NewService - Create a new Minecraft player service
-func NewService(store Store, client *http.Client, s3TextureUrl string) Service {
+func NewService(cfg config.Minecraft, store Store, client *http.Client, s3TextureUrl string) Service {
 	if client == nil {
 		client = http.DefaultClient
 	}
 	return &service{
-		store:                store,
-		client:               client,
-		lookupByName:         mojangLookupByName,
-		lookupByUUID:         mojangLookupByUUID,
-		lookupBulk:           mojangLookupBulk,
-		lookupProfile:        mojangLookupProfile,
-		lookupTexture:        mojangTextureURL,
-		geyserXUIDLookup:     geyserXUIDLookup,
-		geyserSkinLookup:     geyserSkinLookup,
-		geyserGamertagLookup: geyserGamertagLookup,
-		s3TextureUrl:         s3TextureUrl,
+		store:        store,
+		client:       client,
+		cfg:          cfg,
+		s3TextureUrl: s3TextureUrl,
 	}
 }
 
@@ -149,7 +103,7 @@ func (s *service) GetMojangPlayerByName(ctx context.Context, name string) (*Play
 	}
 
 	// Stale entry — fetch from Mojang
-	resp, err := s.get(ctx, s.lookupByName+name)
+	resp, err := s.get(ctx, s.cfg.LookupByName+name)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +151,7 @@ func (s *service) GetMojangPlayerByUUID(ctx context.Context, id string) (*Player
 	}
 
 	// Stale entry — fetch from Mojang
-	resp, err := s.get(ctx, s.lookupByUUID+id)
+	resp, err := s.get(ctx, s.cfg.LookupByUUID+id)
 	if err != nil {
 		return nil, err
 	}
@@ -269,7 +223,7 @@ func (s *service) GetMojangPlayersByNames(ctx context.Context, names []string) (
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.lookupBulk, strings.NewReader(string(body)))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.cfg.LookupBulk, strings.NewReader(string(body)))
 	if err != nil {
 		return nil, err
 	}
@@ -386,7 +340,7 @@ func (s *service) resolveProfile(ctx context.Context, id string) (*Profile, erro
 // fetchProfileFromMojang fetches and persists a player's profile live from
 // Mojang, returning both the raw Player and the decoded Profile.
 func (s *service) fetchProfileFromMojang(ctx context.Context, id string, signed bool) (*Player, *Profile, error) {
-	url := s.lookupProfile + id
+	url := s.cfg.LookupProfile + id
 	if signed {
 		url += "?unsigned=false"
 	}
@@ -458,7 +412,7 @@ func (s *service) GetGeyserXUID(ctx context.Context, gamertag string) (*GeyserPl
 
 	// PathEscape, not raw concatenation: a gamertag can contain '#', '?', '/',
 	// or spaces, which would otherwise corrupt the upstream request URL.
-	resp, err := s.get(ctx, s.geyserXUIDLookup+url.PathEscape(gamertag))
+	resp, err := s.get(ctx, s.cfg.GeyserXUIDLookup+url.PathEscape(gamertag))
 	if err != nil {
 		return nil, err
 	}
@@ -518,7 +472,7 @@ func (s *service) GetGeyserSkin(ctx context.Context, xuid int64) (*GeyserSkin, e
 		return &skin, err
 	}
 
-	resp, err := s.get(ctx, s.geyserSkinLookup+strconv.FormatInt(xuid, 10))
+	resp, err := s.get(ctx, s.cfg.GeyserSkinLookup+strconv.FormatInt(xuid, 10))
 	if err != nil {
 		return nil, err
 	}
@@ -556,7 +510,7 @@ func (s *service) resolveGeyserPlayerByXUID(ctx context.Context, xuid int64) (*G
 		return dbPlayer, nil
 	}
 
-	resp, err := s.get(ctx, s.geyserGamertagLookup+strconv.FormatInt(xuid, 10))
+	resp, err := s.get(ctx, s.cfg.GeyserGamertagLookup+strconv.FormatInt(xuid, 10))
 	if err != nil {
 		return nil, err
 	}
@@ -693,7 +647,7 @@ func (bytesReadCloser) Close() error { return nil }
 // returns a second reader over the same bytes to serve the client — no
 // re-fetch through S3 for the request that just caused the miss.
 func (s *service) fetchAndArchive(ctx context.Context, hash string) (*TextureResult, error) {
-	resp, err := s.get(ctx, s.lookupTexture+hash)
+	resp, err := s.get(ctx, s.cfg.LookupTexture+hash)
 	if err != nil {
 		return nil, err
 	}

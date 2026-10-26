@@ -151,10 +151,11 @@ func ApplyRoutes(
 
 	// --------------- Minecraft ---------------
 	mcStore := mc.NewStore(
+		cfg.Minecraft,
 		database.GetDB(cfg.Database.DBURL2+"/archive?sslmode=require"), rdb,
 		database.GetS3(cfg.S3.APIUrl, cfg.S3.MCATexture.AccessKey, cfg.S3.MCATexture.SecretKey),
 		cfg.S3.MCATexture.Bucket)
-	mcService := mc.NewService(mcStore, nil, "https://"+cfg.S3.APIUrl+"/"+cfg.S3.MCATexture.Bucket+"/")
+	mcService := mc.NewService(cfg.Minecraft, mcStore, nil, "https://"+cfg.S3.APIUrl+"/"+cfg.S3.MCATexture.Bucket+"/")
 
 	mux.Handle("GET /api/v1/mc/mojang/lookup/name/{name}", mc.GetMojangPlayerByNameHandler(mcService))
 	mux.Handle("GET /api/v1/mc/mojang/lookup/{uuid}", mc.GetMojangPlayerByUUIDHandler(mcService))

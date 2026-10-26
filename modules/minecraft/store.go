@@ -6,6 +6,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go"
@@ -26,7 +27,6 @@ const (
 	CachePlayer        = "player:"
 	CacheProfile       = CachePlayer + "profile:"
 	CacheProfileSigned = CacheProfile + "signed:"
-	S3Bucket           = "mca"
 	S3KeyPrefix        = "texture/"
 	GeyserS3KeyPrefix  = "texture/geyser/"
 
@@ -73,6 +73,7 @@ type S3 interface {
 type store struct {
 	cache
 	sThree
+	cfg    config.Minecraft
 	db     *pgxpool.Pool
 	rdb    *redis.Client
 	s3     *s3.Client
@@ -89,8 +90,8 @@ type sThree struct {
 }
 
 // NewStore - Create a new Minecraft player store
-func NewStore(db *pgxpool.Pool, rdb *redis.Client, s3 *s3.Client, bucket string) Store {
-	return &store{db: db, rdb: rdb, s3: s3, bucket: bucket}
+func NewStore(cfg config.Minecraft, db *pgxpool.Pool, rdb *redis.Client, s3 *s3.Client, bucket string) Store {
+	return &store{cfg: cfg, db: db, rdb: rdb, s3: s3, bucket: bucket}
 }
 
 // GetPlayerByUUID gets a player by UUID from the database
@@ -177,7 +178,7 @@ func (s *store) GetTextures(ctx context.Context, table, id, name string) (*Textu
 		}
 		return nil, err
 	}
-	return row.Value(name, mojangTextureURL), nil
+	return row.Value(name, s.cfg.LookupTexture), nil
 }
 
 // UpsertPlayer upserts a player into the database and updates name history
