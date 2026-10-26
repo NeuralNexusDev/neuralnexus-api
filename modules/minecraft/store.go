@@ -73,9 +73,10 @@ type S3 interface {
 type store struct {
 	cache
 	sThree
-	db  *pgxpool.Pool
-	rdb *redis.Client
-	s3  *s3.Client
+	db     *pgxpool.Pool
+	rdb    *redis.Client
+	s3     *s3.Client
+	bucket string
 }
 
 type cache struct {
@@ -83,12 +84,13 @@ type cache struct {
 }
 
 type sThree struct {
-	s3 *s3.Client
+	s3     *s3.Client
+	bucket string
 }
 
 // NewStore - Create a new Minecraft player store
-func NewStore(db *pgxpool.Pool, rdb *redis.Client, s3 *s3.Client) Store {
-	return &store{db: db, rdb: rdb, s3: s3}
+func NewStore(db *pgxpool.Pool, rdb *redis.Client, s3 *s3.Client, bucket string) Store {
+	return &store{db: db, rdb: rdb, s3: s3, bucket: bucket}
 }
 
 // GetPlayerByUUID gets a player by UUID from the database
@@ -394,7 +396,7 @@ func (s *store) UpsertGeyserPlayer(ctx context.Context, player *GeyserPlayer) er
 // IsTextureInS3 check if the texture is in S3
 func (s *sThree) IsTextureInS3(ctx context.Context, hash string) (bool, error) {
 	_, err := s.s3.HeadObject(ctx, &s3.HeadObjectInput{
-		Bucket: aws.String(S3Bucket),
+		Bucket: aws.String(s.bucket),
 		Key:    aws.String(S3KeyPrefix + hash),
 	})
 	if err != nil {
@@ -412,7 +414,7 @@ func (s *sThree) IsTextureInS3(ctx context.Context, hash string) (bool, error) {
 // PutTextureInS3 upload a texture to S3
 func (s *sThree) PutTextureInS3(ctx context.Context, hash string, body io.ReadCloser) error {
 	input := &s3.PutObjectInput{
-		Bucket:      aws.String(S3Bucket),
+		Bucket:      aws.String(s.bucket),
 		Key:         aws.String(S3KeyPrefix + hash),
 		Body:        body,
 		ContentType: aws.String("image/png"),

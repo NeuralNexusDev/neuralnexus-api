@@ -21,6 +21,7 @@ type Config struct {
 	ApiUrl    string
 	SiteUrl   string
 	Redis     Redis
+	S3        S3
 	Auth      Auth
 	Discord   Discord
 	Microsoft Microsoft
@@ -32,6 +33,17 @@ type Redis struct {
 	Address  string
 	Username string
 	Password string
+}
+
+type S3 struct {
+	APIUrl     string
+	MCATexture MCATexture
+}
+
+type MCATexture struct {
+	Bucket    string
+	AccessKey string
+	SecretKey string
 }
 
 type Auth struct {
@@ -110,6 +122,14 @@ func FromEnv() *Config {
 			Address:  checkEnvVar("REDIS_ADDRESS"),
 			Username: checkEnvVar("REDIS_USERNAME"),
 			Password: checkEnvVar("REDIS_PASSWORD"),
+		},
+		S3: S3{
+			APIUrl: checkEnvVar("S3_API_URL"),
+			MCATexture: MCATexture{
+				Bucket:    "mca",
+				AccessKey: checkEnvVar("S3_ACCESS_KEY_MCA_TEXTURE"),
+				SecretKey: checkEnvVar("S3_SECRET_KEY_MCA_TEXTURE"),
+			},
 		},
 		Auth: Auth{
 			Account: Account{
