@@ -20,6 +20,7 @@ func checkEnvVar(varName string) string {
 type Config struct {
 	ApiUrl    string
 	SiteUrl   string
+	Database  Database
 	Redis     Redis
 	S3        S3
 	Auth      Auth
@@ -28,6 +29,11 @@ type Config struct {
 	Microsoft Microsoft
 	Steam     Steam
 	Twitch    Twitch
+}
+
+type Database struct {
+	DBURL  string
+	DBURL2 string
 }
 
 type Redis struct {
@@ -110,6 +116,10 @@ func FromEnv() *Config {
 	return &Config{
 		ApiUrl:  apiUrl,
 		SiteUrl: siteUrl,
+		Database: Database{
+			DBURL:  checkEnvVar("DATABASE_URL"),
+			DBURL2: checkEnvVar("DATABASE_URL_2"),
+		},
 		Redis: Redis{
 			Address:  checkEnvVar("REDIS_ADDRESS"),
 			Username: checkEnvVar("REDIS_USERNAME"),
