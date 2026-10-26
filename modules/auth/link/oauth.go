@@ -108,9 +108,9 @@ func ProcessOAuthLogin(ctx context.Context, cfg *config.Config, as account.Servi
 	case PlatformTwitch:
 		config = cfg.Twitch.OAuth2Config
 	case PlatformMinecraft, PlatformXboxLive:
-		config = MicrosoftConfig
+		config = cfg.Microsoft.OAuth2Config
 	case PlatformMicrosoft:
-		config = MicrosoftLoginConfig
+		config = cfg.Microsoft.LoginOAuth2Config
 	default:
 		return nil, ErrInvalidPlatform
 	}
@@ -254,9 +254,9 @@ func ProcessOAuthLink(r *http.Request, cfg *config.Config, las Store, code strin
 	case PlatformTwitch:
 		config = cfg.Twitch.OAuth2Config
 	case PlatformMinecraft, PlatformXboxLive:
-		config = MicrosoftConfig
+		config = cfg.Microsoft.OAuth2Config
 	case PlatformMicrosoft:
-		config = MicrosoftLoginConfig
+		config = cfg.Microsoft.LoginOAuth2Config
 	default:
 		return nil, ErrInvalidPlatform
 	}

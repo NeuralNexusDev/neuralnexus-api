@@ -18,12 +18,13 @@ func checkEnvVar(varName string) string {
 }
 
 type Config struct {
-	ApiUrl  string
-	SiteUrl string
-	Redis   Redis
-	Auth    Auth
-	Discord Discord
-	Twitch  Twitch
+	ApiUrl    string
+	SiteUrl   string
+	Redis     Redis
+	Auth      Auth
+	Discord   Discord
+	Microsoft Microsoft
+	Twitch    Twitch
 }
 
 type Redis struct {
@@ -54,6 +55,14 @@ type Discord struct {
 	OAuth2Config *oauth2.Config
 }
 
+type Microsoft struct {
+	ClientId          string
+	ClientSecret      string
+	RedirectUri       string
+	OAuth2Config      *oauth2.Config
+	LoginOAuth2Config *oauth2.Config
+}
+
 type Twitch struct {
 	ClientId       string
 	ClientSecret   string
@@ -78,6 +87,11 @@ func FromEnv() *Config {
 		log.Fatal("DISCORD_PUBLIC_KEY is not the correct length")
 		return nil
 	}
+
+	// ---------- Microsoft ---------
+	microsoftClientId := checkEnvVar("MICROSOFT_CLIENT_ID")
+	microsoftClientSecret := checkEnvVar("MICROSOFT_CLIENT_SECRET")
+	microsoftRedirectUri := checkEnvVar("MICROSOFT_REDIRECT_URI")
 
 	// ---------- Twitch ----------
 	twitchClientId := checkEnvVar("TWITCH_CLIENT_ID")
@@ -109,12 +123,37 @@ func FromEnv() *Config {
 			OAuth2Config: &oauth2.Config{
 				ClientID:     discordClientId,
 				ClientSecret: discordClientSecret,
+				RedirectURL:  discordRedirectUri,
 				Endpoint: oauth2.Endpoint{
 					AuthURL:   "https://discord.com/oauth2/authorize",
 					TokenURL:  "https://discord.com/api/oauth2/token",
 					AuthStyle: oauth2.AuthStyleInHeader,
 				},
-				RedirectURL: discordRedirectUri,
+			},
+		},
+		Microsoft: Microsoft{
+			ClientId:     microsoftClientId,
+			ClientSecret: microsoftClientSecret,
+			RedirectUri:  microsoftRedirectUri,
+			OAuth2Config: &oauth2.Config{
+				ClientID:     microsoftClientId,
+				ClientSecret: microsoftClientSecret,
+				RedirectURL:  microsoftRedirectUri,
+				Endpoint: oauth2.Endpoint{
+					AuthURL:  "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize",
+					TokenURL: "https://login.microsoftonline.com/consumers/oauth2/v2.0/token",
+				},
+				Scopes: []string{"XboxLive.signin", "offline_access"},
+			},
+			LoginOAuth2Config: &oauth2.Config{
+				ClientID:     microsoftClientId,
+				ClientSecret: microsoftClientSecret,
+				RedirectURL:  microsoftRedirectUri,
+				Endpoint: oauth2.Endpoint{
+					AuthURL:  "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize",
+					TokenURL: "https://login.microsoftonline.com/consumers/oauth2/v2.0/token",
+				},
+				Scopes: []string{"openid", "profile", "email", "offline_access"},
 			},
 		},
 		Twitch: Twitch{

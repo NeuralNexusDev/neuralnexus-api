@@ -5,51 +5,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/goccy/go-json"
-	"github.com/google/uuid"
-	"golang.org/x/oauth2"
 	"io"
 	"net/http"
-	"os"
 	"strconv"
 	"time"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
-)
-
-// -------------- Global Variables --------------
-
-//goland:noinspection GoSnakeCaseUsage
-var (
-	MICROSOFT_CLIENT_ID     = os.Getenv("MICROSOFT_CLIENT_ID")
-	MICROSOFT_CLIENT_SECRET = os.Getenv("MICROSOFT_CLIENT_SECRET")
-	MICROSOFT_REDIRECT_URI  = os.Getenv("MICROSOFT_REDIRECT_URI")
-	MicrosoftConfig         = &oauth2.Config{
-		ClientID:     MICROSOFT_CLIENT_ID,
-		ClientSecret: MICROSOFT_CLIENT_SECRET,
-		Endpoint: oauth2.Endpoint{
-			AuthURL:  "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize",
-			TokenURL: "https://login.microsoftonline.com/consumers/oauth2/v2.0/token",
-		},
-		Scopes:      []string{"XboxLive.signin", "offline_access"},
-		RedirectURL: MICROSOFT_REDIRECT_URI,
-	}
-
-	// MicrosoftLoginConfig is for a plain "sign in with Microsoft" login that
-	// only needs the account's identity (sub/name/email), not proof of Xbox
-	// Live or Minecraft ownership - kept separate from MicrosoftConfig so its
-	// OIDC scopes can never affect the access token XBL authentication
-	// depends on.
-	MicrosoftLoginConfig = &oauth2.Config{
-		ClientID:     MICROSOFT_CLIENT_ID,
-		ClientSecret: MICROSOFT_CLIENT_SECRET,
-		Endpoint: oauth2.Endpoint{
-			AuthURL:  "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize",
-			TokenURL: "https://login.microsoftonline.com/consumers/oauth2/v2.0/token",
-		},
-		Scopes:      []string{"openid", "profile", "email", "offline_access"},
-		RedirectURL: MICROSOFT_REDIRECT_URI,
-	}
+	"github.com/goccy/go-json"
+	"github.com/google/uuid"
 )
 
 var microsoftHTTPClient = &http.Client{Timeout: 10 * time.Second}
