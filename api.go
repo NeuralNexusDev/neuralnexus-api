@@ -217,6 +217,7 @@ func ApplyRoutes(
 // Setup - Setup the API server
 func (s *APIServer) Setup() http.Handler {
 	cfg := config.FromEnv()
+	database.InitSnowflake(cfg.Snowflake)
 	db := database.GetDB(cfg.Database.DBURL + "/neuralnexus")
 	rdb := database.GetRedis(cfg.Redis)
 	sess := session.NewService(cfg, session.NewStore(db, rdb))
