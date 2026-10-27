@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
 	"github.com/goccy/go-json"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
@@ -21,26 +22,18 @@ import (
 
 // -------------- Global Variables --------------
 
-var steamHTTPClient = &http.Client{Timeout: 10 * time.Second}
-
-// Endpoint URLs as vars, not inline literals, so tests can point them at a
-// local httptest.Server instead of the real Steam services.
 var (
-	steamOpenIDLoginURL   = "https://steamcommunity.com/openid/login"
-	steamPlayerSummaryURL = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/"
-)
-
-// steamClaimedIDPattern matches the identity URL Steam returns in
-// openid.claimed_id, capturing the numeric SteamID64.
-var steamClaimedIDPattern = regexp.MustCompile(`^https://steamcommunity\.com/openid/id/(\d+)$`)
-
-var ErrInvalidAssertion = errors.New("invalid openid assertion")
-
-var (
+	ErrInvalidAssertion         = errors.New("invalid openid assertion")
 	ErrSteamOpenIDCheck         = errors.New("steam openid check_authentication error")
 	ErrSteamPlayerSummaryLookup = errors.New("steam player summary lookup error")
 	ErrSteamIDMismatch          = errors.New("steam player summary response steamid does not match requested")
 	ErrSteamNoPlayers           = errors.New("steam player summary response contained no players")
+
+	steamHTTPClient = &http.Client{Timeout: 10 * time.Second}
+
+	// steamClaimedIDPattern matches the identity URL Steam returns in
+	// openid.claimed_id, capturing the numeric SteamID64.
+	steamClaimedIDPattern = regexp.MustCompile(`^https://steamcommunity\.com/openid/id/(\d+)$`)
 )
 
 // -------------- Structs --------------
@@ -83,7 +76,7 @@ func (s *SteamData) CreateLinkedAccount(userID string) *LinkedAccount {
 
 // VerifySteamOpenIDCallback verifies an OpenID 2.0 assertion by POSTing it
 // back to Steam's own endpoint, returning the caller's SteamID64.
-func VerifySteamOpenIDCallback(ctx context.Context, query url.Values) (string, error) {
+func VerifySteamOpenIDCallback(ctx context.Context, cfg config.Steam, query url.Values) (string, error) {
 	if query.Get("openid.mode") != "id_res" {
 		reqctx.Log(ctx, ErrInvalidAssertion.Error(), "- unexpected openid.mode")
 		return "", ErrInvalidAssertion
@@ -110,7 +103,7 @@ func VerifySteamOpenIDCallback(ctx context.Context, query url.Values) (string, e
 	}
 	checkValues.Set("openid.mode", "check_authentication")
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, steamOpenIDLoginURL, strings.NewReader(checkValues.Encode()))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, cfg.OpenIDLoginURL, strings.NewReader(checkValues.Encode()))
 	if err != nil {
 		return "", err
 	}
@@ -154,8 +147,8 @@ func responseIsValid(body []byte) bool {
 
 // GetSteamUser fetches the caller's public profile via the Steam Web API,
 // for a persona name/avatar beyond the bare SteamID64 OpenID provides.
-func GetSteamUser(ctx context.Context, apiKey, steamID64 string) (*SteamData, error) {
-	reqURL := steamPlayerSummaryURL + "?key=" + url.QueryEscape(apiKey) + "&steamids=" + url.QueryEscape(steamID64)
+func GetSteamUser(ctx context.Context, cfg config.Steam, steamID64 string) (*SteamData, error) {
+	reqURL := cfg.PlayerSummaryURL + "?key=" + url.QueryEscape(cfg.APIKey) + "&steamids=" + url.QueryEscape(steamID64)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
 		return nil, err
@@ -198,29 +191,29 @@ func ProcessSteamLogin(ctx context.Context, as account.Service, las Store, ss se
 	if err != nil {
 		return nil, err
 	}
-	session, err := as.NewSession(ctx, a, time.Now().Add(time.Hour*24).Unix())
+	sess, err := as.NewSession(ctx, a, time.Now().Add(time.Hour*24).Unix())
 	if err != nil {
 		return nil, err
 	}
-	if err = ss.AddSession(ctx, session); err != nil {
+	if err = ss.AddSession(ctx, sess); err != nil {
 		return nil, err
 	}
-	return session, nil
+	return sess, nil
 }
 
 // ProcessSteamLink links the given, already-verified Steam identity to the
 // session already in r's context.
 func ProcessSteamLink(r *http.Request, las Store, user *SteamData) (*session.Session, error) {
 	ctx := r.Context()
-	session, ok := ctx.Value(reqctx.SessionKey).(*session.Session)
-	if !ok || session == nil {
+	sess, ok := ctx.Value(reqctx.SessionKey).(*session.Session)
+	if !ok || sess == nil {
 		return nil, ErrSessionNotFound
 	}
-	if !session.IsValid() {
+	if !sess.IsValid() {
 		return nil, ErrSessionExpired
 	}
-	if err := linkPlatformUserToSession(ctx, las, session.UserID, PlatformSteam, user); err != nil {
+	if err := linkPlatformUserToSession(ctx, las, sess.UserID, PlatformSteam, user); err != nil {
 		return nil, err
 	}
-	return session, nil
+	return sess, nil
 }
