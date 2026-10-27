@@ -104,9 +104,8 @@ func TestTY04to09_Player_ParseProperties(t *testing.T) {
 			{Name: TEXTURES, Value: "not-base64!!"},
 			{Name: TEXTURES, Value: mcEncodeTextures(t, want)},
 		}}
-		got := p.ParseProperties(mcCtx)
-		if got == nil || got.ProfileID != "second" {
-			t.Errorf("ParseProperties() = %+v, want ProfileID=second", got)
+		if got := p.ParseProperties(mcCtx); got != nil {
+			t.Errorf("ParseProperties() = %+v, want nil", got)
 		}
 	})
 }
@@ -293,38 +292,6 @@ func TestTY24to25_Profile_ToPlayer(t *testing.T) {
 		}
 		if len(player.Properties) != 0 {
 			t.Errorf("ToPlayer().Properties = %+v, want empty", player.Properties)
-		}
-	})
-}
-
-func TestTY30to33_GeyserSkin_SkinURL(t *testing.T) {
-	t.Run("TY-30_Valid", func(t *testing.T) {
-		tv := TexturesValue{Textures: Textures{SKIN: &Texture{URL: "http://x/hash"}}}
-		s := &GeyserSkin{Value: mcEncodeTextures(t, tv)}
-		if got := s.SkinURL(); got != "http://x/hash" {
-			t.Errorf("SkinURL() = %q, want %q", got, "http://x/hash")
-		}
-	})
-
-	t.Run("TY-31_NotBase64", func(t *testing.T) {
-		s := &GeyserSkin{Value: "not-base64!!"}
-		if got := s.SkinURL(); got != "" {
-			t.Errorf("SkinURL() = %q, want empty", got)
-		}
-	})
-
-	t.Run("TY-32_ValidBase64InvalidJSON", func(t *testing.T) {
-		s := &GeyserSkin{Value: base64.StdEncoding.EncodeToString([]byte("not json"))}
-		if got := s.SkinURL(); got != "" {
-			t.Errorf("SkinURL() = %q, want empty", got)
-		}
-	})
-
-	t.Run("TY-33_NoSkinTexture", func(t *testing.T) {
-		tv := TexturesValue{Textures: Textures{}}
-		s := &GeyserSkin{Value: mcEncodeTextures(t, tv)}
-		if got := s.SkinURL(); got != "" {
-			t.Errorf("SkinURL() = %q, want empty", got)
 		}
 	})
 }

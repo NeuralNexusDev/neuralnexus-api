@@ -156,7 +156,7 @@ func stSeedBareAccount(t *testing.T, as account.Store, userID string) {
 func stSeedPasswordAccount(t *testing.T, as account.Store, userID string) *account.Account {
 	t.Helper()
 	a := &account.Account{UserID: userID, Username: "sttest-" + userID}
-	if err := a.HashPassword("sttest-password"); err != nil {
+	if err := a.HashPassword(testutil.NewConfig().Auth.Account.Pepper, "sttest-password"); err != nil {
 		t.Fatalf("HashPassword returned error: %v", err)
 	}
 	if err := as.AddAccountToDB(context.Background(), a); err != nil {

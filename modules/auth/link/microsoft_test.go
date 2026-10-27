@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
@@ -20,13 +21,12 @@ func readJSONBody(r *http.Request, v interface{}) error {
 	return json.NewDecoder(r.Body).Decode(v)
 }
 
-func msSetURL(t *testing.T, target *string, value string) {
-	t.Helper()
-	original := *target
-	*target = value
-	t.Cleanup(func() {
-		*target = original
-	})
+func msConfig(mods ...func(*config.Microsoft)) config.Microsoft {
+	return testutil.NewConfig(func(c *config.Config) {
+		for _, mod := range mods {
+			mod(&c.Microsoft)
+		}
+	}).Microsoft
 }
 
 func TestMS01to04XboxLiveDataAccessors(t *testing.T) {
@@ -142,9 +142,9 @@ func TestMS17to21GetMicrosoftUser(t *testing.T) {
 			_, _ = w.Write([]byte(`{"sub":"s1","name":"n","email":"e"}`))
 		}))
 		defer ts.Close()
-		msSetURL(t, &microsoftUserInfoURL, ts.URL)
+		cfg := msConfig(func(m *config.Microsoft) { m.MicrosoftUserInfoURL = ts.URL })
 
-		got, err := GetMicrosoftUser(testutil.LogContext(context.Background()), &OAuthToken{AccessToken: "tok"})
+		got, err := GetMicrosoftUser(testutil.LogContext(context.Background()), cfg, &OAuthToken{AccessToken: "tok"})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -154,8 +154,8 @@ func TestMS17to21GetMicrosoftUser(t *testing.T) {
 	})
 
 	t.Run("MS-18_NetworkError", func(t *testing.T) {
-		msSetURL(t, &microsoftUserInfoURL, "http://127.0.0.1:1")
-		_, err := GetMicrosoftUser(testutil.LogContext(context.Background()), &OAuthToken{AccessToken: "tok"})
+		cfg := msConfig(func(m *config.Microsoft) { m.MicrosoftUserInfoURL = "http://127.0.0.1:1" })
+		_, err := GetMicrosoftUser(testutil.LogContext(context.Background()), cfg, &OAuthToken{AccessToken: "tok"})
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -166,9 +166,9 @@ func TestMS17to21GetMicrosoftUser(t *testing.T) {
 			w.WriteHeader(http.StatusUnauthorized)
 		}))
 		defer ts.Close()
-		msSetURL(t, &microsoftUserInfoURL, ts.URL)
+		cfg := msConfig(func(m *config.Microsoft) { m.MicrosoftUserInfoURL = ts.URL })
 
-		_, err := GetMicrosoftUser(testutil.LogContext(context.Background()), &OAuthToken{AccessToken: "tok"})
+		_, err := GetMicrosoftUser(testutil.LogContext(context.Background()), cfg, &OAuthToken{AccessToken: "tok"})
 		if !errors.Is(err, ErrMicrosoftUserinfoLookup) {
 			t.Fatalf("error = %v, want %v", err, ErrMicrosoftUserinfoLookup)
 		}
@@ -179,9 +179,9 @@ func TestMS17to21GetMicrosoftUser(t *testing.T) {
 			_, _ = w.Write([]byte(`{not-json`))
 		}))
 		defer ts.Close()
-		msSetURL(t, &microsoftUserInfoURL, ts.URL)
+		cfg := msConfig(func(m *config.Microsoft) { m.MicrosoftUserInfoURL = ts.URL })
 
-		_, err := GetMicrosoftUser(testutil.LogContext(context.Background()), &OAuthToken{AccessToken: "tok"})
+		_, err := GetMicrosoftUser(testutil.LogContext(context.Background()), cfg, &OAuthToken{AccessToken: "tok"})
 		if err == nil {
 			t.Fatal("expected a decode error")
 		}
@@ -192,9 +192,9 @@ func TestMS17to21GetMicrosoftUser(t *testing.T) {
 			_, _ = w.Write([]byte(`{"name":"n"}`))
 		}))
 		defer ts.Close()
-		msSetURL(t, &microsoftUserInfoURL, ts.URL)
+		cfg := msConfig(func(m *config.Microsoft) { m.MicrosoftUserInfoURL = ts.URL })
 
-		_, err := GetMicrosoftUser(testutil.LogContext(context.Background()), &OAuthToken{AccessToken: "tok"})
+		_, err := GetMicrosoftUser(testutil.LogContext(context.Background()), cfg, &OAuthToken{AccessToken: "tok"})
 		if !errors.Is(err, ErrUserinfoMissingSub) {
 			t.Fatalf("GetMicrosoftUser() error = %v, want %v", err, ErrUserinfoMissingSub)
 		}
@@ -207,9 +207,9 @@ func TestMS22to26XblAuthenticate(t *testing.T) {
 			_, _ = w.Write([]byte(`{"Token":"t"}`))
 		}))
 		defer ts.Close()
-		msSetURL(t, &xboxLiveAuthenticateURL, ts.URL)
+		cfg := msConfig(func(m *config.Microsoft) { m.XboxLiveAuthenticateURL = ts.URL })
 
-		got, err := xblAuthenticate(testutil.LogContext(context.Background()), "ms-token")
+		got, err := xblAuthenticate(testutil.LogContext(context.Background()), cfg, "ms-token")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -219,8 +219,8 @@ func TestMS22to26XblAuthenticate(t *testing.T) {
 	})
 
 	t.Run("MS-23_NetworkError", func(t *testing.T) {
-		msSetURL(t, &xboxLiveAuthenticateURL, "http://127.0.0.1:1")
-		_, err := xblAuthenticate(testutil.LogContext(context.Background()), "ms-token")
+		cfg := msConfig(func(m *config.Microsoft) { m.XboxLiveAuthenticateURL = "http://127.0.0.1:1" })
+		_, err := xblAuthenticate(testutil.LogContext(context.Background()), cfg, "ms-token")
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -231,9 +231,9 @@ func TestMS22to26XblAuthenticate(t *testing.T) {
 			w.WriteHeader(http.StatusUnauthorized)
 		}))
 		defer ts.Close()
-		msSetURL(t, &xboxLiveAuthenticateURL, ts.URL)
+		cfg := msConfig(func(m *config.Microsoft) { m.XboxLiveAuthenticateURL = ts.URL })
 
-		_, err := xblAuthenticate(testutil.LogContext(context.Background()), "ms-token")
+		_, err := xblAuthenticate(testutil.LogContext(context.Background()), cfg, "ms-token")
 		if !errors.Is(err, ErrXboxLiveAuthentication) {
 			t.Fatalf("error = %v, want %v", err, ErrXboxLiveAuthentication)
 		}
@@ -244,9 +244,9 @@ func TestMS22to26XblAuthenticate(t *testing.T) {
 			_, _ = w.Write([]byte(`{not-json`))
 		}))
 		defer ts.Close()
-		msSetURL(t, &xboxLiveAuthenticateURL, ts.URL)
+		cfg := msConfig(func(m *config.Microsoft) { m.XboxLiveAuthenticateURL = ts.URL })
 
-		_, err := xblAuthenticate(testutil.LogContext(context.Background()), "ms-token")
+		_, err := xblAuthenticate(testutil.LogContext(context.Background()), cfg, "ms-token")
 		if err == nil {
 			t.Fatal("expected a decode error")
 		}
@@ -257,9 +257,9 @@ func TestMS22to26XblAuthenticate(t *testing.T) {
 			_, _ = w.Write([]byte(`{}`))
 		}))
 		defer ts.Close()
-		msSetURL(t, &xboxLiveAuthenticateURL, ts.URL)
+		cfg := msConfig(func(m *config.Microsoft) { m.XboxLiveAuthenticateURL = ts.URL })
 
-		_, err := xblAuthenticate(testutil.LogContext(context.Background()), "ms-token")
+		_, err := xblAuthenticate(testutil.LogContext(context.Background()), cfg, "ms-token")
 		if !errors.Is(err, ErrXboxLiveMissingToken) {
 			t.Fatalf("xblAuthenticate() error = %v, want %v", err, ErrXboxLiveMissingToken)
 		}
@@ -272,9 +272,9 @@ func TestMS27to34XstsAuthorize(t *testing.T) {
 			_, _ = w.Write([]byte(`{"Token":"xsts-t","DisplayClaims":{"xui":[{"uhs":"hash1","xid":"xid1","gtg":"Tag"}]}}`))
 		}))
 		defer ts.Close()
-		msSetURL(t, &xstsAuthorizeURL, ts.URL)
+		cfg := msConfig(func(m *config.Microsoft) { m.XstsAuthorizeURL = ts.URL })
 
-		token, uhs, xuid, gamertag, err := xstsAuthorize(testutil.LogContext(context.Background()), "xbl-token", xstsXboxLiveRelyingParty)
+		token, uhs, xuid, gamertag, err := xstsAuthorize(testutil.LogContext(context.Background()), cfg, "xbl-token", XstsXboxLiveRelyingParty)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -288,9 +288,9 @@ func TestMS27to34XstsAuthorize(t *testing.T) {
 			_, _ = w.Write([]byte(`{"Token":"xsts-t","DisplayClaims":{"xui":[{"uhs":"hash1"}]}}`))
 		}))
 		defer ts.Close()
-		msSetURL(t, &xstsAuthorizeURL, ts.URL)
+		cfg := msConfig(func(m *config.Microsoft) { m.XstsAuthorizeURL = ts.URL })
 
-		token, uhs, xuid, gamertag, err := xstsAuthorize(testutil.LogContext(context.Background()), "xbl-token", xstsMinecraftRelyingParty)
+		token, uhs, xuid, gamertag, err := xstsAuthorize(testutil.LogContext(context.Background()), cfg, "xbl-token", XstsMinecraftRelyingParty)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -304,9 +304,9 @@ func TestMS27to34XstsAuthorize(t *testing.T) {
 			_, _ = w.Write([]byte(`{"XErr":2148916233}`))
 		}))
 		defer ts.Close()
-		msSetURL(t, &xstsAuthorizeURL, ts.URL)
+		cfg := msConfig(func(m *config.Microsoft) { m.XstsAuthorizeURL = ts.URL })
 
-		_, _, _, _, err := xstsAuthorize(testutil.LogContext(context.Background()), "xbl-token", xstsXboxLiveRelyingParty)
+		_, _, _, _, err := xstsAuthorize(testutil.LogContext(context.Background()), cfg, "xbl-token", XstsXboxLiveRelyingParty)
 		if err != ErrNoXboxAccount {
 			t.Fatalf("xstsAuthorize() error = %v, want ErrNoXboxAccount", err)
 		}
@@ -317,9 +317,9 @@ func TestMS27to34XstsAuthorize(t *testing.T) {
 			w.WriteHeader(http.StatusInternalServerError)
 		}))
 		defer ts.Close()
-		msSetURL(t, &xstsAuthorizeURL, ts.URL)
+		cfg := msConfig(func(m *config.Microsoft) { m.XstsAuthorizeURL = ts.URL })
 
-		_, _, _, _, err := xstsAuthorize(testutil.LogContext(context.Background()), "xbl-token", xstsXboxLiveRelyingParty)
+		_, _, _, _, err := xstsAuthorize(testutil.LogContext(context.Background()), cfg, "xbl-token", XstsXboxLiveRelyingParty)
 		if !errors.Is(err, ErrXSTSAuthorization) {
 			t.Fatalf("error = %v, want %v", err, ErrXSTSAuthorization)
 		}
@@ -330,9 +330,9 @@ func TestMS27to34XstsAuthorize(t *testing.T) {
 			_, _ = w.Write([]byte(`{not-json`))
 		}))
 		defer ts.Close()
-		msSetURL(t, &xstsAuthorizeURL, ts.URL)
+		cfg := msConfig(func(m *config.Microsoft) { m.XstsAuthorizeURL = ts.URL })
 
-		_, _, _, _, err := xstsAuthorize(testutil.LogContext(context.Background()), "xbl-token", xstsXboxLiveRelyingParty)
+		_, _, _, _, err := xstsAuthorize(testutil.LogContext(context.Background()), cfg, "xbl-token", XstsXboxLiveRelyingParty)
 		if err == nil {
 			t.Fatal("expected a decode error")
 		}
@@ -343,9 +343,9 @@ func TestMS27to34XstsAuthorize(t *testing.T) {
 			_, _ = w.Write([]byte(`{"Token":""}`))
 		}))
 		defer ts.Close()
-		msSetURL(t, &xstsAuthorizeURL, ts.URL)
+		cfg := msConfig(func(m *config.Microsoft) { m.XstsAuthorizeURL = ts.URL })
 
-		_, _, _, _, err := xstsAuthorize(testutil.LogContext(context.Background()), "xbl-token", xstsXboxLiveRelyingParty)
+		_, _, _, _, err := xstsAuthorize(testutil.LogContext(context.Background()), cfg, "xbl-token", XstsXboxLiveRelyingParty)
 		if !errors.Is(err, ErrXSTSMissingTokenOrClaims) {
 			t.Fatalf("xstsAuthorize() error = %v, want %v", err, ErrXSTSMissingTokenOrClaims)
 		}
@@ -356,17 +356,17 @@ func TestMS27to34XstsAuthorize(t *testing.T) {
 			_, _ = w.Write([]byte(`{"Token":"xsts-t","DisplayClaims":{"xui":[{"xid":"xid1","gtg":"Tag"}]}}`))
 		}))
 		defer ts.Close()
-		msSetURL(t, &xstsAuthorizeURL, ts.URL)
+		cfg := msConfig(func(m *config.Microsoft) { m.XstsAuthorizeURL = ts.URL })
 
-		_, _, _, _, err := xstsAuthorize(testutil.LogContext(context.Background()), "xbl-token", xstsXboxLiveRelyingParty)
+		_, _, _, _, err := xstsAuthorize(testutil.LogContext(context.Background()), cfg, "xbl-token", XstsXboxLiveRelyingParty)
 		if !errors.Is(err, ErrXSTSMissingUHS) {
 			t.Fatalf("xstsAuthorize() error = %v, want %v", err, ErrXSTSMissingUHS)
 		}
 	})
 
 	t.Run("MS-34_NetworkError", func(t *testing.T) {
-		msSetURL(t, &xstsAuthorizeURL, "http://127.0.0.1:1")
-		_, _, _, _, err := xstsAuthorize(testutil.LogContext(context.Background()), "xbl-token", xstsXboxLiveRelyingParty)
+		cfg := msConfig(func(m *config.Microsoft) { m.XstsAuthorizeURL = "http://127.0.0.1:1" })
+		_, _, _, _, err := xstsAuthorize(testutil.LogContext(context.Background()), cfg, "xbl-token", XstsXboxLiveRelyingParty)
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -379,9 +379,9 @@ func TestMS35to39MinecraftLoginWithXbox(t *testing.T) {
 			_, _ = w.Write([]byte(`{"access_token":"m"}`))
 		}))
 		defer ts.Close()
-		msSetURL(t, &minecraftLoginURL, ts.URL)
+		cfg := msConfig(func(m *config.Microsoft) { m.MinecraftLoginURL = ts.URL })
 
-		got, err := minecraftLoginWithXbox(testutil.LogContext(context.Background()), "hash1", "xsts-t")
+		got, err := minecraftLoginWithXbox(testutil.LogContext(context.Background()), cfg, "hash1", "xsts-t")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -391,8 +391,8 @@ func TestMS35to39MinecraftLoginWithXbox(t *testing.T) {
 	})
 
 	t.Run("MS-36_NetworkError", func(t *testing.T) {
-		msSetURL(t, &minecraftLoginURL, "http://127.0.0.1:1")
-		_, err := minecraftLoginWithXbox(testutil.LogContext(context.Background()), "hash1", "xsts-t")
+		cfg := msConfig(func(m *config.Microsoft) { m.MinecraftLoginURL = "http://127.0.0.1:1" })
+		_, err := minecraftLoginWithXbox(testutil.LogContext(context.Background()), cfg, "hash1", "xsts-t")
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -404,9 +404,9 @@ func TestMS35to39MinecraftLoginWithXbox(t *testing.T) {
 			_, _ = w.Write([]byte(`forbidden`))
 		}))
 		defer ts.Close()
-		msSetURL(t, &minecraftLoginURL, ts.URL)
+		cfg := msConfig(func(m *config.Microsoft) { m.MinecraftLoginURL = ts.URL })
 
-		_, err := minecraftLoginWithXbox(testutil.LogContext(context.Background()), "hash1", "xsts-t")
+		_, err := minecraftLoginWithXbox(testutil.LogContext(context.Background()), cfg, "hash1", "xsts-t")
 		if !errors.Is(err, ErrMinecraftLoginWithXbox) {
 			t.Fatalf("error = %v, want %v", err, ErrMinecraftLoginWithXbox)
 		}
@@ -417,9 +417,9 @@ func TestMS35to39MinecraftLoginWithXbox(t *testing.T) {
 			_, _ = w.Write([]byte(`{not-json`))
 		}))
 		defer ts.Close()
-		msSetURL(t, &minecraftLoginURL, ts.URL)
+		cfg := msConfig(func(m *config.Microsoft) { m.MinecraftLoginURL = ts.URL })
 
-		_, err := minecraftLoginWithXbox(testutil.LogContext(context.Background()), "hash1", "xsts-t")
+		_, err := minecraftLoginWithXbox(testutil.LogContext(context.Background()), cfg, "hash1", "xsts-t")
 		if err == nil {
 			t.Fatal("expected a decode error")
 		}
@@ -430,9 +430,9 @@ func TestMS35to39MinecraftLoginWithXbox(t *testing.T) {
 			_, _ = w.Write([]byte(`{}`))
 		}))
 		defer ts.Close()
-		msSetURL(t, &minecraftLoginURL, ts.URL)
+		cfg := msConfig(func(m *config.Microsoft) { m.MinecraftLoginURL = ts.URL })
 
-		_, err := minecraftLoginWithXbox(testutil.LogContext(context.Background()), "hash1", "xsts-t")
+		_, err := minecraftLoginWithXbox(testutil.LogContext(context.Background()), cfg, "hash1", "xsts-t")
 		if !errors.Is(err, ErrLoginMissingAccessToken) {
 			t.Fatalf("minecraftLoginWithXbox() error = %v, want %v", err, ErrLoginMissingAccessToken)
 		}
@@ -447,9 +447,9 @@ func TestMS40to46GetMinecraftProfile(t *testing.T) {
 			_, _ = w.Write([]byte(fmt.Sprintf(`{"id":%q,"name":"Steve","skins":[],"capes":[]}`, validID.String())))
 		}))
 		defer ts.Close()
-		msSetURL(t, &minecraftProfileURL, ts.URL)
+		cfg := msConfig(func(m *config.Microsoft) { m.MinecraftProfileURL = ts.URL })
 
-		got, err := getMinecraftProfile(testutil.LogContext(context.Background()), "mc-token")
+		got, err := getMinecraftProfile(testutil.LogContext(context.Background()), cfg, "mc-token")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -463,9 +463,9 @@ func TestMS40to46GetMinecraftProfile(t *testing.T) {
 			w.WriteHeader(http.StatusNotFound)
 		}))
 		defer ts.Close()
-		msSetURL(t, &minecraftProfileURL, ts.URL)
+		cfg := msConfig(func(m *config.Microsoft) { m.MinecraftProfileURL = ts.URL })
 
-		got, err := getMinecraftProfile(testutil.LogContext(context.Background()), "mc-token")
+		got, err := getMinecraftProfile(testutil.LogContext(context.Background()), cfg, "mc-token")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -479,9 +479,9 @@ func TestMS40to46GetMinecraftProfile(t *testing.T) {
 			_, _ = w.Write([]byte(`{"error":"NOT_FOUND"}`))
 		}))
 		defer ts.Close()
-		msSetURL(t, &minecraftProfileURL, ts.URL)
+		cfg := msConfig(func(m *config.Microsoft) { m.MinecraftProfileURL = ts.URL })
 
-		got, err := getMinecraftProfile(testutil.LogContext(context.Background()), "mc-token")
+		got, err := getMinecraftProfile(testutil.LogContext(context.Background()), cfg, "mc-token")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -491,8 +491,8 @@ func TestMS40to46GetMinecraftProfile(t *testing.T) {
 	})
 
 	t.Run("MS-43_NetworkError", func(t *testing.T) {
-		msSetURL(t, &minecraftProfileURL, "http://127.0.0.1:1")
-		_, err := getMinecraftProfile(testutil.LogContext(context.Background()), "mc-token")
+		cfg := msConfig(func(m *config.Microsoft) { m.MinecraftProfileURL = "http://127.0.0.1:1" })
+		_, err := getMinecraftProfile(testutil.LogContext(context.Background()), cfg, "mc-token")
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -503,9 +503,9 @@ func TestMS40to46GetMinecraftProfile(t *testing.T) {
 			w.WriteHeader(http.StatusInternalServerError)
 		}))
 		defer ts.Close()
-		msSetURL(t, &minecraftProfileURL, ts.URL)
+		cfg := msConfig(func(m *config.Microsoft) { m.MinecraftProfileURL = ts.URL })
 
-		_, err := getMinecraftProfile(testutil.LogContext(context.Background()), "mc-token")
+		_, err := getMinecraftProfile(testutil.LogContext(context.Background()), cfg, "mc-token")
 		if !errors.Is(err, ErrMinecraftProfileLookup) {
 			t.Fatalf("error = %v, want %v", err, ErrMinecraftProfileLookup)
 		}
@@ -516,9 +516,9 @@ func TestMS40to46GetMinecraftProfile(t *testing.T) {
 			_, _ = w.Write([]byte(`{not-json`))
 		}))
 		defer ts.Close()
-		msSetURL(t, &minecraftProfileURL, ts.URL)
+		cfg := msConfig(func(m *config.Microsoft) { m.MinecraftProfileURL = ts.URL })
 
-		_, err := getMinecraftProfile(testutil.LogContext(context.Background()), "mc-token")
+		_, err := getMinecraftProfile(testutil.LogContext(context.Background()), cfg, "mc-token")
 		if err == nil {
 			t.Fatal("expected a decode error")
 		}
@@ -529,9 +529,9 @@ func TestMS40to46GetMinecraftProfile(t *testing.T) {
 			_, _ = w.Write([]byte(`{"id":"not-a-uuid","name":"Steve"}`))
 		}))
 		defer ts.Close()
-		msSetURL(t, &minecraftProfileURL, ts.URL)
+		cfg := msConfig(func(m *config.Microsoft) { m.MinecraftProfileURL = ts.URL })
 
-		_, err := getMinecraftProfile(testutil.LogContext(context.Background()), "mc-token")
+		_, err := getMinecraftProfile(testutil.LogContext(context.Background()), cfg, "mc-token")
 		if err == nil {
 			t.Fatal("expected a UUID-parse error")
 		}
@@ -544,9 +544,9 @@ func TestMS47to49AuthenticateXboxLiveIdentity(t *testing.T) {
 			_, _ = w.Write([]byte(`{"Token":"xsts-t","DisplayClaims":{"xui":[{"uhs":"hash1","xid":"xid1","gtg":"Tag"}]}}`))
 		}))
 		defer ts.Close()
-		msSetURL(t, &xstsAuthorizeURL, ts.URL)
+		cfg := msConfig(func(m *config.Microsoft) { m.XstsAuthorizeURL = ts.URL })
 
-		got, err := authenticateXboxLiveIdentity(testutil.LogContext(context.Background()), "xbl-token")
+		got, err := authenticateXboxLiveIdentity(testutil.LogContext(context.Background()), cfg, "xbl-token")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -560,9 +560,9 @@ func TestMS47to49AuthenticateXboxLiveIdentity(t *testing.T) {
 			w.WriteHeader(http.StatusInternalServerError)
 		}))
 		defer ts.Close()
-		msSetURL(t, &xstsAuthorizeURL, ts.URL)
+		cfg := msConfig(func(m *config.Microsoft) { m.XstsAuthorizeURL = ts.URL })
 
-		_, err := authenticateXboxLiveIdentity(testutil.LogContext(context.Background()), "xbl-token")
+		_, err := authenticateXboxLiveIdentity(testutil.LogContext(context.Background()), cfg, "xbl-token")
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -573,9 +573,9 @@ func TestMS47to49AuthenticateXboxLiveIdentity(t *testing.T) {
 			_, _ = w.Write([]byte(`{"Token":"xsts-t","DisplayClaims":{"xui":[{"uhs":"hash1"}]}}`))
 		}))
 		defer ts.Close()
-		msSetURL(t, &xstsAuthorizeURL, ts.URL)
+		cfg := msConfig(func(m *config.Microsoft) { m.XstsAuthorizeURL = ts.URL })
 
-		_, err := authenticateXboxLiveIdentity(testutil.LogContext(context.Background()), "xbl-token")
+		_, err := authenticateXboxLiveIdentity(testutil.LogContext(context.Background()), cfg, "xbl-token")
 		if !errors.Is(err, ErrXSTSMissingXIDOrGTG) {
 			t.Fatalf("authenticateXboxLiveIdentity() error = %v, want %v", err, ErrXSTSMissingXIDOrGTG)
 		}
@@ -592,10 +592,12 @@ func TestMS50to51GetXboxUser(t *testing.T) {
 			_, _ = w.Write([]byte(`{"Token":"xsts-t","DisplayClaims":{"xui":[{"uhs":"hash1","xid":"xid1","gtg":"Tag"}]}}`))
 		}))
 		defer xstsTS.Close()
-		msSetURL(t, &xboxLiveAuthenticateURL, xblTS.URL)
-		msSetURL(t, &xstsAuthorizeURL, xstsTS.URL)
+		cfg := msConfig(func(m *config.Microsoft) {
+			m.XboxLiveAuthenticateURL = xblTS.URL
+			m.XstsAuthorizeURL = xstsTS.URL
+		})
 
-		got, err := GetXboxUser(testutil.LogContext(context.Background()), &OAuthToken{AccessToken: "ms-tok"})
+		got, err := GetXboxUser(testutil.LogContext(context.Background()), cfg, &OAuthToken{AccessToken: "ms-tok"})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -611,10 +613,12 @@ func TestMS50to51GetXboxUser(t *testing.T) {
 			_, _ = w.Write([]byte(`{}`))
 		}))
 		defer xstsTS.Close()
-		msSetURL(t, &xboxLiveAuthenticateURL, "http://127.0.0.1:1")
-		msSetURL(t, &xstsAuthorizeURL, xstsTS.URL)
+		cfg := msConfig(func(m *config.Microsoft) {
+			m.XboxLiveAuthenticateURL = "http://127.0.0.1:1"
+			m.XstsAuthorizeURL = xstsTS.URL
+		})
 
-		_, err := GetXboxUser(testutil.LogContext(context.Background()), &OAuthToken{AccessToken: "ms-tok"})
+		_, err := GetXboxUser(testutil.LogContext(context.Background()), cfg, &OAuthToken{AccessToken: "ms-tok"})
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -626,6 +630,7 @@ func TestMS50to51GetXboxUser(t *testing.T) {
 
 type msFullChainServers struct {
 	xbl, xsts, mcLogin, mcProfile *httptest.Server
+	cfg                           config.Microsoft
 }
 
 func (s *msFullChainServers) close() {
@@ -645,7 +650,7 @@ func newMSFullChain(t *testing.T, javaOwned bool, mcLoginFails, mcProfileFails, 
 			RelyingParty string `json:"RelyingParty"`
 		}
 		_ = readJSONBody(r, &body)
-		if body.RelyingParty == xstsXboxLiveRelyingParty {
+		if body.RelyingParty == XstsXboxLiveRelyingParty {
 			if xstsXboxLiveFails {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
@@ -674,20 +679,23 @@ func newMSFullChain(t *testing.T, javaOwned bool, mcLoginFails, mcProfileFails, 
 		_, _ = w.Write([]byte(fmt.Sprintf(`{"id":%q,"name":"Steve","skins":[],"capes":[]}`, uuid.New().String())))
 	}))
 
-	msSetURL(t, &xboxLiveAuthenticateURL, xbl.URL)
-	msSetURL(t, &xstsAuthorizeURL, xsts.URL)
-	msSetURL(t, &minecraftLoginURL, mcLogin.URL)
-	msSetURL(t, &minecraftProfileURL, mcProfile.URL)
+	cfg := msConfig(func(m *config.Microsoft) {
+		m.XboxLiveAuthenticateURL = xbl.URL
+		m.XstsAuthorizeURL = xsts.URL
+		m.MinecraftLoginURL = mcLogin.URL
+		m.MinecraftProfileURL = mcProfile.URL
+	})
 
-	return &msFullChainServers{xbl: xbl, xsts: xsts, mcLogin: mcLogin, mcProfile: mcProfile}
+	return &msFullChainServers{xbl: xbl, xsts: xsts, mcLogin: mcLogin, mcProfile: mcProfile, cfg: cfg}
 }
 
 func TestMS52to58GetXboxAndMinecraftUser(t *testing.T) {
 	t.Run("MS-52_FullSuccessJavaOwned", func(t *testing.T) {
 		s := newMSFullChain(t, true, false, false, false)
 		defer s.close()
+		cfg := s.cfg
 
-		xbox, java, err := GetXboxAndMinecraftUser(testutil.LogContext(context.Background()), &OAuthToken{AccessToken: "tok"})
+		xbox, java, err := GetXboxAndMinecraftUser(testutil.LogContext(context.Background()), cfg, &OAuthToken{AccessToken: "tok"})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -702,8 +710,9 @@ func TestMS52to58GetXboxAndMinecraftUser(t *testing.T) {
 	t.Run("MS-53_FullSuccessJavaNotOwned", func(t *testing.T) {
 		s := newMSFullChain(t, false, false, false, false)
 		defer s.close()
+		cfg := s.cfg
 
-		xbox, java, err := GetXboxAndMinecraftUser(testutil.LogContext(context.Background()), &OAuthToken{AccessToken: "tok"})
+		xbox, java, err := GetXboxAndMinecraftUser(testutil.LogContext(context.Background()), cfg, &OAuthToken{AccessToken: "tok"})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -718,9 +727,10 @@ func TestMS52to58GetXboxAndMinecraftUser(t *testing.T) {
 	t.Run("MS-54_XblAuthenticateFails", func(t *testing.T) {
 		s := newMSFullChain(t, true, false, false, false)
 		defer s.close()
-		msSetURL(t, &xboxLiveAuthenticateURL, "http://127.0.0.1:1")
+		cfg := s.cfg
+		cfg.XboxLiveAuthenticateURL = "http://127.0.0.1:1"
 
-		xbox, java, err := GetXboxAndMinecraftUser(testutil.LogContext(context.Background()), &OAuthToken{AccessToken: "tok"})
+		xbox, java, err := GetXboxAndMinecraftUser(testutil.LogContext(context.Background()), cfg, &OAuthToken{AccessToken: "tok"})
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -738,10 +748,12 @@ func TestMS52to58GetXboxAndMinecraftUser(t *testing.T) {
 			w.WriteHeader(http.StatusInternalServerError)
 		}))
 		defer xsts.Close()
-		msSetURL(t, &xboxLiveAuthenticateURL, xbl.URL)
-		msSetURL(t, &xstsAuthorizeURL, xsts.URL)
+		cfg := msConfig(func(m *config.Microsoft) {
+			m.XboxLiveAuthenticateURL = xbl.URL
+			m.XstsAuthorizeURL = xsts.URL
+		})
 
-		xbox, java, err := GetXboxAndMinecraftUser(testutil.LogContext(context.Background()), &OAuthToken{AccessToken: "tok"})
+		xbox, java, err := GetXboxAndMinecraftUser(testutil.LogContext(context.Background()), cfg, &OAuthToken{AccessToken: "tok"})
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -753,8 +765,9 @@ func TestMS52to58GetXboxAndMinecraftUser(t *testing.T) {
 	t.Run("MS-56_MinecraftLoginFailsXboxStillResolves", func(t *testing.T) {
 		s := newMSFullChain(t, true, true, false, false)
 		defer s.close()
+		cfg := s.cfg
 
-		xbox, java, err := GetXboxAndMinecraftUser(testutil.LogContext(context.Background()), &OAuthToken{AccessToken: "tok"})
+		xbox, java, err := GetXboxAndMinecraftUser(testutil.LogContext(context.Background()), cfg, &OAuthToken{AccessToken: "tok"})
 		if err == nil {
 			t.Fatal("expected a minecraft-login error")
 		}
@@ -769,8 +782,9 @@ func TestMS52to58GetXboxAndMinecraftUser(t *testing.T) {
 	t.Run("MS-57_MinecraftLoginFailsAndXboxLiveAlsoFails", func(t *testing.T) {
 		s := newMSFullChain(t, true, true, false, true)
 		defer s.close()
+		cfg := s.cfg
 
-		xbox, java, err := GetXboxAndMinecraftUser(testutil.LogContext(context.Background()), &OAuthToken{AccessToken: "tok"})
+		xbox, java, err := GetXboxAndMinecraftUser(testutil.LogContext(context.Background()), cfg, &OAuthToken{AccessToken: "tok"})
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -782,8 +796,9 @@ func TestMS52to58GetXboxAndMinecraftUser(t *testing.T) {
 	t.Run("MS-58_MinecraftProfileFailsXboxStillResolves", func(t *testing.T) {
 		s := newMSFullChain(t, true, false, true, false)
 		defer s.close()
+		cfg := s.cfg
 
-		xbox, java, err := GetXboxAndMinecraftUser(testutil.LogContext(context.Background()), &OAuthToken{AccessToken: "tok"})
+		xbox, java, err := GetXboxAndMinecraftUser(testutil.LogContext(context.Background()), cfg, &OAuthToken{AccessToken: "tok"})
 		if err == nil {
 			t.Fatal("expected a minecraft-profile error")
 		}
@@ -798,6 +813,13 @@ func TestMS52to58GetXboxAndMinecraftUser(t *testing.T) {
 
 func TestMS59to63RequestContextReachesRequest(t *testing.T) {
 	ctx := context.WithValue(testutil.LogContext(context.Background()), reqctx.UserIDKey, "u1")
+	cfg := msConfig(func(m *config.Microsoft) {
+		m.MicrosoftUserInfoURL = "http://ms.test/userinfo"
+		m.XboxLiveAuthenticateURL = "http://ms.test/xbl"
+		m.XstsAuthorizeURL = "http://ms.test/xsts"
+		m.MinecraftLoginURL = "http://ms.test/mclogin"
+		m.MinecraftProfileURL = "http://ms.test/mcprofile"
+	})
 	var got any
 	swapDefaultTransport(t, auRoundTripperFunc(func(r *http.Request) (*http.Response, error) {
 		got = r.Context().Value(reqctx.UserIDKey)
@@ -809,23 +831,23 @@ func TestMS59to63RequestContextReachesRequest(t *testing.T) {
 		call func() error
 	}{
 		{"MS-59_GetMicrosoftUser_CtxReachesRequest", func() error {
-			_, err := GetMicrosoftUser(ctx, &OAuthToken{AccessToken: "t"})
+			_, err := GetMicrosoftUser(ctx, cfg, &OAuthToken{AccessToken: "t"})
 			return err
 		}},
 		{"MS-60_xblAuthenticate_CtxReachesRequest", func() error {
-			_, err := xblAuthenticate(ctx, "t")
+			_, err := xblAuthenticate(ctx, cfg, "t")
 			return err
 		}},
 		{"MS-61_xstsAuthorize_CtxReachesRequest", func() error {
-			_, _, _, _, err := xstsAuthorize(ctx, "xbl", xstsMinecraftRelyingParty)
+			_, _, _, _, err := xstsAuthorize(ctx, cfg, "xbl", XstsMinecraftRelyingParty)
 			return err
 		}},
 		{"MS-62_minecraftLoginWithXbox_CtxReachesRequest", func() error {
-			_, err := minecraftLoginWithXbox(ctx, "uhs", "xsts")
+			_, err := minecraftLoginWithXbox(ctx, cfg, "uhs", "xsts")
 			return err
 		}},
 		{"MS-63_getMinecraftProfile_CtxReachesRequest", func() error {
-			_, err := getMinecraftProfile(ctx, "mc")
+			_, err := getMinecraftProfile(ctx, cfg, "mc")
 			return err
 		}},
 	}

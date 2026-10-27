@@ -12,6 +12,7 @@ import (
 	"testing/iotest"
 	"time"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/mcstatus"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
@@ -64,7 +65,7 @@ func closedTCPPort(t *testing.T) int {
 }
 
 func TestQueryGameQ(t *testing.T) {
-	svc := NewService()
+	svc := NewService(testutil.NewConfig().GameServerStatus, mcstatus.NewService())
 
 	t.Run("GSV-02_HappyPath_DecodesFirstMapEntry", func(t *testing.T) {
 		testutil.SwapTransport(t, &fakeRoundTripper{resp: testutil.FakeResponse(http.StatusOK, `{"srv":{"gq_hostname":"host1","gq_port_query":1234,"gq_name":"Name1","gq_mapname":"map1","gq_maxplayers":10,"gq_numplayers":2,"gq_online":true,"players":["p1","p2"]}}`)})
@@ -159,7 +160,7 @@ func TestQueryGameQ(t *testing.T) {
 }
 
 func TestQueryGameDig(t *testing.T) {
-	svc := NewService()
+	svc := NewService(testutil.NewConfig().GameServerStatus, mcstatus.NewService())
 
 	t.Run("GSV-07_HappyPath_DecodesBody", func(t *testing.T) {
 		testutil.SwapTransport(t, &fakeRoundTripper{resp: testutil.FakeResponse(http.StatusOK, `{"name":"n","map":"m","numplayers":2,"maxplayers":10,"connect":"1.2.3.4:25566","queryPort":25566,"players":[{"name":"p1"},{"name":"p2"}]}`)})
@@ -270,7 +271,7 @@ func TestDetermineOrVerifyQueryType(t *testing.T) {
 }
 
 func TestQueryGameServer(t *testing.T) {
-	svc := NewService()
+	svc := NewService(testutil.NewConfig().GameServerStatus, mcstatus.NewService())
 
 	t.Run("GSV-21_ErrorPath_UnsupportedGame", func(t *testing.T) {
 		status, err := svc.QueryGameServer(testutil.LogContext(context.Background()), "not-a-real-game-xyz", "1.2.3.4", 25565, QueryTypeUnknown)
@@ -424,7 +425,7 @@ func (b *blockingRoundTripper) RoundTrip(req *http.Request) (*http.Response, err
 }
 
 func TestQueryCancellation(t *testing.T) {
-	svc := NewService()
+	svc := NewService(testutil.NewConfig().GameServerStatus, mcstatus.NewService())
 
 	for _, tc := range []struct {
 		id      string

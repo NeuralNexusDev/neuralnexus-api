@@ -92,11 +92,20 @@ func (s *stubSessionService) DeleteSession(_ context.Context, id string) error {
 	return s.deleteSessionErr
 }
 
-func (s *stubSessionService) CreateJWT(session *session.Session) (string, error) {
+func (s *stubSessionService) CreateJWT(_ context.Context, session *session.Session) (string, error) {
 	if s.createJWT != nil {
 		return s.createJWT(session)
 	}
 	return "", nil
+}
+
+func (s *stubSessionService) SetSessionCookie(ctx context.Context, w http.ResponseWriter, sess *session.Session) error {
+	jwt, err := s.CreateJWT(ctx, sess)
+	if err != nil {
+		return err
+	}
+	http.SetCookie(w, &http.Cookie{Name: session.CookieName, Value: jwt, Path: "/"})
+	return nil
 }
 
 func (s *stubSessionService) ReadJWT(context.Context, string) (*session.Session, error) {
@@ -104,7 +113,7 @@ func (s *stubSessionService) ReadJWT(context.Context, string) (*session.Session,
 }
 
 func TestAU01LoginHandlerUsernameHappyPath(t *testing.T) {
-	account, err := NewAccount("testuser", "test@example.com", "correct-password")
+	account, err := NewAccount(testutil.NewConfig().Auth.Account.Pepper, "testuser", "test@example.com", "correct-password")
 	if err != nil {
 		t.Fatalf("failed to build account: %v", err)
 	}
@@ -114,7 +123,7 @@ func TestAU01LoginHandlerUsernameHappyPath(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("ACH-01_LoginUsernameHappyPath", func(t *testing.T) {
-		LoginHandler(as, ss)(w, r)
+		LoginHandler(testutil.NewConfig().Auth.Account, as, ss)(w, r)
 
 		if w.Code != http.StatusNoContent {
 			t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
@@ -130,7 +139,7 @@ func TestAU01LoginHandlerUsernameHappyPath(t *testing.T) {
 }
 
 func TestAU02LoginHandlerEmailHappyPath(t *testing.T) {
-	account, err := NewAccount("testuser", "test@example.com", "correct-password")
+	account, err := NewAccount(testutil.NewConfig().Auth.Account.Pepper, "testuser", "test@example.com", "correct-password")
 	if err != nil {
 		t.Fatalf("failed to build account: %v", err)
 	}
@@ -140,7 +149,7 @@ func TestAU02LoginHandlerEmailHappyPath(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("ACH-02_LoginEmailHappyPath", func(t *testing.T) {
-		LoginHandler(as, ss)(w, r)
+		LoginHandler(testutil.NewConfig().Auth.Account, as, ss)(w, r)
 
 		if w.Code != http.StatusNoContent {
 			t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
@@ -158,7 +167,7 @@ func TestAU03LoginHandlerMalformedBody(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("ACH-03_LoginMalformedBody", func(t *testing.T) {
-		LoginHandler(as, ss)(w, r)
+		LoginHandler(testutil.NewConfig().Auth.Account, as, ss)(w, r)
 
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
@@ -174,7 +183,7 @@ func TestAU04LoginHandlerAccountLookupFails(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("ACH-04_LoginAccountLookupFails", func(t *testing.T) {
-		LoginHandler(as, ss)(w, r)
+		LoginHandler(testutil.NewConfig().Auth.Account, as, ss)(w, r)
 
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
@@ -187,7 +196,7 @@ func TestAU04LoginHandlerAccountLookupFails(t *testing.T) {
 }
 
 func TestAU05LoginHandlerWrongPassword(t *testing.T) {
-	account, err := NewAccount("testuser", "test@example.com", "correct-password")
+	account, err := NewAccount(testutil.NewConfig().Auth.Account.Pepper, "testuser", "test@example.com", "correct-password")
 	if err != nil {
 		t.Fatalf("failed to build account: %v", err)
 	}
@@ -197,7 +206,7 @@ func TestAU05LoginHandlerWrongPassword(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("ACH-05_LoginWrongPassword", func(t *testing.T) {
-		LoginHandler(as, ss)(w, r)
+		LoginHandler(testutil.NewConfig().Auth.Account, as, ss)(w, r)
 
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
@@ -210,7 +219,7 @@ func TestAU05LoginHandlerWrongPassword(t *testing.T) {
 }
 
 func TestAU06LoginHandlerPasswordAuthCheckErrors(t *testing.T) {
-	account, err := NewAccount("testuser", "test@example.com", "correct-password")
+	account, err := NewAccount(testutil.NewConfig().Auth.Account.Pepper, "testuser", "test@example.com", "correct-password")
 	if err != nil {
 		t.Fatalf("failed to build account: %v", err)
 	}
@@ -220,7 +229,7 @@ func TestAU06LoginHandlerPasswordAuthCheckErrors(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("ACH-06_LoginPasswordAuthCheckErrors", func(t *testing.T) {
-		LoginHandler(as, ss)(w, r)
+		LoginHandler(testutil.NewConfig().Auth.Account, as, ss)(w, r)
 
 		if w.Code != http.StatusInternalServerError {
 			t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
@@ -230,7 +239,7 @@ func TestAU06LoginHandlerPasswordAuthCheckErrors(t *testing.T) {
 }
 
 func TestAU07LoginHandlerPasswordAuthDisabled(t *testing.T) {
-	account, err := NewAccount("testuser", "test@example.com", "correct-password")
+	account, err := NewAccount(testutil.NewConfig().Auth.Account.Pepper, "testuser", "test@example.com", "correct-password")
 	if err != nil {
 		t.Fatalf("failed to build account: %v", err)
 	}
@@ -240,7 +249,7 @@ func TestAU07LoginHandlerPasswordAuthDisabled(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("ACH-07_LoginPasswordAuthDisabled", func(t *testing.T) {
-		LoginHandler(as, ss)(w, r)
+		LoginHandler(testutil.NewConfig().Auth.Account, as, ss)(w, r)
 
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
@@ -253,7 +262,7 @@ func TestAU07LoginHandlerPasswordAuthDisabled(t *testing.T) {
 }
 
 func TestAU08LoginHandlerAddSessionFails(t *testing.T) {
-	account, err := NewAccount("testuser", "test@example.com", "correct-password")
+	account, err := NewAccount(testutil.NewConfig().Auth.Account.Pepper, "testuser", "test@example.com", "correct-password")
 	if err != nil {
 		t.Fatalf("failed to build account: %v", err)
 	}
@@ -263,7 +272,7 @@ func TestAU08LoginHandlerAddSessionFails(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("ACH-08_LoginAddSessionFails", func(t *testing.T) {
-		LoginHandler(as, ss)(w, r)
+		LoginHandler(testutil.NewConfig().Auth.Account, as, ss)(w, r)
 
 		if w.Code != http.StatusInternalServerError {
 			t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
@@ -276,7 +285,7 @@ func TestAU08LoginHandlerAddSessionFails(t *testing.T) {
 }
 
 func TestAU09LoginHandlerCreateJWTFails(t *testing.T) {
-	account, err := NewAccount("testuser", "test@example.com", "correct-password")
+	account, err := NewAccount(testutil.NewConfig().Auth.Account.Pepper, "testuser", "test@example.com", "correct-password")
 	if err != nil {
 		t.Fatalf("failed to build account: %v", err)
 	}
@@ -286,7 +295,7 @@ func TestAU09LoginHandlerCreateJWTFails(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("ACH-09_LoginCreateJWTFails", func(t *testing.T) {
-		LoginHandler(as, ss)(w, r)
+		LoginHandler(testutil.NewConfig().Auth.Account, as, ss)(w, r)
 
 		if w.Code != http.StatusInternalServerError {
 			t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
@@ -299,8 +308,8 @@ func TestAU09LoginHandlerCreateJWTFails(t *testing.T) {
 }
 
 func TestAU10LogoutHandlerHappyPath(t *testing.T) {
-	session := &session.Session{ID: "s1", UserID: "u1"}
-	ctx := context.WithValue(testutil.LogContext(context.Background()), reqctx.SessionKey, session)
+	sess := &session.Session{ID: "s1", UserID: "u1"}
+	ctx := context.WithValue(testutil.LogContext(context.Background()), reqctx.SessionKey, sess)
 	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 	ss := &stubSessionService{}
@@ -347,8 +356,8 @@ func TestAU11LogoutHandlerNilSessionInContext(t *testing.T) {
 }
 
 func TestAU12LogoutHandlerDeleteSessionFails(t *testing.T) {
-	session := &session.Session{ID: "s1", UserID: "u1"}
-	ctx := context.WithValue(testutil.LogContext(context.Background()), reqctx.SessionKey, session)
+	sess := &session.Session{ID: "s1", UserID: "u1"}
+	ctx := context.WithValue(testutil.LogContext(context.Background()), reqctx.SessionKey, sess)
 	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 	ss := &stubSessionService{deleteSessionErr: testutil.ErrDBDown}
@@ -368,7 +377,7 @@ func TestAU12LogoutHandlerDeleteSessionFails(t *testing.T) {
 
 func TestAU58LoginHandlerNewSessionFails(t *testing.T) {
 	account := &Account{UserID: "u1", Username: "testuser"}
-	if err := account.HashPassword("correct-password"); err != nil {
+	if err := account.HashPassword(testutil.NewConfig().Auth.Account.Pepper, "correct-password"); err != nil {
 		t.Fatalf("failed to hash password: %v", err)
 	}
 	as := &stubService{account: account, newSessionErr: testutil.ErrBoom}
@@ -377,7 +386,7 @@ func TestAU58LoginHandlerNewSessionFails(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("ACH-58_LoginNewSessionFails", func(t *testing.T) {
-		LoginHandler(as, ss)(w, r)
+		LoginHandler(testutil.NewConfig().Auth.Account, as, ss)(w, r)
 
 		if w.Code != http.StatusInternalServerError {
 			t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
@@ -396,7 +405,7 @@ func TestAU59LoginHandlerAccountLookupInfraFails(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("ACH-59_LoginAccountLookupInfraFails", func(t *testing.T) {
-		LoginHandler(as, ss)(w, r)
+		LoginHandler(testutil.NewConfig().Auth.Account, as, ss)(w, r)
 
 		if w.Code != http.StatusInternalServerError {
 			t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())

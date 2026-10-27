@@ -1,17 +1,14 @@
 package account
 
 import (
-	"bytes"
-	"errors"
-	"os"
-	"os/exec"
-	"strings"
 	"testing"
+
+	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
 func TestTY01to02NewAccount(t *testing.T) {
 	t.Run("ACT-01_Success", func(t *testing.T) {
-		a, err := NewAccount("alice", "a@b.com", "hunter2")
+		a, err := NewAccount(testutil.NewConfig().Auth.Account.Pepper, "alice", "a@b.com", "hunter2")
 		if err != nil {
 			t.Fatalf("NewAccount() unexpected error: %v", err)
 		}
@@ -30,7 +27,7 @@ func TestTY01to02NewAccount(t *testing.T) {
 	})
 
 	t.Run("ACT-02_EmptyEmailStaysNil", func(t *testing.T) {
-		a, err := NewAccount("alice", "", "hunter2")
+		a, err := NewAccount(testutil.NewConfig().Auth.Account.Pepper, "alice", "", "hunter2")
 		if err != nil {
 			t.Fatalf("NewAccount() unexpected error: %v", err)
 		}
@@ -108,7 +105,7 @@ func TestTY07to08IDKeyWithSecret(t *testing.T) {
 func TestTY09to10HashPassword(t *testing.T) {
 	t.Run("ACT-09_Success", func(t *testing.T) {
 		u := &Account{}
-		if err := u.HashPassword("hunter2"); err != nil {
+		if err := u.HashPassword(testutil.NewConfig().Auth.Account.Pepper, "hunter2"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if len(u.HashedSecret) != 32 {
@@ -121,10 +118,10 @@ func TestTY09to10HashPassword(t *testing.T) {
 
 	t.Run("ACT-10_DifferentCallsUseDifferentSalts", func(t *testing.T) {
 		u1, u2 := &Account{}, &Account{}
-		if err := u1.HashPassword("hunter2"); err != nil {
+		if err := u1.HashPassword(testutil.NewConfig().Auth.Account.Pepper, "hunter2"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if err := u2.HashPassword("hunter2"); err != nil {
+		if err := u2.HashPassword(testutil.NewConfig().Auth.Account.Pepper, "hunter2"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if string(u1.Salt) == string(u2.Salt) {
@@ -139,27 +136,27 @@ func TestTY09to10HashPassword(t *testing.T) {
 func TestTY12to14ValidateUser(t *testing.T) {
 	t.Run("ACT-12_CorrectPassword", func(t *testing.T) {
 		u := &Account{}
-		if err := u.HashPassword("correct-horse"); err != nil {
+		if err := u.HashPassword(testutil.NewConfig().Auth.Account.Pepper, "correct-horse"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if !u.ValidateUser("correct-horse") {
+		if !u.ValidateUser(testutil.NewConfig().Auth.Account.Pepper, "correct-horse") {
 			t.Error("ValidateUser() = false for the correct password, want true")
 		}
 	})
 
 	t.Run("ACT-13_WrongPassword", func(t *testing.T) {
 		u := &Account{}
-		if err := u.HashPassword("correct-horse"); err != nil {
+		if err := u.HashPassword(testutil.NewConfig().Auth.Account.Pepper, "correct-horse"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if u.ValidateUser("wrong-password") {
+		if u.ValidateUser(testutil.NewConfig().Auth.Account.Pepper, "wrong-password") {
 			t.Error("ValidateUser() = true for an incorrect password, want false")
 		}
 	})
 
 	t.Run("ACT-14_NeverHashedDoesNotPanic", func(t *testing.T) {
 		u := &Account{}
-		if u.ValidateUser("anything") {
+		if u.ValidateUser(testutil.NewConfig().Auth.Account.Pepper, "anything") {
 			t.Error("ValidateUser() = true for an account with no password set, want false")
 		}
 	})
@@ -167,7 +164,7 @@ func TestTY12to14ValidateUser(t *testing.T) {
 
 func TestTY15DummyValidateUser(t *testing.T) {
 	t.Run("ACT-15_DoesNotPanic", func(t *testing.T) {
-		DummyValidateUser("whatever")
+		DummyValidateUser(testutil.NewConfig().Auth.Account.Pepper, "whatever")
 	})
 }
 
@@ -221,29 +218,6 @@ func TestTY22DefaultAccountSettings(t *testing.T) {
 		want := &AccountSettings{UserID: "u1", PasswordAuthEnabled: true}
 		if got.UserID != want.UserID || got.PasswordAuthEnabled != want.PasswordAuthEnabled {
 			t.Errorf("DefaultAccountSettings() = %+v, want %+v", got, want)
-		}
-	})
-}
-
-func TestTY27to28InitTypesGo(t *testing.T) {
-	t.Run("ACT-27_PackageLoadedUnderRequiredEnv", func(t *testing.T) {
-		if len(pepper) == 0 {
-			t.Fatal("pepper is empty; init() should already have log.Fatal'd if so, so this file's other tests couldn't be running")
-		}
-	})
-
-	t.Run("ACT-28_MissingPepperFatals", func(t *testing.T) {
-		cmd := exec.Command(os.Args[0], "-test.run=^$")
-		cmd.Env = append(os.Environ(), "PEPPER=")
-		var stderr bytes.Buffer
-		cmd.Stderr = &stderr
-		err := cmd.Run()
-		var exitErr *exec.ExitError
-		if !errors.As(err, &exitErr) || exitErr.Success() {
-			t.Fatalf("re-exec with PEPPER unset: got err=%v, want a non-zero exit from init()'s log.Fatal; stderr:\n%s", err, stderr.String())
-		}
-		if !strings.Contains(stderr.String(), msgPepperUnset) {
-			t.Errorf("subprocess stderr = %q, want it to contain init()'s PEPPER message", stderr.String())
 		}
 	})
 }

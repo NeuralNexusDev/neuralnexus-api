@@ -13,9 +13,11 @@ import (
 	"time"
 
 	"github.com/goccy/go-json"
+	"golang.org/x/oauth2"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
@@ -145,11 +147,20 @@ func (s *stubSessionService) DeleteSession(_ context.Context, id string) error {
 	return s.deleteSessionErr
 }
 
-func (s *stubSessionService) CreateJWT(session *session.Session) (string, error) {
+func (s *stubSessionService) CreateJWT(_ context.Context, sess *session.Session) (string, error) {
 	if s.createJWT != nil {
-		return s.createJWT(session)
+		return s.createJWT(sess)
 	}
 	return "", nil
+}
+
+func (s *stubSessionService) SetSessionCookie(ctx context.Context, w http.ResponseWriter, sess *session.Session) error {
+	token, err := s.CreateJWT(ctx, sess)
+	if err != nil {
+		return err
+	}
+	http.SetCookie(w, &http.Cookie{Name: session.CookieName, Value: token})
+	return nil
 }
 
 func (s *stubSessionService) ReadJWT(context.Context, string) (*session.Session, error) {
@@ -193,9 +204,9 @@ func TestAU13OAuthHandlerMissingCode(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("AU-13_OAuthMissingCode", func(t *testing.T) {
-		OAuthHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{})(w, r)
+		OAuthHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{}, auSiteURL)(w, r)
 
-		requireProblemRedirect(t, w, session.NN_SITE_URL, http.StatusBadRequest, msgInvalidRequest)
+		requireProblemRedirect(t, w, auSiteURL, http.StatusBadRequest, msgInvalidRequest)
 	})
 }
 
@@ -204,9 +215,9 @@ func TestAU14OAuthHandlerMissingState(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("AU-14_OAuthMissingState", func(t *testing.T) {
-		OAuthHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{})(w, r)
+		OAuthHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{}, auSiteURL)(w, r)
 
-		requireProblemRedirect(t, w, session.NN_SITE_URL, http.StatusBadRequest, msgInvalidRequest)
+		requireProblemRedirect(t, w, auSiteURL, http.StatusBadRequest, msgInvalidRequest)
 	})
 }
 
@@ -218,7 +229,7 @@ func TestAU15OAuthHandlerLinkModeNoSession(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("AU-15_OAuthLinkModeNoSession", func(t *testing.T) {
-		OAuthHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{})(w, r)
+		OAuthHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{}, auSiteURL)(w, r)
 
 		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, msgLoginRequiredToLink)
 	})
@@ -259,11 +270,24 @@ func swapDefaultTransport(t *testing.T, rt http.RoundTripper) {
 	t.Cleanup(func() { http.DefaultTransport = orig })
 }
 
-func swapSteamAPIKey(t *testing.T, value string) {
-	t.Helper()
-	original := STEAM_API_KEY
-	STEAM_API_KEY = value
-	t.Cleanup(func() { STEAM_API_KEY = original })
+const auSiteURL = "https://neuralnexus.test"
+
+func auConfig() *config.Config {
+	return testutil.NewConfig(func(c *config.Config) {
+		c.Discord.OAuth2Config = &oauth2.Config{Endpoint: oauth2.Endpoint{TokenURL: "https://discord.com/api/oauth2/token"}}
+		c.Microsoft = config.Microsoft{
+			OAuth2Config:            &oauth2.Config{Endpoint: oauth2.Endpoint{TokenURL: "https://login.microsoftonline.com/consumers/oauth2/v2.0/token"}},
+			XboxLiveAuthenticateURL: "https://user.auth.xboxlive.com/user/authenticate",
+			XstsAuthorizeURL:        "https://xsts.auth.xboxlive.com/xsts/authorize",
+			MinecraftLoginURL:       "https://api.minecraftservices.com/authentication/login_with_xbox",
+			MinecraftProfileURL:     "https://api.minecraftservices.com/minecraft/profile",
+		}
+		c.Steam = config.Steam{
+			APIKey:           "test-steam-api-key",
+			OpenIDLoginURL:   "https://steamcommunity.com/openid/login",
+			PlayerSummaryURL: "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/",
+		}
+	})
 }
 
 func TestAU50OAuthHandlerLoginHappyPath(t *testing.T) {
@@ -288,7 +312,7 @@ func TestAU50OAuthHandlerLoginHappyPath(t *testing.T) {
 	ss := &stubSessionService{createJWT: func(*session.Session) (string, error) { return "test-jwt", nil }}
 
 	t.Run("AU-50_OAuthHandlerLoginHappyPath", func(t *testing.T) {
-		OAuthHandler(as, las, ss)(w, r)
+		OAuthHandler(auConfig(), as, las, ss, auSiteURL)(w, r)
 
 		if w.Code != http.StatusSeeOther {
 			t.Fatalf("expected 303, got %d: %s", w.Code, w.Body.String())
@@ -304,7 +328,6 @@ func TestAU50OAuthHandlerLoginHappyPath(t *testing.T) {
 }
 
 func TestAU51OpenIDHandlerLoginHappyPath(t *testing.T) {
-	swapSteamAPIKey(t, "test-steam-api-key")
 	swapDefaultTransport(t, auRoundTripperFunc(func(req *http.Request) (*http.Response, error) {
 		switch {
 		case req.Method == http.MethodPost && req.URL.Host == "steamcommunity.com" && req.URL.Path == "/openid/login":
@@ -336,7 +359,7 @@ func TestAU51OpenIDHandlerLoginHappyPath(t *testing.T) {
 	ss := &stubSessionService{createJWT: func(*session.Session) (string, error) { return "test-jwt", nil }}
 
 	t.Run("AU-51_OpenIDHandlerLoginHappyPath", func(t *testing.T) {
-		OpenIDHandler(as, las, ss)(w, r)
+		OpenIDHandler(auConfig().Steam, as, las, ss, auSiteURL)(w, r)
 
 		if w.Code != http.StatusSeeOther {
 			t.Fatalf("expected 303, got %d: %s", w.Code, w.Body.String())
@@ -381,7 +404,6 @@ func auSteamTransport(t *testing.T, checkStatus, summaryStatus int) {
 
 func auSteamTransportBody(t *testing.T, checkStatus, summaryStatus int, summaryBody string) {
 	t.Helper()
-	swapSteamAPIKey(t, "test-steam-api-key")
 	swapDefaultTransport(t, auRoundTripperFunc(func(req *http.Request) (*http.Response, error) {
 		switch {
 		case req.Method == http.MethodPost && req.URL.Host == "steamcommunity.com" && req.URL.Path == "/openid/login":
@@ -422,7 +444,7 @@ func TestAU52to57OAuthAndOpenIDFailuresHideCause(t *testing.T) {
 		w := httptest.NewRecorder()
 		ss := &stubSessionService{createJWT: okJWT, addSessionErr: testutil.ErrDBDown}
 
-		OAuthHandler(&stubAccountService{}, &stubLinkAccountStore{}, ss)(w, auOAuthRequest(t, oauthState))
+		OAuthHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, ss, auSiteURL)(w, auOAuthRequest(t, oauthState))
 
 		requireProblemRedirect(t, w, oauthState.RedirectURI, http.StatusInternalServerError, msgAuthenticationFailed)
 	})
@@ -432,7 +454,7 @@ func TestAU52to57OAuthAndOpenIDFailuresHideCause(t *testing.T) {
 		w := httptest.NewRecorder()
 		ss := &stubSessionService{createJWT: failJWT}
 
-		OAuthHandler(&stubAccountService{}, &stubLinkAccountStore{}, ss)(w, auOAuthRequest(t, oauthState))
+		OAuthHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, ss, auSiteURL)(w, auOAuthRequest(t, oauthState))
 
 		requireProblemRedirect(t, w, oauthState.RedirectURI, http.StatusInternalServerError, msgAuthenticationFailed)
 	})
@@ -442,7 +464,7 @@ func TestAU52to57OAuthAndOpenIDFailuresHideCause(t *testing.T) {
 		w := httptest.NewRecorder()
 		ss := &stubSessionService{createJWT: okJWT}
 
-		OpenIDHandler(&stubAccountService{}, &stubLinkAccountStore{}, ss)(w, auOpenIDRequest(t, steamState))
+		OpenIDHandler(auConfig().Steam, &stubAccountService{}, &stubLinkAccountStore{}, ss, auSiteURL)(w, auOpenIDRequest(t, steamState))
 
 		requireProblemRedirect(t, w, steamState.RedirectURI, http.StatusInternalServerError, msgAuthenticationFailed)
 	})
@@ -452,7 +474,7 @@ func TestAU52to57OAuthAndOpenIDFailuresHideCause(t *testing.T) {
 		w := httptest.NewRecorder()
 		ss := &stubSessionService{createJWT: okJWT}
 
-		OpenIDHandler(&stubAccountService{}, &stubLinkAccountStore{}, ss)(w, auOpenIDRequest(t, steamState))
+		OpenIDHandler(auConfig().Steam, &stubAccountService{}, &stubLinkAccountStore{}, ss, auSiteURL)(w, auOpenIDRequest(t, steamState))
 
 		requireProblemRedirect(t, w, steamState.RedirectURI, http.StatusInternalServerError, msgAuthenticationFailed)
 	})
@@ -462,7 +484,7 @@ func TestAU52to57OAuthAndOpenIDFailuresHideCause(t *testing.T) {
 		w := httptest.NewRecorder()
 		ss := &stubSessionService{createJWT: okJWT, addSessionErr: testutil.ErrDBDown}
 
-		OpenIDHandler(&stubAccountService{}, &stubLinkAccountStore{}, ss)(w, auOpenIDRequest(t, steamState))
+		OpenIDHandler(auConfig().Steam, &stubAccountService{}, &stubLinkAccountStore{}, ss, auSiteURL)(w, auOpenIDRequest(t, steamState))
 
 		requireProblemRedirect(t, w, steamState.RedirectURI, http.StatusInternalServerError, msgAuthenticationFailed)
 	})
@@ -472,7 +494,7 @@ func TestAU52to57OAuthAndOpenIDFailuresHideCause(t *testing.T) {
 		w := httptest.NewRecorder()
 		ss := &stubSessionService{createJWT: failJWT}
 
-		OpenIDHandler(&stubAccountService{}, &stubLinkAccountStore{}, ss)(w, auOpenIDRequest(t, steamState))
+		OpenIDHandler(auConfig().Steam, &stubAccountService{}, &stubLinkAccountStore{}, ss, auSiteURL)(w, auOpenIDRequest(t, steamState))
 
 		requireProblemRedirect(t, w, steamState.RedirectURI, http.StatusInternalServerError, msgAuthenticationFailed)
 	})
@@ -483,9 +505,9 @@ func TestAU17OpenIDHandlerMissingState(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("AU-17_OpenIDMissingState", func(t *testing.T) {
-		OpenIDHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{})(w, r)
+		OpenIDHandler(auConfig().Steam, &stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{}, auSiteURL)(w, r)
 
-		requireProblemRedirect(t, w, session.NN_SITE_URL, http.StatusBadRequest, msgInvalidRequest)
+		requireProblemRedirect(t, w, auSiteURL, http.StatusBadRequest, msgInvalidRequest)
 	})
 }
 
@@ -497,7 +519,7 @@ func TestAU18OpenIDHandlerLinkModeNoSession(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("AU-18_OpenIDLinkModeNoSession", func(t *testing.T) {
-		OpenIDHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{})(w, r)
+		OpenIDHandler(auConfig().Steam, &stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{}, auSiteURL)(w, r)
 
 		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, msgLoginRequiredToLink)
 	})
@@ -512,7 +534,7 @@ func TestAU19OpenIDHandlerBadOpenIDMode(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("AU-19_OpenIDBadOpenIDMode", func(t *testing.T) {
-		OpenIDHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{})(w, r)
+		OpenIDHandler(auConfig().Steam, &stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{}, auSiteURL)(w, r)
 
 		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusBadRequest, msgInvalidState)
 	})
@@ -527,7 +549,7 @@ func TestAU20OpenIDHandlerBadClaimedID(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("AU-20_OpenIDBadClaimedID", func(t *testing.T) {
-		OpenIDHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{})(w, r)
+		OpenIDHandler(auConfig().Steam, &stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{}, auSiteURL)(w, r)
 
 		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusBadRequest, msgInvalidState)
 	})
@@ -541,7 +563,7 @@ func TestAU22DecodeAndValidateStateHappyPath(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("AU-22_DecodeAndValidateStateHappyPath", func(t *testing.T) {
-		got, ok := decodeAndValidateState(w, r)
+		got, ok := decodeAndValidateState(w, r, auSiteURL)
 		if !ok {
 			t.Fatalf("expected ok=true, got false (body: %s)", w.Body.String())
 		}
@@ -556,11 +578,11 @@ func TestAU23DecodeAndValidateStateMissingParam(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("AU-23_DecodeAndValidateStateMissingParam", func(t *testing.T) {
-		_, ok := decodeAndValidateState(w, r)
+		_, ok := decodeAndValidateState(w, r, auSiteURL)
 		if ok {
 			t.Fatal("expected ok=false")
 		}
-		requireProblemRedirect(t, w, session.NN_SITE_URL, http.StatusBadRequest, msgInvalidRequest)
+		requireProblemRedirect(t, w, auSiteURL, http.StatusBadRequest, msgInvalidRequest)
 	})
 }
 
@@ -569,11 +591,11 @@ func TestAU24DecodeAndValidateStateInvalidBase64(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("AU-24_DecodeAndValidateStateInvalidBase64", func(t *testing.T) {
-		_, ok := decodeAndValidateState(w, r)
+		_, ok := decodeAndValidateState(w, r, auSiteURL)
 		if ok {
 			t.Fatal("expected ok=false")
 		}
-		requireProblemRedirect(t, w, session.NN_SITE_URL, http.StatusBadRequest, msgInvalidState)
+		requireProblemRedirect(t, w, auSiteURL, http.StatusBadRequest, msgInvalidState)
 	})
 }
 
@@ -583,11 +605,11 @@ func TestAU25DecodeAndValidateStateInvalidJSON(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("AU-25_DecodeAndValidateStateInvalidJSON", func(t *testing.T) {
-		_, ok := decodeAndValidateState(w, r)
+		_, ok := decodeAndValidateState(w, r, auSiteURL)
 		if ok {
 			t.Fatal("expected ok=false")
 		}
-		requireProblemRedirect(t, w, session.NN_SITE_URL, http.StatusBadRequest, msgInvalidState)
+		requireProblemRedirect(t, w, auSiteURL, http.StatusBadRequest, msgInvalidState)
 	})
 }
 
@@ -599,11 +621,11 @@ func TestAU26DecodeAndValidateStateMissingRequiredField(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("AU-26_DecodeAndValidateStateMissingRequiredField", func(t *testing.T) {
-		_, ok := decodeAndValidateState(w, r)
+		_, ok := decodeAndValidateState(w, r, auSiteURL)
 		if ok {
 			t.Fatal("expected ok=false")
 		}
-		requireProblemRedirect(t, w, session.NN_SITE_URL, http.StatusBadRequest, msgInvalidState)
+		requireProblemRedirect(t, w, auSiteURL, http.StatusBadRequest, msgInvalidState)
 	})
 }
 
@@ -615,14 +637,14 @@ func TestAU27DecodeAndValidateStateDisallowedRedirect(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("AU-27_DecodeAndValidateStateDisallowedRedirect", func(t *testing.T) {
-		_, ok := decodeAndValidateState(w, r)
+		_, ok := decodeAndValidateState(w, r, auSiteURL)
 		if ok {
 			t.Fatal("expected ok=false")
 		}
 		if loc := w.Header().Get("Location"); strings.Contains(loc, "evil.example.com") {
 			t.Fatalf("expected no redirect to the attacker's URL, got Location: %q", loc)
 		}
-		requireProblemRedirect(t, w, session.NN_SITE_URL, http.StatusBadRequest, msgInvalidState)
+		requireProblemRedirect(t, w, auSiteURL, http.StatusBadRequest, msgInvalidState)
 	})
 }
 
@@ -633,11 +655,11 @@ func TestAU28DecodeAndValidateStateMissingNonceCookie(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("AU-28_DecodeAndValidateStateMissingNonceCookie", func(t *testing.T) {
-		_, ok := decodeAndValidateState(w, r)
+		_, ok := decodeAndValidateState(w, r, auSiteURL)
 		if ok {
 			t.Fatal("expected ok=false")
 		}
-		requireProblemRedirect(t, w, session.NN_SITE_URL, http.StatusBadRequest, msgInvalidState)
+		requireProblemRedirect(t, w, auSiteURL, http.StatusBadRequest, msgInvalidState)
 	})
 }
 
@@ -649,11 +671,11 @@ func TestAU29DecodeAndValidateStateNonceMismatch(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("AU-29_DecodeAndValidateStateNonceMismatch", func(t *testing.T) {
-		_, ok := decodeAndValidateState(w, r)
+		_, ok := decodeAndValidateState(w, r, auSiteURL)
 		if ok {
 			t.Fatal("expected ok=false")
 		}
-		requireProblemRedirect(t, w, session.NN_SITE_URL, http.StatusBadRequest, msgInvalidState)
+		requireProblemRedirect(t, w, auSiteURL, http.StatusBadRequest, msgInvalidState)
 	})
 }
 
@@ -797,7 +819,7 @@ func TestAU43RedirectInternalServerError(t *testing.T) {
 
 func TestAU44IsAllowedRedirectSameOrigin(t *testing.T) {
 	t.Run("AU-44_IsAllowedRedirectSameOrigin", func(t *testing.T) {
-		if !isAllowedRedirect(session.NN_SITE_URL + "/some/path") {
+		if !isAllowedRedirect(auSiteURL+"/some/path", auSiteURL) {
 			t.Error("expected true for a same-origin redirect URI")
 		}
 	})
@@ -805,20 +827,20 @@ func TestAU44IsAllowedRedirectSameOrigin(t *testing.T) {
 
 func TestAU45IsAllowedRedirectDifferentHost(t *testing.T) {
 	t.Run("AU-45_IsAllowedRedirectDifferentHost", func(t *testing.T) {
-		if isAllowedRedirect("https://evil.example.com/phish") {
+		if isAllowedRedirect("https://evil.example.com/phish", auSiteURL) {
 			t.Error("expected false for a different host")
 		}
 	})
 }
 
 func TestAU46IsAllowedRedirectDifferentScheme(t *testing.T) {
-	siteURL, err := url.Parse(session.NN_SITE_URL)
+	siteURL, err := url.Parse(auSiteURL)
 	if err != nil {
-		t.Fatalf("failed to parse NN_SITE_URL: %v", err)
+		t.Fatalf("failed to parse the site URL: %v", err)
 	}
 
 	t.Run("AU-46_IsAllowedRedirectDifferentScheme", func(t *testing.T) {
-		if isAllowedRedirect("http://" + siteURL.Host + "/done") {
+		if isAllowedRedirect("http://"+siteURL.Host+"/done", auSiteURL) {
 			t.Error("expected false for a different scheme")
 		}
 	})
@@ -826,20 +848,16 @@ func TestAU46IsAllowedRedirectDifferentScheme(t *testing.T) {
 
 func TestAU47IsAllowedRedirectUnparseableRedirectURI(t *testing.T) {
 	t.Run("AU-47_IsAllowedRedirectUnparseableRedirectURI", func(t *testing.T) {
-		if isAllowedRedirect("http://example.com/%zz") {
+		if isAllowedRedirect("http://example.com/%zz", auSiteURL) {
 			t.Error("expected false for an unparseable redirect URI")
 		}
 	})
 }
 
 func TestAU48IsAllowedRedirectUnparseableSiteURL(t *testing.T) {
-	original := session.NN_SITE_URL
-	session.NN_SITE_URL = "http://example.com/%zz"
-	defer func() { session.NN_SITE_URL = original }()
-
 	t.Run("AU-48_IsAllowedRedirectUnparseableSiteURL", func(t *testing.T) {
-		if isAllowedRedirect("https://neuralnexus.test/done") {
-			t.Error("expected false when NN_SITE_URL itself fails to parse")
+		if isAllowedRedirect("https://neuralnexus.test/done", "http://example.com/%zz") {
+			t.Error("expected false when the site URL itself fails to parse")
 		}
 	})
 }
@@ -919,7 +937,7 @@ func TestAU60to71OAuthAndOpenIDFailureMapping(t *testing.T) {
 		w := httptest.NewRecorder()
 		state := OAuthState{Platform: "nonexistent", Nonce: "test-nonce", RedirectURI: redirect, Mode: ModeLogin}
 
-		OAuthHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{createJWT: okJWT})(w, auOAuthRequest(t, state))
+		OAuthHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{createJWT: okJWT}, auSiteURL)(w, auOAuthRequest(t, state))
 
 		requireProblemRedirect(t, w, redirect, http.StatusBadRequest, msgInvalidPlatform)
 	})
@@ -928,7 +946,7 @@ func TestAU60to71OAuthAndOpenIDFailureMapping(t *testing.T) {
 		auDiscordTransportWithoutScope(t)
 		w := httptest.NewRecorder()
 
-		OAuthHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{createJWT: okJWT})(w, auOAuthRequest(t, discordLogin))
+		OAuthHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{createJWT: okJWT}, auSiteURL)(w, auOAuthRequest(t, discordLogin))
 
 		requireProblemRedirect(t, w, redirect, http.StatusBadRequest, msgMissingOAuthScope)
 	})
@@ -937,7 +955,7 @@ func TestAU60to71OAuthAndOpenIDFailureMapping(t *testing.T) {
 		auSteamTransportBody(t, http.StatusOK, http.StatusOK, `{"response":{"players":[{"steamid":"76561198999999999","personaname":"someone"}]}}`)
 		w := httptest.NewRecorder()
 
-		OpenIDHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{createJWT: okJWT})(w, auOpenIDRequest(t, steamLogin))
+		OpenIDHandler(auConfig().Steam, &stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{createJWT: okJWT}, auSiteURL)(w, auOpenIDRequest(t, steamLogin))
 
 		requireProblemRedirect(t, w, redirect, http.StatusBadRequest, msgSteamAccountMismatch)
 	})
@@ -946,7 +964,7 @@ func TestAU60to71OAuthAndOpenIDFailureMapping(t *testing.T) {
 		auDiscordTransport(t)
 		w := httptest.NewRecorder()
 
-		OAuthHandler(&stubAccountService{}, linkedElsewhere, &stubSessionService{createJWT: okJWT})(w, auWithSession(auOAuthRequest(t, discordLink), "u1"))
+		OAuthHandler(auConfig(), &stubAccountService{}, linkedElsewhere, &stubSessionService{createJWT: okJWT}, auSiteURL)(w, auWithSession(auOAuthRequest(t, discordLink), "u1"))
 
 		requireProblemRedirect(t, w, redirect, http.StatusConflict, msgPlatformAlreadyLinked)
 	})
@@ -960,7 +978,7 @@ func TestAU60to71OAuthAndOpenIDFailureMapping(t *testing.T) {
 		}}
 		state := OAuthState{Platform: PlatformMinecraft, Nonce: "test-nonce", RedirectURI: redirect, Mode: ModeLogin}
 
-		OAuthHandler(&stubAccountService{}, las, &stubSessionService{createJWT: okJWT})(w, auOAuthRequest(t, state))
+		OAuthHandler(auConfig(), &stubAccountService{}, las, &stubSessionService{createJWT: okJWT}, auSiteURL)(w, auOAuthRequest(t, state))
 
 		requireProblemRedirect(t, w, redirect, http.StatusConflict, msgConflictingMicrosoftIdentities)
 	})
@@ -969,7 +987,7 @@ func TestAU60to71OAuthAndOpenIDFailureMapping(t *testing.T) {
 		auDiscordTransport(t)
 		w := httptest.NewRecorder()
 
-		OAuthHandler(&stubAccountService{}, addFails(testutil.ErrDBDown), &stubSessionService{createJWT: okJWT})(w, auWithSession(auOAuthRequest(t, discordLink), "u1"))
+		OAuthHandler(auConfig(), &stubAccountService{}, addFails(testutil.ErrDBDown), &stubSessionService{createJWT: okJWT}, auSiteURL)(w, auWithSession(auOAuthRequest(t, discordLink), "u1"))
 
 		requireProblemRedirect(t, w, redirect, http.StatusInternalServerError, msgAuthenticationFailed)
 	})
@@ -978,7 +996,7 @@ func TestAU60to71OAuthAndOpenIDFailureMapping(t *testing.T) {
 		auSteamTransport(t, http.StatusOK, http.StatusOK)
 		w := httptest.NewRecorder()
 
-		OpenIDHandler(&stubAccountService{}, linkedElsewhere, &stubSessionService{createJWT: okJWT})(w, auWithSession(auOpenIDRequest(t, steamLink), "u1"))
+		OpenIDHandler(auConfig().Steam, &stubAccountService{}, linkedElsewhere, &stubSessionService{createJWT: okJWT}, auSiteURL)(w, auWithSession(auOpenIDRequest(t, steamLink), "u1"))
 
 		requireProblemRedirect(t, w, redirect, http.StatusConflict, msgPlatformAlreadyLinked)
 	})
@@ -987,7 +1005,7 @@ func TestAU60to71OAuthAndOpenIDFailureMapping(t *testing.T) {
 		auSteamTransport(t, http.StatusOK, http.StatusOK)
 		w := httptest.NewRecorder()
 
-		OpenIDHandler(&stubAccountService{}, addFails(testutil.ErrDBDown), &stubSessionService{createJWT: okJWT})(w, auWithSession(auOpenIDRequest(t, steamLink), "u1"))
+		OpenIDHandler(auConfig().Steam, &stubAccountService{}, addFails(testutil.ErrDBDown), &stubSessionService{createJWT: okJWT}, auSiteURL)(w, auWithSession(auOpenIDRequest(t, steamLink), "u1"))
 
 		requireProblemRedirect(t, w, redirect, http.StatusInternalServerError, msgAuthenticationFailed)
 	})
@@ -997,7 +1015,7 @@ func TestAU60to71OAuthAndOpenIDFailureMapping(t *testing.T) {
 	t.Run("AU-66_OAuthSessionGoneBeforeLinking", func(t *testing.T) {
 		w := httptest.NewRecorder()
 
-		OAuthHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{createJWT: okJWT})(w, auWithSessionChange(auOAuthRequest(t, discordLink), nil))
+		OAuthHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{createJWT: okJWT}, auSiteURL)(w, auWithSessionChange(auOAuthRequest(t, discordLink), nil))
 
 		requireProblemRedirect(t, w, redirect, http.StatusUnauthorized, msgLoginRequiredToLink)
 	})
@@ -1005,7 +1023,7 @@ func TestAU60to71OAuthAndOpenIDFailureMapping(t *testing.T) {
 	t.Run("AU-69_OAuthSessionExpiredBeforeLinking", func(t *testing.T) {
 		w := httptest.NewRecorder()
 
-		OAuthHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{createJWT: okJWT})(w, auWithSessionChange(auOAuthRequest(t, discordLink), expired))
+		OAuthHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{createJWT: okJWT}, auSiteURL)(w, auWithSessionChange(auOAuthRequest(t, discordLink), expired))
 
 		requireProblemRedirect(t, w, redirect, http.StatusUnauthorized, msgSessionExpired)
 	})
@@ -1014,7 +1032,7 @@ func TestAU60to71OAuthAndOpenIDFailureMapping(t *testing.T) {
 		auSteamTransport(t, http.StatusOK, http.StatusOK)
 		w := httptest.NewRecorder()
 
-		OpenIDHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{createJWT: okJWT})(w, auWithSessionChange(auOpenIDRequest(t, steamLink), nil))
+		OpenIDHandler(auConfig().Steam, &stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{createJWT: okJWT}, auSiteURL)(w, auWithSessionChange(auOpenIDRequest(t, steamLink), nil))
 
 		requireProblemRedirect(t, w, redirect, http.StatusUnauthorized, msgLoginRequiredToLink)
 	})
@@ -1023,7 +1041,7 @@ func TestAU60to71OAuthAndOpenIDFailureMapping(t *testing.T) {
 		auSteamTransport(t, http.StatusOK, http.StatusOK)
 		w := httptest.NewRecorder()
 
-		OpenIDHandler(&stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{createJWT: okJWT})(w, auWithSessionChange(auOpenIDRequest(t, steamLink), expired))
+		OpenIDHandler(auConfig().Steam, &stubAccountService{}, &stubLinkAccountStore{}, &stubSessionService{createJWT: okJWT}, auSiteURL)(w, auWithSessionChange(auOpenIDRequest(t, steamLink), expired))
 
 		requireProblemRedirect(t, w, redirect, http.StatusUnauthorized, msgSessionExpired)
 	})
@@ -1040,7 +1058,7 @@ func TestAU72to74OAuthAndOpenIDFailuresUseMapping(t *testing.T) {
 		w := httptest.NewRecorder()
 		ss := &stubSessionService{createJWT: okJWT}
 
-		OAuthHandler(&stubAccountService{}, disabledLink, ss)(w, auOAuthRequest(t, oauthState))
+		OAuthHandler(auConfig(), &stubAccountService{}, disabledLink, ss, auSiteURL)(w, auOAuthRequest(t, oauthState))
 
 		requireProblemRedirect(t, w, oauthState.RedirectURI, http.StatusForbidden, msgPlatformLoginDisabled)
 	})
@@ -1050,7 +1068,7 @@ func TestAU72to74OAuthAndOpenIDFailuresUseMapping(t *testing.T) {
 		w := httptest.NewRecorder()
 		ss := &stubSessionService{createJWT: okJWT}
 
-		OpenIDHandler(&stubAccountService{}, &stubLinkAccountStore{}, ss)(w, auOpenIDRequest(t, steamState))
+		OpenIDHandler(auConfig().Steam, &stubAccountService{}, &stubLinkAccountStore{}, ss, auSiteURL)(w, auOpenIDRequest(t, steamState))
 
 		requireProblemRedirect(t, w, steamState.RedirectURI, http.StatusNotFound, msgSteamAccountNotFound)
 	})
@@ -1060,7 +1078,7 @@ func TestAU72to74OAuthAndOpenIDFailuresUseMapping(t *testing.T) {
 		w := httptest.NewRecorder()
 		ss := &stubSessionService{createJWT: okJWT}
 
-		OpenIDHandler(&stubAccountService{}, disabledLink, ss)(w, auOpenIDRequest(t, steamState))
+		OpenIDHandler(auConfig().Steam, &stubAccountService{}, disabledLink, ss, auSiteURL)(w, auOpenIDRequest(t, steamState))
 
 		requireProblemRedirect(t, w, steamState.RedirectURI, http.StatusForbidden, msgPlatformLoginDisabled)
 	})

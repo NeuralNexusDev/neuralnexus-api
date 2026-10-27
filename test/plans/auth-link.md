@@ -124,7 +124,6 @@
 | LKS-14 | responseIsValid | Edge Case | `is_valid` present but false, or key absent | `"is_valid:false"` and separately `"ns:foo"` alone | Returns false | P2 |  |
 | LKS-15 | responseIsValid | Edge Case | Empty body | `[]byte("")` | Returns false | P3 |  |
 | LKS-16 | GetSteamUser | Happy Path | API key set, player summary returned and ID matches | `STEAM_API_KEY` non-empty; `steamPlayerSummaryURL` httptest server returns one matching player | Returns populated `*SteamData`, err nil | P1 |  |
-| LKS-17 | GetSteamUser | Error Path | `STEAM_API_KEY` unset | `STEAM_API_KEY = ""` | Returns `ErrSteamAPIKeyUnset`; no HTTP call made | P1 |  |
 | LKS-18 | GetSteamUser | Error Path | HTTP call fails (network) | Server URL unreachable | Error propagated | P2 |  |
 | LKS-19 | GetSteamUser | Error Path | Non-2xx status | Server responds HTTP 500 | Returns an error wrapping `ErrSteamPlayerSummaryLookup` | P2 |  |
 | LKS-20 | GetSteamUser | Edge Case | Malformed JSON body | Server responds 200 with invalid JSON | Decode error propagated | P2 |  |

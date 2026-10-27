@@ -51,8 +51,6 @@
 | ACT-20 | RemoveRole | Edge Case | Role not present | `RemoveRole("z")` | `Roles` unchanged, no panic | P2 |  |
 | ACT-21 | RemoveRole | Edge Case | `Roles` empty | `RemoveRole("z")` | No panic, `Roles` remains empty | P3 |  |
 | ACT-22 | DefaultAccountSettings | Accessor | `userID = "u1"` | | Returns `&AccountSettings{UserID:"u1", PasswordAuthEnabled:true}` | P2 |  |
-| ACT-27 | init | Happy Path | Package loads under the required `PEPPER` env (the precondition every other test in this file already runs under) | | `pepper` is populated from env without `log.Fatal` firing | P2 | Asserts init's already-established postcondition rather than re-invoking it |
-| ACT-28 | init | Error Path | `PEPPER` unset | Test binary re-exec'd as a subprocess with `PEPPER=""` | Subprocess exits non-zero via `log.Fatal(msgPepperUnset)` | P1 | Re-exec/TestCrasher pattern (see `os/exec` docs) |
 
 ## store.go
 

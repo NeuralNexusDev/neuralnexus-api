@@ -12,6 +12,7 @@ import (
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 	"github.com/bwmarrin/discordgo"
@@ -150,7 +151,12 @@ func (m *oaMockSessionService) GetSession(context.Context, string) (*session.Ses
 }
 func (m *oaMockSessionService) UpdateSession(context.Context, *session.Session) error { return nil }
 func (m *oaMockSessionService) DeleteSession(context.Context, string) error           { return nil }
-func (m *oaMockSessionService) CreateJWT(*session.Session) (string, error)            { return "", nil }
+func (m *oaMockSessionService) SetSessionCookie(context.Context, http.ResponseWriter, *session.Session) error {
+	return nil
+}
+func (m *oaMockSessionService) CreateJWT(context.Context, *session.Session) (string, error) {
+	return "", nil
+}
 func (m *oaMockSessionService) ReadJWT(context.Context, string) (*session.Session, error) {
 	return nil, account.ErrNotFound
 }
@@ -161,13 +167,6 @@ func oaRequestWithSession(session *session.Session) *http.Request {
 		return req
 	}
 	return req.WithContext(context.WithValue(req.Context(), reqctx.SessionKey, session))
-}
-
-func oaSetVar(t *testing.T, target *string, value string) {
-	t.Helper()
-	original := *target
-	*target = value
-	t.Cleanup(func() { *target = original })
 }
 
 func oaJSONServer(status int, body string) *httptest.Server {
@@ -187,7 +186,7 @@ func oaSetDiscordUsersEndpoint(t *testing.T, ts *httptest.Server) {
 	t.Cleanup(func() { discordgo.EndpointUsers = original })
 }
 
-func oaSetupDiscordPlatform(t *testing.T) {
+func oaSetupDiscordPlatform(t *testing.T, cfg *config.Config) {
 	t.Helper()
 	tokenTS := oaJSONServer(http.StatusOK, `{"access_token":"disc-at","token_type":"Bearer","expires_in":3600,"scope":"identify"}`)
 	t.Cleanup(tokenTS.Close)
@@ -198,53 +197,38 @@ func oaSetupDiscordPlatform(t *testing.T) {
 	t.Cleanup(usersTS.Close)
 	oaSetDiscordUsersEndpoint(t, usersTS)
 
-	originalTokenURL := discordConfig.Endpoint.TokenURL
-	discordConfig.Endpoint.TokenURL = tokenTS.URL
-	t.Cleanup(func() { discordConfig.Endpoint.TokenURL = originalTokenURL })
+	cfg.Discord.OAuth2Config = &oauth2.Config{Endpoint: oauth2.Endpoint{TokenURL: tokenTS.URL}}
 }
 
-func oaSetupDiscordExchangeFailure(t *testing.T) {
+func oaSetupDiscordExchangeFailure(t *testing.T, cfg *config.Config) {
 	t.Helper()
 	tokenTS := oaJSONServer(http.StatusBadRequest, `{"error":"invalid_grant"}`)
 	t.Cleanup(tokenTS.Close)
-	originalTokenURL := discordConfig.Endpoint.TokenURL
-	discordConfig.Endpoint.TokenURL = tokenTS.URL
-	t.Cleanup(func() { discordConfig.Endpoint.TokenURL = originalTokenURL })
+	cfg.Discord.OAuth2Config = &oauth2.Config{Endpoint: oauth2.Endpoint{TokenURL: tokenTS.URL}}
 }
 
-func oaSetupTwitchPlatform(t *testing.T) {
+func oaSetupTwitchPlatform(t *testing.T, cfg *config.Config) {
 	t.Helper()
 	tokenTS := oaJSONServer(http.StatusOK, `{"access_token":"twitch-at","token_type":"bearer","expires_in":14400,"scope":["user:read:email"]}`)
 	t.Cleanup(tokenTS.Close)
-	originalTokenURL := TwitchConfig.Endpoint.TokenURL
-	TwitchConfig.Endpoint.TokenURL = tokenTS.URL
-	t.Cleanup(func() { TwitchConfig.Endpoint.TokenURL = originalTokenURL })
+	cfg.Twitch.OAuth2Config = &oauth2.Config{Endpoint: oauth2.Endpoint{TokenURL: tokenTS.URL}}
 
 	usersTS := oaJSONServer(http.StatusOK, `{"data":[{"id":"tw1","login":"alice","email":"a@b.com"}]}`)
 	t.Cleanup(usersTS.Close)
-	originalAPIBaseURL := APIBaseURL
-	APIBaseURL = usersTS.URL
-	t.Cleanup(func() { APIBaseURL = originalAPIBaseURL })
-
-	// helix.NewClient requires a ClientID to construct at all, regardless of
-	// APIBaseURL, so fill one in if TWITCH_CLIENT_ID isn't set.
-	if CLIENT_ID == "" {
-		CLIENT_ID = "test-client-id"
-		t.Cleanup(func() { CLIENT_ID = "" })
-	}
+	cfg.Twitch.APIBaseUrl = usersTS.URL
+	// helix.NewClient requires a ClientID to construct at all.
+	cfg.Twitch.ClientId = "test-client-id"
 }
 
-func oaSetupMicrosoftLoginPlatform(t *testing.T) {
+func oaSetupMicrosoftLoginPlatform(t *testing.T, cfg *config.Config) {
 	t.Helper()
 	tokenTS := oaJSONServer(http.StatusOK, `{"access_token":"ms-login-at","token_type":"Bearer","expires_in":3600,"scope":"openid profile email"}`)
 	t.Cleanup(tokenTS.Close)
-	originalTokenURL := MicrosoftLoginConfig.Endpoint.TokenURL
-	MicrosoftLoginConfig.Endpoint.TokenURL = tokenTS.URL
-	t.Cleanup(func() { MicrosoftLoginConfig.Endpoint.TokenURL = originalTokenURL })
+	cfg.Microsoft.LoginOAuth2Config = &oauth2.Config{Endpoint: oauth2.Endpoint{TokenURL: tokenTS.URL}}
 
 	userInfoTS := oaJSONServer(http.StatusOK, `{"sub":"ms1","name":"Alice","email":"a@b.com"}`)
 	t.Cleanup(userInfoTS.Close)
-	oaSetVar(t, &microsoftUserInfoURL, userInfoTS.URL)
+	cfg.Microsoft.MicrosoftUserInfoURL = userInfoTS.URL
 }
 
 type oaMicrosoftChainOpts struct {
@@ -256,7 +240,7 @@ type oaMicrosoftChainOpts struct {
 	xstsXboxLiveFails bool
 }
 
-func oaSetupMicrosoftChain(t *testing.T, opts oaMicrosoftChainOpts) string {
+func oaSetupMicrosoftChain(t *testing.T, cfg *config.Config, opts oaMicrosoftChainOpts) string {
 	t.Helper()
 	xuid := opts.xuid
 	if xuid == "" {
@@ -269,18 +253,16 @@ func oaSetupMicrosoftChain(t *testing.T, opts oaMicrosoftChainOpts) string {
 
 	tokenTS := oaJSONServer(http.StatusOK, `{"access_token":"ms-at","token_type":"Bearer","expires_in":3600,"scope":["XboxLive.signin","offline_access"]}`)
 	t.Cleanup(tokenTS.Close)
-	originalTokenURL := MicrosoftConfig.Endpoint.TokenURL
-	MicrosoftConfig.Endpoint.TokenURL = tokenTS.URL
-	t.Cleanup(func() { MicrosoftConfig.Endpoint.TokenURL = originalTokenURL })
+	cfg.Microsoft.OAuth2Config = &oauth2.Config{Endpoint: oauth2.Endpoint{TokenURL: tokenTS.URL}}
 
 	xblTS := oaJSONServer(http.StatusOK, `{"Token":"xbl-t"}`)
 	t.Cleanup(xblTS.Close)
-	oaSetVar(t, &xboxLiveAuthenticateURL, xblTS.URL)
+	cfg.Microsoft.XboxLiveAuthenticateURL = xblTS.URL
 
 	if opts.xstsFails {
 		xstsTS := oaJSONServer(http.StatusInternalServerError, `{}`)
 		t.Cleanup(xstsTS.Close)
-		oaSetVar(t, &xstsAuthorizeURL, xstsTS.URL)
+		cfg.Microsoft.XstsAuthorizeURL = xstsTS.URL
 		return xuid
 	}
 
@@ -290,7 +272,7 @@ func oaSetupMicrosoftChain(t *testing.T, opts oaMicrosoftChainOpts) string {
 		}
 		_ = readJSONBody(r, &body)
 		w.Header().Set("Content-Type", "application/json")
-		if body.RelyingParty == xstsXboxLiveRelyingParty {
+		if body.RelyingParty == XstsXboxLiveRelyingParty {
 			if opts.xstsXboxLiveFails {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
@@ -301,7 +283,7 @@ func oaSetupMicrosoftChain(t *testing.T, opts oaMicrosoftChainOpts) string {
 		_, _ = w.Write([]byte(`{"Token":"xsts-mc-t","DisplayClaims":{"xui":[{"uhs":"hash1"}]}}`))
 	}))
 	t.Cleanup(xstsTS.Close)
-	oaSetVar(t, &xstsAuthorizeURL, xstsTS.URL)
+	cfg.Microsoft.XstsAuthorizeURL = xstsTS.URL
 
 	mcLoginTS := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -312,7 +294,7 @@ func oaSetupMicrosoftChain(t *testing.T, opts oaMicrosoftChainOpts) string {
 		_, _ = w.Write([]byte(`{"access_token":"mc-t"}`))
 	}))
 	t.Cleanup(mcLoginTS.Close)
-	oaSetVar(t, &minecraftLoginURL, mcLoginTS.URL)
+	cfg.Microsoft.MinecraftLoginURL = mcLoginTS.URL
 
 	mcProfileTS := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -327,7 +309,7 @@ func oaSetupMicrosoftChain(t *testing.T, opts oaMicrosoftChainOpts) string {
 		_, _ = w.Write([]byte(fmt.Sprintf(`{"id":%q,"name":"Steve","skins":[],"capes":[]}`, opts.javaUUID)))
 	}))
 	t.Cleanup(mcProfileTS.Close)
-	oaSetVar(t, &minecraftProfileURL, mcProfileTS.URL)
+	cfg.Microsoft.MinecraftProfileURL = mcProfileTS.URL
 
 	return xuid
 }
@@ -451,12 +433,13 @@ func TestOA05to08RefreshToken(t *testing.T) {
 
 func TestOA09to16ProcessOAuthLogin(t *testing.T) {
 	t.Run("OA-09_DiscordCreatesAccount", func(t *testing.T) {
-		oaSetupDiscordPlatform(t)
+		cfg := testutil.NewConfig()
+		oaSetupDiscordPlatform(t, cfg)
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{}
 		ss := &oaMockSessionService{}
 
-		session, err := ProcessOAuthLogin(context.Background(), as, las, ss, "code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLogin})
+		session, err := ProcessOAuthLogin(context.Background(), cfg, as, las, ss, "code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLogin})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -478,7 +461,8 @@ func TestOA09to16ProcessOAuthLogin(t *testing.T) {
 	})
 
 	t.Run("OA-10_DiscordReusesExistingLinkedAccount", func(t *testing.T) {
-		oaSetupDiscordPlatform(t)
+		cfg := testutil.NewConfig()
+		oaSetupDiscordPlatform(t, cfg)
 		existing := &account.Account{UserID: "user-1"}
 		as := &oaMockAccountService{
 			GetAccountByIDFunc: func(id string) (*account.Account, error) {
@@ -495,7 +479,7 @@ func TestOA09to16ProcessOAuthLogin(t *testing.T) {
 		}
 		ss := &oaMockSessionService{}
 
-		session, err := ProcessOAuthLogin(context.Background(), as, las, ss, "code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLogin})
+		session, err := ProcessOAuthLogin(context.Background(), cfg, as, las, ss, "code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLogin})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -512,7 +496,8 @@ func TestOA09to16ProcessOAuthLogin(t *testing.T) {
 		las := &oaMockLinkAccountStore{}
 		ss := &oaMockSessionService{}
 
-		_, err := ProcessOAuthLogin(context.Background(), as, las, ss, "code", &OAuthState{Platform: "bogus", Mode: ModeLogin})
+		cfg := testutil.NewConfig()
+		_, err := ProcessOAuthLogin(context.Background(), cfg, as, las, ss, "code", &OAuthState{Platform: "bogus", Mode: ModeLogin})
 		if !errors.Is(err, ErrInvalidPlatform) {
 			t.Fatalf("ProcessOAuthLogin(context.Background(), ) error = %v, want %v", err, ErrInvalidPlatform)
 		}
@@ -522,12 +507,13 @@ func TestOA09to16ProcessOAuthLogin(t *testing.T) {
 	})
 
 	t.Run("OA-12_ExchangeFails", func(t *testing.T) {
-		oaSetupDiscordExchangeFailure(t)
+		cfg := testutil.NewConfig()
+		oaSetupDiscordExchangeFailure(t, cfg)
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{}
 		ss := &oaMockSessionService{}
 
-		_, err := ProcessOAuthLogin(context.Background(), as, las, ss, "bad-code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLogin})
+		_, err := ProcessOAuthLogin(context.Background(), cfg, as, las, ss, "bad-code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLogin})
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -537,7 +523,8 @@ func TestOA09to16ProcessOAuthLogin(t *testing.T) {
 	})
 
 	t.Run("OA-13_LinkedAccountLoginDisabled", func(t *testing.T) {
-		oaSetupDiscordPlatform(t)
+		cfg := testutil.NewConfig()
+		oaSetupDiscordPlatform(t, cfg)
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{
 			GetLinkedAccountByPlatformIDFunc: func(platform Platform, id string) (*LinkedAccount, error) {
@@ -546,7 +533,7 @@ func TestOA09to16ProcessOAuthLogin(t *testing.T) {
 		}
 		ss := &oaMockSessionService{}
 
-		_, err := ProcessOAuthLogin(context.Background(), as, las, ss, "code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLogin})
+		_, err := ProcessOAuthLogin(context.Background(), cfg, as, las, ss, "code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLogin})
 		if !errors.Is(err, ErrPlatformLoginDisabled) {
 			t.Fatalf("ProcessOAuthLogin(context.Background(), ) error = %v, want ErrPlatformLoginDisabled", err)
 		}
@@ -554,12 +541,13 @@ func TestOA09to16ProcessOAuthLogin(t *testing.T) {
 
 	t.Run("OA-14_MinecraftFullChainNewAccount", func(t *testing.T) {
 		javaUUID := "11111111-1111-1111-1111-111111111111"
-		oaSetupMicrosoftChain(t, oaMicrosoftChainOpts{javaUUID: javaUUID})
+		cfg := testutil.NewConfig()
+		oaSetupMicrosoftChain(t, cfg, oaMicrosoftChainOpts{javaUUID: javaUUID})
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{}
 		ss := &oaMockSessionService{}
 
-		session, err := ProcessOAuthLogin(context.Background(), as, las, ss, "code", &OAuthState{Platform: PlatformMinecraft, Mode: ModeLogin})
+		session, err := ProcessOAuthLogin(context.Background(), cfg, as, las, ss, "code", &OAuthState{Platform: PlatformMinecraft, Mode: ModeLogin})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -572,12 +560,13 @@ func TestOA09to16ProcessOAuthLogin(t *testing.T) {
 	})
 
 	t.Run("OA-15_MinecraftIdentityFetchFails", func(t *testing.T) {
-		oaSetupMicrosoftChain(t, oaMicrosoftChainOpts{xstsFails: true})
+		cfg := testutil.NewConfig()
+		oaSetupMicrosoftChain(t, cfg, oaMicrosoftChainOpts{xstsFails: true})
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{}
 		ss := &oaMockSessionService{}
 
-		_, err := ProcessOAuthLogin(testutil.LogContext(context.Background()), as, las, ss, "code", &OAuthState{Platform: PlatformMinecraft, Mode: ModeLogin})
+		_, err := ProcessOAuthLogin(testutil.LogContext(context.Background()), cfg, as, las, ss, "code", &OAuthState{Platform: PlatformMinecraft, Mode: ModeLogin})
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -587,12 +576,13 @@ func TestOA09to16ProcessOAuthLogin(t *testing.T) {
 	})
 
 	t.Run("OA-16_AddSessionFails", func(t *testing.T) {
-		oaSetupDiscordPlatform(t)
+		cfg := testutil.NewConfig()
+		oaSetupDiscordPlatform(t, cfg)
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{}
 		ss := &oaMockSessionService{AddSessionFunc: func(*session.Session) error { return testutil.ErrDBDown }}
 
-		session, err := ProcessOAuthLogin(context.Background(), as, las, ss, "code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLogin})
+		session, err := ProcessOAuthLogin(context.Background(), cfg, as, las, ss, "code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLogin})
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -604,12 +594,13 @@ func TestOA09to16ProcessOAuthLogin(t *testing.T) {
 
 func TestOA76to78ProcessOAuthLoginAdditionalPlatformDispatch(t *testing.T) {
 	t.Run("OA-76_TwitchCreatesAccount", func(t *testing.T) {
-		oaSetupTwitchPlatform(t)
+		cfg := testutil.NewConfig()
+		oaSetupTwitchPlatform(t, cfg)
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{}
 		ss := &oaMockSessionService{}
 
-		session, err := ProcessOAuthLogin(context.Background(), as, las, ss, "code", &OAuthState{Platform: PlatformTwitch, Mode: ModeLogin})
+		session, err := ProcessOAuthLogin(context.Background(), cfg, as, las, ss, "code", &OAuthState{Platform: PlatformTwitch, Mode: ModeLogin})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -634,12 +625,13 @@ func TestOA76to78ProcessOAuthLoginAdditionalPlatformDispatch(t *testing.T) {
 	})
 
 	t.Run("OA-77_MicrosoftPlainCreatesAccount", func(t *testing.T) {
-		oaSetupMicrosoftLoginPlatform(t)
+		cfg := testutil.NewConfig()
+		oaSetupMicrosoftLoginPlatform(t, cfg)
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{}
 		ss := &oaMockSessionService{}
 
-		session, err := ProcessOAuthLogin(context.Background(), as, las, ss, "code", &OAuthState{Platform: PlatformMicrosoft, Mode: ModeLogin})
+		session, err := ProcessOAuthLogin(context.Background(), cfg, as, las, ss, "code", &OAuthState{Platform: PlatformMicrosoft, Mode: ModeLogin})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -662,7 +654,8 @@ func TestOA76to78ProcessOAuthLoginAdditionalPlatformDispatch(t *testing.T) {
 
 	t.Run("OA-78_XboxLiveOnlyNeverTouchesJavaEvenIfOwned", func(t *testing.T) {
 		javaUUID := "88888888-8888-8888-8888-888888888888"
-		oaSetupMicrosoftChain(t, oaMicrosoftChainOpts{javaUUID: javaUUID})
+		cfg := testutil.NewConfig()
+		oaSetupMicrosoftChain(t, cfg, oaMicrosoftChainOpts{javaUUID: javaUUID})
 
 		var mcLoginCalled, mcProfileCalled bool
 		mcLoginTS := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -670,19 +663,19 @@ func TestOA76to78ProcessOAuthLoginAdditionalPlatformDispatch(t *testing.T) {
 			w.WriteHeader(http.StatusInternalServerError)
 		}))
 		t.Cleanup(mcLoginTS.Close)
-		oaSetVar(t, &minecraftLoginURL, mcLoginTS.URL)
+		cfg.Microsoft.MinecraftLoginURL = mcLoginTS.URL
 		mcProfileTS := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			mcProfileCalled = true
 			w.WriteHeader(http.StatusInternalServerError)
 		}))
 		t.Cleanup(mcProfileTS.Close)
-		oaSetVar(t, &minecraftProfileURL, mcProfileTS.URL)
+		cfg.Microsoft.MinecraftProfileURL = mcProfileTS.URL
 
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{}
 		ss := &oaMockSessionService{}
 
-		session, err := ProcessOAuthLogin(context.Background(), as, las, ss, "code", &OAuthState{Platform: PlatformXboxLive, Mode: ModeLogin})
+		session, err := ProcessOAuthLogin(context.Background(), cfg, as, las, ss, "code", &OAuthState{Platform: PlatformXboxLive, Mode: ModeLogin})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -891,7 +884,7 @@ func TestOA17to26and83ResolveOrCreateAccountForPlatformUser(t *testing.T) {
 	})
 }
 
-func oaSetupDiscordUserFailure(t *testing.T) {
+func oaSetupDiscordUserFailure(t *testing.T, cfg *config.Config) {
 	t.Helper()
 	tokenTS := oaJSONServer(http.StatusOK, `{"access_token":"disc-at","token_type":"Bearer","expires_in":3600,"scope":"identify"}`)
 	t.Cleanup(tokenTS.Close)
@@ -899,9 +892,7 @@ func oaSetupDiscordUserFailure(t *testing.T) {
 	t.Cleanup(usersTS.Close)
 	oaSetDiscordUsersEndpoint(t, usersTS)
 
-	originalTokenURL := discordConfig.Endpoint.TokenURL
-	discordConfig.Endpoint.TokenURL = tokenTS.URL
-	t.Cleanup(func() { discordConfig.Endpoint.TokenURL = originalTokenURL })
+	cfg.Discord.OAuth2Config = &oauth2.Config{Endpoint: oauth2.Endpoint{TokenURL: tokenTS.URL}}
 }
 
 func TestOA27to42ProcessOAuthLink(t *testing.T) {
@@ -910,11 +901,12 @@ func TestOA27to42ProcessOAuthLink(t *testing.T) {
 	}
 
 	t.Run("OA-27_DiscordLinksToSession", func(t *testing.T) {
-		oaSetupDiscordPlatform(t)
+		cfg := testutil.NewConfig()
+		oaSetupDiscordPlatform(t, cfg)
 		las := &oaMockLinkAccountStore{}
 		req := oaRequestWithSession(activeSession("user-1"))
 
-		session, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLink})
+		session, err := ProcessOAuthLink(req, cfg, las, "code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLink})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -930,7 +922,8 @@ func TestOA27to42ProcessOAuthLink(t *testing.T) {
 		las := &oaMockLinkAccountStore{}
 		req := oaRequestWithSession(nil)
 
-		_, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLink})
+		cfg := testutil.NewConfig()
+		_, err := ProcessOAuthLink(req, cfg, las, "code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLink})
 		if !errors.Is(err, ErrSessionNotFound) {
 			t.Fatalf("error = %v, want %v", err, ErrSessionNotFound)
 		}
@@ -941,7 +934,8 @@ func TestOA27to42ProcessOAuthLink(t *testing.T) {
 		expired := &session.Session{ID: "sess-1", UserID: "user-1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
 		req := oaRequestWithSession(expired)
 
-		_, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLink})
+		cfg := testutil.NewConfig()
+		_, err := ProcessOAuthLink(req, cfg, las, "code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLink})
 		if !errors.Is(err, ErrSessionExpired) {
 			t.Fatalf("error = %v, want %v", err, ErrSessionExpired)
 		}
@@ -951,18 +945,20 @@ func TestOA27to42ProcessOAuthLink(t *testing.T) {
 		las := &oaMockLinkAccountStore{}
 		req := oaRequestWithSession(activeSession("user-1"))
 
-		_, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: "bogus", Mode: ModeLink})
+		cfg := testutil.NewConfig()
+		_, err := ProcessOAuthLink(req, cfg, las, "code", &OAuthState{Platform: "bogus", Mode: ModeLink})
 		if !errors.Is(err, ErrInvalidPlatform) {
 			t.Fatalf("error = %v, want %v", err, ErrInvalidPlatform)
 		}
 	})
 
 	t.Run("OA-31_ExchangeFails", func(t *testing.T) {
-		oaSetupDiscordExchangeFailure(t)
+		cfg := testutil.NewConfig()
+		oaSetupDiscordExchangeFailure(t, cfg)
 		las := &oaMockLinkAccountStore{}
 		req := oaRequestWithSession(activeSession("user-1"))
 
-		_, err := ProcessOAuthLink(req, las, "bad-code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLink})
+		_, err := ProcessOAuthLink(req, cfg, las, "bad-code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLink})
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -970,11 +966,12 @@ func TestOA27to42ProcessOAuthLink(t *testing.T) {
 
 	t.Run("OA-32_MinecraftBothIdentitiesNew", func(t *testing.T) {
 		javaUUID := "22222222-2222-2222-2222-222222222222"
-		oaSetupMicrosoftChain(t, oaMicrosoftChainOpts{javaUUID: javaUUID})
+		cfg := testutil.NewConfig()
+		oaSetupMicrosoftChain(t, cfg, oaMicrosoftChainOpts{javaUUID: javaUUID})
 		las := &oaMockLinkAccountStore{}
 		req := oaRequestWithSession(activeSession("user-1"))
 
-		session, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: PlatformMinecraft, Mode: ModeLink})
+		session, err := ProcessOAuthLink(req, cfg, las, "code", &OAuthState{Platform: PlatformMinecraft, Mode: ModeLink})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -987,11 +984,12 @@ func TestOA27to42ProcessOAuthLink(t *testing.T) {
 	})
 
 	t.Run("OA-33_MinecraftJavaAbsent", func(t *testing.T) {
-		oaSetupMicrosoftChain(t, oaMicrosoftChainOpts{})
+		cfg := testutil.NewConfig()
+		oaSetupMicrosoftChain(t, cfg, oaMicrosoftChainOpts{})
 		las := &oaMockLinkAccountStore{}
 		req := oaRequestWithSession(activeSession("user-1"))
 
-		session, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: PlatformMinecraft, Mode: ModeLink})
+		session, err := ProcessOAuthLink(req, cfg, las, "code", &OAuthState{Platform: PlatformMinecraft, Mode: ModeLink})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1004,7 +1002,8 @@ func TestOA27to42ProcessOAuthLink(t *testing.T) {
 	})
 
 	t.Run("OA-34_XboxAlreadyLinkedToDifferentAccountRejected", func(t *testing.T) {
-		xuid := oaSetupMicrosoftChain(t, oaMicrosoftChainOpts{javaUUID: "33333333-3333-3333-3333-333333333333"})
+		cfg := testutil.NewConfig()
+		xuid := oaSetupMicrosoftChain(t, cfg, oaMicrosoftChainOpts{javaUUID: "33333333-3333-3333-3333-333333333333"})
 		las := &oaMockLinkAccountStore{
 			GetLinkedAccountByPlatformIDFunc: func(platform Platform, id string) (*LinkedAccount, error) {
 				if platform == PlatformXboxLive && id == xuid {
@@ -1015,7 +1014,7 @@ func TestOA27to42ProcessOAuthLink(t *testing.T) {
 		}
 		req := oaRequestWithSession(activeSession("user-1"))
 
-		_, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: PlatformXboxLive, Mode: ModeLink})
+		_, err := ProcessOAuthLink(req, cfg, las, "code", &OAuthState{Platform: PlatformXboxLive, Mode: ModeLink})
 		if !errors.Is(err, ErrPlatformAlreadyLinkedToDifferentAccount) {
 			t.Fatalf("error = %v, want ErrPlatformAlreadyLinkedToDifferentAccount", err)
 		}
@@ -1026,7 +1025,8 @@ func TestOA27to42ProcessOAuthLink(t *testing.T) {
 
 	t.Run("OA-35_JavaAlreadyLinkedToDifferentAccountCommitsNothing", func(t *testing.T) {
 		javaUUID := "44444444-4444-4444-4444-444444444444"
-		oaSetupMicrosoftChain(t, oaMicrosoftChainOpts{javaUUID: javaUUID})
+		cfg := testutil.NewConfig()
+		oaSetupMicrosoftChain(t, cfg, oaMicrosoftChainOpts{javaUUID: javaUUID})
 		las := &oaMockLinkAccountStore{
 			GetLinkedAccountByPlatformIDFunc: func(platform Platform, id string) (*LinkedAccount, error) {
 				if platform == PlatformMinecraft && id == javaUUID {
@@ -1037,7 +1037,7 @@ func TestOA27to42ProcessOAuthLink(t *testing.T) {
 		}
 		req := oaRequestWithSession(activeSession("user-1"))
 
-		_, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: PlatformMinecraft, Mode: ModeLink})
+		_, err := ProcessOAuthLink(req, cfg, las, "code", &OAuthState{Platform: PlatformMinecraft, Mode: ModeLink})
 		if !errors.Is(err, ErrPlatformAlreadyLinkedToDifferentAccount) {
 			t.Fatalf("error = %v, want ErrPlatformAlreadyLinkedToDifferentAccount", err)
 		}
@@ -1048,7 +1048,8 @@ func TestOA27to42ProcessOAuthLink(t *testing.T) {
 
 	t.Run("OA-36_XboxPrecheckLookupErrorPropagates", func(t *testing.T) {
 		wantErr := testutil.ErrDBDown
-		oaSetupMicrosoftChain(t, oaMicrosoftChainOpts{})
+		cfg := testutil.NewConfig()
+		oaSetupMicrosoftChain(t, cfg, oaMicrosoftChainOpts{})
 		las := &oaMockLinkAccountStore{
 			GetLinkedAccountByPlatformIDFunc: func(platform Platform, id string) (*LinkedAccount, error) {
 				if platform == PlatformXboxLive {
@@ -1059,7 +1060,7 @@ func TestOA27to42ProcessOAuthLink(t *testing.T) {
 		}
 		req := oaRequestWithSession(activeSession("user-1"))
 
-		_, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: PlatformXboxLive, Mode: ModeLink})
+		_, err := ProcessOAuthLink(req, cfg, las, "code", &OAuthState{Platform: PlatformXboxLive, Mode: ModeLink})
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("error = %v, want %v", err, wantErr)
 		}
@@ -1071,7 +1072,8 @@ func TestOA27to42ProcessOAuthLink(t *testing.T) {
 	t.Run("OA-37_JavaPrecheckLookupErrorPropagates", func(t *testing.T) {
 		wantErr := testutil.ErrDBDown
 		javaUUID := "55555555-5555-5555-5555-555555555555"
-		oaSetupMicrosoftChain(t, oaMicrosoftChainOpts{javaUUID: javaUUID})
+		cfg := testutil.NewConfig()
+		oaSetupMicrosoftChain(t, cfg, oaMicrosoftChainOpts{javaUUID: javaUUID})
 		las := &oaMockLinkAccountStore{
 			GetLinkedAccountByPlatformIDFunc: func(platform Platform, id string) (*LinkedAccount, error) {
 				if platform == PlatformMinecraft {
@@ -1082,7 +1084,7 @@ func TestOA27to42ProcessOAuthLink(t *testing.T) {
 		}
 		req := oaRequestWithSession(activeSession("user-1"))
 
-		_, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: PlatformMinecraft, Mode: ModeLink})
+		_, err := ProcessOAuthLink(req, cfg, las, "code", &OAuthState{Platform: PlatformMinecraft, Mode: ModeLink})
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("error = %v, want %v", err, wantErr)
 		}
@@ -1094,7 +1096,8 @@ func TestOA27to42ProcessOAuthLink(t *testing.T) {
 	t.Run("OA-38_BothAlreadyLinkedToSameAccountIsNoOp", func(t *testing.T) {
 		xuid := "xid1"
 		javaUUID := "66666666-6666-6666-6666-666666666666"
-		oaSetupMicrosoftChain(t, oaMicrosoftChainOpts{javaUUID: javaUUID, xuid: xuid})
+		cfg := testutil.NewConfig()
+		oaSetupMicrosoftChain(t, cfg, oaMicrosoftChainOpts{javaUUID: javaUUID, xuid: xuid})
 		las := &oaMockLinkAccountStore{
 			GetLinkedAccountByPlatformIDFunc: func(platform Platform, id string) (*LinkedAccount, error) {
 				if (platform == PlatformXboxLive && id == xuid) || (platform == PlatformMinecraft && id == javaUUID) {
@@ -1105,7 +1108,7 @@ func TestOA27to42ProcessOAuthLink(t *testing.T) {
 		}
 		req := oaRequestWithSession(activeSession("user-1"))
 
-		session, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: PlatformMinecraft, Mode: ModeLink})
+		session, err := ProcessOAuthLink(req, cfg, las, "code", &OAuthState{Platform: PlatformMinecraft, Mode: ModeLink})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1118,11 +1121,12 @@ func TestOA27to42ProcessOAuthLink(t *testing.T) {
 	})
 
 	t.Run("OA-39_IdentityFetchFails", func(t *testing.T) {
-		oaSetupMicrosoftChain(t, oaMicrosoftChainOpts{xstsFails: true})
+		cfg := testutil.NewConfig()
+		oaSetupMicrosoftChain(t, cfg, oaMicrosoftChainOpts{xstsFails: true})
 		las := &oaMockLinkAccountStore{}
 		req := oaRequestWithSession(activeSession("user-1"))
 
-		_, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: PlatformMinecraft, Mode: ModeLink})
+		_, err := ProcessOAuthLink(req, cfg, las, "code", &OAuthState{Platform: PlatformMinecraft, Mode: ModeLink})
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -1133,11 +1137,12 @@ func TestOA27to42ProcessOAuthLink(t *testing.T) {
 
 	t.Run("OA-40_XboxLinkWriteFailsJavaNeverAttempted", func(t *testing.T) {
 		javaUUID := "77777777-7777-7777-7777-777777777777"
-		oaSetupMicrosoftChain(t, oaMicrosoftChainOpts{javaUUID: javaUUID})
+		cfg := testutil.NewConfig()
+		oaSetupMicrosoftChain(t, cfg, oaMicrosoftChainOpts{javaUUID: javaUUID})
 		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*LinkedAccount) error { return testutil.ErrInsertFailed }}
 		req := oaRequestWithSession(activeSession("user-1"))
 
-		_, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: PlatformMinecraft, Mode: ModeLink})
+		_, err := ProcessOAuthLink(req, cfg, las, "code", &OAuthState{Platform: PlatformMinecraft, Mode: ModeLink})
 		if !errors.Is(err, ErrLinkAccountFailed) {
 			t.Fatalf("error = %v, want %v", err, ErrLinkAccountFailed)
 		}
@@ -1147,11 +1152,12 @@ func TestOA27to42ProcessOAuthLink(t *testing.T) {
 	})
 
 	t.Run("OA-41_PlatformUserFetchFails", func(t *testing.T) {
-		oaSetupDiscordUserFailure(t)
+		cfg := testutil.NewConfig()
+		oaSetupDiscordUserFailure(t, cfg)
 		las := &oaMockLinkAccountStore{}
 		req := oaRequestWithSession(activeSession("user-1"))
 
-		_, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLink})
+		_, err := ProcessOAuthLink(req, cfg, las, "code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLink})
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -1161,12 +1167,13 @@ func TestOA27to42ProcessOAuthLink(t *testing.T) {
 	})
 
 	t.Run("OA-42_FinalLinkWriteFails", func(t *testing.T) {
-		oaSetupDiscordPlatform(t)
+		cfg := testutil.NewConfig()
+		oaSetupDiscordPlatform(t, cfg)
 		wantErr := testutil.ErrInsertFailed
 		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*LinkedAccount) error { return wantErr }}
 		req := oaRequestWithSession(activeSession("user-1"))
 
-		_, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLink})
+		_, err := ProcessOAuthLink(req, cfg, las, "code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLink})
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -1179,11 +1186,12 @@ func TestOA79to81ProcessOAuthLinkAdditionalPlatformDispatch(t *testing.T) {
 	}
 
 	t.Run("OA-79_TwitchLinksToSession", func(t *testing.T) {
-		oaSetupTwitchPlatform(t)
+		cfg := testutil.NewConfig()
+		oaSetupTwitchPlatform(t, cfg)
 		las := &oaMockLinkAccountStore{}
 		req := oaRequestWithSession(activeSession("user-1"))
 
-		session, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: PlatformTwitch, Mode: ModeLink})
+		session, err := ProcessOAuthLink(req, cfg, las, "code", &OAuthState{Platform: PlatformTwitch, Mode: ModeLink})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1199,11 +1207,12 @@ func TestOA79to81ProcessOAuthLinkAdditionalPlatformDispatch(t *testing.T) {
 	})
 
 	t.Run("OA-80_MicrosoftPlainLinksToSession", func(t *testing.T) {
-		oaSetupMicrosoftLoginPlatform(t)
+		cfg := testutil.NewConfig()
+		oaSetupMicrosoftLoginPlatform(t, cfg)
 		las := &oaMockLinkAccountStore{}
 		req := oaRequestWithSession(activeSession("user-1"))
 
-		session, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: PlatformMicrosoft, Mode: ModeLink})
+		session, err := ProcessOAuthLink(req, cfg, las, "code", &OAuthState{Platform: PlatformMicrosoft, Mode: ModeLink})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -1220,7 +1229,8 @@ func TestOA79to81ProcessOAuthLinkAdditionalPlatformDispatch(t *testing.T) {
 
 	t.Run("OA-81_XboxLiveOnlyNeverTouchesJavaEvenIfOwned", func(t *testing.T) {
 		javaUUID := "99999999-9999-9999-9999-999999999999"
-		oaSetupMicrosoftChain(t, oaMicrosoftChainOpts{javaUUID: javaUUID})
+		cfg := testutil.NewConfig()
+		oaSetupMicrosoftChain(t, cfg, oaMicrosoftChainOpts{javaUUID: javaUUID})
 
 		var mcLoginCalled, mcProfileCalled bool
 		mcLoginTS := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1228,18 +1238,18 @@ func TestOA79to81ProcessOAuthLinkAdditionalPlatformDispatch(t *testing.T) {
 			w.WriteHeader(http.StatusInternalServerError)
 		}))
 		t.Cleanup(mcLoginTS.Close)
-		oaSetVar(t, &minecraftLoginURL, mcLoginTS.URL)
+		cfg.Microsoft.MinecraftLoginURL = mcLoginTS.URL
 		mcProfileTS := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			mcProfileCalled = true
 			w.WriteHeader(http.StatusInternalServerError)
 		}))
 		t.Cleanup(mcProfileTS.Close)
-		oaSetVar(t, &minecraftProfileURL, mcProfileTS.URL)
+		cfg.Microsoft.MinecraftProfileURL = mcProfileTS.URL
 
 		las := &oaMockLinkAccountStore{}
 		req := oaRequestWithSession(activeSession("user-1"))
 
-		session, err := ProcessOAuthLink(req, las, "code", &OAuthState{Platform: PlatformXboxLive, Mode: ModeLink})
+		session, err := ProcessOAuthLink(req, cfg, las, "code", &OAuthState{Platform: PlatformXboxLive, Mode: ModeLink})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
