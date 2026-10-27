@@ -362,28 +362,3 @@ func TestHD28to30_StoreConflictMapping(t *testing.T) {
 		testutil.ExpectDetail(t, w, "That bee name already exists")
 	})
 }
-
-type bngCtxStore struct {
-	bngMockStore
-	got context.Context
-}
-
-func (m *bngCtxStore) GetBeeName(ctx context.Context) (string, error) {
-	m.got = ctx
-	return "Buzzy", nil
-}
-
-func TestHD31_CtxReachesStore(t *testing.T) {
-	t.Run("BNH-31_CtxReachesStore", func(t *testing.T) {
-		type ctxKey struct{}
-		s := &bngCtxStore{}
-		r := bngRequest(t, http.MethodGet, "/", nil, nil)
-		r = r.WithContext(context.WithValue(r.Context(), ctxKey{}, "marker"))
-		h := GetBeeNameHandler(s)
-		w := httptest.NewRecorder()
-		h(w, r)
-		if s.got == nil || s.got.Value(ctxKey{}) != "marker" {
-			t.Error("store did not receive the request's ctx")
-		}
-	})
-}

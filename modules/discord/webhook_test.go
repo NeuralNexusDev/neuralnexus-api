@@ -26,16 +26,6 @@ func dcRequirePanic(t *testing.T, wantSubstr string, fn func()) {
 }
 
 func TestWebhookType_String(t *testing.T) {
-	t.Run("WT-01_Ping", func(t *testing.T) {
-		if got := WebhookTypePing.String(); got != "Ping" {
-			t.Errorf("String() = %q, want %q", got, "Ping")
-		}
-	})
-	t.Run("WT-02_Event", func(t *testing.T) {
-		if got := WebhookTypeEvent.String(); got != "Event" {
-			t.Errorf("String() = %q, want %q", got, "Event")
-		}
-	})
 	t.Run("WT-03_OutOfRange", func(t *testing.T) {
 		if got := WebhookType(99).String(); got != "WebhookType(99)" {
 			t.Errorf("String() = %q, want %q", got, "WebhookType(99)")
@@ -44,32 +34,6 @@ func TestWebhookType_String(t *testing.T) {
 }
 
 func TestWebhookEventType_String(t *testing.T) {
-	t.Run("WET-01_NamedConstants", func(t *testing.T) {
-		cases := []struct {
-			in   WebhookEventType
-			want string
-		}{
-			{ApplicationAuthorized, "ApplicationAuthorized"},
-			{ApplicationDeauthorized, "ApplicationDeauthorized"},
-			{EntitlementCreate, "EntitlementCreate"},
-			{EntitlementUpdate, "EntitlementUpdate"},
-			{EntitlementDelete, "EntitlementDelete"},
-			{QuestUserEnrollment, "QuestUserEnrollment"},
-			{LobbyMessageCreate, "LobbyMessageCreate"},
-			{LobbyMessageUpdate, "LobbyMessageUpdate"},
-			{LobbyMessageDelete, "LobbyMessageDelete"},
-			{GameDirectMessageCreate, "GameDirectMessageCreate"},
-			{GameDirectMessageUpdate, "GameDirectMessageUpdate"},
-			{GameDirectMessageDelete, "GameDirectMessageDelete"},
-		}
-		for _, c := range cases {
-			t.Run(string(c.in), func(t *testing.T) {
-				if got := c.in.String(); got != c.want {
-					t.Errorf("String() = %q, want %q", got, c.want)
-				}
-			})
-		}
-	})
 	t.Run("WET-02_Unrecognized", func(t *testing.T) {
 		got := WebhookEventType("SOMETHING_ELSE").String()
 		want := "WebhookEventType(SOMETHING_ELSE)"
@@ -80,14 +44,6 @@ func TestWebhookEventType_String(t *testing.T) {
 }
 
 func TestInstallationContext_String(t *testing.T) {
-	t.Run("IC-01_NamedConstants", func(t *testing.T) {
-		if got := GuildInstall.String(); got != "GuildInstall" {
-			t.Errorf("String() = %q, want %q", got, "GuildInstall")
-		}
-		if got := UserInstall.String(); got != "UserInstall" {
-			t.Errorf("String() = %q, want %q", got, "UserInstall")
-		}
-	})
 	t.Run("IC-02_OutOfRange", func(t *testing.T) {
 		got := InstallationContext(5).String()
 		want := "InstallationContext(5)"

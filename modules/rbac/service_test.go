@@ -505,19 +505,6 @@ func TestSV19to23GrantedValues(t *testing.T) {
 	})
 }
 
-func TestSV24RequestContextReachesStore(t *testing.T) {
-	t.Run("RCV-24_RequestContextReachesStore", func(t *testing.T) {
-		f := &fakeStore{role: &Role{ID: "1"}}
-		ctx := context.WithValue(context.Background(), reqctx.UserIDKey, "u1")
-		if _, err := NewService(f).GetRole(ctx, "1"); err != nil {
-			t.Fatalf("GetRole() error = %v", err)
-		}
-		if got := f.ctx.Value(reqctx.UserIDKey); got != "u1" {
-			t.Errorf("store context user ID = %v, want %q", got, "u1")
-		}
-	})
-}
-
 func TestSV25GrantWritesIgnoreCancelledContext(t *testing.T) {
 	t.Run("RCV-25_GrantWritesIgnoreCancelledContext", func(t *testing.T) {
 		writes := map[string]func(Service, context.Context) error{

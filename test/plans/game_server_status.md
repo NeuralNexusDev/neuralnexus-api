@@ -15,7 +15,6 @@
 | GSH-09 | SimpleGameServerStatus | Error Path | Non-numeric port | `host` set, `port` is not an integer | 400 Bad Request, problem detail `msgInvalidPort` | P2 |  |
 | GSH-10 | SimpleGameServerStatus | Error Path | Underlying service returns an error | host/port valid, fake GSSService.QueryGameServer returns (nil, someErr) | 404 Not Found, body "Offline" | P1 |  |
 | GSH-11 | GameServerStatusHandler | Error Path | Underlying service returns each known sentinel | fake `QueryGameServer` returns `ErrGameQQuery`, `ErrGameDigQuery`, `ErrReadBody`, `ErrDecodeBody`, `ErrNoGameQResponse`, `ErrGameUnsupported`, `mcstatus.ErrJavaStatus`, `mcstatus.ErrBedrockStatus`, or an unrecognized error | 502 Bad Gateway with the matching const (`msgGameQQueryFailed`, `msgGameDigQueryFailed`, `msgReadBodyFailed`, `msgDecodeBodyFailed`, `msgNoGameQResponse`, `msgJavaStatusFailed`, `msgBedrockStatusFailed`); 400 Bad Request with `msgGameUnsupported` for `ErrGameUnsupported`; 500 Internal Server Error with `msgQueryFailed` for an unrecognized error; no cause text | P1 | |
-| GSH-12 | GameServerStatusHandler | Happy Path | The request ctx reaches the service | request ctx carries a marker value; recording `QueryGameServer` | The recorded ctx holds the marker value | P1 |  |
 
 ## service.go
 

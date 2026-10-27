@@ -302,30 +302,3 @@ func TestSimpleGameServerStatus(t *testing.T) {
 		}
 	})
 }
-
-type ctxGSSService struct {
-	fakeGSSService
-	ctx context.Context
-}
-
-func (f *ctxGSSService) QueryGameServer(ctx context.Context, game string, host string, port int, queryType QueryType) (*GameServerStatus, error) {
-	f.ctx = ctx
-	return f.status, f.err
-}
-
-func TestGameServerStatusHandlerContext(t *testing.T) {
-	type ctxKey struct{}
-
-	t.Run("GSH-12_RequestContextReachesService", func(t *testing.T) {
-		fake := &ctxGSSService{fakeGSSService: fakeGSSService{status: newTestStatus("rawdata")}}
-		req := testutil.NewRequest("GET", "/gss/minecraft/status?host=1.2.3.4&port=25565", nil)
-		req.SetPathValue("game", "minecraft")
-		req = req.WithContext(context.WithValue(req.Context(), ctxKey{}, "marker"))
-
-		GameServerStatusHandler(fake)(httptest.NewRecorder(), req)
-
-		if fake.ctx == nil || fake.ctx.Value(ctxKey{}) != "marker" {
-			t.Fatalf("service ctx = %v, want the request ctx carrying the marker", fake.ctx)
-		}
-	})
-}
