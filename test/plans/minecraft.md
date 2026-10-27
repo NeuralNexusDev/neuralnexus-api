@@ -108,7 +108,7 @@
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
 | SV-01 | NewService | Happy Path | client is nil | client == nil | Returned service uses http.DefaultClient | P2 |  |
-| SV-02 | NewService | Edge Case | client is provided | non-nil client | Retained as-is; nnGeyserTextureUrl == nnTextureUrl+"geyser/" | P3 |  |
+| SV-02 | NewService | Edge Case | client is provided | non-nil client | Retained as-is; s3TextureUrl is the URL passed to NewService | P3 |  |
 | SV-03 | GetMojangPlayerByName | Happy Path | Cache hit | store cache returns player, nil | Returns cached player; no DB/HTTP calls | P1 |  |
 | SV-04 | GetMojangPlayerByName | Error Path | Cache error is not ErrCacheMiss | store cache error = plain error | Returns that error, no fallback | P2 |  |
 | SV-05 | GetMojangPlayerByName | Happy Path | Cache miss, DB entry fresh | cache=ErrCacheMiss, DB player not stale | Caches and returns DB player, no Mojang call | P1 |  |
