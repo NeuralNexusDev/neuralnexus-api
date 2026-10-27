@@ -126,9 +126,9 @@ func ProcessOAuthLogin(ctx context.Context, cfg *config.Config, as account.Servi
 		var java *MinecraftData
 		var xboxErr error
 		if state.Platform == PlatformXboxLive {
-			xbox, xboxErr = GetXboxUser(ctx, token)
+			xbox, xboxErr = GetXboxUser(ctx, cfg.Microsoft, token)
 		} else {
-			xbox, java, xboxErr = GetXboxAndMinecraftUser(ctx, token)
+			xbox, java, xboxErr = GetXboxAndMinecraftUser(ctx, cfg.Microsoft, token)
 		}
 		if xboxErr != nil {
 			return nil, xboxErr
@@ -145,7 +145,7 @@ func ProcessOAuthLogin(ctx context.Context, cfg *config.Config, as account.Servi
 		case PlatformTwitch:
 			user, err = GetTwitchUser(ctx, cfg.Twitch, token)
 		case PlatformMicrosoft:
-			user, err = GetMicrosoftUser(ctx, token)
+			user, err = GetMicrosoftUser(ctx, cfg.Microsoft, token)
 		default:
 			return nil, ErrInvalidPlatform
 		}
@@ -271,9 +271,9 @@ func ProcessOAuthLink(r *http.Request, cfg *config.Config, las Store, code strin
 		var java *MinecraftData
 		var xboxErr error
 		if state.Platform == PlatformXboxLive {
-			xbox, xboxErr = GetXboxUser(ctx, token)
+			xbox, xboxErr = GetXboxUser(ctx, cfg.Microsoft, token)
 		} else {
-			xbox, java, xboxErr = GetXboxAndMinecraftUser(ctx, token)
+			xbox, java, xboxErr = GetXboxAndMinecraftUser(ctx, cfg.Microsoft, token)
 		}
 		if xboxErr != nil {
 			return nil, xboxErr
@@ -317,7 +317,7 @@ func ProcessOAuthLink(r *http.Request, cfg *config.Config, las Store, code strin
 	case PlatformTwitch:
 		user, err = GetTwitchUser(ctx, cfg.Twitch, token)
 	case PlatformMicrosoft:
-		user, err = GetMicrosoftUser(ctx, token)
+		user, err = GetMicrosoftUser(ctx, cfg.Microsoft, token)
 	default:
 		return nil, ErrInvalidPlatform
 	}
