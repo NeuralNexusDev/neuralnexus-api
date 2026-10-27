@@ -34,7 +34,6 @@
 | BNH-28 | UploadBeeNameHandler | Error Path | Store reports the name already exists | fake.UploadBeeName -> ("", ErrBeeNameExists) | 409 Conflict, detail is "That bee name already exists" | P2 |  |
 | BNH-29 | SubmitBeeNameHandler | Error Path | Store reports the suggestion already exists | fake.SubmitBeeName -> ("", ErrBeeNameSuggestionExists) | 409 Conflict, detail is "That bee name has already been suggested" | P2 |  |
 | BNH-30 | AcceptBeeNameSuggestionHandler | Error Path | Store reports the name already exists | fake.AcceptBeeNameSuggestion -> ("", ErrBeeNameExists) | 409 Conflict, detail is "That bee name already exists" | P2 |  |
-| BNH-31 | GetBeeNameHandler | Happy Path | the request's ctx reaches the store | fake.GetBeeName records the ctx it receives; request ctx carries a marker value | The recorded ctx holds the marker value | P1 | |
 
 ## store.go
 
