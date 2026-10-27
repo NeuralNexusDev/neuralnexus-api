@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/goccy/go-json"
 )
@@ -62,14 +63,14 @@ const (
 )
 
 // -------------- Functions --------------
-func getReleases(ctx context.Context, githubToken, group, project string) ([]Release, error) {
-	githubURL := "https://api.github.com/repos/" + group + "/" + project + "/releases"
+func getReleases(ctx context.Context, cfg config.GitHub, group, project string) ([]Release, error) {
+	githubURL := cfg.APIEndpoint + "/repos/" + group + "/" + project + "/releases"
 	req, err := http.NewRequestWithContext(ctx, "GET", githubURL, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("Authorization", "Bearer "+githubToken)
+	req.Header.Set("Authorization", "Bearer "+cfg.Token)
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
 	req.Header.Set("User-Agent", "neuralnexus-api")
 
@@ -117,14 +118,14 @@ func ConvertToFMLFormat(gitHubReleasesURL string, releases []Release) map[string
 }
 
 // GetReleasesHandler - Get the releases
-func GetReleasesHandler(githubToken string) http.HandlerFunc {
+func GetReleasesHandler(cfg config.GitHub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		group := r.PathValue("group")
 		project := r.PathValue("project")
 
 		format := r.URL.Query().Get("format")
 
-		releases, err := getReleases(r.Context(), githubToken, group, project)
+		releases, err := getReleases(r.Context(), cfg, group, project)
 		if err != nil {
 			reqctx.Log(r.Context(), err.Error())
 			if err == ErrGitHubTokenUnset {

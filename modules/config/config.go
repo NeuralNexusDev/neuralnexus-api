@@ -95,7 +95,8 @@ type GameServerStatus struct {
 }
 
 type GitHub struct {
-	Token string
+	APIEndpoint string
+	Token       string
 }
 
 type Microsoft struct {
@@ -253,7 +254,8 @@ func FromEnv() *Config {
 			GameDigEndpoint: os.Getenv("GSS_GAMEDIG_URL"),
 		},
 		GitHub: GitHub{
-			Token: checkEnvVar("GITHUB_TOKEN"),
+			APIEndpoint: "https://api.github.com",
+			Token:       checkEnvVar("GITHUB_TOKEN"),
 		},
 		Microsoft: Microsoft{
 			OAuth2Config: &oauth2.Config{
