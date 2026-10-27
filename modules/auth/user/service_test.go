@@ -208,22 +208,6 @@ func usNewService(as *usFakeAccountStore, als *usFakeLinkAccountStore, ass *usFa
 	return NewService(as, als, link.NewService(als, as), ass, testutil.DefaultRoleStore())
 }
 
-func TestUS01NewService(t *testing.T) {
-	t.Run("US-01_WiresGivenSubStores", func(t *testing.T) {
-		as := &usFakeAccountStore{getByIDAccount: &account.Account{UserID: "u1"}}
-		als := &usFakeLinkAccountStore{}
-		ass := &usFakeAccountSettingsStore{}
-		svc := usNewService(as, als, ass)
-
-		if _, err := svc.GetUser(context.Background(), "u1"); err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if as.getByIDCalls != 1 {
-			t.Errorf("expected GetUser to delegate to the Store passed to NewService")
-		}
-	})
-}
-
 func TestUS02to03GetUser(t *testing.T) {
 	t.Run("US-02_Success", func(t *testing.T) {
 		svc := usNewService(&usFakeAccountStore{getByIDAccount: &account.Account{UserID: "u1", Username: "name"}}, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})

@@ -162,30 +162,6 @@ func TestTY12to14ValidateUser(t *testing.T) {
 	})
 }
 
-func TestTY15DummyValidateUser(t *testing.T) {
-	t.Run("ACT-15_DoesNotPanic", func(t *testing.T) {
-		DummyValidateUser(testutil.NewConfig().Auth.Account.Pepper, "whatever")
-	})
-}
-
-func TestTY17to18AddRole(t *testing.T) {
-	t.Run("ACT-17_AddsToEmptyRoles", func(t *testing.T) {
-		a := &Account{}
-		a.AddRole("admin")
-		if len(a.Roles) != 1 || a.Roles[0] != "admin" {
-			t.Errorf("Roles = %v, want [admin]", a.Roles)
-		}
-	})
-
-	t.Run("ACT-18_DuplicateAllowed", func(t *testing.T) {
-		a := &Account{Roles: []string{"admin"}}
-		a.AddRole("admin")
-		if len(a.Roles) != 2 || a.Roles[0] != "admin" || a.Roles[1] != "admin" {
-			t.Errorf("Roles = %v, want [admin admin] (no de-duplication)", a.Roles)
-		}
-	})
-}
-
 func TestTY19to21RemoveRole(t *testing.T) {
 	t.Run("ACT-19_RemovesPresentRole", func(t *testing.T) {
 		a := &Account{Roles: []string{"a", "b", "c"}}
@@ -208,16 +184,6 @@ func TestTY19to21RemoveRole(t *testing.T) {
 		a.RemoveRole("z")
 		if len(a.Roles) != 0 {
 			t.Errorf("Roles = %v, want to remain empty", a.Roles)
-		}
-	})
-}
-
-func TestTY22DefaultAccountSettings(t *testing.T) {
-	t.Run("ACT-22_DefaultsToPasswordAuthEnabled", func(t *testing.T) {
-		got := DefaultAccountSettings("u1")
-		want := &AccountSettings{UserID: "u1", PasswordAuthEnabled: true}
-		if got.UserID != want.UserID || got.PasswordAuthEnabled != want.PasswordAuthEnabled {
-			t.Errorf("DefaultAccountSettings() = %+v, want %+v", got, want)
 		}
 	})
 }

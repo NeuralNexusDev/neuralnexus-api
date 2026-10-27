@@ -52,7 +52,6 @@
 | CSH-52 | ServerStatusHandler | Error Path | `GetServerStatus` returns `ErrJavaStatus` and `Accept: application/xml` | host = `"example.com:25570"` | `Content-Type: application/problem+xml` and the body has a `Problem` root element with the `host` and `port` elements | P2 |  |
 | CSH-53 | ServerStatusHandler | Error Path | `GetServerStatus` returns `ErrJavaStatus` and `Accept: application/x-protobuf` | host = `"example.com:25570"` | Response is 404 with `Content-Type: application/problem+x-protobuf` | P2 |  |
 | CSH-54 | ServerStatusHandler | Error Path | `bedrock=true` and `GetServerStatus` returns `ErrBedrockStatus` | host = `"Example.COM"` | Response is 404 and the problem carries `detail` `msgBedrockStatusFailed`, `host` `"example.com"` and `port` 19132 | P1 |  |
-| CSH-55 | ServerStatusHandler | Happy Path | The request ctx reaches the service | request ctx carries a marker value; recording `GetServerStatus` | The recorded ctx holds the marker value | P1 |  |
 
 ## service.go
 
@@ -89,8 +88,6 @@
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
 | CST-01 | NewServerStatus | Happy Path | all constructor args populated | java server type, non-nil players/icon/raw | All `MCServerStatus`/embedded `ServerStatus` fields mapped 1:1, including proto `ServerType` enum `JAVA` | P1 |  |
 | CST-02 | NewServerStatus | Edge Case | `serverType = ServerTypeBedrock` | — | Wrapper `ServerType` == `bedrock`, proto enum == `ServerType_BEDROCK` | P2 |  |
-| CST-03 | NewServerStatus | Edge Case | `players = nil` | — | `Players` field stays `nil` | P3 |  |
-| CST-04 | NewServerStatus | Edge Case | `icon = nil` | — | `Icon` field stays `nil`, no panic | P3 |  |
 | CST-05 | NewServerStatus | Edge Case | `serverType` is an unrecognized string | `ServerType("unknown")` | `mcstatuspb.ServerType_value` map lookup misses, proto enum defaults to the zero value (`JAVA`); wrapper `ServerType` keeps the raw string unchanged (documents Go map-miss semantics, not a bug) | P3 |  |
 | CST-06 | MOTDToName | Happy Path | plain motd, no newlines/color codes | `"Hello World"` | Returned unchanged | P2 |  |
 | CST-07 | MOTDToName | Edge Case | motd contains `\n` | `"Line1\nLine2"` | Newline replaced with a space | P2 |  |

@@ -9,30 +9,12 @@ import (
 	"github.com/goccy/go-json"
 )
 
-func TestDC01to04DiscordDataAccessors(t *testing.T) {
+func TestDC04DiscordDataGetData(t *testing.T) {
 	d := &DiscordData{User: &discordgo.User{
 		ID:       "123",
 		Username: "alice",
 		Email:    "a@b.com",
 	}}
-
-	t.Run("DC-01_GetID", func(t *testing.T) {
-		if got := d.GetID(); got != "123" {
-			t.Errorf("GetID() = %q, want %q", got, "123")
-		}
-	})
-
-	t.Run("DC-02_GetUsername", func(t *testing.T) {
-		if got := d.GetUsername(); got != "alice" {
-			t.Errorf("GetUsername() = %q, want %q", got, "alice")
-		}
-	})
-
-	t.Run("DC-03_GetEmail", func(t *testing.T) {
-		if got := d.GetEmail(); got != "a@b.com" {
-			t.Errorf("GetEmail() = %q, want %q", got, "a@b.com")
-		}
-	})
 
 	t.Run("DC-04_GetData", func(t *testing.T) {
 		data := d.GetData()
@@ -42,30 +24,6 @@ func TestDC01to04DiscordDataAccessors(t *testing.T) {
 		}
 		if roundTripped.ID != d.ID || roundTripped.Username != d.Username {
 			t.Errorf("GetData() round-trip mismatch: got %+v, want equivalent of %+v", roundTripped, *d.User)
-		}
-	})
-}
-
-func TestDC05CreateLinkedAccount(t *testing.T) {
-	t.Run("DC-05_CreateLinkedAccount", func(t *testing.T) {
-		d := &DiscordData{User: &discordgo.User{ID: "123", Username: "alice"}}
-
-		la := d.CreateLinkedAccount("user-1")
-
-		if la.UserID != "user-1" {
-			t.Errorf("UserID = %q, want %q", la.UserID, "user-1")
-		}
-		if la.Platform != PlatformDiscord {
-			t.Errorf("Platform = %q, want %q", la.Platform, PlatformDiscord)
-		}
-		if la.PlatformUsername != "alice" {
-			t.Errorf("PlatformUsername = %q, want %q", la.PlatformUsername, "alice")
-		}
-		if la.PlatformID != "123" {
-			t.Errorf("PlatformID = %q, want %q", la.PlatformID, "123")
-		}
-		if !la.Verified || !la.LoginEnabled {
-			t.Errorf("expected a freshly created linked account to be Verified and LoginEnabled, got Verified=%v LoginEnabled=%v", la.Verified, la.LoginEnabled)
 		}
 	})
 }

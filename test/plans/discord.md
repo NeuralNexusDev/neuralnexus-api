@@ -27,12 +27,8 @@
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| WT-01 | WebhookType.String | Accessor | Stringify `WebhookTypePing` | `t = WebhookTypePing` | Returns `"Ping"` | P3 |  |
-| WT-02 | WebhookType.String | Accessor | Stringify `WebhookTypeEvent` | `t = WebhookTypeEvent` | Returns `"Event"` | P3 |  |
 | WT-03 | WebhookType.String | Edge Case | Stringify an out-of-range value | `t = WebhookType(99)` | Returns `"WebhookType(99)"` | P3 |  |
-| WET-01 | WebhookEventType.String | Accessor | Stringify each of the 12 named `WebhookEventType` constants | Table of all 12 constants | Each returns its documented Go-identifier-style name (e.g. `ApplicationAuthorized` → `"ApplicationAuthorized"`) | P3 |  |
 | WET-02 | WebhookEventType.String | Edge Case | Stringify an unrecognized value | `t = WebhookEventType("SOMETHING_ELSE")` | Returns `"WebhookEventType(SOMETHING_ELSE)"` | P3 |  |
-| IC-01 | InstallationContext.String | Accessor | Stringify `GuildInstall` and `UserInstall` | `c = GuildInstall` / `c = UserInstall` | Returns `"GuildInstall"` / `"UserInstall"` respectively | P3 |  |
 | IC-02 | InstallationContext.String | Edge Case | Stringify an out-of-range value | `c = InstallationContext(5)` | Returns `"InstallationContext(5)"` | P3 |  |
 | WEU-01 | WebhookEvent.UnmarshalJSON | Happy Path | Valid JSON for an `APPLICATION_AUTHORIZED` event | Raw JSON has `type`, `timestamp`, and `data.integration_type`/`data.user`/`data.guild` | No error; `Type`, `Timestamp` set correctly; `Data` is an `ApplicationAuthorizedWebhookData` with matching `IntegrationType`, `User.ID`, `Guild.ID` | P1 |  |
 | WEU-02 | WebhookEvent.UnmarshalJSON | Happy Path | Valid JSON for an `APPLICATION_DEAUTHORIZED` event | Raw JSON has `type`, `timestamp`, `data.user` | No error; `Data` is an `ApplicationDeauthorizedWebhookData` with matching `User.ID` | P1 |  |

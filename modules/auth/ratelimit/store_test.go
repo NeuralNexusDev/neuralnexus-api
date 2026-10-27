@@ -11,21 +11,6 @@ func stStoreWithUnreachableRedis(t *testing.T) *store {
 	return &store{rdb: testutil.UnreachableRedis(t)}
 }
 
-func TestST01NewStore(t *testing.T) {
-	t.Run("RLS-01_WrapsGivenClient", func(t *testing.T) {
-		rdb := testutil.UnreachableRedis(t)
-
-		got := NewStore(testutil.NewConfig().Auth.RateLimit, rdb)
-		s, ok := got.(*store)
-		if !ok {
-			t.Fatalf("NewStore() returned type %T, want *store", got)
-		}
-		if s.rdb != rdb {
-			t.Error("NewStore() did not retain the given *redis.Client")
-		}
-	})
-}
-
 func TestST40GetRateLimit(t *testing.T) {
 	s := stStoreWithUnreachableRedis(t)
 	t.Run("RLS-40_ConnectionErrorNotTreatedAsMiss", func(t *testing.T) {

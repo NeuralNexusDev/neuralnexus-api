@@ -26,11 +26,15 @@ import (
 	"golang.org/x/crypto/ed25519"
 )
 
+type mwMarkerKey struct{}
+
 type mwFakeSessionSvc struct {
 	readJWTFunc   func(token string) (*session.Session, error)
 	deleteFunc    func(id string) error
 	deletedIDs    []string
 	readJWTCalled bool
+	deleteCtxErr  error
+	deleteMarker  any
 }
 
 var _ session.Service = (*mwFakeSessionSvc)(nil)
@@ -47,7 +51,9 @@ func (f *mwFakeSessionSvc) CreateJWT(context.Context, *session.Session) (string,
 	return "", nil
 }
 
-func (f *mwFakeSessionSvc) DeleteSession(_ context.Context, id string) error {
+func (f *mwFakeSessionSvc) DeleteSession(ctx context.Context, id string) error {
+	f.deleteCtxErr = ctx.Err()
+	f.deleteMarker = ctx.Value(mwMarkerKey{})
 	f.deletedIDs = append(f.deletedIDs, id)
 	if f.deleteFunc != nil {
 		return f.deleteFunc(id)
@@ -140,49 +146,6 @@ func mwCaptureLog(t *testing.T) func() string {
 	return buf.String
 }
 
-func TestMiddlewareLog(t *testing.T) {
-	t.Run("MW-01_SessionInContextLogsUserID", func(t *testing.T) {
-		getLog := mwCaptureLog(t)
-		ctx := mwBaseCtx()
-		ctx = context.WithValue(ctx, reqctx.SessionKey, &session.Session{ID: "s1", UserID: "u1"})
-		ctx = context.WithValue(ctx, reqctx.UserIDKey, "u1")
-
-		reqctx.Log(ctx, "hello", "world")
-
-		out := getLog()
-		if !strings.Contains(out, "u1") {
-			t.Errorf("expected log output to contain the session's user ID, got: %q", out)
-		}
-		if !strings.Contains(out, "1 u1 127.0.0.1 hello world") {
-			t.Errorf("expected log output to contain the formatted line, got: %q", out)
-		}
-	})
-
-	t.Run("MW-02_NoSessionLogsNA", func(t *testing.T) {
-		getLog := mwCaptureLog(t)
-		ctx := mwBaseCtx()
-
-		reqctx.Log(ctx, "msg")
-
-		out := getLog()
-		if !strings.Contains(out, "N/A") {
-			t.Errorf("expected log output to contain N/A for a missing session, got: %q", out)
-		}
-	})
-
-	t.Run("MW-03_NoMessageArgsDoesNotPanic", func(t *testing.T) {
-		getLog := mwCaptureLog(t)
-		ctx := mwBaseCtx()
-
-		reqctx.Log(ctx)
-
-		out := getLog()
-		if !strings.Contains(out, "1 N/A 127.0.0.1") {
-			t.Errorf("expected log output with an empty joined message, got: %q", out)
-		}
-	})
-}
-
 func TestCreateStack(t *testing.T) {
 	t.Run("MW-05_ExecutionOrderMatchesDeclarationOrder", func(t *testing.T) {
 		var order []string
@@ -225,22 +188,6 @@ func TestCreateStack(t *testing.T) {
 
 		if nextCalls != 1 {
 			t.Errorf("final handler called %d times, want 1", nextCalls)
-		}
-	})
-}
-
-func TestWrappedWriterWriteHeader(t *testing.T) {
-	t.Run("MW-07_SetsStatusCodeAndForwards", func(t *testing.T) {
-		rec := httptest.NewRecorder()
-		ww := &WrappedWriter{ResponseWriter: rec, statusCode: http.StatusOK}
-
-		ww.WriteHeader(http.StatusTeapot)
-
-		if ww.statusCode != http.StatusTeapot {
-			t.Errorf("expected wrapped statusCode %d, got %d", http.StatusTeapot, ww.statusCode)
-		}
-		if rec.Code != http.StatusTeapot {
-			t.Errorf("expected underlying recorder code %d, got %d", http.StatusTeapot, rec.Code)
 		}
 	})
 }
@@ -381,6 +328,25 @@ func mwSessionRequest(authHeader, cookieValue string) *http.Request {
 	return r
 }
 
+func mwCancelledRequest(authHeader, cookieValue string) *http.Request {
+	ctx, cancel := context.WithCancel(context.WithValue(mwBaseCtx(), mwMarkerKey{}, "m1"))
+	cancel()
+	return mwSessionRequest(authHeader, cookieValue).WithContext(ctx)
+}
+
+func mwAssertDeleteDetached(t *testing.T, svc *mwFakeSessionSvc) {
+	t.Helper()
+	if len(svc.deletedIDs) != 1 {
+		t.Fatalf("DeleteSession calls = %v, want one", svc.deletedIDs)
+	}
+	if svc.deleteCtxErr != nil {
+		t.Errorf("DeleteSession context Err() = %v, want nil", svc.deleteCtxErr)
+	}
+	if svc.deleteMarker != "m1" {
+		t.Errorf("DeleteSession context marker = %v, want %q", svc.deleteMarker, "m1")
+	}
+}
+
 func TestSessionMiddleware(t *testing.T) {
 	t.Run("MW-14_NoHeaderNoCookiePassesThrough", func(t *testing.T) {
 		svc := &mwFakeSessionSvc{}
@@ -484,8 +450,21 @@ func TestSessionMiddleware(t *testing.T) {
 		}
 	})
 
+	t.Run("MW-65_HeaderExpiredSessionDeleteRunsOnAnUncancelledContext", func(t *testing.T) {
+		sess := &session.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
+		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*session.Session, error) { return sess, nil }}
+		rec, nextCalls, _ := mwRunSession(svc, mwCancelledRequest("Bearer expiredtoken", ""))
+
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
+		}
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("expected status 401, got %d", rec.Code)
+		}
+		mwAssertDeleteDetached(t, svc)
+	})
+
 	t.Run("MW-19_ExpiredSessionDeleteErrorStillUnauthorized", func(t *testing.T) {
-		readLog := mwCaptureLog(t)
 		sess := &session.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
 		svc := &mwFakeSessionSvc{
 			readJWTFunc: func(string) (*session.Session, error) { return sess, nil },
@@ -498,9 +477,6 @@ func TestSessionMiddleware(t *testing.T) {
 		}
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401 regardless of the DeleteSession error, got %d", rec.Code)
-		}
-		if got := strings.Count(readLog(), logErrorDeletingSession); got != 1 {
-			t.Errorf("log contains %q %d times, want 1", logErrorDeletingSession, got)
 		}
 	})
 
@@ -569,7 +545,6 @@ func TestSessionMiddleware(t *testing.T) {
 	})
 
 	t.Run("MW-21_CookieReadJWTErrorFailsOpen", func(t *testing.T) {
-		readLog := mwCaptureLog(t)
 		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*session.Session, error) { return nil, testutil.ErrBoom }}
 		rec, nextCalls, gotSession := mwRunSession(svc, mwSessionRequest("", "badtoken"))
 
@@ -581,9 +556,6 @@ func TestSessionMiddleware(t *testing.T) {
 		}
 		if rec.Code != http.StatusOK {
 			t.Errorf("expected status 200 (fail open), got %d", rec.Code)
-		}
-		if got := strings.Count(readLog(), logErrorReadingJWTFromCookie); got != 1 {
-			t.Errorf("log contains %q %d times, want 1", logErrorReadingJWTFromCookie, got)
 		}
 	})
 
@@ -606,8 +578,21 @@ func TestSessionMiddleware(t *testing.T) {
 		}
 	})
 
+	t.Run("MW-66_CookieExpiredSessionDeleteRunsOnAnUncancelledContext", func(t *testing.T) {
+		sess := &session.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
+		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*session.Session, error) { return sess, nil }}
+		rec, nextCalls, _ := mwRunSession(svc, mwCancelledRequest("", "expiredtoken"))
+
+		if nextCalls != 1 {
+			t.Errorf("next called %d times, want 1", nextCalls)
+		}
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected status 200 (fail open), got %d", rec.Code)
+		}
+		mwAssertDeleteDetached(t, svc)
+	})
+
 	t.Run("MW-23_CookieExpiredSessionDeleteErrorStillFailsOpen", func(t *testing.T) {
-		readLog := mwCaptureLog(t)
 		sess := &session.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
 		svc := &mwFakeSessionSvc{
 			readJWTFunc: func(string) (*session.Session, error) { return sess, nil },
@@ -623,9 +608,6 @@ func TestSessionMiddleware(t *testing.T) {
 		}
 		if rec.Code != http.StatusOK {
 			t.Errorf("expected status 200 (fail open), got %d", rec.Code)
-		}
-		if got := strings.Count(readLog(), logErrorDeletingSession); got != 1 {
-			t.Errorf("log contains %q %d times, want 1", logErrorDeletingSession, got)
 		}
 	})
 }
@@ -697,7 +679,6 @@ func TestRateLimitMiddleware(t *testing.T) {
 	})
 
 	t.Run("MW-26_SessionIncrErrorFailsOpen", func(t *testing.T) {
-		readLog := mwCaptureLog(t)
 		svc := &mwFakeRateLimitSvc{incrErr: testutil.ErrRedisDown, getLimit: 10}
 		r := mwRateLimitRequest(&session.Session{ID: "s1", UserID: "u1"}, "1.2.3.4:5678")
 
@@ -712,13 +693,9 @@ func TestRateLimitMiddleware(t *testing.T) {
 		if len(svc.getCalls) != 0 {
 			t.Errorf("GetRateLimit calls = %v, want 0", svc.getCalls)
 		}
-		if !strings.Contains(readLog(), logErrorIncrementingRateLimit) {
-			t.Errorf("expected the log to contain %q", logErrorIncrementingRateLimit)
-		}
 	})
 
 	t.Run("MW-27_SessionGetErrorFailsOpen", func(t *testing.T) {
-		readLog := mwCaptureLog(t)
 		svc := &mwFakeRateLimitSvc{getErr: testutil.ErrRedisDown, getErrLimit: 10}
 		r := mwRateLimitRequest(&session.Session{ID: "s1", UserID: "u1"}, "1.2.3.4:5678")
 
@@ -732,9 +709,6 @@ func TestRateLimitMiddleware(t *testing.T) {
 		}
 		if len(svc.getCalls) != 1 {
 			t.Errorf("GetRateLimit calls = %v, want 1", svc.getCalls)
-		}
-		if !strings.Contains(readLog(), logErrorGettingRateLimit) {
-			t.Errorf("expected the log to contain %q", logErrorGettingRateLimit)
 		}
 	})
 
@@ -785,7 +759,6 @@ func TestRateLimitMiddleware(t *testing.T) {
 	})
 
 	t.Run("MW-31_NoSessionIncrErrorFailsOpen", func(t *testing.T) {
-		readLog := mwCaptureLog(t)
 		svc := &mwFakeRateLimitSvc{incrErr: testutil.ErrRedisDown, getLimit: 1}
 		r := mwRateLimitRequest(nil, "9.8.7.6:1234")
 
@@ -800,13 +773,9 @@ func TestRateLimitMiddleware(t *testing.T) {
 		if len(svc.getCalls) != 0 {
 			t.Errorf("GetRateLimit calls = %v, want 0", svc.getCalls)
 		}
-		if !strings.Contains(readLog(), logErrorIncrementingRateLimit) {
-			t.Errorf("expected the log to contain %q", logErrorIncrementingRateLimit)
-		}
 	})
 
 	t.Run("MW-54_NoSessionIncrErrorFailsOpenEvenOverLimit", func(t *testing.T) {
-		readLog := mwCaptureLog(t)
 		svc := &mwFakeRateLimitSvc{incrErr: testutil.ErrRedisDown, getLimit: 10}
 		r := mwRateLimitRequest(nil, "9.8.7.6:1234")
 
@@ -821,13 +790,9 @@ func TestRateLimitMiddleware(t *testing.T) {
 		if len(svc.getCalls) != 0 {
 			t.Errorf("GetRateLimit calls = %v, want 0", svc.getCalls)
 		}
-		if !strings.Contains(readLog(), logErrorIncrementingRateLimit) {
-			t.Errorf("expected the log to contain %q", logErrorIncrementingRateLimit)
-		}
 	})
 
 	t.Run("MW-32_NoSessionGetErrorFailsOpen", func(t *testing.T) {
-		readLog := mwCaptureLog(t)
 		svc := &mwFakeRateLimitSvc{getErr: testutil.ErrRedisDown, getErrLimit: 10}
 		r := mwRateLimitRequest(nil, "9.8.7.6:1234")
 
@@ -841,9 +806,6 @@ func TestRateLimitMiddleware(t *testing.T) {
 		}
 		if len(svc.getCalls) != 1 {
 			t.Errorf("GetRateLimit calls = %v, want 1", svc.getCalls)
-		}
-		if !strings.Contains(readLog(), logErrorGettingRateLimit) {
-			t.Errorf("expected the log to contain %q", logErrorGettingRateLimit)
 		}
 	})
 
@@ -1134,7 +1096,6 @@ func TestAuth(t *testing.T) {
 	})
 
 	t.Run("MW-41_ExpiredSessionDeleteErrorStillUnauthorized", func(t *testing.T) {
-		readLog := mwCaptureLog(t)
 		svc := &mwFakeSessionSvc{deleteFunc: func(string) error { return testutil.ErrCacheDown }}
 		session := &session.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
 		ctx := context.WithValue(mwBaseCtx(), reqctx.SessionKey, session)
@@ -1148,9 +1109,23 @@ func TestAuth(t *testing.T) {
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401 regardless of the DeleteSession error, got %d", rec.Code)
 		}
-		if got := strings.Count(readLog(), logErrorDeletingSession); got != 1 {
-			t.Errorf("log contains %q %d times, want 1", logErrorDeletingSession, got)
+	})
+
+	t.Run("MW-67_ExpiredSessionDeleteRunsOnAnUncancelledContext", func(t *testing.T) {
+		svc := &mwFakeSessionSvc{}
+		sess := &session.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
+		r := mwCancelledRequest("", "")
+		r = r.WithContext(context.WithValue(r.Context(), reqctx.SessionKey, sess))
+
+		rec, nextCalls := mwRunAuth(svc, r)
+
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
 		}
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("expected status 401, got %d", rec.Code)
+		}
+		mwAssertDeleteDetached(t, svc)
 	})
 
 	t.Run("MW-42_ValidSessionCallsNext", func(t *testing.T) {

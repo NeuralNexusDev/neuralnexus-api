@@ -13,9 +13,7 @@ import (
 const (
 	msgInvalidUsernameOrPassword = "Invalid username or password"
 	msgAuthenticationFailed      = "Authentication failed"
-	msgInvalidSession            = "Invalid session"
 	msgFailedToDeleteSession     = "Failed to delete session"
-	logFailedToCreateJWT         = "Failed to create JWT:\n\t"
 )
 
 var VoidCookie = &http.Cookie{
@@ -94,9 +92,7 @@ func LoginHandler(cfg config.Account, as Service, ss session.Service) http.Handl
 		}
 
 		if err := ss.SetSessionCookie(ctx, w, s); err != nil {
-			reqctx.Log(ctx, logFailedToCreateJWT, err.Error())
-			responses.InternalServerError(w, r, msgAuthenticationFailed)
-			return
+			panic("session cookie signing failed although config.FromEnv requires JWT_SECRET: " + err.Error())
 		}
 		responses.NoContent(w, r)
 	}
@@ -107,8 +103,7 @@ func LogoutHandler(ss session.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		s := r.Context().Value(reqctx.SessionKey).(*session.Session)
 		if s == nil {
-			responses.BadRequest(w, r, msgInvalidSession)
-			return
+			panic("LogoutHandler: nil session in context, but mwAuth sets it before this handler")
 		}
 		err := ss.DeleteSession(r.Context(), s.ID)
 		if err != nil {

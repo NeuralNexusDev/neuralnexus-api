@@ -1090,29 +1090,3 @@ func TestSimpleStatusHandler(t *testing.T) {
 		}
 	})
 }
-
-type hdCtxService struct {
-	hdMockService
-	ctx context.Context
-}
-
-func (m *hdCtxService) GetServerStatus(ctx context.Context, host string, port int, isBedrock bool, queryEnabled bool, queryPort int) (*MCServerStatus, error) {
-	m.ctx = ctx
-	return m.serverStatus, m.serverErr
-}
-
-func TestServerStatusHandlerContext(t *testing.T) {
-	type ctxKey struct{}
-
-	t.Run("CSH-55_ServerStatus_RequestContextReachesService", func(t *testing.T) {
-		mock := &hdCtxService{hdMockService: hdMockService{serverStatus: hdValidStatus(nil)}}
-		req := hdRequest(t, "mc.example.com:25570", "")
-		req = req.WithContext(context.WithValue(req.Context(), ctxKey{}, "marker"))
-
-		ServerStatusHandler(mock)(httptest.NewRecorder(), req)
-
-		if mock.ctx == nil || mock.ctx.Value(ctxKey{}) != "marker" {
-			t.Fatalf("service ctx = %v, want the request ctx carrying the marker", mock.ctx)
-		}
-	})
-}

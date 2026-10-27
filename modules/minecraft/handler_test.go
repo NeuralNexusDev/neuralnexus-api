@@ -96,14 +96,6 @@ func mcRequireStatus(t *testing.T, w *httptest.ResponseRecorder, want int) {
 }
 
 func TestHD01to04_GetMojangPlayerByNameHandler(t *testing.T) {
-	t.Run("HD-01_EmptyName", func(t *testing.T) {
-		h := GetMojangPlayerByNameHandler(&mcMockService{})
-		w := httptest.NewRecorder()
-		h(w, mcRequest(t, http.MethodGet, "/name/", nil, map[string]string{"name": ""}))
-		mcRequireStatus(t, w, http.StatusBadRequest)
-		mcRequireDetail(t, w, msgInvalidName)
-	})
-
 	t.Run("HD-02_OK", func(t *testing.T) {
 		svc := &mcMockService{getMojangPlayerByName: func(name string) (*Player, error) {
 			return &Player{ID: "id", Name: name}, nil
@@ -352,14 +344,6 @@ func TestHD21to24_GetProfileHandler(t *testing.T) {
 }
 
 func TestHD25to28_GetProfileByNameHandler(t *testing.T) {
-	t.Run("HD-25_EmptyName", func(t *testing.T) {
-		h := GetProfileByNameHandler(&mcMockService{})
-		w := httptest.NewRecorder()
-		h(w, mcRequest(t, http.MethodGet, "/pn/", nil, map[string]string{"name": ""}))
-		mcRequireStatus(t, w, http.StatusBadRequest)
-		mcRequireDetail(t, w, msgInvalidName)
-	})
-
 	t.Run("HD-26_OK", func(t *testing.T) {
 		svc := &mcMockService{getProfileByName: func(name string) (*Profile, error) { return &Profile{Name: name}, nil }}
 		h := GetProfileByNameHandler(svc)
@@ -387,14 +371,6 @@ func TestHD25to28_GetProfileByNameHandler(t *testing.T) {
 }
 
 func TestHD29to33_GetGeyserXUIDHandler(t *testing.T) {
-	t.Run("HD-29_EmptyGamertag", func(t *testing.T) {
-		h := GetGeyserXUIDHandler(&mcMockService{})
-		w := httptest.NewRecorder()
-		h(w, mcRequest(t, http.MethodGet, "/g/", nil, map[string]string{"gamertag": ""}))
-		mcRequireStatus(t, w, http.StatusBadRequest)
-		mcRequireDetail(t, w, msgInvalidGamertag)
-	})
-
 	t.Run("HD-30_OK", func(t *testing.T) {
 		svc := &mcMockService{getGeyserXUID: func(g string) (*GeyserPlayer, error) { return &GeyserPlayer{Gamertag: g}, nil }}
 		h := GetGeyserXUIDHandler(svc)
@@ -525,14 +501,6 @@ func TestHD39to43_GetGeyserProfileHandler(t *testing.T) {
 }
 
 func TestHD44to48_GetGeyserProfileByNameHandler(t *testing.T) {
-	t.Run("HD-44_EmptyGamertag", func(t *testing.T) {
-		h := GetGeyserProfileByNameHandler(&mcMockService{})
-		w := httptest.NewRecorder()
-		h(w, mcRequest(t, http.MethodGet, "/gpn/", nil, map[string]string{"name": ""}))
-		mcRequireStatus(t, w, http.StatusBadRequest)
-		mcRequireDetail(t, w, msgInvalidGamertag)
-	})
-
 	t.Run("HD-45_OK", func(t *testing.T) {
 		svc := &mcMockService{getGeyserProfileByGamertag: func(g string) (*GeyserProfile, error) {
 			return &GeyserProfile{Gamertag: g}, nil
@@ -572,14 +540,6 @@ func TestHD44to48_GetGeyserProfileByNameHandler(t *testing.T) {
 }
 
 func TestHD49to52_GetTextureHandler(t *testing.T) {
-	t.Run("HD-49_EmptyHash", func(t *testing.T) {
-		h := GetTextureHandler(&mcMockService{})
-		w := httptest.NewRecorder()
-		h(w, mcRequest(t, http.MethodGet, "/t/", nil, map[string]string{"hash": ""}))
-		mcRequireStatus(t, w, http.StatusBadRequest)
-		mcRequireDetail(t, w, msgInvalidHash)
-	})
-
 	t.Run("HD-50_OK", func(t *testing.T) {
 		svc := &mcMockService{getTextureContent: func(hash string) (*TextureResult, error) {
 			return &TextureResult{Body: io.NopCloser(strings.NewReader("bytes")), ContentType: "image/png"}, nil

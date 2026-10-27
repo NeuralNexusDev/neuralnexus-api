@@ -92,8 +92,7 @@ func OAuthHandler(cfg *config.Config, as account.Service, las Store, ss session.
 		}
 
 		if err := ss.SetSessionCookie(ctx, w, sess); err != nil {
-			redirectInternalServerError(w, r, state.RedirectURI, msgAuthenticationFailed)
-			return
+			panic("session cookie signing failed although config.FromEnv requires JWT_SECRET: " + err.Error())
 		}
 		http.Redirect(w, r, state.RedirectURI, http.StatusSeeOther)
 	}
@@ -162,8 +161,7 @@ func OpenIDHandler(cfg config.Steam, as account.Service, las Store, ss session.S
 		}
 
 		if err := ss.SetSessionCookie(ctx, w, sess); err != nil {
-			redirectInternalServerError(w, r, state.RedirectURI, msgAuthenticationFailed)
-			return
+			panic("session cookie signing failed although config.FromEnv requires JWT_SECRET: " + err.Error())
 		}
 		http.Redirect(w, r, state.RedirectURI, http.StatusSeeOther)
 	}

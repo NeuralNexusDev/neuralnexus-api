@@ -284,29 +284,6 @@ func TestAU08LoginHandlerAddSessionFails(t *testing.T) {
 	})
 }
 
-func TestAU09LoginHandlerCreateJWTFails(t *testing.T) {
-	account, err := NewAccount(testutil.NewConfig().Auth.Account.Pepper, "testuser", "test@example.com", "correct-password")
-	if err != nil {
-		t.Fatalf("failed to build account: %v", err)
-	}
-	as := &stubService{account: account}
-	ss := &stubSessionService{createJWT: func(*session.Session) (string, error) { return "", testutil.ErrSigningFailed }}
-	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
-	w := httptest.NewRecorder()
-
-	t.Run("ACH-09_LoginCreateJWTFails", func(t *testing.T) {
-		LoginHandler(testutil.NewConfig().Auth.Account, as, ss)(w, r)
-
-		if w.Code != http.StatusInternalServerError {
-			t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
-		}
-		testutil.ExpectDetail(t, w, msgAuthenticationFailed)
-		if testutil.FindCookie(w, session.CookieName) != nil {
-			t.Error("expected no session cookie when CreateJWT fails")
-		}
-	})
-}
-
 func TestAU10LogoutHandlerHappyPath(t *testing.T) {
 	sess := &session.Session{ID: "s1", UserID: "u1"}
 	ctx := context.WithValue(testutil.LogContext(context.Background()), reqctx.SessionKey, sess)
@@ -332,25 +309,6 @@ func TestAU10LogoutHandlerHappyPath(t *testing.T) {
 		}
 		if !cookie.Expires.Before(time.Now()) {
 			t.Errorf("expected the cleared cookie's Expires to be in the past, got %v", cookie.Expires)
-		}
-	})
-}
-
-func TestAU11LogoutHandlerNilSessionInContext(t *testing.T) {
-	ctx := context.WithValue(testutil.LogContext(context.Background()), reqctx.SessionKey, (*session.Session)(nil))
-	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil).WithContext(ctx)
-	w := httptest.NewRecorder()
-	ss := &stubSessionService{}
-
-	t.Run("ACH-11_LogoutNilSessionInContext", func(t *testing.T) {
-		LogoutHandler(ss)(w, r)
-
-		if w.Code != http.StatusBadRequest {
-			t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
-		}
-		testutil.ExpectDetail(t, w, msgInvalidSession)
-		if len(ss.deletedIDs) != 0 {
-			t.Error("expected DeleteSession to never be called for a nil session")
 		}
 	})
 }

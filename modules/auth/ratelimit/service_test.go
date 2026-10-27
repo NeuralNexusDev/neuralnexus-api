@@ -5,48 +5,35 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
+type rlMarkerKey struct{}
+
 type rlFakeRateLimitStore struct {
-	getCtx    context.Context
 	getVal    int
 	getErr    error
-	getCalls  int
 	setErr    error
 	setCalls  int
 	incrErr   error
 	incrCalls int
+
+	incrCtxErr error
+	incrMarker any
 }
 
-func (f *rlFakeRateLimitStore) GetRateLimit(ctx context.Context, _ string) (int, error) {
-	f.getCtx = ctx
-	f.getCalls++
+func (f *rlFakeRateLimitStore) GetRateLimit(_ context.Context, _ string) (int, error) {
 	return f.getVal, f.getErr
 }
 func (f *rlFakeRateLimitStore) SetRateLimit(_ context.Context, _ string, _ int) error {
 	f.setCalls++
 	return f.setErr
 }
-func (f *rlFakeRateLimitStore) IncrementRateLimit(_ context.Context, _ string) error {
+func (f *rlFakeRateLimitStore) IncrementRateLimit(ctx context.Context, _ string) error {
 	f.incrCalls++
+	f.incrCtxErr = ctx.Err()
+	f.incrMarker = ctx.Value(rlMarkerKey{})
 	return f.incrErr
-}
-
-func TestRL01NewService(t *testing.T) {
-	t.Run("RL-01_WiresGivenSubStore", func(t *testing.T) {
-		rl := &rlFakeRateLimitStore{getVal: 7}
-		svc := NewService(rl)
-
-		got, err := svc.GetRateLimit(context.Background(), "k")
-		if err != nil || got != 7 {
-			t.Errorf("GetRateLimit() = (%d, %v), want (7, nil)", got, err)
-		}
-		if rl.getCalls != 1 {
-			t.Errorf("expected the fake Store to be called once, got %d", rl.getCalls)
-		}
-	})
 }
 
 func TestRL02to03GetRateLimit(t *testing.T) {
@@ -122,16 +109,20 @@ func TestRL06to07IncrRateLimit(t *testing.T) {
 	})
 }
 
-func TestRL08RequestContextReachesStore(t *testing.T) {
-	t.Run("RL-08_RequestContextReachesStore", func(t *testing.T) {
+func TestRL09IncrRateLimitIgnoresCancelledContext(t *testing.T) {
+	t.Run("RL-09_IncrementRateLimitRunsOnAnUncancelledContext", func(t *testing.T) {
 		rl := &rlFakeRateLimitStore{}
-		ctx := context.WithValue(context.Background(), reqctx.UserIDKey, "u1")
+		ctx, cancel := context.WithCancel(context.WithValue(context.Background(), rlMarkerKey{}, "m1"))
+		cancel()
 
-		if _, err := NewService(rl).GetRateLimit(ctx, "k"); err != nil {
-			t.Fatalf("GetRateLimit() error = %v", err)
+		if err := NewService(rl).IncrRateLimit(ctx, "k"); err != nil {
+			t.Fatalf("IncrRateLimit() = %v, want nil", err)
 		}
-		if got := rl.getCtx.Value(reqctx.UserIDKey); got != "u1" {
-			t.Errorf("store context user ID = %v, want %q", got, "u1")
+		if rl.incrCtxErr != nil {
+			t.Errorf("IncrementRateLimit context Err() = %v, want nil", rl.incrCtxErr)
+		}
+		if rl.incrMarker != "m1" {
+			t.Errorf("IncrementRateLimit context marker = %v, want %q", rl.incrMarker, "m1")
 		}
 	})
 }

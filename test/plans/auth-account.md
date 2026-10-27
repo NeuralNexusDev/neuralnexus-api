@@ -4,7 +4,6 @@
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| AC-01 | NewService | Happy Path | Service is wired to the Store and SettingsStore passed to NewService | fake `Store` and fake `SettingsStore` passed to `NewService` | Returned `Service`, when exercised, delegates account methods to the exact `Store` passed in (built by `NewStore`) and settings methods to the exact `SettingsStore` passed in (built by `NewSettingsStore`) | P2 |  |
 | AC-02 | GetAccountByID | Happy Path | `as.GetAccountByID` succeeds | fake store returns a known `*Account` | Returns that `*Account`, nil error | P1 |  |
 | AC-03 | GetAccountByID | Error Path | `as.GetAccountByID` fails | fake store returns `ErrNotFound` | Returns nil, `ErrNotFound` propagated unchanged | P2 |  |
 | AC-04 | GetAccountByUsername | Happy Path | `as.GetAccountByUsername` succeeds | | Returns the account, nil | P1 |  |
@@ -26,7 +25,7 @@
 | AC-20 | NewSession (service) | Error Path | the role store fails | role store returns `testutil.ErrBoom` | Returns a nil session and an error matching the store error, so no session is issued with missing permissions | P1 |   |
 | AC-21 | NewSession (service) | Edge Case | the account's role grants nothing | role store returns no permissions | `Permissions` is empty and non-nil | P1 |   |
 | AC-22 | NewSession (service) | Error Path | the snowflake generator fails | the test binary re-executes itself with `SNOWFLAKE_NODE_ID` above 31 | Returns a nil session and an error | P2 | Re-exec because the snowflake settings are read when the package loads |
-| AC-23 | GetAccountByID (service) | Happy Path | a context value set on the call | fake `Store` | The store receives the same context, so the value reads back from it | P1 |  |
+| AC-24 | AddAccount | Edge Case | the call context is cancelled before the write | fake store records `ctx.Err()` and a marker value at `AddAccountToDB` | The call succeeds, and `AddAccountToDB` sees a context that is not done and still carries the marker, so the account insert is not cancelled with the client | P1 |  |
 
 ## types.go
 
@@ -44,13 +43,9 @@
 | ACT-12 | ValidateUser | Happy Path | `HashPassword("correct")` already applied | `ValidateUser("correct")` | Returns true | P0 |  |
 | ACT-13 | ValidateUser | Edge Case | Same setup | `ValidateUser("wrong")` | Returns false | P0 |  |
 | ACT-14 | ValidateUser | Edge Case | `HashedSecret`/`Salt` both nil (password never set) | | Returns false without panicking | P1 |  |
-| ACT-15 | DummyValidateUser | Happy Path | Any password | | Completes without panicking or returning a value | P2 |  |
-| ACT-17 | AddRole | Happy Path | `Roles == nil` | `AddRole("admin")` | `Roles == ["admin"]` | P2 |  |
-| ACT-18 | AddRole | Edge Case | `Roles` already contains `"admin"` | `AddRole("admin")` again | `Roles == ["admin","admin"]` (no de-duplication) | P3 |  |
 | ACT-19 | RemoveRole | Happy Path | `Roles == ["a","b","c"]` | `RemoveRole("b")` | `Roles == ["a","c"]` | P1 |  |
 | ACT-20 | RemoveRole | Edge Case | Role not present | `RemoveRole("z")` | `Roles` unchanged, no panic | P2 |  |
 | ACT-21 | RemoveRole | Edge Case | `Roles` empty | `RemoveRole("z")` | No panic, `Roles` remains empty | P3 |  |
-| ACT-22 | DefaultAccountSettings | Accessor | `userID = "u1"` | | Returns `&AccountSettings{UserID:"u1", PasswordAuthEnabled:true}` | P2 |  |
 
 ## store.go
 
@@ -110,9 +105,7 @@
 | ACH-06 | LoginHandler | Error Path | IsPasswordAuthEnabled errors | Account and password valid, Service.IsPasswordAuthEnabled returns an error | 500 Internal Server Error `msgAuthenticationFailed` | P2 |  |
 | ACH-07 | LoginHandler | Edge Case | Password auth disabled for account | Account and password valid, IsPasswordAuthEnabled returns (false, nil) | 400 Bad Request `msgInvalidUsernameOrPassword` | P2 |  |
 | ACH-08 | LoginHandler | Error Path | session.Service.AddSession fails | Account/password/enabled all valid, ss.AddSession returns an error | 500 Internal Server Error `msgAuthenticationFailed` | P2 |  |
-| ACH-09 | LoginHandler | Error Path | session.Service.CreateJWT fails | AddSession succeeds, ss.CreateJWT returns an error | 500 Internal Server Error `msgAuthenticationFailed` | P2 |  |
 | ACH-10 | LogoutHandler | Happy Path | Logout with a valid session | Context carries a non-nil *auth.Session, ss.DeleteSession succeeds | 204 No Content, session cookie cleared (empty value, expiry in the past) | P1 |  |
-| ACH-11 | LogoutHandler | Edge Case | Session in context is a nil *auth.Session | Context value under reqctx.SessionKey is (*auth.Session)(nil) | 400 Bad Request `msgInvalidSession` | P3 |  |
 | ACH-12 | LogoutHandler | Error Path | session.Service.DeleteSession fails | Valid session in context, ss.DeleteSession returns an error | 500 Internal Server Error `msgFailedToDeleteSession` | P2 |  |
 | ACH-58 | LoginHandler | Error Path | the account service fails to build the session | Account/password/enabled all valid; `NewSession` returns `testutil.ErrBoom` | 500 Internal Server Error, `detail` is `msgAuthenticationFailed`, and no session is stored | P2 |  |
 | ACH-59 | LoginHandler | Error Path | Account lookup fails with a non-not-found error | Service.GetAccountByUsername returns `testutil.ErrDBDown` | 500 Internal Server Error `msgAuthenticationFailed`; no session cookie | P2 |  |

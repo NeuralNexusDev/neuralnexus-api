@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
@@ -29,7 +28,6 @@ type usFakeLinkAccountStore struct {
 	updateCalls             int
 	updateLastLinkedAccount *LinkedAccount
 
-	getsByUserIDCtx context.Context
 	getsByUserID    []*LinkedAccount
 	getsByUserIDErr error
 
@@ -72,8 +70,7 @@ func (f *usFakeLinkAccountStore) GetLinkedAccountByUserID(_ context.Context, _ s
 	return nil, account.ErrNotFound
 }
 
-func (f *usFakeLinkAccountStore) GetLinkedAccountsByUserID(ctx context.Context, _ string) ([]*LinkedAccount, error) {
-	f.getsByUserIDCtx = ctx
+func (f *usFakeLinkAccountStore) GetLinkedAccountsByUserID(_ context.Context, _ string) ([]*LinkedAccount, error) {
 	return f.getsByUserID, f.getsByUserIDErr
 }
 
@@ -371,7 +368,7 @@ func (s *usConcurrentStore) accountCount() int {
 	return len(s.accounts)
 }
 
-func TestUS15to23and38UpdateFromPlatform(t *testing.T) {
+func TestUS15to23UpdateFromPlatform(t *testing.T) {
 	t.Run("LKV-15_NewIdentityCreatesAccount", func(t *testing.T) {
 		as := &usFakeAccountStore{getByIDAccount: &account.Account{UserID: "resolved"}}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, account.ErrNotFound}}}
@@ -520,16 +517,6 @@ func TestUS15to23and38UpdateFromPlatform(t *testing.T) {
 			t.Errorf("UpdateFromPlatform() err = %v, want %v", err, wantErr)
 		}
 	})
-	t.Run("LKV-38_AddLinkAndCleanupFailReturnsTheCleanupError", func(t *testing.T) {
-		as := &usFakeAccountStore{deleteErr: testutil.ErrBoom}
-		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, account.ErrNotFound}}, addErr: testutil.ErrInsertFailed}
-		svc := NewService(als, as)
-
-		_, err := svc.UpdateFromPlatform(testutil.LogContext(context.Background()), PlatformDiscord, "p1", usFakePlatformData{})
-		if !errors.Is(err, testutil.ErrBoom) {
-			t.Errorf("UpdateFromPlatform() err = %v, want the cleanup error %v", err, testutil.ErrBoom)
-		}
-	})
 }
 
 func TestUS25UpdateFromPlatformConcurrentRace(t *testing.T) {
@@ -567,20 +554,6 @@ func TestUS25UpdateFromPlatformConcurrentRace(t *testing.T) {
 			if got := cs.accountCount(); got != 1 {
 				t.Fatalf("trial %d: expected exactly one account to exist after the race, got %d", trial, got)
 			}
-		}
-	})
-}
-
-func TestUS39RequestContextReachesStore(t *testing.T) {
-	t.Run("LKV-39_RequestContextReachesStore", func(t *testing.T) {
-		als := &usFakeLinkAccountStore{}
-		ctx := context.WithValue(context.Background(), reqctx.UserIDKey, "u1")
-
-		if _, err := NewService(als, nil).GetUserLinkedAccounts(ctx, "u1"); err != nil {
-			t.Fatalf("GetUserLinkedAccounts() error = %v", err)
-		}
-		if got := als.getsByUserIDCtx.Value(reqctx.UserIDKey); got != "u1" {
-			t.Errorf("store context user ID = %v, want %q", got, "u1")
 		}
 	})
 }

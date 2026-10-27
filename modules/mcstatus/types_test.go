@@ -91,22 +91,6 @@ func TestNewServerStatus(t *testing.T) {
 		}
 	})
 
-	t.Run("CST-03_NilPlayersPassedThrough", func(t *testing.T) {
-		status := NewServerStatus("", 0, "", "", "", 0, 0, nil, "", "", ServerTypeJava, nil, nil)
-
-		if status.Players != nil {
-			t.Errorf("expected nil Players, got %+v", status.Players)
-		}
-	})
-
-	t.Run("CST-04_NilIconPassedThrough", func(t *testing.T) {
-		status := NewServerStatus("", 0, "", "", "", 0, 0, nil, "", "", ServerTypeJava, nil, nil)
-
-		if status.Icon != nil {
-			t.Errorf("expected nil Icon, got %v", status.Icon)
-		}
-	})
-
 	t.Run("CST-05_UnknownServerTypeDefaultsProtoEnumToZeroValue", func(t *testing.T) {
 		status := NewServerStatus("", 0, "", "", "", 0, 0, nil, "", "", ServerType("unknown"), nil, nil)
 

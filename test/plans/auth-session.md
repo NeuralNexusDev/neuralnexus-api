@@ -4,7 +4,6 @@
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| SE-07 | NewService | Happy Path | Service wired to `store.Session()` | fake `Store` | Returned service delegates to the exact `Store` the fake `Store` returned | P2 |  |
 | SE-08 | AddSession | Happy Path | `store.AddSessionToDB` and `store.AddSessionToCache` both succeed | | Returns nil; both called exactly once | P1 |  |
 | SE-09 | AddSession | Error Path | `store.AddSessionToDB` fails | | Returns that error; `AddSessionToCache` never called | P1 |  |
 | SE-10 | AddSession | Edge Case | `AddSessionToDB` succeeds but `AddSessionToCache` fails | | Returns nil anyway (cache failure is fail-open, only logged) | P0 |  |
@@ -27,13 +26,13 @@
 | SE-29 | ReadJWT | Error Path | Session lookup fails (e.g. session was deleted/revoked) even though the JWT is validly signed and unexpired | `store.GetSession` returns an error | Returns nil, an error wrapping `ErrNotFound` | P0 |  |
 | SE-30 | ReadJWT | Error Path | Session found but its `UserID` doesn't match the token's `Subject` claim | | Returns nil, `ErrSessionSubjectMismatch` | P0 |  |
 | SE-31 | ReadJWT | Error Path | `UpdateSession` (LastUsedAt bump) fails after a valid lookup | `UpdateSessionInDB` returns `testutil.ErrDBDown` | Returns nil session and an error matching `testutil.ErrDBDown` | P2 |  |
-| SE-37 | GetSession | Happy Path | a context value set on the call | fake `Store` | The store receives the same context, so the value reads back from it | P1 |  |
+| SE-38 | AddSession | Edge Case | the call context is cancelled before the writes | fake store records `ctx.Err()` and a marker value at each call | The call succeeds, and `AddSessionToDB` and `AddSessionToCache` each see a context that is not done and still carries the marker, so the session is stored in both places | P1 |  |
+| SE-39 | UpdateSession | Edge Case | the call context is cancelled before the writes | fake store records `ctx.Err()` and a marker value at each call | The call succeeds, and `UpdateSessionInDB` and `AddSessionToCache` each see a context that is not done and still carries the marker, so the update lands in both places | P1 |  |
 
 ## types.go
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| SE-01 | ToProto | Happy Path | Populated `*Session` | | Returns `*sessionpb.Session` with Id/UserId/Permissions/IssuedAt/LastUsedAt/ExpiresAt copied 1:1 | P2 |  |
 | SE-02 | HasPermission | Happy Path | `Permissions` holds the node bare, with a value, or with a value containing a colon | | Returns true | P1 |  |
 | SE-03 | HasPermission | Error Path | no permissions, or only look-alike entries | entries such as `perm.nodes`, `perm.node.sub`, `perm.nod`, `perm.node2:value` and `x:perm.node` | Returns false | P1 |  |
 | SE-04 | IsValid | Happy Path | `ExpiresAt` in the future | | Returns true | P1 |  |
