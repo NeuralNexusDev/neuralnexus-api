@@ -68,7 +68,7 @@ func ApplyRoutes(
 	linkingService := link.NewService(linkAccountStore, accountStore)
 	usr := user.NewService(accountStore, linkAccountStore, linkingService, settingsStore, rbacService)
 
-	loginRateLimit := mw.RateLimitMiddleware(rateLimit, "login", 5, 5)
+	loginRateLimit := mw.RateLimitMiddleware(cfg.Auth.RateLimit, rateLimit, "login", 5, 5)
 
 	mux.Handle("POST /api/v1/auth/login", loginRateLimit(account.LoginHandler(cfg.Auth.Account, acct, session)))
 	mux.Handle("POST /api/v1/auth/logout", loginRateLimit(mwAuth(account.LogoutHandler(session))))
@@ -225,7 +225,7 @@ func (s *APIServer) Setup() http.Handler {
 	accountStore := account.NewStore(db)
 	linkAccountStore := link.NewStore(db)
 	oauthTokenStore := link.NewOAuthTokenStore(db)
-	rateLimit := ratelimit.NewService(ratelimit.NewStore(rdb))
+	rateLimit := ratelimit.NewService(ratelimit.NewStore(cfg.Auth.RateLimit, rdb))
 
 	middlewareStack := mw.CreateStack(
 		mw.NoSniffMiddleware,
@@ -239,7 +239,7 @@ func (s *APIServer) Setup() http.Handler {
 		mw.RequestIDMiddleware,
 		mw.RecoveryMiddleware,
 		mw.SessionMiddleware(sess),
-		mw.RateLimitMiddleware(rateLimit, "default", 300, 60),
+		mw.RateLimitMiddleware(cfg.Auth.RateLimit, rateLimit, "default", 300, 60),
 		mw.RequestLoggerMiddleware,
 	)
 

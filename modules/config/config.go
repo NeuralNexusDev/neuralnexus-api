@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"time"
 
 	"golang.org/x/crypto/ed25519"
 	"golang.org/x/oauth2"
@@ -62,8 +63,9 @@ type MCATexture struct {
 }
 
 type Auth struct {
-	Account Account
-	Session Session
+	Account   Account
+	RateLimit RateLimit
+	Session   Session
 }
 
 type Account struct {
@@ -73,6 +75,11 @@ type Account struct {
 type Session struct {
 	JwtSecret      []byte
 	ValidAudiences []string
+}
+
+type RateLimit struct {
+	RetryAfter int
+	Window     time.Duration
 }
 
 type Discord struct {
@@ -203,6 +210,10 @@ func FromEnv() *Config {
 		Auth: Auth{
 			Account: Account{
 				Pepper: []byte(checkEnvVar("PEPPER")),
+			},
+			RateLimit: RateLimit{
+				RetryAfter: 60,
+				Window:     time.Minute,
 			},
 			Session: Session{
 				JwtSecret:      []byte(checkEnvVar("JWT_SECRET")),
