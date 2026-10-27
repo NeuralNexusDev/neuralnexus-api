@@ -19,26 +19,6 @@ type oAuthTokenStore struct {
 	db *pgxpool.Pool
 }
 
-//CREATE TRIGGER update_oauth_tokens_modtime
-//BEFORE UPDATE ON oauth_tokens
-//FOR EACH ROW
-//EXECUTE PROCEDURE update_modified_column();
-
-//CREATE TABLE oauth_tokens (
-//	user_id BIGINT NOT NULL,
-//	platform TEXT NOT NULL,
-//	access_token TEXT NOT NULL,
-//  token_type TEXT,
-//  refresh_token TEXT,
-//	expiry BIGINT,
-//  expires_in BIGINT,
-//  scope TEXT[],
-//  created_at timestamp with time zone default current_timestamp,
-//  updated_at timestamp with time zone default current_timestamp,
-//  FOREIGN KEY (user_id) REFERENCES accounts(user_id),
-//  CONSTRAINT oauth_tokens_unique UNIQUE (user_id, platform)
-//);
-
 // OAuthTokenStore interface
 type OAuthTokenStore interface {
 	AddOAuthTokenToDB(ctx context.Context, token *OAuthToken) error

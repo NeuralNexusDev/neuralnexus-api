@@ -38,21 +38,6 @@ func NewSettingsStore(db *pgxpool.Pool) SettingsStore {
 	return &settingsStore{db: db}
 }
 
-//CREATE TRIGGER update_accounts_modtime
-//BEFORE UPDATE ON accounts
-//FOR EACH ROW
-//EXECUTE PROCEDURE update_modified_column();
-
-// CREATE TABLE accounts (
-// 	user_id BIGINT PRIMARY KEY NOT NULL,
-// 	username TEXT UNIQUE,
-// 	email TEXT UNIQUE,
-// 	hashed_secret BYTEA,
-// 	salt BYTEA,
-// 	role_ids BIGINT[] NOT NULL DEFAULT '{}',
-//  updated_at timestamp with time zone default current_timestamp
-// );
-
 // Store - The account store interface
 type Store interface {
 	AddAccountToDB(ctx context.Context, account *Account) error
@@ -164,17 +149,6 @@ func (s *store) DeleteAccountFromDB(ctx context.Context, userID string) error {
 	}
 	return nil
 }
-
-//CREATE TRIGGER update_account_settings_modtime
-//BEFORE UPDATE ON account_settings
-//FOR EACH ROW
-//EXECUTE PROCEDURE update_modified_column();
-
-// CREATE TABLE account_settings (
-//   user_id BIGINT PRIMARY KEY NOT NULL REFERENCES accounts(user_id),
-//   password_auth BOOLEAN NOT NULL DEFAULT true,
-//   updated_at timestamp with time zone default current_timestamp
-// );
 
 // SettingsStore - The account settings store interface
 type SettingsStore interface {
