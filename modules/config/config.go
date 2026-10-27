@@ -41,8 +41,9 @@ type Database struct {
 }
 
 type Snowflake struct {
-	NodeId   uint64
-	WorkerId uint64
+	BaseEpoch uint64
+	NodeId    uint64
+	WorkerId  uint64
 }
 
 type Redis struct {
@@ -198,8 +199,9 @@ func FromEnv() *Config {
 			DBURL2: checkEnvVar("DATABASE_URL_2"),
 		},
 		Snowflake: Snowflake{
-			NodeId:   nodeID,
-			WorkerId: workerID,
+			BaseEpoch: 1706639400000, // January 30, 2024 12:30:00 PM Central/Regina
+			NodeId:    nodeID,
+			WorkerId:  workerID,
 		},
 		Redis: Redis{
 			Address:  checkEnvVar("REDIS_ADDRESS"),

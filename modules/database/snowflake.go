@@ -12,7 +12,7 @@ var settings spaceflake.GeneratorSettings
 // InitSnowflake initializes the snowflake generator
 func InitSnowflake(cfg config.Snowflake) {
 	s := spaceflake.NewGeneratorSettings()
-	s.BaseEpoch = 1706639400000 // January 30, 2024 12:30:00 PM Central/Regina
+	s.BaseEpoch = cfg.BaseEpoch
 	s.NodeID = cfg.NodeId
 	s.WorkerID = cfg.WorkerId
 	s.Sequence = 0
