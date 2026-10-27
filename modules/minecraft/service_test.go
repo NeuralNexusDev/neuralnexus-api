@@ -16,6 +16,7 @@ import (
 
 	"github.com/goccy/go-json"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
@@ -26,7 +27,8 @@ type mcMockStore struct {
 	getPlayerByName           func(name string) (*Player, error)
 	getProfileByUUID          func(id string) (*Profile, error)
 	upsertPlayer              func(player *Player, updateProfile bool) error
-	upsertTextures            func(value *TexturesValue) error
+	getTextures               func(table, id, name string) (*TexturesValue, error)
+	upsertTextures            func(table string, value *TexturesValue) error
 	upsertTextureHash         func(hash string) error
 	getPlayerFromCache        func(key string) (*Player, error)
 	setPlayerInCache          func(player *Player) error
@@ -39,11 +41,6 @@ type mcMockStore struct {
 	getGeyserPlayerByGamertag func(gamertag string) (*GeyserPlayer, error)
 	getGeyserPlayerByXUID     func(xuid int64) (*GeyserPlayer, error)
 	upsertGeyserPlayer        func(player *GeyserPlayer) error
-	getGeyserSkin             func(xuid int64) (*GeyserSkin, error)
-	getGeyserSkinByHash       func(hash string) (*GeyserSkin, error)
-	upsertGeyserSkin          func(xuid int64, skin *GeyserSkin) error
-	isGeyserTextureInS3       func(hash string) (bool, error)
-	putGeyserTextureInS3      func(hash string, body io.ReadCloser) error
 }
 
 var _ Store = (*mcMockStore)(nil)
@@ -72,9 +69,15 @@ func (m *mcMockStore) UpsertPlayer(_ context.Context, player *Player, updateProf
 	}
 	return nil
 }
-func (m *mcMockStore) UpsertTextures(_ context.Context, value *TexturesValue) error {
+func (m *mcMockStore) GetTextures(_ context.Context, table, id, name string) (*TexturesValue, error) {
+	if m.getTextures != nil {
+		return m.getTextures(table, id, name)
+	}
+	return nil, nil
+}
+func (m *mcMockStore) UpsertTextures(_ context.Context, table string, value *TexturesValue) error {
 	if m.upsertTextures != nil {
-		return m.upsertTextures(value)
+		return m.upsertTextures(table, value)
 	}
 	return nil
 }
@@ -150,36 +153,6 @@ func (m *mcMockStore) UpsertGeyserPlayer(_ context.Context, player *GeyserPlayer
 	}
 	return nil
 }
-func (m *mcMockStore) GetGeyserSkin(_ context.Context, xuid int64) (*GeyserSkin, error) {
-	if m.getGeyserSkin != nil {
-		return m.getGeyserSkin(xuid)
-	}
-	return nil, ErrSkinNotFound
-}
-func (m *mcMockStore) GetGeyserSkinByHash(_ context.Context, hash string) (*GeyserSkin, error) {
-	if m.getGeyserSkinByHash != nil {
-		return m.getGeyserSkinByHash(hash)
-	}
-	return nil, nil
-}
-func (m *mcMockStore) UpsertGeyserSkin(_ context.Context, xuid int64, skin *GeyserSkin) error {
-	if m.upsertGeyserSkin != nil {
-		return m.upsertGeyserSkin(xuid, skin)
-	}
-	return nil
-}
-func (m *mcMockStore) IsGeyserTextureInS3(_ context.Context, hash string) (bool, error) {
-	if m.isGeyserTextureInS3 != nil {
-		return m.isGeyserTextureInS3(hash)
-	}
-	return false, nil
-}
-func (m *mcMockStore) PutGeyserTextureInS3(_ context.Context, hash string, body io.ReadCloser) error {
-	if m.putGeyserTextureInS3 != nil {
-		return m.putGeyserTextureInS3(hash, body)
-	}
-	return nil
-}
 
 func mcNewService(t *testing.T, store Store, handler http.HandlerFunc) *service {
 	t.Helper()
@@ -196,18 +169,19 @@ func mcNewUnreachableService(store Store) *service {
 
 func mcServiceForServer(store Store, srv *httptest.Server) *service {
 	return &service{
-		store:                store,
-		client:               srv.Client(),
-		lookupByName:         srv.URL + "/byname/",
-		lookupByUUID:         srv.URL + "/byuuid/",
-		lookupBulk:           srv.URL + "/bulk",
-		lookupProfile:        srv.URL + "/profile/",
-		lookupTexture:        srv.URL + "/texture/",
-		geyserXUIDLookup:     srv.URL + "/xuid/",
-		geyserSkinLookup:     srv.URL + "/skin/",
-		geyserGamertagLookup: srv.URL + "/gamertag/",
-		nnTextureUrl:         srv.URL + "/cdn/",
-		nnGeyserTextureUrl:   srv.URL + "/cdn/geyser/",
+		store:  store,
+		client: srv.Client(),
+		cfg: config.Minecraft{
+			LookupByName:         srv.URL + "/byname/",
+			LookupByUUID:         srv.URL + "/byuuid/",
+			LookupBulk:           srv.URL + "/bulk",
+			LookupProfile:        srv.URL + "/profile/",
+			LookupTexture:        srv.URL + "/texture/",
+			GeyserXUIDLookup:     srv.URL + "/xuid/",
+			GeyserSkinLookup:     srv.URL + "/skin/",
+			GeyserGamertagLookup: srv.URL + "/gamertag/",
+		},
+		s3TextureUrl: srv.URL + "/cdn/",
 	}
 }
 
@@ -235,7 +209,7 @@ func mcMustProperty(t *testing.T, tv TexturesValue) Property {
 
 func TestSV01to02_NewService(t *testing.T) {
 	t.Run("SV-01_NilClientUsesDefault", func(t *testing.T) {
-		svc := NewService(&mcMockStore{}, nil, "http://cdn/")
+		svc := NewService(config.Minecraft{}, &mcMockStore{}, nil, "http://cdn/")
 		s, ok := svc.(*service)
 		if !ok {
 			t.Fatalf("NewService() returned %T, want *service", svc)
@@ -247,13 +221,13 @@ func TestSV01to02_NewService(t *testing.T) {
 
 	t.Run("SV-02_ProvidedClientRetained", func(t *testing.T) {
 		client := &http.Client{}
-		svc := NewService(&mcMockStore{}, client, "http://cdn/")
+		svc := NewService(config.Minecraft{}, &mcMockStore{}, client, "http://cdn/")
 		s := svc.(*service)
 		if s.client != client {
 			t.Error("expected the given client to be retained")
 		}
-		if s.nnGeyserTextureUrl != "http://cdn/geyser/" {
-			t.Errorf("nnGeyserTextureUrl = %q, want %q", s.nnGeyserTextureUrl, "http://cdn/geyser/")
+		if s.s3TextureUrl != "http://cdn/" {
+			t.Errorf("s3TextureUrl = %q, want %q", s.s3TextureUrl, "http://cdn/")
 		}
 	})
 }
@@ -621,8 +595,8 @@ func TestSV36to39_GetProfile(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetProfile() error = %v", err)
 		}
-		wantSkin := s.nnTextureUrl + "skinhash"
-		wantCape := s.nnTextureUrl + "capehash"
+		wantSkin := s.s3TextureUrl + "texture/skinhash"
+		wantCape := s.s3TextureUrl + "texture/capehash"
 		if got.Textures.Textures.SKIN.URL != wantSkin {
 			t.Errorf("SKIN.URL = %q, want %q", got.Textures.Textures.SKIN.URL, wantSkin)
 		}
@@ -796,7 +770,7 @@ func TestSV51to63_FetchProfileFromMojang(t *testing.T) {
 		tex := TexturesValue{Textures: Textures{SKIN: &Texture{URL: "http://mojang/texture/skinhash"}, CAPE: &Texture{URL: "http://mojang/texture/capehash"}}}
 		store := &mcMockStore{
 			upsertTextureHash: func(hash string) error { hashesStored = append(hashesStored, hash); return nil },
-			upsertTextures:    func(*TexturesValue) error { texturesStored = true; return nil },
+			upsertTextures:    func(string, *TexturesValue) error { texturesStored = true; return nil },
 			setProfileInCache: func(*Profile) error { cachedProfile = true; return nil },
 		}
 		s := mcNewService(t, store, func(w http.ResponseWriter, r *http.Request) {
@@ -899,7 +873,7 @@ func TestSV51to63_FetchProfileFromMojang(t *testing.T) {
 
 	t.Run("SV-59_NoTexturesSkipsStorage", func(t *testing.T) {
 		called := false
-		store := &mcMockStore{upsertTextures: func(*TexturesValue) error { called = true; return nil }}
+		store := &mcMockStore{upsertTextures: func(string, *TexturesValue) error { called = true; return nil }}
 		s := mcNewService(t, store, func(w http.ResponseWriter, r *http.Request) {
 			io.WriteString(w, mcMustJSON(t, Player{ID: "id"}))
 		})
@@ -923,7 +897,7 @@ func TestSV51to63_FetchProfileFromMojang(t *testing.T) {
 
 	t.Run("SV-61_UpsertTexturesFailsIsNotFatal", func(t *testing.T) {
 		tex := TexturesValue{Textures: Textures{SKIN: &Texture{URL: "http://mojang/texture/skinhash"}}}
-		store := &mcMockStore{upsertTextures: func(*TexturesValue) error { return testutil.ErrBoom }}
+		store := &mcMockStore{upsertTextures: func(string, *TexturesValue) error { return testutil.ErrBoom }}
 		s := mcNewService(t, store, func(w http.ResponseWriter, r *http.Request) {
 			io.WriteString(w, mcMustJSON(t, Player{ID: "id", Properties: []Property{mcMustProperty(t, tex)}}))
 		})
@@ -1047,78 +1021,6 @@ func TestSV64to71_GetGeyserXUID(t *testing.T) {
 	})
 }
 
-func TestSV72to78_GetGeyserSkin(t *testing.T) {
-	t.Run("SV-72_DBFresh", func(t *testing.T) {
-		store := &mcMockStore{getGeyserSkin: func(int64) (*GeyserSkin, error) { return &GeyserSkin{Hash: "db", LastSeen: mcNow()}, nil }}
-		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) { t.Fatal("should not call Geyser") })
-		got, err := s.GetGeyserSkin(mcCtx, 1)
-		if err != nil || got.Hash != "db" {
-			t.Errorf("got (%+v, %v), want db skin", got, err)
-		}
-	})
-
-	t.Run("SV-73_FetchSuccess", func(t *testing.T) {
-		s := mcNewService(t, &mcMockStore{}, func(w http.ResponseWriter, r *http.Request) {
-			io.WriteString(w, mcMustJSON(t, GeyserSkin{Hash: "fetched"}))
-		})
-		got, err := s.GetGeyserSkin(mcCtx, 1)
-		if err != nil || got.Hash != "fetched" {
-			t.Errorf("got (%+v, %v), want fetched skin", got, err)
-		}
-	})
-
-	t.Run("SV-74_BadRequest", func(t *testing.T) {
-		s := mcNewService(t, &mcMockStore{}, func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusBadRequest)
-		})
-		_, err := s.GetGeyserSkin(mcCtx, 1)
-		if !errors.Is(err, ErrInvalidGeyserRequest) {
-			t.Errorf("err = %v, want ErrInvalidGeyserRequest", err)
-		}
-	})
-
-	t.Run("SV-75_ServerError", func(t *testing.T) {
-		s := mcNewService(t, &mcMockStore{}, func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-		})
-		_, err := s.GetGeyserSkin(mcCtx, 1)
-		if !errors.Is(err, ErrGeyserAPI) {
-			t.Fatalf("error = %v, want %v", err, ErrGeyserAPI)
-		}
-	})
-
-	t.Run("SV-76_BodyUndecodable", func(t *testing.T) {
-		s := mcNewService(t, &mcMockStore{}, func(w http.ResponseWriter, r *http.Request) {
-			io.WriteString(w, "{not json")
-		})
-		_, err := s.GetGeyserSkin(mcCtx, 1)
-		if err == nil {
-			t.Fatal("expected a decode error")
-		}
-	})
-
-	t.Run("SV-77_EmptyHashIsSkinNotFound", func(t *testing.T) {
-		s := mcNewService(t, &mcMockStore{}, func(w http.ResponseWriter, r *http.Request) {
-			io.WriteString(w, `{}`)
-		})
-		_, err := s.GetGeyserSkin(mcCtx, 1)
-		if !errors.Is(err, ErrSkinNotFound) {
-			t.Errorf("err = %v, want ErrSkinNotFound", err)
-		}
-	})
-
-	t.Run("SV-78_UpsertFails", func(t *testing.T) {
-		store := &mcMockStore{upsertGeyserSkin: func(int64, *GeyserSkin) error { return testutil.ErrBoom }}
-		s := mcNewService(t, store, func(w http.ResponseWriter, r *http.Request) {
-			io.WriteString(w, mcMustJSON(t, GeyserSkin{Hash: "fetched"}))
-		})
-		_, err := s.GetGeyserSkin(mcCtx, 1)
-		if !errors.Is(err, testutil.ErrBoom) {
-			t.Errorf("err = %v, want %v", err, testutil.ErrBoom)
-		}
-	})
-}
-
 func TestSV79to84_ResolveGeyserPlayerByXUID(t *testing.T) {
 	t.Run("SV-79_DBFresh", func(t *testing.T) {
 		store := &mcMockStore{getGeyserPlayerByXUID: func(int64) (*GeyserPlayer, error) {
@@ -1184,27 +1086,6 @@ func TestSV79to84_ResolveGeyserPlayerByXUID(t *testing.T) {
 }
 
 func TestSV85to88_GetGeyserProfile(t *testing.T) {
-	t.Run("SV-85_ComposesPlayerAndSkin", func(t *testing.T) {
-		store := &mcMockStore{
-			getGeyserPlayerByXUID: func(int64) (*GeyserPlayer, error) { return &GeyserPlayer{Gamertag: "Notch", LastSeen: mcNow()}, nil },
-			getGeyserSkin:         func(int64) (*GeyserSkin, error) { return &GeyserSkin{Hash: "h", LastSeen: mcNow()}, nil },
-		}
-		s := mcNewService(t, store, nil)
-		got, err := s.GetGeyserProfile(mcCtx, 1)
-		if err != nil || got.Skin == nil || got.Skin.Hash != "h" {
-			t.Errorf("got (%+v, %v), want combined profile with skin", got, err)
-		}
-	})
-
-	t.Run("SV-86_NoSkinYet", func(t *testing.T) {
-		store := &mcMockStore{getGeyserPlayerByXUID: func(int64) (*GeyserPlayer, error) { return &GeyserPlayer{Gamertag: "Notch", LastSeen: mcNow()}, nil }}
-		s := mcNewService(t, store, func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, `{}`) })
-		got, err := s.GetGeyserProfile(mcCtx, 1)
-		if err != nil || got.Skin != nil {
-			t.Errorf("got (%+v, %v), want Skin nil, no error", got, err)
-		}
-	})
-
 	t.Run("SV-87_PlayerResolveFails", func(t *testing.T) {
 		s := mcNewService(t, &mcMockStore{}, func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -1214,43 +1095,9 @@ func TestSV85to88_GetGeyserProfile(t *testing.T) {
 			t.Fatalf("error = %v, want %v", err, ErrGeyserAPI)
 		}
 	})
-
-	t.Run("SV-88_SkinLookupFailsWithGeyserError", func(t *testing.T) {
-		store := &mcMockStore{
-			getGeyserPlayerByXUID: func(int64) (*GeyserPlayer, error) { return &GeyserPlayer{Gamertag: "Notch", LastSeen: mcNow()}, nil },
-		}
-		s := mcNewService(t, store, func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-		})
-		_, err := s.GetGeyserProfile(mcCtx, 1)
-		if !errors.Is(err, ErrGeyserAPI) {
-			t.Errorf("err = %v, want it to wrap %v", err, ErrGeyserAPI)
-		}
-	})
 }
 
 func TestSV89to92_GetGeyserProfileByGamertag(t *testing.T) {
-	t.Run("SV-89_ComposesPlayerAndSkin", func(t *testing.T) {
-		store := &mcMockStore{
-			getGeyserPlayerByGamertag: func(string) (*GeyserPlayer, error) { return &GeyserPlayer{XUID: 1, LastSeen: mcNow()}, nil },
-			getGeyserSkin:             func(int64) (*GeyserSkin, error) { return &GeyserSkin{Hash: "h", LastSeen: mcNow()}, nil },
-		}
-		s := mcNewService(t, store, nil)
-		got, err := s.GetGeyserProfileByGamertag(mcCtx, "Notch")
-		if err != nil || got.Skin == nil {
-			t.Errorf("got (%+v, %v), want combined profile with skin", got, err)
-		}
-	})
-
-	t.Run("SV-90_NoSkinYet", func(t *testing.T) {
-		store := &mcMockStore{getGeyserPlayerByGamertag: func(string) (*GeyserPlayer, error) { return &GeyserPlayer{XUID: 1, LastSeen: mcNow()}, nil }}
-		s := mcNewService(t, store, func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, `{}`) })
-		got, err := s.GetGeyserProfileByGamertag(mcCtx, "Notch")
-		if err != nil || got.Skin != nil {
-			t.Errorf("got (%+v, %v), want Skin nil", got, err)
-		}
-	})
-
 	t.Run("SV-91_XUIDLookupFails", func(t *testing.T) {
 		s := mcNewService(t, &mcMockStore{}, func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -1258,19 +1105,6 @@ func TestSV89to92_GetGeyserProfileByGamertag(t *testing.T) {
 		_, err := s.GetGeyserProfileByGamertag(mcCtx, "Notch")
 		if !errors.Is(err, ErrGeyserAPI) {
 			t.Fatalf("error = %v, want %v", err, ErrGeyserAPI)
-		}
-	})
-
-	t.Run("SV-92_SkinLookupFailsWithGeyserError", func(t *testing.T) {
-		store := &mcMockStore{
-			getGeyserPlayerByGamertag: func(string) (*GeyserPlayer, error) { return &GeyserPlayer{XUID: 1, LastSeen: mcNow()}, nil },
-		}
-		s := mcNewService(t, store, func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-		})
-		_, err := s.GetGeyserProfileByGamertag(mcCtx, "Notch")
-		if !errors.Is(err, ErrGeyserAPI) {
-			t.Errorf("err = %v, want it to wrap %v", err, ErrGeyserAPI)
 		}
 	})
 }
@@ -1507,294 +1341,8 @@ func TestSV102to109_FetchAndArchive(t *testing.T) {
 	})
 }
 
-func TestSV110to112_GetGeyserTextureContent(t *testing.T) {
-	t.Run("SV-110_PresentDelegatesToS3", func(t *testing.T) {
-		store := &mcMockStore{isGeyserTextureInS3: func(string) (bool, error) { return true, nil }}
-		s := mcNewService(t, store, func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "bytes") })
-		res, err := s.GetGeyserTextureContent(mcCtx, "hash")
-		if err != nil {
-			t.Fatalf("GetGeyserTextureContent() error = %v", err)
-		}
-		data, _ := io.ReadAll(res.Body)
-		if string(data) != "bytes" {
-			t.Errorf("body = %q, want bytes", data)
-		}
-	})
-
-	t.Run("SV-111_AbsentDelegatesToFetch", func(t *testing.T) {
-		var srv *httptest.Server
-		store := &mcMockStore{
-			isGeyserTextureInS3: func(string) (bool, error) { return false, nil },
-			getGeyserSkinByHash: func(string) (*GeyserSkin, error) {
-				tex := TexturesValue{Textures: Textures{SKIN: &Texture{URL: srv.URL + "/skin.png"}}}
-				return &GeyserSkin{Value: mcEncodeTextures(t, tex)}, nil
-			},
-		}
-		srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			io.WriteString(w, "bytes")
-		}))
-		t.Cleanup(srv.Close)
-		s := mcServiceForServer(store, srv)
-		res, err := s.GetGeyserTextureContent(mcCtx, "hash")
-		if err != nil {
-			t.Fatalf("GetGeyserTextureContent() error = %v", err)
-		}
-		data, _ := io.ReadAll(res.Body)
-		if string(data) != "bytes" {
-			t.Errorf("body = %q, want bytes", data)
-		}
-	})
-
-	t.Run("SV-112_IsGeyserTextureInS3Fails", func(t *testing.T) {
-		store := &mcMockStore{isGeyserTextureInS3: func(string) (bool, error) { return false, testutil.ErrBoom }}
-		s := mcNewService(t, store, nil)
-		_, err := s.GetGeyserTextureContent(mcCtx, "hash")
-		if !errors.Is(err, testutil.ErrBoom) {
-			t.Errorf("err = %v, want %v", err, testutil.ErrBoom)
-		}
-	})
-}
-
-func TestSV113to117_ServeGeyserFromS3(t *testing.T) {
-	t.Run("SV-113_OK", func(t *testing.T) {
-		s := mcNewService(t, &mcMockStore{}, func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "image/png")
-			io.WriteString(w, "bytes")
-		})
-		res, err := s.serveGeyserFromS3(mcCtx, "hash")
-		if err != nil {
-			t.Fatalf("serveGeyserFromS3() error = %v", err)
-		}
-		if res.ContentType != "image/png" {
-			t.Errorf("ContentType = %q, want image/png", res.ContentType)
-		}
-	})
-
-	t.Run("SV-114_NotFound", func(t *testing.T) {
-		s := mcNewService(t, &mcMockStore{}, func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusNotFound)
-		})
-		_, err := s.serveGeyserFromS3(mcCtx, "hash")
-		if !errors.Is(err, ErrTextureNotFound) {
-			t.Errorf("err = %v, want ErrTextureNotFound", err)
-		}
-	})
-
-	t.Run("SV-115_OtherStatus", func(t *testing.T) {
-		s := mcNewService(t, &mcMockStore{}, func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-		})
-		_, err := s.serveGeyserFromS3(mcCtx, "hash")
-		if !errors.Is(err, ErrBadStatusS3) {
-			t.Fatalf("error = %v, want %v", err, ErrBadStatusS3)
-		}
-	})
-
-	t.Run("SV-116_NetworkError", func(t *testing.T) {
-		s := mcNewUnreachableService(&mcMockStore{})
-		_, err := s.serveGeyserFromS3(mcCtx, "hash")
-		if err == nil {
-			t.Fatal("expected a network error")
-		}
-	})
-
-	t.Run("SV-117_MissingContentTypeDefaults", func(t *testing.T) {
-		s := mcNewService(t, &mcMockStore{}, func(w http.ResponseWriter, r *http.Request) {
-			// Nil the header so net/http's automatic sniffing doesn't set one.
-			w.Header()["Content-Type"] = nil
-			io.WriteString(w, "bytes")
-		})
-		res, err := s.serveGeyserFromS3(mcCtx, "hash")
-		if err != nil {
-			t.Fatalf("serveGeyserFromS3() error = %v", err)
-		}
-		if res.ContentType != "image/png" {
-			t.Errorf("ContentType = %q, want default image/png", res.ContentType)
-		}
-	})
-}
-
-func TestSV118to127_FetchAndArchiveGeyserTexture(t *testing.T) {
-	t.Run("SV-118_OK", func(t *testing.T) {
-		skinSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			io.WriteString(w, "bytes")
-		}))
-		t.Cleanup(skinSrv.Close)
-		tex := TexturesValue{Textures: Textures{SKIN: &Texture{URL: skinSrv.URL + "/skin.png"}}}
-		var archived bool
-		store := &mcMockStore{
-			getGeyserSkinByHash:  func(string) (*GeyserSkin, error) { return &GeyserSkin{Value: mcEncodeTextures(t, tex)}, nil },
-			putGeyserTextureInS3: func(string, io.ReadCloser) error { archived = true; return nil },
-		}
-		s := mcNewService(t, store, nil)
-		res, err := s.fetchAndArchiveGeyserTexture(mcCtx, "hash")
-		if err != nil {
-			t.Fatalf("fetchAndArchiveGeyserTexture() error = %v", err)
-		}
-		data, _ := io.ReadAll(res.Body)
-		if string(data) != "bytes" || !archived {
-			t.Errorf("data=%q archived=%v", data, archived)
-		}
-	})
-
-	t.Run("SV-119_StoreLookupFails", func(t *testing.T) {
-		store := &mcMockStore{getGeyserSkinByHash: func(string) (*GeyserSkin, error) { return nil, testutil.ErrBoom }}
-		s := mcNewService(t, store, nil)
-		_, err := s.fetchAndArchiveGeyserTexture(mcCtx, "hash")
-		if !errors.Is(err, testutil.ErrBoom) {
-			t.Errorf("err = %v, want %v", err, testutil.ErrBoom)
-		}
-	})
-
-	t.Run("SV-120_SkinNil", func(t *testing.T) {
-		s := mcNewService(t, &mcMockStore{}, nil)
-		_, err := s.fetchAndArchiveGeyserTexture(mcCtx, "hash")
-		if !errors.Is(err, ErrTextureNotFound) {
-			t.Errorf("err = %v, want ErrTextureNotFound", err)
-		}
-	})
-
-	t.Run("SV-121_SkinURLUndecodable", func(t *testing.T) {
-		store := &mcMockStore{getGeyserSkinByHash: func(string) (*GeyserSkin, error) { return &GeyserSkin{Value: "not-base64!!"}, nil }}
-		s := mcNewService(t, store, nil)
-		_, err := s.fetchAndArchiveGeyserTexture(mcCtx, "hash")
-		if !errors.Is(err, ErrTextureNotFound) {
-			t.Errorf("err = %v, want ErrTextureNotFound", err)
-		}
-	})
-
-	t.Run("SV-122_NetworkError", func(t *testing.T) {
-		deadSrv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
-		deadSrv.Close()
-		tex := TexturesValue{Textures: Textures{SKIN: &Texture{URL: deadSrv.URL + "/skin.png"}}}
-		store := &mcMockStore{getGeyserSkinByHash: func(string) (*GeyserSkin, error) { return &GeyserSkin{Value: mcEncodeTextures(t, tex)}, nil }}
-		s := mcNewService(t, store, nil)
-		_, err := s.fetchAndArchiveGeyserTexture(mcCtx, "hash")
-		if err == nil {
-			t.Fatal("expected a network error")
-		}
-	})
-
-	t.Run("SV-123_SkinHostNotFound", func(t *testing.T) {
-		skinSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusNotFound)
-		}))
-		t.Cleanup(skinSrv.Close)
-		tex := TexturesValue{Textures: Textures{SKIN: &Texture{URL: skinSrv.URL + "/skin.png"}}}
-		store := &mcMockStore{getGeyserSkinByHash: func(string) (*GeyserSkin, error) { return &GeyserSkin{Value: mcEncodeTextures(t, tex)}, nil }}
-		s := mcNewService(t, store, nil)
-		_, err := s.fetchAndArchiveGeyserTexture(mcCtx, "hash")
-		if !errors.Is(err, ErrTextureNotFound) {
-			t.Errorf("err = %v, want ErrTextureNotFound", err)
-		}
-	})
-
-	t.Run("SV-124_SkinHostOtherStatus", func(t *testing.T) {
-		skinSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-		}))
-		t.Cleanup(skinSrv.Close)
-		tex := TexturesValue{Textures: Textures{SKIN: &Texture{URL: skinSrv.URL + "/skin.png"}}}
-		store := &mcMockStore{getGeyserSkinByHash: func(string) (*GeyserSkin, error) { return &GeyserSkin{Value: mcEncodeTextures(t, tex)}, nil }}
-		s := mcNewService(t, store, nil)
-		_, err := s.fetchAndArchiveGeyserTexture(mcCtx, "hash")
-		if !errors.Is(err, ErrBadStatusRemote) {
-			t.Fatalf("error = %v, want %v", err, ErrBadStatusRemote)
-		}
-	})
-
-	t.Run("SV-125_BodyReadFails", func(t *testing.T) {
-		skinSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Length", "1000")
-			w.WriteHeader(http.StatusOK)
-			io.WriteString(w, "short")
-			if hj, ok := w.(http.Hijacker); ok {
-				if conn, _, err := hj.Hijack(); err == nil {
-					conn.Close()
-				}
-			}
-		}))
-		t.Cleanup(skinSrv.Close)
-		tex := TexturesValue{Textures: Textures{SKIN: &Texture{URL: skinSrv.URL + "/skin.png"}}}
-		store := &mcMockStore{getGeyserSkinByHash: func(string) (*GeyserSkin, error) { return &GeyserSkin{Value: mcEncodeTextures(t, tex)}, nil }}
-		s := mcNewService(t, store, nil)
-		_, err := s.fetchAndArchiveGeyserTexture(mcCtx, "hash")
-		if err == nil {
-			t.Fatal("expected a body read error")
-		}
-	})
-
-	t.Run("SV-126_ArchiveFailsStillServesClient", func(t *testing.T) {
-		skinSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			io.WriteString(w, "bytes")
-		}))
-		t.Cleanup(skinSrv.Close)
-		tex := TexturesValue{Textures: Textures{SKIN: &Texture{URL: skinSrv.URL + "/skin.png"}}}
-		store := &mcMockStore{
-			getGeyserSkinByHash:  func(string) (*GeyserSkin, error) { return &GeyserSkin{Value: mcEncodeTextures(t, tex)}, nil },
-			putGeyserTextureInS3: func(string, io.ReadCloser) error { return testutil.ErrBoom },
-		}
-		s := mcNewService(t, store, nil)
-		res, err := s.fetchAndArchiveGeyserTexture(mcCtx, "hash")
-		if err != nil {
-			t.Fatalf("fetchAndArchiveGeyserTexture() error = %v", err)
-		}
-		data, _ := io.ReadAll(res.Body)
-		if string(data) != "bytes" {
-			t.Errorf("body = %q, want bytes despite archive failure", data)
-		}
-	})
-
-	t.Run("SV-127_MissingContentTypeDefaults", func(t *testing.T) {
-		skinSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Nil the header so net/http's automatic sniffing doesn't set one.
-			w.Header()["Content-Type"] = nil
-			io.WriteString(w, "bytes")
-		}))
-		t.Cleanup(skinSrv.Close)
-		tex := TexturesValue{Textures: Textures{SKIN: &Texture{URL: skinSrv.URL + "/skin.png"}}}
-		store := &mcMockStore{getGeyserSkinByHash: func(string) (*GeyserSkin, error) { return &GeyserSkin{Value: mcEncodeTextures(t, tex)}, nil }}
-		s := mcNewService(t, store, nil)
-		res, err := s.fetchAndArchiveGeyserTexture(mcCtx, "hash")
-		if err != nil {
-			t.Fatalf("fetchAndArchiveGeyserTexture() error = %v", err)
-		}
-		if res.ContentType != "image/png" {
-			t.Errorf("ContentType = %q, want default image/png", res.ContentType)
-		}
-	})
-}
-
 func TestSV128to131_GeyserProfileSkinStepRejection(t *testing.T) {
 	skinBadRequest := func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusBadRequest) }
-
-	t.Run("SV-128_ProfileSkinBadRequestIsGeyserAPIError", func(t *testing.T) {
-		store := &mcMockStore{
-			getGeyserPlayerByXUID: func(int64) (*GeyserPlayer, error) { return &GeyserPlayer{Gamertag: "Notch", LastSeen: mcNow()}, nil },
-		}
-		s := mcNewService(t, store, skinBadRequest)
-		_, err := s.GetGeyserProfile(mcCtx, 1)
-		if !errors.Is(err, ErrGeyserAPI) {
-			t.Errorf("err = %v, want it to wrap %v", err, ErrGeyserAPI)
-		}
-		if errors.Is(err, ErrInvalidGeyserRequest) {
-			t.Errorf("err = %v, must not satisfy %v", err, ErrInvalidGeyserRequest)
-		}
-	})
-
-	t.Run("SV-129_ByGamertagSkinBadRequestIsGeyserAPIError", func(t *testing.T) {
-		store := &mcMockStore{
-			getGeyserPlayerByGamertag: func(string) (*GeyserPlayer, error) { return &GeyserPlayer{XUID: 1, LastSeen: mcNow()}, nil },
-		}
-		s := mcNewService(t, store, skinBadRequest)
-		_, err := s.GetGeyserProfileByGamertag(mcCtx, "Notch")
-		if !errors.Is(err, ErrGeyserAPI) {
-			t.Errorf("err = %v, want it to wrap %v", err, ErrGeyserAPI)
-		}
-		if errors.Is(err, ErrInvalidGeyserRequest) {
-			t.Errorf("err = %v, must not satisfy %v", err, ErrInvalidGeyserRequest)
-		}
-	})
 
 	t.Run("SV-130_ProfileResolveBadRequestStaysInvalidRequest", func(t *testing.T) {
 		s := mcNewService(t, &mcMockStore{}, skinBadRequest)

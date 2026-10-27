@@ -615,47 +615,6 @@ func TestHD49to52_GetTextureHandler(t *testing.T) {
 	})
 }
 
-func TestHD53to56_GetGeyserTextureHandler(t *testing.T) {
-	t.Run("HD-53_EmptyHash", func(t *testing.T) {
-		h := GetGeyserTextureHandler(&mcMockService{})
-		w := httptest.NewRecorder()
-		h(w, mcRequest(t, http.MethodGet, "/gt/", nil, map[string]string{"hash": ""}))
-		mcRequireStatus(t, w, http.StatusBadRequest)
-		mcRequireDetail(t, w, msgInvalidHash)
-	})
-
-	t.Run("HD-54_OK", func(t *testing.T) {
-		svc := &mcMockService{getGeyserTextureContent: func(hash string) (*TextureResult, error) {
-			return &TextureResult{Body: io.NopCloser(strings.NewReader("bytes")), ContentType: "image/png"}, nil
-		}}
-		h := GetGeyserTextureHandler(svc)
-		w := httptest.NewRecorder()
-		h(w, mcRequest(t, http.MethodGet, "/gt/abc", nil, map[string]string{"hash": "abc"}))
-		mcRequireStatus(t, w, http.StatusOK)
-		if w.Body.String() != "bytes" {
-			t.Errorf("body = %q, want %q", w.Body.String(), "bytes")
-		}
-	})
-
-	t.Run("HD-55_NotFound", func(t *testing.T) {
-		svc := &mcMockService{getGeyserTextureContent: func(string) (*TextureResult, error) { return nil, ErrTextureNotFound }}
-		h := GetGeyserTextureHandler(svc)
-		w := httptest.NewRecorder()
-		h(w, mcRequest(t, http.MethodGet, "/gt/abc", nil, map[string]string{"hash": "abc"}))
-		mcRequireStatus(t, w, http.StatusNotFound)
-		mcRequireDetail(t, w, msgTextureNotFound)
-	})
-
-	t.Run("HD-56_ServiceError", func(t *testing.T) {
-		svc := &mcMockService{getGeyserTextureContent: func(string) (*TextureResult, error) { return nil, testutil.ErrBoom }}
-		h := GetGeyserTextureHandler(svc)
-		w := httptest.NewRecorder()
-		h(w, mcRequest(t, http.MethodGet, "/gt/abc", nil, map[string]string{"hash": "abc"}))
-		mcRequireStatus(t, w, http.StatusBadGateway)
-		mcRequireDetail(t, w, msgFailedToGetTexture)
-	})
-}
-
 func TestHD57to58_GeyserProfileUpstreamFailure(t *testing.T) {
 	bedrockUUID := xuidToUUID(42)
 
