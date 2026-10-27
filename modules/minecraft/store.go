@@ -28,7 +28,6 @@ const (
 	CacheProfile       = CachePlayer + "profile:"
 	CacheProfileSigned = CacheProfile + "signed:"
 	S3KeyPrefix        = "texture/"
-	GeyserS3KeyPrefix  = "texture/geyser/"
 
 	JavaPlayerTexturesTable   = "player_textures"
 	GeyserPlayerTexturesTable = "geyser_player_textures"
@@ -163,8 +162,8 @@ func (s *store) GetProfileByUUID(ctx context.Context, id string) (*Profile, erro
 func (s *store) GetTextures(ctx context.Context, table, id, name string) (*TexturesValue, error) {
 	rows, err := s.db.Query(ctx, `
 		SELECT player_id, skin, model, cape, last_seen
-		FROM $1
-		WHERE player_id = $2
+		FROM `+table+
+		` WHERE player_id = $1
 		ORDER BY last_seen DESC
 		LIMIT 1`, table, id)
 	if err != nil {
