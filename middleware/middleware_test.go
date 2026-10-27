@@ -19,6 +19,7 @@ import (
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/ratelimit"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
@@ -39,7 +40,12 @@ func (f *mwFakeSessionSvc) GetSession(context.Context, string) (*session.Session
 	return nil, errors.New("not implemented")
 }
 func (f *mwFakeSessionSvc) UpdateSession(context.Context, *session.Session) error { return nil }
-func (f *mwFakeSessionSvc) CreateJWT(*session.Session) (string, error)            { return "", nil }
+func (f *mwFakeSessionSvc) SetSessionCookie(context.Context, http.ResponseWriter, *session.Session) error {
+	return nil
+}
+func (f *mwFakeSessionSvc) CreateJWT(context.Context, *session.Session) (string, error) {
+	return "", nil
+}
 
 func (f *mwFakeSessionSvc) DeleteSession(_ context.Context, id string) error {
 	f.deletedIDs = append(f.deletedIDs, id)
@@ -370,7 +376,7 @@ func mwSessionRequest(authHeader, cookieValue string) *http.Request {
 		r.Header.Set(AuthHeader, authHeader)
 	}
 	if cookieValue != "" {
-		r.AddCookie(&http.Cookie{Name: SessionCookieName, Value: cookieValue})
+		r.AddCookie(&http.Cookie{Name: session.CookieName, Value: cookieValue})
 	}
 	return r
 }
@@ -629,7 +635,7 @@ func mwRunRateLimit(svc ratelimit.Service, prefix string, sessionLimit, ipLimit 
 	next := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		nextCalls++
 	})
-	RateLimitMiddleware(svc, prefix, sessionLimit, ipLimit)(next).ServeHTTP(rec, r)
+	RateLimitMiddleware(testutil.NewConfig().Auth.RateLimit, svc, prefix, sessionLimit, ipLimit)(next).ServeHTTP(rec, r)
 	return rec, nextCalls
 }
 
@@ -1249,6 +1255,7 @@ func TestVerifyEd25519Middleware(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to generate ed25519 key: %v", err)
 	}
+	cfg := testutil.NewConfig(func(c *config.Config) { c.Discord.PublicKey = pub })
 
 	run := func(r *http.Request) (rec *httptest.ResponseRecorder, nextCalls int, bodyInNext []byte) {
 		rec = httptest.NewRecorder()
@@ -1256,7 +1263,7 @@ func TestVerifyEd25519Middleware(t *testing.T) {
 			nextCalls++
 			bodyInNext, _ = io.ReadAll(r.Body)
 		})
-		VerifyEd25519Middleware(pub)(next).ServeHTTP(rec, r)
+		VerifyEd25519Middleware(cfg)(next).ServeHTTP(rec, r)
 		return rec, nextCalls, bodyInNext
 	}
 
