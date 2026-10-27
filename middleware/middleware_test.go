@@ -26,11 +26,15 @@ import (
 	"golang.org/x/crypto/ed25519"
 )
 
+type mwMarkerKey struct{}
+
 type mwFakeSessionSvc struct {
 	readJWTFunc   func(token string) (*session.Session, error)
 	deleteFunc    func(id string) error
 	deletedIDs    []string
 	readJWTCalled bool
+	deleteCtxErr  error
+	deleteMarker  any
 }
 
 var _ session.Service = (*mwFakeSessionSvc)(nil)
@@ -47,7 +51,9 @@ func (f *mwFakeSessionSvc) CreateJWT(context.Context, *session.Session) (string,
 	return "", nil
 }
 
-func (f *mwFakeSessionSvc) DeleteSession(_ context.Context, id string) error {
+func (f *mwFakeSessionSvc) DeleteSession(ctx context.Context, id string) error {
+	f.deleteCtxErr = ctx.Err()
+	f.deleteMarker = ctx.Value(mwMarkerKey{})
 	f.deletedIDs = append(f.deletedIDs, id)
 	if f.deleteFunc != nil {
 		return f.deleteFunc(id)
@@ -322,6 +328,25 @@ func mwSessionRequest(authHeader, cookieValue string) *http.Request {
 	return r
 }
 
+func mwCancelledRequest(authHeader, cookieValue string) *http.Request {
+	ctx, cancel := context.WithCancel(context.WithValue(mwBaseCtx(), mwMarkerKey{}, "m1"))
+	cancel()
+	return mwSessionRequest(authHeader, cookieValue).WithContext(ctx)
+}
+
+func mwAssertDeleteDetached(t *testing.T, svc *mwFakeSessionSvc) {
+	t.Helper()
+	if len(svc.deletedIDs) != 1 {
+		t.Fatalf("DeleteSession calls = %v, want one", svc.deletedIDs)
+	}
+	if svc.deleteCtxErr != nil {
+		t.Errorf("DeleteSession context Err() = %v, want nil", svc.deleteCtxErr)
+	}
+	if svc.deleteMarker != "m1" {
+		t.Errorf("DeleteSession context marker = %v, want %q", svc.deleteMarker, "m1")
+	}
+}
+
 func TestSessionMiddleware(t *testing.T) {
 	t.Run("MW-14_NoHeaderNoCookiePassesThrough", func(t *testing.T) {
 		svc := &mwFakeSessionSvc{}
@@ -423,6 +448,20 @@ func TestSessionMiddleware(t *testing.T) {
 		if len(svc.deletedIDs) != 1 || svc.deletedIDs[0] != "s1" {
 			t.Errorf("expected DeleteSession(%q), got %v", "s1", svc.deletedIDs)
 		}
+	})
+
+	t.Run("MW-65_HeaderExpiredSessionDeleteRunsOnAnUncancelledContext", func(t *testing.T) {
+		sess := &session.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
+		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*session.Session, error) { return sess, nil }}
+		rec, nextCalls, _ := mwRunSession(svc, mwCancelledRequest("Bearer expiredtoken", ""))
+
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
+		}
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("expected status 401, got %d", rec.Code)
+		}
+		mwAssertDeleteDetached(t, svc)
 	})
 
 	t.Run("MW-19_ExpiredSessionDeleteErrorStillUnauthorized", func(t *testing.T) {
@@ -537,6 +576,20 @@ func TestSessionMiddleware(t *testing.T) {
 		if len(svc.deletedIDs) != 1 || svc.deletedIDs[0] != "s1" {
 			t.Errorf("expected DeleteSession(%q), got %v", "s1", svc.deletedIDs)
 		}
+	})
+
+	t.Run("MW-66_CookieExpiredSessionDeleteRunsOnAnUncancelledContext", func(t *testing.T) {
+		sess := &session.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
+		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*session.Session, error) { return sess, nil }}
+		rec, nextCalls, _ := mwRunSession(svc, mwCancelledRequest("", "expiredtoken"))
+
+		if nextCalls != 1 {
+			t.Errorf("next called %d times, want 1", nextCalls)
+		}
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected status 200 (fail open), got %d", rec.Code)
+		}
+		mwAssertDeleteDetached(t, svc)
 	})
 
 	t.Run("MW-23_CookieExpiredSessionDeleteErrorStillFailsOpen", func(t *testing.T) {
@@ -1056,6 +1109,23 @@ func TestAuth(t *testing.T) {
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401 regardless of the DeleteSession error, got %d", rec.Code)
 		}
+	})
+
+	t.Run("MW-67_ExpiredSessionDeleteRunsOnAnUncancelledContext", func(t *testing.T) {
+		svc := &mwFakeSessionSvc{}
+		sess := &session.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
+		r := mwCancelledRequest("", "")
+		r = r.WithContext(context.WithValue(r.Context(), reqctx.SessionKey, sess))
+
+		rec, nextCalls := mwRunAuth(svc, r)
+
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
+		}
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("expected status 401, got %d", rec.Code)
+		}
+		mwAssertDeleteDetached(t, svc)
 	})
 
 	t.Run("MW-42_ValidSessionCallsNext", func(t *testing.T) {

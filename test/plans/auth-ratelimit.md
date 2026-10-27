@@ -10,6 +10,7 @@
 | RL-05 | SetRateLimit | Error Path | `store.SetRateLimit` fails | | Error propagated unchanged | P2 |  |
 | RL-06 | IncrRateLimit | Happy Path | `store.IncrementRateLimit` succeeds | | Returns nil | P1 |  |
 | RL-07 | IncrRateLimit | Error Path | `store.IncrementRateLimit` fails | | Error propagated unchanged | P2 |  |
+| RL-09 | IncrRateLimit | Edge Case | the call context is cancelled before the increment | fake store records `ctx.Err()` and a marker value at `IncrementRateLimit` | The call succeeds, and `IncrementRateLimit` sees a context that is not done and still carries the marker, so the increment is not cancelled with the client | P1 |  |
 
 ## store.go
 
