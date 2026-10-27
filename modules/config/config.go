@@ -92,8 +92,13 @@ type GitHub struct {
 }
 
 type Microsoft struct {
-	OAuth2Config      *oauth2.Config
-	LoginOAuth2Config *oauth2.Config
+	OAuth2Config            *oauth2.Config
+	LoginOAuth2Config       *oauth2.Config
+	XboxLiveAuthenticateURL string
+	XstsAuthorizeURL        string
+	MinecraftLoginURL       string
+	MinecraftProfileURL     string
+	MicrosoftUserInfoURL    string
 }
 
 type Minecraft struct {
@@ -259,6 +264,11 @@ func FromEnv() *Config {
 				},
 				Scopes: []string{"openid", "profile", "email", "offline_access"},
 			},
+			XboxLiveAuthenticateURL: "https://user.auth.xboxlive.com/user/authenticate",
+			XstsAuthorizeURL:        "https://xsts.auth.xboxlive.com/xsts/authorize",
+			MinecraftLoginURL:       "https://api.minecraftservices.com/authentication/login_with_xbox",
+			MinecraftProfileURL:     "https://api.minecraftservices.com/minecraft/profile",
+			MicrosoftUserInfoURL:    "https://graph.microsoft.com/oidc/userinfo",
 		},
 		Minecraft: Minecraft{
 			LookupByName:         mojangLookupByName,
