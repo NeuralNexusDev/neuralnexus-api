@@ -145,7 +145,8 @@ func ApplyRoutes(
 	mux.Handle("POST /api/discord/interactions", verify(discord.HandleDiscordInteraction()))
 
 	// --------------- Game Server Status ---------------
-	gssService := gss.NewService()
+	mcsService := mcs.NewService()
+	gssService := gss.NewService(cfg.GameServerStatus, mcsService)
 	mux.Handle("GET /api/v1/game-server-status/{game}", gss.GameServerStatusHandler(gssService))
 	mux.Handle("GET /api/v1/game-server-status/simple/{game}", gss.SimpleGameServerStatus(gssService))
 
@@ -170,7 +171,6 @@ func ApplyRoutes(
 	mux.Handle("GET /api/v1/mc/geyser/skin/{xuid}", mc.GetGeyserSkinHandler(mcService))
 
 	// --------------- Minecraft Status ---------------
-	mcsService := mcs.NewService()
 	mux.Handle("GET /api/v1/mcstatus/{host}", mcs.ServerStatusHandler(mcsService))
 	mux.Handle("GET /api/v1/mcstatus/icon/{host}", mcs.IconHandler(mcsService))
 	mux.Handle("GET /api/v1/mcstatus/simple/{host}", mcs.SimpleStatusHandler(mcsService))

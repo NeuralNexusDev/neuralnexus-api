@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/mcstatus"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/goccy/go-json"
@@ -30,17 +31,20 @@ type GSSService interface {
 }
 
 // service - Game Server Status service implementation
-type service struct{}
+type service struct {
+	cfg      config.GameServerStatus
+	mcStatus mcstatus.MCStatusService
+}
 
 // NewService - Create new Game Server Status service
-func NewService() GSSService {
-	return &service{}
+func NewService(cfg config.GameServerStatus, mcStatus mcstatus.MCStatusService) GSSService {
+	return &service{cfg: cfg, mcStatus: mcStatus}
 }
 
 // QueryGameQ - Query GameQ REST API
 func (s *service) QueryGameQ(ctx context.Context, game string, host string, port int) (*GameQResponse, error) {
 	var response map[string]GameQResponse
-	url := fmt.Sprintf("http://172.16.1.180:3024/GssGameq.php/%s?host=%s&port=%d", game, host, port)
+	url := fmt.Sprintf(s.cfg.GameQEndpoint+"/GssGameq.php/%s?host=%s&port=%d", game, host, port)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		reqctx.Log(ctx, err.Error())
@@ -77,7 +81,7 @@ func (s *service) QueryGameQ(ctx context.Context, game string, host string, port
 // QueryGameDig - Query GameDig REST API
 func (s *service) QueryGameDig(ctx context.Context, game string, host string, port int) (*GameDigResponse, error) {
 	var response GameDigResponse
-	url := fmt.Sprintf("http://172.16.1.180:3025/%s?host=%s&port=%d", game, host, port)
+	url := fmt.Sprintf(s.cfg.GameDigEndpoint+"/%s?host=%s&port=%d", game, host, port)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		reqctx.Log(ctx, err.Error())
@@ -155,7 +159,7 @@ func (s *service) QueryGameServer(ctx context.Context, game string, host string,
 	switch queryType {
 	case QueryTypeMinecraft:
 		isBedrock := game != "minecraft"
-		response, err := mcstatus.NewService().GetServerStatus(ctx, host, port, isBedrock, true, port)
+		response, err := s.mcStatus.GetServerStatus(ctx, host, port, isBedrock, true, port)
 		if err != nil {
 			return nil, err
 		}
