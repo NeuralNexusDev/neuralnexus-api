@@ -3,12 +3,12 @@ package account
 import (
 	"context"
 	"errors"
-	"os"
-	"os/exec"
 	"strconv"
 	"testing"
 	"time"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
@@ -280,17 +280,9 @@ func TestAC14to16IsPasswordAuthEnabled(t *testing.T) {
 	})
 }
 
-const acBrokenSnowflakeEnv = "AC22_BROKEN_SNOWFLAKE"
-
 func TestAC22NewSessionSnowflakeFails(t *testing.T) {
-	if os.Getenv(acBrokenSnowflakeEnv) != "1" {
-		cmd := exec.Command(os.Args[0], "-test.run=^TestAC22NewSessionSnowflakeFails$", "-test.v")
-		cmd.Env = append(os.Environ(), acBrokenSnowflakeEnv+"=1", "SNOWFLAKE_NODE_ID=99")
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("child test run failed: %v\n%s", err, out)
-		}
-		return
-	}
+	database.InitSnowflake(testutil.NewConfig(func(c *config.Config) { c.Snowflake.NodeId = 99 }).Snowflake)
+	t.Cleanup(func() { database.InitSnowflake(testutil.NewConfig().Snowflake) })
 
 	t.Run("AC-22_SnowflakeFailureFailsTheSession", func(t *testing.T) {
 		svc := NewService(&acFakeAccountStore{}, &acFakeAccountSettingsStore{}, testutil.DefaultRoleStore())
