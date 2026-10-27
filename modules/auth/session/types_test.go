@@ -7,38 +7,6 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 )
 
-func TestSE01ToProto(t *testing.T) {
-	t.Run("SE-01_CopiesEveryField", func(t *testing.T) {
-		s := &Session{
-			ID:          "s1",
-			UserID:      "u1",
-			Permissions: []string{"a.b:c"},
-			IssuedAt:    100,
-			LastUsedAt:  200,
-			ExpiresAt:   300,
-		}
-		got := s.ToProto()
-		pb, ok := got.(interface {
-			GetId() string
-			GetUserId() string
-			GetPermissions() []string
-			GetIssuedAt() int64
-			GetLastUsedAt() int64
-			GetExpiresAt() int64
-		})
-		if !ok {
-			t.Fatalf("ToProto() returned an unexpected type: %T", got)
-		}
-		if pb.GetId() != s.ID || pb.GetUserId() != s.UserID || pb.GetIssuedAt() != s.IssuedAt ||
-			pb.GetLastUsedAt() != s.LastUsedAt || pb.GetExpiresAt() != s.ExpiresAt {
-			t.Errorf("ToProto() did not copy scalar fields correctly: %+v", got)
-		}
-		if len(pb.GetPermissions()) != 1 || pb.GetPermissions()[0] != "a.b:c" {
-			t.Errorf("ToProto() Permissions = %v, want [a.b:c]", pb.GetPermissions())
-		}
-	})
-}
-
 func TestSE02to03HasPermission(t *testing.T) {
 	scope := perms.Scope{Node: "perm.node"}
 

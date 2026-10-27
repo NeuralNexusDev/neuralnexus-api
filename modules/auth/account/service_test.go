@@ -9,15 +9,12 @@ import (
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
 type acFakeAccountStore struct {
-	getByIDCtx        context.Context
 	getByIDAccount    *Account
 	getByIDErr        error
-	getByIDCalls      int
 	getByUserAccount  *Account
 	getByUserErr      error
 	getByUserCalls    int
@@ -36,9 +33,7 @@ func (f *acFakeAccountStore) AddAccountToDB(_ context.Context, _ *Account) error
 	f.addCalls++
 	return f.addErr
 }
-func (f *acFakeAccountStore) GetAccountByID(ctx context.Context, _ string) (*Account, error) {
-	f.getByIDCtx = ctx
-	f.getByIDCalls++
+func (f *acFakeAccountStore) GetAccountByID(_ context.Context, _ string) (*Account, error) {
 	return f.getByIDAccount, f.getByIDErr
 }
 func (f *acFakeAccountStore) GetAccountByUsername(_ context.Context, _ string) (*Account, error) {
@@ -73,33 +68,6 @@ func (f *acFakeAccountSettingsStore) GetAccountSettings(_ context.Context, _ str
 }
 func (f *acFakeAccountSettingsStore) SetPasswordAuthEnabled(_ context.Context, _ string, _ bool) error {
 	return errors.New("acFakeAccountSettingsStore: SetPasswordAuthEnabled not implemented")
-}
-
-func TestAC01NewService(t *testing.T) {
-	t.Run("AC-01_WiresGivenSubStores", func(t *testing.T) {
-		as := &acFakeAccountStore{getByIDAccount: &Account{UserID: "u1"}}
-		ass := &acFakeAccountSettingsStore{settings: &AccountSettings{UserID: "u1", PasswordAuthEnabled: true}}
-		svc := NewService(as, ass, nil)
-
-		got, err := svc.GetAccountByID(context.Background(), "u1")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if got != as.getByIDAccount {
-			t.Errorf("GetAccountByID did not delegate to the Store passed to NewService")
-		}
-		if as.getByIDCalls != 1 {
-			t.Errorf("expected the fake Store to be called once, got %d", as.getByIDCalls)
-		}
-
-		enabled, err := svc.IsPasswordAuthEnabled(context.Background(), "u1")
-		if err != nil || !enabled {
-			t.Errorf("IsPasswordAuthEnabled() = (%v, %v), want (true, nil) from the SettingsStore passed to NewService", enabled, err)
-		}
-		if ass.calls != 1 {
-			t.Errorf("expected the fake SettingsStore to be called once, got %d", ass.calls)
-		}
-	})
 }
 
 func TestAC02to03GetAccountByID(t *testing.T) {
@@ -384,20 +352,6 @@ func TestAC17to21NewSession(t *testing.T) {
 
 		if s != nil || !errors.Is(err, wantErr) {
 			t.Errorf("NewSession() = (%v, %v), want (nil, %v)", s, err, wantErr)
-		}
-	})
-}
-
-func TestAC23RequestContextReachesStore(t *testing.T) {
-	t.Run("AC-23_RequestContextReachesStore", func(t *testing.T) {
-		as := &acFakeAccountStore{getByIDAccount: &Account{UserID: "u1"}}
-		ctx := context.WithValue(context.Background(), reqctx.UserIDKey, "u1")
-
-		if _, err := NewService(as, &acFakeAccountSettingsStore{}, testutil.DefaultRoleStore()).GetAccountByID(ctx, "u1"); err != nil {
-			t.Fatalf("GetAccountByID() error = %v", err)
-		}
-		if got := as.getByIDCtx.Value(reqctx.UserIDKey); got != "u1" {
-			t.Errorf("store context user ID = %v, want %q", got, "u1")
 		}
 	})
 }

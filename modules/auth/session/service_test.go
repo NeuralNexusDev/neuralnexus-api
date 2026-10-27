@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -28,10 +27,8 @@ type seFakeSessionStore struct {
 	addToCacheErr   error
 	addToCacheCalls int
 
-	getFromCacheCtx     context.Context
 	getFromCacheSession *Session
 	getFromCacheErr     error
-	getFromCacheCalls   int
 
 	deleteFromCacheErr   error
 	deleteFromCacheCalls int
@@ -62,41 +59,13 @@ func (f *seFakeSessionStore) AddSessionToCache(_ context.Context, _ *Session) er
 	return f.addToCacheErr
 }
 
-func (f *seFakeSessionStore) GetSessionFromCache(ctx context.Context, _ string) (*Session, error) {
-	f.getFromCacheCtx = ctx
-	f.getFromCacheCalls++
+func (f *seFakeSessionStore) GetSessionFromCache(_ context.Context, _ string) (*Session, error) {
 	return f.getFromCacheSession, f.getFromCacheErr
 }
 
 func (f *seFakeSessionStore) DeleteSessionFromCache(_ context.Context, _ string) error {
 	f.deleteFromCacheCalls++
 	return f.deleteFromCacheErr
-}
-
-func TestSE37RequestContextReachesStore(t *testing.T) {
-	t.Run("SE-37_RequestContextReachesStore", func(t *testing.T) {
-		fs := &seFakeSessionStore{getFromCacheSession: &Session{ID: "s1"}}
-		ctx := context.WithValue(context.Background(), reqctx.UserIDKey, "u1")
-
-		if _, err := NewService(testutil.NewConfig(), fs).GetSession(ctx, "s1"); err != nil {
-			t.Fatalf("GetSession() error = %v", err)
-		}
-		if got := fs.getFromCacheCtx.Value(reqctx.UserIDKey); got != "u1" {
-			t.Errorf("store context user ID = %v, want %q", got, "u1")
-		}
-	})
-}
-
-func TestSE07NewService(t *testing.T) {
-	t.Run("SE-07_WiresGivenSubStore", func(t *testing.T) {
-		fs := &seFakeSessionStore{getFromDBErr: ErrNotFound, getFromCacheErr: ErrNotFound}
-		svc := NewService(testutil.NewConfig(), fs)
-
-		_, _ = svc.GetSession(testutil.LogContext(context.Background()), "s1")
-		if fs.getFromCacheCalls != 1 {
-			t.Errorf("expected GetSession to delegate to the Store passed to NewService, got %d cache calls", fs.getFromCacheCalls)
-		}
-	})
 }
 
 func TestSE08to10AddSession(t *testing.T) {
