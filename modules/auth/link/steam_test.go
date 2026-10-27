@@ -11,6 +11,7 @@ import (
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 	"github.com/goccy/go-json"
@@ -146,7 +147,12 @@ func (m *stMockSessionService) GetSession(context.Context, string) (*session.Ses
 }
 func (m *stMockSessionService) UpdateSession(context.Context, *session.Session) error { return nil }
 func (m *stMockSessionService) DeleteSession(context.Context, string) error           { return nil }
-func (m *stMockSessionService) CreateJWT(*session.Session) (string, error)            { return "", nil }
+func (m *stMockSessionService) SetSessionCookie(context.Context, http.ResponseWriter, *session.Session) error {
+	return nil
+}
+func (m *stMockSessionService) CreateJWT(context.Context, *session.Session) (string, error) {
+	return "", nil
+}
 func (m *stMockSessionService) ReadJWT(context.Context, string) (*session.Session, error) {
 	return nil, account.ErrNotFound
 }
@@ -230,10 +236,9 @@ func TestST06to12VerifySteamOpenIDCallback(t *testing.T) {
 			_, _ = w.Write([]byte("ns:http://specs.openid.net/auth/2.0\nis_valid:true\n"))
 		}))
 		defer ts.Close()
-		restore := setSteamURLs(ts.URL, "")
-		defer restore()
+		cfg := testutil.NewConfig(func(c *config.Config) { c.Steam.OpenIDLoginURL = ts.URL })
 
-		got, err := VerifySteamOpenIDCallback(testutil.LogContext(context.Background()), validSteamQuery("76500000000000001"))
+		got, err := VerifySteamOpenIDCallback(testutil.LogContext(context.Background()), cfg.Steam, validSteamQuery("76500000000000001"))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -245,7 +250,7 @@ func TestST06to12VerifySteamOpenIDCallback(t *testing.T) {
 	t.Run("LKS-07_WrongMode", func(t *testing.T) {
 		q := validSteamQuery("76500000000000001")
 		q.Set("openid.mode", "cancel")
-		_, err := VerifySteamOpenIDCallback(testutil.LogContext(context.Background()), q)
+		_, err := VerifySteamOpenIDCallback(testutil.LogContext(context.Background()), testutil.NewConfig().Steam, q)
 		if !errors.Is(err, ErrInvalidAssertion) {
 			t.Fatalf("expected ErrInvalidAssertion, got %v", err)
 		}
@@ -254,7 +259,7 @@ func TestST06to12VerifySteamOpenIDCallback(t *testing.T) {
 	t.Run("LKS-08_InvalidClaimedID", func(t *testing.T) {
 		q := validSteamQuery("76500000000000001")
 		q.Set("openid.claimed_id", "not-a-steam-url")
-		_, err := VerifySteamOpenIDCallback(testutil.LogContext(context.Background()), q)
+		_, err := VerifySteamOpenIDCallback(testutil.LogContext(context.Background()), testutil.NewConfig().Steam, q)
 		if !errors.Is(err, ErrInvalidAssertion) {
 			t.Fatalf("expected ErrInvalidAssertion, got %v", err)
 		}
@@ -263,17 +268,16 @@ func TestST06to12VerifySteamOpenIDCallback(t *testing.T) {
 	t.Run("LKS-09_SignedDoesNotCoverClaimedID", func(t *testing.T) {
 		q := validSteamQuery("76500000000000001")
 		q.Set("openid.signed", "op_endpoint,identity,return_to")
-		_, err := VerifySteamOpenIDCallback(testutil.LogContext(context.Background()), q)
+		_, err := VerifySteamOpenIDCallback(testutil.LogContext(context.Background()), testutil.NewConfig().Steam, q)
 		if !errors.Is(err, ErrInvalidAssertion) {
 			t.Fatalf("expected ErrInvalidAssertion, got %v", err)
 		}
 	})
 
 	t.Run("LKS-10_NetworkErrorIsNotInvalidAssertion", func(t *testing.T) {
-		restore := setSteamURLs("http://127.0.0.1:1", "")
-		defer restore()
+		cfg := testutil.NewConfig(func(c *config.Config) { c.Steam.OpenIDLoginURL = "http://127.0.0.1:1" })
 
-		_, err := VerifySteamOpenIDCallback(testutil.LogContext(context.Background()), validSteamQuery("76500000000000001"))
+		_, err := VerifySteamOpenIDCallback(testutil.LogContext(context.Background()), cfg.Steam, validSteamQuery("76500000000000001"))
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -287,10 +291,9 @@ func TestST06to12VerifySteamOpenIDCallback(t *testing.T) {
 			w.WriteHeader(http.StatusInternalServerError)
 		}))
 		defer ts.Close()
-		restore := setSteamURLs(ts.URL, "")
-		defer restore()
+		cfg := testutil.NewConfig(func(c *config.Config) { c.Steam.OpenIDLoginURL = ts.URL })
 
-		_, err := VerifySteamOpenIDCallback(testutil.LogContext(context.Background()), validSteamQuery("76500000000000001"))
+		_, err := VerifySteamOpenIDCallback(testutil.LogContext(context.Background()), cfg.Steam, validSteamQuery("76500000000000001"))
 		if !errors.Is(err, ErrSteamOpenIDCheck) {
 			t.Fatalf("error = %v, want %v", err, ErrSteamOpenIDCheck)
 		}
@@ -304,28 +307,13 @@ func TestST06to12VerifySteamOpenIDCallback(t *testing.T) {
 			_, _ = w.Write([]byte("ns:http://specs.openid.net/auth/2.0\nis_valid:false\n"))
 		}))
 		defer ts.Close()
-		restore := setSteamURLs(ts.URL, "")
-		defer restore()
+		cfg := testutil.NewConfig(func(c *config.Config) { c.Steam.OpenIDLoginURL = ts.URL })
 
-		_, err := VerifySteamOpenIDCallback(testutil.LogContext(context.Background()), validSteamQuery("76500000000000001"))
+		_, err := VerifySteamOpenIDCallback(testutil.LogContext(context.Background()), cfg.Steam, validSteamQuery("76500000000000001"))
 		if !errors.Is(err, ErrInvalidAssertion) {
 			t.Fatalf("expected ErrInvalidAssertion, got %v", err)
 		}
 	})
-}
-
-func setSteamURLs(openIDLoginURL, playerSummaryURL string) func() {
-	origLogin, origSummary := steamOpenIDLoginURL, steamPlayerSummaryURL
-	if openIDLoginURL != "" {
-		steamOpenIDLoginURL = openIDLoginURL
-	}
-	if playerSummaryURL != "" {
-		steamPlayerSummaryURL = playerSummaryURL
-	}
-	return func() {
-		steamOpenIDLoginURL = origLogin
-		steamPlayerSummaryURL = origSummary
-	}
 }
 
 func TestST13to15ResponseIsValid(t *testing.T) {
@@ -353,12 +341,9 @@ func TestST16to22GetSteamUser(t *testing.T) {
 			_, _ = w.Write([]byte(`{"response":{"players":[{"steamid":"76500000000000001","personaname":"bob","profileurl":"https://steamcommunity.com/id/bob","avatarfull":"https://avatar.test/bob.png"}]}}`))
 		}))
 		defer ts.Close()
-		restore := setSteamURLs("", ts.URL+"/")
-		restoreKey := setSteamAPIKeyForTest(t, "test-key")
-		defer restore()
-		defer restoreKey()
+		cfg := testutil.NewConfig(func(c *config.Config) { c.Steam.PlayerSummaryURL = ts.URL + "/" })
 
-		got, err := GetSteamUser(testutil.LogContext(context.Background()), "76500000000000001")
+		got, err := GetSteamUser(testutil.LogContext(context.Background()), cfg.Steam, "76500000000000001")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -367,23 +352,10 @@ func TestST16to22GetSteamUser(t *testing.T) {
 		}
 	})
 
-	t.Run("LKS-17_MissingAPIKey", func(t *testing.T) {
-		restoreKey := setSteamAPIKeyForTest(t, "")
-		defer restoreKey()
-
-		_, err := GetSteamUser(testutil.LogContext(context.Background()), "76500000000000001")
-		if !errors.Is(err, ErrSteamAPIKeyUnset) {
-			t.Fatalf("GetSteamUser() error = %v, want %v", err, ErrSteamAPIKeyUnset)
-		}
-	})
-
 	t.Run("LKS-18_NetworkError", func(t *testing.T) {
-		restore := setSteamURLs("", "http://127.0.0.1:1/")
-		restoreKey := setSteamAPIKeyForTest(t, "test-key")
-		defer restore()
-		defer restoreKey()
+		cfg := testutil.NewConfig(func(c *config.Config) { c.Steam.PlayerSummaryURL = "http://127.0.0.1:1/" })
 
-		_, err := GetSteamUser(testutil.LogContext(context.Background()), "76500000000000001")
+		_, err := GetSteamUser(testutil.LogContext(context.Background()), cfg.Steam, "76500000000000001")
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -394,12 +366,9 @@ func TestST16to22GetSteamUser(t *testing.T) {
 			w.WriteHeader(http.StatusInternalServerError)
 		}))
 		defer ts.Close()
-		restore := setSteamURLs("", ts.URL+"/")
-		restoreKey := setSteamAPIKeyForTest(t, "test-key")
-		defer restore()
-		defer restoreKey()
+		cfg := testutil.NewConfig(func(c *config.Config) { c.Steam.PlayerSummaryURL = ts.URL + "/" })
 
-		_, err := GetSteamUser(testutil.LogContext(context.Background()), "76500000000000001")
+		_, err := GetSteamUser(testutil.LogContext(context.Background()), cfg.Steam, "76500000000000001")
 		if !errors.Is(err, ErrSteamPlayerSummaryLookup) {
 			t.Fatalf("error = %v, want %v", err, ErrSteamPlayerSummaryLookup)
 		}
@@ -410,12 +379,9 @@ func TestST16to22GetSteamUser(t *testing.T) {
 			_, _ = w.Write([]byte(`{not-json`))
 		}))
 		defer ts.Close()
-		restore := setSteamURLs("", ts.URL+"/")
-		restoreKey := setSteamAPIKeyForTest(t, "test-key")
-		defer restore()
-		defer restoreKey()
+		cfg := testutil.NewConfig(func(c *config.Config) { c.Steam.PlayerSummaryURL = ts.URL + "/" })
 
-		_, err := GetSteamUser(testutil.LogContext(context.Background()), "76500000000000001")
+		_, err := GetSteamUser(testutil.LogContext(context.Background()), cfg.Steam, "76500000000000001")
 		if err == nil {
 			t.Fatal("expected a decode error")
 		}
@@ -426,12 +392,9 @@ func TestST16to22GetSteamUser(t *testing.T) {
 			_, _ = w.Write([]byte(`{"response":{"players":[]}}`))
 		}))
 		defer ts.Close()
-		restore := setSteamURLs("", ts.URL+"/")
-		restoreKey := setSteamAPIKeyForTest(t, "test-key")
-		defer restore()
-		defer restoreKey()
+		cfg := testutil.NewConfig(func(c *config.Config) { c.Steam.PlayerSummaryURL = ts.URL + "/" })
 
-		_, err := GetSteamUser(testutil.LogContext(context.Background()), "76500000000000001")
+		_, err := GetSteamUser(testutil.LogContext(context.Background()), cfg.Steam, "76500000000000001")
 		if !errors.Is(err, ErrSteamNoPlayers) {
 			t.Fatalf("GetSteamUser() error = %v, want %v", err, ErrSteamNoPlayers)
 		}
@@ -442,25 +405,13 @@ func TestST16to22GetSteamUser(t *testing.T) {
 			_, _ = w.Write([]byte(`{"response":{"players":[{"steamid":"76500000000000099","personaname":"bob"}]}}`))
 		}))
 		defer ts.Close()
-		restore := setSteamURLs("", ts.URL+"/")
-		restoreKey := setSteamAPIKeyForTest(t, "test-key")
-		defer restore()
-		defer restoreKey()
+		cfg := testutil.NewConfig(func(c *config.Config) { c.Steam.PlayerSummaryURL = ts.URL + "/" })
 
-		_, err := GetSteamUser(testutil.LogContext(context.Background()), "76500000000000001")
+		_, err := GetSteamUser(testutil.LogContext(context.Background()), cfg.Steam, "76500000000000001")
 		if !errors.Is(err, ErrSteamIDMismatch) {
 			t.Fatalf("error = %v, want %v", err, ErrSteamIDMismatch)
 		}
 	})
-}
-
-func setSteamAPIKeyForTest(t *testing.T, value string) func() {
-	t.Helper()
-	original := STEAM_API_KEY
-	STEAM_API_KEY = value
-	return func() {
-		STEAM_API_KEY = original
-	}
 }
 
 func TestST23to25ProcessSteamLogin(t *testing.T) {
@@ -571,6 +522,10 @@ func TestST26to29ProcessSteamLink(t *testing.T) {
 
 func TestST30to31RequestContextReachesRequest(t *testing.T) {
 	ctx := context.WithValue(testutil.LogContext(context.Background()), reqctx.UserIDKey, "u1")
+	cfg := testutil.NewConfig(func(c *config.Config) {
+		c.Steam.OpenIDLoginURL = "https://steamcommunity.com/openid/login"
+		c.Steam.PlayerSummaryURL = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/"
+	})
 	var got any
 	swapDefaultTransport(t, auRoundTripperFunc(func(r *http.Request) (*http.Response, error) {
 		got = r.Context().Value(reqctx.UserIDKey)
@@ -580,7 +535,7 @@ func TestST30to31RequestContextReachesRequest(t *testing.T) {
 	t.Run("LKS-74_VerifySteamOpenIDCallback_CtxReachesRequest", func(t *testing.T) {
 		got = nil
 
-		if _, err := VerifySteamOpenIDCallback(ctx, validSteamQuery("76500000000000001")); err == nil {
+		if _, err := VerifySteamOpenIDCallback(ctx, cfg.Steam, validSteamQuery("76500000000000001")); err == nil {
 			t.Fatal("expected the transport error")
 		}
 		if got != "u1" {
@@ -590,9 +545,8 @@ func TestST30to31RequestContextReachesRequest(t *testing.T) {
 
 	t.Run("LKS-75_GetSteamUser_CtxReachesRequest", func(t *testing.T) {
 		got = nil
-		defer setSteamAPIKeyForTest(t, "test-key")()
 
-		if _, err := GetSteamUser(ctx, "76500000000000001"); err == nil {
+		if _, err := GetSteamUser(ctx, cfg.Steam, "76500000000000001"); err == nil {
 			t.Fatal("expected the transport error")
 		}
 		if got != "u1" {
