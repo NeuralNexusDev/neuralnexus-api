@@ -25,3 +25,19 @@ func SwapTransport(t *testing.T, rt http.RoundTripper) {
 		http.DefaultTransport = orig
 	})
 }
+
+// FakeRoundTripper is an http.RoundTripper that answers every request with Resp, or with Err when Err is set.
+type FakeRoundTripper struct {
+	Resp    *http.Response
+	Err     error
+	LastReq *http.Request
+}
+
+// RoundTrip records req in LastReq, then returns Err if set and Resp otherwise.
+func (f *FakeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	f.LastReq = req
+	if f.Err != nil {
+		return nil, f.Err
+	}
+	return f.Resp, nil
+}
