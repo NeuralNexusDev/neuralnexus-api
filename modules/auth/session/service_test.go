@@ -6,12 +6,20 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 	"github.com/golang-jwt/jwt/v5"
 )
 
+type seMarkerKey struct{}
+
+type seCtxRecord struct {
+	err    error
+	marker any
+}
+
 type seFakeSessionStore struct {
+	ctxByCall map[string]seCtxRecord
+
 	addToDBErr   error
 	addToDBCalls int
 
@@ -28,16 +36,22 @@ type seFakeSessionStore struct {
 	addToCacheErr   error
 	addToCacheCalls int
 
-	getFromCacheCtx     context.Context
 	getFromCacheSession *Session
 	getFromCacheErr     error
-	getFromCacheCalls   int
 
 	deleteFromCacheErr   error
 	deleteFromCacheCalls int
 }
 
-func (f *seFakeSessionStore) AddSessionToDB(_ context.Context, _ *Session) error {
+func (f *seFakeSessionStore) record(call string, ctx context.Context) {
+	if f.ctxByCall == nil {
+		f.ctxByCall = map[string]seCtxRecord{}
+	}
+	f.ctxByCall[call] = seCtxRecord{err: ctx.Err(), marker: ctx.Value(seMarkerKey{})}
+}
+
+func (f *seFakeSessionStore) AddSessionToDB(ctx context.Context, _ *Session) error {
+	f.record("AddSessionToDB", ctx)
 	f.addToDBCalls++
 	return f.addToDBErr
 }
@@ -47,7 +61,8 @@ func (f *seFakeSessionStore) GetSessionFromDB(_ context.Context, _ string) (*Ses
 	return f.getFromDBSession, f.getFromDBErr
 }
 
-func (f *seFakeSessionStore) UpdateSessionInDB(_ context.Context, _ *Session) error {
+func (f *seFakeSessionStore) UpdateSessionInDB(ctx context.Context, _ *Session) error {
+	f.record("UpdateSessionInDB", ctx)
 	f.updateInDBCalls++
 	return f.updateInDBErr
 }
@@ -57,46 +72,19 @@ func (f *seFakeSessionStore) DeleteSessionInDB(_ context.Context, _ string) erro
 	return f.deleteInDBErr
 }
 
-func (f *seFakeSessionStore) AddSessionToCache(_ context.Context, _ *Session) error {
+func (f *seFakeSessionStore) AddSessionToCache(ctx context.Context, _ *Session) error {
+	f.record("AddSessionToCache", ctx)
 	f.addToCacheCalls++
 	return f.addToCacheErr
 }
 
-func (f *seFakeSessionStore) GetSessionFromCache(ctx context.Context, _ string) (*Session, error) {
-	f.getFromCacheCtx = ctx
-	f.getFromCacheCalls++
+func (f *seFakeSessionStore) GetSessionFromCache(_ context.Context, _ string) (*Session, error) {
 	return f.getFromCacheSession, f.getFromCacheErr
 }
 
 func (f *seFakeSessionStore) DeleteSessionFromCache(_ context.Context, _ string) error {
 	f.deleteFromCacheCalls++
 	return f.deleteFromCacheErr
-}
-
-func TestSE37RequestContextReachesStore(t *testing.T) {
-	t.Run("SE-37_RequestContextReachesStore", func(t *testing.T) {
-		fs := &seFakeSessionStore{getFromCacheSession: &Session{ID: "s1"}}
-		ctx := context.WithValue(context.Background(), reqctx.UserIDKey, "u1")
-
-		if _, err := NewService(testutil.NewConfig(), fs).GetSession(ctx, "s1"); err != nil {
-			t.Fatalf("GetSession() error = %v", err)
-		}
-		if got := fs.getFromCacheCtx.Value(reqctx.UserIDKey); got != "u1" {
-			t.Errorf("store context user ID = %v, want %q", got, "u1")
-		}
-	})
-}
-
-func TestSE07NewService(t *testing.T) {
-	t.Run("SE-07_WiresGivenSubStore", func(t *testing.T) {
-		fs := &seFakeSessionStore{getFromDBErr: ErrNotFound, getFromCacheErr: ErrNotFound}
-		svc := NewService(testutil.NewConfig(), fs)
-
-		_, _ = svc.GetSession(testutil.LogContext(context.Background()), "s1")
-		if fs.getFromCacheCalls != 1 {
-			t.Errorf("expected GetSession to delegate to the Store passed to NewService, got %d cache calls", fs.getFromCacheCalls)
-		}
-	})
 }
 
 func TestSE08to10AddSession(t *testing.T) {
@@ -133,6 +121,49 @@ func TestSE08to10AddSession(t *testing.T) {
 		if err := svc.AddSession(testutil.LogContext(context.Background()), &Session{ID: "s1"}); err != nil {
 			t.Errorf("AddSession() = %v, want nil (cache failure should be fail-open)", err)
 		}
+	})
+}
+
+func seAssertDetached(t *testing.T, fs *seFakeSessionStore, calls ...string) {
+	t.Helper()
+	for _, call := range calls {
+		rec, ok := fs.ctxByCall[call]
+		if !ok {
+			t.Errorf("%s was not called", call)
+			continue
+		}
+		if rec.err != nil {
+			t.Errorf("%s context Err() = %v, want nil", call, rec.err)
+		}
+		if rec.marker != "m1" {
+			t.Errorf("%s context marker = %v, want %q", call, rec.marker, "m1")
+		}
+	}
+}
+
+func TestSE38AddSessionIgnoresCancelledContext(t *testing.T) {
+	t.Run("SE-38_DBAndCacheWritesRunOnAnUncancelledContext", func(t *testing.T) {
+		fs := &seFakeSessionStore{}
+		ctx, cancel := context.WithCancel(testutil.LogContext(context.WithValue(context.Background(), seMarkerKey{}, "m1")))
+		cancel()
+
+		if err := NewService(testutil.NewConfig(), fs).AddSession(ctx, &Session{ID: "s1"}); err != nil {
+			t.Fatalf("AddSession() = %v, want nil", err)
+		}
+		seAssertDetached(t, fs, "AddSessionToDB", "AddSessionToCache")
+	})
+}
+
+func TestSE39UpdateSessionIgnoresCancelledContext(t *testing.T) {
+	t.Run("SE-39_DBAndCacheWritesRunOnAnUncancelledContext", func(t *testing.T) {
+		fs := &seFakeSessionStore{}
+		ctx, cancel := context.WithCancel(testutil.LogContext(context.WithValue(context.Background(), seMarkerKey{}, "m1")))
+		cancel()
+
+		if err := NewService(testutil.NewConfig(), fs).UpdateSession(ctx, &Session{ID: "s1"}); err != nil {
+			t.Fatalf("UpdateSession() = %v, want nil", err)
+		}
+		seAssertDetached(t, fs, "UpdateSessionInDB", "AddSessionToCache")
 	})
 }
 

@@ -27,7 +27,6 @@
 | OA-21 | resolveOrCreateAccountForPlatformUser | Error Path | `as.AddAccount` fails | Mock `AddAccount` returns error | Error propagated; `AddLinkedAccountToDB` never called | P2 |  |
 | OA-22 | resolveOrCreateAccountForPlatformUser | Error Path | `AddLinkedAccountToDB` fails with a non-`ErrAlreadyLinked` error and cleanup succeeds | Mock `AddLinkedAccountToDB` returns generic error; `DeleteAccount` succeeds | Returns original error; `DeleteAccount` called once | P0 |  |
 | OA-23 | resolveOrCreateAccountForPlatformUser | Error Path | Same as OA-22, but cleanup (`DeleteAccount`) also fails | Both `AddLinkedAccountToDB` and `DeleteAccount` return errors | Returns the cleanup error; the link failure is logged | P1 |  |
-| OA-83 | resolveOrCreateAccountForPlatformUser | Error Path | Same as OA-23, asserting the cleanup error | `AddLinkedAccountToDB` fails with `testutil.ErrInsertFailed`; `DeleteAccount` fails with `testutil.ErrBoom` | Returns an error matching `testutil.ErrBoom` (the cleanup failure) | P2 | |
 | OA-24 | resolveOrCreateAccountForPlatformUser | Edge Case | `AddLinkedAccountToDB` fails with `ErrAlreadyLinked` (lost the race); cleanup and winner re-fetch succeed | Mock returns `link.ErrAlreadyLinked`, cleanup succeeds, re-fetched linked account + account resolve fine | Returns the winner's `*account.Account`, err nil | P0 |  |
 | OA-25 | resolveOrCreateAccountForPlatformUser | Error Path | Lost the race, cleanup succeeds, but re-fetching the winner's link fails | `GetLinkedAccountByPlatformID` (second call) returns error | Error propagated | P2 |  |
 | OA-26 | resolveOrCreateAccountForPlatformUser | Error Path | Lost the race, winner link found, but `GetAccountByID` for winner fails | Mock `GetAccountByID` returns error on second call | Error propagated | P2 |  |
@@ -64,7 +63,6 @@
 | OA-57 | ensureMicrosoftIdentityLinked | Error Path | Link fails (non-`ErrAlreadyLinked`), `isNewAccount=true`, cleanup succeeds | Mock returns generic error; `DeleteAccount` succeeds | Returns `(nil, false, originalErr)`; `DeleteAccount` called | P0 |  |
 | OA-58 | ensureMicrosoftIdentityLinked | Error Path | Same, `isNewAccount=false` | No cleanup attempted | Returns `(nil, false, originalErr)` directly; `DeleteAccount` never called | P1 |  |
 | OA-59 | ensureMicrosoftIdentityLinked | Error Path | Same as OA-57, but cleanup `DeleteAccount` also fails | Both calls fail | Returns the cleanup error; the link failure is logged | P1 |  |
-| OA-84 | ensureMicrosoftIdentityLinked | Error Path | Same as OA-59, asserting the cleanup error | `AddLinkedAccountToDB` fails with `testutil.ErrInsertFailed`; `DeleteAccount` fails with `testutil.ErrBoom` | Returns an error matching `testutil.ErrBoom` (the cleanup failure) | P2 | |
 | OA-60 | ensureMicrosoftIdentityLinked | Edge Case | `ErrAlreadyLinked`, but re-fetch shows we already own it | Re-fetched linked account's `UserID == a.UserID` | Returns `(a, false, nil)`, no error | P0 |  |
 | OA-61 | ensureMicrosoftIdentityLinked | Error Path | `ErrAlreadyLinked`, re-fetch lookup fails (non-`ErrNotFound`), `isNewAccount=true` | Cleanup succeeds | Returns cleanup+lookup wrapped/propagated error | P2 |  |
 | OA-62 | ensureMicrosoftIdentityLinked | Error Path | Same as OA-61, but cleanup also fails | Both fail | Returns an error matching `testutil.ErrBoom` (the cleanup failure); the re-fetch failure is logged | P2 |  |
@@ -90,16 +88,18 @@
 | OA-80 | ProcessOAuthLink | Happy Path | Microsoft (plain, non-Xbox) platform, valid session, identity not yet linked | Valid non-expired session in request context; `MicrosoftLoginConfig` + `microsoftUserInfoURL` point at httptest servers; `AddLinkedAccountToDB` succeeds | Returns the same session, err nil; `AddLinkedAccountToDB` called once, with the linked account's `Platform == link.PlatformMicrosoft` | P1 |  |
 | OA-81 | ProcessOAuthLink | Edge Case | `state.Platform == link.PlatformXboxLive` takes the `GetXboxUser` call and never touches Java, even when the account owns it | Full Microsoft/XBL/XSTS chain succeeds; account owns Java; `minecraftLoginURL`/`minecraftProfileURL` wired to fail the test if hit at all | Returns the session, err nil; the Minecraft Services login-with-xbox and profile endpoints are never called; `AddLinkedAccountToDB` called once, only for `link.PlatformXboxLive` | P0 |  |
 | OA-82 | linkPlatformUserToSession | Concurrency Invariant | Two concurrent callers race to link the *same* platform identity to two *different* sessions (`userID`s) | Two goroutines call the function simultaneously against a store whose `GetLinkedAccountByPlatformID` holds both callers at a rendezvous barrier until each has independently observed `account.ErrNotFound` (deterministically reproducing the check-then-act window), then whose `AddLinkedAccountToDB` enforces the real `(platform, platform_id)` uniqueness constraint, returning `link.ErrAlreadyLinked` to whichever write loses | Exactly one goroutine returns nil error (the winner, whose write committed); the other returns a non-nil, observable error rather than silently succeeding, overwriting, or duplicating the link; exactly one linked-account row exists afterward, owned by whichever `userID` won | P0 | Currently the loser's error is the generic `ErrLinkAccountFailed` rather than a distinguishable sentinel, but it is never nil/swallowed - this row locks in that the race is still handled safely even though the specific cause is masked |
+| OA-87 | resolveOrCreateAccountForPlatformUser | Edge Case | The call's ctx is cancelled, the account was created, and `AddLinkedAccountToDB` fails with a non-`ErrAlreadyLinked` error | `AddLinkedAccountToDB` fails with `testutil.ErrInsertFailed`; Called with an already-cancelled ctx that carries a marker value; the fakes record `ctx.Err()` and the marker at each detached call. | Returns the link error; `AddLinkedAccountToDB` and `DeleteAccount` each run once on a ctx whose `Err()` is nil and that carries the marker | P1 |  |
+| OA-88 | ensureMicrosoftIdentityLinked | Edge Case | The call's ctx is cancelled and the link insert succeeds | `AddLinkedAccountToDB` succeeds; Called with an already-cancelled ctx that carries a marker value; the fakes record `ctx.Err()` and the marker at each detached call. | Returns `(a, false, nil)`; `AddLinkedAccountToDB` runs once on a ctx whose `Err()` is nil and that carries the marker | P1 |  |
+| OA-89 | ensureMicrosoftIdentityLinked | Edge Case | The call's ctx is cancelled, `isNewAccount=true`, and the link insert fails with a non-`ErrAlreadyLinked` error | `AddLinkedAccountToDB` fails with `testutil.ErrInsertFailed`; Called with an already-cancelled ctx that carries a marker value; the fakes record `ctx.Err()` and the marker at each detached call. | Returns the link error; `DeleteAccount` runs once on a ctx whose `Err()` is nil and that carries the marker | P1 |  |
+| OA-90 | ensureMicrosoftIdentityLinked | Edge Case | The call's ctx is cancelled, `isNewAccount=true`, `ErrAlreadyLinked`, then the owner lookup fails with an error other than `account.ErrNotFound` | `AddLinkedAccountToDB` returns `ErrAlreadyLinked`; `GetLinkedAccountByPlatformID` fails with `testutil.ErrDBDown`; Called with an already-cancelled ctx that carries a marker value; the fakes record `ctx.Err()` and the marker at each detached call. | Returns the lookup error; `DeleteAccount` runs once on a ctx whose `Err()` is nil and that carries the marker | P1 |  |
+| OA-91 | ensureMicrosoftIdentityLinked | Edge Case | The call's ctx is cancelled, `isNewAccount=true`, `ErrAlreadyLinked`, and the lookup returns a different owner's linked account | `AddLinkedAccountToDB` returns `ErrAlreadyLinked`; `GetLinkedAccountByPlatformID` returns a link owned by `winner`; `GetAccountByID` returns the winner; Called with an already-cancelled ctx that carries a marker value; the fakes record `ctx.Err()` and the marker at each detached call. | Returns `(winner, false, nil)`; `DeleteAccount` runs once on a ctx whose `Err()` is nil and that carries the marker | P1 |  |
+| OA-92 | linkPlatformUserToSession | Edge Case | The call's ctx is cancelled, no linked account exists for the platform user, and the link insert succeeds | `GetLinkedAccountByPlatformID` returns `account.ErrNotFound`; `AddLinkedAccountToDB` succeeds; Called with an already-cancelled ctx that carries a marker value; the fakes record `ctx.Err()` and the marker at each detached call. | Returns nil; `AddLinkedAccountToDB` runs once on a ctx whose `Err()` is nil and that carries the marker | P1 |  |
 
 ## discord.go
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| DC-01 | GetID | Accessor | Returns the underlying Discord user ID | `DiscordData{User: &discordgo.User{ID: "123"}}` | `GetID() == "123"` | P3 |  |
-| DC-02 | GetUsername | Accessor | Returns the underlying username | `Username: "alice"` | `GetUsername() == "alice"` | P3 |  |
-| DC-03 | GetEmail | Accessor | Returns the underlying email | `Email: "a@b.com"` | `GetEmail() == "a@b.com"` | P3 |  |
 | DC-04 | GetData | Accessor | Returns a JSON marshal of the wrapped user | Any populated `DiscordData` | Returned string unmarshals back to an equivalent `discordgo.User` | P3 |  |
-| DC-05 | CreateLinkedAccount | Happy Path | Builds a `*link.LinkedAccount` for platform Discord | `DiscordData{ID: "123", Username: "alice"}` | Returned `LinkedAccount` has `Platform: PlatformDiscord`, `UserID`, `PlatformUsername: "alice"`, `PlatformID: "123"`, `Verified` and `LoginEnabled` true | P2 |  |
 | DC-06 | GetDiscordUser | Happy Path | Discord's `/users/@me` returns a valid user | `discordgo.EndpointUsers` overridden to an httptest server returning a valid user JSON body | Returns `*DiscordData` wrapping the decoded user, err nil | P1 |  |
 | DC-07 | GetDiscordUser | Error Path | Discord API returns a non-2xx status | Server returns HTTP 401 with a Discord-style error body | Returns nil, non-nil error | P1 |  |
 | DC-08 | GetDiscordUser | Edge Case | Discord API returns malformed JSON | Server returns HTTP 200 with an invalid JSON body | Returns nil, non-nil error (unmarshal failure) | P2 |  |
@@ -108,11 +108,7 @@
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| LKS-01 | GetID | Accessor | Returns SteamID64 | `SteamData{SteamID64: "765..."}` | `GetID() == "765..."` | P3 |  |
-| LKS-02 | GetUsername | Accessor | Returns PersonaName | `PersonaName: "bob"` | `GetUsername() == "bob"` | P3 |  |
-| LKS-03 | GetEmail | Accessor | Always empty (Steam never exposes an email) | Any `SteamData` | `GetEmail() == ""` | P3 |  |
 | LKS-04 | GetData | Accessor | Returns a JSON marshal of the struct | Any populated `SteamData` | Returned string unmarshals back to an equivalent `SteamData` | P3 |  |
-| LKS-05 | CreateLinkedAccount | Happy Path | Builds a `*link.LinkedAccount` for platform Steam | `SteamData{SteamID64: "765...", PersonaName: "bob"}` | `Platform: PlatformSteam`, `PlatformUsername: "bob"`, `PlatformID: "765..."` | P2 |  |
 | LKS-06 | VerifySteamOpenIDCallback | Happy Path | Fully valid OpenID assertion, Steam confirms it | `query` has `openid.mode=id_res`, a matching `claimed_id`, `openid.signed` containing `claimed_id`; `steamOpenIDLoginURL` httptest server responds `is_valid:true` | Returns the parsed SteamID64, err nil | P0 |  |
 | LKS-07 | VerifySteamOpenIDCallback | Error Path | `openid.mode` isn't `id_res` | `query.Set("openid.mode","cancel")` | Returns `ErrInvalidAssertion`-wrapped error, no HTTP call made | P1 |  |
 | LKS-08 | VerifySteamOpenIDCallback | Error Path | `claimed_id` missing or doesn't match the expected pattern | `openid.claimed_id` unset or garbage | Returns `ErrInvalidAssertion`-wrapped error | P1 |  |
@@ -136,28 +132,13 @@
 | LKS-27 | ProcessSteamLink | Error Path | No session in request context | Plain request, no context value | Returns `ErrSessionNotFound` | P1 |  |
 | LKS-28 | ProcessSteamLink | Error Path | Session expired | `session.IsValid()` false | Returns `ErrSessionExpired` | P1 |  |
 | LKS-29 | ProcessSteamLink | Error Path | Identity already linked to a different account | `linkPlatformUserToSession` returns `ErrPlatformAlreadyLinkedToDifferentAccount` | Error propagated | P2 |  |
-| LKS-74 | VerifySteamOpenIDCallback | Happy Path | the caller's ctx reaches the check_authentication request | transport records the request ctx and fails; ctx carries a marker value | The recorded request ctx holds the marker value | P1 |  |
-| LKS-75 | GetSteamUser | Happy Path | the caller's ctx reaches the player summary request | transport records the request ctx and fails; ctx carries a marker value | The recorded request ctx holds the marker value | P1 |  |
 
 ## microsoft.go
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| MS-01 | (XboxLiveData) GetID | Accessor | Returns XUID | `XboxLiveData{XUID:"x1"}` | `GetID() == "x1"` | P3 |  |
-| MS-02 | (XboxLiveData) GetEmail | Accessor | Always empty | Any value | `GetEmail() == ""` | P3 |  |
-| MS-03 | (XboxLiveData) GetUsername | Accessor | Returns Gamertag | `Gamertag:"Tag"` | `GetUsername() == "Tag"` | P3 |  |
 | MS-04 | (XboxLiveData) GetData | Accessor | JSON marshal round-trips | Populated struct | Unmarshals back equivalently | P3 |  |
-| MS-05 | (XboxLiveData) CreateLinkedAccount | Happy Path | Builds LinkedAccount for PlatformXboxLive | `XboxLiveData{XUID:"x1",Gamertag:"Tag"}` | `Platform: PlatformXboxLive`, `PlatformID:"x1"`, `PlatformUsername:"Tag"` | P2 |  |
-| MS-06 | (MicrosoftUserData) GetID | Accessor | Returns Sub | `Sub:"sub1"` | `GetID() == "sub1"` | P3 |  |
-| MS-07 | (MicrosoftUserData) GetEmail | Accessor | Returns Email | `Email:"a@b.com"` | `GetEmail() == "a@b.com"` | P3 |  |
-| MS-08 | (MicrosoftUserData) GetUsername | Accessor | Returns Name | `Name:"Alice"` | `GetUsername() == "Alice"` | P3 |  |
 | MS-09 | (MicrosoftUserData) GetData | Accessor | JSON marshal round-trips | Populated struct | Unmarshals back equivalently | P3 |  |
-| MS-10 | (MicrosoftUserData) CreateLinkedAccount | Happy Path | Builds LinkedAccount for PlatformMicrosoft | `MicrosoftUserData{Sub:"sub1",Name:"Alice"}` | `Platform: PlatformMicrosoft`, `PlatformID:"sub1"`, `PlatformUsername:"Alice"` | P2 |  |
-| MS-11 | xstsErrForCode | Edge Case | Code 2148916233 | n/a | Returns `ErrNoXboxAccount` | P2 |  |
-| MS-12 | xstsErrForCode | Edge Case | Code 2148916235 | n/a | Returns `ErrXboxLiveUnavailable` | P2 |  |
-| MS-13 | xstsErrForCode | Edge Case | Code 2148916236 | n/a | Returns `ErrAdultVerificationRequired` | P2 |  |
-| MS-14 | xstsErrForCode | Edge Case | Code 2148916237 | n/a | Returns `ErrAgeVerificationRequired` | P2 |  |
-| MS-15 | xstsErrForCode | Edge Case | Code 2148916238 | n/a | Returns `ErrAccountIsChild` | P2 |  |
 | MS-16 | xstsErrForCode | Edge Case | Unrecognized code | e.g. `999` | Returns an error wrapping `ErrXSTSAuthentication` | P3 |  |
 | MS-17 | GetMicrosoftUser | Happy Path | Userinfo endpoint returns a valid identity | `microsoftUserInfoURL` httptest server returns 200 + `{"sub":"s1","name":"n","email":"e"}` | Returns populated `*MicrosoftUserData`, err nil | P1 |  |
 | MS-18 | GetMicrosoftUser | Error Path | HTTP call fails | Server unreachable | Error propagated | P2 |  |
@@ -201,21 +182,12 @@
 | MS-56 | GetXboxAndMinecraftUser | Edge Case | `minecraftLoginWithXbox` fails, but the Xbox Live identity still resolves | mc-login leg fails; XSTS-xboxlive leg succeeds | Returns `(xbox, nil, minecraftErr)` — xbox is not discarded | P0 |  |
 | MS-57 | GetXboxAndMinecraftUser | Error Path | `minecraftLoginWithXbox` fails AND the Xbox Live identity fetch also fails | Both mc-login and XSTS-xboxlive legs fail | Returns `(nil, nil, xboxErr)` — the Xbox Live error takes precedence | P1 |  |
 | MS-58 | GetXboxAndMinecraftUser | Edge Case | `getMinecraftProfile` fails after a successful login-with-xbox, Xbox identity still resolves | mc-profile leg fails; XSTS-xboxlive succeeds | Returns `(xbox, nil, minecraftErr)` | P1 |  |
-| MS-59 | GetMicrosoftUser | Happy Path | the caller's ctx reaches the userinfo request | transport records the request ctx and fails; ctx carries a marker value | The recorded request ctx holds the marker value | P1 |  |
-| MS-60 | xblAuthenticate | Happy Path | the caller's ctx reaches the Xbox Live authenticate request | transport records the request ctx and fails; ctx carries a marker value | The recorded request ctx holds the marker value | P1 |  |
-| MS-61 | xstsAuthorize | Happy Path | the caller's ctx reaches the XSTS authorize request | transport records the request ctx and fails; ctx carries a marker value | The recorded request ctx holds the marker value | P1 |  |
-| MS-62 | minecraftLoginWithXbox | Happy Path | the caller's ctx reaches the login_with_xbox request | transport records the request ctx and fails; ctx carries a marker value | The recorded request ctx holds the marker value | P1 |  |
-| MS-63 | getMinecraftProfile | Happy Path | the caller's ctx reaches the profile request | transport records the request ctx and fails; ctx carries a marker value | The recorded request ctx holds the marker value | P1 |  |
 
 ## minecraft.go
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| MC-01 | GetID | Accessor | Returns the UUID's string form | `MinecraftData{ID: u}` | `GetID() == u.String()` | P3 |  |
-| MC-02 | GetEmail | Accessor | Always empty | Any value | `GetEmail() == ""` | P3 |  |
-| MC-03 | GetUsername | Accessor | Returns Username | `Username:"Steve"` | `GetUsername() == "Steve"` | P3 |  |
 | MC-04 | GetData | Accessor | JSON marshal round-trips | Populated struct incl. Skins/Capes | Unmarshals back equivalently | P3 |  |
-| MC-05 | CreateLinkedAccount | Happy Path | Builds LinkedAccount for PlatformMinecraft | `MinecraftData{ID:u, Username:"Steve"}` | `Platform: PlatformMinecraft`, `PlatformID: u.String()`, `PlatformUsername:"Steve"` | P2 |  |
 
 ## store.go
 
@@ -288,8 +260,6 @@
 | LKV-22 | UpdateFromPlatform | Error Path | Lost the race, cleanup succeeds, but the re-fetch (`GetLinkedAccountByPlatformID`) fails | | Error propagated | P2 |  |
 | LKV-23 | UpdateFromPlatform | Error Path | `als.UpdateLinkedAccount` fails | | Error propagated | P2 |  |
 | LKV-25 | UpdateFromPlatform | Concurrency Invariant | Two concurrent callers race to resolve/create an account for the same, brand-new platform identity | Two goroutines call `UpdateUserFromPlatform` simultaneously against a shared, mutex-serialized fake store enforcing the real `(platform, platformID)` uniqueness constraint (the losing `AddLinkedAccountToDB` call gets `ErrAlreadyLinked`) | Both goroutines return without error and resolve to the same user ID; exactly one account row exists afterward (the loser's placeholder was cleaned up) | P0 | design: 50 trials x 8 concurrent callers; a barrier holds each goroutine's first lookup until all 8 arrive, since an untimed trial isn't guaranteed to hit the "lost the race" branch |
-| LKV-38 | UpdateFromPlatform | Error Path | Same as LKV-20, asserting the cleanup error | `AddLinkedAccountToDB` fails with `testutil.ErrInsertFailed`; `DeleteAccountFromDB` fails with `testutil.ErrBoom` | Returns an error matching `testutil.ErrBoom` (the cleanup failure) | P2 | |
-| LKV-39 | GetUserLinkedAccounts | Happy Path | a context value set on the call | fake `Store` | The store receives the same context, so the value reads back from it | P1 |  |
 | LKV-40 | UpdateFromPlatform | Edge Case | the call's ctx is cancelled before the placeholder account is created, the link insert fails | `als.GetLinkedAccountByPlatformID` → `ErrNotFound`; `AddLinkedAccountToDB` fails | The account insert, the link insert and the cleanup delete each run on a ctx that is not cancelled | P1 |  |
 
 ## handler.go
@@ -306,11 +276,9 @@
 | AU-50 | OAuthHandler | Happy Path | mode=login, platform=discord | code+valid state present, mode=login; http.DefaultTransport swapped for a fake RoundTripper standing in for Discord's token and `/users/@me` endpoints (both reached through clients with no Transport set, so they fall back to http.DefaultTransport - see swapTransport in modules/projects/projects_test.go for the same technique); account.Service/Store/session.Service mocks resolve a brand-new account | 303 redirect straight to state.RedirectURI (no problem param), session cookie set with the JWT from ss.CreateJWT | P1 | No live network dependency: the Discord HTTP calls are faked at the transport layer, not skipped. |
 | AU-51 | OpenIDHandler | Happy Path | mode=login, platform=steam | Valid state, mode=login, openid.mode=id_res with a valid signed claimed_id; http.DefaultTransport swapped for a fake RoundTripper standing in for Steam's check_authentication and GetPlayerSummaries endpoints (steamHTTPClient also has no Transport set); link.STEAM_API_KEY set to a test value for the duration of the subtest; account.Service/Store/session.Service mocks resolve a brand-new account | 303 redirect straight to state.RedirectURI (no problem param), session cookie set with the JWT from ss.CreateJWT | P1 | No live network dependency: the Steam HTTP calls are faked at the transport layer, not skipped. |
 | AU-52 | OAuthHandler | Error Path | OAuth login fails while creating the session | Valid state, mode=login, platform=discord; Discord HTTP calls faked as in AU-50; session.Service.AddSession returns testutil.ErrDBDown | 303 redirect to state.RedirectURI with a problem of 500 whose detail is `msgAuthenticationFailed` (the cause is not exposed) | P2 |  |
-| AU-53 | OAuthHandler | Error Path | OAuth login fails while signing the JWT | As AU-52 but AddSession succeeds and session.Service.CreateJWT returns testutil.ErrSigningFailed | 303 redirect to state.RedirectURI with a problem of 500 whose detail is `msgAuthenticationFailed` | P2 |  |
 | AU-54 | OpenIDHandler | Error Path | Steam check_authentication endpoint fails without rejecting the assertion | Valid state, platform=steam; check_authentication answers 500; player summary answers 200 | 303 redirect to state.RedirectURI with a problem of 500 whose detail is `msgAuthenticationFailed` | P2 |  |
 | AU-55 | OpenIDHandler | Error Path | Steam player summary lookup fails | check_authentication answers 200, GetPlayerSummaries answers 500 | 303 redirect to state.RedirectURI with a problem of 500 whose detail is `msgAuthenticationFailed` | P2 |  |
 | AU-56 | OpenIDHandler | Error Path | OpenID login fails while creating the session | Both Steam calls succeed; session.Service.AddSession returns testutil.ErrDBDown | 303 redirect to state.RedirectURI with a problem of 500 whose detail is `msgAuthenticationFailed` | P2 |  |
-| AU-57 | OpenIDHandler | Error Path | OpenID login fails while signing the JWT | Both Steam calls succeed; session.Service.CreateJWT returns testutil.ErrSigningFailed | 303 redirect to state.RedirectURI with a problem of 500 whose detail is `msgAuthenticationFailed` | P2 |  |
 | AU-60 | OAuthHandler | Error Path | the state names a platform that is not supported | Valid state with an unrecognized platform, mode=login | 303 redirect to state.RedirectURI whose problem is 400 `msgInvalidPlatform` | P2 |  |
 | AU-61 | OAuthHandler | Error Path | the platform's token response carries no scope | Valid state, mode=login, platform=discord, the token endpoint returns a token without a scope | 303 redirect whose problem is 400 `msgMissingOAuthScope` | P2 |  |
 | AU-62 | OpenIDHandler | Error Path | Steam returns a player whose steamid is not the verified one | Valid state, both Steam endpoints faked as in AU-51 but the player summary lists a different steamid | 303 redirect whose problem is 400 `msgSteamAccountMismatch` | P2 |  |
@@ -342,9 +310,6 @@
 | AU-35 | requireValidModeAndSession | Error Path | Unrecognized mode value | mode is neither link.ModeLogin nor link.ModeLink | Returns false; redirectBadRequest to redirectURI, detail `msgInvalidState` | P2 |  |
 | AU-38 | redirectWithError | Happy Path | Well-formed target URL | target parses successfully with url.Parse | 303 redirect; redirect Location has a "problem" query param that base64url-decodes to the expected RFC 9457 JSON (status/title/detail) | P1 |  |
 | AU-39 | redirectWithError | Edge Case | Target URL fails url.Parse | target contains an invalid percent-escape (e.g. "%zz") | 303 redirect straight to target, unmodified (no "problem" param appended) | P3 |  |
-| AU-41 | redirectBadRequest | Accessor | Wraps redirectWithError with `http.StatusBadRequest` | any target/detail | Redirects to the target with a problem whose status is `http.StatusBadRequest` and whose detail is the given detail | P2 |  |
-| AU-42 | redirectUnauthorized | Accessor | Wraps redirectWithError with `http.StatusUnauthorized` | any target/detail | Redirects to the target with a problem whose status is `http.StatusUnauthorized` and whose detail is the given detail | P2 |  |
-| AU-43 | redirectInternalServerError | Accessor | Wraps redirectWithError with `http.StatusInternalServerError` | any target/detail | Redirects to the target with a problem whose status is `http.StatusInternalServerError` and whose detail is the given detail | P2 |  |
 | AU-44 | isAllowedRedirect | Happy Path | redirectURI scheme+host match auth.NN_SITE_URL | redirectURI = auth.NN_SITE_URL + some path | Returns true | P1 |  |
 | AU-45 | isAllowedRedirect | Error Path | redirectURI has a different host | Same scheme, different host than auth.NN_SITE_URL | Returns false | P2 |  |
 | AU-46 | isAllowedRedirect | Edge Case | redirectURI has a different scheme, same host | e.g. http vs https | Returns false | P3 |  |

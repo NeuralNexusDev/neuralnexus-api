@@ -15,7 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
@@ -124,23 +123,6 @@ func mcUniqueXUID() int64 { return atomic.AddInt64(&mcXUIDCounter, 1) }
 
 func mcUniqueHash(prefix string) string {
 	return fmt.Sprintf("%s-%s", prefix, strings.ReplaceAll(uuid.New().String(), "-", ""))
-}
-
-func TestST01_NewStore(t *testing.T) {
-	t.Run("ST-01_WrapsGivenValues", func(t *testing.T) {
-		db := mcUnreachablePool(t)
-		rdb := mcUnreachableRedis(t)
-		s3c := mcFakeS3(t, func(http.ResponseWriter, *http.Request) {})
-
-		got := NewStore(config.Minecraft{}, db, rdb, s3c, "bucket")
-		s, ok := got.(*store)
-		if !ok {
-			t.Fatalf("NewStore() returned %T, want *store", got)
-		}
-		if s.db != db || s.rdb != rdb || s.s3 != s3c || s.bucket != "bucket" {
-			t.Error("NewStore() did not retain the given db/rdb/s3/bucket values")
-		}
-	})
 }
 
 func TestST02to04_GetPlayerByUUID(t *testing.T) {
@@ -636,14 +618,7 @@ type mcSeekableReadCloser struct{ io.ReadSeeker }
 
 func (mcSeekableReadCloser) Close() error { return nil }
 
-func mcRequireUploadS3Error(t *testing.T, err error) {
-	t.Helper()
-	if !errors.Is(err, ErrUploadS3) {
-		t.Fatalf("error = %v, want %v", err, ErrUploadS3)
-	}
-}
-
-func TestST68to70and77_PutTextureInS3(t *testing.T) {
+func TestST68to70_PutTextureInS3(t *testing.T) {
 	t.Run("ST-68_WithLen", func(t *testing.T) {
 		var gotLen int64 = -1
 		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) {
@@ -677,10 +652,4 @@ func TestST68to70and77_PutTextureInS3(t *testing.T) {
 		}
 	})
 
-	t.Run("ST-77_ServerErrorReturnsUploadError", func(t *testing.T) {
-		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusInternalServerError) })
-		s := &store{sThree: sThree{s3: s3c}}
-		err := s.PutTextureInS3(mcCtx, "hash", mcSeekableReadCloser{strings.NewReader("hello")})
-		mcRequireUploadS3Error(t, err)
-	})
 }

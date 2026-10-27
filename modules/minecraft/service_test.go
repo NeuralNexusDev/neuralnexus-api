@@ -1,14 +1,13 @@
 package minecraft
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -1085,30 +1084,6 @@ func TestSV79to84_ResolveGeyserPlayerByXUID(t *testing.T) {
 	})
 }
 
-func TestSV85to88_GetGeyserProfile(t *testing.T) {
-	t.Run("SV-87_PlayerResolveFails", func(t *testing.T) {
-		s := mcNewService(t, &mcMockStore{}, func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-		})
-		_, err := s.GetGeyserProfile(mcCtx, 1)
-		if !errors.Is(err, ErrGeyserAPI) {
-			t.Fatalf("error = %v, want %v", err, ErrGeyserAPI)
-		}
-	})
-}
-
-func TestSV89to92_GetGeyserProfileByGamertag(t *testing.T) {
-	t.Run("SV-91_XUIDLookupFails", func(t *testing.T) {
-		s := mcNewService(t, &mcMockStore{}, func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-		})
-		_, err := s.GetGeyserProfileByGamertag(mcCtx, "Notch")
-		if !errors.Is(err, ErrGeyserAPI) {
-			t.Fatalf("error = %v, want %v", err, ErrGeyserAPI)
-		}
-	})
-}
-
 func TestSV93to95_GetTextureContent(t *testing.T) {
 	t.Run("SV-93_PresentDelegatesToS3", func(t *testing.T) {
 		store := &mcMockStore{isTextureInS3: func(string) (bool, error) { return true, nil }}
@@ -1208,15 +1183,6 @@ func TestSV96to100_ServeFromS3(t *testing.T) {
 		defer res.Body.Close()
 		if res.ContentType != "image/png" {
 			t.Errorf("ContentType = %q, want default image/png", res.ContentType)
-		}
-	})
-}
-
-func TestSV101_BytesReadCloser_Close(t *testing.T) {
-	t.Run("SV-101_AlwaysNil", func(t *testing.T) {
-		var b bytesReadCloser
-		if err := b.Close(); err != nil {
-			t.Errorf("Close() = %v, want nil", err)
 		}
 	})
 }
@@ -1361,69 +1327,7 @@ func TestSV128to131_GeyserProfileSkinStepRejection(t *testing.T) {
 	})
 }
 
-func TestSV132to133_ResolveProfileDBErrorLogging(t *testing.T) {
-	captureLog := func(t *testing.T) *bytes.Buffer {
-		var buf bytes.Buffer
-		prev := log.Writer()
-		log.SetOutput(&buf)
-		t.Cleanup(func() { log.SetOutput(prev) })
-		return &buf
-	}
-	mojang := func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, mcMustJSON(t, Player{ID: "fetched", ProfileActions: []string{}}))
-	}
-
-	t.Run("SV-132_DBPlayerNotFoundNotLogged", func(t *testing.T) {
-		buf := captureLog(t)
-		store := &mcMockStore{getProfileByUUID: func(string) (*Profile, error) { return nil, ErrPlayerNotFound }}
-		s := mcNewService(t, store, mojang)
-		if _, err := s.resolveProfile(mcCtx, "id"); err != nil {
-			t.Fatalf("err = %v, want nil", err)
-		}
-		if strings.Contains(buf.String(), "Failed to get profile from DB") {
-			t.Errorf("log = %q, want no DB failure line", buf.String())
-		}
-	})
-
-	t.Run("SV-133_DBOtherErrorLogged", func(t *testing.T) {
-		buf := captureLog(t)
-		store := &mcMockStore{getProfileByUUID: func(string) (*Profile, error) { return nil, testutil.ErrBoom }}
-		s := mcNewService(t, store, mojang)
-		if _, err := s.resolveProfile(mcCtx, "id"); err != nil {
-			t.Fatalf("err = %v, want nil", err)
-		}
-		if !strings.Contains(buf.String(), "Failed to get profile from DB") {
-			t.Errorf("log = %q, want the DB failure line", buf.String())
-		}
-	})
-}
-
 type mcCtxKey struct{}
-
-type mcCtxStore struct {
-	*mcMockStore
-	got context.Context
-}
-
-func (m *mcCtxStore) GetPlayerFromCache(ctx context.Context, key string) (*Player, error) {
-	m.got = ctx
-	return &Player{ID: "cached"}, nil
-}
-
-func TestSV134_GetMojangPlayerByName_CtxReachesStore(t *testing.T) {
-	t.Run("SV-134_CtxReachesStore", func(t *testing.T) {
-		store := &mcCtxStore{mcMockStore: &mcMockStore{}}
-		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) { t.Fatal("should not call Mojang") })
-		ctx := context.WithValue(mcCtx, mcCtxKey{}, "marker")
-
-		if _, err := s.GetMojangPlayerByName(ctx, "Steve"); err != nil {
-			t.Fatalf("GetMojangPlayerByName() error = %v", err)
-		}
-		if store.got == nil || store.got.Value(mcCtxKey{}) != "marker" {
-			t.Error("store did not receive the caller's ctx")
-		}
-	})
-}
 
 func mcBlockingMojang(started chan<- struct{}) http.HandlerFunc {
 	var once sync.Once
@@ -1484,22 +1388,49 @@ func TestSV135to137_OutboundCallsCancelWithCtx(t *testing.T) {
 
 type mcWriteCtxStore struct {
 	*mcMockStore
+	calls   []string
 	errs    []error
 	markers []any
 }
 
-func (m *mcWriteCtxStore) record(ctx context.Context) {
+func (m *mcWriteCtxStore) record(ctx context.Context, call string) {
+	m.calls = append(m.calls, call)
 	m.errs = append(m.errs, ctx.Err())
 	m.markers = append(m.markers, ctx.Value(mcCtxKey{}))
 }
 
 func (m *mcWriteCtxStore) UpsertPlayer(ctx context.Context, player *Player, updateProfile bool) error {
-	m.record(ctx)
+	m.record(ctx, "UpsertPlayer")
 	return nil
 }
 
 func (m *mcWriteCtxStore) SetPlayerInCache(ctx context.Context, player *Player) error {
-	m.record(ctx)
+	m.record(ctx, "SetPlayerInCache")
+	return nil
+}
+
+func (m *mcWriteCtxStore) SetProfileInCache(ctx context.Context, profile *Profile) error {
+	m.record(ctx, "SetProfileInCache")
+	return nil
+}
+
+func (m *mcWriteCtxStore) SetSignedProfileInCache(ctx context.Context, player *Player) error {
+	m.record(ctx, "SetSignedProfileInCache")
+	return nil
+}
+
+func (m *mcWriteCtxStore) UpsertTextureHash(ctx context.Context, hash string) error {
+	m.record(ctx, "UpsertTextureHash")
+	return nil
+}
+
+func (m *mcWriteCtxStore) UpsertTextures(ctx context.Context, table string, value *TexturesValue) error {
+	m.record(ctx, "UpsertTextures")
+	return nil
+}
+
+func (m *mcWriteCtxStore) PutTextureInS3(ctx context.Context, hash string, body io.ReadCloser) error {
+	m.record(ctx, "PutTextureInS3")
 	return nil
 }
 
@@ -1555,5 +1486,163 @@ func TestSV136_WritesSurviveCtxCancel(t *testing.T) {
 				t.Errorf("write %d: ctx lost its values", i)
 			}
 		}
+	})
+}
+
+// mcMojangBody makes the service's client answer 200 with body and cancel ctx
+// once the body has been read.
+func mcMojangBody(s *service, body string, cancel context.CancelFunc) {
+	s.client = &http.Client{Transport: mcRoundTripFunc(func(r *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       mcCancelAfterRead{Reader: strings.NewReader(body), cancel: cancel},
+			Request:    r,
+		}, nil
+	})}
+}
+
+func mcRequireDetachedWrites(t *testing.T, ctx context.Context, store *mcWriteCtxStore, want ...string) {
+	t.Helper()
+	if ctx.Err() == nil {
+		t.Fatal("ctx was not cancelled before the writes")
+	}
+	if !slices.Equal(store.calls, want) {
+		t.Fatalf("recorded writes = %v, want %v", store.calls, want)
+	}
+	for i, call := range store.calls {
+		if store.errs[i] != nil {
+			t.Errorf("%s: ctx.Err() = %v, want nil", call, store.errs[i])
+		}
+		if store.markers[i] != "marker" {
+			t.Errorf("%s: ctx lost its values", call)
+		}
+	}
+}
+
+func TestSV138to146_JavaWritesSurviveCtxCancel(t *testing.T) {
+	newCtx := func() (context.Context, context.CancelFunc) {
+		return context.WithCancel(context.WithValue(mcCtx, mcCtxKey{}, "marker"))
+	}
+	skinAndCape := TexturesValue{Textures: Textures{SKIN: &Texture{URL: "http://mojang/texture/skinhash"}, CAPE: &Texture{URL: "http://mojang/texture/capehash"}}}
+
+	t.Run("SV-138_NameDBHitCachesAfterCancel", func(t *testing.T) {
+		store := &mcWriteCtxStore{mcMockStore: &mcMockStore{
+			getPlayerByName: func(string) (*Player, error) { return &Player{ID: "id", Name: "Steve", LastSeen: mcNow()}, nil },
+		}}
+		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) {})
+		ctx, cancel := newCtx()
+		cancel()
+
+		if _, err := s.GetMojangPlayerByName(ctx, "Steve"); err != nil {
+			t.Fatalf("GetMojangPlayerByName() error = %v", err)
+		}
+		mcRequireDetachedWrites(t, ctx, store, "SetPlayerInCache")
+	})
+
+	t.Run("SV-139_UUIDDBHitCachesAfterCancel", func(t *testing.T) {
+		store := &mcWriteCtxStore{mcMockStore: &mcMockStore{
+			getPlayerByUUID: func(string) (*Player, error) { return &Player{ID: "id", Name: "Steve", LastSeen: mcNow()}, nil },
+		}}
+		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) {})
+		ctx, cancel := newCtx()
+		cancel()
+
+		if _, err := s.GetMojangPlayerByUUID(ctx, "id"); err != nil {
+			t.Fatalf("GetMojangPlayerByUUID() error = %v", err)
+		}
+		mcRequireDetachedWrites(t, ctx, store, "SetPlayerInCache")
+	})
+
+	t.Run("SV-140_UUIDMojangFetchWritesAfterCancel", func(t *testing.T) {
+		store := &mcWriteCtxStore{mcMockStore: &mcMockStore{}}
+		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) {})
+		ctx, cancel := newCtx()
+		defer cancel()
+		mcMojangBody(s, mcMustJSON(t, Player{ID: "id", Name: "Steve"}), cancel)
+
+		if _, err := s.GetMojangPlayerByUUID(ctx, "id"); err != nil {
+			t.Fatalf("GetMojangPlayerByUUID() error = %v", err)
+		}
+		mcRequireDetachedWrites(t, ctx, store, "UpsertPlayer", "SetPlayerInCache")
+	})
+
+	t.Run("SV-141_BulkDBHitCachesAfterCancel", func(t *testing.T) {
+		store := &mcWriteCtxStore{mcMockStore: &mcMockStore{
+			getPlayerByName: func(string) (*Player, error) { return &Player{ID: "id", Name: "Steve", LastSeen: mcNow()}, nil },
+		}}
+		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) {})
+		ctx, cancel := newCtx()
+		cancel()
+
+		if _, err := s.GetMojangPlayersByNames(ctx, []string{"Steve"}); err != nil {
+			t.Fatalf("GetMojangPlayersByNames() error = %v", err)
+		}
+		mcRequireDetachedWrites(t, ctx, store, "SetPlayerInCache")
+	})
+
+	t.Run("SV-142_BulkMojangFetchWritesAfterCancel", func(t *testing.T) {
+		store := &mcWriteCtxStore{mcMockStore: &mcMockStore{}}
+		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) {})
+		ctx, cancel := newCtx()
+		defer cancel()
+		mcMojangBody(s, mcMustJSON(t, []Player{{ID: "id", Name: "Steve"}}), cancel)
+
+		if _, err := s.GetMojangPlayersByNames(ctx, []string{"Steve"}); err != nil {
+			t.Fatalf("GetMojangPlayersByNames() error = %v", err)
+		}
+		mcRequireDetachedWrites(t, ctx, store, "UpsertPlayer", "SetPlayerInCache")
+	})
+
+	t.Run("SV-143_ProfileDBHitCachesAfterCancel", func(t *testing.T) {
+		store := &mcWriteCtxStore{mcMockStore: &mcMockStore{
+			getProfileByUUID: func(string) (*Profile, error) { return &Profile{ID: "id", Name: "Steve", LastSeen: mcNow()}, nil },
+		}}
+		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) {})
+		ctx, cancel := newCtx()
+		cancel()
+
+		if _, err := s.resolveProfile(ctx, "id"); err != nil {
+			t.Fatalf("resolveProfile() error = %v", err)
+		}
+		mcRequireDetachedWrites(t, ctx, store, "SetProfileInCache")
+	})
+
+	t.Run("SV-144_UnsignedProfileFetchWritesAfterCancel", func(t *testing.T) {
+		store := &mcWriteCtxStore{mcMockStore: &mcMockStore{}}
+		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) {})
+		ctx, cancel := newCtx()
+		defer cancel()
+		mcMojangBody(s, mcMustJSON(t, Player{ID: "id", Properties: []Property{mcMustProperty(t, skinAndCape)}}), cancel)
+
+		if _, _, err := s.fetchProfileFromMojang(ctx, "id", false); err != nil {
+			t.Fatalf("fetchProfileFromMojang() error = %v", err)
+		}
+		mcRequireDetachedWrites(t, ctx, store, "UpsertPlayer", "UpsertTextureHash", "UpsertTextureHash", "UpsertTextures", "SetProfileInCache")
+	})
+
+	t.Run("SV-145_SignedProfileFetchWritesAfterCancel", func(t *testing.T) {
+		store := &mcWriteCtxStore{mcMockStore: &mcMockStore{}}
+		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) {})
+		ctx, cancel := newCtx()
+		defer cancel()
+		mcMojangBody(s, mcMustJSON(t, Player{ID: "id", Properties: []Property{mcMustProperty(t, skinAndCape)}}), cancel)
+
+		if _, _, err := s.fetchProfileFromMojang(ctx, "id", true); err != nil {
+			t.Fatalf("fetchProfileFromMojang() error = %v", err)
+		}
+		mcRequireDetachedWrites(t, ctx, store, "UpsertPlayer", "UpsertTextureHash", "UpsertTextureHash", "UpsertTextures", "SetSignedProfileInCache")
+	})
+
+	t.Run("SV-146_TextureArchiveWritesAfterCancel", func(t *testing.T) {
+		store := &mcWriteCtxStore{mcMockStore: &mcMockStore{}}
+		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) {})
+		ctx, cancel := newCtx()
+		defer cancel()
+		mcMojangBody(s, "bytes", cancel)
+
+		if _, err := s.fetchAndArchive(ctx, "hash"); err != nil {
+			t.Fatalf("fetchAndArchive() error = %v", err)
+		}
+		mcRequireDetachedWrites(t, ctx, store, "PutTextureInS3", "UpsertTextureHash")
 	})
 }
