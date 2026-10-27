@@ -31,16 +31,6 @@ func NewStore(db *pgxpool.Pool, rdb *redis.Client) Store {
 	}
 }
 
-// CREATE TABLE sessions (
-// 	session_id BIGINT PRIMARY KEY NOT NULL,
-// 	user_id BIGINT NOT NULL,
-// 	permissions TEXT[] NOT NULL,
-// 	iat BIGINT NOT NULL,
-// 	lua BIGINT NOT NULL,
-// 	exp BIGINT NOT NULL,
-//  FOREIGN KEY (user_id) REFERENCES accounts(user_id)
-// );
-
 // Store - The session store interface
 type Store interface {
 	AddSessionToDB(ctx context.Context, session *Session) error

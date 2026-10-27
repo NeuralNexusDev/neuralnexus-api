@@ -21,26 +21,6 @@ func NewStore(db *pgxpool.Pool) Store {
 	return &store{db: db}
 }
 
-//CREATE TRIGGER update_linked_accounts_modtime
-//BEFORE UPDATE ON linked_accounts
-//FOR EACH ROW
-//EXECUTE PROCEDURE update_modified_column();
-
-// CREATE TABLE linked_accounts (
-//   user_id BIGINT NOT NULL,
-//   platform TEXT NOT NULL,
-//   platform_username TEXT NOT NULL,
-//   platform_id TEXT NOT NULL,
-//   data JSONB NOT NULL,
-//   verified BOOLEAN NOT NULL DEFAULT false,
-//   login_enabled BOOLEAN NOT NULL DEFAULT false,
-//   created_at timestamp with time zone default current_timestamp,
-//   updated_at timestamp with time zone default current_timestamp,
-//   FOREIGN KEY (user_id) REFERENCES accounts(user_id),
-//   CONSTRAINT linked_accounts_unique UNIQUE (user_id, platform),
-//   CONSTRAINT linked_accounts_platform_unique UNIQUE (platform, platform_id)
-// );
-
 // Store - Account Link Store
 type Store interface {
 	AddLinkedAccountToDB(ctx context.Context, la *LinkedAccount) error
