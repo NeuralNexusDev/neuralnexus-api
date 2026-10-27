@@ -21,9 +21,12 @@ var microsoftHTTPClient = &http.Client{Timeout: 10 * time.Second}
 // XSTS relying parties. Xbox Live only ever puts xid/gtg in DisplayClaims
 // for the xboxLive one - an authorization scoped to the Minecraft relying
 // party legitimately gets uhs alone, so the two need separate XSTS calls.
+//
+//goland:noinspection HttpUrlsUsage
 const (
-	XstsMinecraftRelyingParty = "rp://api.minecraftservices.com/"
-	XstsXboxLiveRelyingParty  = "http://xboxlive.com"
+	XstsMinecraftRelyingParty    = "rp://api.minecraftservices.com/"
+	XstsXboxLiveRelyingParty     = "http://xboxlive.com"
+	XstsAuthXboxLiveRelyingParty = "http://auth.xboxlive.com"
 )
 
 // XErr codes returned by xsts.auth.xboxlive.com/xsts/authorize when the
@@ -148,8 +151,8 @@ func GetMicrosoftUser(ctx context.Context, cfg config.Microsoft, token *OAuthTok
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+token.AccessToken)
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set(HeaderAuthorization, AuthBearer+token.AccessToken)
+	req.Header.Set(HeaderAccept, ContentTypeJSON)
 
 	resp, err := microsoftHTTPClient.Do(req)
 	if err != nil {
@@ -174,6 +177,11 @@ func GetMicrosoftUser(ctx context.Context, cfg config.Microsoft, token *OAuthTok
 
 // -------------- XBL/XSTS/Minecraft chain --------------
 
+const (
+	SandboxIdRetail = "RETAIL"
+	TokenTypeJWT    = "JWT"
+)
+
 type xblAuthRequest struct {
 	Properties   xblAuthProperties `json:"Properties"`
 	RelyingParty string            `json:"RelyingParty"`
@@ -186,17 +194,51 @@ type xblAuthProperties struct {
 	RpsTicket  string `json:"RpsTicket"`
 }
 
+type displayClaim struct {
+	Uhs string `json:"Uhs"`
+	Xid string `json:"Xid"`
+	Gtg string `json:"Gtg"`
+}
+
 type displayClaims struct {
-	Xui []struct {
-		Uhs string `json:"uhs"`
-		Xid string `json:"xid,omitempty"`
-		Gtg string `json:"gtg,omitempty"`
-	} `json:"xui"`
+	Xui []displayClaim `json:"xui"`
 }
 
 type xblAuthResponse struct {
 	Token         string        `json:"Token"`
 	DisplayClaims displayClaims `json:"DisplayClaims"`
+}
+
+type xstsAuthRequest struct {
+	Properties   xstsAuthProperties `json:"Properties"`
+	RelyingParty string             `json:"RelyingParty"`
+	TokenType    string             `json:"TokenType"`
+}
+
+type xstsAuthProperties struct {
+	SandboxId  string   `json:"SandboxId"`
+	UserTokens []string `json:"UserTokens"`
+}
+
+type xstsAuthResponse struct {
+	xblAuthResponse
+	XErr int64 `json:"XErr,omitempty"`
+}
+
+type mcLoginWithXboxRequest struct {
+	IdentityToken string `json:"identityToken"`
+}
+
+type mcLoginWithXboxResponse struct {
+	AccessToken string `json:"access_token"`
+}
+
+type mcProfileResponse struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Skins []Skin `json:"skins"`
+	Capes []Cape `json:"capes"`
+	Error string `json:"error"`
 }
 
 // xblAuthenticate exchanges a Microsoft OAuth access token for an Xbox Live
@@ -208,10 +250,8 @@ func xblAuthenticate(ctx context.Context, cfg config.Microsoft, msAccessToken st
 			SiteName:   "user.auth.xboxlive.com",
 			RpsTicket:  "d=" + msAccessToken,
 		},
-		// Has to be http, not https - Xbox Live only recognizes this exact
-		// relying party string.
-		RelyingParty: "http://auth.xboxlive.com",
-		TokenType:    "JWT",
+		RelyingParty: XstsAuthXboxLiveRelyingParty,
+		TokenType:    TokenTypeJWT,
 	}
 	body, err := json.Marshal(reqBody)
 	if err != nil {
@@ -222,9 +262,9 @@ func xblAuthenticate(ctx context.Context, cfg config.Microsoft, msAccessToken st
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("x-xbl-contract-version", "1")
+	req.Header.Set(HeaderAccept, ContentTypeJSON)
+	req.Header.Set(HeaderContentType, ContentTypeJSON)
+	req.Header.Set(HeaderXBLContractVersion, "1")
 
 	resp, err := microsoftHTTPClient.Do(req)
 	if err != nil {
@@ -247,23 +287,6 @@ func xblAuthenticate(ctx context.Context, cfg config.Microsoft, msAccessToken st
 	return xblResp.Token, nil
 }
 
-type xstsAuthRequest struct {
-	Properties   xstsAuthProperties `json:"Properties"`
-	RelyingParty string             `json:"RelyingParty"`
-	TokenType    string             `json:"TokenType"`
-}
-
-type xstsAuthProperties struct {
-	SandboxId  string   `json:"SandboxId"`
-	UserTokens []string `json:"UserTokens"`
-}
-
-type xstsAuthResponse struct {
-	Token         string        `json:"Token"`
-	DisplayClaims displayClaims `json:"DisplayClaims"`
-	XErr          int64         `json:"XErr,omitempty"`
-}
-
 // xstsAuthorize exchanges an XBL user token for an XSTS token scoped to
 // relyingParty, returning that token alongside whatever DisplayClaims Xbox
 // Live includes for it. xuid/gamertag are only populated when relyingParty
@@ -271,11 +294,11 @@ type xstsAuthResponse struct {
 func xstsAuthorize(ctx context.Context, cfg config.Microsoft, xblToken, relyingParty string) (xstsToken, userHash, xuid, gamertag string, err error) {
 	reqBody := xstsAuthRequest{
 		Properties: xstsAuthProperties{
-			SandboxId:  "RETAIL",
+			SandboxId:  SandboxIdRetail,
 			UserTokens: []string{xblToken},
 		},
 		RelyingParty: relyingParty,
-		TokenType:    "JWT",
+		TokenType:    TokenTypeJWT,
 	}
 	body, err := json.Marshal(reqBody)
 	if err != nil {
@@ -286,8 +309,8 @@ func xstsAuthorize(ctx context.Context, cfg config.Microsoft, xblToken, relyingP
 	if err != nil {
 		return "", "", "", "", err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set(HeaderAccept, ContentTypeJSON)
+	req.Header.Set(HeaderContentType, ContentTypeJSON)
 
 	resp, err := microsoftHTTPClient.Do(req)
 	if err != nil {
@@ -323,14 +346,6 @@ func xstsAuthorize(ctx context.Context, cfg config.Microsoft, xblToken, relyingP
 	return xstsResp.Token, claims.Uhs, claims.Xid, claims.Gtg, nil
 }
 
-type mcLoginWithXboxRequest struct {
-	IdentityToken string `json:"identityToken"`
-}
-
-type mcLoginWithXboxResponse struct {
-	AccessToken string `json:"access_token"`
-}
-
 // minecraftLoginWithXbox exchanges an XSTS token for a Minecraft Services
 // access token.
 func minecraftLoginWithXbox(ctx context.Context, cfg config.Microsoft, userHash, xstsToken string) (string, error) {
@@ -346,8 +361,8 @@ func minecraftLoginWithXbox(ctx context.Context, cfg config.Microsoft, userHash,
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set(HeaderAccept, ContentTypeJSON)
+	req.Header.Set(HeaderContentType, ContentTypeJSON)
 
 	resp, err := microsoftHTTPClient.Do(req)
 	if err != nil {
@@ -371,14 +386,6 @@ func minecraftLoginWithXbox(ctx context.Context, cfg config.Microsoft, userHash,
 	return loginResp.AccessToken, nil
 }
 
-type mcProfileResponse struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Skins []Skin `json:"skins"`
-	Capes []Cape `json:"capes"`
-	Error string `json:"error"`
-}
-
 // getMinecraftProfile fetches the caller's Minecraft: Java Edition profile.
 // A nil profile with a nil error means the account simply doesn't own Java -
 // not a failure.
@@ -387,7 +394,7 @@ func getMinecraftProfile(ctx context.Context, cfg config.Microsoft, mcAccessToke
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+mcAccessToken)
+	req.Header.Set(HeaderAuthorization, AuthBearer+mcAccessToken)
 
 	resp, err := microsoftHTTPClient.Do(req)
 	if err != nil {

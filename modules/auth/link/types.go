@@ -4,6 +4,15 @@ import (
 	"time"
 )
 
+const (
+	HeaderAccept             = "Accept"
+	HeaderAuthorization      = "Authorization"
+	HeaderContentType        = "Content-Type"
+	HeaderXBLContractVersion = "x-xbl-contract-version"
+	ContentTypeJSON          = "application/json"
+	AuthBearer               = "Bearer "
+)
+
 // LinkedAccount struct
 type LinkedAccount struct {
 	UserID           string      `db:"user_id" validate:"required" json:"user_id" xml:"user_id"`
