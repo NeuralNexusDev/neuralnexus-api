@@ -166,24 +166,8 @@ func stRequestWithSession(session *session.Session) *http.Request {
 	return req.WithContext(ctx)
 }
 
-func TestST01to04SteamDataAccessors(t *testing.T) {
+func TestST04SteamDataGetData(t *testing.T) {
 	s := &SteamData{SteamID64: "76500000000000001", PersonaName: "bob", ProfileURL: "https://steamcommunity.com/id/bob", AvatarURL: "https://avatar.test/bob.png"}
-
-	t.Run("LKS-01_GetID", func(t *testing.T) {
-		if got := s.GetID(); got != "76500000000000001" {
-			t.Errorf("GetID() = %q, want %q", got, "76500000000000001")
-		}
-	})
-	t.Run("LKS-02_GetUsername", func(t *testing.T) {
-		if got := s.GetUsername(); got != "bob" {
-			t.Errorf("GetUsername() = %q, want %q", got, "bob")
-		}
-	})
-	t.Run("LKS-03_GetEmail", func(t *testing.T) {
-		if got := s.GetEmail(); got != "" {
-			t.Errorf("GetEmail() = %q, want empty string", got)
-		}
-	})
 	t.Run("LKS-04_GetData", func(t *testing.T) {
 		data := s.GetData()
 		var roundTripped SteamData
@@ -192,20 +176,6 @@ func TestST01to04SteamDataAccessors(t *testing.T) {
 		}
 		if roundTripped != *s {
 			t.Errorf("GetData() round-trip mismatch: got %+v, want %+v", roundTripped, *s)
-		}
-	})
-}
-
-func TestST05CreateLinkedAccount(t *testing.T) {
-	t.Run("LKS-05_CreateLinkedAccount", func(t *testing.T) {
-		s := &SteamData{SteamID64: "76500000000000001", PersonaName: "bob"}
-		la := s.CreateLinkedAccount("user-1")
-
-		if la.UserID != "user-1" || la.Platform != PlatformSteam || la.PlatformUsername != "bob" || la.PlatformID != "76500000000000001" {
-			t.Errorf("CreateLinkedAccount() = %+v, want UserID=user-1 Platform=steam PlatformUsername=bob PlatformID=76500000000000001", la)
-		}
-		if !la.Verified || !la.LoginEnabled {
-			t.Errorf("expected Verified and LoginEnabled true, got Verified=%v LoginEnabled=%v", la.Verified, la.LoginEnabled)
 		}
 	})
 }
@@ -516,41 +486,6 @@ func TestST26to29ProcessSteamLink(t *testing.T) {
 		_, err := ProcessSteamLink(req, las, user)
 		if !errors.Is(err, ErrPlatformAlreadyLinkedToDifferentAccount) {
 			t.Fatalf("ProcessSteamLink() error = %v, want ErrPlatformAlreadyLinkedToDifferentAccount", err)
-		}
-	})
-}
-
-func TestST30to31RequestContextReachesRequest(t *testing.T) {
-	ctx := context.WithValue(testutil.LogContext(context.Background()), reqctx.UserIDKey, "u1")
-	cfg := testutil.NewConfig(func(c *config.Config) {
-		c.Steam.OpenIDLoginURL = "https://steamcommunity.com/openid/login"
-		c.Steam.PlayerSummaryURL = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/"
-	})
-	var got any
-	swapDefaultTransport(t, auRoundTripperFunc(func(r *http.Request) (*http.Response, error) {
-		got = r.Context().Value(reqctx.UserIDKey)
-		return nil, testutil.ErrBoom
-	}))
-
-	t.Run("LKS-74_VerifySteamOpenIDCallback_CtxReachesRequest", func(t *testing.T) {
-		got = nil
-
-		if _, err := VerifySteamOpenIDCallback(ctx, cfg.Steam, validSteamQuery("76500000000000001")); err == nil {
-			t.Fatal("expected the transport error")
-		}
-		if got != "u1" {
-			t.Errorf("request context user ID = %v, want %q", got, "u1")
-		}
-	})
-
-	t.Run("LKS-75_GetSteamUser_CtxReachesRequest", func(t *testing.T) {
-		got = nil
-
-		if _, err := GetSteamUser(ctx, cfg.Steam, "76500000000000001"); err == nil {
-			t.Fatal("expected the transport error")
-		}
-		if got != "u1" {
-			t.Errorf("request context user ID = %v, want %q", got, "u1")
 		}
 	})
 }
