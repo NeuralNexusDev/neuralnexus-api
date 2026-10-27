@@ -42,10 +42,12 @@ func (d *DiscordData) CreateLinkedAccount(userID string) *LinkedAccount {
 
 // GetDiscordUser gets a Discord user with the given access token
 func GetDiscordUser(token *OAuthToken) (*DiscordData, error) {
-	discord, err := discordgo.New("Bearer " + token.AccessToken)
+	discord, err := discordgo.New(AuthBearer + token.AccessToken)
 	if err != nil {
 		return nil, err
 	}
+	defer discord.Close()
+
 	user, err := discord.User("@me")
 	if err != nil {
 		return nil, err
