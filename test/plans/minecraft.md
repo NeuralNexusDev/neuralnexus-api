@@ -12,7 +12,7 @@
 | TY-06 | ParseProperties | Edge Case | Property.Name != TEXTURES | Property{Name: "other"} | Entry skipped, returns nil | P3 |  |
 | TY-07 | ParseProperties | Error Path | Property.Value is not valid base64 | Property{Name: TEXTURES, Value: "not-base64!!"} | Entry skipped (logged), returns nil | P2 |  |
 | TY-08 | ParseProperties | Error Path | Property.Value is valid base64 but not valid JSON | base64("not json") | Entry skipped (logged), returns nil | P2 |  |
-| TY-09 | ParseProperties | Edge Case | First property invalid, second is a valid TEXTURES entry | two Properties, first malformed | Loop continues past the bad entry and returns the second's decoded value | P2 |  |
+| TY-09 | ParseProperties | Edge Case | First property invalid, second is a valid TEXTURES entry | two Properties, first malformed | Returns nil: the first TEXTURES entry decides the result, so the second is never read | P2 |  |
 | TY-10 | IsStale (Player) | Happy Path | LastSeen is recent | LastSeen = now | Returns false | P2 |  |
 | TY-11 | IsStale (Player) | Edge Case | LastSeen older than stalenessThreshold | LastSeen = now - 25h | Returns true | P2 |  |
 | TY-12 | ToProfile | Happy Path | Player has a valid TEXTURES property | populated Player | Returned *Profile mirrors ID/Name/Legacy/Demo/ProfileActions, Textures = ParseProperties() result | P1 |  |
@@ -33,10 +33,6 @@
 | TY-27 | IsStale (GeyserPlayer) | Edge Case | LastSeen older than stalenessThreshold | LastSeen = now - 25h | Returns true | P3 |  |
 | TY-28 | IsStale (GeyserSkin) | Happy Path | LastSeen is recent | LastSeen = now | Returns false | P3 |  |
 | TY-29 | IsStale (GeyserSkin) | Edge Case | LastSeen older than stalenessThreshold | LastSeen = now - 25h | Returns true | P3 |  |
-| TY-30 | SkinURL | Happy Path | Value is base64(JSON) with Textures.SKIN set | valid GeyserSkin.Value | Returns the embedded SKIN.URL | P1 |  |
-| TY-31 | SkinURL | Error Path | Value is not valid base64 | Value: "not-base64!!" | Returns "" | P2 |  |
-| TY-32 | SkinURL | Error Path | Value is valid base64 but not valid JSON | base64("not json") | Returns "" | P2 |  |
-| TY-33 | SkinURL | Edge Case | Decodes fine but Textures.SKIN is nil | JSON with no SKIN key | Returns "" | P2 |  |
 | TY-34 | xuidToUUID | Happy Path | xuid is a nonzero int64 | xuid = 123456789 | Returns zero-padded-hex value formatted as a dashed UUID string | P1 |  |
 | TY-35 | xuidToUUID | Edge Case | xuid is 0 | xuid = 0 | Returns "00000000-0000-0000-0000-000000000000" | P3 |  |
 | TY-36 | uuidToXUID | Happy Path | id is a UUID produced by xuidToUUID | id = xuidToUUID(N) | Returns (N, nil) | P1 |  |
@@ -104,10 +100,6 @@
 | HD-50 | GetTextureHandler | Happy Path | Valid hash, service succeeds | mock returns *TextureResult | 200 OK, body bytes copied verbatim, Content-Type header set | P1 |  |
 | HD-51 | GetTextureHandler | Error Path | Service returns ErrTextureNotFound | mock error | 404 Not Found, `detail` is `msgTextureNotFound` | P1 |  |
 | HD-52 | GetTextureHandler | Error Path | Service returns a generic error | mock error | 502 Bad Gateway, `detail` is `msgFailedToGetTexture` | P2 |  |
-| HD-53 | GetGeyserTextureHandler | Error Path | Empty hash path value | hash == "" | 400 Bad Request, `detail` is `msgInvalidHash` | P2 |  |
-| HD-54 | GetGeyserTextureHandler | Happy Path | Valid hash, service succeeds | mock returns *TextureResult | 200 OK, body bytes copied verbatim | P1 |  |
-| HD-55 | GetGeyserTextureHandler | Error Path | Service returns ErrTextureNotFound | mock error | 404 Not Found, `detail` is `msgTextureNotFound` | P1 |  |
-| HD-56 | GetGeyserTextureHandler | Error Path | Service returns a generic error | mock error | 502 Bad Gateway, `detail` is `msgFailedToGetTexture` | P2 |  |
 | HD-57 | GetGeyserProfileByNameHandler | Error Path | Service returns `ErrGeyserAPI` | mock service returns `nil, ErrGeyserAPI` | 500 Internal Server Error, `detail` is `msgFailedToGetGeyserProfile` | P1 |  |
 | HD-58 | GetGeyserProfileHandler | Error Path | Service returns `ErrGeyserAPI` | mock service returns `nil, ErrGeyserAPI` | 500 Internal Server Error, `detail` is `msgFailedToGetGeyserProfile` | P1 |  |
 
@@ -317,23 +309,7 @@ Rows marked "(live)" require `TEST_POSTGRES_URL` and/or `TEST_REDIS_URL` and `t.
 | ST-55 | UpsertGeyserPlayer | Happy Path (live) | New xuid | live DB | Row inserted | P1 |  |
 | ST-56 | UpsertGeyserPlayer | Edge Case (live) | Same xuid upserted twice | live DB | Second call updates gamertag/last_seen in place | P2 |  |
 | ST-57 | UpsertGeyserPlayer | Concurrency Invariant (live) | N goroutines UpsertGeyserPlayer the same xuid concurrently | live DB | No unique-violation errors from any goroutine; `geyser_players`' xuid PRIMARY KEY then guarantees a single surviving row (looped trials) | P0 |  |
-| ST-58 | GetGeyserSkin | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |  |
-| ST-59 | GetGeyserSkin | Happy Path (live) | Row seeded via UpsertGeyserSkin | live DB | Returns most-recently-seen skin | P1 |  |
-| ST-60 | GetGeyserSkin | Error Path (live) | No matching xuid | live DB, unknown xuid | Returns `ErrSkinNotFound` (pgx.ErrNoRows is mapped) | P2 |  |
-| ST-61 | GetGeyserSkinByHash | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |  |
-| ST-62 | GetGeyserSkinByHash | Happy Path (live) | Row seeded via UpsertGeyserSkin | live DB | Returns matching skin | P1 |  |
-| ST-63 | GetGeyserSkinByHash | Edge Case (live) | No matching hash | live DB, unknown hash | Returns (nil, nil) | P2 |  |
-| ST-64 | UpsertGeyserSkin | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |  |
-| ST-65 | UpsertGeyserSkin | Happy Path (live) | Empty Signature | live DB | Stored as NULL; read back as "" via COALESCE | P1 |  |
-| ST-66 | UpsertGeyserSkin | Edge Case (live) | Same (xuid,hash) upserted twice | live DB | Second call updates fields in place | P2 |  |
-| ST-67 | UpsertGeyserSkin | Concurrency Invariant (live) | N goroutines UpsertGeyserSkin the same (xuid,hash) concurrently | live DB | No unique-violation errors from any goroutine; `geyser_player_textures_unique` then guarantees a single surviving row (looped trials) | P0 |  |
 | ST-68 | PutTextureInS3 | Happy Path (local fake) | Body implements Len(); PUT returns 200 | fake S3 server | Content-Length header equals Len(); nil error | P1 |  |
 | ST-69 | PutTextureInS3 | Edge Case (local fake) | Body does not implement Len() | fake S3 server | ContentLength left unset; still succeeds | P2 |  |
 | ST-70 | PutTextureInS3 | Error Path (local fake) | PUT returns 500 | fake S3 server | Returns an error wrapping `ErrUploadS3` | P2 |  |
 | ST-77 | PutTextureInS3 | Error Path (local fake) | PUT returns 500, asserting the upload error | fake S3 server | Returns `ErrUploadS3` | P2 | |
-| ST-71 | IsGeyserTextureInS3 | Happy Path (local fake) | HeadObject returns 200 at Geyser key | fake S3 server | Returns (true, nil); request key uses GeyserS3KeyPrefix | P1 |  |
-| ST-72 | IsGeyserTextureInS3 | Edge Case (local fake) | HeadObject returns 404 | fake S3 server | Returns (false, nil) | P2 |  |
-| ST-73 | IsGeyserTextureInS3 | Error Path (local fake) | HeadObject returns 500 | fake S3 server | Returns (false, non-nil error) | P2 |  |
-| ST-74 | PutGeyserTextureInS3 | Happy Path (local fake) | PUT returns 200 | fake S3 server | nil error; request key uses GeyserS3KeyPrefix | P1 |  |
-| ST-75 | PutGeyserTextureInS3 | Error Path (local fake) | PUT returns 500 | fake S3 server | Returns an error wrapping `ErrUploadS3` | P2 |  |
-| ST-78 | PutGeyserTextureInS3 | Error Path (local fake) | PUT returns 500, asserting the upload error | fake S3 server | Returns `ErrUploadS3` | P2 | |
