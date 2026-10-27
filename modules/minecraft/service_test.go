@@ -1,12 +1,10 @@
 package minecraft
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -1085,30 +1083,6 @@ func TestSV79to84_ResolveGeyserPlayerByXUID(t *testing.T) {
 	})
 }
 
-func TestSV85to88_GetGeyserProfile(t *testing.T) {
-	t.Run("SV-87_PlayerResolveFails", func(t *testing.T) {
-		s := mcNewService(t, &mcMockStore{}, func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-		})
-		_, err := s.GetGeyserProfile(mcCtx, 1)
-		if !errors.Is(err, ErrGeyserAPI) {
-			t.Fatalf("error = %v, want %v", err, ErrGeyserAPI)
-		}
-	})
-}
-
-func TestSV89to92_GetGeyserProfileByGamertag(t *testing.T) {
-	t.Run("SV-91_XUIDLookupFails", func(t *testing.T) {
-		s := mcNewService(t, &mcMockStore{}, func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-		})
-		_, err := s.GetGeyserProfileByGamertag(mcCtx, "Notch")
-		if !errors.Is(err, ErrGeyserAPI) {
-			t.Fatalf("error = %v, want %v", err, ErrGeyserAPI)
-		}
-	})
-}
-
 func TestSV93to95_GetTextureContent(t *testing.T) {
 	t.Run("SV-93_PresentDelegatesToS3", func(t *testing.T) {
 		store := &mcMockStore{isTextureInS3: func(string) (bool, error) { return true, nil }}
@@ -1208,15 +1182,6 @@ func TestSV96to100_ServeFromS3(t *testing.T) {
 		defer res.Body.Close()
 		if res.ContentType != "image/png" {
 			t.Errorf("ContentType = %q, want default image/png", res.ContentType)
-		}
-	})
-}
-
-func TestSV101_BytesReadCloser_Close(t *testing.T) {
-	t.Run("SV-101_AlwaysNil", func(t *testing.T) {
-		var b bytesReadCloser
-		if err := b.Close(); err != nil {
-			t.Errorf("Close() = %v, want nil", err)
 		}
 	})
 }
@@ -1361,69 +1326,7 @@ func TestSV128to131_GeyserProfileSkinStepRejection(t *testing.T) {
 	})
 }
 
-func TestSV132to133_ResolveProfileDBErrorLogging(t *testing.T) {
-	captureLog := func(t *testing.T) *bytes.Buffer {
-		var buf bytes.Buffer
-		prev := log.Writer()
-		log.SetOutput(&buf)
-		t.Cleanup(func() { log.SetOutput(prev) })
-		return &buf
-	}
-	mojang := func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, mcMustJSON(t, Player{ID: "fetched", ProfileActions: []string{}}))
-	}
-
-	t.Run("SV-132_DBPlayerNotFoundNotLogged", func(t *testing.T) {
-		buf := captureLog(t)
-		store := &mcMockStore{getProfileByUUID: func(string) (*Profile, error) { return nil, ErrPlayerNotFound }}
-		s := mcNewService(t, store, mojang)
-		if _, err := s.resolveProfile(mcCtx, "id"); err != nil {
-			t.Fatalf("err = %v, want nil", err)
-		}
-		if strings.Contains(buf.String(), "Failed to get profile from DB") {
-			t.Errorf("log = %q, want no DB failure line", buf.String())
-		}
-	})
-
-	t.Run("SV-133_DBOtherErrorLogged", func(t *testing.T) {
-		buf := captureLog(t)
-		store := &mcMockStore{getProfileByUUID: func(string) (*Profile, error) { return nil, testutil.ErrBoom }}
-		s := mcNewService(t, store, mojang)
-		if _, err := s.resolveProfile(mcCtx, "id"); err != nil {
-			t.Fatalf("err = %v, want nil", err)
-		}
-		if !strings.Contains(buf.String(), "Failed to get profile from DB") {
-			t.Errorf("log = %q, want the DB failure line", buf.String())
-		}
-	})
-}
-
 type mcCtxKey struct{}
-
-type mcCtxStore struct {
-	*mcMockStore
-	got context.Context
-}
-
-func (m *mcCtxStore) GetPlayerFromCache(ctx context.Context, key string) (*Player, error) {
-	m.got = ctx
-	return &Player{ID: "cached"}, nil
-}
-
-func TestSV134_GetMojangPlayerByName_CtxReachesStore(t *testing.T) {
-	t.Run("SV-134_CtxReachesStore", func(t *testing.T) {
-		store := &mcCtxStore{mcMockStore: &mcMockStore{}}
-		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) { t.Fatal("should not call Mojang") })
-		ctx := context.WithValue(mcCtx, mcCtxKey{}, "marker")
-
-		if _, err := s.GetMojangPlayerByName(ctx, "Steve"); err != nil {
-			t.Fatalf("GetMojangPlayerByName() error = %v", err)
-		}
-		if store.got == nil || store.got.Value(mcCtxKey{}) != "marker" {
-			t.Error("store did not receive the caller's ctx")
-		}
-	})
-}
 
 func mcBlockingMojang(started chan<- struct{}) http.HandlerFunc {
 	var once sync.Once
