@@ -60,13 +60,13 @@ func OAuthHandler(cfg *config.Config, as account.Service, las Store, ss session.
 			return
 		}
 
-		var session *session.Session
+		var sess *session.Session
 		var err error
 		switch state.Mode {
 		case ModeLogin:
-			session, err = ProcessOAuthLogin(ctx, cfg, as, las, ss, code, &state)
+			sess, err = ProcessOAuthLogin(ctx, cfg, as, las, ss, code, &state)
 		case ModeLink:
-			session, err = ProcessOAuthLink(r, cfg, las, code, &state)
+			sess, err = ProcessOAuthLink(r, cfg, las, code, &state)
 		}
 		if err != nil {
 			reqctx.Log(ctx, "Failed to process OAuth:\n\t", err.Error())
@@ -91,7 +91,7 @@ func OAuthHandler(cfg *config.Config, as account.Service, las Store, ss session.
 			return
 		}
 
-		if err := ss.SetSessionCookie(ctx, w, session); err != nil {
+		if err := ss.SetSessionCookie(ctx, w, sess); err != nil {
 			redirectInternalServerError(w, r, state.RedirectURI, msgAuthenticationFailed)
 			return
 		}
@@ -111,7 +111,7 @@ func OpenIDHandler(cfg config.Steam, as account.Service, las Store, ss session.S
 			return
 		}
 
-		steamID64, err := VerifySteamOpenIDCallback(ctx, r.URL.Query())
+		steamID64, err := VerifySteamOpenIDCallback(ctx, cfg, r.URL.Query())
 		if err != nil {
 			reqctx.Log(ctx, "Failed to verify Steam OpenID callback:\n\t", err.Error())
 			switch err {
@@ -123,7 +123,7 @@ func OpenIDHandler(cfg config.Steam, as account.Service, las Store, ss session.S
 			return
 		}
 
-		user, err := GetSteamUser(ctx, cfg.APIKey, steamID64)
+		user, err := GetSteamUser(ctx, cfg, steamID64)
 		if err != nil {
 			reqctx.Log(ctx, "Failed to get Steam user:\n\t", err.Error())
 			switch err {
@@ -137,12 +137,12 @@ func OpenIDHandler(cfg config.Steam, as account.Service, las Store, ss session.S
 			return
 		}
 
-		var session *session.Session
+		var sess *session.Session
 		switch state.Mode {
 		case ModeLogin:
-			session, err = ProcessSteamLogin(ctx, as, las, ss, user)
+			sess, err = ProcessSteamLogin(ctx, as, las, ss, user)
 		case ModeLink:
-			session, err = ProcessSteamLink(r, las, user)
+			sess, err = ProcessSteamLink(r, las, user)
 		}
 		if err != nil {
 			reqctx.Log(ctx, "Failed to process Steam OpenID:\n\t", err.Error())
@@ -161,7 +161,7 @@ func OpenIDHandler(cfg config.Steam, as account.Service, las Store, ss session.S
 			return
 		}
 
-		if err := ss.SetSessionCookie(ctx, w, session); err != nil {
+		if err := ss.SetSessionCookie(ctx, w, sess); err != nil {
 			redirectInternalServerError(w, r, state.RedirectURI, msgAuthenticationFailed)
 			return
 		}
@@ -224,7 +224,7 @@ func requireValidModeAndSession(w http.ResponseWriter, r *http.Request, mode Mod
 	case ModeLogin:
 		return true
 	case ModeLink:
-		if session, ok := r.Context().Value(reqctx.SessionKey).(*session.Session); ok && session != nil && session.IsValid() {
+		if sess, ok := r.Context().Value(reqctx.SessionKey).(*session.Session); ok && sess != nil && sess.IsValid() {
 			return true
 		}
 		redirectUnauthorized(w, r, redirectURI, msgLoginRequiredToLink)
@@ -288,9 +288,9 @@ func isAllowedRedirect(redirectURI, siteUrl string) bool {
 // GetUserLinkedAccountsHandler - List a user's linked platforms
 func GetUserLinkedAccountsHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
+		sess := r.Context().Value(reqctx.SessionKey).(*session.Session)
 		userID := r.PathValue("user_id")
-		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
+		if sess.UserID != userID && !sess.HasPermission(perms.ScopeAdminUsers) {
 			responses.Forbidden(w, r, msgNoPermissionToViewLinkedAccounts)
 			return
 		}
@@ -306,9 +306,9 @@ func GetUserLinkedAccountsHandler(service Service) http.HandlerFunc {
 // UnlinkPlatformHandler - Unlink a platform from a user
 func UnlinkPlatformHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
+		sess := r.Context().Value(reqctx.SessionKey).(*session.Session)
 		userID := r.PathValue("user_id")
-		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
+		if sess.UserID != userID && !sess.HasPermission(perms.ScopeAdminUsers) {
 			responses.Forbidden(w, r, msgNoPermissionToUnlinkPlatforms)
 			return
 		}
@@ -337,9 +337,9 @@ type SetPlatformLoginEnabledRequest struct {
 // SetPlatformLoginEnabledHandler - Toggle whether a linked platform can log in
 func SetPlatformLoginEnabledHandler(service Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
+		sess := r.Context().Value(reqctx.SessionKey).(*session.Session)
 		userID := r.PathValue("user_id")
-		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
+		if sess.UserID != userID && !sess.HasPermission(perms.ScopeAdminUsers) {
 			responses.Forbidden(w, r, msgNoPermissionToUpdatePlatforms)
 			return
 		}

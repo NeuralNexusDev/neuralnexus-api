@@ -108,7 +108,9 @@ type Minecraft struct {
 }
 
 type Steam struct {
-	APIKey string
+	APIKey           string
+	OpenIDLoginURL   string
+	PlayerSummaryURL string
 }
 
 type Twitch struct {
@@ -269,7 +271,9 @@ func FromEnv() *Config {
 			GeyserGamertagLookup: geyserGamertagLookup,
 		},
 		Steam: Steam{
-			APIKey: checkEnvVar("STEAM_API_KEY"),
+			APIKey:           checkEnvVar("STEAM_API_KEY"),
+			OpenIDLoginURL:   "https://steamcommunity.com/openid/login",
+			PlayerSummaryURL: "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/",
 		},
 		Twitch: Twitch{
 			ClientId:       twitchClientId,
