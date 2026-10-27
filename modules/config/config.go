@@ -20,19 +20,20 @@ func checkEnvVar(varName string) string {
 }
 
 type Config struct {
-	ApiUrl    string
-	SiteUrl   string
-	Database  Database
-	Snowflake Snowflake
-	Redis     Redis
-	S3        S3
-	Auth      Auth
-	Discord   Discord
-	GitHub    GitHub
-	Microsoft Microsoft
-	Minecraft Minecraft
-	Steam     Steam
-	Twitch    Twitch
+	ApiUrl           string
+	SiteUrl          string
+	Database         Database
+	Snowflake        Snowflake
+	Redis            Redis
+	S3               S3
+	Auth             Auth
+	Discord          Discord
+	GameServerStatus GameServerStatus
+	GitHub           GitHub
+	Microsoft        Microsoft
+	Minecraft        Minecraft
+	Steam            Steam
+	Twitch           Twitch
 }
 
 type Database struct {
@@ -86,6 +87,11 @@ type RateLimit struct {
 type Discord struct {
 	PublicKey    ed25519.PublicKey
 	OAuth2Config *oauth2.Config
+}
+
+type GameServerStatus struct {
+	GameQEndpoint   string
+	GameDigEndpoint string
 }
 
 type GitHub struct {
@@ -241,6 +247,10 @@ func FromEnv() *Config {
 					AuthStyle: oauth2.AuthStyleInHeader,
 				},
 			},
+		},
+		GameServerStatus: GameServerStatus{ // TODO: Migrate this
+			GameQEndpoint:   os.Getenv("GSS_GAMEQ_URL"),
+			GameDigEndpoint: os.Getenv("GSS_GAMEDIG_URL"),
 		},
 		GitHub: GitHub{
 			Token: checkEnvVar("GITHUB_TOKEN"),
