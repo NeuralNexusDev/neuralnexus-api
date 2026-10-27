@@ -15,7 +15,7 @@ func TestST01NewStore(t *testing.T) {
 	t.Run("RLS-01_WrapsGivenClient", func(t *testing.T) {
 		rdb := testutil.UnreachableRedis(t)
 
-		got := NewStore(rdb)
+		got := NewStore(testutil.NewConfig().Auth.RateLimit, rdb)
 		s, ok := got.(*store)
 		if !ok {
 			t.Fatalf("NewStore() returned type %T, want *store", got)
