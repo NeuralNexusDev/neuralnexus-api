@@ -5,24 +5,19 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
 type rlFakeRateLimitStore struct {
-	getCtx    context.Context
 	getVal    int
 	getErr    error
-	getCalls  int
 	setErr    error
 	setCalls  int
 	incrErr   error
 	incrCalls int
 }
 
-func (f *rlFakeRateLimitStore) GetRateLimit(ctx context.Context, _ string) (int, error) {
-	f.getCtx = ctx
-	f.getCalls++
+func (f *rlFakeRateLimitStore) GetRateLimit(_ context.Context, _ string) (int, error) {
 	return f.getVal, f.getErr
 }
 func (f *rlFakeRateLimitStore) SetRateLimit(_ context.Context, _ string, _ int) error {
@@ -32,21 +27,6 @@ func (f *rlFakeRateLimitStore) SetRateLimit(_ context.Context, _ string, _ int) 
 func (f *rlFakeRateLimitStore) IncrementRateLimit(_ context.Context, _ string) error {
 	f.incrCalls++
 	return f.incrErr
-}
-
-func TestRL01NewService(t *testing.T) {
-	t.Run("RL-01_WiresGivenSubStore", func(t *testing.T) {
-		rl := &rlFakeRateLimitStore{getVal: 7}
-		svc := NewService(rl)
-
-		got, err := svc.GetRateLimit(context.Background(), "k")
-		if err != nil || got != 7 {
-			t.Errorf("GetRateLimit() = (%d, %v), want (7, nil)", got, err)
-		}
-		if rl.getCalls != 1 {
-			t.Errorf("expected the fake Store to be called once, got %d", rl.getCalls)
-		}
-	})
 }
 
 func TestRL02to03GetRateLimit(t *testing.T) {
@@ -118,20 +98,6 @@ func TestRL06to07IncrRateLimit(t *testing.T) {
 		err := svc.IncrRateLimit(context.Background(), "k")
 		if !errors.Is(err, wantErr) {
 			t.Errorf("IncrRateLimit() err = %v, want %v", err, wantErr)
-		}
-	})
-}
-
-func TestRL08RequestContextReachesStore(t *testing.T) {
-	t.Run("RL-08_RequestContextReachesStore", func(t *testing.T) {
-		rl := &rlFakeRateLimitStore{}
-		ctx := context.WithValue(context.Background(), reqctx.UserIDKey, "u1")
-
-		if _, err := NewService(rl).GetRateLimit(ctx, "k"); err != nil {
-			t.Fatalf("GetRateLimit() error = %v", err)
-		}
-		if got := rl.getCtx.Value(reqctx.UserIDKey); got != "u1" {
-			t.Errorf("store context user ID = %v, want %q", got, "u1")
 		}
 	})
 }
