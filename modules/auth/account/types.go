@@ -6,6 +6,8 @@ import (
 	"time"
 	_ "unsafe"
 
+	_ "golang.org/x/crypto/argon2"
+
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 )
 
@@ -67,11 +69,6 @@ func NewIDOnlyAccount() (*Account, error) {
 	}, nil
 }
 
-// Deliberate go:linkname into argon2's unexported deriveKey, to pass a
-// pepper as a real Argon2 "secret" rather than folding it into the
-// password bytes - the public argon2.IDKey hardcodes secret=nil. Fallback
-// if x/crypto ever breaks this: argon2.IDKey(append(password, pepper...), salt, ...).
-//
 //go:linkname deriveKey golang.org/x/crypto/argon2.deriveKey
 //goland:noinspection GoUnusedParameter
 func deriveKey(mode int, password, salt, secret, data []byte, time, memory uint32, threads uint8, keyLen uint32) []byte
