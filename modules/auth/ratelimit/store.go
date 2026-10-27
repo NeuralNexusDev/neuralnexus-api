@@ -3,8 +3,8 @@ package ratelimit
 import (
 	"context"
 	"errors"
-	"time"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -18,12 +18,14 @@ type Store interface {
 }
 
 type store struct {
+	cfg config.RateLimit
 	rdb *redis.Client
 }
 
 // NewStore - Create a new rate limit store
-func NewStore(rdb *redis.Client) Store {
+func NewStore(cfg config.RateLimit, rdb *redis.Client) Store {
 	return &store{
+		cfg: cfg,
 		rdb: rdb,
 	}
 }
@@ -46,7 +48,7 @@ func (s *store) GetRateLimit(ctx context.Context, key string) (int, error) {
 
 // SetRateLimit sets the rate limit for a key
 func (s *store) SetRateLimit(ctx context.Context, key string, val int) error {
-	_, err := s.rdb.Set(ctx, rateLimitKeyPrefix+key, val, time.Minute).Result()
+	_, err := s.rdb.Set(ctx, rateLimitKeyPrefix+key, val, s.cfg.Window).Result()
 	if err != nil {
 		return err
 	}
@@ -62,7 +64,7 @@ func (s *store) IncrementRateLimit(ctx context.Context, key string) error {
 	}
 	// Only set the TTL if this increment created the key, so an existing
 	// key's window doesn't reset on every request.
-	_, err = s.rdb.ExpireNX(ctx, rediskey, time.Minute).Result()
+	_, err = s.rdb.ExpireNX(ctx, rediskey, s.cfg.Window).Result()
 	if err != nil {
 		return err
 	}

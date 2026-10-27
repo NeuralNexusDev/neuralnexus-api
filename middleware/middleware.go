@@ -44,8 +44,6 @@ const (
 	CFConnectingIPHeader = "CF-Connecting-IP"
 	XSignatureEd25519    = "X-Signature-Ed25519"
 	XSignatureTimestamp  = "X-Signature-Timestamp"
-
-	RetryAfter = 60
 )
 
 // CreateStack - Create a stack of middlewares
@@ -154,7 +152,7 @@ func SessionMiddleware(service session.Service) Middleware {
 }
 
 // RateLimitMiddleware - Rate limit requests
-func RateLimitMiddleware(service ratelimit.Service, prefix string, sessionLimit int, ipLimit int) Middleware {
+func RateLimitMiddleware(cfg config.RateLimit, service ratelimit.Service, prefix string, sessionLimit int, ipLimit int) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			s, ok := r.Context().Value(reqctx.SessionKey).(*session.Session)
@@ -172,7 +170,7 @@ func RateLimitMiddleware(service ratelimit.Service, prefix string, sessionLimit 
 					return
 				}
 				if limit > sessionLimit {
-					responses.TooManyRequests(w, r, RetryAfter, msgRateLimited)
+					responses.TooManyRequests(w, r, cfg.RetryAfter, msgRateLimited)
 					return
 				}
 			} else {
@@ -193,7 +191,7 @@ func RateLimitMiddleware(service ratelimit.Service, prefix string, sessionLimit 
 					return
 				}
 				if limit > ipLimit {
-					responses.TooManyRequests(w, r, RetryAfter, msgRateLimited)
+					responses.TooManyRequests(w, r, cfg.RetryAfter, msgRateLimited)
 					return
 				}
 			}
