@@ -8,6 +8,8 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
+type rlMarkerKey struct{}
+
 type rlFakeRateLimitStore struct {
 	getVal    int
 	getErr    error
@@ -15,6 +17,9 @@ type rlFakeRateLimitStore struct {
 	setCalls  int
 	incrErr   error
 	incrCalls int
+
+	incrCtxErr error
+	incrMarker any
 }
 
 func (f *rlFakeRateLimitStore) GetRateLimit(_ context.Context, _ string) (int, error) {
@@ -24,8 +29,10 @@ func (f *rlFakeRateLimitStore) SetRateLimit(_ context.Context, _ string, _ int) 
 	f.setCalls++
 	return f.setErr
 }
-func (f *rlFakeRateLimitStore) IncrementRateLimit(_ context.Context, _ string) error {
+func (f *rlFakeRateLimitStore) IncrementRateLimit(ctx context.Context, _ string) error {
 	f.incrCalls++
+	f.incrCtxErr = ctx.Err()
+	f.incrMarker = ctx.Value(rlMarkerKey{})
 	return f.incrErr
 }
 
@@ -98,6 +105,24 @@ func TestRL06to07IncrRateLimit(t *testing.T) {
 		err := svc.IncrRateLimit(context.Background(), "k")
 		if !errors.Is(err, wantErr) {
 			t.Errorf("IncrRateLimit() err = %v, want %v", err, wantErr)
+		}
+	})
+}
+
+func TestRL09IncrRateLimitIgnoresCancelledContext(t *testing.T) {
+	t.Run("RL-09_IncrementRateLimitRunsOnAnUncancelledContext", func(t *testing.T) {
+		rl := &rlFakeRateLimitStore{}
+		ctx, cancel := context.WithCancel(context.WithValue(context.Background(), rlMarkerKey{}, "m1"))
+		cancel()
+
+		if err := NewService(rl).IncrRateLimit(ctx, "k"); err != nil {
+			t.Fatalf("IncrRateLimit() = %v, want nil", err)
+		}
+		if rl.incrCtxErr != nil {
+			t.Errorf("IncrementRateLimit context Err() = %v, want nil", rl.incrCtxErr)
+		}
+		if rl.incrMarker != "m1" {
+			t.Errorf("IncrementRateLimit context marker = %v, want %q", rl.incrMarker, "m1")
 		}
 	})
 }

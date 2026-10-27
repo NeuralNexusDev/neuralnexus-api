@@ -25,6 +25,7 @@
 | AC-20 | NewSession (service) | Error Path | the role store fails | role store returns `testutil.ErrBoom` | Returns a nil session and an error matching the store error, so no session is issued with missing permissions | P1 |   |
 | AC-21 | NewSession (service) | Edge Case | the account's role grants nothing | role store returns no permissions | `Permissions` is empty and non-nil | P1 |   |
 | AC-22 | NewSession (service) | Error Path | the snowflake generator fails | the test binary re-executes itself with `SNOWFLAKE_NODE_ID` above 31 | Returns a nil session and an error | P2 | Re-exec because the snowflake settings are read when the package loads |
+| AC-24 | AddAccount | Edge Case | the call context is cancelled before the write | fake store records `ctx.Err()` and a marker value at `AddAccountToDB` | The call succeeds, and `AddAccountToDB` sees a context that is not done and still carries the marker, so the account insert is not cancelled with the client | P1 |  |
 
 ## types.go
 

@@ -26,6 +26,8 @@
 | SE-29 | ReadJWT | Error Path | Session lookup fails (e.g. session was deleted/revoked) even though the JWT is validly signed and unexpired | `store.GetSession` returns an error | Returns nil, an error wrapping `ErrNotFound` | P0 |  |
 | SE-30 | ReadJWT | Error Path | Session found but its `UserID` doesn't match the token's `Subject` claim | | Returns nil, `ErrSessionSubjectMismatch` | P0 |  |
 | SE-31 | ReadJWT | Error Path | `UpdateSession` (LastUsedAt bump) fails after a valid lookup | `UpdateSessionInDB` returns `testutil.ErrDBDown` | Returns nil session and an error matching `testutil.ErrDBDown` | P2 |  |
+| SE-38 | AddSession | Edge Case | the call context is cancelled before the writes | fake store records `ctx.Err()` and a marker value at each call | The call succeeds, and `AddSessionToDB` and `AddSessionToCache` each see a context that is not done and still carries the marker, so the session is stored in both places | P1 |  |
+| SE-39 | UpdateSession | Edge Case | the call context is cancelled before the writes | fake store records `ctx.Err()` and a marker value at each call | The call succeeds, and `UpdateSessionInDB` and `AddSessionToCache` each see a context that is not done and still carries the marker, so the update lands in both places | P1 |  |
 
 ## types.go
 
