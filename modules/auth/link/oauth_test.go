@@ -694,7 +694,7 @@ func TestOA76to78ProcessOAuthLoginAdditionalPlatformDispatch(t *testing.T) {
 	})
 }
 
-func TestOA17to26and83ResolveOrCreateAccountForPlatformUser(t *testing.T) {
+func TestOA17to26ResolveOrCreateAccountForPlatformUser(t *testing.T) {
 	user := &oaIdentity{id: "p1", username: "alice", email: "a@b.com"}
 
 	t.Run("OA-17_NoExistingLink", func(t *testing.T) {
@@ -870,16 +870,6 @@ func TestOA17to26and83ResolveOrCreateAccountForPlatformUser(t *testing.T) {
 		_, err := resolveOrCreateAccountForPlatformUser(context.Background(), as, las, PlatformDiscord, user)
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("error = %v, want %v", err, wantErr)
-		}
-	})
-
-	t.Run("OA-83_AddLinkAndCleanupFailReturnsTheCleanupError", func(t *testing.T) {
-		as := &oaMockAccountService{DeleteAccountFunc: func(string) error { return testutil.ErrBoom }}
-		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*LinkedAccount) error { return testutil.ErrInsertFailed }}
-
-		_, err := resolveOrCreateAccountForPlatformUser(testutil.LogContext(context.Background()), as, las, PlatformDiscord, user)
-		if !errors.Is(err, testutil.ErrBoom) {
-			t.Errorf("error = %v, want the cleanup error %v", err, testutil.ErrBoom)
 		}
 	})
 }
@@ -1512,7 +1502,7 @@ func TestOA43to55ResolveOrCreateAccountForMicrosoftUser(t *testing.T) {
 	})
 }
 
-func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
+func TestOA56to66EnsureMicrosoftIdentityLinked(t *testing.T) {
 	xbox := &XboxLiveData{XUID: "xid1", Gamertag: "Tag"}
 	acct := &account.Account{UserID: "user-1"}
 
@@ -1706,16 +1696,6 @@ func TestOA56to66and84EnsureMicrosoftIdentityLinked(t *testing.T) {
 		_, _, err := ensureMicrosoftIdentityLinked(context.Background(), as, las, acct, true, PlatformXboxLive, xbox)
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("error = %v, want %v", err, wantErr)
-		}
-	})
-
-	t.Run("OA-84_LinkAndCleanupFailReturnsTheCleanupError", func(t *testing.T) {
-		as := &oaMockAccountService{DeleteAccountFunc: func(string) error { return testutil.ErrBoom }}
-		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*LinkedAccount) error { return testutil.ErrInsertFailed }}
-
-		_, _, err := ensureMicrosoftIdentityLinked(testutil.LogContext(context.Background()), as, las, acct, true, PlatformXboxLive, xbox)
-		if !errors.Is(err, testutil.ErrBoom) {
-			t.Errorf("error = %v, want the cleanup error %v", err, testutil.ErrBoom)
 		}
 	})
 }

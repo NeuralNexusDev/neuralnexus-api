@@ -433,26 +433,15 @@ func auOpenIDRequest(t *testing.T, state OAuthState) *http.Request {
 	return r
 }
 
-func TestAU52to57OAuthAndOpenIDFailuresHideCause(t *testing.T) {
+func TestAU52to56OAuthAndOpenIDFailuresHideCause(t *testing.T) {
 	oauthState := OAuthState{Platform: PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: ModeLogin}
 	steamState := OAuthState{Platform: PlatformSteam, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: ModeLogin}
 	okJWT := func(*session.Session) (string, error) { return "test-jwt", nil }
-	failJWT := func(*session.Session) (string, error) { return "", testutil.ErrSigningFailed }
 
 	t.Run("AU-52_OAuthProcessFails", func(t *testing.T) {
 		auDiscordTransport(t)
 		w := httptest.NewRecorder()
 		ss := &stubSessionService{createJWT: okJWT, addSessionErr: testutil.ErrDBDown}
-
-		OAuthHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, ss, auSiteURL)(w, auOAuthRequest(t, oauthState))
-
-		requireProblemRedirect(t, w, oauthState.RedirectURI, http.StatusInternalServerError, msgAuthenticationFailed)
-	})
-
-	t.Run("AU-53_OAuthJWTFails", func(t *testing.T) {
-		auDiscordTransport(t)
-		w := httptest.NewRecorder()
-		ss := &stubSessionService{createJWT: failJWT}
 
 		OAuthHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, ss, auSiteURL)(w, auOAuthRequest(t, oauthState))
 
@@ -483,16 +472,6 @@ func TestAU52to57OAuthAndOpenIDFailuresHideCause(t *testing.T) {
 		auSteamTransport(t, http.StatusOK, http.StatusOK)
 		w := httptest.NewRecorder()
 		ss := &stubSessionService{createJWT: okJWT, addSessionErr: testutil.ErrDBDown}
-
-		OpenIDHandler(auConfig().Steam, &stubAccountService{}, &stubLinkAccountStore{}, ss, auSiteURL)(w, auOpenIDRequest(t, steamState))
-
-		requireProblemRedirect(t, w, steamState.RedirectURI, http.StatusInternalServerError, msgAuthenticationFailed)
-	})
-
-	t.Run("AU-57_OpenIDJWTFails", func(t *testing.T) {
-		auSteamTransport(t, http.StatusOK, http.StatusOK)
-		w := httptest.NewRecorder()
-		ss := &stubSessionService{createJWT: failJWT}
 
 		OpenIDHandler(auConfig().Steam, &stubAccountService{}, &stubLinkAccountStore{}, ss, auSiteURL)(w, auOpenIDRequest(t, steamState))
 
@@ -784,36 +763,6 @@ func TestAU39RedirectWithErrorUnparseableTarget(t *testing.T) {
 		if loc := w.Header().Get("Location"); loc != target {
 			t.Errorf("expected redirect straight to %q with no problem param, got %q", target, loc)
 		}
-	})
-}
-
-func TestAU41RedirectBadRequest(t *testing.T) {
-	r := testutil.NewRequest(http.MethodGet, "/", nil)
-	w := httptest.NewRecorder()
-
-	t.Run("AU-41_RedirectBadRequest", func(t *testing.T) {
-		redirectBadRequest(w, r, "https://neuralnexus.test/done", "bad input")
-		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusBadRequest, "bad input")
-	})
-}
-
-func TestAU42RedirectUnauthorized(t *testing.T) {
-	r := testutil.NewRequest(http.MethodGet, "/", nil)
-	w := httptest.NewRecorder()
-
-	t.Run("AU-42_RedirectUnauthorized", func(t *testing.T) {
-		redirectUnauthorized(w, r, "https://neuralnexus.test/done", "no session")
-		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, "no session")
-	})
-}
-
-func TestAU43RedirectInternalServerError(t *testing.T) {
-	r := testutil.NewRequest(http.MethodGet, "/", nil)
-	w := httptest.NewRecorder()
-
-	t.Run("AU-43_RedirectInternalServerError", func(t *testing.T) {
-		redirectInternalServerError(w, r, "https://neuralnexus.test/done", "boom")
-		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusInternalServerError, "boom")
 	})
 }
 

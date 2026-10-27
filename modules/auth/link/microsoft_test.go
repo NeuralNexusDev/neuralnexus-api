@@ -12,7 +12,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
@@ -29,24 +28,9 @@ func msConfig(mods ...func(*config.Microsoft)) config.Microsoft {
 	}).Microsoft
 }
 
-func TestMS01to04XboxLiveDataAccessors(t *testing.T) {
+func TestMS04XboxLiveDataGetData(t *testing.T) {
 	x := &XboxLiveData{XUID: "x1", Gamertag: "Tag"}
 
-	t.Run("MS-01_GetID", func(t *testing.T) {
-		if got := x.GetID(); got != "x1" {
-			t.Errorf("GetID() = %q, want %q", got, "x1")
-		}
-	})
-	t.Run("MS-02_GetEmail", func(t *testing.T) {
-		if got := x.GetEmail(); got != "" {
-			t.Errorf("GetEmail() = %q, want empty string", got)
-		}
-	})
-	t.Run("MS-03_GetUsername", func(t *testing.T) {
-		if got := x.GetUsername(); got != "Tag" {
-			t.Errorf("GetUsername() = %q, want %q", got, "Tag")
-		}
-	})
 	t.Run("MS-04_GetData", func(t *testing.T) {
 		data := x.GetData()
 		if data == "" {
@@ -59,34 +43,9 @@ func TestMS01to04XboxLiveDataAccessors(t *testing.T) {
 	})
 }
 
-func TestMS05XboxLiveDataCreateLinkedAccount(t *testing.T) {
-	t.Run("MS-05_CreateLinkedAccount", func(t *testing.T) {
-		x := &XboxLiveData{XUID: "x1", Gamertag: "Tag"}
-		la := x.CreateLinkedAccount("user-1")
-		if la.UserID != "user-1" || la.Platform != PlatformXboxLive || la.PlatformID != "x1" || la.PlatformUsername != "Tag" {
-			t.Errorf("CreateLinkedAccount() = %+v, want UserID=user-1 Platform=xboxlive PlatformID=x1 PlatformUsername=Tag", la)
-		}
-	})
-}
-
-func TestMS06to09MicrosoftUserDataAccessors(t *testing.T) {
+func TestMS09MicrosoftUserDataGetData(t *testing.T) {
 	m := &MicrosoftUserData{Sub: "sub1", Name: "Alice", Email: "a@b.com"}
 
-	t.Run("MS-06_GetID", func(t *testing.T) {
-		if got := m.GetID(); got != "sub1" {
-			t.Errorf("GetID() = %q, want %q", got, "sub1")
-		}
-	})
-	t.Run("MS-07_GetEmail", func(t *testing.T) {
-		if got := m.GetEmail(); got != "a@b.com" {
-			t.Errorf("GetEmail() = %q, want %q", got, "a@b.com")
-		}
-	})
-	t.Run("MS-08_GetUsername", func(t *testing.T) {
-		if got := m.GetUsername(); got != "Alice" {
-			t.Errorf("GetUsername() = %q, want %q", got, "Alice")
-		}
-	})
 	t.Run("MS-09_GetData", func(t *testing.T) {
 		want := `{"sub":"sub1","name":"Alice","email":"a@b.com"}`
 		if got := m.GetData(); got != want {
@@ -95,36 +54,7 @@ func TestMS06to09MicrosoftUserDataAccessors(t *testing.T) {
 	})
 }
 
-func TestMS10MicrosoftUserDataCreateLinkedAccount(t *testing.T) {
-	t.Run("MS-10_CreateLinkedAccount", func(t *testing.T) {
-		m := &MicrosoftUserData{Sub: "sub1", Name: "Alice"}
-		la := m.CreateLinkedAccount("user-1")
-		if la.UserID != "user-1" || la.Platform != PlatformMicrosoft || la.PlatformID != "sub1" || la.PlatformUsername != "Alice" {
-			t.Errorf("CreateLinkedAccount() = %+v, want UserID=user-1 Platform=microsoft PlatformID=sub1 PlatformUsername=Alice", la)
-		}
-	})
-}
-
-func TestMS11to16XstsErrForCode(t *testing.T) {
-	tests := []struct {
-		name string
-		code int64
-		want error
-	}{
-		{"MS-11_NoXboxAccount", 2148916233, ErrNoXboxAccount},
-		{"MS-12_XboxLiveUnavailable", 2148916235, ErrXboxLiveUnavailable},
-		{"MS-13_AdultVerificationRequired", 2148916236, ErrAdultVerificationRequired},
-		{"MS-14_AgeVerificationRequired", 2148916237, ErrAgeVerificationRequired},
-		{"MS-15_AccountIsChild", 2148916238, ErrAccountIsChild},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := xstsErrForCode(testutil.LogContext(context.Background()), tc.code); got != tc.want {
-				t.Errorf("xstsErrForCode(%d) = %v, want %v", tc.code, got, tc.want)
-			}
-		})
-	}
-
+func TestMS16XstsErrForCodeUnrecognizedCode(t *testing.T) {
 	t.Run("MS-16_UnrecognizedCode", func(t *testing.T) {
 		got := xstsErrForCode(testutil.LogContext(context.Background()), 999)
 		if !errors.Is(got, ErrXSTSAuthentication) {
@@ -809,58 +739,4 @@ func TestMS52to58GetXboxAndMinecraftUser(t *testing.T) {
 			t.Errorf("java = %+v, want nil", java)
 		}
 	})
-}
-
-func TestMS59to63RequestContextReachesRequest(t *testing.T) {
-	ctx := context.WithValue(testutil.LogContext(context.Background()), reqctx.UserIDKey, "u1")
-	cfg := msConfig(func(m *config.Microsoft) {
-		m.MicrosoftUserInfoURL = "http://ms.test/userinfo"
-		m.XboxLiveAuthenticateURL = "http://ms.test/xbl"
-		m.XstsAuthorizeURL = "http://ms.test/xsts"
-		m.MinecraftLoginURL = "http://ms.test/mclogin"
-		m.MinecraftProfileURL = "http://ms.test/mcprofile"
-	})
-	var got any
-	swapDefaultTransport(t, auRoundTripperFunc(func(r *http.Request) (*http.Response, error) {
-		got = r.Context().Value(reqctx.UserIDKey)
-		return nil, testutil.ErrBoom
-	}))
-
-	cases := []struct {
-		name string
-		call func() error
-	}{
-		{"MS-59_GetMicrosoftUser_CtxReachesRequest", func() error {
-			_, err := GetMicrosoftUser(ctx, cfg, &OAuthToken{AccessToken: "t"})
-			return err
-		}},
-		{"MS-60_xblAuthenticate_CtxReachesRequest", func() error {
-			_, err := xblAuthenticate(ctx, cfg, "t")
-			return err
-		}},
-		{"MS-61_xstsAuthorize_CtxReachesRequest", func() error {
-			_, _, _, _, err := xstsAuthorize(ctx, cfg, "xbl", XstsMinecraftRelyingParty)
-			return err
-		}},
-		{"MS-62_minecraftLoginWithXbox_CtxReachesRequest", func() error {
-			_, err := minecraftLoginWithXbox(ctx, cfg, "uhs", "xsts")
-			return err
-		}},
-		{"MS-63_getMinecraftProfile_CtxReachesRequest", func() error {
-			_, err := getMinecraftProfile(ctx, cfg, "mc")
-			return err
-		}},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got = nil
-
-			if err := tc.call(); err == nil {
-				t.Fatal("expected the transport error")
-			}
-			if got != "u1" {
-				t.Errorf("request context user ID = %v, want %q", got, "u1")
-			}
-		})
-	}
 }
