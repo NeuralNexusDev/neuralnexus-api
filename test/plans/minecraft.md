@@ -142,7 +142,7 @@
 | SV-33 | GetMojangProfile | Error Path | signed=true, fetchProfileFromMojang fails | mojang error | Returns that error (`ErrPlayerNotFound`) | P2 |  |
 | SV-34 | GetMojangProfile | Happy Path | signed=false | resolveProfile succeeds | Returns profile.ToPlayer() result | P1 |  |
 | SV-35 | GetMojangProfile | Error Path | signed=false, resolveProfile fails | resolveProfile error | Returns that error | P2 |  |
-| SV-36 | GetProfile | Happy Path | resolveProfile succeeds, SKIN+CAPE present | Textures with both | Both URLs rewritten to nnTextureUrl+hash | P1 |  |
+| SV-36 | GetProfile | Happy Path | resolveProfile succeeds, SKIN+CAPE present | Textures with both | Both URLs rewritten to s3TextureUrl+"texture/"+hash | P1 |  |
 | SV-37 | GetProfile | Edge Case | resolveProfile succeeds, Textures nil | Profile.Textures == nil | Returned unmodified, no panic | P2 |  |
 | SV-38 | GetProfile | Error Path | resolveProfile fails | resolveProfile error | Returns that error | P2 |  |
 | SV-39 | GetProfile | Edge Case | Textures present, CAPE nil | only SKIN set | Only SKIN.URL rewritten | P3 |  |
@@ -178,27 +178,14 @@
 | SV-69 | GetGeyserXUID | Edge Case | Response XUID == 0 | unknown gamertag | Returns ErrPlayerNotFound | P1 |  |
 | SV-70 | GetGeyserXUID | Error Path | UpsertGeyserPlayer fails | store error | Returns that error | P2 |  |
 | SV-71 | GetGeyserXUID | Edge Case | Gamertag contains special characters | gamertag = "a b#c" | Request path is url.PathEscape'd | P2 |  |
-| SV-72 | GetGeyserSkin | Happy Path | DB skin fresh | not stale | Returned without HTTP call | P1 |  |
-| SV-73 | GetGeyserSkin | Happy Path | DB stale/missing, Geyser succeeds | hash present | Upserted and returned | P0 |  |
-| SV-74 | GetGeyserSkin | Error Path | Geyser returns 400 | status 400 | Returns ErrInvalidGeyserRequest | P1 |  |
-| SV-75 | GetGeyserSkin | Error Path | Geyser returns non-200/400 | status 500 | Returns an error wrapping `ErrGeyserAPI` | P2 |  |
-| SV-76 | GetGeyserSkin | Error Path | Geyser body is not valid JSON | malformed body | Returns decode error | P2 |  |
-| SV-77 | GetGeyserSkin | Edge Case | Response hash == "" | unconverted player | Returns ErrSkinNotFound | P1 |  |
-| SV-78 | GetGeyserSkin | Error Path | UpsertGeyserSkin fails | store error | Returns that error | P2 |  |
 | SV-79 | resolveGeyserPlayerByXUID | Happy Path | DB entry fresh | not stale | Returned without HTTP call | P1 |  |
 | SV-80 | resolveGeyserPlayerByXUID | Happy Path | DB stale/missing, Geyser succeeds | gamertag present | Upserted and returned | P1 |  |
 | SV-81 | resolveGeyserPlayerByXUID | Error Path | Geyser returns 400 | status 400 | Returns ErrInvalidGeyserRequest | P2 |  |
 | SV-82 | resolveGeyserPlayerByXUID | Error Path | Geyser returns non-200 | status 500 | Returns an error wrapping `ErrGeyserAPI` | P2 |  |
 | SV-83 | resolveGeyserPlayerByXUID | Edge Case | Response gamertag == "" | unknown xuid | Returns ErrPlayerNotFound | P1 |  |
 | SV-84 | resolveGeyserPlayerByXUID | Error Path | UpsertGeyserPlayer fails | store error | Returns that error | P2 |  |
-| SV-85 | GetGeyserProfile | Happy Path | Player and skin both resolve | both succeed | Returns combined GeyserProfile with Skin set | P1 |  |
-| SV-86 | GetGeyserProfile | Edge Case | GetGeyserSkin returns ErrSkinNotFound | no skin | Returns GeyserProfile with Skin nil, no error | P2 |  |
 | SV-87 | GetGeyserProfile | Error Path | resolveGeyserPlayerByXUID fails | error | Returns that error, which for a Geyser 500 wraps `ErrGeyserAPI` | P2 |  |
-| SV-88 | GetGeyserProfile | Error Path | GetGeyserSkin misses the store and the live Geyser fetch fails | Geyser responds 500 | Returns an error wrapping `ErrGeyserAPI` | P2 | The store's own lookup error is intentionally discarded as a cache-miss signal |
-| SV-89 | GetGeyserProfileByGamertag | Happy Path | XUID and skin both resolve | both succeed | Returns combined GeyserProfile with Skin set | P1 |  |
-| SV-90 | GetGeyserProfileByGamertag | Edge Case | GetGeyserSkin returns ErrSkinNotFound | no skin | Returns GeyserProfile with Skin nil | P2 |  |
 | SV-91 | GetGeyserProfileByGamertag | Error Path | GetGeyserXUID fails | error | Returns that error, which for a Geyser 500 wraps `ErrGeyserAPI` | P2 |  |
-| SV-92 | GetGeyserProfileByGamertag | Error Path | GetGeyserSkin misses the store and the live Geyser fetch fails | Geyser responds 500 | Returns an error wrapping `ErrGeyserAPI` | P2 |  |
 | SV-93 | GetTextureContent | Happy Path | IsTextureInS3 true | present=true | Delegates to serveFromS3 | P1 |  |
 | SV-94 | GetTextureContent | Happy Path | IsTextureInS3 false | present=false | Delegates to fetchAndArchive | P1 |  |
 | SV-95 | GetTextureContent | Error Path | IsTextureInS3 fails | store error | Returns that error | P2 |  |
@@ -216,26 +203,6 @@
 | SV-107 | fetchAndArchive | Edge Case | PutTextureInS3 fails | store error | Logged only; response still succeeds; UpsertTextureHash not called | P2 |  |
 | SV-108 | fetchAndArchive | Edge Case | PutTextureInS3 succeeds, UpsertTextureHash fails | store error | Logged only; response still succeeds | P2 |  |
 | SV-109 | fetchAndArchive | Edge Case | Missing Content-Type header | no header | Defaults to "image/png" | P3 |  |
-| SV-110 | GetGeyserTextureContent | Happy Path | IsGeyserTextureInS3 true | present=true | Delegates to serveGeyserFromS3 | P1 |  |
-| SV-111 | GetGeyserTextureContent | Happy Path | IsGeyserTextureInS3 false | present=false | Delegates to fetchAndArchiveGeyserTexture | P1 |  |
-| SV-112 | GetGeyserTextureContent | Error Path | IsGeyserTextureInS3 fails | store error | Returns that error | P2 |  |
-| SV-113 | serveGeyserFromS3 | Happy Path | CDN returns 200 | body+content-type | Returns TextureResult | P1 |  |
-| SV-114 | serveGeyserFromS3 | Error Path | CDN returns 404 | status 404 | Returns ErrTextureNotFound | P1 |  |
-| SV-115 | serveGeyserFromS3 | Error Path | CDN returns other non-200 | status 500 | Returns an error wrapping `ErrBadStatusS3` | P2 |  |
-| SV-116 | serveGeyserFromS3 | Error Path | http.Client.Get fails | transport error | Returns that error | P2 |  |
-| SV-117 | serveGeyserFromS3 | Edge Case | Missing Content-Type header | no header | Defaults to "image/png" | P3 |  |
-| SV-118 | fetchAndArchiveGeyserTexture | Happy Path | Skin found with valid SkinURL, HTTP 200 | full success path | Archived and returned with correct bytes | P0 |  |
-| SV-119 | fetchAndArchiveGeyserTexture | Error Path | GetGeyserSkinByHash fails | store error | Returns that error | P2 |  |
-| SV-120 | fetchAndArchiveGeyserTexture | Edge Case | Skin is nil | hash unknown | Returns ErrTextureNotFound | P1 |  |
-| SV-121 | fetchAndArchiveGeyserTexture | Edge Case | skin.SkinURL() == "" | undecodable Value | Returns ErrTextureNotFound | P2 |  |
-| SV-122 | fetchAndArchiveGeyserTexture | Error Path | http.Client.Get fails | transport error | Returns that error | P2 |  |
-| SV-123 | fetchAndArchiveGeyserTexture | Error Path | Skin host returns 404 | status 404 | Returns ErrTextureNotFound | P2 |  |
-| SV-124 | fetchAndArchiveGeyserTexture | Error Path | Skin host returns other non-200 | status 500 | Returns an error wrapping `ErrBadStatusRemote` | P2 |  |
-| SV-125 | fetchAndArchiveGeyserTexture | Error Path | Response body read fails | erroring body | Returns that error | P2 |  |
-| SV-126 | fetchAndArchiveGeyserTexture | Edge Case | PutGeyserTextureInS3 fails | store error | Logged only; response still succeeds | P2 |  |
-| SV-127 | fetchAndArchiveGeyserTexture | Edge Case | Missing Content-Type header | no header | Defaults to "image/png" | P3 |  |
-| SV-128 | GetGeyserProfile | Error Path | Skin lookup answers 400 after the player resolved | player by xuid fresh in the DB; fake Geyser skin endpoint answers 400 | Error wraps `ErrGeyserAPI` and does not satisfy `ErrInvalidGeyserRequest` | P1 |  |
-| SV-129 | GetGeyserProfileByGamertag | Error Path | Skin lookup answers 400 after the gamertag resolved | player by gamertag fresh in the DB; fake Geyser skin endpoint answers 400 | Error wraps `ErrGeyserAPI` and does not satisfy `ErrInvalidGeyserRequest` | P1 |  |
 | SV-130 | GetGeyserProfile | Error Path | Player lookup by xuid answers 400 | empty DB; fake Geyser endpoint answers 400 | Error is `ErrInvalidGeyserRequest` | P2 |  |
 | SV-131 | GetGeyserProfileByGamertag | Error Path | Gamertag lookup answers 400 | empty DB; fake Geyser endpoint answers 400 | Error is `ErrInvalidGeyserRequest` | P2 |  |
 | SV-132 | resolveProfile | Edge Case | DB lookup returns ErrPlayerNotFound | profile store reports not found; fake Mojang succeeds | No DB failure line is logged; falls through to Mojang fetch | P2 |  |
