@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
+	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -91,13 +92,9 @@ func mcFakeS3(t *testing.T, handler http.HandlerFunc) *s3.Client {
 
 func mcLiveDB(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	dsn := os.Getenv("TEST_POSTGRES_URL")
-	if dsn == "" {
-		t.Skip("TEST_POSTGRES_URL not set; skipping live-Postgres test")
-	}
-	pool, err := pgxpool.New(context.Background(), dsn)
+	pool, err := pgxpool.New(context.Background(), testutil.PostgresURL(t, "archive"))
 	if err != nil {
-		t.Fatalf("failed to connect to TEST_POSTGRES_URL: %v", err)
+		t.Fatalf("failed to connect to the archive database: %v", err)
 	}
 	t.Cleanup(pool.Close)
 	return pool
@@ -577,7 +574,7 @@ func TestST29to32_GetPlayerFromCache(t *testing.T) {
 	t.Run("ST-32_Live_MalformedJSON", func(t *testing.T) {
 		s := mcLiveStoreRedis(t)
 		key := "malformed-" + mcUniqueHash("k")
-		if err := s.rdb.Set(context.Background(), CachePlayer+key, "not json", time.Minute).Err(); err != nil {
+		if err := s.cache.rdb.Set(context.Background(), CachePlayer+key, "not json", time.Minute).Err(); err != nil {
 			t.Fatalf("seed Set() error = %v", err)
 		}
 		_, err := s.GetPlayerFromCache(mcCtx, key)
