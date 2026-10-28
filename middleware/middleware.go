@@ -32,9 +32,9 @@ const (
 	msgRateLimited      = "You have been rate limited. Please try again later."
 	msgInvalidSignature = "Invalid signature"
 	msgInternalError    = "An internal server error occurred."
-)
 
-const maxSignedBodyBytes = 1 << 20
+	maxSignedBodyBytes = 1 << 20
+)
 
 // Middleware - Middleware type
 type Middleware func(http.Handler) http.Handler
