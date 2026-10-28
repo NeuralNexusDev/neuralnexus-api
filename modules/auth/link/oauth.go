@@ -131,7 +131,14 @@ func ProcessOAuthLogin(ctx context.Context, cfg *config.Config, as account.Servi
 			xbox, java, xboxErr = GetXboxAndMinecraftUser(ctx, cfg.Microsoft, token)
 		}
 		if xboxErr != nil {
-			return nil, xboxErr
+			if xbox == nil {
+				return nil, xboxErr
+			}
+			if _, lookupErr := las.GetLinkedAccountByPlatformID(ctx, PlatformXboxLive, xbox.GetID()); lookupErr != nil {
+				return nil, xboxErr
+			}
+			reqctx.Log(ctx, "Minecraft: Java Edition lookup failed, continuing with the linked Xbox Live identity:\n\t", xboxErr.Error())
+			java = nil
 		}
 		a, err = resolveOrCreateAccountForMicrosoftUser(ctx, as, las, xbox, java)
 		if err != nil {
@@ -478,7 +485,12 @@ var ErrPlatformAlreadyLinkedToDifferentAccount = errors.New("this platform accou
 
 // linkPlatformUserToSession links the given platform identity to userID. If
 // it's already linked to a different account, that's returned as an error;
-// if it's already linked to this same account, linking is a no-op.
+// if it's already linked to this same account, linking is a no-op. When the
+// insert loses a race (ErrAlreadyLinked) the owner is re-read: the same
+// account returns nil, another account returns
+// ErrPlatformAlreadyLinkedToDifferentAccount, and a failed re-read returns
+// ErrLinkAccountFailed. ErrUserAlreadyLinkedToPlatform, meaning userID
+// already has another account on the platform, is returned unchanged.
 func linkPlatformUserToSession(ctx context.Context, las Store, userID string, platform Platform, user PlatformData) error {
 	la, err := las.GetLinkedAccountByPlatformID(ctx, platform, user.GetID())
 	switch err {
@@ -495,8 +507,23 @@ func linkPlatformUserToSession(ctx context.Context, las Store, userID string, pl
 	// Link account
 	la = NewLinkedAccount(userID, platform, user.GetUsername(), user.GetID(), user)
 	if err := las.AddLinkedAccountToDB(context.WithoutCancel(ctx), la); err != nil {
-		reqctx.Log(ctx, ErrLinkAccountFailed.Error(), err.Error())
-		return ErrLinkAccountFailed
+		switch err {
+		case ErrUserAlreadyLinkedToPlatform:
+			return err
+		case ErrAlreadyLinked:
+			owner, getErr := las.GetLinkedAccountByPlatformID(ctx, platform, user.GetID())
+			if getErr != nil {
+				reqctx.Log(ctx, ErrLinkAccountFailed.Error(), getErr.Error())
+				return ErrLinkAccountFailed
+			}
+			if owner.UserID == userID {
+				return nil
+			}
+			return ErrPlatformAlreadyLinkedToDifferentAccount
+		default:
+			reqctx.Log(ctx, ErrLinkAccountFailed.Error(), err.Error())
+			return ErrLinkAccountFailed
+		}
 	}
 
 	return nil
