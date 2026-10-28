@@ -4,13 +4,15 @@ import (
 	"encoding/xml"
 	"image"
 	"image/png"
+	"io/fs"
 	"net/http"
 	"net/netip"
-	"path/filepath"
+	"path"
 	"strconv"
 	"strings"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
+	"github.com/NeuralNexusDev/neuralnexus-api/public"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 )
 
@@ -38,7 +40,9 @@ const (
 	legacyIconFile  = "legacy.png"
 )
 
-var iconDir = filepath.Join("public", "mcstatus", "icons")
+const iconPath = "mcstatus/icons"
+
+var iconFS fs.FS = public.FS
 
 type offlineProblem struct {
 	XMLName xml.Name `json:"-" xml:"Problem"`
@@ -215,7 +219,7 @@ func writeIcon(w http.ResponseWriter, img image.Image) {
 }
 
 func writeStockIcon(w http.ResponseWriter, r *http.Request, name string) {
-	img, err := LoadImgFromFile(filepath.Join(iconDir, name))
+	img, err := LoadImgFromFS(iconFS, path.Join(iconPath, name))
 	if err != nil {
 		reqctx.Log(r.Context(), "[Error]: Unable to load stock icon:\n\t", err.Error())
 		responses.InternalServerError(w, r, msgIconUnavailable)

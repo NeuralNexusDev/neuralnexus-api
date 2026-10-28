@@ -107,39 +107,14 @@ func stLiveSessionStore(t *testing.T) Store {
 		t.Skip("TEST_POSTGRES_URL must be set to run these store tests")
 	}
 
-	db, err := pgxpool.New(testutil.LogContext(context.Background()), pgURL)
+	pool, err := pgxpool.New(testutil.LogContext(context.Background()), pgURL)
 	if err != nil {
 		t.Fatalf("failed to connect to postgres: %v", err)
 	}
 
-	for _, ddl := range []string{
-		`CREATE TABLE IF NOT EXISTS accounts (
-			user_id BIGINT PRIMARY KEY NOT NULL,
-			username TEXT UNIQUE,
-			email TEXT UNIQUE,
-			hashed_secret BYTEA,
-			salt BYTEA,
-			role_ids BIGINT[] NOT NULL DEFAULT '{}',
-			updated_at timestamp with time zone default current_timestamp
-		)`,
-		`CREATE TABLE IF NOT EXISTS sessions (
-			session_id BIGINT PRIMARY KEY NOT NULL,
-			user_id BIGINT NOT NULL,
-			permissions TEXT[] NOT NULL,
-			iat BIGINT NOT NULL,
-			lua BIGINT NOT NULL,
-			exp BIGINT NOT NULL,
-			FOREIGN KEY (user_id) REFERENCES accounts(user_id)
-		)`,
-	} {
-		if _, err := db.Exec(testutil.LogContext(context.Background()), ddl); err != nil {
-			db.Close()
-			t.Fatalf("failed to create test schema: %v", err)
-		}
-	}
-	t.Cleanup(db.Close)
+	t.Cleanup(pool.Close)
 
-	return NewStore(db, nil)
+	return NewStore(pool, nil)
 }
 
 func TestST76_GetSessionFromDBNotFound(t *testing.T) {
