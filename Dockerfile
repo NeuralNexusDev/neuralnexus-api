@@ -25,7 +25,6 @@ FROM alpine:edge AS release-stage
 
 WORKDIR /app
 
-COPY ./public ./public
 COPY --from=build /app/apiserver .
 
 CMD ["/app/apiserver"]

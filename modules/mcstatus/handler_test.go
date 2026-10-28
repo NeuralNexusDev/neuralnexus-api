@@ -11,12 +11,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
-	"path/filepath"
+	"path"
 	"strconv"
 	"strings"
 	"testing"
+	"testing/fstest"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/public"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 	"github.com/dreamscached/minequery/v2"
@@ -94,9 +95,9 @@ var (
 	hdLegacyIconColor  = color.RGBA{G: 255, A: 255}
 )
 
-func hdUseIconDir(t *testing.T, withIcons bool) {
+func hdUseIcons(t *testing.T, withIcons bool) {
 	t.Helper()
-	dir := t.TempDir()
+	icons := fstest.MapFS{}
 	if withIcons {
 		for name, c := range map[string]color.RGBA{bedrockIconFile: hdBedrockIconColor, defaultIconFile: hdDefaultIconColor, legacyIconFile: hdLegacyIconColor} {
 			img := image.NewRGBA(image.Rect(0, 0, 1, 1))
@@ -105,14 +106,12 @@ func hdUseIconDir(t *testing.T, withIcons bool) {
 			if err := png.Encode(&buf, img); err != nil {
 				t.Fatalf("encode %s: %v", name, err)
 			}
-			if err := os.WriteFile(filepath.Join(dir, name), buf.Bytes(), 0o644); err != nil {
-				t.Fatalf("write %s: %v", name, err)
-			}
+			icons[path.Join(iconPath, name)] = &fstest.MapFile{Data: buf.Bytes()}
 		}
 	}
-	prev := iconDir
-	iconDir = dir
-	t.Cleanup(func() { iconDir = prev })
+	prev := iconFS
+	iconFS = icons
+	t.Cleanup(func() { iconFS = prev })
 }
 
 func hdDecodePixel(t *testing.T, body []byte) color.RGBA {
@@ -689,7 +688,7 @@ func TestIconHandler(t *testing.T) {
 	})
 
 	t.Run("CSH-09_LookupFailureServesDefaultIcon", func(t *testing.T) {
-		hdUseIconDir(t, true)
+		hdUseIcons(t, true)
 		mock := &hdMockService{javaErr: ErrJavaStatus}
 		req := hdRequest(t, "example.com:25565", "")
 		w := httptest.NewRecorder()
@@ -746,7 +745,7 @@ func TestIconHandler(t *testing.T) {
 	})
 
 	t.Run("CSH-11_BedrockServesBedrockIcon", func(t *testing.T) {
-		hdUseIconDir(t, true)
+		hdUseIcons(t, true)
 		mock := &hdMockService{javaErr: ErrJavaStatus}
 		req := hdRequest(t, "example.com:19132", "bedrock=true")
 		w := httptest.NewRecorder()
@@ -784,7 +783,7 @@ func TestIconHandler(t *testing.T) {
 	})
 
 	t.Run("CSH-31_NoIconServesDefaultIcon", func(t *testing.T) {
-		hdUseIconDir(t, true)
+		hdUseIcons(t, true)
 		mock := &hdMockService{javaStatus: hdValidStatus(nil)}
 		req := hdRequest(t, "example.com:25565", "")
 		w := httptest.NewRecorder()
@@ -800,7 +799,7 @@ func TestIconHandler(t *testing.T) {
 	})
 
 	t.Run("CSH-34_LegacyNoIconServesLegacyIcon", func(t *testing.T) {
-		hdUseIconDir(t, true)
+		hdUseIcons(t, true)
 		mock := &hdMockService{javaStatus: GetPing16Status(&minequery.Status16{})}
 		req := hdRequest(t, "example.com:25565", "")
 		w := httptest.NewRecorder()
@@ -816,7 +815,7 @@ func TestIconHandler(t *testing.T) {
 	})
 
 	t.Run("CSH-32_MissingDefaultIconReturns500", func(t *testing.T) {
-		hdUseIconDir(t, false)
+		hdUseIcons(t, false)
 		mock := &hdMockService{javaStatus: hdValidStatus(nil)}
 		req := hdRequest(t, "example.com:25565", "")
 		w := httptest.NewRecorder()
@@ -832,7 +831,7 @@ func TestIconHandler(t *testing.T) {
 	})
 
 	t.Run("CSH-33_MissingBedrockIconReturns500", func(t *testing.T) {
-		hdUseIconDir(t, false)
+		hdUseIcons(t, false)
 		mock := &hdMockService{}
 		req := hdRequest(t, "example.com:19132", "bedrock=true")
 		w := httptest.NewRecorder()
@@ -888,6 +887,18 @@ func TestIconHandler(t *testing.T) {
 
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400, got %d", w.Code)
+		}
+	})
+
+	t.Run("CSH-56_EmbeddedStockIconsDecode", func(t *testing.T) {
+		for _, name := range []string{bedrockIconFile, defaultIconFile, legacyIconFile} {
+			img, err := LoadImgFromFS(public.FS, path.Join(iconPath, name))
+			if err != nil {
+				t.Fatalf("%s: expected nil error, got %v", name, err)
+			}
+			if img == nil {
+				t.Fatalf("%s: expected a decoded image", name)
+			}
 		}
 	})
 }

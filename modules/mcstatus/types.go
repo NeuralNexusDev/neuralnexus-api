@@ -5,7 +5,7 @@ import (
 	"encoding/base64"
 	"image"
 	"image/png"
-	"os"
+	"io/fs"
 	"regexp"
 	"strings"
 
@@ -73,10 +73,10 @@ func ImgToBase64(i image.Image) string {
 	return "data:image/png;base64," + encodedString
 }
 
-// LoadImgFromFile - Load image from file
-func LoadImgFromFile(path string) (image.Image, error) {
+// LoadImgFromFS - Load an image from a file system
+func LoadImgFromFS(fsys fs.FS, name string) (image.Image, error) {
 	// Open the file
-	iconFile, err := os.Open(path)
+	iconFile, err := fsys.Open(name)
 	if err != nil {
 		return nil, err
 	}

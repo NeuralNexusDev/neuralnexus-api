@@ -12,9 +12,9 @@
 | CSH-06 | ServerStatusHandler | Edge Case | `query_port` param missing | host has an explicit port | `queryPort` forwarded equals the parsed `port` | P2 |  |
 | CSH-07 | ServerStatusHandler | Happy Path | `bedrock=true`, `query=true`, explicit `query_port` given | full query string | `isBedrock`, `queryEnabled`, `queryPort`, and `port` all forwarded to `GetServerStatus` unchanged, and `host` is forwarded without the port suffix | P1 |  |
 | CSH-08 | IconHandler | Happy Path | valid host, `bedrock` absent, `GetJavaServerStatus` succeeds with a non-nil icon | mock returns a status with `Icon` set | Response `Content-Type: image/png`, 200, body is a valid PNG decoding to the same bounds; `GetJavaServerStatus` is called once with `queryEnabled` false and `queryPort` 0 | P1 |  |
-| CSH-09 | IconHandler | Error Path | `GetJavaServerStatus` returns `ErrJavaStatus` | mock returns `ErrJavaStatus` | Response 200, `Content-Type: image/png`, body is the `defaultIconFile` image from `iconDir`, and `GetJavaServerStatus` is called exactly once | P1 |  |
+| CSH-09 | IconHandler | Error Path | `GetJavaServerStatus` returns `ErrJavaStatus` | mock returns `ErrJavaStatus` | Response 200, `Content-Type: image/png`, body is the `defaultIconFile` image from `iconFS`, and `GetJavaServerStatus` is called exactly once | P1 |  |
 | CSH-10 | IconHandler | Edge Case | host has no `:port` suffix | host = `"example.com"` | The port defaults to 25565 and the bare host is forwarded to `GetJavaServerStatus` | P2 |  |
-| CSH-11 | IconHandler | Happy Path | `bedrock=true` | any host | Response 200, `Content-Type: image/png`, body is the `bedrockIconFile` image from `iconDir`, and `GetJavaServerStatus` is never called | P1 |  |
+| CSH-11 | IconHandler | Happy Path | `bedrock=true` | any host | Response 200, `Content-Type: image/png`, body is the `bedrockIconFile` image from `iconFS`, and `GetJavaServerStatus` is never called | P1 |  |
 | CSH-12 | SimpleStatusHandler | Happy Path | `GetServerStatus` succeeds | mock success | Response 200, `Content-Type: text/plain`, body `"Online"` | P1 |  |
 | CSH-13 | SimpleStatusHandler | Error Path | `GetServerStatus` fails | mock returns `nil, err` | Response 404, body `"Offline"` | P1 |  |
 | CSH-14 | SimpleStatusHandler | Edge Case | host has no `:port` suffix, `bedrock=true` | host = `"example.com"` | Port defaults to 19132, the bare host is forwarded to `GetServerStatus` | P2 |  |
@@ -30,10 +30,10 @@
 | CSH-24 | SimpleStatusHandler | Happy Path | java host carries a `:port` suffix | host = `"mc.example.com:25570"` | `GetServerStatus` receives host `"mc.example.com"` and port 25570 | P1 |  |
 | CSH-25 | SimpleStatusHandler | Happy Path | `bedrock=true` and host carries a `:port` suffix | host = `"mc.example.com:19140"` | `GetServerStatus` receives host `"mc.example.com"` and port 19140 | P1 |  |
 | CSH-26 | SimpleStatusHandler | Edge Case | host has no `:port` suffix, `bedrock` param absent | host = `"example.com"` | Port defaults to 25565, the bare host is forwarded to `GetServerStatus` | P2 |  |
-| CSH-31 | IconHandler | Edge Case | `GetJavaServerStatus` succeeds but the status has a nil `Icon` | mock returns a status with no icon | Response 200, body is the `defaultIconFile` image from `iconDir`; the handler does not panic | P1 |  |
-| CSH-32 | IconHandler | Error Path | the status has a nil `Icon` and `defaultIconFile` is missing from `iconDir` | empty icon directory | Response is 500 via `responses.InternalServerError`, body `detail` is `msgIconUnavailable` | P2 |  |
-| CSH-33 | IconHandler | Error Path | `bedrock=true` and `bedrockIconFile` is missing from `iconDir` | empty icon directory | Response is 500 via `responses.InternalServerError`, body `detail` is `msgIconUnavailable` | P2 |  |
-| CSH-34 | IconHandler | Edge Case | the status has a nil `Icon` and `Legacy` set (from `GetPing16Status`) | mock returns a legacy status | Response 200, body is the `legacyIconFile` image from `iconDir` | P1 |  |
+| CSH-31 | IconHandler | Edge Case | `GetJavaServerStatus` succeeds but the status has a nil `Icon` | mock returns a status with no icon | Response 200, body is the `defaultIconFile` image from `iconFS`; the handler does not panic | P1 |  |
+| CSH-32 | IconHandler | Error Path | the status has a nil `Icon` and `defaultIconFile` is missing from `iconFS` | empty icon file system | Response is 500 via `responses.InternalServerError`, body `detail` is `msgIconUnavailable` | P2 |  |
+| CSH-33 | IconHandler | Error Path | `bedrock=true` and `bedrockIconFile` is missing from `iconFS` | empty icon file system | Response is 500 via `responses.InternalServerError`, body `detail` is `msgIconUnavailable` | P2 |  |
+| CSH-34 | IconHandler | Edge Case | the status has a nil `Icon` and `Legacy` set (from `GetPing16Status`) | mock returns a legacy status | Response 200, body is the `legacyIconFile` image from `iconFS` | P1 |  |
 | CSH-35 | ServerStatusHandler | Happy Path | java host is a bracketed IPv6 literal with a `:port` suffix | host = `"[2001:db8::1]:25570"` | `GetServerStatus` receives host `"2001:db8::1"` (no brackets) and port 25570 | P1 |  |
 | CSH-36 | ServerStatusHandler | Edge Case | `bedrock=true` and host is a bracketed IPv6 literal with no port | host = `"[2001:db8::1]"` | `GetServerStatus` receives host `"2001:db8::1"` and port 19132 | P1 |  |
 | CSH-37 | ServerStatusHandler | Edge Case | java host is a bare IPv6 literal | host = `"2001:db8::1"` | The whole string is forwarded as the host and the port defaults to 25565 | P1 |  |
@@ -52,6 +52,7 @@
 | CSH-52 | ServerStatusHandler | Error Path | `GetServerStatus` returns `ErrJavaStatus` and `Accept: application/xml` | host = `"example.com:25570"` | `Content-Type: application/problem+xml` and the body has a `Problem` root element with the `host` and `port` elements | P2 |  |
 | CSH-53 | ServerStatusHandler | Error Path | `GetServerStatus` returns `ErrJavaStatus` and `Accept: application/x-protobuf` | host = `"example.com:25570"` | Response is 404 with `Content-Type: application/problem+x-protobuf` | P2 |  |
 | CSH-54 | ServerStatusHandler | Error Path | `bedrock=true` and `GetServerStatus` returns `ErrBedrockStatus` | host = `"Example.COM"` | Response is 404 and the problem carries `detail` `msgBedrockStatusFailed`, `host` `"example.com"` and `port` 19132 | P1 |  |
+| CSH-56 | IconHandler | Happy Path | the three stock icon files exist in the embedded public file system and decode | `bedrockIconFile`, `defaultIconFile` and `legacyIconFile` under `iconPath` in `public.FS` | `LoadImgFromFS` returns a nil error and a non-nil image for each of the three files | P1 |  |
 
 ## service.go
 
@@ -96,9 +97,9 @@
 | CST-10 | MOTDToName | Edge Case | empty string | `""` | Returns `""` | P3 |  |
 | CST-11 | ImgToBase64 | Happy Path | valid `image.Image` | 2x2 RGBA image | Returns `"data:image/png;base64,"` + valid base64 PNG payload decoding to the same bounds | P2 |  |
 | CST-12 | ImgToBase64 | Edge Case | `nil` image | — | Returns `""` | P2 |  |
-| CST-13 | LoadImgFromFile | Happy Path | valid PNG file on disk | temp file with an encoded PNG | Returns the decoded `image.Image`, nil error | P1 |  |
-| CST-14 | LoadImgFromFile | Error Path | file does not exist | nonexistent path | Returns `nil`, a non-nil `os.Open` error | P2 |  |
-| CST-15 | LoadImgFromFile | Error Path | file exists but is not a valid image | temp file with garbage bytes | Returns `nil`, a non-nil decode error | P2 |  |
+| CST-13 | LoadImgFromFS | Happy Path | valid PNG file on disk | temp file with an encoded PNG | Returns the decoded `image.Image`, nil error | P1 |  |
+| CST-14 | LoadImgFromFS | Error Path | file does not exist | nonexistent path | Returns `nil`, a non-nil `os.Open` error | P2 |  |
+| CST-15 | LoadImgFromFS | Error Path | file exists but is not a valid image | temp file with garbage bytes | Returns `nil`, a non-nil decode error | P2 |  |
 | CST-16 | GetPing17Status | Happy Path | full `Status17` with sample players, icon, description | `Description` implements `Stringer`, `Icon` set | All fields mapped correctly; input `s.Icon` is cleared (nilled) as a side effect; `Legacy` is false | P1 |  |
 | CST-17 | GetPing17Status | Edge Case | `SamplePlayers` empty | — | `Players` is a non-nil empty slice | P3 |  |
 | CST-18 | GetPing16Status | Happy Path | full `Status16` | `MOTD` contains a real newline | All fields mapped; `Version` hardcoded `"1.6"`, `Favicon` `""`, `Icon` `nil`; `Legacy` is true | P1 |  |

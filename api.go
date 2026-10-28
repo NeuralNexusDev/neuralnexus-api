@@ -30,6 +30,7 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/switchboard"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/teapot"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/twitch"
+	"github.com/NeuralNexusDev/neuralnexus-api/public"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/cors"
@@ -246,7 +247,7 @@ func (s *APIServer) Setup() http.Handler {
 	router := ApplyRoutes(http.NewServeMux(), cfg, db, rdb, sess, accountStore, linkAccountStore, oauthTokenStore, rateLimit)
 
 	// --------------- Static Files ---------------
-	router.Handle("/", http.FileServer(http.Dir("./public")))
+	router.Handle("/", http.FileServerFS(public.FS))
 	return middlewareStack(router)
 }
 
