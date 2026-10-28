@@ -14,6 +14,7 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
+	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil/authtest"
 	"github.com/goccy/go-json"
 )
 
@@ -126,35 +127,6 @@ func (m *stMockLinkAccountStore) DeleteLinkedAccount(context.Context, string, Pl
 }
 func (m *stMockLinkAccountStore) SetLinkedAccountLoginEnabled(context.Context, string, Platform, bool) error {
 	return nil
-}
-
-type stMockSessionService struct {
-	addSessionErr error
-	added         []*session.Session
-}
-
-var _ session.Service = (*stMockSessionService)(nil)
-
-func (m *stMockSessionService) AddSession(_ context.Context, session *session.Session) error {
-	if m.addSessionErr != nil {
-		return m.addSessionErr
-	}
-	m.added = append(m.added, session)
-	return nil
-}
-func (m *stMockSessionService) GetSession(context.Context, string) (*session.Session, error) {
-	return nil, account.ErrNotFound
-}
-func (m *stMockSessionService) UpdateSession(context.Context, *session.Session) error { return nil }
-func (m *stMockSessionService) DeleteSession(context.Context, string) error           { return nil }
-func (m *stMockSessionService) SetSessionCookie(context.Context, http.ResponseWriter, *session.Session) error {
-	return nil
-}
-func (m *stMockSessionService) CreateJWT(context.Context, *session.Session) (string, error) {
-	return "", nil
-}
-func (m *stMockSessionService) ReadJWT(context.Context, string) (*session.Session, error) {
-	return nil, account.ErrNotFound
 }
 
 func stRequestWithSession(session *session.Session) *http.Request {
@@ -390,7 +362,7 @@ func TestST23to25ProcessSteamLogin(t *testing.T) {
 	t.Run("LKS-23_CreatesAccount", func(t *testing.T) {
 		as := newSTMockAccountService()
 		las := newSTMockLinkAccountStore()
-		ss := &stMockSessionService{}
+		ss := &authtest.FakeSessionService{}
 
 		session, err := ProcessSteamLogin(context.Background(), as, las, ss, user)
 		if err != nil {
@@ -402,8 +374,8 @@ func TestST23to25ProcessSteamLogin(t *testing.T) {
 		if len(session.Permissions) != 1 || session.Permissions[0] != "stub:perm" {
 			t.Errorf("Permissions = %v, want those the account service built", session.Permissions)
 		}
-		if len(ss.added) != 1 {
-			t.Errorf("ss.AddSession called %d times, want 1", len(ss.added))
+		if len(ss.Added) != 1 {
+			t.Errorf("ss.AddSession called %d times, want 1", len(ss.Added))
 		}
 		if as.addAccountCalls != 1 {
 			t.Errorf("as.AddAccount called %d times, want 1", as.addAccountCalls)
@@ -414,7 +386,7 @@ func TestST23to25ProcessSteamLogin(t *testing.T) {
 		as := newSTMockAccountService()
 		as.addAccountErr = testutil.ErrDBDown
 		las := newSTMockLinkAccountStore()
-		ss := &stMockSessionService{}
+		ss := &authtest.FakeSessionService{}
 
 		_, err := ProcessSteamLogin(context.Background(), as, las, ss, user)
 		if err == nil {
@@ -425,7 +397,7 @@ func TestST23to25ProcessSteamLogin(t *testing.T) {
 	t.Run("LKS-25_AddSessionFails", func(t *testing.T) {
 		as := newSTMockAccountService()
 		las := newSTMockLinkAccountStore()
-		ss := &stMockSessionService{addSessionErr: testutil.ErrDBDown}
+		ss := &authtest.FakeSessionService{AddSessionErr: testutil.ErrDBDown}
 
 		_, err := ProcessSteamLogin(context.Background(), as, las, ss, user)
 		if err == nil {

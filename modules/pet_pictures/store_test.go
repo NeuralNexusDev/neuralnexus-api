@@ -3,7 +3,6 @@ package petpictures
 import (
 	"context"
 	"errors"
-	"fmt"
 	"reflect"
 	"strings"
 	"sync"
@@ -17,21 +16,6 @@ import (
 )
 
 var ppCtx = context.Background()
-
-func ppUnreachablePool(t *testing.T) *pgxpool.Pool {
-	t.Helper()
-	port := testutil.UnusedTCPPort(t)
-	cfg, err := pgxpool.ParseConfig(fmt.Sprintf("postgres://user:pass@127.0.0.1:%d/pet_pictures?sslmode=disable&connect_timeout=2", port))
-	if err != nil {
-		t.Fatalf("failed to parse pool config: %v", err)
-	}
-	pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
-	if err != nil {
-		t.Fatalf("failed to create pool: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	return pool
-}
 
 func ppLiveDatabase(t *testing.T) *pgxpool.Pool {
 	t.Helper()
@@ -81,7 +65,7 @@ func ppUniqueID(prefix string) string {
 
 func TestST02to05and26_CreatePet(t *testing.T) {
 	t.Run("PPS-04_ConnectionFailure", func(t *testing.T) {
-		s := &store{db: ppUnreachablePool(t)}
+		s := &store{db: testutil.UnreachablePool(t)}
 		if _, err := s.CreatePet(ppCtx, ppUniqueID("pet")); err == nil {
 			t.Error("CreatePet() error = nil, want a connection error")
 		}
@@ -151,7 +135,7 @@ func TestST02to05and26_CreatePet(t *testing.T) {
 
 func TestST06to09and27_GetPetAndGetPetByName(t *testing.T) {
 	t.Run("PPS-09_ConnectionFailure", func(t *testing.T) {
-		s := &store{db: ppUnreachablePool(t)}
+		s := &store{db: testutil.UnreachablePool(t)}
 		if _, err := s.GetPetByName(ppCtx, "anything"); err == nil {
 			t.Error("GetPetByName() error = nil, want a connection error")
 		}
@@ -198,7 +182,7 @@ func TestST06to09and27_GetPetAndGetPetByName(t *testing.T) {
 
 func TestST10to12_UpdatePet(t *testing.T) {
 	t.Run("PPS-12_ConnectionFailure", func(t *testing.T) {
-		s := &store{db: ppUnreachablePool(t)}
+		s := &store{db: testutil.UnreachablePool(t)}
 		if _, err := s.UpdatePet(ppCtx, &Pet{ID: 1, Name: "x"}); err == nil {
 			t.Error("UpdatePet() error = nil, want a connection error")
 		}
@@ -234,7 +218,7 @@ func TestST10to12_UpdatePet(t *testing.T) {
 
 func TestST13to16_CreatePetPicture(t *testing.T) {
 	t.Run("PPS-15_ConnectionFailure", func(t *testing.T) {
-		s := &store{db: ppUnreachablePool(t)}
+		s := &store{db: testutil.UnreachablePool(t)}
 		if _, err := s.CreatePetPicture(ppCtx, ppUniqueID("pic"), "jpg", 1, nil, nil); err == nil {
 			t.Error("CreatePetPicture() error = nil, want a connection error")
 		}
@@ -336,7 +320,7 @@ func TestST13to16_CreatePetPicture(t *testing.T) {
 
 func TestST17to20and28to29_GetPetPictureAndGetRandPetPictureByName(t *testing.T) {
 	t.Run("PPS-20_ConnectionFailure", func(t *testing.T) {
-		s := &store{db: ppUnreachablePool(t)}
+		s := &store{db: testutil.UnreachablePool(t)}
 		if _, err := s.GetPetPicture(ppCtx, "anything"); err == nil {
 			t.Error("GetPetPicture() error = nil, want a connection error")
 		}
@@ -401,7 +385,7 @@ func TestST17to20and28to29_GetPetPictureAndGetRandPetPictureByName(t *testing.T)
 
 func TestST21to22and30_UpdatePetPicture(t *testing.T) {
 	t.Run("PPS-21_ConnectionFailure", func(t *testing.T) {
-		s := &store{db: ppUnreachablePool(t)}
+		s := &store{db: testutil.UnreachablePool(t)}
 		if _, err := s.UpdatePetPicture(ppCtx, PetPicture{ID: "anything"}); err == nil {
 			t.Error("UpdatePetPicture() error = nil, want a connection error")
 		}
@@ -441,7 +425,7 @@ func TestST21to22and30_UpdatePetPicture(t *testing.T) {
 
 func TestST23to25_DeletePetPicture(t *testing.T) {
 	t.Run("PPS-24_ConnectionFailure", func(t *testing.T) {
-		s := &store{db: ppUnreachablePool(t)}
+		s := &store{db: testutil.UnreachablePool(t)}
 		if _, err := s.DeletePetPicture(ppCtx, "anything"); err == nil {
 			t.Error("DeletePetPicture() error = nil, want a connection error")
 		}

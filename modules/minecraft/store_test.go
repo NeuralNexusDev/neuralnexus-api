@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -24,54 +23,12 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-const mcMojangTextureURL = "http://textures.minecraft.net/texture/"
-
-func mcUnusedTCPPort(t *testing.T) int {
-	t.Helper()
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("failed to find an unused port: %v", err)
-	}
-	port := l.Addr().(*net.TCPAddr).Port
-	if err := l.Close(); err != nil {
-		t.Fatalf("failed to close probe listener: %v", err)
-	}
-	return port
-}
-
-func mcUnreachablePool(t *testing.T) *pgxpool.Pool {
-	t.Helper()
-	port := mcUnusedTCPPort(t)
-	cfg, err := pgxpool.ParseConfig(fmt.Sprintf("postgres://user:pass@127.0.0.1:%d/db?sslmode=disable&connect_timeout=2", port))
-	if err != nil {
-		t.Fatalf("failed to parse pool config: %v", err)
-	}
-	pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
-	if err != nil {
-		t.Fatalf("failed to create pool: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	return pool
-}
-
-func mcUnreachableRedis(t *testing.T) *redis.Client {
-	t.Helper()
-	port := mcUnusedTCPPort(t)
-	c := redis.NewClient(&redis.Options{
-		Addr:        fmt.Sprintf("127.0.0.1:%d", port),
-		DialTimeout: 2 * time.Second,
-		MaxRetries:  -1,
-	})
-	t.Cleanup(func() { _ = c.Close() })
-	return c
-}
-
 func mcStoreWithUnreachableDB(t *testing.T) *store {
-	return &store{db: mcUnreachablePool(t)}
+	return &store{db: testutil.UnreachablePool(t)}
 }
 
 func mcStoreWithUnreachableRedis(t *testing.T) *store {
-	return &store{cache: cache{rdb: mcUnreachableRedis(t)}}
+	return &store{cache: cache{rdb: testutil.UnreachableRedis(t)}}
 }
 
 func mcFakeS3(t *testing.T, handler http.HandlerFunc) *s3.Client {

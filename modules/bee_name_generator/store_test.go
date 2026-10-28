@@ -23,23 +23,8 @@ import (
 
 var bnCtx = context.Background()
 
-func bngUnreachablePool(t *testing.T) *pgxpool.Pool {
-	t.Helper()
-	port := testutil.UnusedTCPPort(t)
-	cfg, err := pgxpool.ParseConfig(fmt.Sprintf("postgres://user:pass@127.0.0.1:%d/db?sslmode=disable&connect_timeout=2", port))
-	if err != nil {
-		t.Fatalf("failed to parse pool config: %v", err)
-	}
-	pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
-	if err != nil {
-		t.Fatalf("failed to create pool: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	return pool
-}
-
 func bngStoreWithUnreachableDB(t *testing.T) *store {
-	return &store{db: bngUnreachablePool(t)}
+	return &store{db: testutil.UnreachablePool(t)}
 }
 
 func bngLiveDB(t *testing.T) *pgxpool.Pool {
