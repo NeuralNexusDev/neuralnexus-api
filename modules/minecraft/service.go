@@ -103,7 +103,7 @@ func (s *service) GetMojangPlayerByName(ctx context.Context, name string) (*Play
 	}
 
 	// Stale entry — fetch from Mojang
-	resp, err := s.get(ctx, s.cfg.LookupByName+name)
+	resp, err := s.get(ctx, s.cfg.LookupByName+url.PathEscape(name))
 	if err != nil {
 		return nil, err
 	}
@@ -612,7 +612,7 @@ func (s *service) GetTextureContent(ctx context.Context, hash string) (*TextureR
 
 // serveFromS3 fetches an already-archived texture straight from the CDN/S3
 func (s *service) serveFromS3(ctx context.Context, hash string) (*TextureResult, error) {
-	resp, err := s.get(ctx, s.s3TextureUrl+S3KeyPrefix+hash)
+	resp, err := s.get(ctx, s.s3TextureUrl+S3KeyPrefix+url.PathEscape(hash))
 	if err != nil {
 		return nil, err
 	}
@@ -647,7 +647,7 @@ func (bytesReadCloser) Close() error { return nil }
 // returns a second reader over the same bytes to serve the client — no
 // re-fetch through S3 for the request that just caused the miss.
 func (s *service) fetchAndArchive(ctx context.Context, hash string) (*TextureResult, error) {
-	resp, err := s.get(ctx, s.cfg.LookupTexture+hash)
+	resp, err := s.get(ctx, s.cfg.LookupTexture+url.PathEscape(hash))
 	if err != nil {
 		return nil, err
 	}
