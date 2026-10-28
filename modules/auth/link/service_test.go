@@ -8,6 +8,7 @@ import (
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/account"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
+	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil/authtest/accounttest"
 )
 
 type usLinkResult struct {
@@ -173,76 +174,10 @@ func (f usFakePlatformData) CreateLinkedAccount(_ string) *LinkedAccount {
 	return nil
 }
 
-type usFakeAccountStore struct {
-	addErr         error
-	addCalls       int
-	addLastAccount *account.Account
-	addCtxErr      error
-
-	getByIDAccount    *account.Account
-	getByIDErr        error
-	getByIDCalls      int
-	getByIDLastUserID string
-
-	listAccounts   []*account.Account
-	listErr        error
-	listCalls      int
-	listLastLimit  int
-	listLastOffset int
-
-	updateErr         error
-	updateCalls       int
-	updateLastAccount *account.Account
-
-	deleteErr        error
-	deleteCalls      int
-	deleteLastUserID string
-	deleteCtxErr     error
-}
-
-func (f *usFakeAccountStore) AddAccountToDB(ctx context.Context, a *account.Account) error {
-	f.addCtxErr = ctx.Err()
-	f.addCalls++
-	f.addLastAccount = a
-	return f.addErr
-}
-
-func (f *usFakeAccountStore) DeleteAccountFromDB(ctx context.Context, userID string) error {
-	f.deleteCtxErr = ctx.Err()
-	f.deleteCalls++
-	f.deleteLastUserID = userID
-	return f.deleteErr
-}
-
-func (f *usFakeAccountStore) GetAccountByID(_ context.Context, userID string) (*account.Account, error) {
-	f.getByIDCalls++
-	f.getByIDLastUserID = userID
-	return f.getByIDAccount, f.getByIDErr
-}
-
-func (f *usFakeAccountStore) GetAccountByUsername(_ context.Context, _ string) (*account.Account, error) {
-	return nil, account.ErrNotFound
-}
-
-func (f *usFakeAccountStore) GetAccountByEmail(_ context.Context, _ string) (*account.Account, error) {
-	return nil, account.ErrNotFound
-}
-
-func (f *usFakeAccountStore) ListAccounts(_ context.Context, _, _ int) ([]*account.Account, error) {
-	f.listCalls++
-	return f.listAccounts, f.listErr
-}
-
-func (f *usFakeAccountStore) UpdateAccountInDB(_ context.Context, a *account.Account) error {
-	f.updateCalls++
-	f.updateLastAccount = a
-	return f.updateErr
-}
-
 type usConcurrentStore struct {
-	mu       sync.Mutex
-	accounts map[string]*account.Account
-	links    map[string]*LinkedAccount
+	*accountMap
+	mu    sync.Mutex
+	links map[string]*LinkedAccount
 
 	barrierMu    sync.Mutex
 	barrierWG    sync.WaitGroup
@@ -251,7 +186,7 @@ type usConcurrentStore struct {
 }
 
 func newUSConcurrentStore(barrierN int) *usConcurrentStore {
-	s := &usConcurrentStore{accounts: map[string]*account.Account{}, links: map[string]*LinkedAccount{}, barrierN: barrierN}
+	s := &usConcurrentStore{accountMap: newAccountMap(), links: map[string]*LinkedAccount{}, barrierN: barrierN}
 	s.barrierWG.Add(barrierN)
 	return s
 }
@@ -260,21 +195,8 @@ func usLinkKey(platform Platform, platformID string) string {
 	return string(platform) + "|" + platformID
 }
 
-func (s *usConcurrentStore) AddAccountToDB(_ context.Context, a *account.Account) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.accounts[a.UserID] = a
-	return nil
-}
-
-func (s *usConcurrentStore) GetAccountByID(_ context.Context, userID string) (*account.Account, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	a, ok := s.accounts[userID]
-	if !ok {
-		return nil, account.ErrNotFound
-	}
-	return a, nil
+func (s *usConcurrentStore) AddAccountToDB(ctx context.Context, a *account.Account) error {
+	return s.AddAccount(ctx, a)
 }
 
 func (s *usConcurrentStore) GetAccountByUsername(_ context.Context, _ string) (*account.Account, error) {
@@ -293,11 +215,8 @@ func (s *usConcurrentStore) UpdateAccountInDB(_ context.Context, _ *account.Acco
 	return nil
 }
 
-func (s *usConcurrentStore) DeleteAccountFromDB(_ context.Context, userID string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	delete(s.accounts, userID)
-	return nil
+func (s *usConcurrentStore) DeleteAccountFromDB(ctx context.Context, userID string) error {
+	return s.DeleteAccount(ctx, userID)
 }
 
 func (s *usConcurrentStore) AddLinkedAccountToDB(_ context.Context, la *LinkedAccount) error {
@@ -362,15 +281,9 @@ func (s *usConcurrentStore) SetLinkedAccountLoginEnabled(_ context.Context, _ st
 	return nil
 }
 
-func (s *usConcurrentStore) accountCount() int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return len(s.accounts)
-}
-
 func TestUS15to23UpdateFromPlatform(t *testing.T) {
 	t.Run("LKV-15_NewIdentityCreatesAccount", func(t *testing.T) {
-		as := &usFakeAccountStore{getByIDAccount: &account.Account{UserID: "resolved"}}
+		as := &accounttest.FakeStore{GetByIDAccount: &account.Account{UserID: "resolved"}}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, account.ErrNotFound}}}
 		svc := NewService(als, as)
 
@@ -378,19 +291,19 @@ func TestUS15to23UpdateFromPlatform(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if got != as.addLastAccount.UserID {
-			t.Errorf("UpdateFromPlatform() = %v, want %v", got, as.addLastAccount.UserID)
+		if got != as.AddLastAccount.UserID {
+			t.Errorf("UpdateFromPlatform() = %v, want %v", got, as.AddLastAccount.UserID)
 		}
-		if as.addCalls != 1 || als.addCalls != 1 {
-			t.Errorf("expected exactly one AddAccountToDB and one AddLinkedAccountToDB call, got %d/%d", as.addCalls, als.addCalls)
+		if as.AddCalls != 1 || als.addCalls != 1 {
+			t.Errorf("expected exactly one AddAccountToDB and one AddLinkedAccountToDB call, got %d/%d", as.AddCalls, als.addCalls)
 		}
-		if als.addLastLinkedAccount.UserID != as.addLastAccount.UserID {
-			t.Errorf("linked account UserID %q does not match the newly created placeholder account %q", als.addLastLinkedAccount.UserID, as.addLastAccount.UserID)
+		if als.addLastLinkedAccount.UserID != as.AddLastAccount.UserID {
+			t.Errorf("linked account UserID %q does not match the newly created placeholder account %q", als.addLastLinkedAccount.UserID, as.AddLastAccount.UserID)
 		}
 	})
 	t.Run("LKV-16_ExistingIdentitySkipsCreation", func(t *testing.T) {
 		existing := &LinkedAccount{UserID: "existing-user", Platform: PlatformDiscord, PlatformID: "p1"}
-		as := &usFakeAccountStore{getByIDAccount: &account.Account{UserID: "existing-user"}}
+		as := &accounttest.FakeStore{GetByIDAccount: &account.Account{UserID: "existing-user"}}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{existing, nil}}}
 		svc := NewService(als, as)
 
@@ -398,7 +311,7 @@ func TestUS15to23UpdateFromPlatform(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if as.addCalls != 0 {
+		if as.AddCalls != 0 {
 			t.Error("expected AddAccountToDB to never be called for an already-linked identity")
 		}
 		if als.updateCalls != 1 || als.updateLastLinkedAccount.UserID != "existing-user" {
@@ -410,7 +323,7 @@ func TestUS15to23UpdateFromPlatform(t *testing.T) {
 	})
 	t.Run("LKV-17_InitialLookupUnexpectedError", func(t *testing.T) {
 		wantErr := testutil.ErrBoom
-		as := &usFakeAccountStore{}
+		as := &accounttest.FakeStore{}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, wantErr}}}
 		svc := NewService(als, as)
 
@@ -418,13 +331,13 @@ func TestUS15to23UpdateFromPlatform(t *testing.T) {
 		if !errors.Is(err, wantErr) {
 			t.Errorf("UpdateFromPlatform() err = %v, want %v", err, wantErr)
 		}
-		if as.addCalls != 0 {
+		if as.AddCalls != 0 {
 			t.Error("expected no account creation attempt on an unexpected lookup error")
 		}
 	})
 	t.Run("LKV-18_AddAccountFails", func(t *testing.T) {
 		wantErr := testutil.ErrBoom
-		as := &usFakeAccountStore{addErr: wantErr}
+		as := &accounttest.FakeStore{AddErr: wantErr}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, account.ErrNotFound}}}
 		svc := NewService(als, as)
 
@@ -438,7 +351,7 @@ func TestUS15to23UpdateFromPlatform(t *testing.T) {
 	})
 	t.Run("LKV-19_AddLinkFailsCleansUpPlaceholder", func(t *testing.T) {
 		wantErr := testutil.ErrInsertFailed
-		as := &usFakeAccountStore{}
+		as := &accounttest.FakeStore{}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, account.ErrNotFound}}, addErr: wantErr}
 		svc := NewService(als, as)
 
@@ -446,14 +359,14 @@ func TestUS15to23UpdateFromPlatform(t *testing.T) {
 		if !errors.Is(err, wantErr) {
 			t.Errorf("UpdateFromPlatform() err = %v, want %v", err, wantErr)
 		}
-		if as.deleteCalls != 1 || as.deleteLastUserID != as.addLastAccount.UserID {
-			t.Errorf("expected DeleteAccountFromDB to clean up the orphaned placeholder %q, got calls=%d last=%q", as.addLastAccount.UserID, as.deleteCalls, as.deleteLastUserID)
+		if as.DeleteCalls != 1 || as.DeleteLastUserID != as.AddLastAccount.UserID {
+			t.Errorf("expected DeleteAccountFromDB to clean up the orphaned placeholder %q, got calls=%d last=%q", as.AddLastAccount.UserID, as.DeleteCalls, as.DeleteLastUserID)
 		}
 	})
 	t.Run("LKV-20_AddLinkFailsAndCleanupFailsReturnsTheCleanupError", func(t *testing.T) {
 		linkErr := testutil.ErrInsertFailed
 		deleteErr := testutil.ErrDBDown
-		as := &usFakeAccountStore{deleteErr: deleteErr}
+		as := &accounttest.FakeStore{DeleteErr: deleteErr}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, account.ErrNotFound}}, addErr: linkErr}
 		svc := NewService(als, as)
 
@@ -467,7 +380,7 @@ func TestUS15to23UpdateFromPlatform(t *testing.T) {
 	})
 	t.Run("LKV-21_LostRaceUsesWinner", func(t *testing.T) {
 		winner := &LinkedAccount{UserID: "winner-user", Platform: PlatformDiscord, PlatformID: "p1"}
-		as := &usFakeAccountStore{getByIDAccount: &account.Account{UserID: "winner-user"}}
+		as := &accounttest.FakeStore{GetByIDAccount: &account.Account{UserID: "winner-user"}}
 		als := &usFakeLinkAccountStore{
 			getByPlatformIDResults: []usLinkResult{{nil, account.ErrNotFound}, {winner, nil}},
 			addErr:                 ErrAlreadyLinked,
@@ -481,8 +394,8 @@ func TestUS15to23UpdateFromPlatform(t *testing.T) {
 		if got != "winner-user" {
 			t.Errorf("UpdateFromPlatform() = %v, want the winner's user ID %v", got, "winner-user")
 		}
-		if as.deleteCalls != 1 {
-			t.Errorf("expected the loser's placeholder to be cleaned up, got %d DeleteAccountFromDB calls", as.deleteCalls)
+		if as.DeleteCalls != 1 {
+			t.Errorf("expected the loser's placeholder to be cleaned up, got %d DeleteAccountFromDB calls", as.DeleteCalls)
 		}
 		if als.updateLastLinkedAccount.UserID != "winner-user" {
 			t.Errorf("expected the winner's linked account to be updated, got UserID=%q", als.updateLastLinkedAccount.UserID)
@@ -493,7 +406,7 @@ func TestUS15to23UpdateFromPlatform(t *testing.T) {
 	})
 	t.Run("LKV-22_LostRaceRefetchFails", func(t *testing.T) {
 		wantErr := testutil.ErrDBDown
-		as := &usFakeAccountStore{}
+		as := &accounttest.FakeStore{}
 		als := &usFakeLinkAccountStore{
 			getByPlatformIDResults: []usLinkResult{{nil, account.ErrNotFound}, {nil, wantErr}},
 			addErr:                 ErrAlreadyLinked,
@@ -508,7 +421,7 @@ func TestUS15to23UpdateFromPlatform(t *testing.T) {
 	t.Run("LKV-23_UpdateLinkedAccountFails", func(t *testing.T) {
 		wantErr := testutil.ErrDBDown
 		existing := &LinkedAccount{UserID: "u1", Platform: PlatformDiscord, PlatformID: "p1"}
-		as := &usFakeAccountStore{}
+		as := &accounttest.FakeStore{}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{existing, nil}}, updateErr: wantErr}
 		svc := NewService(als, as)
 
@@ -551,7 +464,7 @@ func TestUS25UpdateFromPlatformConcurrentRace(t *testing.T) {
 					t.Fatalf("trial %d: goroutine %d resolved to user %q, want all goroutines to converge on %q", trial, i, id, first)
 				}
 			}
-			if got := cs.accountCount(); got != 1 {
+			if got := cs.count(); got != 1 {
 				t.Fatalf("trial %d: expected exactly one account to exist after the race, got %d", trial, got)
 			}
 		}
@@ -560,7 +473,7 @@ func TestUS25UpdateFromPlatformConcurrentRace(t *testing.T) {
 
 func TestUS40UpdateFromPlatformCreateAndCleanupIgnoreCancel(t *testing.T) {
 	t.Run("LKV-40_CreateLinkAndCleanupRunOnAnUncancelledContext", func(t *testing.T) {
-		as := &usFakeAccountStore{}
+		as := &accounttest.FakeStore{}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, account.ErrNotFound}}, addErr: testutil.ErrInsertFailed}
 		ctx, cancel := context.WithCancel(testutil.LogContext(context.Background()))
 		cancel()
@@ -568,8 +481,8 @@ func TestUS40UpdateFromPlatformCreateAndCleanupIgnoreCancel(t *testing.T) {
 		if _, err := NewService(als, as).UpdateFromPlatform(ctx, PlatformDiscord, "p1", usFakePlatformData{}); !errors.Is(err, testutil.ErrInsertFailed) {
 			t.Fatalf("UpdateFromPlatform() err = %v, want %v", err, testutil.ErrInsertFailed)
 		}
-		if as.addCtxErr != nil || als.addCtxErr != nil || as.deleteCtxErr != nil {
-			t.Errorf("context errors at the account insert, link insert and cleanup delete = %v, %v, %v, want all nil", as.addCtxErr, als.addCtxErr, as.deleteCtxErr)
+		if as.AddCtxErr != nil || als.addCtxErr != nil || as.DeleteCtxErr != nil {
+			t.Errorf("context errors at the account insert, link insert and cleanup delete = %v, %v, %v, want all nil", as.AddCtxErr, als.addCtxErr, as.DeleteCtxErr)
 		}
 	})
 }

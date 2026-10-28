@@ -15,7 +15,7 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
-	"github.com/bwmarrin/discordgo"
+	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil/authtest"
 	"github.com/google/uuid"
 	"golang.org/x/oauth2"
 )
@@ -148,35 +148,6 @@ func (m *oaMockLinkAccountStore) SetLinkedAccountLoginEnabled(context.Context, s
 	return nil
 }
 
-type oaMockSessionService struct {
-	AddSessionFunc  func(*session.Session) error
-	AddSessionCalls int
-}
-
-var _ session.Service = (*oaMockSessionService)(nil)
-
-func (m *oaMockSessionService) AddSession(_ context.Context, session *session.Session) error {
-	m.AddSessionCalls++
-	if m.AddSessionFunc != nil {
-		return m.AddSessionFunc(session)
-	}
-	return nil
-}
-func (m *oaMockSessionService) GetSession(context.Context, string) (*session.Session, error) {
-	return nil, account.ErrNotFound
-}
-func (m *oaMockSessionService) UpdateSession(context.Context, *session.Session) error { return nil }
-func (m *oaMockSessionService) DeleteSession(context.Context, string) error           { return nil }
-func (m *oaMockSessionService) SetSessionCookie(context.Context, http.ResponseWriter, *session.Session) error {
-	return nil
-}
-func (m *oaMockSessionService) CreateJWT(context.Context, *session.Session) (string, error) {
-	return "", nil
-}
-func (m *oaMockSessionService) ReadJWT(context.Context, string) (*session.Session, error) {
-	return nil, account.ErrNotFound
-}
-
 func oaRequestWithSession(session *session.Session) *http.Request {
 	req := testutil.NewRequest(http.MethodGet, "/", nil)
 	if session == nil {
@@ -193,15 +164,6 @@ func oaJSONServer(status int, body string) *httptest.Server {
 	}))
 }
 
-// oaSetDiscordUsersEndpoint points discordgo's EndpointUsers at ts for the
-// duration of the calling test (see discord_test.go for why this works).
-func oaSetDiscordUsersEndpoint(t *testing.T, ts *httptest.Server) {
-	t.Helper()
-	original := discordgo.EndpointUsers
-	discordgo.EndpointUsers = ts.URL + "/users/"
-	t.Cleanup(func() { discordgo.EndpointUsers = original })
-}
-
 func oaSetupDiscordPlatform(t *testing.T, cfg *config.Config) {
 	t.Helper()
 	tokenTS := oaJSONServer(http.StatusOK, `{"access_token":"disc-at","token_type":"Bearer","expires_in":3600,"scope":"identify"}`)
@@ -211,7 +173,7 @@ func oaSetupDiscordPlatform(t *testing.T, cfg *config.Config) {
 		_, _ = w.Write([]byte(`{"id":"d1","username":"alice","email":"a@b.com"}`))
 	}))
 	t.Cleanup(usersTS.Close)
-	oaSetDiscordUsersEndpoint(t, usersTS)
+	setDiscordUsersEndpoint(t, usersTS)
 
 	cfg.Discord.OAuth2Config = &oauth2.Config{Endpoint: oauth2.Endpoint{TokenURL: tokenTS.URL}}
 }
@@ -453,7 +415,7 @@ func TestOA09to16ProcessOAuthLogin(t *testing.T) {
 		oaSetupDiscordPlatform(t, cfg)
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{}
-		ss := &oaMockSessionService{}
+		ss := &authtest.FakeSessionService{}
 
 		session, err := ProcessOAuthLogin(context.Background(), cfg, as, las, ss, "code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLogin})
 		if err != nil {
@@ -471,8 +433,8 @@ func TestOA09to16ProcessOAuthLogin(t *testing.T) {
 		if las.AddLinkedAccountToDBCalls != 1 {
 			t.Errorf("AddLinkedAccountToDB called %d times, want 1", las.AddLinkedAccountToDBCalls)
 		}
-		if ss.AddSessionCalls != 1 {
-			t.Errorf("AddSession called %d times, want 1", ss.AddSessionCalls)
+		if len(ss.Added) != 1 {
+			t.Errorf("AddSession called %d times, want 1", len(ss.Added))
 		}
 	})
 
@@ -493,7 +455,7 @@ func TestOA09to16ProcessOAuthLogin(t *testing.T) {
 				return &LinkedAccount{UserID: "user-1", Platform: PlatformDiscord, PlatformID: "d1", Verified: true, LoginEnabled: true}, nil
 			},
 		}
-		ss := &oaMockSessionService{}
+		ss := &authtest.FakeSessionService{}
 
 		session, err := ProcessOAuthLogin(context.Background(), cfg, as, las, ss, "code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLogin})
 		if err != nil {
@@ -510,14 +472,14 @@ func TestOA09to16ProcessOAuthLogin(t *testing.T) {
 	t.Run("OA-11_InvalidPlatform", func(t *testing.T) {
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{}
-		ss := &oaMockSessionService{}
+		ss := &authtest.FakeSessionService{}
 
 		cfg := testutil.NewConfig()
 		_, err := ProcessOAuthLogin(context.Background(), cfg, as, las, ss, "code", &OAuthState{Platform: "bogus", Mode: ModeLogin})
 		if !errors.Is(err, ErrInvalidPlatform) {
 			t.Fatalf("ProcessOAuthLogin(context.Background(), ) error = %v, want %v", err, ErrInvalidPlatform)
 		}
-		if as.AddAccountCalls != 0 || las.AddLinkedAccountToDBCalls != 0 || ss.AddSessionCalls != 0 {
+		if as.AddAccountCalls != 0 || las.AddLinkedAccountToDBCalls != 0 || len(ss.Added) != 0 {
 			t.Error("expected no store calls for an invalid platform")
 		}
 	})
@@ -527,7 +489,7 @@ func TestOA09to16ProcessOAuthLogin(t *testing.T) {
 		oaSetupDiscordExchangeFailure(t, cfg)
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{}
-		ss := &oaMockSessionService{}
+		ss := &authtest.FakeSessionService{}
 
 		_, err := ProcessOAuthLogin(context.Background(), cfg, as, las, ss, "bad-code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLogin})
 		if err == nil {
@@ -547,7 +509,7 @@ func TestOA09to16ProcessOAuthLogin(t *testing.T) {
 				return &LinkedAccount{UserID: "user-1", Platform: PlatformDiscord, PlatformID: "d1", Verified: true, LoginEnabled: false}, nil
 			},
 		}
-		ss := &oaMockSessionService{}
+		ss := &authtest.FakeSessionService{}
 
 		_, err := ProcessOAuthLogin(context.Background(), cfg, as, las, ss, "code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLogin})
 		if !errors.Is(err, ErrPlatformLoginDisabled) {
@@ -561,7 +523,7 @@ func TestOA09to16ProcessOAuthLogin(t *testing.T) {
 		oaSetupMicrosoftChain(t, cfg, oaMicrosoftChainOpts{javaUUID: javaUUID})
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{}
-		ss := &oaMockSessionService{}
+		ss := &authtest.FakeSessionService{}
 
 		session, err := ProcessOAuthLogin(context.Background(), cfg, as, las, ss, "code", &OAuthState{Platform: PlatformMinecraft, Mode: ModeLogin})
 		if err != nil {
@@ -580,13 +542,13 @@ func TestOA09to16ProcessOAuthLogin(t *testing.T) {
 		oaSetupMicrosoftChain(t, cfg, oaMicrosoftChainOpts{xstsFails: true})
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{}
-		ss := &oaMockSessionService{}
+		ss := &authtest.FakeSessionService{}
 
 		_, err := ProcessOAuthLogin(testutil.LogContext(context.Background()), cfg, as, las, ss, "code", &OAuthState{Platform: PlatformMinecraft, Mode: ModeLogin})
 		if err == nil {
 			t.Fatal("expected an error")
 		}
-		if las.AddLinkedAccountToDBCalls != 0 || ss.AddSessionCalls != 0 {
+		if las.AddLinkedAccountToDBCalls != 0 || len(ss.Added) != 0 {
 			t.Error("expected no store calls when the identity fetch fails")
 		}
 	})
@@ -596,7 +558,7 @@ func TestOA09to16ProcessOAuthLogin(t *testing.T) {
 		oaSetupDiscordPlatform(t, cfg)
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{}
-		ss := &oaMockSessionService{AddSessionFunc: func(*session.Session) error { return testutil.ErrDBDown }}
+		ss := &authtest.FakeSessionService{AddSessionErr: testutil.ErrDBDown}
 
 		session, err := ProcessOAuthLogin(context.Background(), cfg, as, las, ss, "code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLogin})
 		if err == nil {
@@ -614,7 +576,7 @@ func TestOA76to78ProcessOAuthLoginAdditionalPlatformDispatch(t *testing.T) {
 		oaSetupTwitchPlatform(t, cfg)
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{}
-		ss := &oaMockSessionService{}
+		ss := &authtest.FakeSessionService{}
 
 		session, err := ProcessOAuthLogin(context.Background(), cfg, as, las, ss, "code", &OAuthState{Platform: PlatformTwitch, Mode: ModeLogin})
 		if err != nil {
@@ -635,8 +597,8 @@ func TestOA76to78ProcessOAuthLoginAdditionalPlatformDispatch(t *testing.T) {
 		if len(las.AddedLinkedAccounts) != 1 || las.AddedLinkedAccounts[0].Platform != PlatformTwitch {
 			t.Errorf("expected a Twitch linked account, got %+v", las.AddedLinkedAccounts)
 		}
-		if ss.AddSessionCalls != 1 {
-			t.Errorf("AddSession called %d times, want 1", ss.AddSessionCalls)
+		if len(ss.Added) != 1 {
+			t.Errorf("AddSession called %d times, want 1", len(ss.Added))
 		}
 	})
 
@@ -645,7 +607,7 @@ func TestOA76to78ProcessOAuthLoginAdditionalPlatformDispatch(t *testing.T) {
 		oaSetupMicrosoftLoginPlatform(t, cfg)
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{}
-		ss := &oaMockSessionService{}
+		ss := &authtest.FakeSessionService{}
 
 		session, err := ProcessOAuthLogin(context.Background(), cfg, as, las, ss, "code", &OAuthState{Platform: PlatformMicrosoft, Mode: ModeLogin})
 		if err != nil {
@@ -689,7 +651,7 @@ func TestOA76to78ProcessOAuthLoginAdditionalPlatformDispatch(t *testing.T) {
 
 		as := &oaMockAccountService{}
 		las := &oaMockLinkAccountStore{}
-		ss := &oaMockSessionService{}
+		ss := &authtest.FakeSessionService{}
 
 		session, err := ProcessOAuthLogin(context.Background(), cfg, as, las, ss, "code", &OAuthState{Platform: PlatformXboxLive, Mode: ModeLogin})
 		if err != nil {
@@ -896,7 +858,7 @@ func oaSetupDiscordUserFailure(t *testing.T, cfg *config.Config) {
 	t.Cleanup(tokenTS.Close)
 	usersTS := oaJSONServer(http.StatusUnauthorized, `{"message":"401: Unauthorized","code":0}`)
 	t.Cleanup(usersTS.Close)
-	oaSetDiscordUsersEndpoint(t, usersTS)
+	setDiscordUsersEndpoint(t, usersTS)
 
 	cfg.Discord.OAuth2Config = &oauth2.Config{Endpoint: oauth2.Endpoint{TokenURL: tokenTS.URL}}
 }
@@ -1905,60 +1867,26 @@ func TestOA87to92LinkHelpersDetachedWritesIgnoreCancel(t *testing.T) {
 // ErrAlreadyLinked return.
 
 type oaConcurrentAccountService struct {
-	mu       sync.Mutex
-	accounts map[string]*account.Account
+	*accountMap
 }
 
 var _ account.Service = (*oaConcurrentAccountService)(nil)
 
 func newOAConcurrentAccountService() *oaConcurrentAccountService {
-	return &oaConcurrentAccountService{accounts: map[string]*account.Account{}}
+	return &oaConcurrentAccountService{newAccountMap()}
 }
 
-func (m *oaConcurrentAccountService) AddAccount(_ context.Context, a *account.Account) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.accounts[a.UserID] = a
-	return nil
-}
-func (m *oaConcurrentAccountService) GetAccountByID(_ context.Context, userID string) (*account.Account, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	a, ok := m.accounts[userID]
-	if !ok {
-		return nil, account.ErrNotFound
-	}
-	return a, nil
-}
 func (m *oaConcurrentAccountService) GetAccountByUsername(context.Context, string) (*account.Account, error) {
 	return nil, account.ErrNotFound
 }
 func (m *oaConcurrentAccountService) GetAccountByEmail(context.Context, string) (*account.Account, error) {
 	return nil, account.ErrNotFound
 }
-func (m *oaConcurrentAccountService) UpdateAccount(_ context.Context, a *account.Account) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.accounts[a.UserID] = a
-	return nil
-}
-func (m *oaConcurrentAccountService) DeleteAccount(_ context.Context, userID string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	delete(m.accounts, userID)
-	return nil
-}
 func (m *oaConcurrentAccountService) IsPasswordAuthEnabled(context.Context, string) (bool, error) {
 	return false, nil
 }
 func (m *oaConcurrentAccountService) NewSession(_ context.Context, a *account.Account, expiresAt int64) (*session.Session, error) {
 	return &session.Session{ID: "stub-session", UserID: a.UserID, Permissions: []string{"stub:perm"}, ExpiresAt: expiresAt}, nil
-}
-
-func (m *oaConcurrentAccountService) count() int {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return len(m.accounts)
 }
 
 func oaLinkKey(platform Platform, platformID string) string {

@@ -11,6 +11,7 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
+	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil/authtest"
 )
 
 type stubService struct {
@@ -66,59 +67,13 @@ func (s *stubService) NewSession(_ context.Context, a *Account, expiresAt int64)
 	return &session.Session{ID: "stub-session", UserID: a.UserID, Permissions: []string{stubSessionPermission}, ExpiresAt: expiresAt}, nil
 }
 
-type stubSessionService struct {
-	createJWT        func(*session.Session) (string, error)
-	addSessionErr    error
-	deleteSessionErr error
-	deletedIDs       []string
-	added            []*session.Session
-}
-
-var _ session.Service = (*stubSessionService)(nil)
-
-func (s *stubSessionService) AddSession(_ context.Context, session *session.Session) error {
-	s.added = append(s.added, session)
-	return s.addSessionErr
-}
-
-func (s *stubSessionService) GetSession(context.Context, string) (*session.Session, error) {
-	return nil, ErrNotFound
-}
-
-func (s *stubSessionService) UpdateSession(context.Context, *session.Session) error { return nil }
-
-func (s *stubSessionService) DeleteSession(_ context.Context, id string) error {
-	s.deletedIDs = append(s.deletedIDs, id)
-	return s.deleteSessionErr
-}
-
-func (s *stubSessionService) CreateJWT(_ context.Context, session *session.Session) (string, error) {
-	if s.createJWT != nil {
-		return s.createJWT(session)
-	}
-	return "", nil
-}
-
-func (s *stubSessionService) SetSessionCookie(ctx context.Context, w http.ResponseWriter, sess *session.Session) error {
-	jwt, err := s.CreateJWT(ctx, sess)
-	if err != nil {
-		return err
-	}
-	http.SetCookie(w, &http.Cookie{Name: session.CookieName, Value: jwt, Path: "/"})
-	return nil
-}
-
-func (s *stubSessionService) ReadJWT(context.Context, string) (*session.Session, error) {
-	return nil, ErrNotFound
-}
-
 func TestAU01LoginHandlerUsernameHappyPath(t *testing.T) {
 	account, err := NewAccount(testutil.NewConfig().Auth.Account.Pepper, "testuser", "test@example.com", "correct-password")
 	if err != nil {
 		t.Fatalf("failed to build account: %v", err)
 	}
 	as := &stubService{account: account}
-	ss := &stubSessionService{createJWT: func(*session.Session) (string, error) { return "test-jwt", nil }}
+	ss := &authtest.FakeSessionService{CreateJWTFunc: func(*session.Session) (string, error) { return "test-jwt", nil }}
 	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
 	w := httptest.NewRecorder()
 
@@ -132,8 +87,8 @@ func TestAU01LoginHandlerUsernameHappyPath(t *testing.T) {
 		if cookie == nil || cookie.Value != "test-jwt" {
 			t.Errorf("expected session cookie with value %q, got %+v", "test-jwt", cookie)
 		}
-		if len(ss.added) != 1 || len(ss.added[0].Permissions) != 1 || ss.added[0].Permissions[0] != stubSessionPermission {
-			t.Errorf("stored sessions = %+v, want one session carrying the permissions the account service built", ss.added)
+		if len(ss.Added) != 1 || len(ss.Added[0].Permissions) != 1 || ss.Added[0].Permissions[0] != stubSessionPermission {
+			t.Errorf("stored sessions = %+v, want one session carrying the permissions the account service built", ss.Added)
 		}
 	})
 }
@@ -144,7 +99,7 @@ func TestAU02LoginHandlerEmailHappyPath(t *testing.T) {
 		t.Fatalf("failed to build account: %v", err)
 	}
 	as := &stubService{account: account}
-	ss := &stubSessionService{createJWT: func(*session.Session) (string, error) { return "test-jwt", nil }}
+	ss := &authtest.FakeSessionService{CreateJWTFunc: func(*session.Session) (string, error) { return "test-jwt", nil }}
 	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"email":"test@example.com","password":"correct-password"}`))
 	w := httptest.NewRecorder()
 
@@ -162,7 +117,7 @@ func TestAU02LoginHandlerEmailHappyPath(t *testing.T) {
 
 func TestAU03LoginHandlerMalformedBody(t *testing.T) {
 	as := &stubService{}
-	ss := &stubSessionService{}
+	ss := &authtest.FakeSessionService{}
 	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`not json`))
 	w := httptest.NewRecorder()
 
@@ -178,7 +133,7 @@ func TestAU03LoginHandlerMalformedBody(t *testing.T) {
 
 func TestAU04LoginHandlerAccountLookupFails(t *testing.T) {
 	as := &stubService{}
-	ss := &stubSessionService{}
+	ss := &authtest.FakeSessionService{}
 	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"no-such-user","password":"whatever"}`))
 	w := httptest.NewRecorder()
 
@@ -201,7 +156,7 @@ func TestAU05LoginHandlerWrongPassword(t *testing.T) {
 		t.Fatalf("failed to build account: %v", err)
 	}
 	as := &stubService{account: account}
-	ss := &stubSessionService{}
+	ss := &authtest.FakeSessionService{}
 	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"wrong-password"}`))
 	w := httptest.NewRecorder()
 
@@ -224,7 +179,7 @@ func TestAU06LoginHandlerPasswordAuthCheckErrors(t *testing.T) {
 		t.Fatalf("failed to build account: %v", err)
 	}
 	as := &stubService{account: account, passwordAuthErr: testutil.ErrDBDown}
-	ss := &stubSessionService{}
+	ss := &authtest.FakeSessionService{}
 	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
 	w := httptest.NewRecorder()
 
@@ -244,7 +199,7 @@ func TestAU07LoginHandlerPasswordAuthDisabled(t *testing.T) {
 		t.Fatalf("failed to build account: %v", err)
 	}
 	as := &stubService{account: account, passwordAuthDisabled: true}
-	ss := &stubSessionService{}
+	ss := &authtest.FakeSessionService{}
 	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
 	w := httptest.NewRecorder()
 
@@ -267,7 +222,7 @@ func TestAU08LoginHandlerAddSessionFails(t *testing.T) {
 		t.Fatalf("failed to build account: %v", err)
 	}
 	as := &stubService{account: account}
-	ss := &stubSessionService{addSessionErr: testutil.ErrDBDown}
+	ss := &authtest.FakeSessionService{AddSessionErr: testutil.ErrDBDown}
 	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
 	w := httptest.NewRecorder()
 
@@ -289,7 +244,7 @@ func TestAU10LogoutHandlerHappyPath(t *testing.T) {
 	ctx := context.WithValue(testutil.LogContext(context.Background()), reqctx.SessionKey, sess)
 	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
-	ss := &stubSessionService{}
+	ss := &authtest.FakeSessionService{}
 
 	t.Run("ACH-10_LogoutHappyPath", func(t *testing.T) {
 		LogoutHandler(ss)(w, r)
@@ -297,8 +252,8 @@ func TestAU10LogoutHandlerHappyPath(t *testing.T) {
 		if w.Code != http.StatusNoContent {
 			t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
 		}
-		if len(ss.deletedIDs) != 1 || ss.deletedIDs[0] != "s1" {
-			t.Errorf("expected DeleteSession(\"s1\"), got %v", ss.deletedIDs)
+		if len(ss.DeletedIDs) != 1 || ss.DeletedIDs[0] != "s1" {
+			t.Errorf("expected DeleteSession(\"s1\"), got %v", ss.DeletedIDs)
 		}
 		cookie := testutil.FindCookie(w, session.CookieName)
 		if cookie == nil {
@@ -318,7 +273,7 @@ func TestAU12LogoutHandlerDeleteSessionFails(t *testing.T) {
 	ctx := context.WithValue(testutil.LogContext(context.Background()), reqctx.SessionKey, sess)
 	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
-	ss := &stubSessionService{deleteSessionErr: testutil.ErrDBDown}
+	ss := &authtest.FakeSessionService{DeleteSessionErr: testutil.ErrDBDown}
 
 	t.Run("ACH-12_LogoutDeleteSessionFails", func(t *testing.T) {
 		LogoutHandler(ss)(w, r)
@@ -339,7 +294,7 @@ func TestAU58LoginHandlerNewSessionFails(t *testing.T) {
 		t.Fatalf("failed to hash password: %v", err)
 	}
 	as := &stubService{account: account, newSessionErr: testutil.ErrBoom}
-	ss := &stubSessionService{createJWT: func(*session.Session) (string, error) { return "test-jwt", nil }}
+	ss := &authtest.FakeSessionService{CreateJWTFunc: func(*session.Session) (string, error) { return "test-jwt", nil }}
 	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
 	w := httptest.NewRecorder()
 
@@ -350,15 +305,15 @@ func TestAU58LoginHandlerNewSessionFails(t *testing.T) {
 			t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
 		}
 		testutil.ExpectDetail(t, w, msgAuthenticationFailed)
-		if len(ss.added) != 0 {
-			t.Errorf("stored sessions = %v, want none", ss.added)
+		if len(ss.Added) != 0 {
+			t.Errorf("stored sessions = %v, want none", ss.Added)
 		}
 	})
 }
 
 func TestAU59LoginHandlerAccountLookupInfraFails(t *testing.T) {
 	as := &stubService{lookupErr: testutil.ErrDBDown}
-	ss := &stubSessionService{}
+	ss := &authtest.FakeSessionService{}
 	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"someone","password":"whatever"}`))
 	w := httptest.NewRecorder()
 

@@ -62,20 +62,6 @@ func (m *svMockStore) DeletePetPicture(_ context.Context, id string) (*PetPictur
 	panic("DeletePetPicture not used by UploadPetPicture")
 }
 
-type svFakeRoundTripper struct {
-	resp    *http.Response
-	err     error
-	lastReq *http.Request
-}
-
-func (rt *svFakeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	rt.lastReq = req
-	if rt.err != nil {
-		return nil, rt.err
-	}
-	return rt.resp, nil
-}
-
 func svOKResponse() *http.Response {
 	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(nil)), Header: make(http.Header)}
 }
@@ -106,7 +92,7 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 		svc := NewService(mock)
 		file := svTempFile(t, "sv03-upload-*.jpg", []byte("some picture bytes"))
 
-		rt := &svFakeRoundTripper{resp: svOKResponse()}
+		rt := &testutil.FakeRoundTripper{Resp: svOKResponse()}
 		testutil.SwapTransport(t, rt)
 
 		origKey := CDN_KEY
@@ -132,18 +118,18 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 			t.Errorf("CreatePetPicture id = %q, want a 64-char sha256 hex digest", call.id)
 		}
 
-		if rt.lastReq == nil {
+		if rt.LastReq == nil {
 			t.Fatal("expected an outbound CDN request, got none")
 		}
-		if got := rt.lastReq.URL.String(); got != CDN_URL+"/upload" {
+		if got := rt.LastReq.URL.String(); got != CDN_URL+"/upload" {
 			t.Errorf("request URL = %q, want %q", got, CDN_URL+"/upload")
 		}
 
-		mediaType, params, err := mime.ParseMediaType(rt.lastReq.Header.Get("Content-Type"))
+		mediaType, params, err := mime.ParseMediaType(rt.LastReq.Header.Get("Content-Type"))
 		if err != nil || !strings.HasPrefix(mediaType, "multipart/") {
-			t.Fatalf("Content-Type = %q, want a multipart type", rt.lastReq.Header.Get("Content-Type"))
+			t.Fatalf("Content-Type = %q, want a multipart type", rt.LastReq.Header.Get("Content-Type"))
 		}
-		mr := multipart.NewReader(rt.lastReq.Body, params["boundary"])
+		mr := multipart.NewReader(rt.LastReq.Body, params["boundary"])
 		form, err := mr.ReadForm(1 << 20)
 		if err != nil {
 			t.Fatalf("failed to parse multipart body: %v", err)
@@ -165,7 +151,7 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 		svc := NewService(mock)
 		file := svTempFile(t, "sv04-upload-*.jpg", []byte("bytes"))
 
-		rt := &svFakeRoundTripper{}
+		rt := &testutil.FakeRoundTripper{}
 		testutil.SwapTransport(t, rt)
 
 		got, err := svc.UploadPetPicture(svCtx, file, 1, nil, nil)
@@ -175,7 +161,7 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 		if !errors.Is(err, wantErr) {
 			t.Errorf("UploadPetPicture() error = %v, want %v", err, wantErr)
 		}
-		if rt.lastReq != nil {
+		if rt.LastReq != nil {
 			t.Error("expected no outbound CDN request when CreatePetPicture fails")
 		}
 	})
@@ -205,7 +191,7 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 		file := svTempFile(t, "sv06-upload-*.jpg", []byte("bytes"))
 
 		wantErr := testutil.ErrTransportFailed
-		testutil.SwapTransport(t, &svFakeRoundTripper{err: wantErr})
+		testutil.SwapTransport(t, &testutil.FakeRoundTripper{Err: wantErr})
 
 		got, err := svc.UploadPetPicture(svCtx, file, 1, nil, nil)
 		if got != nil {
@@ -223,7 +209,7 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 		svc := NewService(mock)
 		file := svTempFile(t, "sv07-photo-*.tar.gz", []byte("bytes"))
 
-		testutil.SwapTransport(t, &svFakeRoundTripper{resp: svOKResponse()})
+		testutil.SwapTransport(t, &testutil.FakeRoundTripper{Resp: svOKResponse()})
 
 		if _, err := svc.UploadPetPicture(svCtx, file, 1, nil, nil); err != nil {
 			t.Fatalf("UploadPetPicture() error = %v, want nil", err)
@@ -242,7 +228,7 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 		renamed := "sv08-mock-id." + base
 		t.Cleanup(func() { os.Remove(renamed) })
 
-		testutil.SwapTransport(t, &svFakeRoundTripper{resp: svOKResponse()})
+		testutil.SwapTransport(t, &testutil.FakeRoundTripper{Resp: svOKResponse()})
 
 		if _, err := svc.UploadPetPicture(svCtx, file, 1, nil, nil); err != nil {
 			t.Fatalf("UploadPetPicture() error = %v, want nil", err)
@@ -271,7 +257,7 @@ func TestSV09_UploadCtxReachesStore(t *testing.T) {
 		mock := &svCtxStore{}
 		svc := NewService(mock)
 		file := svTempFile(t, "sv09-upload-*.jpg", []byte("some picture bytes"))
-		rt := &svFakeRoundTripper{resp: svOKResponse()}
+		rt := &testutil.FakeRoundTripper{Resp: svOKResponse()}
 		testutil.SwapTransport(t, rt)
 
 		ctx, cancel := context.WithCancel(context.WithValue(svCtx, ctxKey{}, "marker"))
@@ -286,7 +272,7 @@ func TestSV09_UploadCtxReachesStore(t *testing.T) {
 		if mock.got != nil && mock.got.Err() != nil {
 			t.Errorf("store ctx Err() = %v, want nil: the record write must outlive a cancelled request", mock.got.Err())
 		}
-		if rt.lastReq == nil || rt.lastReq.Context().Value(ctxKey{}) != "marker" {
+		if rt.LastReq == nil || rt.LastReq.Context().Value(ctxKey{}) != "marker" {
 			t.Error("CDN request did not carry the caller's ctx")
 		}
 	})
