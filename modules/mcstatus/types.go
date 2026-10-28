@@ -232,7 +232,7 @@ func GetBedrockStatus(s bedrockping.Response) *MCServerStatus {
 		[]*mcstatuspb.Player{},
 		s.MCPEVersion,
 		"",
-		ServerTypeJava,
+		ServerTypeBedrock,
 		s,
 		nil,
 	)

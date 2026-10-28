@@ -540,4 +540,15 @@ func TestGetBedrockStatus(t *testing.T) {
 			t.Errorf("Map: expected empty string (len(Extra)==2 is not >2), got %q", result.Map)
 		}
 	})
+
+	t.Run("CST-26_BedrockStatusReportsBedrockType", func(t *testing.T) {
+		result := GetBedrockStatus(bedrockping.Response{ServerName: "BedrockSrv"})
+
+		if result.ServerType != ServerTypeBedrock {
+			t.Errorf("ServerType: expected %q, got %q", ServerTypeBedrock, result.ServerType)
+		}
+		if result.ServerStatus.ServerType != mcstatuspb.ServerType_BEDROCK {
+			t.Errorf("ServerStatus.ServerType: expected %v, got %v", mcstatuspb.ServerType_BEDROCK, result.ServerStatus.ServerType)
+		}
+	})
 }
