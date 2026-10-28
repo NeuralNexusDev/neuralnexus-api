@@ -7,7 +7,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/db"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
@@ -28,14 +27,6 @@ func ndsLiveStore(t *testing.T) (*numberStore, string, string) {
 	t.Cleanup(pool.Close)
 
 	ctx := context.Background()
-	schema, err := db.FS.ReadFile("neuralnexus.sql")
-	if err != nil {
-		t.Fatalf("failed to read the schema: %v", err)
-	}
-	if _, err := pool.Exec(ctx, string(schema)); err != nil {
-		t.Fatalf("failed to apply the schema: %v", err)
-	}
-
 	cleanup := func() {
 		pool.Exec(ctx, "DELETE FROM datastore_numbers WHERE store_id BETWEEN $1 AND $2", int64(ndsStoreIDMin), int64(ndsStoreIDMax))
 		pool.Exec(ctx, "DELETE FROM datastores WHERE store_id BETWEEN $1 AND $2", int64(ndsStoreIDMin), int64(ndsStoreIDMax))

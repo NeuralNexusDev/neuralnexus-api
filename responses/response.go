@@ -52,7 +52,7 @@ func SendStruct[T any](w http.ResponseWriter, r *http.Request, statusCode int, d
 
 const maxBodyBytes = 1 << 20
 
-// DecodeStruct -- Decode a struct from JSON, XML or Protobuf. It panics, with a message that says what was wrong, when the body is larger than maxBodyBytes, when a JSON body decodes to a nil pointer, or when a protobuf body is sent for a type that cannot take it.
+// DecodeStruct -- Decode a struct from JSON, XML or Protobuf
 func DecodeStruct[T any](r *http.Request, data *T) error {
 	if data == nil {
 		panic("responses.DecodeStruct: data must be a non-nil pointer")

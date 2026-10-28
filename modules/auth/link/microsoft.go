@@ -471,9 +471,8 @@ func GetXboxUser(ctx context.Context, cfg config.Microsoft, token *OAuthToken) (
 //   - (xbox, java, nil): full success. java is nil if the account doesn't
 //     own Java Edition - that's not a failure.
 //   - (xbox, nil, err): Xbox Live succeeded but a later Minecraft Services
-//     step failed. xbox is still a valid identity. ProcessOAuthLogin
-//     continues without Java when that Xbox identity is already linked, and
-//     returns err otherwise. ProcessOAuthLink returns err.
+//     step failed. xbox is still a valid identity: callers decide whether
+//     to continue without Java.
 //   - (nil, nil, err): Xbox Live authentication itself failed.
 //
 // The Minecraft-scoped XSTS token is authorized, consumed by

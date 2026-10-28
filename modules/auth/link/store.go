@@ -35,7 +35,6 @@ type Store interface {
 
 var ErrAlreadyLinked = errors.New("platform account already linked")
 
-// ErrUserAlreadyLinkedToPlatform is returned when the user already has a linked account on the platform.
 var ErrUserAlreadyLinkedToPlatform = errors.New("user already has a linked account on this platform")
 
 var ErrDuplicateLinkedAccount = errors.New("multiple linked accounts found for platform ID")

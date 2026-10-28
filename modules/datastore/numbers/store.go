@@ -10,13 +10,10 @@ import (
 )
 
 var (
-	ErrNumberNotFound = errors.New("number not found")
-	// ErrNumberExists is returned when a number already exists for the data store.
-	ErrNumberExists = errors.New("number already exists")
-	// ErrNumberStoreOrUserNotFound is returned when the data store or the user does not exist.
+	ErrNumberNotFound            = errors.New("number not found")
+	ErrNumberExists              = errors.New("number already exists")
 	ErrNumberStoreOrUserNotFound = errors.New("data store or user not found")
-	// ErrNumberInvalidID is returned when the data store or user id is not a number.
-	ErrNumberInvalidID = errors.New("data store or user id is not a number")
+	ErrNumberInvalidID           = errors.New("data store or user id is not a number")
 )
 
 func translateNumberErr(err error) error {

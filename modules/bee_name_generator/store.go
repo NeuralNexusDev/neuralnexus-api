@@ -13,7 +13,6 @@ var ErrBeeNameNotFound = errors.New("no bee names found")
 var ErrBeeNameExists = errors.New("bee name already exists")
 var ErrBeeNameSuggestionExists = errors.New("bee name suggestion already exists")
 
-// ErrBeeNameSuggestionNotFound is returned when no suggestion matches the given name.
 var ErrBeeNameSuggestionNotFound = errors.New("bee name suggestion not found")
 
 // BNGStore - Bee Name Generator Store
