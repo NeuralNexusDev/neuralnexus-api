@@ -21,7 +21,7 @@ const (
 func ndsLiveStore(t *testing.T) (*numberStore, string, string) {
 	t.Helper()
 
-	pool, err := pgxpool.New(context.Background(), testutil.PostgresURL(t, "numtest"))
+	pool, err := pgxpool.New(context.Background(), testutil.PostgresURL(t, "neuralnexus"))
 	if err != nil {
 		t.Fatalf("failed to connect to postgres: %v", err)
 	}
