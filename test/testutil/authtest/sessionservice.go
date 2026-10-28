@@ -58,7 +58,7 @@ func (f *FakeSessionService) SetSessionCookie(ctx context.Context, w http.Respon
 	if err != nil {
 		return err
 	}
-	http.SetCookie(w, &http.Cookie{Name: session.CookieName, Value: jwt, Path: "/"})
+	http.SetCookie(w, &http.Cookie{Name: session.CookieName, Value: jwt})
 	return nil
 }
 
