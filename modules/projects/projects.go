@@ -56,8 +56,6 @@ type Release struct {
 	URL     string `json:"html_url"`
 }
 
-var ErrGitHubTokenUnset = errors.New("GITHUB_TOKEN is not set")
-
 var ErrReleasesNotFound = errors.New("releases not found")
 
 var ErrGitHubRateLimited = errors.New("github is not accepting requests")
@@ -65,7 +63,6 @@ var ErrGitHubRateLimited = errors.New("github is not accepting requests")
 var ErrGitHubStatus = errors.New("github returned an unexpected status")
 
 const (
-	msgGitHubTokenUnset    = "GITHUB_TOKEN is not set"
 	msgFailedToGetReleases = "Failed to get releases"
 	msgReleasesNotFound    = "Releases not found"
 	msgGitHubRateLimited   = "GitHub is not accepting requests right now. Try again later"
@@ -151,8 +148,6 @@ func GetReleasesHandler(cfg config.GitHub) http.HandlerFunc {
 		if err != nil {
 			reqctx.Log(r.Context(), err.Error())
 			switch err {
-			case ErrGitHubTokenUnset:
-				http.Error(w, msgGitHubTokenUnset, http.StatusInternalServerError)
 			case ErrReleasesNotFound:
 				http.Error(w, msgReleasesNotFound, http.StatusNotFound)
 			case ErrGitHubRateLimited:
