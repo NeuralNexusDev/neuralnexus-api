@@ -110,3 +110,4 @@
 | CST-23 | GetBedrockStatus | Happy Path | `Extra` has a MOTD second line and a map name (len 3) | `Extra = [_, line1, mapName]` | `Motd` includes `ServerName + "\n" + Extra[1]` (escaped), `Map = Extra[2]`, other fields mapped; `ServerType`/proto enum and `Name` not asserted | P1 |  |
 | CST-24 | GetBedrockStatus | Edge Case | `Extra` is empty/nil | — | `Motd == Name == ServerName`, `Map == ""` | P2 |  |
 | CST-25 | GetBedrockStatus | Edge Case | `Extra` has exactly 2 elements (boundary) | `len(Extra) == 2` | Second MOTD line appended (`len(Extra) > 1`), but `Map` stays `""` (`len(Extra) > 2` is false); `Name` not asserted | P2 |  |
+| CST-26 | GetBedrockStatus | Happy Path | response with `ServerName` `"BedrockSrv"` | `bedrockping.Response{ServerName: "BedrockSrv"}` | wrapper `ServerType == ServerTypeBedrock` and protobuf `ServerType == mcstatuspb.ServerType_BEDROCK` | P1 |  |
