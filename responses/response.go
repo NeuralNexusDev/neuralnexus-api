@@ -1,8 +1,12 @@
 package responses
 
 import (
+	"bytes"
 	"encoding/xml"
+	"fmt"
+	"io"
 	"net/http"
+	"reflect"
 	"time"
 
 	"github.com/goccy/go-json"
@@ -46,23 +50,43 @@ func SendStruct[T any](w http.ResponseWriter, r *http.Request, statusCode int, d
 	w.Write(structBytes)
 }
 
-// DecodeStruct -- Decode a struct from JSON, XML or Protobuf
+const maxBodyBytes = 1 << 20
+
+// DecodeStruct -- Decode a struct from JSON, XML or Protobuf. It panics, with a message that says what was wrong, when the body is larger than maxBodyBytes, when a JSON body decodes to a nil pointer, or when a protobuf body is sent for a type that cannot take it.
 func DecodeStruct[T any](r *http.Request, data *T) error {
-	var err error
+	if data == nil {
+		panic("responses.DecodeStruct: data must be a non-nil pointer")
+	}
+	if r.ContentLength > maxBodyBytes {
+		panic(fmt.Sprintf("responses.DecodeStruct: the request body is larger than the %d byte limit", maxBodyBytes))
+	}
+	b, err := io.ReadAll(io.LimitReader(r.Body, maxBodyBytes+1))
+	if err != nil {
+		return err
+	}
+	if len(b) > maxBodyBytes {
+		panic(fmt.Sprintf("responses.DecodeStruct: the request body is larger than the %d byte limit", maxBodyBytes))
+	}
 	switch contentType := r.Header.Get("Content-Type"); contentType {
 	case "application/x-protobuf":
-		var b []byte = make([]byte, r.ContentLength)
-		r.Body.Read(b)
+		var message proto.Message
 		if pb, ok := any(*data).(proto.Message); ok {
-			err = proto.Unmarshal(b, pb)
+			message = pb
+		} else if encoder, ok := any(*data).(ProtoEncoder); ok {
+			message = encoder.ToProto()
+		} else {
+			panic(fmt.Sprintf("responses.DecodeStruct: %T cannot be decoded from protobuf", *data))
 		}
-		if encoder, ok := any(*data).(ProtoEncoder); ok {
-			err = proto.Unmarshal(b, encoder.ToProto())
-		}
+		err = proto.Unmarshal(b, message)
 	case "application/xml":
-		err = xml.NewDecoder(r.Body).Decode(data)
+		err = xml.NewDecoder(bytes.NewReader(b)).Decode(data)
 	default:
-		err = json.NewDecoder(r.Body).Decode(data)
+		err = json.NewDecoder(bytes.NewReader(b)).Decode(data)
+	}
+	if err == nil {
+		if v := reflect.ValueOf(*data); v.Kind() == reflect.Pointer && v.IsNil() {
+			panic(fmt.Sprintf("responses.DecodeStruct: the request body decoded to a nil %T", *data))
+		}
 	}
 	return err
 }
