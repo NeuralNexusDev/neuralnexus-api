@@ -974,6 +974,32 @@ func TestAU72to74OAuthAndOpenIDFailuresUseMapping(t *testing.T) {
 	})
 }
 
+func TestAU75to76SecondPlatformAccountConflict(t *testing.T) {
+	const redirect = "https://neuralnexus.test/done"
+	okJWT := func(*session.Session) (string, error) { return "test-jwt", nil }
+	secondAccount := &stubLinkAccountStore{addErr: ErrUserAlreadyLinkedToPlatform}
+
+	t.Run("AU-75_OAuthHandlerSecondPlatformAccountConflict", func(t *testing.T) {
+		auDiscordTransport(t)
+		w := httptest.NewRecorder()
+		state := OAuthState{Platform: PlatformDiscord, Nonce: "test-nonce", RedirectURI: redirect, Mode: ModeLink}
+
+		OAuthHandler(auConfig(), &stubAccountService{}, secondAccount, &authtest.FakeSessionService{CreateJWTFunc: okJWT}, auSiteURL)(w, auWithSession(auOAuthRequest(t, state), "u1"))
+
+		requireProblemRedirect(t, w, redirect, http.StatusConflict, msgUserAlreadyLinkedToPlatform)
+	})
+
+	t.Run("AU-76_SteamHandlerSecondPlatformAccountConflict", func(t *testing.T) {
+		auSteamTransport(t, http.StatusOK, http.StatusOK)
+		w := httptest.NewRecorder()
+		state := OAuthState{Platform: PlatformSteam, Nonce: "test-nonce", RedirectURI: redirect, Mode: ModeLink}
+
+		OpenIDHandler(auConfig().Steam, &stubAccountService{}, secondAccount, &authtest.FakeSessionService{CreateJWTFunc: okJWT}, auSiteURL)(w, auWithSession(auOpenIDRequest(t, state), "u1"))
+
+		requireProblemRedirect(t, w, redirect, http.StatusConflict, msgUserAlreadyLinkedToPlatform)
+	})
+}
+
 type stubService struct {
 	links    []*LinkedAccount
 	linksErr error

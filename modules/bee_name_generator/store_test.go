@@ -291,11 +291,11 @@ func TestST07to09_DeleteBeeName(t *testing.T) {
 		s, _ := bngLiveStore(t)
 		name := bngUniqueName("del-missing")
 		got, err := s.DeleteBeeName(bnCtx, name)
-		if err != nil {
-			t.Fatalf("DeleteBeeName() of a non-existent name error = %v, want nil", err)
+		if err != ErrBeeNameNotFound {
+			t.Errorf("DeleteBeeName() of a non-existent name error = %v, want ErrBeeNameNotFound", err)
 		}
-		if got != name {
-			t.Errorf("DeleteBeeName() = %q, want %q", got, name)
+		if got != "" {
+			t.Errorf("DeleteBeeName() = %q, want an empty string on error", got)
 		}
 	})
 }
@@ -529,20 +529,77 @@ func TestST15to17and26_AcceptBeeNameSuggestion(t *testing.T) {
 	t.Run("BNS-26_Live_WhitespaceOnlyNameRejected", func(t *testing.T) {
 		s, db := bngLiveStore(t)
 		blank := "  \t "
-		t.Cleanup(func() {
-			_, _ = db.Exec(context.Background(), "DELETE FROM bee_name WHERE name = $1", blank)
-		})
 
 		got, err := s.AcceptBeeNameSuggestion(bnCtx, blank)
-		var pgErr *pgconn.PgError
-		if !errors.As(err, &pgErr) || pgErr.Code != "23514" || pgErr.ConstraintName != "bee_name_name_not_blank" {
-			t.Errorf("AcceptBeeNameSuggestion() error = %v, want the bee_name_name_not_blank CHECK violation (SQLSTATE 23514)", err)
+		if err != ErrBeeNameSuggestionNotFound {
+			t.Errorf("AcceptBeeNameSuggestion() error = %v, want ErrBeeNameSuggestionNotFound", err)
 		}
 		if got != "" {
 			t.Errorf("AcceptBeeNameSuggestion() = %q, want an empty string on error", got)
 		}
 		if n := bngCountByName(t, db, "bee_name", blank); n != 0 {
 			t.Errorf("bee_name holds %d rows named %q, want 0", n, blank)
+		}
+	})
+
+	t.Run("BNS-27_AcceptRemovesSuggestionAndInserts", func(t *testing.T) {
+		s, db := bngLiveStore(t)
+		name := bngUniqueName("acc-tx")
+		if _, err := s.SubmitBeeName(bnCtx, name); err != nil {
+			t.Fatalf("seed SubmitBeeName() error = %v", err)
+		}
+		t.Cleanup(func() { _, _ = s.DeleteBeeName(bnCtx, name) })
+
+		got, err := s.AcceptBeeNameSuggestion(bnCtx, name)
+		if err != nil || got != name {
+			t.Fatalf("AcceptBeeNameSuggestion() = (%q, %v), want (%q, nil)", got, err, name)
+		}
+		if n := bngCountByName(t, db, "bee_name", name); n != 1 {
+			t.Errorf("bee_name has %d rows for %q, want 1", n, name)
+		}
+		if n := bngCountByName(t, db, "bee_name_suggestion", name); n != 0 {
+			t.Errorf("bee_name_suggestion has %d rows for %q, want 0", n, name)
+		}
+	})
+
+	t.Run("BNS-28_AcceptNeverSuggestedNameNotFoundAndNotInserted", func(t *testing.T) {
+		s, db := bngLiveStore(t)
+		name := bngUniqueName("acc-never")
+		t.Cleanup(func() { _, _ = s.DeleteBeeName(bnCtx, name) })
+
+		got, err := s.AcceptBeeNameSuggestion(bnCtx, name)
+		if err != ErrBeeNameSuggestionNotFound {
+			t.Errorf("AcceptBeeNameSuggestion() error = %v, want ErrBeeNameSuggestionNotFound", err)
+		}
+		if got != "" {
+			t.Errorf("AcceptBeeNameSuggestion() = %q, want an empty string on error", got)
+		}
+		if n := bngCountByName(t, db, "bee_name", name); n != 0 {
+			t.Errorf("bee_name has %d rows for %q, want 0", n, name)
+		}
+	})
+
+	t.Run("BNS-29_AcceptExistingNameKeepsSuggestion", func(t *testing.T) {
+		s, db := bngLiveStore(t)
+		name := bngUniqueName("acc-dup")
+		if _, err := s.UploadBeeName(bnCtx, name); err != nil {
+			t.Fatalf("seed UploadBeeName() error = %v", err)
+		}
+		t.Cleanup(func() { _, _ = s.DeleteBeeName(bnCtx, name) })
+		if _, err := s.SubmitBeeName(bnCtx, name); err != nil {
+			t.Fatalf("seed SubmitBeeName() error = %v", err)
+		}
+		t.Cleanup(func() { _, _ = s.RejectBeeNameSuggestion(bnCtx, name) })
+
+		got, err := s.AcceptBeeNameSuggestion(bnCtx, name)
+		if err != ErrBeeNameExists {
+			t.Errorf("AcceptBeeNameSuggestion() error = %v, want ErrBeeNameExists", err)
+		}
+		if got != "" {
+			t.Errorf("AcceptBeeNameSuggestion() = %q, want an empty string on error", got)
+		}
+		if n := bngCountByName(t, db, "bee_name_suggestion", name); n != 1 {
+			t.Errorf("bee_name_suggestion has %d rows for %q, want 1", n, name)
 		}
 	})
 }
@@ -579,11 +636,11 @@ func TestST18to20_RejectBeeNameSuggestion(t *testing.T) {
 		s, _ := bngLiveStore(t)
 		name := bngUniqueName("rej-missing")
 		got, err := s.RejectBeeNameSuggestion(bnCtx, name)
-		if err != nil {
-			t.Fatalf("RejectBeeNameSuggestion() of a non-existent name error = %v, want nil", err)
+		if err != ErrBeeNameSuggestionNotFound {
+			t.Errorf("RejectBeeNameSuggestion() of a non-existent name error = %v, want ErrBeeNameSuggestionNotFound", err)
 		}
-		if got != name {
-			t.Errorf("RejectBeeNameSuggestion() = %q, want %q", got, name)
+		if got != "" {
+			t.Errorf("RejectBeeNameSuggestion() = %q, want an empty string on error", got)
 		}
 	})
 }

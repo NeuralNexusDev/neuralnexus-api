@@ -26,6 +26,7 @@ const (
 	msgPlatformLoginDisabled            = "Login with this platform is disabled for this account"
 	msgConflictingMicrosoftIdentities   = "This Microsoft account's Xbox Live and Minecraft: Java Edition identities belong to different accounts"
 	msgPlatformAlreadyLinked            = "This platform account is already linked to a different account"
+	msgUserAlreadyLinkedToPlatform      = "You already have a linked account on this platform; unlink it first"
 	msgSteamAccountNotFound             = "Steam account not found"
 	msgSteamAccountMismatch             = "Steam account mismatch"
 	msgInvalidRequestBody               = "Invalid request body"
@@ -85,6 +86,8 @@ func OAuthHandler(cfg *config.Config, as account.Service, las Store, ss session.
 				redirectProblem(w, r, state.RedirectURI, http.StatusConflict, msgConflictingMicrosoftIdentities)
 			case ErrPlatformAlreadyLinkedToDifferentAccount:
 				redirectProblem(w, r, state.RedirectURI, http.StatusConflict, msgPlatformAlreadyLinked)
+			case ErrUserAlreadyLinkedToPlatform:
+				redirectProblem(w, r, state.RedirectURI, http.StatusConflict, msgUserAlreadyLinkedToPlatform)
 			default:
 				redirectInternalServerError(w, r, state.RedirectURI, msgAuthenticationFailed)
 			}
@@ -154,6 +157,8 @@ func OpenIDHandler(cfg config.Steam, as account.Service, las Store, ss session.S
 				redirectProblem(w, r, state.RedirectURI, http.StatusForbidden, msgPlatformLoginDisabled)
 			case ErrPlatformAlreadyLinkedToDifferentAccount:
 				redirectProblem(w, r, state.RedirectURI, http.StatusConflict, msgPlatformAlreadyLinked)
+			case ErrUserAlreadyLinkedToPlatform:
+				redirectProblem(w, r, state.RedirectURI, http.StatusConflict, msgUserAlreadyLinkedToPlatform)
 			default:
 				redirectInternalServerError(w, r, state.RedirectURI, msgAuthenticationFailed)
 			}

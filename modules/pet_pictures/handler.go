@@ -3,6 +3,8 @@ package petpictures
 import (
 	"net/http"
 	"strconv"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
@@ -20,7 +22,9 @@ const (
 	msgUnableToGetPetPicture       = "Unable to get pet picture"
 	msgUnableToGetPet              = "Unable to get pet"
 	msgNoPermissionToCreatePet     = "You do not have permission to create a pet"
-	msgUnableToCreatePet           = "Unable to create pet (pet may already exist)"
+	msgUnableToCreatePet           = "Unable to create pet"
+	msgPetNameAlreadyExists        = "A pet with that name already exists"
+	msgInvalidPetName              = "Invalid pet name"
 	msgPetIDIsRequired             = "Pet ID is required"
 	msgUnableToUpdatePet           = "Unable to update pet"
 	msgUnableToGetRandomPetPicture = "Unable to get random pet picture"
@@ -30,6 +34,10 @@ const (
 	logUnableToGetPetPicture       = "[Error]: Unable to get pet picture:\n\t"
 	logUnableToGetPet              = "[Error]: Unable to get pet:\n\t"
 )
+
+func validPetName(name string) bool {
+	return !strings.Contains(name, "\x00") && utf8.ValidString(name)
+}
 
 // CreatePetHandler - Create a new pet
 func CreatePetHandler(s PetPicService) http.HandlerFunc {
@@ -52,15 +60,22 @@ func CreatePetHandler(s PetPicService) http.HandlerFunc {
 			responses.BadRequest(w, r, msgPetNameIsRequired)
 			return
 		}
+		if !validPetName(petName) {
+			responses.BadRequest(w, r, msgInvalidPetName)
+			return
+		}
 
 		petResponse, err := s.GetStore().CreatePet(r.Context(), petName)
 		if err != nil {
 			reqctx.Log(r.Context(), "[Error]: Unable to create pet:\n\t", err.Error())
-			if err == ErrPetNameEmpty {
+			switch err {
+			case ErrPetNameEmpty:
 				responses.BadRequest(w, r, msgPetNameMustNotBeEmpty)
-				return
+			case ErrPetNameExists:
+				responses.Conflict(w, r, msgPetNameAlreadyExists)
+			default:
+				responses.InternalServerError(w, r, msgUnableToCreatePet)
 			}
-			responses.InternalServerError(w, r, msgUnableToCreatePet)
 			return
 		}
 		responses.SendStruct(w, r, http.StatusCreated, petResponse)
@@ -120,6 +135,10 @@ func UpdatePetHandler(s PetPicService) http.HandlerFunc {
 			responses.Forbidden(w, r, msgNoPermissionToUpdatePet)
 			return
 		}
+		if !validPetName(pet.Name) {
+			responses.BadRequest(w, r, msgInvalidPetName)
+			return
+		}
 
 		_, err = s.GetStore().UpdatePet(r.Context(), pet)
 		if err != nil {
@@ -129,6 +148,8 @@ func UpdatePetHandler(s PetPicService) http.HandlerFunc {
 				responses.NotFound(w, r, msgPetNotFound)
 			case ErrPetNameEmpty:
 				responses.BadRequest(w, r, msgPetNameMustNotBeEmpty)
+			case ErrPetNameExists:
+				responses.Conflict(w, r, msgPetNameAlreadyExists)
 			default:
 				responses.InternalServerError(w, r, msgUnableToUpdatePet)
 			}

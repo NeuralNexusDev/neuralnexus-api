@@ -1741,12 +1741,62 @@ func TestOA67to71and85LinkPlatformUserToSession(t *testing.T) {
 		}
 	})
 
-	t.Run("OA-85_AddLinkedAccountAlreadyLinked", func(t *testing.T) {
+	t.Run("OA-85_AddLinkedAccountAlreadyLinkedWinnerVanishedOnReread", func(t *testing.T) {
 		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*LinkedAccount) error { return ErrAlreadyLinked }}
 
 		err := linkPlatformUserToSession(testutil.LogContext(context.Background()), las, "user-1", PlatformDiscord, user)
 		if !errors.Is(err, ErrLinkAccountFailed) {
 			t.Fatalf("error = %v, want %v", err, ErrLinkAccountFailed)
+		}
+	})
+
+	lostRaceStore := func(rereads func() (*LinkedAccount, error)) *oaMockLinkAccountStore {
+		calls := 0
+		return &oaMockLinkAccountStore{
+			AddLinkedAccountToDBFunc: func(*LinkedAccount) error { return ErrAlreadyLinked },
+			GetLinkedAccountByPlatformIDFunc: func(Platform, string) (*LinkedAccount, error) {
+				calls++
+				if calls == 1 {
+					return nil, account.ErrNotFound
+				}
+				return rereads()
+			},
+		}
+	}
+
+	t.Run("OA-93_LostRaceSameOwnerLinksNil", func(t *testing.T) {
+		las := lostRaceStore(func() (*LinkedAccount, error) { return &LinkedAccount{UserID: "user-1"}, nil })
+
+		err := linkPlatformUserToSession(testutil.LogContext(context.Background()), las, "user-1", PlatformDiscord, user)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("OA-94_LostRaceOtherOwnerConflict", func(t *testing.T) {
+		las := lostRaceStore(func() (*LinkedAccount, error) { return &LinkedAccount{UserID: "other-user"}, nil })
+
+		err := linkPlatformUserToSession(testutil.LogContext(context.Background()), las, "user-1", PlatformDiscord, user)
+		if !errors.Is(err, ErrPlatformAlreadyLinkedToDifferentAccount) {
+			t.Fatalf("error = %v, want %v", err, ErrPlatformAlreadyLinkedToDifferentAccount)
+		}
+	})
+
+	t.Run("OA-95_LostRaceRereadFails", func(t *testing.T) {
+		las := lostRaceStore(func() (*LinkedAccount, error) { return nil, testutil.ErrDBDown })
+
+		err := linkPlatformUserToSession(testutil.LogContext(context.Background()), las, "user-1", PlatformDiscord, user)
+		if !errors.Is(err, ErrLinkAccountFailed) {
+			t.Fatalf("error = %v, want %v", err, ErrLinkAccountFailed)
+		}
+	})
+
+	t.Run("OA-101_SecondAccountOnSamePlatformConflicts", func(t *testing.T) {
+		las := &oaMockLinkAccountStore{AddLinkedAccountToDBFunc: func(*LinkedAccount) error { return ErrUserAlreadyLinkedToPlatform }}
+
+		err := linkPlatformUserToSession(testutil.LogContext(context.Background()), las, "user-1", PlatformDiscord, user)
+		if err != ErrUserAlreadyLinkedToPlatform {
+			t.Fatalf("error = %v, want %v", err, ErrUserAlreadyLinkedToPlatform)
 		}
 	})
 }
@@ -2231,6 +2281,125 @@ func TestOA82LinkPlatformUserToSessionConcurrentRace(t *testing.T) {
 		}
 		if la.UserID != "user-A" && la.UserID != "user-B" {
 			t.Errorf("linked account UserID = %q, want user-A or user-B (the winner), not duplicated or overwritten by a third value", la.UserID)
+		}
+	})
+}
+
+func TestOA96LinkPlatformUserToSessionConcurrentLinksSettle(t *testing.T) {
+	t.Run("OA-96_ConcurrentLinksSettle", func(t *testing.T) {
+		link := func(las Store, user *oaIdentity, userIDs ...string) []error {
+			errs := make([]error, len(userIDs))
+			var wg sync.WaitGroup
+			wg.Add(len(userIDs))
+			for i, userID := range userIDs {
+				go func() {
+					defer wg.Done()
+					errs[i] = linkPlatformUserToSession(testutil.LogContext(context.Background()), las, userID, PlatformDiscord, user)
+				}()
+			}
+			wg.Wait()
+			return errs
+		}
+
+		for _, err := range link(newOAConcurrentLinkAccountStore(), &oaIdentity{id: "race-96a", username: "alice"}, "user-A", "user-A") {
+			if err != nil {
+				t.Errorf("same user: error = %v, want nil", err)
+			}
+		}
+
+		nils, conflicts := 0, 0
+		for _, err := range link(newOAConcurrentLinkAccountStore(), &oaIdentity{id: "race-96b", username: "alice"}, "user-A", "user-B") {
+			switch {
+			case err == nil:
+				nils++
+			case errors.Is(err, ErrPlatformAlreadyLinkedToDifferentAccount):
+				conflicts++
+			default:
+				t.Errorf("two users: unexpected error %v", err)
+			}
+		}
+		if nils != 1 || conflicts != 1 {
+			t.Errorf("two users: %d nil and %d conflict, want 1 and 1", nils, conflicts)
+		}
+	})
+}
+
+func TestOA97to100MicrosoftJavaFailure(t *testing.T) {
+	activeSession := func(userID string) *session.Session {
+		return &session.Session{ID: "sess-1", UserID: userID, ExpiresAt: time.Now().Add(time.Hour).Unix()}
+	}
+	linkedXboxStore := func(owner string) *oaMockLinkAccountStore {
+		return &oaMockLinkAccountStore{GetLinkedAccountByPlatformIDFunc: func(platform Platform, _ string) (*LinkedAccount, error) {
+			if platform == PlatformXboxLive {
+				return &LinkedAccount{UserID: owner, Verified: true, LoginEnabled: true}, nil
+			}
+			return nil, account.ErrNotFound
+		}}
+	}
+
+	t.Run("OA-97_LoginContinuesWhenOnlyJavaFailsForLinkedXbox", func(t *testing.T) {
+		cfg := testutil.NewConfig()
+		oaSetupMicrosoftChain(t, cfg, oaMicrosoftChainOpts{mcLoginFails: true})
+		as := &oaMockAccountService{GetAccountByIDFunc: func(id string) (*account.Account, error) { return &account.Account{UserID: id}, nil }}
+		las := linkedXboxStore("account-A")
+		ss := &authtest.FakeSessionService{}
+
+		got, err := ProcessOAuthLogin(testutil.LogContext(context.Background()), cfg, as, las, ss, "code", &OAuthState{Platform: PlatformMinecraft, Mode: ModeLogin})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got == nil || got.UserID != "account-A" {
+			t.Fatalf("session = %+v, want a session for account-A", got)
+		}
+		if as.AddAccountCalls != 0 || las.AddLinkedAccountToDBCalls != 0 {
+			t.Errorf("AddAccount called %d times, AddLinkedAccountToDB %d times, want 0 and 0", as.AddAccountCalls, las.AddLinkedAccountToDBCalls)
+		}
+	})
+
+	t.Run("OA-98_LoginFailsWhenJavaFailsAndXboxUnlinked", func(t *testing.T) {
+		cfg := testutil.NewConfig()
+		oaSetupMicrosoftChain(t, cfg, oaMicrosoftChainOpts{mcLoginFails: true})
+		as := &oaMockAccountService{}
+		las := &oaMockLinkAccountStore{}
+		ss := &authtest.FakeSessionService{}
+
+		_, err := ProcessOAuthLogin(testutil.LogContext(context.Background()), cfg, as, las, ss, "code", &OAuthState{Platform: PlatformMinecraft, Mode: ModeLogin})
+		if !errors.Is(err, ErrMinecraftLoginWithXbox) {
+			t.Fatalf("error = %v, want %v", err, ErrMinecraftLoginWithXbox)
+		}
+		if as.AddAccountCalls != 0 || len(ss.Added) != 0 {
+			t.Errorf("AddAccount called %d times, %d sessions added, want 0 and 0", as.AddAccountCalls, len(ss.Added))
+		}
+	})
+
+	t.Run("OA-99_LoginFailsWhenXboxLookupErrors", func(t *testing.T) {
+		cfg := testutil.NewConfig()
+		oaSetupMicrosoftChain(t, cfg, oaMicrosoftChainOpts{mcLoginFails: true})
+		as := &oaMockAccountService{}
+		las := &oaMockLinkAccountStore{GetLinkedAccountByPlatformIDFunc: func(Platform, string) (*LinkedAccount, error) { return nil, testutil.ErrDBDown }}
+		ss := &authtest.FakeSessionService{}
+
+		_, err := ProcessOAuthLogin(testutil.LogContext(context.Background()), cfg, as, las, ss, "code", &OAuthState{Platform: PlatformMinecraft, Mode: ModeLogin})
+		if !errors.Is(err, ErrMinecraftLoginWithXbox) {
+			t.Fatalf("error = %v, want %v", err, ErrMinecraftLoginWithXbox)
+		}
+		if as.AddAccountCalls != 0 || len(ss.Added) != 0 {
+			t.Errorf("AddAccount called %d times, %d sessions added, want 0 and 0", as.AddAccountCalls, len(ss.Added))
+		}
+	})
+
+	t.Run("OA-100_LinkStillFailsWhenJavaFails", func(t *testing.T) {
+		cfg := testutil.NewConfig()
+		oaSetupMicrosoftChain(t, cfg, oaMicrosoftChainOpts{mcLoginFails: true})
+		las := linkedXboxStore("user-1")
+		req := oaRequestWithSession(activeSession("user-1"))
+
+		_, err := ProcessOAuthLink(req, cfg, las, "code", &OAuthState{Platform: PlatformMinecraft, Mode: ModeLink})
+		if !errors.Is(err, ErrMinecraftLoginWithXbox) {
+			t.Fatalf("error = %v, want %v", err, ErrMinecraftLoginWithXbox)
+		}
+		if las.AddLinkedAccountToDBCalls != 0 {
+			t.Errorf("AddLinkedAccountToDB called %d times, want 0", las.AddLinkedAccountToDBCalls)
 		}
 	})
 }

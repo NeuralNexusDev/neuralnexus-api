@@ -14,6 +14,7 @@ const createdColumn = `COALESCE(to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-
 
 var (
 	ErrPetNameEmpty       = errors.New("pet name must not be empty")
+	ErrPetNameExists      = errors.New("pet name already exists")
 	ErrPetNotFound        = errors.New("pet not found")
 	ErrPetPictureNotFound = errors.New("pet picture not found")
 )
@@ -55,8 +56,14 @@ func petNotFound(err error) error {
 
 func translatePetConstraintErr(err error) error {
 	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23514" && pgErr.ConstraintName == "pets_name_not_empty" {
+	if !errors.As(err, &pgErr) {
+		return err
+	}
+	if pgErr.Code == "23514" && pgErr.ConstraintName == "pets_name_not_empty" {
 		return ErrPetNameEmpty
+	}
+	if pgErr.Code == "23505" && pgErr.ConstraintName == "name_check" {
+		return ErrPetNameExists
 	}
 	return err
 }

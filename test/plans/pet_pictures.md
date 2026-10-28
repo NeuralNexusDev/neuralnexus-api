@@ -11,9 +11,9 @@
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
 | PPS-02 | CreatePet | Happy Path | insert a pet with a unique name | live DB, unique name | Returns `*Pet` with matching `Name`, nonzero `ID`, nil `ProfilePicture`, nil error | P1 | `ProfilePicture` is `*string`; nil means the column came back SQL NULL |
-| PPS-03 | CreatePet | Error Path | insert a pet whose name already exists | live DB, name already created by a prior `CreatePet` | Returns `nil`, non-nil error (unique constraint violation) | P2 | |
+| PPS-03 | CreatePet | Error Path | insert a pet whose name already exists | live DB, name already created by a prior `CreatePet` | Returns `nil`, `ErrPetNameExists` (translated from the `name_check` unique violation, SQLSTATE 23505) | P2 | |
 | PPS-04 | CreatePet | Error Path | database unreachable | `DATABASE_URL` points at a closed local port | Returns `nil`, non-nil connection error | P2 | |
-| PPS-05 | CreatePet | Concurrency Invariant | N goroutines call `CreatePet` with the identical name simultaneously | live DB, one shared unique name per round | Exactly one call succeeds (nonzero `ID`, nil error); the rest fail with a unique-constraint error | P0 | design: 5 rounds x 8 concurrent callers, fresh name per round |
+| PPS-05 | CreatePet | Concurrency Invariant | N goroutines call `CreatePet` with the identical name simultaneously | live DB, one shared unique name per round | Exactly one call succeeds (nonzero `ID`, nil error); every other call fails with `ErrPetNameExists` | P0 | design: 5 rounds x 8 concurrent callers, fresh name per round |
 | PPS-26 | CreatePet | Error Path | insert a pet with an empty name | live DB, `name = ""` | Returns `nil`, `ErrPetNameEmpty` (translated from the `pets_name_not_empty` CHECK violation, not a raw Postgres error) | P1 | |
 | PPS-06 | GetPet | Error Path | id has no matching row | live DB, id not present in `pets` | Returns `nil`, `ErrPetNotFound` | P2 | |
 | PPS-07 | GetPetByName | Happy Path | name has a matching row | live DB, pet created via `CreatePet` | Returns `*Pet` with matching `ID`/`Name`/`ProfilePicture`, nil error | P1 | |
@@ -23,6 +23,7 @@
 | PPS-10 | UpdatePet | Happy Path | update an existing pet's name/profile_picture | live DB, pet created via `CreatePet` | Returns the same `*Pet` passed in, nil error; a follow-up `GetPetByName` on the new name confirms the row was updated | P1 | |
 | PPS-11 | UpdatePet | Error Path | update targets an id with no matching row | live DB, nonexistent id | Returns `nil`, `ErrPetNotFound` (an `UPDATE` matching zero rows means the pet no longer exists) | P2 | |
 | PPS-12 | UpdatePet | Error Path | database unreachable | closed-port `DATABASE_URL` | Returns `nil`, non-nil connection error | P2 | |
+| PPS-34 | UpdatePet | Error Path | rename a pet to the name of another pet | live DB, two pets created via `CreatePet` | Returns `nil`, `ErrPetNameExists` | P2 | |
 | PPS-13 | CreatePetPicture | Happy Path | insert a picture with a unique id | live DB, unique id | Returns `*PetPicture` with the given `ID`/`FileExt`/`PrimarySubject`/`OthersSubjects`/`Aliases` and zero-value `Created`, nil error | P1 | |
 | PPS-14 | CreatePetPicture | Error Path | insert a picture whose id already exists | live DB, id already created | Returns `nil`, non-nil error (unique constraint violation) | P2 | |
 | PPS-15 | CreatePetPicture | Error Path | database unreachable | closed-port `DATABASE_URL` | Returns `nil`, non-nil connection error | P2 | |
@@ -104,3 +105,8 @@
 | PPH-43 | DeletePetPictureHandler | Error Path | `store.GetPetPicture` fails with a non-not-found error | mock returns `nil, testutil.ErrDBDown` | 500 Internal Server Error; `store.DeletePetPicture` never called, `detail` is `msgUnableToGetPetPicture` | P2 |  |
 | PPH-44 | DeletePetPictureHandler | Error Path | `store.GetPet(PrimarySubject)` fails with a non-not-found error | mock `GetPetPicture` succeeds, `GetPet` returns `nil, testutil.ErrDBDown` | 500 Internal Server Error; `store.DeletePetPicture` never called, `detail` is `msgUnableToGetPet` | P2 |  |
 | PPH-45 | GetRandPetPictureByNameHandler | Error Path | `store` returns `ErrPetNotFound` for an unknown pet name | mock returns `nil, ErrPetNotFound` | 404 Not Found, `detail` is `msgPetNotFound` | P2 |  |
+| PPH-46 | CreatePetHandler | Error Path | `store.CreatePet` returns `ErrPetNameExists` | mock returns `nil, ErrPetNameExists` | 409 Conflict, `detail` is `msgPetNameAlreadyExists` | P1 | |
+| PPH-47 | UpdatePetHandler | Error Path | `store.UpdatePet` returns `ErrPetNameExists` | mock returns `nil, ErrPetNameExists` | 409 Conflict, `detail` is `msgPetNameAlreadyExists` | P1 | |
+| PPH-48 | CreatePetHandler | Error Path | name from the path contains a NUL byte | path value `"Re\x00x"` | 400 Bad Request, `detail` is `msgInvalidPetName`; `store.CreatePet` never called | P1 | |
+| PPH-49 | CreatePetHandler | Error Path | name from the path is not valid UTF-8 | path value `"Re\xffx"` | 400 Bad Request, `detail` is `msgInvalidPetName`; `store.CreatePet` never called | P1 | |
+| PPH-50 | UpdatePetHandler | Error Path | body name contains a NUL byte | body `{"id":1,"name":"Re\u0000x"}`, session permitted for that name | 400 Bad Request, `detail` is `msgInvalidPetName`; `store.UpdatePet` never called | P1 | |

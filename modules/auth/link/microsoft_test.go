@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -303,6 +304,24 @@ func TestMS27to34XstsAuthorize(t *testing.T) {
 	})
 }
 
+type msRoundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f msRoundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+type msBodyFunc func([]byte) (int, error)
+
+func (f msBodyFunc) Read(p []byte) (int, error) { return f(p) }
+func (msBodyFunc) Close() error                 { return nil }
+
+func msWithBody(t *testing.T, body io.Reader, status int) {
+	t.Helper()
+	prev := microsoftHTTPClient.Transport
+	microsoftHTTPClient.Transport = msRoundTripFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: status, Status: http.StatusText(status), Body: io.NopCloser(body), Header: http.Header{}}, nil
+	})
+	t.Cleanup(func() { microsoftHTTPClient.Transport = prev })
+}
+
 func TestMS35to39MinecraftLoginWithXbox(t *testing.T) {
 	t.Run("MS-35_Success", func(t *testing.T) {
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -339,6 +358,44 @@ func TestMS35to39MinecraftLoginWithXbox(t *testing.T) {
 		_, err := minecraftLoginWithXbox(testutil.LogContext(context.Background()), cfg, "hash1", "xsts-t")
 		if !errors.Is(err, ErrMinecraftLoginWithXbox) {
 			t.Fatalf("error = %v, want %v", err, ErrMinecraftLoginWithXbox)
+		}
+	})
+
+	t.Run("MS-59_NonOKLoginBodyReadErrorStillLoginFailed", func(t *testing.T) {
+		sent := false
+		msWithBody(t, msBodyFunc(func(p []byte) (int, error) {
+			if sent {
+				return 0, io.ErrUnexpectedEOF
+			}
+			sent = true
+			return copy(p, "partial"), nil
+		}), http.StatusForbidden)
+		cfg := msConfig(func(m *config.Microsoft) { m.MinecraftLoginURL = "http://login.test" })
+
+		_, err := minecraftLoginWithXbox(testutil.LogContext(context.Background()), cfg, "hash1", "xsts-t")
+		if !errors.Is(err, ErrMinecraftLoginWithXbox) {
+			t.Fatalf("error = %v, want %v", err, ErrMinecraftLoginWithXbox)
+		}
+	})
+
+	t.Run("MS-60_NonOKLoginBodyIsBounded", func(t *testing.T) {
+		const total = 64 << 20
+		read := 0
+		msWithBody(t, msBodyFunc(func(p []byte) (int, error) {
+			if read >= total {
+				return 0, io.EOF
+			}
+			read += len(p)
+			return len(p), nil
+		}), http.StatusForbidden)
+		cfg := msConfig(func(m *config.Microsoft) { m.MinecraftLoginURL = "http://login.test" })
+
+		_, err := minecraftLoginWithXbox(testutil.LogContext(context.Background()), cfg, "hash1", "xsts-t")
+		if !errors.Is(err, ErrMinecraftLoginWithXbox) {
+			t.Fatalf("error = %v, want %v", err, ErrMinecraftLoginWithXbox)
+		}
+		if read < maxErrorBodyBytes || read > 2*maxErrorBodyBytes {
+			t.Errorf("read %d bytes of the error body, want about %d", read, maxErrorBodyBytes)
 		}
 	})
 

@@ -1242,6 +1242,37 @@ func TestVerifyEd25519Middleware(t *testing.T) {
 		return rec, nextCalls, bodyInNext
 	}
 
+	t.Run("MW-68_Ed25519BodyOverLimitRejected", func(t *testing.T) {
+		body := strings.Repeat("a", maxSignedBodyBytes+1)
+		r := mwEd25519Request(t, priv, "1700000000", body, false).WithContext(mwBaseCtx())
+
+		rec, nextCalls, _ := run(r)
+
+		if nextCalls != 0 {
+			t.Errorf("next called %d times, want 0", nextCalls)
+		}
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("expected status 401, got %d", rec.Code)
+		}
+	})
+
+	t.Run("MW-69_Ed25519BodyAtLimitAccepted", func(t *testing.T) {
+		body := strings.Repeat("a", maxSignedBodyBytes)
+		r := mwEd25519Request(t, priv, "1700000000", body, false)
+
+		rec, nextCalls, bodyInNext := run(r)
+
+		if nextCalls != 1 {
+			t.Fatalf("next called %d times, want 1", nextCalls)
+		}
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected status 200, got %d", rec.Code)
+		}
+		if string(bodyInNext) != body {
+			t.Errorf("next received %d bytes, want the whole %d byte body", len(bodyInNext), len(body))
+		}
+	})
+
 	t.Run("MW-46_MissingSignatureHeaderRejected", func(t *testing.T) {
 		r := mwEd25519Request(t, nil, "1234567890", "{}", false)
 

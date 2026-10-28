@@ -35,6 +35,8 @@ type Store interface {
 
 var ErrAlreadyLinked = errors.New("platform account already linked")
 
+var ErrUserAlreadyLinkedToPlatform = errors.New("user already has a linked account on this platform")
+
 var ErrDuplicateLinkedAccount = errors.New("multiple linked accounts found for platform ID")
 
 var ErrLinkedAccountUnverified = errors.New("this linked account is unverified and can't be enabled for login")
@@ -46,6 +48,9 @@ func (s *store) AddLinkedAccountToDB(ctx context.Context, la *LinkedAccount) err
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "linked_accounts_platform_unique" {
 			return ErrAlreadyLinked
+		}
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "linked_accounts_unique" {
+			return ErrUserAlreadyLinkedToPlatform
 		}
 		return err
 	}

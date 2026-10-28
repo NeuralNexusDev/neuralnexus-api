@@ -131,7 +131,14 @@ func ProcessOAuthLogin(ctx context.Context, cfg *config.Config, as account.Servi
 			xbox, java, xboxErr = GetXboxAndMinecraftUser(ctx, cfg.Microsoft, token)
 		}
 		if xboxErr != nil {
-			return nil, xboxErr
+			if xbox == nil {
+				return nil, xboxErr
+			}
+			if _, lookupErr := las.GetLinkedAccountByPlatformID(ctx, PlatformXboxLive, xbox.GetID()); lookupErr != nil {
+				return nil, xboxErr
+			}
+			reqctx.Log(ctx, "Minecraft: Java Edition lookup failed, continuing with the linked Xbox Live identity:\n\t", xboxErr.Error())
+			java = nil
 		}
 		a, err = resolveOrCreateAccountForMicrosoftUser(ctx, as, las, xbox, java)
 		if err != nil {
@@ -495,8 +502,23 @@ func linkPlatformUserToSession(ctx context.Context, las Store, userID string, pl
 	// Link account
 	la = NewLinkedAccount(userID, platform, user.GetUsername(), user.GetID(), user)
 	if err := las.AddLinkedAccountToDB(context.WithoutCancel(ctx), la); err != nil {
-		reqctx.Log(ctx, ErrLinkAccountFailed.Error(), err.Error())
-		return ErrLinkAccountFailed
+		switch err {
+		case ErrUserAlreadyLinkedToPlatform:
+			return err
+		case ErrAlreadyLinked:
+			owner, getErr := las.GetLinkedAccountByPlatformID(ctx, platform, user.GetID())
+			if getErr != nil {
+				reqctx.Log(ctx, ErrLinkAccountFailed.Error(), getErr.Error())
+				return ErrLinkAccountFailed
+			}
+			if owner.UserID == userID {
+				return nil
+			}
+			return ErrPlatformAlreadyLinkedToDifferentAccount
+		default:
+			reqctx.Log(ctx, ErrLinkAccountFailed.Error(), err.Error())
+			return ErrLinkAccountFailed
+		}
 	}
 
 	return nil
