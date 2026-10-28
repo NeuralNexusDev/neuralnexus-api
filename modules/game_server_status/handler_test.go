@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/mcstatus"
@@ -299,6 +300,72 @@ func TestSimpleGameServerStatus(t *testing.T) {
 		}
 		if got := rec.Body.String(); got != "Offline" {
 			t.Errorf("body = %q, want %q", got, "Offline")
+		}
+	})
+}
+
+func TestSimpleGameServerStatusErrors(t *testing.T) {
+	serve := func(err error) *httptest.ResponseRecorder {
+		fake := &fakeGSSService{err: err}
+		req := testutil.NewRequest("GET", "/gss/minecraft/simple?host=1.2.3.4&port=25565", nil)
+		req.SetPathValue("game", "minecraft")
+		rec := httptest.NewRecorder()
+		SimpleGameServerStatus(fake)(rec, req)
+		return rec
+	}
+
+	t.Run("GSH-13_OfflineErrorsAre404Offline", func(t *testing.T) {
+		for _, err := range []error{ErrServerOffline, mcstatus.ErrJavaStatus, mcstatus.ErrBedrockStatus} {
+			rec := serve(err)
+			if rec.Code != 404 {
+				t.Errorf("%v: status = %d, want 404", err, rec.Code)
+			}
+			if got := rec.Body.String(); got != "Offline" {
+				t.Errorf("%v: body = %q, want %q", err, got, "Offline")
+			}
+			if got := rec.Header().Get("Content-Type"); got != "text/plain" {
+				t.Errorf("%v: Content-Type = %q, want text/plain", err, got)
+			}
+		}
+	})
+
+	t.Run("GSH-14_UnsupportedGameIs400", func(t *testing.T) {
+		rec := serve(ErrGameUnsupported)
+		if rec.Code != 400 {
+			t.Fatalf("status = %d, want 400", rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), "this game is not supported, or the given query type doesn't support this game") {
+			t.Errorf("body = %q, want the unsupported-game message", rec.Body.String())
+		}
+	})
+
+	t.Run("GSH-15_UpstreamErrorsAre502", func(t *testing.T) {
+		for _, err := range []error{ErrGameQQuery, ErrGameDigQuery, ErrReadBody, ErrDecodeBody, ErrNoGameQResponse} {
+			rec := serve(err)
+			if rec.Code != 502 {
+				t.Errorf("%v: status = %d, want 502", err, rec.Code)
+			}
+			body := rec.Body.String()
+			if !strings.Contains(body, "Failed to reach the game server query backend") {
+				t.Errorf("%v: body = %q, want the backend message", err, body)
+			}
+			if strings.Contains(body, err.Error()) {
+				t.Errorf("%v: body = %q leaks the cause", err, body)
+			}
+		}
+	})
+
+	t.Run("GSH-16_UnknownErrorIs500", func(t *testing.T) {
+		rec := serve(testutil.ErrBoom)
+		if rec.Code != 500 {
+			t.Fatalf("status = %d, want 500", rec.Code)
+		}
+		body := rec.Body.String()
+		if !strings.Contains(body, "Failed to query game server") {
+			t.Errorf("body = %q, want the query-failed message", body)
+		}
+		if strings.Contains(body, testutil.ErrBoom.Error()) {
+			t.Errorf("body = %q leaks the cause", body)
 		}
 	})
 }

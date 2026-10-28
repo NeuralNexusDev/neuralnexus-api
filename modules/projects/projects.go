@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
@@ -57,14 +58,26 @@ type Release struct {
 
 var ErrGitHubTokenUnset = errors.New("GITHUB_TOKEN is not set")
 
+// ErrReleasesNotFound is returned when GitHub answers 404 for the repository.
+var ErrReleasesNotFound = errors.New("releases not found")
+
+// ErrGitHubRateLimited is returned when GitHub answers 403 or 429.
+var ErrGitHubRateLimited = errors.New("github is not accepting requests")
+
+// ErrGitHubStatus is returned when GitHub answers any other non-200 status.
+var ErrGitHubStatus = errors.New("github returned an unexpected status")
+
 const (
 	msgGitHubTokenUnset    = "GITHUB_TOKEN is not set"
 	msgFailedToGetReleases = "Failed to get releases"
+	msgReleasesNotFound    = "Releases not found"
+	msgGitHubRateLimited   = "GitHub is not accepting requests right now. Try again later"
+	msgGitHubBadStatus     = "GitHub returned an unexpected response"
 )
 
 // -------------- Functions --------------
 func getReleases(ctx context.Context, cfg config.GitHub, group, project string) ([]Release, error) {
-	githubURL := cfg.APIEndpoint + "/repos/" + group + "/" + project + "/releases"
+	githubURL := cfg.APIEndpoint + "/repos/" + url.PathEscape(group) + "/" + url.PathEscape(project) + "/releases"
 	req, err := http.NewRequestWithContext(ctx, "GET", githubURL, nil)
 	if err != nil {
 		return nil, err
@@ -80,6 +93,18 @@ func getReleases(ctx context.Context, cfg config.GitHub, group, project string) 
 		return nil, err
 	}
 	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+	case http.StatusNotFound:
+		return nil, ErrReleasesNotFound
+	case http.StatusForbidden, http.StatusTooManyRequests:
+		reqctx.Log(ctx, "GitHub releases request refused:\n\t", resp.Status)
+		return nil, ErrGitHubRateLimited
+	default:
+		reqctx.Log(ctx, "GitHub releases request refused:\n\t", resp.Status)
+		return nil, ErrGitHubStatus
+	}
 
 	var releases []Release
 	err = json.NewDecoder(resp.Body).Decode(&releases)
@@ -128,11 +153,18 @@ func GetReleasesHandler(cfg config.GitHub) http.HandlerFunc {
 		releases, err := getReleases(r.Context(), cfg, group, project)
 		if err != nil {
 			reqctx.Log(r.Context(), err.Error())
-			if err == ErrGitHubTokenUnset {
+			switch err {
+			case ErrGitHubTokenUnset:
 				http.Error(w, msgGitHubTokenUnset, http.StatusInternalServerError)
-				return
+			case ErrReleasesNotFound:
+				http.Error(w, msgReleasesNotFound, http.StatusNotFound)
+			case ErrGitHubRateLimited:
+				http.Error(w, msgGitHubRateLimited, http.StatusServiceUnavailable)
+			case ErrGitHubStatus:
+				http.Error(w, msgGitHubBadStatus, http.StatusBadGateway)
+			default:
+				http.Error(w, msgFailedToGetReleases, http.StatusInternalServerError)
 			}
-			http.Error(w, msgFailedToGetReleases, http.StatusInternalServerError)
 			return
 		}
 
@@ -142,9 +174,13 @@ func GetReleasesHandler(cfg config.GitHub) http.HandlerFunc {
 		if format == "fml" {
 			gitHubReleasesURL := "https://github.com/" + group + "/" + project + "/releases"
 			forgeModUpdates := ConvertToFMLFormat(gitHubReleasesURL, releases)
-			json.NewEncoder(w).Encode(forgeModUpdates)
+			if err := json.NewEncoder(w).Encode(forgeModUpdates); err != nil {
+				reqctx.Log(r.Context(), "Failed to write releases:\n\t", err.Error())
+			}
 			return
 		}
-		json.NewEncoder(w).Encode(releases)
+		if err := json.NewEncoder(w).Encode(releases); err != nil {
+			reqctx.Log(r.Context(), "Failed to write releases:\n\t", err.Error())
+		}
 	}
 }

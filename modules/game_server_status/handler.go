@@ -22,6 +22,7 @@ const (
 	msgJavaStatusFailed        = "failed to get java server status"
 	msgBedrockStatusFailed     = "failed to get bedrock server status"
 	msgQueryFailed             = "Failed to query game server"
+	msgUpstreamQueryFailed     = "Failed to reach the game server query backend"
 	logUnableToQueryGameServer = "[Error]: Unable to query game server:\n\t"
 )
 
@@ -91,17 +92,26 @@ func SimpleGameServerStatus(s GSSService) http.HandlerFunc {
 			return
 		}
 
-		status := "Online"
-		statusCode := http.StatusOK
+		plain := func(code int, text string) {
+			w.Header().Set("Content-Type", "text/plain")
+			w.WriteHeader(code)
+			w.Write([]byte(text))
+		}
 		queryType := ParseQueryType(r.URL.Query().Get("query_type"))
 		_, err = s.QueryGameServer(r.Context(), game, host, port, queryType)
-		if err != nil {
-			status = "Offline"
-			statusCode = http.StatusNotFound
+		switch err {
+		case nil:
+			plain(http.StatusOK, "Online")
+		case ErrServerOffline, mcstatus.ErrJavaStatus, mcstatus.ErrBedrockStatus:
+			plain(http.StatusNotFound, "Offline")
+		case ErrGameUnsupported:
+			responses.BadRequest(w, r, msgGameUnsupported)
+		case ErrGameQQuery, ErrGameDigQuery, ErrReadBody, ErrDecodeBody, ErrNoGameQResponse:
+			reqctx.Log(r.Context(), "Unable to query game server:\n\t", err.Error())
+			responses.BadGateway(w, r, msgUpstreamQueryFailed)
+		default:
+			reqctx.Log(r.Context(), "Unable to query game server:\n\t", err.Error())
+			responses.InternalServerError(w, r, msgQueryFailed)
 		}
-
-		w.Header().Set("Content-Type", "text/plain")
-		w.WriteHeader(statusCode)
-		w.Write([]byte(status))
 	}
 }
