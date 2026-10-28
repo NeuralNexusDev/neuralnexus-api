@@ -10,7 +10,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/db"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
@@ -113,15 +112,6 @@ func stLiveSessionStore(t *testing.T) Store {
 		t.Fatalf("failed to connect to postgres: %v", err)
 	}
 
-	schema, err := db.FS.ReadFile("neuralnexus.sql")
-	if err != nil {
-		pool.Close()
-		t.Fatalf("failed to read the neuralnexus schema: %v", err)
-	}
-	if _, err := pool.Exec(testutil.LogContext(context.Background()), string(schema)); err != nil {
-		pool.Close()
-		t.Fatalf("failed to apply schema: %v", err)
-	}
 	t.Cleanup(pool.Close)
 
 	return NewStore(pool, nil)
