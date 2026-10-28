@@ -10,13 +10,10 @@ import (
 )
 
 var (
-	ErrDataStoreNotFound = errors.New("data store not found")
-	// ErrDataStoreInUse is returned when a delete is blocked by rows that still reference the store.
-	ErrDataStoreInUse = errors.New("data store still holds data")
-	// ErrDataStoreOwnerNotFound is returned when the owner account does not exist.
+	ErrDataStoreNotFound      = errors.New("data store not found")
+	ErrDataStoreInUse         = errors.New("data store still holds data")
 	ErrDataStoreOwnerNotFound = errors.New("data store owner not found")
-	// ErrDataStoreInvalidID is returned when a store or owner id is not a number.
-	ErrDataStoreInvalidID = errors.New("data store or owner id is not a number")
+	ErrDataStoreInvalidID     = errors.New("data store or owner id is not a number")
 )
 
 func translateDataStoreErr(err error) error {

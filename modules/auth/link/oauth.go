@@ -485,12 +485,7 @@ var ErrPlatformAlreadyLinkedToDifferentAccount = errors.New("this platform accou
 
 // linkPlatformUserToSession links the given platform identity to userID. If
 // it's already linked to a different account, that's returned as an error;
-// if it's already linked to this same account, linking is a no-op. When the
-// insert loses a race (ErrAlreadyLinked) the owner is re-read: the same
-// account returns nil, another account returns
-// ErrPlatformAlreadyLinkedToDifferentAccount, and a failed re-read returns
-// ErrLinkAccountFailed. ErrUserAlreadyLinkedToPlatform, meaning userID
-// already has another account on the platform, is returned unchanged.
+// if it's already linked to this same account, linking is a no-op.
 func linkPlatformUserToSession(ctx context.Context, las Store, userID string, platform Platform, user PlatformData) error {
 	la, err := las.GetLinkedAccountByPlatformID(ctx, platform, user.GetID())
 	switch err {

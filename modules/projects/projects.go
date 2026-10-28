@@ -58,13 +58,10 @@ type Release struct {
 
 var ErrGitHubTokenUnset = errors.New("GITHUB_TOKEN is not set")
 
-// ErrReleasesNotFound is returned when GitHub answers 404 for the repository.
 var ErrReleasesNotFound = errors.New("releases not found")
 
-// ErrGitHubRateLimited is returned when GitHub answers 403 or 429.
 var ErrGitHubRateLimited = errors.New("github is not accepting requests")
 
-// ErrGitHubStatus is returned when GitHub answers any other non-200 status.
 var ErrGitHubStatus = errors.New("github returned an unexpected status")
 
 const (

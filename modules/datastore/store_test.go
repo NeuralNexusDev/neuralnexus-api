@@ -3,17 +3,15 @@ package datastore
 import (
 	"context"
 	"errors"
+	"strconv"
 	"testing"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/db"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
 const (
-	dsSchema    = "dsstore"
 	dsOwnerID   = "910000000000070001"
 	dsOtherID   = "910000000000070002"
 	dsMissingID = "910000000000070999"
@@ -21,41 +19,26 @@ const (
 
 func newDSStore(t *testing.T) (DSStore, *pgxpool.Pool) {
 	t.Helper()
-	pgURL := testutil.PostgresURL(t, "neuralnexus")
 	ctx := context.Background()
-	admin, err := pgx.Connect(ctx, pgURL)
-	if err != nil {
-		t.Fatalf("failed to connect to postgres: %v", err)
-	}
-	t.Cleanup(func() {
-		admin.Exec(ctx, "DROP SCHEMA IF EXISTS "+dsSchema+" CASCADE")
-		admin.Close(ctx)
-	})
-	schema, err := db.FS.ReadFile("neuralnexus.sql")
-	if err != nil {
-		t.Fatalf("failed to read the neuralnexus schema: %v", err)
-	}
-	for _, q := range []string{
-		"DROP SCHEMA IF EXISTS " + dsSchema + " CASCADE",
-		"CREATE SCHEMA " + dsSchema,
-		"SET search_path TO " + dsSchema,
-		string(schema),
-		"INSERT INTO accounts (user_id) VALUES (" + dsOwnerID + "), (" + dsOtherID + ")",
-	} {
-		if _, err := admin.Exec(ctx, q); err != nil {
-			t.Fatalf("failed to prepare the %s schema: %v", dsSchema, err)
-		}
-	}
-	cfg, err := pgxpool.ParseConfig(pgURL)
-	if err != nil {
-		t.Fatalf("failed to parse the postgres url: %v", err)
-	}
-	cfg.ConnConfig.RuntimeParams["search_path"] = dsSchema
-	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	pool, err := pgxpool.New(ctx, testutil.PostgresURL(t, "neuralnexus"))
 	if err != nil {
 		t.Fatalf("failed to connect to postgres: %v", err)
 	}
 	t.Cleanup(pool.Close)
+
+	owner, _ := strconv.ParseInt(dsOwnerID, 10, 64)
+	other, _ := strconv.ParseInt(dsOtherID, 10, 64)
+	cleanup := func() {
+		pool.Exec(ctx, "DELETE FROM datastore_numbers WHERE store_id IN (SELECT store_id FROM datastores WHERE owner_id IN ($1, $2))", owner, other)
+		pool.Exec(ctx, "DELETE FROM datastores WHERE owner_id IN ($1, $2)", owner, other)
+		pool.Exec(ctx, "DELETE FROM accounts WHERE user_id IN ($1, $2)", owner, other)
+	}
+	cleanup()
+	t.Cleanup(cleanup)
+
+	if _, err := pool.Exec(ctx, "INSERT INTO accounts (user_id) VALUES ($1), ($2)", owner, other); err != nil {
+		t.Fatalf("failed to insert the accounts: %v", err)
+	}
 	return NewStore(pool), pool
 }
 

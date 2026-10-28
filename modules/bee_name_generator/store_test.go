@@ -18,7 +18,6 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/db"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
@@ -35,14 +34,6 @@ func bngLiveDB(t *testing.T) *pgxpool.Pool {
 		t.Fatalf("failed to connect to the bee_name_generator database: %v", err)
 	}
 	t.Cleanup(pool.Close)
-
-	schema, err := db.FS.ReadFile("bee_name_generator.sql")
-	if err != nil {
-		t.Fatalf("failed to read the schema: %v", err)
-	}
-	if _, err := pool.Exec(context.Background(), string(schema)); err != nil {
-		t.Fatalf("failed to apply the schema: %v", err)
-	}
 	return pool
 }
 
@@ -574,6 +565,7 @@ func TestST15to17and26_AcceptBeeNameSuggestion(t *testing.T) {
 	t.Run("BNS-28_AcceptNeverSuggestedNameNotFoundAndNotInserted", func(t *testing.T) {
 		s, db := bngLiveStore(t)
 		name := bngUniqueName("acc-never")
+		t.Cleanup(func() { _, _ = s.DeleteBeeName(bnCtx, name) })
 
 		got, err := s.AcceptBeeNameSuggestion(bnCtx, name)
 		if err != ErrBeeNameSuggestionNotFound {
