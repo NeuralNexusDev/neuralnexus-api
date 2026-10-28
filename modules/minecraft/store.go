@@ -29,7 +29,9 @@ const (
 	CacheProfileSigned = CacheProfile + "signed:"
 	S3KeyPrefix        = "texture/"
 
+	JavaPlayerNamesTable      = "player_names"
 	JavaPlayerTexturesTable   = "player_textures"
+	GeyserPlayerNamesTable    = "geyser_player_names"
 	GeyserPlayerTexturesTable = "geyser_player_textures"
 )
 
@@ -37,16 +39,22 @@ const (
 type Store interface {
 	Cache
 	S3
-	GetPlayerByUUID(ctx context.Context, id string) (*Player, error)
-	GetPlayerByName(ctx context.Context, name string) (*Player, error)
-	GetProfileByUUID(ctx context.Context, id string) (*Profile, error)
-
-	UpsertPlayer(ctx context.Context, player *Player, updateProfile bool) error
-
 	GetTextures(ctx context.Context, table, id, name string) (*TexturesValue, error)
 	UpsertTextures(ctx context.Context, table string, value *TexturesValue) error
 	UpsertTextureHash(ctx context.Context, hash string) error
+	JavaPlayerStore
+	GeyserPlayerStore
+}
 
+type JavaPlayerStore interface {
+	GetPlayerByUUID(ctx context.Context, id string) (*Player, error)
+	GetPlayerByName(ctx context.Context, name string) (*Player, error)
+	GetProfileByUUID(ctx context.Context, id string) (*Profile, error)
+	UpsertPlayer(ctx context.Context, player *Player, updateProfile bool) error
+}
+
+type GeyserPlayerStore interface {
+	GetGeyserPlayerByUUID(ctx context.Context, floodgateUUID string) (*GeyserPlayer, error)
 	GetGeyserPlayerByGamertag(ctx context.Context, gamertag string) (*GeyserPlayer, error)
 	GetGeyserPlayerByXUID(ctx context.Context, xuid int64) (*GeyserPlayer, error)
 	UpsertGeyserPlayer(ctx context.Context, player *GeyserPlayer) error
@@ -180,6 +188,18 @@ func (s *store) GetTextures(ctx context.Context, table, id, name string) (*Textu
 	return row.Value(name, s.cfg.LookupTexture), nil
 }
 
+func (s *store) upsertNameHistory(ctx context.Context, table, uuid, name string, now int64) error {
+	_, err := s.db.Exec(ctx, `
+		INSERT INTO `+table+` (player_id, name, first_seen, last_seen)
+		VALUES ($1, $2, $3, $3)
+		ON CONFLICT (player_id, name) DO UPDATE SET
+			last_seen = EXCLUDED.last_seen
+		`,
+		uuid, name, now,
+	)
+	return err
+}
+
 // UpsertPlayer upserts a player into the database and updates name history
 func (s *store) UpsertPlayer(ctx context.Context, player *Player, updateProfile bool) error {
 	now := time.Now().UnixMilli()
@@ -212,17 +232,7 @@ func (s *store) UpsertPlayer(ctx context.Context, player *Player, updateProfile 
 	if err != nil {
 		return err
 	}
-
-	// Upsert name history
-	_, err = s.db.Exec(ctx, `
-		INSERT INTO player_names (player_id, name, first_seen, last_seen)
-		VALUES ($1, $2, $3, $3)
-		ON CONFLICT (player_id, name) DO UPDATE SET
-			last_seen = EXCLUDED.last_seen
-		`,
-		player.ID, player.Name, now,
-	)
-	return err
+	return s.upsertNameHistory(ctx, JavaPlayerNamesTable, player.ID, player.Name, now)
 }
 
 // UpsertTextures upserts a player's skin and cape into the database
@@ -239,12 +249,83 @@ func (s *store) UpsertTextures(ctx context.Context, table string, value *Texture
 	// via ON CONFLICT ON CONSTRAINT — the conflict target must repeat the
 	// same expressions instead.
 	_, err := s.db.Exec(ctx, `
-		INSERT INTO $1 (player_id, skin, model, cape, first_seen, last_seen)
-		VALUES ($2, $3, $4, $5, $6, $6)
+		INSERT INTO `+table+` (player_id, skin, model, cape, first_seen, last_seen)
+		VALUES ($1, $2, $3, $4, $5, $5)
 		ON CONFLICT (player_id, COALESCE(skin, ''), COALESCE(model, ''), COALESCE(cape, '')) DO UPDATE SET
 			last_seen = EXCLUDED.last_seen
-		`, table, value.ProfileID, textureHash(skin), model, textureHash(cape), value.Timestamp)
+		`, value.ProfileID, textureHash(skin), model, textureHash(cape), value.Timestamp)
 	return err
+}
+
+// GetGeyserPlayerByUUID gets a Bedrock player from their floodgateUUID
+func (s *store) GetGeyserPlayerByUUID(ctx context.Context, floodgateUUID string) (*GeyserPlayer, error) {
+	rows, err := s.db.Query(ctx, `
+		SELECT id, xuid, gamertag, first_seen, last_seen
+		FROM geyser_players
+		WHERE id = $1
+		ORDER BY last_seen DESC
+		LIMIT 1`, floodgateUUID)
+	if err != nil {
+		return nil, err
+	}
+	player, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[GeyserPlayer])
+	if err != nil {
+		return nil, playerNotFound(err)
+	}
+	return player, nil
+}
+
+// GetGeyserPlayerByGamertag gets a Bedrock player from their gamertag
+func (s *store) GetGeyserPlayerByGamertag(ctx context.Context, gamertag string) (*GeyserPlayer, error) {
+	rows, err := s.db.Query(ctx, `
+		SELECT id, xuid, gamertag, first_seen, last_seen
+		FROM geyser_players
+		WHERE gamertag = $1
+		ORDER BY last_seen DESC
+		LIMIT 1`, gamertag)
+	if err != nil {
+		return nil, err
+	}
+	player, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[GeyserPlayer])
+	if err != nil {
+		return nil, playerNotFound(err)
+	}
+	return player, nil
+}
+
+// GetGeyserPlayerByXUID gets a Bedrock player from their xuid
+func (s *store) GetGeyserPlayerByXUID(ctx context.Context, xuid int64) (*GeyserPlayer, error) {
+	rows, err := s.db.Query(ctx, `
+		SELECT id, xuid, gamertag, first_seen, last_seen
+		FROM geyser_players
+		WHERE xuid = $1`, xuid)
+	if err != nil {
+		return nil, err
+	}
+	player, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[GeyserPlayer])
+	if err != nil {
+		return nil, playerNotFound(err)
+	}
+	player.ID = xuidToUUID(player.XUID)
+	return player, nil
+}
+
+// UpsertGeyserPlayer upserts a Bedrock player's info
+func (s *store) UpsertGeyserPlayer(ctx context.Context, player *GeyserPlayer) error {
+	now := time.Now().UnixMilli()
+	_, err := s.db.Exec(ctx, `
+		INSERT INTO geyser_players (id, xuid, gamertag, first_seen, last_seen)
+		VALUES ($1, $2, $3, $4, $4)
+		ON CONFLICT (xuid) DO UPDATE SET
+			gamertag  = EXCLUDED.gamertag,
+			last_seen = EXCLUDED.last_seen
+		`,
+		player.ID, player.XUID, player.Gamertag, now,
+	)
+	if err != nil {
+		return err
+	}
+	return s.upsertNameHistory(ctx, GeyserPlayerNamesTable, player.ID, player.Gamertag, now)
 }
 
 // textureHash returns t's hash, or nil when absent or unparsable — an
@@ -341,56 +422,6 @@ func (c *cache) SetSignedProfileInCache(ctx context.Context, player *Player) err
 		return err
 	}
 	return c.rdb.Set(ctx, CacheProfileSigned+player.ID, string(data), redisTTL).Err()
-}
-
-// GetGeyserPlayerByGamertag gets a Bedrock player's gamertag->XUID mapping.
-func (s *store) GetGeyserPlayerByGamertag(ctx context.Context, gamertag string) (*GeyserPlayer, error) {
-	rows, err := s.db.Query(ctx, `
-		SELECT id, xuid, gamertag, first_seen, last_seen
-		FROM geyser_players
-		WHERE gamertag = $1
-		ORDER BY last_seen DESC
-		LIMIT 1`, gamertag)
-	if err != nil {
-		return nil, err
-	}
-	player, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[GeyserPlayer])
-	if err != nil {
-		return nil, playerNotFound(err)
-	}
-	return player, nil
-}
-
-// GetGeyserPlayerByXUID gets a Bedrock player's player info by XUID
-func (s *store) GetGeyserPlayerByXUID(ctx context.Context, xuid int64) (*GeyserPlayer, error) {
-	rows, err := s.db.Query(ctx, `
-		SELECT id, xuid, gamertag, first_seen, last_seen
-		FROM geyser_players
-		WHERE xuid = $1`, xuid)
-	if err != nil {
-		return nil, err
-	}
-	player, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[GeyserPlayer])
-	if err != nil {
-		return nil, playerNotFound(err)
-	}
-	player.ID = xuidToUUID(player.XUID)
-	return player, nil
-}
-
-// UpsertGeyserPlayer upserts a Bedrock player's info
-func (s *store) UpsertGeyserPlayer(ctx context.Context, player *GeyserPlayer) error {
-	now := time.Now().UnixMilli()
-	_, err := s.db.Exec(ctx, `
-		INSERT INTO geyser_players (id, xuid, gamertag, first_seen, last_seen)
-		VALUES ($1, $2, $3, $4, $4)
-		ON CONFLICT (xuid) DO UPDATE SET
-			gamertag  = EXCLUDED.gamertag,
-			last_seen = EXCLUDED.last_seen
-		`,
-		player.ID, player.XUID, player.Gamertag, now,
-	)
-	return err
 }
 
 // IsTextureInS3 check if the texture is in S3
