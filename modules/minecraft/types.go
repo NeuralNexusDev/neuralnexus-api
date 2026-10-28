@@ -131,7 +131,7 @@ type Property struct {
 func (p *Property) String() string {
 	str := "{ Name: " + string(p.Name) + ", Value: " + p.Value
 	if p.Signature != "" {
-		str += ", " + p.Signature
+		str += ", Signature: " + p.Signature
 	}
 	str += " }"
 	return str
