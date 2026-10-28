@@ -13,7 +13,8 @@ import (
 const createdColumn = `COALESCE(to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'), '')`
 
 var (
-	ErrPetNameEmpty       = errors.New("pet name must not be empty")
+	ErrPetNameEmpty = errors.New("pet name must not be empty")
+	// ErrPetNameExists is returned when a pet name is already taken.
 	ErrPetNameExists      = errors.New("pet name already exists")
 	ErrPetNotFound        = errors.New("pet not found")
 	ErrPetPictureNotFound = errors.New("pet picture not found")
