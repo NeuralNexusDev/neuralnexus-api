@@ -3,9 +3,10 @@ package gss
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strconv"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/mcstatus"
@@ -44,8 +45,11 @@ func NewService(cfg config.GameServerStatus, mcStatus mcstatus.MCStatusService) 
 // QueryGameQ - Query GameQ REST API
 func (s *service) QueryGameQ(ctx context.Context, game string, host string, port int) (*GameQResponse, error) {
 	var response map[string]GameQResponse
-	url := fmt.Sprintf(s.cfg.GameQEndpoint+"/GssGameq.php/%s?host=%s&port=%d", game, host, port)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	q := url.Values{}
+	q.Set("host", host)
+	q.Set("port", strconv.Itoa(port))
+	reqURL := s.cfg.GameQEndpoint + "/GssGameq.php/" + url.PathEscape(game) + "?" + q.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
 		reqctx.Log(ctx, err.Error())
 		return nil, ErrGameQQuery
@@ -55,6 +59,7 @@ func (s *service) QueryGameQ(ctx context.Context, game string, host string, port
 		reqctx.Log(ctx, err.Error())
 		return nil, ErrGameQQuery
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
@@ -64,7 +69,6 @@ func (s *service) QueryGameQ(ctx context.Context, game string, host string, port
 		reqctx.Log(ctx, string(body))
 		return nil, ErrGameQQuery
 	}
-	defer resp.Body.Close()
 
 	err = json.NewDecoder(resp.Body).Decode(&response)
 	if err != nil {
@@ -81,8 +85,11 @@ func (s *service) QueryGameQ(ctx context.Context, game string, host string, port
 // QueryGameDig - Query GameDig REST API
 func (s *service) QueryGameDig(ctx context.Context, game string, host string, port int) (*GameDigResponse, error) {
 	var response GameDigResponse
-	url := fmt.Sprintf(s.cfg.GameDigEndpoint+"/%s?host=%s&port=%d", game, host, port)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	q := url.Values{}
+	q.Set("host", host)
+	q.Set("port", strconv.Itoa(port))
+	reqURL := s.cfg.GameDigEndpoint + "/" + url.PathEscape(game) + "?" + q.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
 		reqctx.Log(ctx, err.Error())
 		return nil, ErrGameDigQuery
@@ -92,6 +99,7 @@ func (s *service) QueryGameDig(ctx context.Context, game string, host string, po
 		reqctx.Log(ctx, err.Error())
 		return nil, ErrGameDigQuery
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
@@ -101,7 +109,6 @@ func (s *service) QueryGameDig(ctx context.Context, game string, host string, po
 		reqctx.Log(ctx, string(body))
 		return nil, ErrGameDigQuery
 	}
-	defer resp.Body.Close()
 
 	err = json.NewDecoder(resp.Body).Decode(&response)
 	if err != nil {

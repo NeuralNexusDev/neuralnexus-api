@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"testing/iotest"
 	"time"
@@ -430,6 +431,104 @@ func TestQueryCancellation(t *testing.T) {
 				}
 			case <-time.After(5 * time.Second):
 				t.Fatal("call did not return after the ctx was cancelled")
+			}
+		})
+	}
+}
+
+type closeTrackingBody struct {
+	io.Reader
+	closed bool
+}
+
+func (c *closeTrackingBody) Close() error {
+	c.closed = true
+	return nil
+}
+
+func TestQueryOutbound(t *testing.T) {
+	svc := NewService(testutil.NewConfig().GameServerStatus, mcstatus.NewService())
+	queryGameQ := func(host string) error {
+		_, err := svc.QueryGameQ(testutil.LogContext(context.Background()), "cs16", host, 27015)
+		return err
+	}
+	queryGameDig := func(host string) error {
+		_, err := svc.QueryGameDig(testutil.LogContext(context.Background()), "factorio", host, 27015)
+		return err
+	}
+	okQ := `{"srv":{"gq_online":true}}`
+	okDig := `{"name":"n"}`
+
+	for _, tc := range []struct {
+		id      string
+		name    string
+		call    func(host string) error
+		wantErr error
+	}{
+		{"GSV-34", "GameQNon200ClosesBody", queryGameQ, ErrGameQQuery},
+		{"GSV-35", "GameDigNon200ClosesBody", queryGameDig, ErrGameDigQuery},
+	} {
+		t.Run(tc.id+"_"+tc.name, func(t *testing.T) {
+			body := &closeTrackingBody{Reader: strings.NewReader("upstream exploded")}
+			resp := &http.Response{StatusCode: http.StatusInternalServerError, Body: body, Header: make(http.Header)}
+			testutil.SwapTransport(t, &testutil.FakeRoundTripper{Resp: resp})
+
+			if err := tc.call("1.2.3.4"); !errors.Is(err, tc.wantErr) {
+				t.Errorf("error = %v, want %v", err, tc.wantErr)
+			}
+			if !body.closed {
+				t.Error("response body was not closed")
+			}
+		})
+	}
+
+	for _, tc := range []struct {
+		id   string
+		name string
+		call func(host string) error
+		body string
+	}{
+		{"GSV-36", "GameQHostWithAmpersandStaysOneParameter", queryGameQ, okQ},
+		{"GSV-38", "GameDigHostWithAmpersandStaysOneParameter", queryGameDig, okDig},
+	} {
+		t.Run(tc.id+"_"+tc.name, func(t *testing.T) {
+			rt := &testutil.FakeRoundTripper{Resp: testutil.FakeResponse(http.StatusOK, tc.body)}
+			testutil.SwapTransport(t, rt)
+
+			if err := tc.call("a&port=1"); err != nil {
+				t.Fatalf("error = %v, want nil", err)
+			}
+			q := rt.LastReq.URL.Query()
+			if got := q.Get("host"); got != "a&port=1" {
+				t.Errorf("host = %q, want %q", got, "a&port=1")
+			}
+			if got := q["port"]; len(got) != 1 || got[0] != "27015" {
+				t.Errorf("port = %v, want [27015]", got)
+			}
+		})
+	}
+
+	for _, tc := range []struct {
+		id   string
+		name string
+		call func(host string) error
+		body string
+	}{
+		{"GSV-37", "GameQHostWithNewlineIsSent", queryGameQ, okQ},
+		{"GSV-39", "GameDigHostWithNewlineIsSent", queryGameDig, okDig},
+	} {
+		t.Run(tc.id+"_"+tc.name, func(t *testing.T) {
+			rt := &testutil.FakeRoundTripper{Resp: testutil.FakeResponse(http.StatusOK, tc.body)}
+			testutil.SwapTransport(t, rt)
+
+			if err := tc.call("a\nb"); err != nil {
+				t.Fatalf("error = %v, want nil", err)
+			}
+			if rt.LastReq == nil {
+				t.Fatal("no request was sent")
+			}
+			if got := rt.LastReq.URL.Query().Get("host"); got != "a\nb" {
+				t.Errorf("host = %q, want %q", got, "a\nb")
 			}
 		})
 	}

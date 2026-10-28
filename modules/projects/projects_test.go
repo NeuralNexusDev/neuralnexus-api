@@ -53,8 +53,9 @@ func TestGetReleases(t *testing.T) {
 
 	t.Run("PJ-03_ErrorPath_InvalidRequestURL", func(t *testing.T) {
 		cfg := testGitHub("test-token")
+		cfg.APIEndpoint = "http://bad host"
 
-		releases, err := getReleases(pjCtx, cfg, "a\nb", "project")
+		releases, err := getReleases(pjCtx, cfg, "group", "project")
 		if err == nil {
 			t.Fatal("getReleases() error = nil, want non-nil")
 		}
@@ -118,6 +119,60 @@ func TestGetReleases(t *testing.T) {
 		}
 		if got := rt.LastReq.Context().Value(ctxKey{}); got != "marker" {
 			t.Errorf("outbound request ctx value = %v, want marker", got)
+		}
+	})
+
+	logCtx := testutil.LogContext(pjCtx)
+
+	t.Run("PJ-17_NotFoundIsErrReleasesNotFound", func(t *testing.T) {
+		testutil.SwapTransport(t, &testutil.FakeRoundTripper{Resp: testutil.FakeResponse(http.StatusNotFound, `{"message":"Not Found"}`)})
+
+		releases, err := getReleases(logCtx, testGitHub("test-token"), "group", "project")
+		if !errors.Is(err, ErrReleasesNotFound) {
+			t.Errorf("getReleases() error = %v, want %v", err, ErrReleasesNotFound)
+		}
+		if releases != nil {
+			t.Errorf("getReleases() releases = %+v, want nil", releases)
+		}
+	})
+
+	t.Run("PJ-18_ForbiddenAndTooManyAreRateLimited", func(t *testing.T) {
+		for _, status := range []int{http.StatusForbidden, http.StatusTooManyRequests} {
+			testutil.SwapTransport(t, &testutil.FakeRoundTripper{Resp: testutil.FakeResponse(status, `{"message":"rate limit"}`)})
+
+			releases, err := getReleases(logCtx, testGitHub("test-token"), "group", "project")
+			if !errors.Is(err, ErrGitHubRateLimited) {
+				t.Errorf("status %d: error = %v, want %v", status, err, ErrGitHubRateLimited)
+			}
+			if releases != nil {
+				t.Errorf("status %d: releases = %+v, want nil", status, releases)
+			}
+		}
+	})
+
+	t.Run("PJ-19_OtherStatusIsErrGitHubStatus", func(t *testing.T) {
+		for _, status := range []int{http.StatusInternalServerError, http.StatusUnauthorized} {
+			testutil.SwapTransport(t, &testutil.FakeRoundTripper{Resp: testutil.FakeResponse(status, `{"message":"nope"}`)})
+
+			releases, err := getReleases(logCtx, testGitHub("test-token"), "group", "project")
+			if !errors.Is(err, ErrGitHubStatus) {
+				t.Errorf("status %d: error = %v, want %v", status, err, ErrGitHubStatus)
+			}
+			if releases != nil {
+				t.Errorf("status %d: releases = %+v, want nil", status, releases)
+			}
+		}
+	})
+
+	t.Run("PJ-20_PathIsEscaped", func(t *testing.T) {
+		rt := &testutil.FakeRoundTripper{Resp: testutil.FakeResponse(http.StatusOK, "[]")}
+		testutil.SwapTransport(t, rt)
+
+		if _, err := getReleases(logCtx, testGitHub("test-token"), "a/../b", "p q"); err != nil {
+			t.Fatalf("getReleases() error = %v, want nil", err)
+		}
+		if got, want := rt.LastReq.URL.EscapedPath(), "/repos/a%2F..%2Fb/p%20q/releases"; got != want {
+			t.Errorf("request path = %q, want %q", got, want)
 		}
 	})
 }
@@ -226,6 +281,12 @@ func TestConvertToFMLFormat(t *testing.T) {
 	})
 }
 
+type failingWriter struct{ header http.Header }
+
+func (f *failingWriter) Header() http.Header       { return f.header }
+func (f *failingWriter) WriteHeader(int)           {}
+func (f *failingWriter) Write([]byte) (int, error) { return 0, testutil.ErrBodyRead }
+
 func TestGetReleasesHandler(t *testing.T) {
 	t.Run("PJ-11_HappyPath_DefaultFormat", func(t *testing.T) {
 		cfg := testGitHub("test-token")
@@ -330,6 +391,48 @@ func TestGetReleasesHandler(t *testing.T) {
 		}
 		if got, want := rec.Body.String(), msgFailedToGetReleases+"\n"; got != want {
 			t.Errorf("body = %q, want %q", got, want)
+		}
+	})
+
+	for _, tc := range []struct {
+		id      string
+		name    string
+		status  int
+		want    int
+		message string
+	}{
+		{"PJ-21", "HandlerNotFound", http.StatusNotFound, http.StatusNotFound, "Releases not found"},
+		{"PJ-22", "HandlerRateLimited", http.StatusForbidden, http.StatusServiceUnavailable, "GitHub is not accepting requests right now. Try again later"},
+		{"PJ-23", "HandlerBadStatus", http.StatusInternalServerError, http.StatusBadGateway, "GitHub returned an unexpected response"},
+	} {
+		t.Run(tc.id+"_"+tc.name, func(t *testing.T) {
+			testutil.SwapTransport(t, &testutil.FakeRoundTripper{Resp: testutil.FakeResponse(tc.status, `{}`)})
+
+			req := testutil.NewRequest(http.MethodGet, "/projects/releases/group/project", nil)
+			req.SetPathValue("group", "group")
+			req.SetPathValue("project", "project")
+			rec := httptest.NewRecorder()
+
+			GetReleasesHandler(testGitHub("test-token"))(rec, req)
+
+			if rec.Code != tc.want {
+				t.Fatalf("status = %d, want %d", rec.Code, tc.want)
+			}
+			if got, want := rec.Body.String(), tc.message+"\n"; got != want {
+				t.Errorf("body = %q, want %q", got, want)
+			}
+		})
+	}
+
+	t.Run("PJ-24_EncodeErrorIsLogged", func(t *testing.T) {
+		testutil.SwapTransport(t, &testutil.FakeRoundTripper{Resp: testutil.FakeResponse(http.StatusOK, `[{"tag_name":"v1","html_url":"u"}]`)})
+
+		for _, target := range []string{"/projects/releases/group/project", "/projects/releases/group/project?format=fml"} {
+			req := testutil.NewRequest(http.MethodGet, target, nil)
+			req.SetPathValue("group", "group")
+			req.SetPathValue("project", "project")
+
+			GetReleasesHandler(testGitHub("test-token"))(&failingWriter{header: make(http.Header)}, req)
 		}
 	})
 }
