@@ -38,6 +38,7 @@ type mcMockStore struct {
 	isTextureInS3             func(hash string) (bool, error)
 	putTextureInS3            func(hash string, body io.ReadCloser) error
 	getGeyserPlayerByGamertag func(gamertag string) (*GeyserPlayer, error)
+	getGeyserPlayerByUUID     func(uuid string) (*GeyserPlayer, error)
 	getGeyserPlayerByXUID     func(xuid int64) (*GeyserPlayer, error)
 	upsertGeyserPlayer        func(player *GeyserPlayer) error
 }
@@ -137,6 +138,12 @@ func (m *mcMockStore) PutTextureInS3(_ context.Context, hash string, body io.Rea
 func (m *mcMockStore) GetGeyserPlayerByGamertag(_ context.Context, gamertag string) (*GeyserPlayer, error) {
 	if m.getGeyserPlayerByGamertag != nil {
 		return m.getGeyserPlayerByGamertag(gamertag)
+	}
+	return nil, ErrPlayerNotFound
+}
+func (m *mcMockStore) GetGeyserPlayerByUUID(_ context.Context, uuid string) (*GeyserPlayer, error) {
+	if m.getGeyserPlayerByUUID != nil {
+		return m.getGeyserPlayerByUUID(uuid)
 	}
 	return nil, ErrPlayerNotFound
 }
