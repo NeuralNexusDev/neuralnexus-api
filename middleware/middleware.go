@@ -34,6 +34,8 @@ const (
 	msgInternalError    = "An internal server error occurred."
 )
 
+const maxSignedBodyBytes = 1 << 20
+
 // Middleware - Middleware type
 type Middleware func(http.Handler) http.Handler
 
@@ -319,7 +321,7 @@ func VerifyEd25519Middleware(cfg *config.Config) Middleware {
 				return
 			}
 
-			bodyBytes, err := io.ReadAll(r.Body)
+			bodyBytes, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxSignedBodyBytes))
 			if err != nil {
 				reqctx.Log(r.Context(), "Error reading body:\n\t", err.Error())
 				responses.Unauthorized(w, r, msgInvalidSignature)
