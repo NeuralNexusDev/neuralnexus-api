@@ -164,7 +164,7 @@ func TestImgToBase64(t *testing.T) {
 	})
 }
 
-func TestLoadImgFromFile(t *testing.T) {
+func TestLoadImgFromFS(t *testing.T) {
 	t.Run("CST-13_ValidPNGFileDecodes", func(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "icon.png")
@@ -181,7 +181,7 @@ func TestLoadImgFromFile(t *testing.T) {
 			t.Fatalf("failed to close test file: %v", err)
 		}
 
-		got, err := LoadImgFromFile(path)
+		got, err := LoadImgFromFS(os.DirFS(dir), "icon.png")
 		if err != nil {
 			t.Fatalf("expected nil error, got %v", err)
 		}
@@ -192,9 +192,8 @@ func TestLoadImgFromFile(t *testing.T) {
 
 	t.Run("CST-14_MissingFileReturnsError", func(t *testing.T) {
 		dir := t.TempDir()
-		path := filepath.Join(dir, "does-not-exist.png")
 
-		got, err := LoadImgFromFile(path)
+		got, err := LoadImgFromFS(os.DirFS(dir), "does-not-exist.png")
 		if err == nil {
 			t.Fatal("expected a non-nil error")
 		}
@@ -210,7 +209,7 @@ func TestLoadImgFromFile(t *testing.T) {
 			t.Fatalf("failed to write test file: %v", err)
 		}
 
-		got, err := LoadImgFromFile(path)
+		got, err := LoadImgFromFS(os.DirFS(dir), "garbage.png")
 		if err == nil {
 			t.Fatal("expected a non-nil decode error")
 		}

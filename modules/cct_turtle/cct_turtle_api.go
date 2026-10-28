@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/NeuralNexusDev/neuralnexus-api/public"
 	"github.com/goccy/go-json"
 )
 
@@ -87,12 +88,12 @@ func ApplyRoutes(mux *http.ServeMux) *http.ServeMux {
 
 // GetTurtleCode - Get the turtle code
 func GetTurtleCode(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, "public/cct_turtle/startup.lua")
+	http.ServeFileFS(w, r, public.FS, "cct_turtle/startup.lua")
 }
 
 // GetTurtleUpdatingCode - Get the turtle updating code
 func GetTurtleUpdatingCode(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, "public/cct_turtle/updating_startup.lua")
+	http.ServeFileFS(w, r, public.FS, "cct_turtle/updating_startup.lua")
 }
 
 // TODO: pull from DB
