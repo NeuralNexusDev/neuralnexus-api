@@ -130,6 +130,18 @@ func TestHD03to06_UploadBeeNameHandler(t *testing.T) {
 		bngRequireStatus(t, w, http.StatusInternalServerError)
 		testutil.ExpectDetail(t, w, msgFailedToUploadBeeName)
 	})
+
+	t.Run("BNH-32_NameWithNULIs400", func(t *testing.T) {
+		bngRequireInvalidNameEverywhere(t, "bee\x00name")
+	})
+
+	t.Run("BNH-33_WhitespaceOnlyNameIs400", func(t *testing.T) {
+		bngRequireInvalidNameEverywhere(t, "  \t ")
+	})
+
+	t.Run("BNH-34_InvalidUTF8NameIs400", func(t *testing.T) {
+		bngRequireInvalidNameEverywhere(t, "bee\xffname")
+	})
 }
 
 func TestHD07to10_DeleteBeeNameHandler(t *testing.T) {
@@ -164,6 +176,14 @@ func TestHD07to10_DeleteBeeNameHandler(t *testing.T) {
 		h(w, bngRequest(t, http.MethodDelete, "/Buzzy", map[string]string{"name": "Buzzy"}, bngAuthorizedSession))
 		bngRequireStatus(t, w, http.StatusInternalServerError)
 		testutil.ExpectDetail(t, w, msgFailedToDeleteBeeName)
+	})
+
+	t.Run("BNH-36_DeleteAbsentName404", func(t *testing.T) {
+		s := &bngMockStore{deleteBeeName: func(string) (string, error) { return "", ErrBeeNameNotFound }}
+		w := httptest.NewRecorder()
+		DeleteBeeNameHandler(s)(w, bngRequest(t, http.MethodDelete, "/Buzzy", map[string]string{"name": "Buzzy"}, bngAuthorizedSession))
+		bngRequireStatus(t, w, http.StatusNotFound)
+		testutil.ExpectDetail(t, w, "Bee name not found")
 	})
 }
 
@@ -258,6 +278,18 @@ func TestHD14to19_GetBeeNameSuggestionsHandler(t *testing.T) {
 		bngRequireStatus(t, w, http.StatusInternalServerError)
 		testutil.ExpectDetail(t, w, msgFailedToGetBeeNameSuggestions)
 	})
+
+	t.Run("BNH-35_NegativeAmountIs400", func(t *testing.T) {
+		called := false
+		s := &bngMockStore{getBeeNameSuggestions: func(int64) ([]string, error) { called = true; return nil, nil }}
+		w := httptest.NewRecorder()
+		GetBeeNameSuggestionsHandler(s)(w, bngRequest(t, http.MethodGet, "/-1", map[string]string{"amount": "-1"}, bngAuthorizedSession))
+		bngRequireStatus(t, w, http.StatusBadRequest)
+		testutil.ExpectDetail(t, w, msgInvalidAmountProvided)
+		if called {
+			t.Error("store was called for a negative amount")
+		}
+	})
 }
 
 func TestHD20to23_AcceptBeeNameSuggestionHandler(t *testing.T) {
@@ -297,6 +329,14 @@ func TestHD20to23_AcceptBeeNameSuggestionHandler(t *testing.T) {
 		bngRequireStatus(t, w, http.StatusInternalServerError)
 		testutil.ExpectDetail(t, w, msgFailedToAcceptBeeNameSuggestion)
 	})
+
+	t.Run("BNH-38_AcceptNeverSuggestedName404", func(t *testing.T) {
+		s := &bngMockStore{acceptBeeNameSuggestion: func(string) (string, error) { return "", ErrBeeNameSuggestionNotFound }}
+		w := httptest.NewRecorder()
+		AcceptBeeNameSuggestionHandler(s)(w, bngRequest(t, http.MethodPost, "/Buzzy", map[string]string{"name": "Buzzy"}, bngAuthorizedSession))
+		bngRequireStatus(t, w, http.StatusNotFound)
+		testutil.ExpectDetail(t, w, "Bee name suggestion not found")
+	})
 }
 
 func TestHD24to27_RejectBeeNameSuggestionHandler(t *testing.T) {
@@ -332,6 +372,14 @@ func TestHD24to27_RejectBeeNameSuggestionHandler(t *testing.T) {
 		bngRequireStatus(t, w, http.StatusInternalServerError)
 		testutil.ExpectDetail(t, w, msgFailedToRejectBeeNameSuggestion)
 	})
+
+	t.Run("BNH-37_RejectAbsentSuggestion404", func(t *testing.T) {
+		s := &bngMockStore{rejectBeeNameSuggestion: func(string) (string, error) { return "", ErrBeeNameSuggestionNotFound }}
+		w := httptest.NewRecorder()
+		RejectBeeNameSuggestionHandler(s)(w, bngRequest(t, http.MethodDelete, "/Buzzy", map[string]string{"name": "Buzzy"}, bngAuthorizedSession))
+		bngRequireStatus(t, w, http.StatusNotFound)
+		testutil.ExpectDetail(t, w, "Bee name suggestion not found")
+	})
 }
 
 func TestHD28to30_StoreConflictMapping(t *testing.T) {
@@ -361,4 +409,34 @@ func TestHD28to30_StoreConflictMapping(t *testing.T) {
 		bngRequireStatus(t, w, http.StatusConflict)
 		testutil.ExpectDetail(t, w, "That bee name already exists")
 	})
+}
+
+func bngRequireInvalidNameEverywhere(t *testing.T, badName string) {
+	t.Helper()
+	handlers := []struct {
+		name    string
+		method  string
+		session *session.Session
+		handler func(BNGStore) http.HandlerFunc
+	}{
+		{"Upload", http.MethodPut, bngAuthorizedSession, UploadBeeNameHandler},
+		{"Delete", http.MethodDelete, bngAuthorizedSession, DeleteBeeNameHandler},
+		{"Submit", http.MethodPost, nil, SubmitBeeNameHandler},
+		{"Accept", http.MethodPost, bngAuthorizedSession, AcceptBeeNameSuggestionHandler},
+		{"Reject", http.MethodDelete, bngAuthorizedSession, RejectBeeNameSuggestionHandler},
+	}
+	for _, nh := range handlers {
+		t.Run(nh.name, func(t *testing.T) {
+			called := false
+			mark := func(string) (string, error) { called = true; return "", nil }
+			s := &bngMockStore{uploadBeeName: mark, deleteBeeName: mark, submitBeeName: mark, acceptBeeNameSuggestion: mark, rejectBeeNameSuggestion: mark}
+			w := httptest.NewRecorder()
+			nh.handler(s)(w, bngRequest(t, nh.method, "/x", map[string]string{"name": badName}, nh.session))
+			bngRequireStatus(t, w, http.StatusBadRequest)
+			testutil.ExpectDetail(t, w, msgInvalidName)
+			if called {
+				t.Error("store was called for an invalid name")
+			}
+		})
+	}
 }

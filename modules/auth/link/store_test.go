@@ -476,6 +476,27 @@ func TestLS75AddLinkedAccountToDBDuplicatePlatformID(t *testing.T) {
 	})
 }
 
+func TestLS79AddLinkedAccountToDBSecondAccountOfPlatform(t *testing.T) {
+	as, las, _ := stLiveStore(t)
+	t.Run("LS-79_AddSecondAccountOfPlatformUserLinked", func(t *testing.T) {
+		stSeedBareAccount(t, as, "910000000000000029")
+		stSeedLink(t, las, "910000000000000029", PlatformDiscord, "sttest-second-first", true, true)
+
+		err := las.AddLinkedAccountToDB(context.Background(), &LinkedAccount{
+			UserID:           "910000000000000029",
+			Platform:         PlatformDiscord,
+			PlatformUsername: "sttest",
+			PlatformID:       "sttest-second-other",
+			Data:             map[string]string{},
+			Verified:         true,
+			LoginEnabled:     true,
+		})
+		if !errors.Is(err, ErrUserAlreadyLinkedToPlatform) {
+			t.Errorf("expected ErrUserAlreadyLinkedToPlatform, got %v", err)
+		}
+	})
+}
+
 func TestLS77to78_NotFoundSentinels(t *testing.T) {
 	s := stLiveFullStore(t)
 

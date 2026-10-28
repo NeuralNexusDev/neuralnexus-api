@@ -19,6 +19,10 @@ const (
 	msgFailedToDeleteDatastore       = "Failed to delete datastore"
 	logBadBody                       = "Bad body:\n\t"
 	msgFailedToCreateDatastore       = "Failed to create datastore"
+	msgDataStoreNotFound             = "Data store not found"
+	msgOwnerNotFound                 = "Owner account not found"
+	msgDataStoreInUse                = "Data store is still in use and can't be deleted"
+	msgInvalidDataStoreID            = "Data store and owner ids must be numbers"
 )
 
 // CreateDataStoreHandler - Create a new data store
@@ -58,12 +62,17 @@ func ReadDataStoreHandler(s DSService) http.HandlerFunc {
 			return
 		}
 		ds, err = s.Read(r.Context(), ds)
-		if err != nil {
+		switch err {
+		case nil:
+			responses.StructOK(w, r, ds)
+		case ErrDataStoreNotFound:
+			responses.NotFound(w, r, msgDataStoreNotFound)
+		case ErrDataStoreInvalidID:
+			responses.BadRequest(w, r, msgInvalidDataStoreID)
+		default:
 			reqctx.Log(r.Context(), "Failed to read data store:\n\t", err.Error())
 			responses.InternalServerError(w, r, msgFailedToReadDatastore)
-			return
 		}
-		responses.StructOK(w, r, ds)
 	}
 }
 
@@ -85,12 +94,19 @@ func UpdateDataStoreHandler(s DSService) http.HandlerFunc {
 		}
 
 		ds, err = s.Update(r.Context(), ds)
-		if err != nil {
+		switch err {
+		case nil:
+			responses.StructOK(w, r, ds)
+		case ErrDataStoreNotFound:
+			responses.NotFound(w, r, msgDataStoreNotFound)
+		case ErrDataStoreOwnerNotFound:
+			responses.NotFound(w, r, msgOwnerNotFound)
+		case ErrDataStoreInvalidID:
+			responses.BadRequest(w, r, msgInvalidDataStoreID)
+		default:
 			reqctx.Log(r.Context(), "Failed to update data store:\n\t", err.Error())
 			responses.InternalServerError(w, r, msgFailedToUpdateDatastore)
-			return
 		}
-		responses.StructOK(w, r, ds)
 	}
 }
 
@@ -112,11 +128,18 @@ func DeleteDataStoreHandler(s DSService) http.HandlerFunc {
 		}
 
 		err = s.Delete(r.Context(), ds)
-		if err != nil {
+		switch err {
+		case nil:
+			responses.NoContent(w, r)
+		case ErrDataStoreNotFound:
+			responses.NotFound(w, r, msgDataStoreNotFound)
+		case ErrDataStoreInvalidID:
+			responses.BadRequest(w, r, msgInvalidDataStoreID)
+		case ErrDataStoreInUse:
+			responses.Conflict(w, r, msgDataStoreInUse)
+		default:
 			reqctx.Log(r.Context(), "Failed to delete data store:\n\t", err.Error())
 			responses.InternalServerError(w, r, msgFailedToDeleteDatastore)
-			return
 		}
-		responses.NoContent(w, r)
 	}
 }

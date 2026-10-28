@@ -1,16 +1,21 @@
 package responses
 
 import (
+	"bytes"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/proto/problempb"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 func TestRR01_TooManyRequestsRetryAfterIsHTTPDate(t *testing.T) {
@@ -116,5 +121,199 @@ func TestSendProblemStruct(t *testing.T) {
 		if got.Status != 404 || got.Detail != "gone" {
 			t.Errorf("problem = %v, want status 404 and detail gone", &got)
 		}
+	})
+}
+
+type rrDecoded struct {
+	XMLName xml.Name `json:"-" xml:"item"`
+	A       int      `json:"a" xml:"a"`
+}
+
+var errRRBoom = errors.New("boom")
+
+func rrDecodeRequest(contentType string, contentLength int64, body io.Reader) *http.Request {
+	r := httptest.NewRequest(http.MethodPost, "/", body)
+	r.ContentLength = contentLength
+	if contentType != "" {
+		r.Header.Set("Content-Type", contentType)
+	}
+	return r
+}
+
+func rrRecovered(f func()) (recovered any) {
+	defer func() { recovered = recover() }()
+	f()
+	return nil
+}
+
+func rrRequirePanicMessage(t *testing.T, recovered any) {
+	t.Helper()
+	msg, ok := recovered.(string)
+	if !ok || msg == "" {
+		t.Fatalf("recovered = %#v, want a non-empty string", recovered)
+	}
+}
+
+func TestDecodeStruct(t *testing.T) {
+	protoBody, err := proto.Marshal(wrapperspb.String("hello"))
+	if err != nil {
+		t.Fatalf("failed to marshal the protobuf body: %v", err)
+	}
+
+	t.Run("RR-05_JSONNegativeContentLengthDecodes", func(t *testing.T) {
+		var got rrDecoded
+		r := rrDecodeRequest("application/json", -1, strings.NewReader(`{"a":1}`))
+
+		if err := DecodeStruct(r, &got); err != nil {
+			t.Fatalf("err = %v, want nil", err)
+		}
+		if got.A != 1 {
+			t.Errorf("A = %d, want 1", got.A)
+		}
+	})
+
+	t.Run("RR-06_ProtobufNegativeContentLengthDecodes", func(t *testing.T) {
+		got := &wrapperspb.StringValue{}
+		r := rrDecodeRequest("application/x-protobuf", -1, bytes.NewReader(protoBody))
+
+		if err := DecodeStruct(r, &got); err != nil {
+			t.Fatalf("err = %v, want nil", err)
+		}
+		if got.Value != "hello" {
+			t.Errorf("Value = %q, want hello", got.Value)
+		}
+	})
+
+	t.Run("RR-07_OneByteReadsDecodeProtobuf", func(t *testing.T) {
+		got := &wrapperspb.StringValue{}
+		r := rrDecodeRequest("application/x-protobuf", int64(len(protoBody)), iotest.OneByteReader(bytes.NewReader(protoBody)))
+
+		if err := DecodeStruct(r, &got); err != nil {
+			t.Fatalf("err = %v, want nil", err)
+		}
+		if got.Value != "hello" {
+			t.Errorf("Value = %q, want hello", got.Value)
+		}
+	})
+
+	t.Run("RR-08_HugeContentLengthPanics", func(t *testing.T) {
+		cases := []struct {
+			name        string
+			contentType string
+		}{
+			{"JSON", "application/json"},
+			{"XML", "application/xml"},
+			{"Protobuf", "application/x-protobuf"},
+		}
+		for _, c := range cases {
+			t.Run(c.name, func(t *testing.T) {
+				var got rrDecoded
+				r := rrDecodeRequest(c.contentType, 1<<40, strings.NewReader(`{"a":1}`))
+
+				recovered := rrRecovered(func() { _ = DecodeStruct(r, &got) })
+
+				rrRequirePanicMessage(t, recovered)
+			})
+		}
+	})
+
+	t.Run("RR-09_BodyOverLimitWithoutContentLengthPanics", func(t *testing.T) {
+		var got string
+		r := rrDecodeRequest("application/json", -1, bytes.NewReader(bytes.Repeat([]byte("a"), maxBodyBytes+1)))
+
+		recovered := rrRecovered(func() { _ = DecodeStruct(r, &got) })
+
+		rrRequirePanicMessage(t, recovered)
+	})
+
+	t.Run("RR-10_BodyExactlyAtLimitDecodes", func(t *testing.T) {
+		var got string
+		body := `"` + strings.Repeat("a", maxBodyBytes-2) + `"`
+		if len(body) != maxBodyBytes {
+			t.Fatalf("body is %d bytes, want %d", len(body), maxBodyBytes)
+		}
+		r := rrDecodeRequest("application/json", -1, strings.NewReader(body))
+
+		if err := DecodeStruct(r, &got); err != nil {
+			t.Fatalf("err = %v, want nil", err)
+		}
+		if len(got) != maxBodyBytes-2 {
+			t.Errorf("decoded %d bytes, want %d", len(got), maxBodyBytes-2)
+		}
+	})
+
+	t.Run("RR-11_ReadErrorIsReturned", func(t *testing.T) {
+		var got rrDecoded
+		r := rrDecodeRequest("application/json", -1, iotest.ErrReader(errRRBoom))
+		var err error
+
+		recovered := rrRecovered(func() { err = DecodeStruct(r, &got) })
+
+		if recovered != nil {
+			t.Fatalf("panicked with %#v, want an error", recovered)
+		}
+		if !errors.Is(err, errRRBoom) {
+			t.Errorf("err = %v, want it to wrap errRRBoom", err)
+		}
+	})
+
+	t.Run("RR-12_NullBodyPanics", func(t *testing.T) {
+		var got *rrDecoded
+		r := rrDecodeRequest("application/json", -1, strings.NewReader("null"))
+
+		recovered := rrRecovered(func() { _ = DecodeStruct(r, &got) })
+
+		rrRequirePanicMessage(t, recovered)
+
+		var empty *rrDecoded
+		r = rrDecodeRequest("application/json", -1, strings.NewReader("{}"))
+		if err := DecodeStruct(r, &empty); err != nil {
+			t.Fatalf("err = %v, want nil for {}", err)
+		}
+		if empty == nil {
+			t.Error("decoded {} to a nil pointer, want a non-nil one")
+		}
+	})
+
+	t.Run("RR-13_ProtobufIntoUnsupportedTypePanics", func(t *testing.T) {
+		var got rrDecoded
+		r := rrDecodeRequest("application/x-protobuf", int64(len(protoBody)), bytes.NewReader(protoBody))
+
+		recovered := rrRecovered(func() { _ = DecodeStruct(r, &got) })
+
+		rrRequirePanicMessage(t, recovered)
+	})
+
+	t.Run("RR-14_OrdinaryBodiesStillDecode", func(t *testing.T) {
+		var fromJSON rrDecoded
+		r := rrDecodeRequest("application/json", 7, strings.NewReader(`{"a":2}`))
+		if err := DecodeStruct(r, &fromJSON); err != nil || fromJSON.A != 2 {
+			t.Errorf("JSON: A = %d, err = %v, want 2 and nil", fromJSON.A, err)
+		}
+
+		var fromXML rrDecoded
+		r = rrDecodeRequest("application/xml", -1, strings.NewReader(`<item><a>3</a></item>`))
+		if err := DecodeStruct(r, &fromXML); err != nil || fromXML.A != 3 {
+			t.Errorf("XML: A = %d, err = %v, want 3 and nil", fromXML.A, err)
+		}
+
+		var bad rrDecoded
+		r = rrDecodeRequest("application/json", -1, strings.NewReader(`{"a":`))
+		var err error
+		recovered := rrRecovered(func() { err = DecodeStruct(r, &bad) })
+		if recovered != nil {
+			t.Fatalf("malformed JSON panicked with %#v, want an error", recovered)
+		}
+		if err == nil {
+			t.Error("malformed JSON returned nil, want an error")
+		}
+	})
+
+	t.Run("RR-15_NilDataPanics", func(t *testing.T) {
+		r := rrDecodeRequest("application/json", -1, strings.NewReader(`{"a":1}`))
+
+		recovered := rrRecovered(func() { _ = DecodeStruct[rrDecoded](r, nil) })
+
+		rrRequirePanicMessage(t, recovered)
 	})
 }

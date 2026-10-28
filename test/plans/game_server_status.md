@@ -13,8 +13,12 @@
 | GSH-07 | SimpleGameServerStatus | Happy Path | Underlying service succeeds | host/port valid, fake GSSService.QueryGameServer returns (status, nil) | 200 OK, Content-Type text/plain, body "Online" | P1 |  |
 | GSH-08 | SimpleGameServerStatus | Error Path | Missing host | `host` query param absent or empty | 400 Bad Request, problem detail `msgInvalidHost` | P2 |  |
 | GSH-09 | SimpleGameServerStatus | Error Path | Non-numeric port | `host` set, `port` is not an integer | 400 Bad Request, problem detail `msgInvalidPort` | P2 |  |
-| GSH-10 | SimpleGameServerStatus | Error Path | Underlying service returns an error | host/port valid, fake GSSService.QueryGameServer returns (nil, someErr) | 404 Not Found, body "Offline" | P1 |  |
+| GSH-10 | SimpleGameServerStatus | Error Path | Underlying service returns an error | host/port valid, fake GSSService.QueryGameServer returns `ErrServerOffline` | 404 Not Found, body "Offline" | P1 |  |
 | GSH-11 | GameServerStatusHandler | Error Path | Underlying service returns each known sentinel | fake `QueryGameServer` returns `ErrGameQQuery`, `ErrGameDigQuery`, `ErrReadBody`, `ErrDecodeBody`, `ErrNoGameQResponse`, `ErrGameUnsupported`, `mcstatus.ErrJavaStatus`, `mcstatus.ErrBedrockStatus`, or an unrecognized error | 502 Bad Gateway with the matching const (`msgGameQQueryFailed`, `msgGameDigQueryFailed`, `msgReadBodyFailed`, `msgDecodeBodyFailed`, `msgNoGameQResponse`, `msgJavaStatusFailed`, `msgBedrockStatusFailed`); 400 Bad Request with `msgGameUnsupported` for `ErrGameUnsupported`; 500 Internal Server Error with `msgQueryFailed` for an unrecognized error; no cause text | P1 | |
+| GSH-13 | SimpleGameServerStatus | Error Path | Service returns an offline error | fake `QueryGameServer` returns `ErrServerOffline`, `mcstatus.ErrJavaStatus` or `mcstatus.ErrBedrockStatus` | 404 Not Found, `text/plain` body "Offline" | P1 | The endpoint is polled, so these are not logged |
+| GSH-14 | SimpleGameServerStatus | Error Path | Service returns `ErrGameUnsupported` | fake `QueryGameServer` returns `ErrGameUnsupported` | 400 Bad Request with `msgGameUnsupported` | P1 |  |
+| GSH-15 | SimpleGameServerStatus | Error Path | Service returns an upstream query error | fake `QueryGameServer` returns `ErrGameQQuery`, `ErrGameDigQuery`, `ErrReadBody`, `ErrDecodeBody` or `ErrNoGameQResponse` | 502 Bad Gateway with `msgUpstreamQueryFailed`; no cause text | P1 |  |
+| GSH-16 | SimpleGameServerStatus | Error Path | Service returns an unrecognized error | fake `QueryGameServer` returns `testutil.ErrBoom` | 500 Internal Server Error with `msgQueryFailed`; no cause text | P1 |  |
 
 ## service.go
 
@@ -52,6 +56,12 @@
 | GSV-31 | QueryGameDig | Error Path | Upstream returns non-200 status and reading its body fails | Fake transport returns 500 with a body whose `Read` errors | Returns nil, `ErrReadBody` | P2 | |
 | GSV-32 | QueryGameQ | Error Path | Cancelling the ctx stops the outbound GET | transport blocks until the request ctx is done; ctx cancelled once the transport is reached | Returns `ErrGameQQuery` without waiting for the transport | P1 |  |
 | GSV-33 | QueryGameDig | Error Path | Cancelling the ctx stops the outbound GET | transport blocks until the request ctx is done; ctx cancelled once the transport is reached | Returns `ErrGameDigQuery` without waiting for the transport | P1 |  |
+| GSV-34 | QueryGameQ | Error Path | Upstream returns non-200 status | Fake transport returns 500 with a body that records `Close` | Returns nil, `ErrGameQQuery`, and the body was closed | P1 |  |
+| GSV-35 | QueryGameDig | Error Path | Upstream returns non-200 status | Fake transport returns 500 with a body that records `Close` | Returns nil, `ErrGameDigQuery`, and the body was closed | P1 |  |
+| GSV-36 | QueryGameQ | Edge Case | Host contains `&port=1` | host `a&port=1`, port 27015; fake transport records the request | The query has `host=a&port=1` and exactly one `port=27015`; nil error | P1 |  |
+| GSV-37 | QueryGameQ | Edge Case | Host contains a newline | host `a\nb`; fake transport records the request | The request is sent, the query `host` decodes back to `a\nb`; nil error | P2 |  |
+| GSV-38 | QueryGameDig | Edge Case | Host contains `&port=1` | host `a&port=1`, port 27015; fake transport records the request | The query has `host=a&port=1` and exactly one `port=27015`; nil error | P1 |  |
+| GSV-39 | QueryGameDig | Edge Case | Host contains a newline | host `a\nb`; fake transport records the request | The request is sent, the query `host` decodes back to `a\nb`; nil error | P2 |  |
 
 ## types.go
 
