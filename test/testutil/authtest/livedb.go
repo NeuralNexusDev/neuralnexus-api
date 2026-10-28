@@ -6,17 +6,14 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-
-	"github.com/NeuralNexusDev/neuralnexus-api/db"
 )
 
 // liveLockKey serializes the live-database tests across packages, since each
 // package's cleanup deletes rows in the same user ID range.
 const liveLockKey = 910000
 
-// LiveAuthPool returns a pool on the TEST_POSTGRES_URL server with the neuralnexus
-// schema applied, skipping the test when the variable is unset. It holds an
-// advisory lock until the test ends, then deletes the rows in the user ID range
+// LiveAuthPool returns a pool on the TEST_POSTGRES_URL server skipping the test when the variable
+// is unset. It holds an advisory lock until the test ends, then deletes the rows in the user ID range
 // 910000000000000000 to 910000000000049999 and closes the pool.
 func LiveAuthPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
@@ -47,14 +44,6 @@ func LiveAuthPool(t *testing.T) *pgxpool.Pool {
 		conn.Release()
 		pool.Close()
 	})
-
-	schema, err := db.FS.ReadFile("neuralnexus.sql")
-	if err != nil {
-		t.Fatalf("failed to read the neuralnexus schema: %v", err)
-	}
-	if _, err := pool.Exec(context.Background(), string(schema)); err != nil {
-		t.Fatalf("failed to apply schema: %v", err)
-	}
 
 	return pool
 }
