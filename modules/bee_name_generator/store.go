@@ -13,6 +13,9 @@ var ErrBeeNameNotFound = errors.New("no bee names found")
 var ErrBeeNameExists = errors.New("bee name already exists")
 var ErrBeeNameSuggestionExists = errors.New("bee name suggestion already exists")
 
+// ErrBeeNameSuggestionNotFound is returned when no suggestion matches the given name.
+var ErrBeeNameSuggestionNotFound = errors.New("bee name suggestion not found")
+
 // BNGStore - Bee Name Generator Store
 type BNGStore interface {
 	GetBeeName(ctx context.Context) (string, error)
@@ -62,9 +65,12 @@ func (s *store) UploadBeeName(ctx context.Context, beeName string) (string, erro
 
 // DeleteBeeName deletes a bee name from the database
 func (s *store) DeleteBeeName(ctx context.Context, beeName string) (string, error) {
-	_, err := s.db.Exec(ctx, "DELETE FROM bee_name WHERE name = $1", beeName)
+	tag, err := s.db.Exec(ctx, "DELETE FROM bee_name WHERE name = $1", beeName)
 	if err != nil {
 		return "", err
+	}
+	if tag.RowsAffected() == 0 {
+		return "", ErrBeeNameNotFound
 	}
 	return beeName, nil
 }
@@ -112,16 +118,25 @@ func (s *store) GetBeeNameSuggestions(ctx context.Context, amount int64) ([]stri
 
 // AcceptBeeNameSuggestion accepts a bee name suggestion
 func (s *store) AcceptBeeNameSuggestion(ctx context.Context, beeName string) (string, error) {
-	_, err := s.db.Exec(ctx, "INSERT INTO bee_name (name) VALUES ($1)", beeName)
-	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return "", ErrBeeNameExists
+	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, "DELETE FROM bee_name_suggestion WHERE name = $1", beeName)
+		if err != nil {
+			return err
 		}
-		return "", err
-	}
+		if tag.RowsAffected() == 0 {
+			return ErrBeeNameSuggestionNotFound
+		}
 
-	_, err = s.db.Exec(ctx, "DELETE FROM bee_name_suggestion WHERE name = $1", beeName)
+		_, err = tx.Exec(ctx, "INSERT INTO bee_name (name) VALUES ($1)", beeName)
+		if err != nil {
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+				return ErrBeeNameExists
+			}
+			return err
+		}
+		return nil
+	})
 	if err != nil {
 		return "", err
 	}
@@ -130,9 +145,12 @@ func (s *store) AcceptBeeNameSuggestion(ctx context.Context, beeName string) (st
 
 // RejectBeeNameSuggestion rejects a bee name suggestion
 func (s *store) RejectBeeNameSuggestion(ctx context.Context, beeName string) (string, error) {
-	_, err := s.db.Exec(ctx, "DELETE FROM bee_name_suggestion WHERE name = $1", beeName)
+	tag, err := s.db.Exec(ctx, "DELETE FROM bee_name_suggestion WHERE name = $1", beeName)
 	if err != nil {
 		return "", err
+	}
+	if tag.RowsAffected() == 0 {
+		return "", ErrBeeNameSuggestionNotFound
 	}
 	return beeName, nil
 }

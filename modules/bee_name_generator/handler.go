@@ -3,6 +3,8 @@ package beenamegenerator
 import (
 	"net/http"
 	"strconv"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
@@ -25,7 +27,16 @@ const (
 	msgNoPermissionToRejectBeeNameSuggestions = "You do not have permission to reject bee name suggestions"
 	msgFailedToRejectBeeNameSuggestion        = "Failed to reject bee name suggestion"
 	msgInvalidName                            = "Invalid name"
+	msgBeeNameNotFound                        = "Bee name not found"
+	msgBeeNameSuggestionNotFound              = "Bee name suggestion not found"
 )
+
+func validBeeName(name string) bool {
+	if name == "" || strings.Contains(name, "\x00") || !utf8.ValidString(name) {
+		return false
+	}
+	return strings.TrimSpace(name) != ""
+}
 
 // GetBeeNameHandler Get a bee name
 func GetBeeNameHandler(s BNGStore) http.HandlerFunc {
@@ -50,7 +61,7 @@ func UploadBeeNameHandler(s BNGStore) http.HandlerFunc {
 		}
 
 		beeName := r.PathValue("name")
-		if beeName == "" {
+		if !validBeeName(beeName) {
 			responses.BadRequest(w, r, msgInvalidName)
 			return
 		}
@@ -79,18 +90,21 @@ func DeleteBeeNameHandler(s BNGStore) http.HandlerFunc {
 		}
 
 		beeName := r.PathValue("name")
-		if beeName == "" {
+		if !validBeeName(beeName) {
 			responses.BadRequest(w, r, msgInvalidName)
 			return
 		}
 
 		_, err := s.DeleteBeeName(r.Context(), beeName)
-		if err != nil {
+		switch err {
+		case nil:
+			responses.NoContent(w, r)
+		case ErrBeeNameNotFound:
+			responses.NotFound(w, r, msgBeeNameNotFound)
+		default:
 			reqctx.Log(r.Context(), "Failed to delete bee name:\n\t", err.Error())
 			responses.InternalServerError(w, r, msgFailedToDeleteBeeName)
-			return
 		}
-		responses.NoContent(w, r)
 	}
 }
 
@@ -98,7 +112,7 @@ func DeleteBeeNameHandler(s BNGStore) http.HandlerFunc {
 func SubmitBeeNameHandler(s BNGStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		beeName := r.PathValue("name")
-		if beeName == "" {
+		if !validBeeName(beeName) {
 			responses.BadRequest(w, r, msgInvalidName)
 			return
 		}
@@ -126,12 +140,8 @@ func GetBeeNameSuggestionsHandler(s BNGStore) http.HandlerFunc {
 			return
 		}
 
-		amount := r.PathValue("amount")
-		if amount == "" || amount == "0" {
-			amount = "NAN"
-		}
-		amountInt, err := strconv.ParseInt(amount, 10, 64)
-		if err != nil {
+		amountInt, err := strconv.ParseInt(r.PathValue("amount"), 10, 64)
+		if err != nil || amountInt < 1 {
 			responses.BadRequest(w, r, msgInvalidAmountProvided)
 			return
 		}
@@ -156,7 +166,7 @@ func AcceptBeeNameSuggestionHandler(s BNGStore) http.HandlerFunc {
 		}
 
 		beeName := r.PathValue("name")
-		if beeName == "" {
+		if !validBeeName(beeName) {
 			responses.BadRequest(w, r, msgInvalidName)
 			return
 		}
@@ -164,6 +174,10 @@ func AcceptBeeNameSuggestionHandler(s BNGStore) http.HandlerFunc {
 		_, err := s.AcceptBeeNameSuggestion(r.Context(), beeName)
 		if err == ErrBeeNameExists {
 			responses.Conflict(w, r, "That bee name already exists")
+			return
+		}
+		if err == ErrBeeNameSuggestionNotFound {
+			responses.NotFound(w, r, msgBeeNameSuggestionNotFound)
 			return
 		}
 		if err != nil {
@@ -185,16 +199,20 @@ func RejectBeeNameSuggestionHandler(s BNGStore) http.HandlerFunc {
 		}
 
 		beeName := r.PathValue("name")
-		if beeName == "" {
+		if !validBeeName(beeName) {
 			responses.BadRequest(w, r, msgInvalidName)
 			return
 		}
 
 		_, err := s.RejectBeeNameSuggestion(r.Context(), beeName)
-		if err != nil {
+		switch err {
+		case nil:
+			responses.NoContent(w, r)
+		case ErrBeeNameSuggestionNotFound:
+			responses.NotFound(w, r, msgBeeNameSuggestionNotFound)
+		default:
+			reqctx.Log(r.Context(), "Failed to reject bee name suggestion:\n\t", err.Error())
 			responses.InternalServerError(w, r, msgFailedToRejectBeeNameSuggestion)
-			return
 		}
-		responses.NoContent(w, r)
 	}
 }
