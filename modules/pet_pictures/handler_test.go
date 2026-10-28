@@ -793,6 +793,79 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 		testutil.ExpectDetail(t, w, msgPetNotFound)
 	})
 
+	t.Run("PPH-46_CreateDuplicateName409", func(t *testing.T) {
+		mock := &hdMockStore{createPetErr: ErrPetNameExists}
+		svc := NewService(mock)
+		req := testutil.NewRequest(http.MethodPost, "/pets/Rex", nil)
+		req.SetPathValue("name", "Rex")
+		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.admin")))
+		w := httptest.NewRecorder()
+
+		CreatePetHandler(svc)(w, req)
+
+		if w.Code != http.StatusConflict {
+			t.Errorf("status = %d, want %d", w.Code, http.StatusConflict)
+		}
+		testutil.ExpectDetail(t, w, msgPetNameAlreadyExists)
+	})
+
+	t.Run("PPH-47_UpdateDuplicateName409", func(t *testing.T) {
+		mock := &hdMockStore{updatePetErr: ErrPetNameExists}
+		svc := NewService(mock)
+		req := testutil.NewRequest(http.MethodPut, "/pets", strings.NewReader(`{"id":1,"name":"Rex"}`))
+		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.pets:Rex")))
+		w := httptest.NewRecorder()
+
+		UpdatePetHandler(svc)(w, req)
+
+		if w.Code != http.StatusConflict {
+			t.Errorf("status = %d, want %d", w.Code, http.StatusConflict)
+		}
+		testutil.ExpectDetail(t, w, msgPetNameAlreadyExists)
+	})
+
+	for _, tc := range []struct{ id, name, pathName string }{
+		{"PPH-48_CreateNameWithNULIs400", "NUL", "Re\x00x"},
+		{"PPH-49_CreateInvalidUTF8NameIs400", "UTF8", "Re\xffx"},
+	} {
+		t.Run(tc.id, func(t *testing.T) {
+			mock := &hdMockStore{}
+			svc := NewService(mock)
+			req := testutil.NewRequest(http.MethodPost, "/pets/x", nil)
+			req.SetPathValue("name", tc.pathName)
+			req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.admin")))
+			w := httptest.NewRecorder()
+
+			CreatePetHandler(svc)(w, req)
+
+			if w.Code != http.StatusBadRequest {
+				t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
+			}
+			testutil.ExpectDetail(t, w, msgInvalidPetName)
+			if len(mock.createPetCalls) != 0 {
+				t.Errorf("CreatePet called %d times, want 0", len(mock.createPetCalls))
+			}
+		})
+	}
+
+	t.Run("PPH-50_UpdateNameWithNULIs400", func(t *testing.T) {
+		mock := &hdMockStore{}
+		svc := NewService(mock)
+		req := testutil.NewRequest(http.MethodPut, "/pets", strings.NewReader(`{"id":1,"name":"Re\u0000x"}`))
+		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.pets:Re\x00x")))
+		w := httptest.NewRecorder()
+
+		UpdatePetHandler(svc)(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
+		}
+		testutil.ExpectDetail(t, w, msgInvalidPetName)
+		if len(mock.updatePetCalls) != 0 {
+			t.Errorf("UpdatePet called %d times, want 0", len(mock.updatePetCalls))
+		}
+	})
+
 	t.Run("PPH-40_GetRandPetPictureStoreFailureInternalServerError", func(t *testing.T) {
 		mock := &hdMockStore{getRandPetPictureByNameErr: testutil.ErrDBDown}
 		svc := NewService(mock)

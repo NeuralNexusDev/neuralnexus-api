@@ -87,8 +87,8 @@ func TestST02to05and26_CreatePet(t *testing.T) {
 		name := ppUniqueID("pet")
 		ppCreatePet(t, pool, s, name)
 		pet, err := s.CreatePet(ppCtx, name)
-		if pet != nil || err == nil {
-			t.Errorf("CreatePet(duplicate) = (%v, %v), want (nil, error)", pet, err)
+		if pet != nil || !errors.Is(err, ErrPetNameExists) {
+			t.Errorf("CreatePet(duplicate) = (%v, %v), want (nil, ErrPetNameExists)", pet, err)
 		}
 	})
 
@@ -114,6 +114,10 @@ func TestST02to05and26_CreatePet(t *testing.T) {
 			for i := range results {
 				if errs[i] == nil && results[i] != nil && results[i].ID != 0 {
 					succeeded++
+					continue
+				}
+				if !errors.Is(errs[i], ErrPetNameExists) {
+					t.Errorf("round %d: CreatePet error = %v, want ErrPetNameExists", round, errs[i])
 				}
 			}
 			if succeeded != 1 {
@@ -212,6 +216,19 @@ func TestST10to12_UpdatePet(t *testing.T) {
 		got, err := s.UpdatePet(ppCtx, &Pet{ID: -1, Name: ppUniqueID("ghost")})
 		if got != nil || !errors.Is(err, ErrPetNotFound) {
 			t.Errorf("UpdatePet(no row) = (%v, %v), want (nil, ErrPetNotFound)", got, err)
+		}
+	})
+}
+
+func TestST34_UpdatePetNameExists(t *testing.T) {
+	t.Run("PPS-34_UpdateToAnotherPetsNameExists", func(t *testing.T) {
+		pool := ppLiveDatabase(t)
+		s := &store{db: pool}
+		taken := ppCreatePet(t, pool, s, ppUniqueID("pet"))
+		other := ppCreatePet(t, pool, s, ppUniqueID("pet"))
+		got, err := s.UpdatePet(ppCtx, &Pet{ID: other.ID, Name: taken.Name})
+		if got != nil || !errors.Is(err, ErrPetNameExists) {
+			t.Errorf("UpdatePet(taken name) = (%v, %v), want (nil, ErrPetNameExists)", got, err)
 		}
 	})
 }
