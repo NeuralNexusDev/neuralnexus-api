@@ -300,21 +300,18 @@ func (s *GeyserSkin) IsStale() bool {
 	return time.Now().UnixMilli()-s.LastSeen > stalenessThreshold.Milliseconds()
 }
 
-func (s *GeyserSkin) FromTexturesValue(ctx context.Context, t *TexturesValue) {
-	if t == nil {
-		return
+func (s *GeyserSkin) FromTexturesValue(ctx context.Context, t *TexturesValue) error {
+	if t == nil || t.Textures.SKIN == nil {
+		return ErrSkinNotFound
 	}
-	hash := t.Textures.SKIN.Hash()
-	if hash == "" {
-		return
-	}
-	s.Hash = hash
-	s.IsSteve = t.Textures.SKIN.Metadata != nil && t.Textures.SKIN.Metadata.Model == SLIM
-	s.Value = EncodeTextureValue(ctx, t)
-	// TODO: Hash PNG in some manner? Check that the "hash" stored in the image DB is actually a hash
+	// TODO: RGBA hash from the PNG, or just go get it from the DB
 	s.TextureBytesHash = "TODO"
+	s.IsSteve = t.Textures.SKIN.Metadata != nil && t.Textures.SKIN.Metadata.Model == SLIM
+	s.Hash = t.Textures.SKIN.Hash()
+	s.Value = EncodeTextureValue(ctx, t)
 	s.FirstSeen = t.Timestamp
 	s.LastSeen = t.Timestamp
+	return nil
 }
 
 // xuidToUUID derives a synthetic UUID from an Xbox XUID: its zero-padded hex
