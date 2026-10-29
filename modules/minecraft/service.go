@@ -468,7 +468,7 @@ func (s *service) GetGeyserSkin(ctx context.Context, xuid int64) (*GeyserSkin, e
 
 	var skin GeyserSkin
 	if !player.IsStale() && textures != nil {
-		skin.FromTexturesValue(ctx, textures)
+		err := skin.FromTexturesValue(ctx, textures)
 		return &skin, err
 	}
 
