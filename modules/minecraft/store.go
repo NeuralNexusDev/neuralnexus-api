@@ -244,16 +244,12 @@ func (s *store) UpsertTextures(ctx context.Context, table string, value *Texture
 	}
 	cape := value.Textures.CAPE
 
-	// player_textures_unique is an expression index (COALESCE(skin/model/cape, ''))
-	// rather than a plain-column constraint, so it can't be targeted by name
-	// via ON CONFLICT ON CONSTRAINT — the conflict target must repeat the
-	// same expressions instead.
 	_, err := s.db.Exec(ctx, `
 		INSERT INTO `+table+` (player_id, skin, model, cape, first_seen, last_seen)
 		VALUES ($1, $2, $3, $4, $5, $5)
 		ON CONFLICT (player_id, COALESCE(skin, ''), COALESCE(model, ''), COALESCE(cape, '')) DO UPDATE SET
 			last_seen = EXCLUDED.last_seen
-		`, value.ProfileID, textureHash(skin), model, textureHash(cape), value.Timestamp)
+		`, value.ProfileID, skin.Hash(), model, cape.Hash(), value.Timestamp)
 	return err
 }
 
@@ -326,17 +322,6 @@ func (s *store) UpsertGeyserPlayer(ctx context.Context, player *GeyserPlayer) er
 		return err
 	}
 	return s.upsertNameHistory(ctx, GeyserPlayerNamesTable, player.ID, player.Gamertag, now)
-}
-
-// textureHash returns t's hash, or nil when absent or unparsable — an
-// empty string is never a valid skin/cape reference (see the
-// player_textures_skin_not_empty / _cape_not_empty DB constraints).
-func textureHash(t *Texture) *string {
-	hash := t.Hash()
-	if hash == "" {
-		return nil
-	}
-	return &hash
 }
 
 // UpsertTextureHash upserts a texture hash into the database

@@ -301,10 +301,14 @@ func (s *GeyserSkin) IsStale() bool {
 }
 
 func (s *GeyserSkin) FromTexturesValue(ctx context.Context, t *TexturesValue) {
-	if t == nil || t.Textures.SKIN == nil {
+	if t == nil {
 		return
 	}
-	s.Hash = t.Textures.SKIN.Hash()
+	hash := t.Textures.SKIN.Hash()
+	if hash == "" {
+		return
+	}
+	s.Hash = hash
 	s.IsSteve = t.Textures.SKIN.Metadata != nil && t.Textures.SKIN.Metadata.Model == SLIM
 	s.Value = EncodeTextureValue(ctx, t)
 	// TODO: Hash PNG in some manner? Check that the "hash" stored in the image DB is actually a hash

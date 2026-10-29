@@ -288,11 +288,11 @@ func (s *service) GetProfile(ctx context.Context, id string) (*Profile, error) {
 	if profile.Textures == nil {
 		return profile, nil
 	}
-	if profile.Textures.Textures.SKIN != nil {
-		profile.Textures.Textures.SKIN.URL = s.s3TextureUrl + S3KeyPrefix + profile.Textures.Textures.SKIN.Hash()
+	if hash := profile.Textures.Textures.SKIN.Hash(); hash != "" {
+		profile.Textures.Textures.SKIN.URL = s.s3TextureUrl + S3KeyPrefix + hash
 	}
-	if profile.Textures.Textures.CAPE != nil {
-		profile.Textures.Textures.CAPE.URL = s.s3TextureUrl + S3KeyPrefix + profile.Textures.Textures.CAPE.Hash()
+	if hash := profile.Textures.Textures.CAPE.Hash(); hash != "" {
+		profile.Textures.Textures.CAPE.URL = s.s3TextureUrl + S3KeyPrefix + hash
 	}
 	return profile, nil
 }
@@ -373,14 +373,14 @@ func (s *service) fetchProfileFromMojang(ctx context.Context, id string, signed 
 	// Extract and store textures
 	profile := player.ToProfile(ctx)
 	if profile.Textures != nil {
-		if hash := textureHash(profile.Textures.Textures.SKIN); hash != nil {
-			if err := s.store.UpsertTextureHash(context.WithoutCancel(ctx), *hash); err != nil {
+		if hash := profile.Textures.Textures.SKIN.Hash(); hash != "" {
+			if err := s.store.UpsertTextureHash(context.WithoutCancel(ctx), hash); err != nil {
 				reqctx.Log(ctx, "Failed to store skin hash:\n\t", err.Error())
 			}
 		}
 
-		if hash := textureHash(profile.Textures.Textures.CAPE); hash != nil {
-			if err := s.store.UpsertTextureHash(context.WithoutCancel(ctx), *hash); err != nil {
+		if hash := profile.Textures.Textures.CAPE.Hash(); hash != "" {
+			if err := s.store.UpsertTextureHash(context.WithoutCancel(ctx), hash); err != nil {
 				reqctx.Log(ctx, "Failed to store cape hash:\n\t", err.Error())
 			}
 		}
