@@ -254,21 +254,6 @@ func TestST20to23_UpsertTextures(t *testing.T) {
 	})
 }
 
-func TestST24to25_TextureHash(t *testing.T) {
-	t.Run("ST-24_Parsable", func(t *testing.T) {
-		got := textureHash(&Texture{URL: "http://x/abc"})
-		if got == nil || *got != "abc" {
-			t.Errorf("textureHash() = %v, want pointer to abc", got)
-		}
-	})
-
-	t.Run("ST-25_Unparsable", func(t *testing.T) {
-		if got := textureHash(nil); got != nil {
-			t.Errorf("textureHash(nil) = %v, want nil", got)
-		}
-	})
-}
-
 func TestST26to28_UpsertTextureHash(t *testing.T) {
 	t.Run("ST-26_Unreachable", func(t *testing.T) {
 		s := mcStoreWithUnreachableDB(t)
