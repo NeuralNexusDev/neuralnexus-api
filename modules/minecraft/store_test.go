@@ -28,7 +28,7 @@ func mcStoreWithUnreachableDB(t *testing.T) *store {
 }
 
 func mcStoreWithUnreachableRedis(t *testing.T) *store {
-	return &store{cache: cache{rdb: testutil.UnreachableRedis(t)}}
+	return &store{cacheStore: cacheStore{rdb: testutil.UnreachableRedis(t)}}
 }
 
 func mcFakeS3(t *testing.T, handler http.HandlerFunc) *s3.Client {
@@ -71,8 +71,10 @@ func mcLiveRedis(t *testing.T) *redis.Client {
 	return c
 }
 
-func mcLiveStoreDB(t *testing.T) *store    { return &store{db: mcLiveDB(t)} }
-func mcLiveStoreRedis(t *testing.T) *store { return &store{cache: cache{rdb: mcLiveRedis(t)}} }
+func mcLiveStoreDB(t *testing.T) *store { return &store{db: mcLiveDB(t)} }
+func mcLiveStoreRedis(t *testing.T) *store {
+	return &store{cacheStore: cacheStore{rdb: mcLiveRedis(t)}}
+}
 
 var mcXUIDCounter = time.Now().UnixNano()
 
@@ -335,7 +337,7 @@ func TestST29to32_GetPlayerFromCache(t *testing.T) {
 	t.Run("ST-32_Live_MalformedJSON", func(t *testing.T) {
 		s := mcLiveStoreRedis(t)
 		key := "malformed-" + mcUniqueHash("k")
-		if err := s.cache.rdb.Set(context.Background(), CachePlayer+key, "not json", time.Minute).Err(); err != nil {
+		if err := s.cacheStore.rdb.Set(context.Background(), CachePlayer+key, "not json", time.Minute).Err(); err != nil {
 			t.Fatalf("seed Set() error = %v", err)
 		}
 		_, err := s.GetPlayerFromCache(mcCtx, key)
@@ -477,7 +479,7 @@ func TestST43to44_SetSignedProfileInCache(t *testing.T) {
 func TestST45to47_IsTextureInS3(t *testing.T) {
 	t.Run("ST-45_Exists", func(t *testing.T) {
 		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
-		s := &store{sThree: sThree{s3: s3c}}
+		s := &store{s3store: s3store{s3: s3c}}
 		got, err := s.IsTextureInS3(mcCtx, "hash")
 		if err != nil || !got {
 			t.Errorf("got (%v, %v), want (true, nil)", got, err)
@@ -486,7 +488,7 @@ func TestST45to47_IsTextureInS3(t *testing.T) {
 
 	t.Run("ST-46_NotFound", func(t *testing.T) {
 		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNotFound) })
-		s := &store{sThree: sThree{s3: s3c}}
+		s := &store{s3store: s3store{s3: s3c}}
 		got, err := s.IsTextureInS3(mcCtx, "hash")
 		if err != nil || got {
 			t.Errorf("got (%v, %v), want (false, nil)", got, err)
@@ -495,7 +497,7 @@ func TestST45to47_IsTextureInS3(t *testing.T) {
 
 	t.Run("ST-47_ServerError", func(t *testing.T) {
 		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusInternalServerError) })
-		s := &store{sThree: sThree{s3: s3c}}
+		s := &store{s3store: s3store{s3: s3c}}
 		got, err := s.IsTextureInS3(mcCtx, "hash")
 		if err == nil || got {
 			t.Errorf("got (%v, %v), want (false, non-nil error)", got, err)
@@ -567,7 +569,7 @@ func TestST68to70_PutTextureInS3(t *testing.T) {
 			gotLen = r.ContentLength
 			w.WriteHeader(http.StatusOK)
 		})
-		s := &store{sThree: sThree{s3: s3c}}
+		s := &store{s3store: s3store{s3: s3c}}
 		body := mcLenReadCloser{strings.NewReader("hello world")}
 		if err := s.PutTextureInS3(mcCtx, "hash", body); err != nil {
 			t.Fatalf("PutTextureInS3() error = %v", err)
@@ -579,7 +581,7 @@ func TestST68to70_PutTextureInS3(t *testing.T) {
 
 	t.Run("ST-69_WithoutLen", func(t *testing.T) {
 		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
-		s := &store{sThree: sThree{s3: s3c}}
+		s := &store{s3store: s3store{s3: s3c}}
 		if err := s.PutTextureInS3(mcCtx, "hash", mcSeekableReadCloser{strings.NewReader("hello")}); err != nil {
 			t.Errorf("PutTextureInS3() error = %v", err)
 		}
@@ -587,7 +589,7 @@ func TestST68to70_PutTextureInS3(t *testing.T) {
 
 	t.Run("ST-70_ServerError", func(t *testing.T) {
 		s3c := mcFakeS3(t, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusInternalServerError) })
-		s := &store{sThree: sThree{s3: s3c}}
+		s := &store{s3store: s3store{s3: s3c}}
 		err := s.PutTextureInS3(mcCtx, "hash", mcSeekableReadCloser{strings.NewReader("hello")})
 		if !errors.Is(err, ErrUploadS3) {
 			t.Errorf("err = %v, want it to wrap %v", err, ErrUploadS3)

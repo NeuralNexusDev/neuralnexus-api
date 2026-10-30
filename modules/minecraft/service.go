@@ -50,10 +50,33 @@ type CommonService interface {
 
 // service - Minecraft player service implementation
 type service struct {
+	mojangService
+	geyserService
+	textureService
+}
+
+type mojangService struct {
 	cfg          config.Minecraft
-	store        Store
 	client       *http.Client
 	s3TextureUrl string
+	store        MojangStore
+	texture      TextureStore
+	cache        CacheStore
+}
+
+type geyserService struct {
+	cfg     config.Minecraft
+	client  *http.Client
+	store   GeyserStore
+	texture TextureStore
+}
+
+type textureService struct {
+	cfg          config.Minecraft
+	client       *http.Client
+	s3TextureUrl string
+	texture      TextureStore
+	s3           S3Store
 }
 
 // NewService - Create a new Minecraft player service
@@ -62,25 +85,42 @@ func NewService(cfg config.Minecraft, store Store, client *http.Client, s3Textur
 		client = http.DefaultClient
 	}
 	return &service{
-		store:        store,
-		client:       client,
-		cfg:          cfg,
-		s3TextureUrl: s3TextureUrl,
+		mojangService: mojangService{
+			cfg,
+			client,
+			s3TextureUrl,
+			store.Mojang(),
+			store.Texture(),
+			store.Cache(),
+		},
+		geyserService: geyserService{
+			cfg,
+			client,
+			store.Geyser(),
+			store.Texture(),
+		},
+		textureService: textureService{
+			cfg,
+			client,
+			s3TextureUrl,
+			store.Texture(),
+			store.S3(),
+		},
 	}
 }
 
 // get issues a GET that is cancelled with ctx.
-func (s *service) get(ctx context.Context, url string) (*http.Response, error) {
+func get(ctx context.Context, client *http.Client, url string) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
-	return s.client.Do(req)
+	return client.Do(req)
 }
 
 // GetMojangPlayerByName gets a player by name, cache-first with Mojang fallback
-func (s *service) GetMojangPlayerByName(ctx context.Context, name string) (*MojangPlayer, error) {
-	cached, err := s.store.GetPlayerFromCache(ctx, name)
+func (m *mojangService) GetMojangPlayerByName(ctx context.Context, name string) (*MojangPlayer, error) {
+	cached, err := m.cache.GetPlayerFromCache(ctx, name)
 	if err == nil {
 		return cached, nil
 	}
@@ -89,16 +129,16 @@ func (s *service) GetMojangPlayerByName(ctx context.Context, name string) (*Moja
 	}
 
 	// Cache miss — fetch from DB
-	dbPlayer, _ := s.store.GetPlayerByName(ctx, name)
+	dbPlayer, _ := m.store.GetPlayerByName(ctx, name)
 	if dbPlayer != nil && !dbPlayer.IsStale() {
-		if err := s.store.SetPlayerInCache(context.WithoutCancel(ctx), dbPlayer); err != nil {
+		if err := m.cache.SetPlayerInCache(context.WithoutCancel(ctx), dbPlayer); err != nil {
 			return nil, err
 		}
 		return dbPlayer, nil
 	}
 
 	// Stale entry — fetch from Mojang
-	resp, err := s.get(ctx, s.cfg.LookupByName+url.PathEscape(name))
+	resp, err := get(ctx, m.client, m.cfg.LookupByName+url.PathEscape(name))
 	if err != nil {
 		return nil, err
 	}
@@ -117,18 +157,18 @@ func (s *service) GetMojangPlayerByName(ctx context.Context, name string) (*Moja
 		return nil, err
 	}
 
-	if err := s.store.UpsertPlayer(context.WithoutCancel(ctx), &player, false); err != nil {
+	if err := m.store.UpsertPlayer(context.WithoutCancel(ctx), &player, false); err != nil {
 		return nil, err
 	}
-	if err := s.store.SetPlayerInCache(context.WithoutCancel(ctx), &player); err != nil {
+	if err := m.cache.SetPlayerInCache(context.WithoutCancel(ctx), &player); err != nil {
 		return nil, err
 	}
 	return &player, nil
 }
 
 // GetMojangPlayerByUUID gets a player by UUID, cache-first with Mojang fallback
-func (s *service) GetMojangPlayerByUUID(ctx context.Context, id string) (*MojangPlayer, error) {
-	cached, err := s.store.GetPlayerFromCache(ctx, id)
+func (m *mojangService) GetMojangPlayerByUUID(ctx context.Context, id string) (*MojangPlayer, error) {
+	cached, err := m.cache.GetPlayerFromCache(ctx, id)
 	if err == nil {
 		return cached, nil
 	}
@@ -137,16 +177,16 @@ func (s *service) GetMojangPlayerByUUID(ctx context.Context, id string) (*Mojang
 	}
 
 	// Cache miss — fetch from DB
-	dbPlayer, _ := s.store.GetPlayerByUUID(ctx, id)
+	dbPlayer, _ := m.store.GetPlayerByUUID(ctx, id)
 	if dbPlayer != nil && !dbPlayer.IsStale() {
-		if err := s.store.SetPlayerInCache(context.WithoutCancel(ctx), dbPlayer); err != nil {
+		if err := m.cache.SetPlayerInCache(context.WithoutCancel(ctx), dbPlayer); err != nil {
 			return nil, err
 		}
 		return dbPlayer, nil
 	}
 
 	// Stale entry — fetch from Mojang
-	resp, err := s.get(ctx, s.cfg.LookupByUUID+id)
+	resp, err := get(ctx, m.client, m.cfg.LookupByUUID+id)
 	if err != nil {
 		return nil, err
 	}
@@ -165,10 +205,10 @@ func (s *service) GetMojangPlayerByUUID(ctx context.Context, id string) (*Mojang
 		return nil, err
 	}
 
-	if err := s.store.UpsertPlayer(context.WithoutCancel(ctx), &player, false); err != nil {
+	if err := m.store.UpsertPlayer(context.WithoutCancel(ctx), &player, false); err != nil {
 		return nil, err
 	}
-	if err := s.store.SetPlayerInCache(context.WithoutCancel(ctx), &player); err != nil {
+	if err := m.cache.SetPlayerInCache(context.WithoutCancel(ctx), &player); err != nil {
 		return nil, err
 	}
 	return &player, nil
@@ -176,7 +216,7 @@ func (s *service) GetMojangPlayerByUUID(ctx context.Context, id string) (*Mojang
 
 // GetMojangPlayersByNames gets players by name in batch, cache-first with Mojang fallback
 // Mojang batch endpoint is capped at 10 names per request
-func (s *service) GetMojangPlayersByNames(ctx context.Context, names []string) ([]*MojangPlayer, error) {
+func (m *mojangService) GetMojangPlayersByNames(ctx context.Context, names []string) ([]*MojangPlayer, error) {
 	if len(names) == 0 {
 		return nil, ErrNoNamesProvided
 	}
@@ -189,14 +229,14 @@ func (s *service) GetMojangPlayersByNames(ctx context.Context, names []string) (
 	misses := make([]string, 0, len(names))
 
 	for _, name := range names {
-		player, err := s.store.GetPlayerFromCache(ctx, name)
+		player, err := m.cache.GetPlayerFromCache(ctx, name)
 		if err == nil {
 			players = append(players, player)
 		} else {
 			// Cache miss — fetch from DB
-			player, _ := s.store.GetPlayerByName(ctx, name)
+			player, _ := m.store.GetPlayerByName(ctx, name)
 			if player != nil && !player.IsStale() {
-				if err := s.store.SetPlayerInCache(context.WithoutCancel(ctx), player); err != nil {
+				if err := m.cache.SetPlayerInCache(context.WithoutCancel(ctx), player); err != nil {
 					return nil, err
 				}
 				players = append(players, player)
@@ -218,12 +258,12 @@ func (s *service) GetMojangPlayersByNames(ctx context.Context, names []string) (
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.cfg.LookupBulk, strings.NewReader(string(body)))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, m.cfg.LookupBulk, strings.NewReader(string(body)))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := s.client.Do(req)
+	resp, err := m.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -240,10 +280,10 @@ func (s *service) GetMojangPlayersByNames(ctx context.Context, names []string) (
 	}
 
 	for i := range fetched {
-		if err := s.store.UpsertPlayer(context.WithoutCancel(ctx), &fetched[i], false); err != nil {
+		if err := m.store.UpsertPlayer(context.WithoutCancel(ctx), &fetched[i], false); err != nil {
 			return nil, err
 		}
-		if err := s.store.SetPlayerInCache(context.WithoutCancel(ctx), &fetched[i]); err != nil {
+		if err := m.cache.SetPlayerInCache(context.WithoutCancel(ctx), &fetched[i]); err != nil {
 			return nil, err
 		}
 		players = append(players, &fetched[i])
@@ -253,20 +293,20 @@ func (s *service) GetMojangPlayersByNames(ctx context.Context, names []string) (
 }
 
 // GetMojangProfile gets a full player profile
-func (s *service) GetMojangProfile(ctx context.Context, id string, signed bool) (*MojangPlayer, error) {
+func (m *mojangService) GetMojangProfile(ctx context.Context, id string, signed bool) (*MojangPlayer, error) {
 	if signed {
-		cached, err := s.store.GetSignedProfileFromCache(ctx, id)
+		cached, err := m.cache.GetSignedProfileFromCache(ctx, id)
 		if err == nil {
 			return cached, nil
 		}
 		if err != ErrCacheMiss {
 			return nil, err
 		}
-		player, _, err := s.fetchProfileFromMojang(ctx, id, true)
+		player, _, err := m.fetchProfileFromMojang(ctx, id, true)
 		return player, err
 	}
 
-	profile, err := s.resolveProfile(ctx, id)
+	profile, err := m.resolveProfile(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -275,8 +315,8 @@ func (s *service) GetMojangProfile(ctx context.Context, id string, signed bool) 
 
 // GetProfile gets a player's profile with textures decoded as native JSON,
 // with texture URLs pointing at our own CDN instead of Mojang's.
-func (s *service) GetProfile(ctx context.Context, id string) (*MojangProfile, error) {
-	profile, err := s.resolveProfile(ctx, id)
+func (m *mojangService) GetProfile(ctx context.Context, id string) (*MojangProfile, error) {
+	profile, err := m.resolveProfile(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -284,27 +324,27 @@ func (s *service) GetProfile(ctx context.Context, id string) (*MojangProfile, er
 		return profile, nil
 	}
 	if hash := profile.Textures.Textures.SKIN.Hash(); hash != "" {
-		profile.Textures.Textures.SKIN.URL = s.s3TextureUrl + S3KeyPrefix + hash
+		profile.Textures.Textures.SKIN.URL = m.s3TextureUrl + S3KeyPrefix + hash
 	}
 	if hash := profile.Textures.Textures.CAPE.Hash(); hash != "" {
-		profile.Textures.Textures.CAPE.URL = s.s3TextureUrl + S3KeyPrefix + hash
+		profile.Textures.Textures.CAPE.URL = m.s3TextureUrl + S3KeyPrefix + hash
 	}
 	return profile, nil
 }
 
 // GetProfileByName resolves a Java username to its profile.
-func (s *service) GetProfileByName(ctx context.Context, name string) (*MojangProfile, error) {
-	player, err := s.GetMojangPlayerByName(ctx, name)
+func (m *mojangService) GetProfileByName(ctx context.Context, name string) (*MojangProfile, error) {
+	player, err := m.GetMojangPlayerByName(ctx, name)
 	if err != nil {
 		return nil, err
 	}
-	return s.GetProfile(ctx, player.ID)
+	return m.GetProfile(ctx, player.ID)
 }
 
-// resolveProfile gets a player's canonical MojangProfile from cache or the
+// resolveProfile gets a player's canonical MojangProfile from cacheStore or the
 // database, fetching live from Mojang when needed.
-func (s *service) resolveProfile(ctx context.Context, id string) (*MojangProfile, error) {
-	cached, err := s.store.GetProfileFromCache(ctx, id)
+func (m *mojangService) resolveProfile(ctx context.Context, id string) (*MojangProfile, error) {
+	cached, err := m.cache.GetProfileFromCache(ctx, id)
 	if err == nil {
 		return cached, nil
 	}
@@ -312,7 +352,7 @@ func (s *service) resolveProfile(ctx context.Context, id string) (*MojangProfile
 		return nil, err
 	}
 
-	dbProfile, err := s.store.GetProfileByUUID(ctx, id)
+	dbProfile, err := m.store.GetProfileByUUID(ctx, id)
 	if err != nil && err != ErrPlayerNotFound {
 		reqctx.Log(ctx, "Failed to get profile from DB:\n\t", err.Error())
 	}
@@ -321,25 +361,25 @@ func (s *service) resolveProfile(ctx context.Context, id string) (*MojangProfile
 			dbProfile.ProfileActions = []string{}
 		}
 		if !dbProfile.IsStale() {
-			if err := s.store.SetProfileInCache(context.WithoutCancel(ctx), dbProfile); err != nil {
+			if err := m.cache.SetProfileInCache(context.WithoutCancel(ctx), dbProfile); err != nil {
 				return nil, err
 			}
 			return dbProfile, nil
 		}
 	}
 
-	_, profile, err := s.fetchProfileFromMojang(ctx, id, false)
+	_, profile, err := m.fetchProfileFromMojang(ctx, id, false)
 	return profile, err
 }
 
 // fetchProfileFromMojang fetches and persists a player's profile live from
 // Mojang, returning both the raw MojangPlayer and the decoded MojangProfile.
-func (s *service) fetchProfileFromMojang(ctx context.Context, id string, signed bool) (*MojangPlayer, *MojangProfile, error) {
-	u := s.cfg.LookupProfile + id
+func (m *mojangService) fetchProfileFromMojang(ctx context.Context, id string, signed bool) (*MojangPlayer, *MojangProfile, error) {
+	u := m.cfg.LookupProfile + id
 	if signed {
 		u += "?unsigned=false"
 	}
-	resp, err := s.get(ctx, u)
+	resp, err := get(ctx, m.client, u)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -361,7 +401,7 @@ func (s *service) fetchProfileFromMojang(ctx context.Context, id string, signed 
 		player.ProfileActions = []string{}
 	}
 
-	if err := s.store.UpsertPlayer(context.WithoutCancel(ctx), &player, true); err != nil {
+	if err := m.store.UpsertPlayer(context.WithoutCancel(ctx), &player, true); err != nil {
 		return nil, nil, err
 	}
 
@@ -369,28 +409,28 @@ func (s *service) fetchProfileFromMojang(ctx context.Context, id string, signed 
 	profile := player.ToProfile(ctx)
 	if profile.Textures != nil {
 		if hash := profile.Textures.Textures.SKIN.Hash(); hash != "" {
-			if err := s.store.UpsertTextureHash(context.WithoutCancel(ctx), hash); err != nil {
+			if err := m.texture.UpsertTextureHash(context.WithoutCancel(ctx), hash); err != nil {
 				reqctx.Log(ctx, "Failed to store skin hash:\n\t", err.Error())
 			}
 		}
 
 		if hash := profile.Textures.Textures.CAPE.Hash(); hash != "" {
-			if err := s.store.UpsertTextureHash(context.WithoutCancel(ctx), hash); err != nil {
+			if err := m.texture.UpsertTextureHash(context.WithoutCancel(ctx), hash); err != nil {
 				reqctx.Log(ctx, "Failed to store cape hash:\n\t", err.Error())
 			}
 		}
 
-		if err := s.store.UpsertTextures(context.WithoutCancel(ctx), JavaPlayerTexturesTable, profile.Textures); err != nil {
+		if err := m.texture.UpsertTextures(context.WithoutCancel(ctx), JavaPlayerTexturesTable, profile.Textures); err != nil {
 			reqctx.Log(ctx, "Failed to store texture:\n\t", err.Error())
 		}
 	}
 
 	if signed {
-		if err := s.store.SetSignedProfileInCache(context.WithoutCancel(ctx), &player); err != nil {
+		if err := m.cache.SetSignedProfileInCache(context.WithoutCancel(ctx), &player); err != nil {
 			return nil, nil, err
 		}
 	} else {
-		if err := s.store.SetProfileInCache(context.WithoutCancel(ctx), profile); err != nil {
+		if err := m.cache.SetProfileInCache(context.WithoutCancel(ctx), profile); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -399,13 +439,13 @@ func (s *service) fetchProfileFromMojang(ctx context.Context, id string, signed 
 }
 
 // GetGeyserPlayerByXUID looks up a Bedrock player's by Xbox XUID.
-func (s *service) GetGeyserPlayerByXUID(ctx context.Context, xuid int64) (*GeyserPlayer, error) {
-	dbPlayer, _ := s.store.GetGeyserPlayerByXUID(ctx, xuid)
+func (g *geyserService) GetGeyserPlayerByXUID(ctx context.Context, xuid int64) (*GeyserPlayer, error) {
+	dbPlayer, _ := g.store.GetGeyserPlayerByXUID(ctx, xuid)
 	if dbPlayer != nil && !dbPlayer.IsStale() {
 		return dbPlayer, nil
 	}
 
-	result, err := s.queryGeyserAPI[GeyserGamertag](ctx, s.cfg.GeyserGamertagLookup, strconv.FormatInt(xuid, 10))
+	result, err := g.queryGeyserAPI[GeyserGamertag](ctx, g.cfg.GeyserGamertagLookup, strconv.FormatInt(xuid, 10))
 	if err != nil {
 		return nil, err
 	}
@@ -419,20 +459,20 @@ func (s *service) GetGeyserPlayerByXUID(ctx context.Context, xuid int64) (*Geyse
 		Name: result.Gamertag,
 	}
 
-	if err := s.store.UpsertGeyserPlayer(context.WithoutCancel(ctx), player); err != nil {
+	if err := g.store.UpsertGeyserPlayer(context.WithoutCancel(ctx), player); err != nil {
 		return nil, err
 	}
 	return player, nil
 }
 
 // GetGeyserPlayerByGamertag looks up a Bedrock player by gamertag.
-func (s *service) GetGeyserPlayerByGamertag(ctx context.Context, gamertag string) (*GeyserPlayer, error) {
-	dbPlayer, _ := s.store.GetGeyserPlayerByGamertag(ctx, gamertag)
+func (g *geyserService) GetGeyserPlayerByGamertag(ctx context.Context, gamertag string) (*GeyserPlayer, error) {
+	dbPlayer, _ := g.store.GetGeyserPlayerByGamertag(ctx, gamertag)
 	if dbPlayer != nil && !dbPlayer.IsStale() {
 		return dbPlayer, nil
 	}
 
-	result, err := s.queryGeyserAPI[GeyserXUID](ctx, s.cfg.GeyserXUIDLookup, url.PathEscape(gamertag))
+	result, err := g.queryGeyserAPI[GeyserXUID](ctx, g.cfg.GeyserXUIDLookup, url.PathEscape(gamertag))
 	if err != nil {
 		return nil, err
 	}
@@ -446,27 +486,27 @@ func (s *service) GetGeyserPlayerByGamertag(ctx context.Context, gamertag string
 		XUID: result.XUID,
 	}
 
-	if err := s.store.UpsertGeyserPlayer(context.WithoutCancel(ctx), player); err != nil {
+	if err := g.store.UpsertGeyserPlayer(context.WithoutCancel(ctx), player); err != nil {
 		return nil, err
 	}
 	return player, nil
 }
 
 // GetGeyserPlayerByUUID looks up a Bedrock player by Floodgate uuid.
-func (s *service) GetGeyserPlayerByUUID(ctx context.Context, id string) (*GeyserPlayer, error) {
+func (g *geyserService) GetGeyserPlayerByUUID(ctx context.Context, id string) (*GeyserPlayer, error) {
 	xuid, err := uuidToXUID(id)
 	if err != nil {
 		return nil, err
 	}
-	dbPlayer, _ := s.store.GetGeyserPlayerByUUID(ctx, id)
+	dbPlayer, _ := g.store.GetGeyserPlayerByUUID(ctx, id)
 	if dbPlayer != nil && !dbPlayer.IsStale() {
 		return dbPlayer, nil
 	}
-	return s.GetGeyserPlayerByXUID(ctx, xuid)
+	return g.GetGeyserPlayerByXUID(ctx, xuid)
 }
 
-func (s *service) queryGeyserAPI[T any](ctx context.Context, uri string, value string) (*T, error) {
-	resp, err := s.get(ctx, uri+value)
+func (g *geyserService) queryGeyserAPI[T any](ctx context.Context, uri string, value string) (*T, error) {
+	resp, err := get(ctx, g.client, uri+value)
 	if err != nil {
 		return nil, err
 	}
@@ -488,14 +528,14 @@ func (s *service) queryGeyserAPI[T any](ctx context.Context, uri string, value s
 }
 
 // GetGeyserSkin gets a Bedrock player's most recently converted skin by XUID.
-func (s *service) GetGeyserSkin(ctx context.Context, xuid int64) (*GeyserSkin, error) {
-	player, err := s.GetGeyserPlayerByXUID(ctx, xuid)
+func (g *geyserService) GetGeyserSkin(ctx context.Context, xuid int64) (*GeyserSkin, error) {
+	player, err := g.GetGeyserPlayerByXUID(ctx, xuid)
 	if err != nil {
 		return nil, err
 	}
 
 	var textures *TexturesValue
-	if textures, err = s.store.GetTextures(ctx, GeyserPlayerTexturesTable, player.ID, player.Name); err != nil {
+	if textures, err = g.texture.GetTextures(ctx, GeyserPlayerTexturesTable, player.ID, player.Name); err != nil {
 		return nil, err
 	}
 
@@ -505,7 +545,7 @@ func (s *service) GetGeyserSkin(ctx context.Context, xuid int64) (*GeyserSkin, e
 		return &skin, err
 	}
 
-	resp, err := s.get(ctx, s.cfg.GeyserSkinLookup+strconv.FormatInt(xuid, 10))
+	resp, err := get(ctx, g.client, g.cfg.GeyserSkinLookup+strconv.FormatInt(xuid, 10))
 	if err != nil {
 		return nil, err
 	}
@@ -529,7 +569,7 @@ func (s *service) GetGeyserSkin(ctx context.Context, xuid int64) (*GeyserSkin, e
 
 	textures = ParseTextureValue(ctx, skin.Value)
 	if textures != nil {
-		if err := s.store.UpsertTextures(context.WithoutCancel(ctx), GeyserPlayerTexturesTable, textures); err != nil {
+		if err := g.texture.UpsertTextures(context.WithoutCancel(ctx), GeyserPlayerTexturesTable, textures); err != nil {
 			return nil, err
 		}
 	}
@@ -546,8 +586,8 @@ func skinStepFailure(ctx context.Context, err error) error {
 	return err
 }
 
-func (s *service) getGeyserProfileFromPlayer(ctx context.Context, player *GeyserPlayer) (*GeyserProfile, error) {
-	skin, err := s.GetGeyserSkin(ctx, player.XUID)
+func (g *geyserService) getGeyserProfileFromPlayer(ctx context.Context, player *GeyserPlayer) (*GeyserProfile, error) {
+	skin, err := g.GetGeyserSkin(ctx, player.XUID)
 	if err != nil {
 		if err != ErrSkinNotFound {
 			return nil, skinStepFailure(ctx, err)
@@ -556,7 +596,7 @@ func (s *service) getGeyserProfileFromPlayer(ctx context.Context, player *Geyser
 	}
 	textures := ParseTextureValue(ctx, skin.Value)
 	if textures != nil {
-		if err := s.store.UpsertTextures(context.WithoutCancel(ctx), GeyserPlayerTexturesTable, textures); err != nil {
+		if err := g.texture.UpsertTextures(context.WithoutCancel(ctx), GeyserPlayerTexturesTable, textures); err != nil {
 			return nil, err
 		}
 	}
@@ -606,14 +646,14 @@ func (bytesReadCloser) Close() error { return nil }
 
 // GetTextureContent returns the texture's bytes and content type, fetching from
 // Mojang exactly once on a cache miss instead of round-tripping back through S3.
-func (s *service) GetTextureContent(ctx context.Context, hash string) (*TextureResult, error) {
-	present, err := s.store.IsTextureInS3(ctx, hash)
+func (t *textureService) GetTextureContent(ctx context.Context, hash string) (*TextureResult, error) {
+	present, err := t.s3.IsTextureInS3(ctx, hash)
 	if err != nil {
 		return nil, err
 	}
 
 	if present {
-		resp, err := s.get(ctx, s.s3TextureUrl+S3KeyPrefix+url.PathEscape(hash))
+		resp, err := get(ctx, t.client, t.s3TextureUrl+S3KeyPrefix+url.PathEscape(hash))
 		if err != nil {
 			return nil, err
 		}
@@ -634,7 +674,7 @@ func (s *service) GetTextureContent(ctx context.Context, hash string) (*TextureR
 		}
 		return &TextureResult{Body: resp.Body, ContentType: contentType}, nil
 	}
-	resp, err := s.get(ctx, s.cfg.LookupTexture+url.PathEscape(hash))
+	resp, err := get(ctx, t.client, t.cfg.LookupTexture+url.PathEscape(hash))
 	if err != nil {
 		return nil, err
 	}
@@ -658,9 +698,9 @@ func (s *service) GetTextureContent(ctx context.Context, hash string) (*TextureR
 		contentType = "image/png"
 	}
 
-	if err := s.store.PutTextureInS3(context.WithoutCancel(ctx), hash, bytesReadCloser{bytes.NewReader(data)}); err != nil {
+	if err := t.s3.PutTextureInS3(context.WithoutCancel(ctx), hash, bytesReadCloser{bytes.NewReader(data)}); err != nil {
 		reqctx.Log(ctx, "Failed to upload texture to S3:\n\t", err.Error())
-	} else if err := s.store.UpsertTextureHash(context.WithoutCancel(ctx), hash); err != nil {
+	} else if err := t.texture.UpsertTextureHash(context.WithoutCancel(ctx), hash); err != nil {
 		reqctx.Log(ctx, "Failed to store texture hash:\n\t", err.Error())
 	}
 
