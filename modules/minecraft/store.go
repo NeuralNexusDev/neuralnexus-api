@@ -36,25 +36,11 @@ const (
 
 // Store - Minecraft player store
 type Store interface {
-	JavaPlayerStore
-	GeyserPlayerStore
-	TextureStore
-	Cache
-	S3
-}
-
-type JavaPlayerStore interface {
-	GetPlayerByUUID(ctx context.Context, id string) (*MojangPlayer, error)
-	GetPlayerByName(ctx context.Context, name string) (*MojangPlayer, error)
-	UpsertPlayer(ctx context.Context, player *MojangPlayer, updateProfile bool) error
-	GetProfileByUUID(ctx context.Context, id string) (*MojangProfile, error)
-}
-
-type GeyserPlayerStore interface {
-	GetGeyserPlayerByUUID(ctx context.Context, floodgateUUID string) (*GeyserPlayer, error)
-	GetGeyserPlayerByGamertag(ctx context.Context, gamertag string) (*GeyserPlayer, error)
-	GetGeyserPlayerByXUID(ctx context.Context, xuid int64) (*GeyserPlayer, error)
-	UpsertGeyserPlayer(ctx context.Context, player *GeyserPlayer) error
+	Texture() TextureStore
+	Cache() CacheStore
+	S3() S3Store
+	Mojang() MojangStore
+	Geyser() GeyserStore
 }
 
 type TextureStore interface {
@@ -63,7 +49,7 @@ type TextureStore interface {
 	UpsertTextureHash(ctx context.Context, hash string) error
 }
 
-type Cache interface {
+type CacheStore interface {
 	GetPlayerFromCache(ctx context.Context, key string) (*MojangPlayer, error)
 	SetPlayerInCache(ctx context.Context, player *MojangPlayer) error
 
@@ -74,39 +60,106 @@ type Cache interface {
 	SetSignedProfileInCache(ctx context.Context, player *MojangPlayer) error
 }
 
-type S3 interface {
+type S3Store interface {
 	IsTextureInS3(ctx context.Context, hash string) (bool, error)
 	PutTextureInS3(ctx context.Context, hash string, body io.ReadCloser) error
 }
 
-// store - Minecraft player store implementation
-type store struct {
-	cache
-	sThree
-	cfg    config.Minecraft
-	db     *pgxpool.Pool
-	rdb    *redis.Client
-	s3     *s3.Client
-	bucket string
+type MojangStore interface {
+	GetPlayerByUUID(ctx context.Context, id string) (*MojangPlayer, error)
+	GetPlayerByName(ctx context.Context, name string) (*MojangPlayer, error)
+	UpsertPlayer(ctx context.Context, player *MojangPlayer, updateProfile bool) error
+	GetProfileByUUID(ctx context.Context, id string) (*MojangProfile, error)
 }
 
-type cache struct {
+type GeyserStore interface {
+	GetGeyserPlayerByUUID(ctx context.Context, floodgateUUID string) (*GeyserPlayer, error)
+	GetGeyserPlayerByGamertag(ctx context.Context, gamertag string) (*GeyserPlayer, error)
+	GetGeyserPlayerByXUID(ctx context.Context, xuid int64) (*GeyserPlayer, error)
+	UpsertGeyserPlayer(ctx context.Context, player *GeyserPlayer) error
+}
+
+// store - Minecraft player store implementation
+type store struct {
+	texture *textureStore
+	cache   *cacheStore
+	sThree  *s3store
+	mojang  *mojangStore
+	geyser  *geyserStore
+}
+
+func (s *store) Texture() TextureStore {
+	return s.texture
+}
+
+func (s *store) Cache() CacheStore {
+	return s.cache
+}
+
+func (s *store) S3() S3Store {
+	return s.sThree
+}
+
+func (s *store) Mojang() MojangStore {
+	return s.mojang
+}
+
+func (s *store) Geyser() GeyserStore {
+	return s.geyser
+}
+
+type cacheStore struct {
 	rdb *redis.Client
 }
 
-type sThree struct {
+type s3store struct {
 	s3     *s3.Client
 	bucket string
+}
+
+type textureStore struct {
+	cfg config.Minecraft
+	db  *pgxpool.Pool
+}
+
+type mojangStore struct {
+	cfg     config.Minecraft
+	db      *pgxpool.Pool
+	texture *textureStore
+	cache   *cacheStore
+}
+
+type geyserStore struct {
+	cfg     config.Minecraft
+	db      *pgxpool.Pool
+	texture TextureStore
 }
 
 // NewStore - Create a new Minecraft player store
 func NewStore(cfg config.Minecraft, db *pgxpool.Pool, rdb *redis.Client, s3 *s3.Client, bucket string) Store {
-	return &store{cfg: cfg, db: db, rdb: rdb, s3: s3, bucket: bucket}
+	texture := &textureStore{cfg, db}
+	cache := &cacheStore{rdb}
+	return &store{
+		texture,
+		cache,
+		&s3store{s3, bucket},
+		&mojangStore{
+			cfg:     cfg,
+			db:      db,
+			texture: texture,
+			cache:   cache,
+		},
+		&geyserStore{
+			cfg:     cfg,
+			db:      db,
+			texture: texture,
+		},
+	}
 }
 
 // GetPlayerByUUID gets a player by UUID from the database
-func (s *store) GetPlayerByUUID(ctx context.Context, id string) (*MojangPlayer, error) {
-	rows, err := s.db.Query(ctx,
+func (m *mojangStore) GetPlayerByUUID(ctx context.Context, id string) (*MojangPlayer, error) {
+	rows, err := m.db.Query(ctx,
 		"SELECT id, name, legacy, demo, first_seen, last_seen FROM players WHERE id = $1", id)
 	if err != nil {
 		return nil, err
@@ -119,8 +172,8 @@ func (s *store) GetPlayerByUUID(ctx context.Context, id string) (*MojangPlayer, 
 }
 
 // GetPlayerByName gets a player by name from the database
-func (s *store) GetPlayerByName(ctx context.Context, name string) (*MojangPlayer, error) {
-	rows, err := s.db.Query(ctx,
+func (m *mojangStore) GetPlayerByName(ctx context.Context, name string) (*MojangPlayer, error) {
+	rows, err := m.db.Query(ctx,
 		"SELECT id, name, legacy, demo, first_seen, last_seen FROM players WHERE name = $1", name)
 	if err != nil {
 		return nil, err
@@ -140,8 +193,8 @@ func playerNotFound(err error) error {
 }
 
 // GetProfileByUUID gets a player's full profile from the database by UUID
-func (s *store) GetProfileByUUID(ctx context.Context, id string) (*MojangProfile, error) {
-	rows, err := s.db.Query(ctx,
+func (m *mojangStore) GetProfileByUUID(ctx context.Context, id string) (*MojangProfile, error) {
+	rows, err := m.db.Query(ctx,
 		"SELECT id, name, legacy, demo, profile_actions, first_seen, last_seen FROM players WHERE id = $1", id)
 	if err != nil {
 		return nil, err
@@ -151,7 +204,7 @@ func (s *store) GetProfileByUUID(ctx context.Context, id string) (*MojangProfile
 		return nil, playerNotFound(err)
 	}
 
-	textures, err := s.GetTextures(ctx, JavaPlayerTexturesTable, id, player.Name)
+	textures, err := m.texture.GetTextures(ctx, JavaPlayerTexturesTable, id, player.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -168,31 +221,8 @@ func (s *store) GetProfileByUUID(ctx context.Context, id string) (*MojangProfile
 	}, nil
 }
 
-// GetTextures loads a player's most recently seen skin+cape from the
-// database and decodes it into a TexturesValue, or nil if none is stored.
-func (s *store) GetTextures(ctx context.Context, table, id, name string) (*TexturesValue, error) {
-	rows, err := s.db.Query(ctx, `
-		SELECT player_id, skin, model, cape, last_seen
-		FROM `+table+
-		` WHERE player_id = $1
-		ORDER BY last_seen DESC
-		LIMIT 1`, table, id)
-	if err != nil {
-		return nil, err
-	}
-
-	row, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[TexturesRow])
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return row.Value(name, s.cfg.LookupTexture), nil
-}
-
-func (s *store) upsertNameHistory(ctx context.Context, table, uuid, name string, now int64) error {
-	_, err := s.db.Exec(ctx, `
+func upsertNameHistory(ctx context.Context, db *pgxpool.Pool, table, uuid, name string, now int64) error {
+	_, err := db.Exec(ctx, `
 		INSERT INTO `+table+` (player_id, name, first_seen, last_seen)
 		VALUES ($1, $2, $3, $3)
 		ON CONFLICT (player_id, name) DO UPDATE SET
@@ -204,12 +234,12 @@ func (s *store) upsertNameHistory(ctx context.Context, table, uuid, name string,
 }
 
 // UpsertPlayer upserts a player into the database and updates name history
-func (s *store) UpsertPlayer(ctx context.Context, player *MojangPlayer, updateProfile bool) error {
+func (m *mojangStore) UpsertPlayer(ctx context.Context, player *MojangPlayer, updateProfile bool) error {
 	now := time.Now().UnixMilli()
 
 	var err error
 	if updateProfile {
-		_, err = s.db.Exec(ctx, `
+		_, err = m.db.Exec(ctx, `
 			INSERT INTO players (id, name, legacy, demo, profile_actions, first_seen, last_seen)
 			VALUES ($1, $2, $3, $4, $5, $6, $6)
 			ON CONFLICT (id) DO UPDATE SET
@@ -222,7 +252,7 @@ func (s *store) UpsertPlayer(ctx context.Context, player *MojangPlayer, updatePr
 			player.ID, player.Name, player.Legacy, player.Demo, player.ProfileActions, now,
 		)
 	} else {
-		_, err = s.db.Exec(ctx, `
+		_, err = m.db.Exec(ctx, `
 			INSERT INTO players (id, name, legacy, demo, profile_actions, first_seen, last_seen)
 			VALUES ($1, $2, false, false, '[]', $3, $3)
 			ON CONFLICT (id) DO UPDATE SET
@@ -235,30 +265,12 @@ func (s *store) UpsertPlayer(ctx context.Context, player *MojangPlayer, updatePr
 	if err != nil {
 		return err
 	}
-	return s.upsertNameHistory(ctx, JavaPlayerNamesTable, player.ID, player.Name, now)
-}
-
-// UpsertTextures upserts a player's skin and cape into the database
-func (s *store) UpsertTextures(ctx context.Context, table string, value *TexturesValue) error {
-	skin := value.Textures.SKIN
-	var model *Model
-	if skin != nil && skin.Metadata != nil {
-		model = &skin.Metadata.Model
-	}
-	cape := value.Textures.CAPE
-
-	_, err := s.db.Exec(ctx, `
-		INSERT INTO `+table+` (player_id, skin, model, cape, first_seen, last_seen)
-		VALUES ($1, $2, $3, $4, $5, $5)
-		ON CONFLICT (player_id, COALESCE(skin, ''), COALESCE(model, ''), COALESCE(cape, '')) DO UPDATE SET
-			last_seen = EXCLUDED.last_seen
-		`, value.ProfileID, skin.Hash(), model, cape.Hash(), value.Timestamp)
-	return err
+	return upsertNameHistory(ctx, m.db, JavaPlayerNamesTable, player.ID, player.Name, now)
 }
 
 // GetGeyserPlayerByUUID gets a Bedrock player from their floodgateUUID
-func (s *store) GetGeyserPlayerByUUID(ctx context.Context, floodgateUUID string) (*GeyserPlayer, error) {
-	rows, err := s.db.Query(ctx, `
+func (g *geyserStore) GetGeyserPlayerByUUID(ctx context.Context, floodgateUUID string) (*GeyserPlayer, error) {
+	rows, err := g.db.Query(ctx, `
 		SELECT id, xuid, gamertag, first_seen, last_seen
 		FROM geyser_players
 		WHERE id = $1
@@ -275,8 +287,8 @@ func (s *store) GetGeyserPlayerByUUID(ctx context.Context, floodgateUUID string)
 }
 
 // GetGeyserPlayerByGamertag gets a Bedrock player from their gamertag
-func (s *store) GetGeyserPlayerByGamertag(ctx context.Context, gamertag string) (*GeyserPlayer, error) {
-	rows, err := s.db.Query(ctx, `
+func (g *geyserStore) GetGeyserPlayerByGamertag(ctx context.Context, gamertag string) (*GeyserPlayer, error) {
+	rows, err := g.db.Query(ctx, `
 		SELECT id, xuid, gamertag, first_seen, last_seen
 		FROM geyser_players
 		WHERE gamertag = $1
@@ -293,8 +305,8 @@ func (s *store) GetGeyserPlayerByGamertag(ctx context.Context, gamertag string) 
 }
 
 // GetGeyserPlayerByXUID gets a Bedrock player from their xuid
-func (s *store) GetGeyserPlayerByXUID(ctx context.Context, xuid int64) (*GeyserPlayer, error) {
-	rows, err := s.db.Query(ctx, `
+func (g *geyserStore) GetGeyserPlayerByXUID(ctx context.Context, xuid int64) (*GeyserPlayer, error) {
+	rows, err := g.db.Query(ctx, `
 		SELECT id, xuid, gamertag, first_seen, last_seen
 		FROM geyser_players
 		WHERE xuid = $1`, xuid)
@@ -310,9 +322,9 @@ func (s *store) GetGeyserPlayerByXUID(ctx context.Context, xuid int64) (*GeyserP
 }
 
 // UpsertGeyserPlayer upserts a Bedrock player's info
-func (s *store) UpsertGeyserPlayer(ctx context.Context, player *GeyserPlayer) error {
+func (g *geyserStore) UpsertGeyserPlayer(ctx context.Context, player *GeyserPlayer) error {
 	now := time.Now().UnixMilli()
-	_, err := s.db.Exec(ctx, `
+	_, err := g.db.Exec(ctx, `
 		INSERT INTO geyser_players (id, xuid, gamertag, first_seen, last_seen)
 		VALUES ($1, $2, $3, $4, $4)
 		ON CONFLICT (xuid) DO UPDATE SET
@@ -324,12 +336,53 @@ func (s *store) UpsertGeyserPlayer(ctx context.Context, player *GeyserPlayer) er
 	if err != nil {
 		return err
 	}
-	return s.upsertNameHistory(ctx, GeyserPlayerNamesTable, player.ID, player.Name, now)
+	return upsertNameHistory(ctx, g.db, GeyserPlayerNamesTable, player.ID, player.Name, now)
+}
+
+// GetTextures loads a player's most recently seen skin+cape from the
+// database and decodes it into a TexturesValue, or nil if none is stored.
+func (t *textureStore) GetTextures(ctx context.Context, table, id, name string) (*TexturesValue, error) {
+	rows, err := t.db.Query(ctx, `
+		SELECT player_id, skin, model, cape, last_seen
+		FROM `+table+
+		` WHERE player_id = $1
+		ORDER BY last_seen DESC
+		LIMIT 1`, table, id)
+	if err != nil {
+		return nil, err
+	}
+
+	row, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[TexturesRow])
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return row.Value(name, t.cfg.LookupTexture), nil
+}
+
+// UpsertTextures upserts a player's skin and cape into the database
+func (t *textureStore) UpsertTextures(ctx context.Context, table string, value *TexturesValue) error {
+	skin := value.Textures.SKIN
+	var model *Model
+	if skin != nil && skin.Metadata != nil {
+		model = &skin.Metadata.Model
+	}
+	cape := value.Textures.CAPE
+
+	_, err := t.db.Exec(ctx, `
+		INSERT INTO `+table+` (player_id, skin, model, cape, first_seen, last_seen)
+		VALUES ($1, $2, $3, $4, $5, $5)
+		ON CONFLICT (player_id, COALESCE(skin, ''), COALESCE(model, ''), COALESCE(cape, '')) DO UPDATE SET
+			last_seen = EXCLUDED.last_seen
+		`, value.ProfileID, skin.Hash(), model, cape.Hash(), value.Timestamp)
+	return err
 }
 
 // UpsertTextureHash upserts a texture hash into the database
-func (s *store) UpsertTextureHash(ctx context.Context, hash string) error {
-	_, err := s.db.Exec(ctx,
+func (t *textureStore) UpsertTextureHash(ctx context.Context, hash string) error {
+	_, err := t.db.Exec(ctx,
 		"INSERT INTO textures (hash) VALUES ($1) ON CONFLICT (hash) DO NOTHING", hash)
 	return err
 }
@@ -342,7 +395,7 @@ func cacheMiss(err error) error {
 }
 
 // GetPlayerFromCache gets a player from the cache by key (uuid or name)
-func (c *cache) GetPlayerFromCache(ctx context.Context, key string) (*MojangPlayer, error) {
+func (c *cacheStore) GetPlayerFromCache(ctx context.Context, key string) (*MojangPlayer, error) {
 	val, err := c.rdb.Get(ctx, CachePlayer+key).Result()
 	if err != nil {
 		return nil, cacheMiss(err)
@@ -355,7 +408,7 @@ func (c *cache) GetPlayerFromCache(ctx context.Context, key string) (*MojangPlay
 }
 
 // SetPlayerInCache sets a player in the cache under both uuid and name keys
-func (c *cache) SetPlayerInCache(ctx context.Context, player *MojangPlayer) error {
+func (c *cacheStore) SetPlayerInCache(ctx context.Context, player *MojangPlayer) error {
 	data, err := json.Marshal(player)
 	if err != nil {
 		return err
@@ -369,7 +422,7 @@ func (c *cache) SetPlayerInCache(ctx context.Context, player *MojangPlayer) erro
 }
 
 // GetProfileFromCache gets a player's profile from the cache
-func (c *cache) GetProfileFromCache(ctx context.Context, id string) (*MojangProfile, error) {
+func (c *cacheStore) GetProfileFromCache(ctx context.Context, id string) (*MojangProfile, error) {
 	val, err := c.rdb.Get(ctx, CacheProfile+id).Result()
 	if err != nil {
 		return nil, cacheMiss(err)
@@ -382,7 +435,7 @@ func (c *cache) GetProfileFromCache(ctx context.Context, id string) (*MojangProf
 }
 
 // SetProfileInCache sets a player's profile in the cache
-func (c *cache) SetProfileInCache(ctx context.Context, profile *MojangProfile) error {
+func (c *cacheStore) SetProfileInCache(ctx context.Context, profile *MojangProfile) error {
 	data, err := json.Marshal(profile)
 	if err != nil {
 		return err
@@ -391,7 +444,7 @@ func (c *cache) SetProfileInCache(ctx context.Context, profile *MojangProfile) e
 }
 
 // GetSignedProfileFromCache gets a player's signed profile from the cache
-func (c *cache) GetSignedProfileFromCache(ctx context.Context, id string) (*MojangPlayer, error) {
+func (c *cacheStore) GetSignedProfileFromCache(ctx context.Context, id string) (*MojangPlayer, error) {
 	val, err := c.rdb.Get(ctx, CacheProfileSigned+id).Result()
 	if err != nil {
 		return nil, cacheMiss(err)
@@ -404,7 +457,7 @@ func (c *cache) GetSignedProfileFromCache(ctx context.Context, id string) (*Moja
 }
 
 // SetSignedProfileInCache sets a player's signed profile in the cache
-func (c *cache) SetSignedProfileInCache(ctx context.Context, player *MojangPlayer) error {
+func (c *cacheStore) SetSignedProfileInCache(ctx context.Context, player *MojangPlayer) error {
 	data, err := json.Marshal(player)
 	if err != nil {
 		return err
@@ -413,7 +466,7 @@ func (c *cache) SetSignedProfileInCache(ctx context.Context, player *MojangPlaye
 }
 
 // IsTextureInS3 check if the texture is in S3
-func (s *sThree) IsTextureInS3(ctx context.Context, hash string) (bool, error) {
+func (s *s3store) IsTextureInS3(ctx context.Context, hash string) (bool, error) {
 	_, err := s.s3.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(S3KeyPrefix + hash),
@@ -431,7 +484,7 @@ func (s *sThree) IsTextureInS3(ctx context.Context, hash string) (bool, error) {
 }
 
 // PutTextureInS3 upload a texture to S3
-func (s *sThree) PutTextureInS3(ctx context.Context, hash string, body io.ReadCloser) error {
+func (s *s3store) PutTextureInS3(ctx context.Context, hash string, body io.ReadCloser) error {
 	input := &s3.PutObjectInput{
 		Bucket:      aws.String(s.bucket),
 		Key:         aws.String(S3KeyPrefix + hash),
