@@ -270,6 +270,16 @@ func (t *TexturesRow) Value(playerName, textureUrl string) *TexturesValue {
 	}
 }
 
+// GeyserXUID result returned by Geyser's API
+type GeyserXUID struct {
+	XUID int64 `json:"xuid"`
+}
+
+// GeyserGamertag result returned by Geyser's API
+type GeyserGamertag struct {
+	Gamertag string `json:"gamertag"`
+}
+
 // GeyserPlayer - a Bedrock player's identity derived from Geyser's Xbox XUID lookup.
 type GeyserPlayer struct {
 	ID        string `json:"floodgate_uuid" db:"id"`
@@ -305,7 +315,7 @@ func (s *GeyserSkin) FromTexturesValue(ctx context.Context, t *TexturesValue) er
 		return ErrSkinNotFound
 	}
 	// TODO: RGBA hash from the PNG, or just go get it from the DB
-	s.TextureBytesHash = "TODO"
+	s.TextureBytesHash = "NOT_A_HASH_USE_TEXTURE_ID"
 	s.IsSteve = t.Textures.SKIN.Metadata != nil && t.Textures.SKIN.Metadata.Model == SLIM
 	s.Hash = t.Textures.SKIN.Hash()
 	s.Value = EncodeTextureValue(ctx, t)
