@@ -14,12 +14,12 @@ import (
 )
 
 type mcMockService struct {
-	getMojangPlayerByName      func(name string) (*Player, error)
-	getMojangPlayerByUUID      func(id string) (*Player, error)
-	getMojangPlayersByNames    func(names []string) ([]*Player, error)
-	getMojangProfile           func(id string, signed bool) (*Player, error)
-	getProfile                 func(id string) (*Profile, error)
-	getProfileByName           func(name string) (*Profile, error)
+	getMojangPlayerByName      func(name string) (*MojangPlayer, error)
+	getMojangPlayerByUUID      func(id string) (*MojangPlayer, error)
+	getMojangPlayersByNames    func(names []string) ([]*MojangPlayer, error)
+	getMojangProfile           func(id string, signed bool) (*MojangPlayer, error)
+	getProfile                 func(id string) (*MojangProfile, error)
+	getProfileByName           func(name string) (*MojangProfile, error)
 	getTextureContent          func(hash string) (*TextureResult, error)
 	getGeyserXUID              func(gamertag string) (*GeyserPlayer, error)
 	getGeyserSkin              func(xuid int64) (*GeyserSkin, error)
@@ -30,22 +30,22 @@ type mcMockService struct {
 
 var _ Service = (*mcMockService)(nil)
 
-func (m *mcMockService) GetMojangPlayerByName(_ context.Context, name string) (*Player, error) {
+func (m *mcMockService) GetMojangPlayerByName(_ context.Context, name string) (*MojangPlayer, error) {
 	return m.getMojangPlayerByName(name)
 }
-func (m *mcMockService) GetMojangPlayerByUUID(_ context.Context, id string) (*Player, error) {
+func (m *mcMockService) GetMojangPlayerByUUID(_ context.Context, id string) (*MojangPlayer, error) {
 	return m.getMojangPlayerByUUID(id)
 }
-func (m *mcMockService) GetMojangPlayersByNames(_ context.Context, names []string) ([]*Player, error) {
+func (m *mcMockService) GetMojangPlayersByNames(_ context.Context, names []string) ([]*MojangPlayer, error) {
 	return m.getMojangPlayersByNames(names)
 }
-func (m *mcMockService) GetMojangProfile(_ context.Context, id string, signed bool) (*Player, error) {
+func (m *mcMockService) GetMojangProfile(_ context.Context, id string, signed bool) (*MojangPlayer, error) {
 	return m.getMojangProfile(id, signed)
 }
-func (m *mcMockService) GetProfile(_ context.Context, id string) (*Profile, error) {
+func (m *mcMockService) GetProfile(_ context.Context, id string) (*MojangProfile, error) {
 	return m.getProfile(id)
 }
-func (m *mcMockService) GetProfileByName(_ context.Context, name string) (*Profile, error) {
+func (m *mcMockService) GetProfileByName(_ context.Context, name string) (*MojangProfile, error) {
 	return m.getProfileByName(name)
 }
 func (m *mcMockService) GetTextureContent(_ context.Context, hash string) (*TextureResult, error) {
@@ -85,21 +85,21 @@ func mcRequireStatus(t *testing.T, w *httptest.ResponseRecorder, want int) {
 
 func TestHD01to04_GetMojangPlayerByNameHandler(t *testing.T) {
 	t.Run("HD-02_OK", func(t *testing.T) {
-		svc := &mcMockService{getMojangPlayerByName: func(name string) (*Player, error) {
-			return &Player{ID: "id", Name: name}, nil
+		svc := &mcMockService{getMojangPlayerByName: func(name string) (*MojangPlayer, error) {
+			return &MojangPlayer{ID: "id", Name: name}, nil
 		}}
 		h := GetMojangPlayerByNameHandler(svc)
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/name/Steve", nil, map[string]string{"name": "Steve"}))
 		mcRequireStatus(t, w, http.StatusOK)
-		var got Player
+		var got MojangPlayer
 		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil || got.Name != "Steve" {
 			t.Errorf("body = %s, want a player named Steve", w.Body.String())
 		}
 	})
 
 	t.Run("HD-03_NotFound", func(t *testing.T) {
-		svc := &mcMockService{getMojangPlayerByName: func(string) (*Player, error) { return nil, ErrPlayerNotFound }}
+		svc := &mcMockService{getMojangPlayerByName: func(string) (*MojangPlayer, error) { return nil, ErrPlayerNotFound }}
 		h := GetMojangPlayerByNameHandler(svc)
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/name/x", nil, map[string]string{"name": "x"}))
@@ -108,7 +108,7 @@ func TestHD01to04_GetMojangPlayerByNameHandler(t *testing.T) {
 	})
 
 	t.Run("HD-04_InternalError", func(t *testing.T) {
-		svc := &mcMockService{getMojangPlayerByName: func(string) (*Player, error) { return nil, testutil.ErrBoom }}
+		svc := &mcMockService{getMojangPlayerByName: func(string) (*MojangPlayer, error) { return nil, testutil.ErrBoom }}
 		h := GetMojangPlayerByNameHandler(svc)
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/name/x", nil, map[string]string{"name": "x"}))
@@ -129,8 +129,8 @@ func TestHD05to08_GetMojangPlayerByUUIDHandler(t *testing.T) {
 	})
 
 	t.Run("HD-06_OK", func(t *testing.T) {
-		svc := &mcMockService{getMojangPlayerByUUID: func(id string) (*Player, error) {
-			return &Player{ID: id}, nil
+		svc := &mcMockService{getMojangPlayerByUUID: func(id string) (*MojangPlayer, error) {
+			return &MojangPlayer{ID: id}, nil
 		}}
 		h := GetMojangPlayerByUUIDHandler(svc)
 		w := httptest.NewRecorder()
@@ -139,7 +139,7 @@ func TestHD05to08_GetMojangPlayerByUUIDHandler(t *testing.T) {
 	})
 
 	t.Run("HD-07_NotFound", func(t *testing.T) {
-		svc := &mcMockService{getMojangPlayerByUUID: func(string) (*Player, error) { return nil, ErrPlayerNotFound }}
+		svc := &mcMockService{getMojangPlayerByUUID: func(string) (*MojangPlayer, error) { return nil, ErrPlayerNotFound }}
 		h := GetMojangPlayerByUUIDHandler(svc)
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/uuid/"+validUUID, nil, map[string]string{"uuid": validUUID}))
@@ -148,7 +148,7 @@ func TestHD05to08_GetMojangPlayerByUUIDHandler(t *testing.T) {
 	})
 
 	t.Run("HD-08_InternalError", func(t *testing.T) {
-		svc := &mcMockService{getMojangPlayerByUUID: func(string) (*Player, error) { return nil, testutil.ErrBoom }}
+		svc := &mcMockService{getMojangPlayerByUUID: func(string) (*MojangPlayer, error) { return nil, testutil.ErrBoom }}
 		h := GetMojangPlayerByUUIDHandler(svc)
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/uuid/"+validUUID, nil, map[string]string{"uuid": validUUID}))
@@ -208,10 +208,10 @@ func TestHD09to15_GetMojangPlayersByNamesHandler(t *testing.T) {
 	})
 
 	t.Run("HD-14_OK", func(t *testing.T) {
-		svc := &mcMockService{getMojangPlayersByNames: func(names []string) ([]*Player, error) {
-			out := make([]*Player, len(names))
+		svc := &mcMockService{getMojangPlayersByNames: func(names []string) ([]*MojangPlayer, error) {
+			out := make([]*MojangPlayer, len(names))
 			for i, n := range names {
-				out[i] = &Player{Name: n}
+				out[i] = &MojangPlayer{Name: n}
 			}
 			return out, nil
 		}}
@@ -219,14 +219,14 @@ func TestHD09to15_GetMojangPlayersByNamesHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, post(t, `["a","b"]`, "application/json"))
 		mcRequireStatus(t, w, http.StatusOK)
-		var got []Player
+		var got []MojangPlayer
 		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil || len(got) != 2 {
 			t.Errorf("body = %s, want 2 players", w.Body.String())
 		}
 	})
 
 	t.Run("HD-15_ServiceError", func(t *testing.T) {
-		svc := &mcMockService{getMojangPlayersByNames: func([]string) ([]*Player, error) { return nil, testutil.ErrBoom }}
+		svc := &mcMockService{getMojangPlayersByNames: func([]string) ([]*MojangPlayer, error) { return nil, testutil.ErrBoom }}
 		h := GetMojangPlayersByNamesHandler(svc)
 		w := httptest.NewRecorder()
 		h(w, post(t, `["a"]`, "application/json"))
@@ -248,9 +248,9 @@ func TestHD16to20_GetMojangProfileHandler(t *testing.T) {
 
 	t.Run("HD-17_DefaultQuerySignedFalse", func(t *testing.T) {
 		var gotSigned bool
-		svc := &mcMockService{getMojangProfile: func(id string, signed bool) (*Player, error) {
+		svc := &mcMockService{getMojangProfile: func(id string, signed bool) (*MojangPlayer, error) {
 			gotSigned = signed
-			return &Player{ID: id}, nil
+			return &MojangPlayer{ID: id}, nil
 		}}
 		h := GetMojangProfileHandler(svc)
 		w := httptest.NewRecorder()
@@ -263,9 +263,9 @@ func TestHD16to20_GetMojangProfileHandler(t *testing.T) {
 
 	t.Run("HD-18_UnsignedFalseMeansSignedTrue", func(t *testing.T) {
 		var gotSigned bool
-		svc := &mcMockService{getMojangProfile: func(id string, signed bool) (*Player, error) {
+		svc := &mcMockService{getMojangProfile: func(id string, signed bool) (*MojangPlayer, error) {
 			gotSigned = signed
-			return &Player{ID: id}, nil
+			return &MojangPlayer{ID: id}, nil
 		}}
 		h := GetMojangProfileHandler(svc)
 		w := httptest.NewRecorder()
@@ -277,7 +277,7 @@ func TestHD16to20_GetMojangProfileHandler(t *testing.T) {
 	})
 
 	t.Run("HD-19_NotFound", func(t *testing.T) {
-		svc := &mcMockService{getMojangProfile: func(string, bool) (*Player, error) { return nil, ErrPlayerNotFound }}
+		svc := &mcMockService{getMojangProfile: func(string, bool) (*MojangPlayer, error) { return nil, ErrPlayerNotFound }}
 		h := GetMojangProfileHandler(svc)
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/profile/"+validUUID, nil, map[string]string{"uuid": validUUID}))
@@ -285,7 +285,7 @@ func TestHD16to20_GetMojangProfileHandler(t *testing.T) {
 	})
 
 	t.Run("HD-20_InternalError", func(t *testing.T) {
-		svc := &mcMockService{getMojangProfile: func(string, bool) (*Player, error) { return nil, testutil.ErrBoom }}
+		svc := &mcMockService{getMojangProfile: func(string, bool) (*MojangPlayer, error) { return nil, testutil.ErrBoom }}
 		h := GetMojangProfileHandler(svc)
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/profile/"+validUUID, nil, map[string]string{"uuid": validUUID}))
@@ -306,7 +306,7 @@ func TestHD21to24_GetProfileHandler(t *testing.T) {
 	})
 
 	t.Run("HD-22_OK", func(t *testing.T) {
-		svc := &mcMockService{getProfile: func(id string) (*Profile, error) { return &Profile{ID: id}, nil }}
+		svc := &mcMockService{getProfile: func(id string) (*MojangProfile, error) { return &MojangProfile{ID: id}, nil }}
 		h := GetProfileHandler(svc)
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/p/"+validUUID, nil, map[string]string{"uuid": validUUID}))
@@ -314,7 +314,7 @@ func TestHD21to24_GetProfileHandler(t *testing.T) {
 	})
 
 	t.Run("HD-23_NotFound", func(t *testing.T) {
-		svc := &mcMockService{getProfile: func(string) (*Profile, error) { return nil, ErrPlayerNotFound }}
+		svc := &mcMockService{getProfile: func(string) (*MojangProfile, error) { return nil, ErrPlayerNotFound }}
 		h := GetProfileHandler(svc)
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/p/"+validUUID, nil, map[string]string{"uuid": validUUID}))
@@ -322,7 +322,7 @@ func TestHD21to24_GetProfileHandler(t *testing.T) {
 	})
 
 	t.Run("HD-24_InternalError", func(t *testing.T) {
-		svc := &mcMockService{getProfile: func(string) (*Profile, error) { return nil, testutil.ErrBoom }}
+		svc := &mcMockService{getProfile: func(string) (*MojangProfile, error) { return nil, testutil.ErrBoom }}
 		h := GetProfileHandler(svc)
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/p/"+validUUID, nil, map[string]string{"uuid": validUUID}))
@@ -333,7 +333,7 @@ func TestHD21to24_GetProfileHandler(t *testing.T) {
 
 func TestHD25to28_GetProfileByNameHandler(t *testing.T) {
 	t.Run("HD-26_OK", func(t *testing.T) {
-		svc := &mcMockService{getProfileByName: func(name string) (*Profile, error) { return &Profile{Name: name}, nil }}
+		svc := &mcMockService{getProfileByName: func(name string) (*MojangProfile, error) { return &MojangProfile{Name: name}, nil }}
 		h := GetProfileByNameHandler(svc)
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/pn/Steve", nil, map[string]string{"name": "Steve"}))
@@ -341,7 +341,7 @@ func TestHD25to28_GetProfileByNameHandler(t *testing.T) {
 	})
 
 	t.Run("HD-27_NotFound", func(t *testing.T) {
-		svc := &mcMockService{getProfileByName: func(string) (*Profile, error) { return nil, ErrPlayerNotFound }}
+		svc := &mcMockService{getProfileByName: func(string) (*MojangProfile, error) { return nil, ErrPlayerNotFound }}
 		h := GetProfileByNameHandler(svc)
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/pn/x", nil, map[string]string{"name": "x"}))
@@ -349,7 +349,7 @@ func TestHD25to28_GetProfileByNameHandler(t *testing.T) {
 	})
 
 	t.Run("HD-28_InternalError", func(t *testing.T) {
-		svc := &mcMockService{getProfileByName: func(string) (*Profile, error) { return nil, testutil.ErrBoom }}
+		svc := &mcMockService{getProfileByName: func(string) (*MojangProfile, error) { return nil, testutil.ErrBoom }}
 		h := GetProfileByNameHandler(svc)
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/pn/x", nil, map[string]string{"name": "x"}))

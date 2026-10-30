@@ -44,10 +44,10 @@ type Store interface {
 }
 
 type JavaPlayerStore interface {
-	GetPlayerByUUID(ctx context.Context, id string) (*Player, error)
-	GetPlayerByName(ctx context.Context, name string) (*Player, error)
-	UpsertPlayer(ctx context.Context, player *Player, updateProfile bool) error
-	GetProfileByUUID(ctx context.Context, id string) (*Profile, error)
+	GetPlayerByUUID(ctx context.Context, id string) (*MojangPlayer, error)
+	GetPlayerByName(ctx context.Context, name string) (*MojangPlayer, error)
+	UpsertPlayer(ctx context.Context, player *MojangPlayer, updateProfile bool) error
+	GetProfileByUUID(ctx context.Context, id string) (*MojangProfile, error)
 }
 
 type GeyserPlayerStore interface {
@@ -64,14 +64,14 @@ type TextureStore interface {
 }
 
 type Cache interface {
-	GetPlayerFromCache(ctx context.Context, key string) (*Player, error)
-	SetPlayerInCache(ctx context.Context, player *Player) error
+	GetPlayerFromCache(ctx context.Context, key string) (*MojangPlayer, error)
+	SetPlayerInCache(ctx context.Context, player *MojangPlayer) error
 
-	GetProfileFromCache(ctx context.Context, id string) (*Profile, error)
-	SetProfileInCache(ctx context.Context, profile *Profile) error
+	GetProfileFromCache(ctx context.Context, id string) (*MojangProfile, error)
+	SetProfileInCache(ctx context.Context, profile *MojangProfile) error
 
-	GetSignedProfileFromCache(ctx context.Context, id string) (*Player, error)
-	SetSignedProfileInCache(ctx context.Context, player *Player) error
+	GetSignedProfileFromCache(ctx context.Context, id string) (*MojangPlayer, error)
+	SetSignedProfileInCache(ctx context.Context, player *MojangPlayer) error
 }
 
 type S3 interface {
@@ -105,13 +105,13 @@ func NewStore(cfg config.Minecraft, db *pgxpool.Pool, rdb *redis.Client, s3 *s3.
 }
 
 // GetPlayerByUUID gets a player by UUID from the database
-func (s *store) GetPlayerByUUID(ctx context.Context, id string) (*Player, error) {
+func (s *store) GetPlayerByUUID(ctx context.Context, id string) (*MojangPlayer, error) {
 	rows, err := s.db.Query(ctx,
 		"SELECT id, name, legacy, demo, first_seen, last_seen FROM players WHERE id = $1", id)
 	if err != nil {
 		return nil, err
 	}
-	player, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByNameLax[Player])
+	player, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByNameLax[MojangPlayer])
 	if err != nil {
 		return nil, playerNotFound(err)
 	}
@@ -119,13 +119,13 @@ func (s *store) GetPlayerByUUID(ctx context.Context, id string) (*Player, error)
 }
 
 // GetPlayerByName gets a player by name from the database
-func (s *store) GetPlayerByName(ctx context.Context, name string) (*Player, error) {
+func (s *store) GetPlayerByName(ctx context.Context, name string) (*MojangPlayer, error) {
 	rows, err := s.db.Query(ctx,
 		"SELECT id, name, legacy, demo, first_seen, last_seen FROM players WHERE name = $1", name)
 	if err != nil {
 		return nil, err
 	}
-	player, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByNameLax[Player])
+	player, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByNameLax[MojangPlayer])
 	if err != nil {
 		return nil, playerNotFound(err)
 	}
@@ -140,13 +140,13 @@ func playerNotFound(err error) error {
 }
 
 // GetProfileByUUID gets a player's full profile from the database by UUID
-func (s *store) GetProfileByUUID(ctx context.Context, id string) (*Profile, error) {
+func (s *store) GetProfileByUUID(ctx context.Context, id string) (*MojangProfile, error) {
 	rows, err := s.db.Query(ctx,
 		"SELECT id, name, legacy, demo, profile_actions, first_seen, last_seen FROM players WHERE id = $1", id)
 	if err != nil {
 		return nil, err
 	}
-	player, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[Player])
+	player, err := pgx.CollectExactlyOneRow(rows, pgx.RowToAddrOfStructByName[MojangPlayer])
 	if err != nil {
 		return nil, playerNotFound(err)
 	}
@@ -156,7 +156,7 @@ func (s *store) GetProfileByUUID(ctx context.Context, id string) (*Profile, erro
 		return nil, err
 	}
 
-	return &Profile{
+	return &MojangProfile{
 		ID:             player.ID,
 		Name:           player.Name,
 		Legacy:         player.Legacy,
@@ -204,7 +204,7 @@ func (s *store) upsertNameHistory(ctx context.Context, table, uuid, name string,
 }
 
 // UpsertPlayer upserts a player into the database and updates name history
-func (s *store) UpsertPlayer(ctx context.Context, player *Player, updateProfile bool) error {
+func (s *store) UpsertPlayer(ctx context.Context, player *MojangPlayer, updateProfile bool) error {
 	now := time.Now().UnixMilli()
 
 	var err error
@@ -342,12 +342,12 @@ func cacheMiss(err error) error {
 }
 
 // GetPlayerFromCache gets a player from the cache by key (uuid or name)
-func (c *cache) GetPlayerFromCache(ctx context.Context, key string) (*Player, error) {
+func (c *cache) GetPlayerFromCache(ctx context.Context, key string) (*MojangPlayer, error) {
 	val, err := c.rdb.Get(ctx, CachePlayer+key).Result()
 	if err != nil {
 		return nil, cacheMiss(err)
 	}
-	var player Player
+	var player MojangPlayer
 	if err := json.Unmarshal([]byte(val), &player); err != nil {
 		return nil, err
 	}
@@ -355,7 +355,7 @@ func (c *cache) GetPlayerFromCache(ctx context.Context, key string) (*Player, er
 }
 
 // SetPlayerInCache sets a player in the cache under both uuid and name keys
-func (c *cache) SetPlayerInCache(ctx context.Context, player *Player) error {
+func (c *cache) SetPlayerInCache(ctx context.Context, player *MojangPlayer) error {
 	data, err := json.Marshal(player)
 	if err != nil {
 		return err
@@ -369,12 +369,12 @@ func (c *cache) SetPlayerInCache(ctx context.Context, player *Player) error {
 }
 
 // GetProfileFromCache gets a player's profile from the cache
-func (c *cache) GetProfileFromCache(ctx context.Context, id string) (*Profile, error) {
+func (c *cache) GetProfileFromCache(ctx context.Context, id string) (*MojangProfile, error) {
 	val, err := c.rdb.Get(ctx, CacheProfile+id).Result()
 	if err != nil {
 		return nil, cacheMiss(err)
 	}
-	var profile Profile
+	var profile MojangProfile
 	if err := json.Unmarshal([]byte(val), &profile); err != nil {
 		return nil, err
 	}
@@ -382,7 +382,7 @@ func (c *cache) GetProfileFromCache(ctx context.Context, id string) (*Profile, e
 }
 
 // SetProfileInCache sets a player's profile in the cache
-func (c *cache) SetProfileInCache(ctx context.Context, profile *Profile) error {
+func (c *cache) SetProfileInCache(ctx context.Context, profile *MojangProfile) error {
 	data, err := json.Marshal(profile)
 	if err != nil {
 		return err
@@ -391,12 +391,12 @@ func (c *cache) SetProfileInCache(ctx context.Context, profile *Profile) error {
 }
 
 // GetSignedProfileFromCache gets a player's signed profile from the cache
-func (c *cache) GetSignedProfileFromCache(ctx context.Context, id string) (*Player, error) {
+func (c *cache) GetSignedProfileFromCache(ctx context.Context, id string) (*MojangPlayer, error) {
 	val, err := c.rdb.Get(ctx, CacheProfileSigned+id).Result()
 	if err != nil {
 		return nil, cacheMiss(err)
 	}
-	var player Player
+	var player MojangPlayer
 	if err := json.Unmarshal([]byte(val), &player); err != nil {
 		return nil, err
 	}
@@ -404,7 +404,7 @@ func (c *cache) GetSignedProfileFromCache(ctx context.Context, id string) (*Play
 }
 
 // SetSignedProfileInCache sets a player's signed profile in the cache
-func (c *cache) SetSignedProfileInCache(ctx context.Context, player *Player) error {
+func (c *cache) SetSignedProfileInCache(ctx context.Context, player *MojangPlayer) error {
 	data, err := json.Marshal(player)
 	if err != nil {
 		return err
