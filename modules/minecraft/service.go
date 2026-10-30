@@ -414,9 +414,9 @@ func (s *service) GetGeyserPlayerByXUID(ctx context.Context, xuid int64) (*Geyse
 	}
 
 	player := &GeyserPlayer{
-		ID:       xuidToUUID(xuid),
-		XUID:     xuid,
-		Gamertag: result.Gamertag,
+		ID:   xuidToUUID(xuid),
+		XUID: xuid,
+		Name: result.Gamertag,
 	}
 
 	if err := s.store.UpsertGeyserPlayer(context.WithoutCancel(ctx), player); err != nil {
@@ -441,9 +441,9 @@ func (s *service) GetGeyserPlayerByGamertag(ctx context.Context, gamertag string
 	}
 
 	player := &GeyserPlayer{
-		ID:       xuidToUUID(result.XUID),
-		Gamertag: gamertag,
-		XUID:     result.XUID,
+		ID:   xuidToUUID(result.XUID),
+		Name: gamertag,
+		XUID: result.XUID,
 	}
 
 	if err := s.store.UpsertGeyserPlayer(context.WithoutCancel(ctx), player); err != nil {
@@ -495,7 +495,7 @@ func (s *service) GetGeyserSkin(ctx context.Context, xuid int64) (*GeyserSkin, e
 	}
 
 	var textures *TexturesValue
-	if textures, err = s.store.GetTextures(ctx, GeyserPlayerTexturesTable, player.ID, player.Gamertag); err != nil {
+	if textures, err = s.store.GetTextures(ctx, GeyserPlayerTexturesTable, player.ID, player.Name); err != nil {
 		return nil, err
 	}
 
@@ -563,7 +563,7 @@ func (s *service) getGeyserProfileFromPlayer(ctx context.Context, player *Geyser
 	return &GeyserProfile{
 		ID:       player.ID,
 		XUID:     player.XUID,
-		Gamertag: player.Gamertag,
+		Name:     player.Name,
 		Textures: textures,
 	}, nil
 }

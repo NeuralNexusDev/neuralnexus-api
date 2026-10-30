@@ -319,12 +319,12 @@ func (s *store) UpsertGeyserPlayer(ctx context.Context, player *GeyserPlayer) er
 			gamertag  = EXCLUDED.gamertag,
 			last_seen = EXCLUDED.last_seen
 		`,
-		player.ID, player.XUID, player.Gamertag, now,
+		player.ID, player.XUID, player.Name, now,
 	)
 	if err != nil {
 		return err
 	}
-	return s.upsertNameHistory(ctx, GeyserPlayerNamesTable, player.ID, player.Gamertag, now)
+	return s.upsertNameHistory(ctx, GeyserPlayerNamesTable, player.ID, player.Name, now)
 }
 
 // UpsertTextureHash upserts a texture hash into the database
