@@ -168,7 +168,8 @@ func ApplyRoutes(
 	mux.Handle("GET /api/v1/mc/profile/bedrock/{uuid}", mc.GetGeyserProfileHandler(mcService))
 	mux.Handle("GET /api/v1/mc/profile/bedrock/name/{name}", mc.GetGeyserProfileByNameHandler(mcService))
 	mux.Handle("GET /api/v1/mc/texture/{hash}", mc.GetTextureHandler(mcService))
-	mux.Handle("GET /api/v1/mc/geyser/xuid/{gamertag}", mc.GetGeyserXUIDHandler(mcService))
+	mux.Handle("GET /api/v1/mc/geyser/gamertag/{xuid}", mc.GetGeyserPlayerByXUIDHandler(mcService))
+	mux.Handle("GET /api/v1/mc/geyser/xuid/{gamertag}", mc.GetGeyserPlayerByGamertagHandler(mcService))
 	mux.Handle("GET /api/v1/mc/geyser/skin/{xuid}", mc.GetGeyserSkinHandler(mcService))
 
 	// --------------- Minecraft Status ---------------

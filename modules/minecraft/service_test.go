@@ -936,13 +936,13 @@ func TestSV51to63_FetchProfileFromMojang(t *testing.T) {
 	})
 }
 
-func TestSV64to71_GetGeyserXUID(t *testing.T) {
+func TestSV64to71_GetGeyserPlayerByGamertag(t *testing.T) {
 	t.Run("SV-64_DBFresh", func(t *testing.T) {
 		store := &mcMockStore{getGeyserPlayerByGamertag: func(string) (*GeyserPlayer, error) {
 			return &GeyserPlayer{Gamertag: "Notch", LastSeen: mcNow()}, nil
 		}}
 		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) { t.Fatal("should not call Geyser") })
-		got, err := s.GetGeyserXUID(mcCtx, "Notch")
+		got, err := s.GetGeyserPlayerByGamertag(mcCtx, "Notch")
 		if err != nil || got.Gamertag != "Notch" {
 			t.Errorf("got (%+v, %v), want db player", got, err)
 		}
@@ -952,7 +952,7 @@ func TestSV64to71_GetGeyserXUID(t *testing.T) {
 		s := mcNewService(t, &mcMockStore{}, func(w http.ResponseWriter, r *http.Request) {
 			io.WriteString(w, `{"xuid": 42}`)
 		})
-		got, err := s.GetGeyserXUID(mcCtx, "Notch")
+		got, err := s.GetGeyserPlayerByGamertag(mcCtx, "Notch")
 		if err != nil || got.XUID != 42 {
 			t.Errorf("got (%+v, %v), want XUID=42", got, err)
 		}
@@ -962,7 +962,7 @@ func TestSV64to71_GetGeyserXUID(t *testing.T) {
 		s := mcNewService(t, &mcMockStore{}, func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusBadRequest)
 		})
-		_, err := s.GetGeyserXUID(mcCtx, "Notch")
+		_, err := s.GetGeyserPlayerByGamertag(mcCtx, "Notch")
 		if !errors.Is(err, ErrInvalidGeyserRequest) {
 			t.Errorf("err = %v, want ErrInvalidGeyserRequest", err)
 		}
@@ -972,7 +972,7 @@ func TestSV64to71_GetGeyserXUID(t *testing.T) {
 		s := mcNewService(t, &mcMockStore{}, func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 		})
-		_, err := s.GetGeyserXUID(mcCtx, "Notch")
+		_, err := s.GetGeyserPlayerByGamertag(mcCtx, "Notch")
 		if !errors.Is(err, ErrGeyserAPI) {
 			t.Fatalf("error = %v, want %v", err, ErrGeyserAPI)
 		}
@@ -982,7 +982,7 @@ func TestSV64to71_GetGeyserXUID(t *testing.T) {
 		s := mcNewService(t, &mcMockStore{}, func(w http.ResponseWriter, r *http.Request) {
 			io.WriteString(w, "{not json")
 		})
-		_, err := s.GetGeyserXUID(mcCtx, "Notch")
+		_, err := s.GetGeyserPlayerByGamertag(mcCtx, "Notch")
 		if err == nil {
 			t.Fatal("expected a decode error")
 		}
@@ -992,7 +992,7 @@ func TestSV64to71_GetGeyserXUID(t *testing.T) {
 		s := mcNewService(t, &mcMockStore{}, func(w http.ResponseWriter, r *http.Request) {
 			io.WriteString(w, `{"xuid": 0}`)
 		})
-		_, err := s.GetGeyserXUID(mcCtx, "Notch")
+		_, err := s.GetGeyserPlayerByGamertag(mcCtx, "Notch")
 		if !errors.Is(err, ErrPlayerNotFound) {
 			t.Errorf("err = %v, want ErrPlayerNotFound", err)
 		}
@@ -1003,7 +1003,7 @@ func TestSV64to71_GetGeyserXUID(t *testing.T) {
 		s := mcNewService(t, store, func(w http.ResponseWriter, r *http.Request) {
 			io.WriteString(w, `{"xuid": 42}`)
 		})
-		_, err := s.GetGeyserXUID(mcCtx, "Notch")
+		_, err := s.GetGeyserPlayerByGamertag(mcCtx, "Notch")
 		if !errors.Is(err, testutil.ErrBoom) {
 			t.Errorf("err = %v, want %v", err, testutil.ErrBoom)
 		}
@@ -1017,9 +1017,9 @@ func TestSV64to71_GetGeyserXUID(t *testing.T) {
 			gotEscapedPath = r.URL.EscapedPath()
 			io.WriteString(w, `{"xuid": 42}`)
 		})
-		_, err := s.GetGeyserXUID(mcCtx, "a b#c")
+		_, err := s.GetGeyserPlayerByGamertag(mcCtx, "a b#c")
 		if err != nil {
-			t.Fatalf("GetGeyserXUID() error = %v", err)
+			t.Fatalf("GetGeyserPlayerByGamertag() error = %v", err)
 		}
 		if strings.Contains(gotEscapedPath, "#") || strings.Contains(gotEscapedPath, " ") {
 			t.Errorf("request path = %q, want the gamertag to be escaped", gotEscapedPath)
@@ -1027,13 +1027,13 @@ func TestSV64to71_GetGeyserXUID(t *testing.T) {
 	})
 }
 
-func TestSV79to84_ResolveGeyserPlayerByXUID(t *testing.T) {
+func TestSV79to84_GetGeyserPlayerByXUID(t *testing.T) {
 	t.Run("SV-79_DBFresh", func(t *testing.T) {
 		store := &mcMockStore{getGeyserPlayerByXUID: func(int64) (*GeyserPlayer, error) {
 			return &GeyserPlayer{Gamertag: "db", LastSeen: mcNow()}, nil
 		}}
 		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) { t.Fatal("should not call Geyser") })
-		got, err := s.resolveGeyserPlayerByXUID(mcCtx, 1)
+		got, err := s.GetGeyserPlayerByXUID(mcCtx, 1)
 		if err != nil || got.Gamertag != "db" {
 			t.Errorf("got (%+v, %v), want db player", got, err)
 		}
@@ -1043,7 +1043,7 @@ func TestSV79to84_ResolveGeyserPlayerByXUID(t *testing.T) {
 		s := mcNewService(t, &mcMockStore{}, func(w http.ResponseWriter, r *http.Request) {
 			io.WriteString(w, `{"gamertag": "Notch"}`)
 		})
-		got, err := s.resolveGeyserPlayerByXUID(mcCtx, 1)
+		got, err := s.GetGeyserPlayerByXUID(mcCtx, 1)
 		if err != nil || got.Gamertag != "Notch" {
 			t.Errorf("got (%+v, %v), want fetched player", got, err)
 		}
@@ -1053,7 +1053,7 @@ func TestSV79to84_ResolveGeyserPlayerByXUID(t *testing.T) {
 		s := mcNewService(t, &mcMockStore{}, func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusBadRequest)
 		})
-		_, err := s.resolveGeyserPlayerByXUID(mcCtx, 1)
+		_, err := s.GetGeyserPlayerByXUID(mcCtx, 1)
 		if !errors.Is(err, ErrInvalidGeyserRequest) {
 			t.Errorf("err = %v, want ErrInvalidGeyserRequest", err)
 		}
@@ -1063,7 +1063,7 @@ func TestSV79to84_ResolveGeyserPlayerByXUID(t *testing.T) {
 		s := mcNewService(t, &mcMockStore{}, func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 		})
-		_, err := s.resolveGeyserPlayerByXUID(mcCtx, 1)
+		_, err := s.GetGeyserPlayerByXUID(mcCtx, 1)
 		if !errors.Is(err, ErrGeyserAPI) {
 			t.Fatalf("error = %v, want %v", err, ErrGeyserAPI)
 		}
@@ -1073,7 +1073,7 @@ func TestSV79to84_ResolveGeyserPlayerByXUID(t *testing.T) {
 		s := mcNewService(t, &mcMockStore{}, func(w http.ResponseWriter, r *http.Request) {
 			io.WriteString(w, `{}`)
 		})
-		_, err := s.resolveGeyserPlayerByXUID(mcCtx, 1)
+		_, err := s.GetGeyserPlayerByXUID(mcCtx, 1)
 		if !errors.Is(err, ErrPlayerNotFound) {
 			t.Errorf("err = %v, want ErrPlayerNotFound", err)
 		}
@@ -1084,7 +1084,7 @@ func TestSV79to84_ResolveGeyserPlayerByXUID(t *testing.T) {
 		s := mcNewService(t, store, func(w http.ResponseWriter, r *http.Request) {
 			io.WriteString(w, `{"gamertag": "Notch"}`)
 		})
-		_, err := s.resolveGeyserPlayerByXUID(mcCtx, 1)
+		_, err := s.GetGeyserPlayerByXUID(mcCtx, 1)
 		if !errors.Is(err, testutil.ErrBoom) {
 			t.Errorf("err = %v, want %v", err, testutil.ErrBoom)
 		}

@@ -10,41 +10,36 @@ import (
 	"strings"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
-	"github.com/goccy/go-json"
-
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
+	"github.com/goccy/go-json"
 )
 
 // Service - Minecraft player service
 type Service interface {
+	MojangService
+	GeyserService
+
+	GetProfile(ctx context.Context, id string) (*Profile, error)
+	GetProfileByName(ctx context.Context, name string) (*Profile, error)
+
+	GetGeyserProfile(ctx context.Context, id string) (*GeyserProfile, error)
+	GetGeyserProfileByName(ctx context.Context, name string) (*GeyserProfile, error)
+
+	GetTextureContent(ctx context.Context, hash string) (*TextureResult, error)
+}
+
+type MojangService interface {
 	GetMojangPlayerByName(ctx context.Context, name string) (*Player, error)
 	GetMojangPlayerByUUID(ctx context.Context, id string) (*Player, error)
 	GetMojangPlayersByNames(ctx context.Context, names []string) ([]*Player, error)
 	GetMojangProfile(ctx context.Context, id string, signed bool) (*Player, error)
-
-	GetProfile(ctx context.Context, id string) (*Profile, error)
-	GetProfileByName(ctx context.Context, name string) (*Profile, error)
-	GetTextureContent(ctx context.Context, hash string) (*TextureResult, error)
-
-	GetGeyserXUID(ctx context.Context, gamertag string) (*GeyserPlayer, error)
-	GetGeyserSkin(ctx context.Context, xuid int64) (*GeyserSkin, error)
-	GetGeyserProfile(ctx context.Context, xuid int64) (*GeyserProfile, error)
-	GetGeyserProfileByGamertag(ctx context.Context, gamertag string) (*GeyserProfile, error)
-}
-
-type MojangService interface {
-	GetPlayerByName(ctx context.Context, name string) (*Player, error)
-	GetPlayerByUUID(ctx context.Context, id string) (*Player, error)
-	GetPlayersByNames(ctx context.Context, names []string) ([]*Player, error)
-	GetProfile(ctx context.Context, id string, signed bool) (*Player, error)
 }
 
 type GeyserService interface {
-	GetPlayerByXUID(ctx context.Context, xuid int64) (*GeyserPlayer, error)
-	GetPlayerByGamertag(ctx context.Context, gamertag string) (*GeyserPlayer, error)
-	GetSkin(ctx context.Context, xuid int64) (*GeyserSkin, error)
-	GetProfile(ctx context.Context, xuid int64) (*GeyserProfile, error)
-	GetProfileByGamertag(ctx context.Context, gamertag string) (*GeyserProfile, error)
+	GetGeyserPlayerByXUID(ctx context.Context, xuid int64) (*GeyserPlayer, error)
+	GetGeyserPlayerByGamertag(ctx context.Context, gamertag string) (*GeyserPlayer, error)
+	GetGeyserPlayerByUUID(ctx context.Context, id string) (*GeyserPlayer, error)
+	GetGeyserSkin(ctx context.Context, xuid int64) (*GeyserSkin, error)
 }
 
 type CommonService interface {
@@ -340,11 +335,11 @@ func (s *service) resolveProfile(ctx context.Context, id string) (*Profile, erro
 // fetchProfileFromMojang fetches and persists a player's profile live from
 // Mojang, returning both the raw Player and the decoded Profile.
 func (s *service) fetchProfileFromMojang(ctx context.Context, id string, signed bool) (*Player, *Profile, error) {
-	url := s.cfg.LookupProfile + id
+	u := s.cfg.LookupProfile + id
 	if signed {
-		url += "?unsigned=false"
+		u += "?unsigned=false"
 	}
-	resp, err := s.get(ctx, url)
+	resp, err := s.get(ctx, u)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -403,34 +398,42 @@ func (s *service) fetchProfileFromMojang(ctx context.Context, id string, signed 
 	return &player, profile, nil
 }
 
-// GetGeyserXUID looks up a Bedrock player's Xbox XUID by gamertag.
-func (s *service) GetGeyserXUID(ctx context.Context, gamertag string) (*GeyserPlayer, error) {
+// GetGeyserPlayerByXUID looks up a Bedrock player's by Xbox XUID.
+func (s *service) GetGeyserPlayerByXUID(ctx context.Context, xuid int64) (*GeyserPlayer, error) {
+	dbPlayer, _ := s.store.GetGeyserPlayerByXUID(ctx, xuid)
+	if dbPlayer != nil && !dbPlayer.IsStale() {
+		return dbPlayer, nil
+	}
+
+	result, err := s.queryGeyserAPI[GeyserGamertag](ctx, s.cfg.GeyserGamertagLookup, strconv.FormatInt(xuid, 10))
+	if err != nil {
+		return nil, err
+	}
+	if result.Gamertag == "" {
+		return nil, ErrPlayerNotFound
+	}
+
+	player := &GeyserPlayer{
+		ID:       xuidToUUID(xuid),
+		XUID:     xuid,
+		Gamertag: result.Gamertag,
+	}
+
+	if err := s.store.UpsertGeyserPlayer(context.WithoutCancel(ctx), player); err != nil {
+		return nil, err
+	}
+	return player, nil
+}
+
+// GetGeyserPlayerByGamertag looks up a Bedrock player by gamertag.
+func (s *service) GetGeyserPlayerByGamertag(ctx context.Context, gamertag string) (*GeyserPlayer, error) {
 	dbPlayer, _ := s.store.GetGeyserPlayerByGamertag(ctx, gamertag)
 	if dbPlayer != nil && !dbPlayer.IsStale() {
 		return dbPlayer, nil
 	}
 
-	// PathEscape, not raw concatenation: a gamertag can contain '#', '?', '/',
-	// or spaces, which would otherwise corrupt the upstream request URL.
-	resp, err := s.get(ctx, s.cfg.GeyserXUIDLookup+url.PathEscape(gamertag))
+	result, err := s.queryGeyserAPI[GeyserXUID](ctx, s.cfg.GeyserXUIDLookup, url.PathEscape(gamertag))
 	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusBadRequest {
-		return nil, ErrInvalidGeyserRequest
-	}
-	// Geyser has no 404 here: an unknown gamertag is 200 with an empty object.
-	if resp.StatusCode != http.StatusOK {
-		reqctx.Log(ctx, ErrGeyserAPI.Error(), resp.Status)
-		return nil, ErrGeyserAPI
-	}
-
-	var result struct {
-		XUID int64 `json:"xuid"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, err
 	}
 	if result.XUID == 0 {
@@ -449,18 +452,48 @@ func (s *service) GetGeyserXUID(ctx context.Context, gamertag string) (*GeyserPl
 	return player, nil
 }
 
+// GetGeyserPlayerByUUID looks up a Bedrock player by Floodgate uuid.
+func (s *service) GetGeyserPlayerByUUID(ctx context.Context, id string) (*GeyserPlayer, error) {
+	xuid, err := uuidToXUID(id)
+	if err != nil {
+		return nil, err
+	}
+	dbPlayer, _ := s.store.GetGeyserPlayerByUUID(ctx, id)
+	if dbPlayer != nil && !dbPlayer.IsStale() {
+		return dbPlayer, nil
+	}
+	return s.GetGeyserPlayerByXUID(ctx, xuid)
+}
+
+func (s *service) queryGeyserAPI[T any](ctx context.Context, uri string, value string) (*T, error) {
+	resp, err := s.get(ctx, uri+value)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusBadRequest {
+		return nil, ErrInvalidGeyserRequest
+	}
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotModified {
+		reqctx.Log(ctx, ErrGeyserAPI.Error(), resp.Status)
+		return nil, ErrGeyserAPI
+	}
+
+	var result T
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // GetGeyserSkin gets a Bedrock player's most recently converted skin by XUID.
 func (s *service) GetGeyserSkin(ctx context.Context, xuid int64) (*GeyserSkin, error) {
-	// TODO: Simplify
-	profile, err := s.GetGeyserProfile(ctx, xuid)
+	player, err := s.GetGeyserPlayerByXUID(ctx, xuid)
 	if err != nil {
 		return nil, err
 	}
 
-	player, err := s.GetGeyserXUID(ctx, profile.Gamertag)
-	if err != nil {
-		return nil, err
-	}
 	var textures *TexturesValue
 	if textures, err = s.store.GetTextures(ctx, GeyserPlayerTexturesTable, player.ID, player.Gamertag); err != nil {
 		return nil, err
@@ -503,45 +536,7 @@ func (s *service) GetGeyserSkin(ctx context.Context, xuid int64) (*GeyserSkin, e
 	return &skin, nil
 }
 
-// resolveGeyserPlayerByXUID is the reverse of GetGeyserXUID.
-func (s *service) resolveGeyserPlayerByXUID(ctx context.Context, xuid int64) (*GeyserPlayer, error) {
-	dbPlayer, _ := s.store.GetGeyserPlayerByXUID(ctx, xuid)
-	if dbPlayer != nil && !dbPlayer.IsStale() {
-		return dbPlayer, nil
-	}
-
-	resp, err := s.get(ctx, s.cfg.GeyserGamertagLookup+strconv.FormatInt(xuid, 10))
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusBadRequest {
-		return nil, ErrInvalidGeyserRequest
-	}
-	if resp.StatusCode != http.StatusOK {
-		reqctx.Log(ctx, ErrGeyserAPI.Error(), resp.Status)
-		return nil, ErrGeyserAPI
-	}
-
-	var result struct {
-		Gamertag string `json:"gamertag"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-	if result.Gamertag == "" {
-		return nil, ErrPlayerNotFound
-	}
-
-	player := &GeyserPlayer{ID: xuidToUUID(xuid), XUID: xuid, Gamertag: result.Gamertag}
-	if err := s.store.UpsertGeyserPlayer(context.WithoutCancel(ctx), player); err != nil {
-		return nil, err
-	}
-	return player, nil
-}
-
-// skinStepFailure reports a skin-lookup failure for an xuid that was already
+// skinStepFailure reports a skin-lookup failure for a xuid that was already
 // resolved. It must not wrap ErrInvalidGeyserRequest, which the handlers map to 400.
 func skinStepFailure(ctx context.Context, err error) error {
 	if err == ErrInvalidGeyserRequest {
@@ -551,13 +546,7 @@ func skinStepFailure(ctx context.Context, err error) error {
 	return err
 }
 
-// GetGeyserProfile gets a Bedrock player's full profile (identity + skin) by
-// XUID. A missing skin leaves Skin nil.
-func (s *service) GetGeyserProfile(ctx context.Context, xuid int64) (*GeyserProfile, error) {
-	player, err := s.resolveGeyserPlayerByXUID(ctx, xuid)
-	if err != nil {
-		return nil, err
-	}
+func (s *service) getGeyserProfileFromPlayer(ctx context.Context, player *GeyserPlayer) (*GeyserProfile, error) {
 	skin, err := s.GetGeyserSkin(ctx, player.XUID)
 	if err != nil {
 		if err != ErrSkinNotFound {
@@ -571,67 +560,39 @@ func (s *service) GetGeyserProfile(ctx context.Context, xuid int64) (*GeyserProf
 			return nil, err
 		}
 	}
-	return &GeyserProfile{ID: player.ID, XUID: player.XUID, Gamertag: player.Gamertag, Textures: textures}, nil
+	return &GeyserProfile{
+		ID:       player.ID,
+		XUID:     player.XUID,
+		Gamertag: player.Gamertag,
+		Textures: textures,
+	}, nil
 }
 
-// GetGeyserProfileByGamertag resolves a Bedrock player's full profile by gamertag.
-func (s *service) GetGeyserProfileByGamertag(ctx context.Context, gamertag string) (*GeyserProfile, error) {
-	player, err := s.GetGeyserXUID(ctx, gamertag)
+// GetGeyserProfile resolves a Bedrock player's full profile by Floodgate UUID
+func (s *service) GetGeyserProfile(ctx context.Context, id string) (*GeyserProfile, error) {
+	player, err := s.GetGeyserPlayerByUUID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	skin, err := s.GetGeyserSkin(ctx, player.XUID)
-	if err != nil {
-		if err != ErrSkinNotFound {
-			return nil, skinStepFailure(ctx, err)
-		}
-		return nil, err
-	}
-	textures := ParseTextureValue(ctx, skin.Value)
-	if textures != nil {
-		if err := s.store.UpsertTextures(context.WithoutCancel(ctx), GeyserPlayerTexturesTable, textures); err != nil {
-			return nil, err
-		}
-	}
-	return &GeyserProfile{ID: player.ID, XUID: player.XUID, Gamertag: player.Gamertag, Textures: textures}, nil
+	return s.getGeyserProfileFromPlayer(ctx, player)
 }
 
-// GetTextureContent returns the texture's bytes and content type, fetching from
-// Mojang exactly once on a cache miss instead of round-tripping back through S3.
-func (s *service) GetTextureContent(ctx context.Context, hash string) (*TextureResult, error) {
-	present, err := s.store.IsTextureInS3(ctx, hash)
+// GetGeyserProfileByXUID resolves a Bedrock player's full profile by XUID
+func (s *service) GetGeyserProfileByXUID(ctx context.Context, xuid int64) (*GeyserProfile, error) {
+	player, err := s.GetGeyserPlayerByXUID(ctx, xuid)
 	if err != nil {
 		return nil, err
 	}
-
-	if present {
-		return s.serveFromS3(ctx, hash)
-	}
-	return s.fetchAndArchive(ctx, hash)
+	return s.getGeyserProfileFromPlayer(ctx, player)
 }
 
-// serveFromS3 fetches an already-archived texture straight from the CDN/S3
-func (s *service) serveFromS3(ctx context.Context, hash string) (*TextureResult, error) {
-	resp, err := s.get(ctx, s.s3TextureUrl+S3KeyPrefix+url.PathEscape(hash))
+// GetGeyserProfileByName resolves a Bedrock player's full profile by gamertag.
+func (s *service) GetGeyserProfileByName(ctx context.Context, gamertag string) (*GeyserProfile, error) {
+	player, err := s.GetGeyserPlayerByGamertag(ctx, gamertag)
 	if err != nil {
 		return nil, err
 	}
-
-	if resp.StatusCode == http.StatusNotFound {
-		resp.Body.Close()
-		return nil, ErrTextureNotFound
-	}
-	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
-		reqctx.Log(ctx, ErrBadStatusS3.Error(), strconv.Itoa(resp.StatusCode))
-		return nil, ErrBadStatusS3
-	}
-
-	contentType := resp.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = "image/png"
-	}
-	return &TextureResult{Body: resp.Body, ContentType: contentType}, nil
+	return s.getGeyserProfileFromPlayer(ctx, player)
 }
 
 // bytesReadCloser adapts a *bytes.Reader to io.ReadCloser while keeping Len()
@@ -643,10 +604,36 @@ type bytesReadCloser struct {
 
 func (bytesReadCloser) Close() error { return nil }
 
-// fetchAndArchive fetches a texture from Mojang once, archives it to S3, and
-// returns a second reader over the same bytes to serve the client — no
-// re-fetch through S3 for the request that just caused the miss.
-func (s *service) fetchAndArchive(ctx context.Context, hash string) (*TextureResult, error) {
+// GetTextureContent returns the texture's bytes and content type, fetching from
+// Mojang exactly once on a cache miss instead of round-tripping back through S3.
+func (s *service) GetTextureContent(ctx context.Context, hash string) (*TextureResult, error) {
+	present, err := s.store.IsTextureInS3(ctx, hash)
+	if err != nil {
+		return nil, err
+	}
+
+	if present {
+		resp, err := s.get(ctx, s.s3TextureUrl+S3KeyPrefix+url.PathEscape(hash))
+		if err != nil {
+			return nil, err
+		}
+
+		if resp.StatusCode == http.StatusNotFound {
+			resp.Body.Close()
+			return nil, ErrTextureNotFound
+		}
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			reqctx.Log(ctx, ErrBadStatusS3.Error(), strconv.Itoa(resp.StatusCode))
+			return nil, ErrBadStatusS3
+		}
+
+		contentType := resp.Header.Get("Content-Type")
+		if contentType == "" {
+			contentType = "image/png"
+		}
+		return &TextureResult{Body: resp.Body, ContentType: contentType}, nil
+	}
 	resp, err := s.get(ctx, s.cfg.LookupTexture+url.PathEscape(hash))
 	if err != nil {
 		return nil, err
@@ -671,7 +658,6 @@ func (s *service) fetchAndArchive(ctx context.Context, hash string) (*TextureRes
 		contentType = "image/png"
 	}
 
-	// Archival failure shouldn't fail the client's request — degrade gracefully.
 	if err := s.store.PutTextureInS3(context.WithoutCancel(ctx), hash, bytesReadCloser{bytes.NewReader(data)}); err != nil {
 		reqctx.Log(ctx, "Failed to upload texture to S3:\n\t", err.Error())
 	} else if err := s.store.UpsertTextureHash(context.WithoutCancel(ctx), hash); err != nil {

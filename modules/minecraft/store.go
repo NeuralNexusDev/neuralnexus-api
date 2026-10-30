@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
+	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go"
@@ -14,8 +15,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
-
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 )
 
 const (
@@ -37,20 +36,18 @@ const (
 
 // Store - Minecraft player store
 type Store interface {
-	Cache
-	S3
-	GetTextures(ctx context.Context, table, id, name string) (*TexturesValue, error)
-	UpsertTextures(ctx context.Context, table string, value *TexturesValue) error
-	UpsertTextureHash(ctx context.Context, hash string) error
 	JavaPlayerStore
 	GeyserPlayerStore
+	TextureStore
+	Cache
+	S3
 }
 
 type JavaPlayerStore interface {
 	GetPlayerByUUID(ctx context.Context, id string) (*Player, error)
 	GetPlayerByName(ctx context.Context, name string) (*Player, error)
-	GetProfileByUUID(ctx context.Context, id string) (*Profile, error)
 	UpsertPlayer(ctx context.Context, player *Player, updateProfile bool) error
+	GetProfileByUUID(ctx context.Context, id string) (*Profile, error)
 }
 
 type GeyserPlayerStore interface {
@@ -58,6 +55,12 @@ type GeyserPlayerStore interface {
 	GetGeyserPlayerByGamertag(ctx context.Context, gamertag string) (*GeyserPlayer, error)
 	GetGeyserPlayerByXUID(ctx context.Context, xuid int64) (*GeyserPlayer, error)
 	UpsertGeyserPlayer(ctx context.Context, player *GeyserPlayer) error
+}
+
+type TextureStore interface {
+	GetTextures(ctx context.Context, table, id, name string) (*TexturesValue, error)
+	UpsertTextures(ctx context.Context, table string, value *TexturesValue) error
+	UpsertTextureHash(ctx context.Context, hash string) error
 }
 
 type Cache interface {

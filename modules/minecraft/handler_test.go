@@ -361,7 +361,7 @@ func TestHD25to28_GetProfileByNameHandler(t *testing.T) {
 func TestHD29to33_GetGeyserXUIDHandler(t *testing.T) {
 	t.Run("HD-30_OK", func(t *testing.T) {
 		svc := &mcMockService{getGeyserXUID: func(g string) (*GeyserPlayer, error) { return &GeyserPlayer{Gamertag: g}, nil }}
-		h := GetGeyserXUIDHandler(svc)
+		h := GetGeyserPlayerByGamertagHandler(svc)
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/g/Notch", nil, map[string]string{"gamertag": "Notch"}))
 		mcRequireStatus(t, w, http.StatusOK)
@@ -369,7 +369,7 @@ func TestHD29to33_GetGeyserXUIDHandler(t *testing.T) {
 
 	t.Run("HD-31_NotFound", func(t *testing.T) {
 		svc := &mcMockService{getGeyserXUID: func(string) (*GeyserPlayer, error) { return nil, ErrPlayerNotFound }}
-		h := GetGeyserXUIDHandler(svc)
+		h := GetGeyserPlayerByGamertagHandler(svc)
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/g/x", nil, map[string]string{"gamertag": "x"}))
 		mcRequireStatus(t, w, http.StatusNotFound)
@@ -378,7 +378,7 @@ func TestHD29to33_GetGeyserXUIDHandler(t *testing.T) {
 
 	t.Run("HD-32_InvalidGeyserRequest", func(t *testing.T) {
 		svc := &mcMockService{getGeyserXUID: func(string) (*GeyserPlayer, error) { return nil, ErrInvalidGeyserRequest }}
-		h := GetGeyserXUIDHandler(svc)
+		h := GetGeyserPlayerByGamertagHandler(svc)
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/g/x", nil, map[string]string{"gamertag": "x"}))
 		mcRequireStatus(t, w, http.StatusBadRequest)
@@ -387,7 +387,7 @@ func TestHD29to33_GetGeyserXUIDHandler(t *testing.T) {
 
 	t.Run("HD-33_InternalError", func(t *testing.T) {
 		svc := &mcMockService{getGeyserXUID: func(string) (*GeyserPlayer, error) { return nil, testutil.ErrBoom }}
-		h := GetGeyserXUIDHandler(svc)
+		h := GetGeyserPlayerByGamertagHandler(svc)
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/g/x", nil, map[string]string{"gamertag": "x"}))
 		mcRequireStatus(t, w, http.StatusInternalServerError)
