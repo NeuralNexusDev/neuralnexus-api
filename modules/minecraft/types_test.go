@@ -22,7 +22,7 @@ func mcEncodeTextures(t *testing.T, value TexturesValue) string {
 
 func TestTY01to03_Player_MarshalJSON(t *testing.T) {
 	t.Run("TY-01_NilProfileActionsOmitted", func(t *testing.T) {
-		p := &Player{ID: "id", Name: "name", ProfileActions: nil}
+		p := &MojangPlayer{ID: "id", Name: "name", ProfileActions: nil}
 		data, err := json.Marshal(p)
 		if err != nil {
 			t.Fatalf("Marshal() error = %v", err)
@@ -33,7 +33,7 @@ func TestTY01to03_Player_MarshalJSON(t *testing.T) {
 	})
 
 	t.Run("TY-02_EmptyNonNilProfileActionsPresent", func(t *testing.T) {
-		p := &Player{ID: "id", Name: "name", ProfileActions: []string{}}
+		p := &MojangPlayer{ID: "id", Name: "name", ProfileActions: []string{}}
 		data, err := json.Marshal(p)
 		if err != nil {
 			t.Fatalf("Marshal() error = %v", err)
@@ -44,7 +44,7 @@ func TestTY01to03_Player_MarshalJSON(t *testing.T) {
 	})
 
 	t.Run("TY-03_PopulatedProfileActions", func(t *testing.T) {
-		p := &Player{ID: "id", Name: "name", ProfileActions: []string{"a"}}
+		p := &MojangPlayer{ID: "id", Name: "name", ProfileActions: []string{"a"}}
 		data, err := json.Marshal(p)
 		if err != nil {
 			t.Fatalf("Marshal() error = %v", err)
@@ -58,7 +58,7 @@ func TestTY01to03_Player_MarshalJSON(t *testing.T) {
 func TestTY04to09_Player_ParseProperties(t *testing.T) {
 	t.Run("TY-04_ValidTexturesProperty", func(t *testing.T) {
 		want := TexturesValue{ProfileID: "abc", ProfileName: "Steve", Textures: Textures{SKIN: &Texture{URL: "http://x/y"}}}
-		p := &Player{Properties: []Property{{Name: TEXTURES, Value: mcEncodeTextures(t, want)}}}
+		p := &MojangPlayer{Properties: []Property{{Name: TEXTURES, Value: mcEncodeTextures(t, want)}}}
 
 		got := p.ParseProperties(mcCtx)
 		if got == nil {
@@ -70,21 +70,21 @@ func TestTY04to09_Player_ParseProperties(t *testing.T) {
 	})
 
 	t.Run("TY-05_NoProperties", func(t *testing.T) {
-		p := &Player{Properties: nil}
+		p := &MojangPlayer{Properties: nil}
 		if got := p.ParseProperties(mcCtx); got != nil {
 			t.Errorf("ParseProperties() = %+v, want nil", got)
 		}
 	})
 
 	t.Run("TY-06_UnknownPropertyName", func(t *testing.T) {
-		p := &Player{Properties: []Property{{Name: "other", Value: "irrelevant"}}}
+		p := &MojangPlayer{Properties: []Property{{Name: "other", Value: "irrelevant"}}}
 		if got := p.ParseProperties(mcCtx); got != nil {
 			t.Errorf("ParseProperties() = %+v, want nil", got)
 		}
 	})
 
 	t.Run("TY-07_InvalidBase64", func(t *testing.T) {
-		p := &Player{Properties: []Property{{Name: TEXTURES, Value: "not-base64!!"}}}
+		p := &MojangPlayer{Properties: []Property{{Name: TEXTURES, Value: "not-base64!!"}}}
 		if got := p.ParseProperties(mcCtx); got != nil {
 			t.Errorf("ParseProperties() = %+v, want nil", got)
 		}
@@ -92,7 +92,7 @@ func TestTY04to09_Player_ParseProperties(t *testing.T) {
 
 	t.Run("TY-08_ValidBase64InvalidJSON", func(t *testing.T) {
 		bad := base64.StdEncoding.EncodeToString([]byte("not json"))
-		p := &Player{Properties: []Property{{Name: TEXTURES, Value: bad}}}
+		p := &MojangPlayer{Properties: []Property{{Name: TEXTURES, Value: bad}}}
 		if got := p.ParseProperties(mcCtx); got != nil {
 			t.Errorf("ParseProperties() = %+v, want nil", got)
 		}
@@ -100,7 +100,7 @@ func TestTY04to09_Player_ParseProperties(t *testing.T) {
 
 	t.Run("TY-09_FirstInvalidSecondValid", func(t *testing.T) {
 		want := TexturesValue{ProfileID: "second"}
-		p := &Player{Properties: []Property{
+		p := &MojangPlayer{Properties: []Property{
 			{Name: TEXTURES, Value: "not-base64!!"},
 			{Name: TEXTURES, Value: mcEncodeTextures(t, want)},
 		}}
@@ -112,13 +112,13 @@ func TestTY04to09_Player_ParseProperties(t *testing.T) {
 
 func TestTY10to11_Player_IsStale(t *testing.T) {
 	t.Run("TY-10_Fresh", func(t *testing.T) {
-		p := &Player{LastSeen: time.Now().UnixMilli()}
+		p := &MojangPlayer{LastSeen: time.Now().UnixMilli()}
 		if p.IsStale() {
 			t.Error("IsStale() = true, want false for a fresh entry")
 		}
 	})
 	t.Run("TY-11_Stale", func(t *testing.T) {
-		p := &Player{LastSeen: time.Now().Add(-25 * time.Hour).UnixMilli()}
+		p := &MojangPlayer{LastSeen: time.Now().Add(-25 * time.Hour).UnixMilli()}
 		if !p.IsStale() {
 			t.Error("IsStale() = false, want true for an entry older than the staleness threshold")
 		}
@@ -127,13 +127,13 @@ func TestTY10to11_Player_IsStale(t *testing.T) {
 
 func TestTY22to23_Profile_IsStale(t *testing.T) {
 	t.Run("TY-22_Fresh", func(t *testing.T) {
-		p := &Profile{LastSeen: time.Now().UnixMilli()}
+		p := &MojangProfile{LastSeen: time.Now().UnixMilli()}
 		if p.IsStale() {
 			t.Error("IsStale() = true, want false for a fresh entry")
 		}
 	})
 	t.Run("TY-23_Stale", func(t *testing.T) {
-		p := &Profile{LastSeen: time.Now().Add(-25 * time.Hour).UnixMilli()}
+		p := &MojangProfile{LastSeen: time.Now().Add(-25 * time.Hour).UnixMilli()}
 		if !p.IsStale() {
 			t.Error("IsStale() = false, want true for an entry older than the staleness threshold")
 		}
@@ -173,7 +173,7 @@ func TestTY28to29_GeyserSkin_IsStale(t *testing.T) {
 func TestTY12to13_Player_ToProfile(t *testing.T) {
 	t.Run("TY-12_WithTextures", func(t *testing.T) {
 		tex := TexturesValue{ProfileID: "abc"}
-		p := &Player{
+		p := &MojangPlayer{
 			ID: "id", Name: "name", Legacy: true, Demo: true,
 			ProfileActions: []string{"a"},
 			Properties:     []Property{{Name: TEXTURES, Value: mcEncodeTextures(t, tex)}},
@@ -191,7 +191,7 @@ func TestTY12to13_Player_ToProfile(t *testing.T) {
 	})
 
 	t.Run("TY-13_NoProperties", func(t *testing.T) {
-		p := &Player{ID: "id", Name: "name"}
+		p := &MojangPlayer{ID: "id", Name: "name"}
 		got := p.ToProfile(mcCtx)
 		if got.Textures != nil {
 			t.Errorf("ToProfile().Textures = %+v, want nil", got.Textures)
@@ -271,7 +271,7 @@ func TestTY18to21_Texture_Hash(t *testing.T) {
 
 func TestTY24to25_Profile_ToPlayer(t *testing.T) {
 	t.Run("TY-24_WithTextures", func(t *testing.T) {
-		p := &Profile{
+		p := &MojangProfile{
 			ID: "id", Name: "name",
 			Textures: &TexturesValue{Textures: Textures{SKIN: &Texture{URL: "http://x/hash"}}},
 		}
@@ -285,7 +285,7 @@ func TestTY24to25_Profile_ToPlayer(t *testing.T) {
 	})
 
 	t.Run("TY-25_NoTextures", func(t *testing.T) {
-		p := &Profile{ID: "id", Name: "name", Textures: nil}
+		p := &MojangProfile{ID: "id", Name: "name", Textures: nil}
 		player, err := p.ToPlayer()
 		if err != nil {
 			t.Fatalf("ToPlayer() error = %v", err)

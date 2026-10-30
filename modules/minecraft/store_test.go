@@ -94,7 +94,7 @@ func TestST02to04_GetPlayerByUUID(t *testing.T) {
 	t.Run("ST-03_Live_Found", func(t *testing.T) {
 		s := mcLiveStoreDB(t)
 		id := uuid.New().String()
-		if err := s.UpsertPlayer(mcCtx, &Player{ID: id, Name: "Steve"}, false); err != nil {
+		if err := s.UpsertPlayer(mcCtx, &MojangPlayer{ID: id, Name: "Steve"}, false); err != nil {
 			t.Fatalf("seed UpsertPlayer() error = %v", err)
 		}
 		got, err := s.GetPlayerByUUID(mcCtx, id)
@@ -128,7 +128,7 @@ func TestST05to07_GetPlayerByName(t *testing.T) {
 		s := mcLiveStoreDB(t)
 		id := uuid.New().String()
 		name := "Name_" + mcUniqueHash("n")
-		if err := s.UpsertPlayer(mcCtx, &Player{ID: id, Name: name}, false); err != nil {
+		if err := s.UpsertPlayer(mcCtx, &MojangPlayer{ID: id, Name: name}, false); err != nil {
 			t.Fatalf("seed UpsertPlayer() error = %v", err)
 		}
 		got, err := s.GetPlayerByName(mcCtx, name)
@@ -180,7 +180,7 @@ func TestST12to14_GetTextures(t *testing.T) {
 func TestST15to19_UpsertPlayer(t *testing.T) {
 	t.Run("ST-15_Unreachable", func(t *testing.T) {
 		s := mcStoreWithUnreachableDB(t)
-		err := s.UpsertPlayer(mcCtx, &Player{ID: uuid.New().String(), Name: "Steve"}, false)
+		err := s.UpsertPlayer(mcCtx, &MojangPlayer{ID: uuid.New().String(), Name: "Steve"}, false)
 		if err == nil {
 			t.Error("expected a raw connection error")
 		}
@@ -189,7 +189,7 @@ func TestST15to19_UpsertPlayer(t *testing.T) {
 	t.Run("ST-17_Live_UpdateProfileFalseDefaults", func(t *testing.T) {
 		s := mcLiveStoreDB(t)
 		id := uuid.New().String()
-		if err := s.UpsertPlayer(mcCtx, &Player{ID: id, Name: "Steve", Legacy: true}, false); err != nil {
+		if err := s.UpsertPlayer(mcCtx, &MojangPlayer{ID: id, Name: "Steve", Legacy: true}, false); err != nil {
 			t.Fatalf("UpsertPlayer() error = %v", err)
 		}
 		got, err := s.GetPlayerByUUID(mcCtx, id)
@@ -204,10 +204,10 @@ func TestST15to19_UpsertPlayer(t *testing.T) {
 	t.Run("ST-18_Live_UpsertTwiceUpdatesInPlace", func(t *testing.T) {
 		s := mcLiveStoreDB(t)
 		id := uuid.New().String()
-		if err := s.UpsertPlayer(mcCtx, &Player{ID: id, Name: "First"}, false); err != nil {
+		if err := s.UpsertPlayer(mcCtx, &MojangPlayer{ID: id, Name: "First"}, false); err != nil {
 			t.Fatalf("first UpsertPlayer() error = %v", err)
 		}
-		if err := s.UpsertPlayer(mcCtx, &Player{ID: id, Name: "Second"}, false); err != nil {
+		if err := s.UpsertPlayer(mcCtx, &MojangPlayer{ID: id, Name: "Second"}, false); err != nil {
 			t.Fatalf("second UpsertPlayer() error = %v", err)
 		}
 		got, err := s.GetPlayerByUUID(mcCtx, id)
@@ -229,7 +229,7 @@ func TestST15to19_UpsertPlayer(t *testing.T) {
 			wg.Add(1)
 			go func(i int) {
 				defer wg.Done()
-				errs[i] = s.UpsertPlayer(mcCtx, &Player{ID: id, Name: fmt.Sprintf("Name%d", i)}, false)
+				errs[i] = s.UpsertPlayer(mcCtx, &MojangPlayer{ID: id, Name: fmt.Sprintf("Name%d", i)}, false)
 			}(i)
 		}
 		wg.Wait()
@@ -314,7 +314,7 @@ func TestST29to32_GetPlayerFromCache(t *testing.T) {
 	t.Run("ST-30_Live_Hit", func(t *testing.T) {
 		s := mcLiveStoreRedis(t)
 		id := uuid.New().String()
-		p := &Player{ID: id, Name: "Steve_" + mcUniqueHash("n")}
+		p := &MojangPlayer{ID: id, Name: "Steve_" + mcUniqueHash("n")}
 		if err := s.SetPlayerInCache(mcCtx, p); err != nil {
 			t.Fatalf("seed SetPlayerInCache() error = %v", err)
 		}
@@ -348,7 +348,7 @@ func TestST29to32_GetPlayerFromCache(t *testing.T) {
 func TestST33to34_SetPlayerInCache(t *testing.T) {
 	t.Run("ST-33_Unreachable", func(t *testing.T) {
 		s := mcStoreWithUnreachableRedis(t)
-		if err := s.SetPlayerInCache(mcCtx, &Player{ID: "id", Name: "name"}); err == nil {
+		if err := s.SetPlayerInCache(mcCtx, &MojangPlayer{ID: "id", Name: "name"}); err == nil {
 			t.Error("expected a raw connection error")
 		}
 	})
@@ -357,7 +357,7 @@ func TestST33to34_SetPlayerInCache(t *testing.T) {
 		s := mcLiveStoreRedis(t)
 		id := uuid.New().String()
 		name := "Steve_" + mcUniqueHash("n")
-		p := &Player{ID: id, Name: name}
+		p := &MojangPlayer{ID: id, Name: name}
 		if err := s.SetPlayerInCache(mcCtx, p); err != nil {
 			t.Fatalf("SetPlayerInCache() error = %v", err)
 		}
@@ -384,7 +384,7 @@ func TestST35to37_GetProfileFromCache(t *testing.T) {
 	t.Run("ST-36_Live_Hit", func(t *testing.T) {
 		s := mcLiveStoreRedis(t)
 		id := uuid.New().String()
-		if err := s.SetProfileInCache(mcCtx, &Profile{ID: id, Name: "Steve"}); err != nil {
+		if err := s.SetProfileInCache(mcCtx, &MojangProfile{ID: id, Name: "Steve"}); err != nil {
 			t.Fatalf("seed SetProfileInCache() error = %v", err)
 		}
 		got, err := s.GetProfileFromCache(mcCtx, id)
@@ -405,7 +405,7 @@ func TestST35to37_GetProfileFromCache(t *testing.T) {
 func TestST38to39_SetProfileInCache(t *testing.T) {
 	t.Run("ST-38_Unreachable", func(t *testing.T) {
 		s := mcStoreWithUnreachableRedis(t)
-		if err := s.SetProfileInCache(mcCtx, &Profile{ID: "id"}); err == nil {
+		if err := s.SetProfileInCache(mcCtx, &MojangProfile{ID: "id"}); err == nil {
 			t.Error("expected a raw connection error")
 		}
 	})
@@ -413,7 +413,7 @@ func TestST38to39_SetProfileInCache(t *testing.T) {
 	t.Run("ST-39_Live_ReadableBack", func(t *testing.T) {
 		s := mcLiveStoreRedis(t)
 		id := uuid.New().String()
-		if err := s.SetProfileInCache(mcCtx, &Profile{ID: id, Name: "Steve"}); err != nil {
+		if err := s.SetProfileInCache(mcCtx, &MojangProfile{ID: id, Name: "Steve"}); err != nil {
 			t.Fatalf("SetProfileInCache() error = %v", err)
 		}
 		got, err := s.GetProfileFromCache(mcCtx, id)
@@ -435,7 +435,7 @@ func TestST40to42_GetSignedProfileFromCache(t *testing.T) {
 	t.Run("ST-41_Live_Hit", func(t *testing.T) {
 		s := mcLiveStoreRedis(t)
 		id := uuid.New().String()
-		if err := s.SetSignedProfileInCache(mcCtx, &Player{ID: id, Name: "Steve"}); err != nil {
+		if err := s.SetSignedProfileInCache(mcCtx, &MojangPlayer{ID: id, Name: "Steve"}); err != nil {
 			t.Fatalf("seed SetSignedProfileInCache() error = %v", err)
 		}
 		got, err := s.GetSignedProfileFromCache(mcCtx, id)
@@ -456,7 +456,7 @@ func TestST40to42_GetSignedProfileFromCache(t *testing.T) {
 func TestST43to44_SetSignedProfileInCache(t *testing.T) {
 	t.Run("ST-43_Unreachable", func(t *testing.T) {
 		s := mcStoreWithUnreachableRedis(t)
-		if err := s.SetSignedProfileInCache(mcCtx, &Player{ID: "id"}); err == nil {
+		if err := s.SetSignedProfileInCache(mcCtx, &MojangPlayer{ID: "id"}); err == nil {
 			t.Error("expected a raw connection error")
 		}
 	})
@@ -464,7 +464,7 @@ func TestST43to44_SetSignedProfileInCache(t *testing.T) {
 	t.Run("ST-44_Live_ReadableBack", func(t *testing.T) {
 		s := mcLiveStoreRedis(t)
 		id := uuid.New().String()
-		if err := s.SetSignedProfileInCache(mcCtx, &Player{ID: id, Name: "Steve"}); err != nil {
+		if err := s.SetSignedProfileInCache(mcCtx, &MojangPlayer{ID: id, Name: "Steve"}); err != nil {
 			t.Fatalf("SetSignedProfileInCache() error = %v", err)
 		}
 		got, err := s.GetSignedProfileFromCache(mcCtx, id)

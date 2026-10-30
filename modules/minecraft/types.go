@@ -39,8 +39,8 @@ type TextureResult struct {
 	ContentType string
 }
 
-// Player - Minecraft player profile as returned by Mojang
-type Player struct {
+// MojangPlayer - Minecraft player profile as returned by Mojang
+type MojangPlayer struct {
 	ID             string     `json:"id"                   db:"id"`
 	Name           string     `json:"name"                 db:"name"`
 	Legacy         bool       `json:"legacy,omitempty"     db:"legacy"`
@@ -51,12 +51,12 @@ type Player struct {
 	LastSeen       int64      `json:"-"                    db:"last_seen"`
 }
 
-// MarshalJSON customizes Player's JSON output so ProfileActions is omitted
+// MarshalJSON customizes MojangPlayer's JSON output so ProfileActions is omitted
 // only when it was never populated (nil) — a genuinely empty slice (fetched,
 // zero actions) still serializes as []. Plain `omitempty` can't tell those
 // apart since both have len == 0.
-func (p *Player) MarshalJSON() ([]byte, error) {
-	type Alias Player
+func (p *MojangPlayer) MarshalJSON() ([]byte, error) {
+	type Alias MojangPlayer
 	if p.ProfileActions == nil {
 		return json.Marshal(struct {
 			*Alias
@@ -92,7 +92,7 @@ func EncodeTextureValue(ctx context.Context, textures *TexturesValue) string {
 }
 
 // ParseProperties parse the player's properties
-func (p *Player) ParseProperties(ctx context.Context) *TexturesValue {
+func (p *MojangPlayer) ParseProperties(ctx context.Context) *TexturesValue {
 	for _, prop := range p.Properties {
 		if prop.Name != TEXTURES {
 			reqctx.Log(ctx, "Unknown property:\n\t"+prop.String())
@@ -104,14 +104,14 @@ func (p *Player) ParseProperties(ctx context.Context) *TexturesValue {
 }
 
 // IsStale returns true if the player's last_seen is older than the staleness threshold
-func (p *Player) IsStale() bool {
+func (p *MojangPlayer) IsStale() bool {
 	return time.Now().UnixMilli()-p.LastSeen > stalenessThreshold.Milliseconds()
 }
 
-// ToProfile converts a Player fetched live from Mojang into our canonical,
+// ToProfile converts a MojangPlayer fetched live from Mojang into our canonical,
 // decoded shape for storage and caching.
-func (p *Player) ToProfile(ctx context.Context) *Profile {
-	return &Profile{
+func (p *MojangPlayer) ToProfile(ctx context.Context) *MojangProfile {
+	return &MojangProfile{
 		ID:             p.ID,
 		Name:           p.Name,
 		Legacy:         p.Legacy,
@@ -200,8 +200,8 @@ type Model string
 // SLIM The only known value for Metadata.Model
 const SLIM Model = "slim"
 
-// Profile - a player's full profile
-type Profile struct {
+// MojangProfile - a player's full profile
+type MojangProfile struct {
 	ID             string         `json:"id"`
 	Name           string         `json:"name"`
 	Legacy         bool           `json:"legacy,omitempty"`
@@ -213,17 +213,17 @@ type Profile struct {
 }
 
 // IsStale returns true if the profile's last_seen is older than the staleness threshold
-func (p *Profile) IsStale() bool {
+func (p *MojangProfile) IsStale() bool {
 	return time.Now().UnixMilli()-p.LastSeen > stalenessThreshold.Milliseconds()
 }
 
-// ToPlayer converts a Profile into Mojang's raw session-server mirror shape.
-func (p *Profile) ToPlayer() (*Player, error) {
+// ToPlayer converts a MojangProfile into Mojang's raw session-server mirror shape.
+func (p *MojangProfile) ToPlayer() (*MojangPlayer, error) {
 	prop, err := p.Textures.ToProperty()
 	if err != nil {
 		return nil, err
 	}
-	player := &Player{
+	player := &MojangPlayer{
 		ID:             p.ID,
 		Name:           p.Name,
 		Legacy:         p.Legacy,

@@ -19,8 +19,8 @@ type Service interface {
 	MojangService
 	GeyserService
 
-	GetProfile(ctx context.Context, id string) (*Profile, error)
-	GetProfileByName(ctx context.Context, name string) (*Profile, error)
+	GetProfile(ctx context.Context, id string) (*MojangProfile, error)
+	GetProfileByName(ctx context.Context, name string) (*MojangProfile, error)
 
 	GetGeyserProfile(ctx context.Context, id string) (*GeyserProfile, error)
 	GetGeyserProfileByName(ctx context.Context, name string) (*GeyserProfile, error)
@@ -29,10 +29,10 @@ type Service interface {
 }
 
 type MojangService interface {
-	GetMojangPlayerByName(ctx context.Context, name string) (*Player, error)
-	GetMojangPlayerByUUID(ctx context.Context, id string) (*Player, error)
-	GetMojangPlayersByNames(ctx context.Context, names []string) ([]*Player, error)
-	GetMojangProfile(ctx context.Context, id string, signed bool) (*Player, error)
+	GetMojangPlayerByName(ctx context.Context, name string) (*MojangPlayer, error)
+	GetMojangPlayerByUUID(ctx context.Context, id string) (*MojangPlayer, error)
+	GetMojangPlayersByNames(ctx context.Context, names []string) ([]*MojangPlayer, error)
+	GetMojangProfile(ctx context.Context, id string, signed bool) (*MojangPlayer, error)
 }
 
 type GeyserService interface {
@@ -43,8 +43,8 @@ type GeyserService interface {
 }
 
 type CommonService interface {
-	GetProfile(ctx context.Context, id string) (*Profile, error)
-	GetProfileByName(ctx context.Context, name string) (*Profile, error)
+	GetProfile(ctx context.Context, id string) (*MojangProfile, error)
+	GetProfileByName(ctx context.Context, name string) (*MojangProfile, error)
 	GetTextureContent(ctx context.Context, hash string) (*TextureResult, error)
 }
 
@@ -79,7 +79,7 @@ func (s *service) get(ctx context.Context, url string) (*http.Response, error) {
 }
 
 // GetMojangPlayerByName gets a player by name, cache-first with Mojang fallback
-func (s *service) GetMojangPlayerByName(ctx context.Context, name string) (*Player, error) {
+func (s *service) GetMojangPlayerByName(ctx context.Context, name string) (*MojangPlayer, error) {
 	cached, err := s.store.GetPlayerFromCache(ctx, name)
 	if err == nil {
 		return cached, nil
@@ -112,7 +112,7 @@ func (s *service) GetMojangPlayerByName(ctx context.Context, name string) (*Play
 		return nil, ErrMojangAPI
 	}
 
-	var player Player
+	var player MojangPlayer
 	if err := json.NewDecoder(resp.Body).Decode(&player); err != nil {
 		return nil, err
 	}
@@ -127,7 +127,7 @@ func (s *service) GetMojangPlayerByName(ctx context.Context, name string) (*Play
 }
 
 // GetMojangPlayerByUUID gets a player by UUID, cache-first with Mojang fallback
-func (s *service) GetMojangPlayerByUUID(ctx context.Context, id string) (*Player, error) {
+func (s *service) GetMojangPlayerByUUID(ctx context.Context, id string) (*MojangPlayer, error) {
 	cached, err := s.store.GetPlayerFromCache(ctx, id)
 	if err == nil {
 		return cached, nil
@@ -160,7 +160,7 @@ func (s *service) GetMojangPlayerByUUID(ctx context.Context, id string) (*Player
 		return nil, ErrMojangAPI
 	}
 
-	var player Player
+	var player MojangPlayer
 	if err := json.NewDecoder(resp.Body).Decode(&player); err != nil {
 		return nil, err
 	}
@@ -176,7 +176,7 @@ func (s *service) GetMojangPlayerByUUID(ctx context.Context, id string) (*Player
 
 // GetMojangPlayersByNames gets players by name in batch, cache-first with Mojang fallback
 // Mojang batch endpoint is capped at 10 names per request
-func (s *service) GetMojangPlayersByNames(ctx context.Context, names []string) ([]*Player, error) {
+func (s *service) GetMojangPlayersByNames(ctx context.Context, names []string) ([]*MojangPlayer, error) {
 	if len(names) == 0 {
 		return nil, ErrNoNamesProvided
 	}
@@ -185,7 +185,7 @@ func (s *service) GetMojangPlayersByNames(ctx context.Context, names []string) (
 	}
 
 	// Check cache first, collect misses
-	players := make([]*Player, 0, len(names))
+	players := make([]*MojangPlayer, 0, len(names))
 	misses := make([]string, 0, len(names))
 
 	for _, name := range names {
@@ -234,7 +234,7 @@ func (s *service) GetMojangPlayersByNames(ctx context.Context, names []string) (
 		return nil, ErrMojangAPI
 	}
 
-	var fetched []Player
+	var fetched []MojangPlayer
 	if err := json.NewDecoder(resp.Body).Decode(&fetched); err != nil {
 		return nil, err
 	}
@@ -253,7 +253,7 @@ func (s *service) GetMojangPlayersByNames(ctx context.Context, names []string) (
 }
 
 // GetMojangProfile gets a full player profile
-func (s *service) GetMojangProfile(ctx context.Context, id string, signed bool) (*Player, error) {
+func (s *service) GetMojangProfile(ctx context.Context, id string, signed bool) (*MojangPlayer, error) {
 	if signed {
 		cached, err := s.store.GetSignedProfileFromCache(ctx, id)
 		if err == nil {
@@ -275,7 +275,7 @@ func (s *service) GetMojangProfile(ctx context.Context, id string, signed bool) 
 
 // GetProfile gets a player's profile with textures decoded as native JSON,
 // with texture URLs pointing at our own CDN instead of Mojang's.
-func (s *service) GetProfile(ctx context.Context, id string) (*Profile, error) {
+func (s *service) GetProfile(ctx context.Context, id string) (*MojangProfile, error) {
 	profile, err := s.resolveProfile(ctx, id)
 	if err != nil {
 		return nil, err
@@ -293,7 +293,7 @@ func (s *service) GetProfile(ctx context.Context, id string) (*Profile, error) {
 }
 
 // GetProfileByName resolves a Java username to its profile.
-func (s *service) GetProfileByName(ctx context.Context, name string) (*Profile, error) {
+func (s *service) GetProfileByName(ctx context.Context, name string) (*MojangProfile, error) {
 	player, err := s.GetMojangPlayerByName(ctx, name)
 	if err != nil {
 		return nil, err
@@ -301,9 +301,9 @@ func (s *service) GetProfileByName(ctx context.Context, name string) (*Profile, 
 	return s.GetProfile(ctx, player.ID)
 }
 
-// resolveProfile gets a player's canonical Profile from cache or the
+// resolveProfile gets a player's canonical MojangProfile from cache or the
 // database, fetching live from Mojang when needed.
-func (s *service) resolveProfile(ctx context.Context, id string) (*Profile, error) {
+func (s *service) resolveProfile(ctx context.Context, id string) (*MojangProfile, error) {
 	cached, err := s.store.GetProfileFromCache(ctx, id)
 	if err == nil {
 		return cached, nil
@@ -333,8 +333,8 @@ func (s *service) resolveProfile(ctx context.Context, id string) (*Profile, erro
 }
 
 // fetchProfileFromMojang fetches and persists a player's profile live from
-// Mojang, returning both the raw Player and the decoded Profile.
-func (s *service) fetchProfileFromMojang(ctx context.Context, id string, signed bool) (*Player, *Profile, error) {
+// Mojang, returning both the raw MojangPlayer and the decoded MojangProfile.
+func (s *service) fetchProfileFromMojang(ctx context.Context, id string, signed bool) (*MojangPlayer, *MojangProfile, error) {
 	u := s.cfg.LookupProfile + id
 	if signed {
 		u += "?unsigned=false"
@@ -353,7 +353,7 @@ func (s *service) fetchProfileFromMojang(ctx context.Context, id string, signed 
 		return nil, nil, ErrMojangAPI
 	}
 
-	var player Player
+	var player MojangPlayer
 	if err := json.NewDecoder(resp.Body).Decode(&player); err != nil {
 		return nil, nil, err
 	}
