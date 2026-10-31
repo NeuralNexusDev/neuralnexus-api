@@ -30,16 +30,12 @@
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| ACT-01 | NewAccount | Happy Path | Valid username/email/password | `database.GenSnowflake`/`HashPassword` succeed | Returns `*Account` with `UserID` set, `Username` set, `Email == &email`, non-empty `HashedSecret`/`Salt`, nil error | P1 |  |
-| ACT-02 | NewAccount | Edge Case | `email == ""` | | `Account.Email == nil` | P2 |  |
 | ACT-04 | NewPasswordLessAccount | Happy Path | Valid username/email | | Returns `*Account` with `UserID`, `Username`, `Email == &email`; `HashedSecret`/`Salt` nil | P2 |  |
 | ACT-05 | NewPasswordLessAccount | Edge Case | `email == ""` | | `Account.Email == nil` | P3 |  |
 | ACT-06 | NewIDOnlyAccount | Happy Path | n/a | | Returns `*Account` with only `UserID` set | P2 |  |
 | ACT-07 | IDKeyWithSecret | Happy Path | Same password/salt/secret/params called twice | | Identical output both times (deterministic) | P2 |  |
 | ACT-08 | IDKeyWithSecret | Edge Case | Same password/salt/params, different `secret` | | Different output (the pepper/secret genuinely affects the digest) | P1 |  |
-| ACT-09 | HashPassword | Happy Path | Any password | `rand.Read` succeeds | Sets `user.HashedSecret` (32 bytes) and `user.Salt` (16 bytes); nil error | P1 |  |
-| ACT-10 | HashPassword | Edge Case | Called twice with the same password on two different accounts | | Produces different `Salt`/`HashedSecret` each time (random per-call salt) | P2 |  |
-| ACT-12 | ValidateUser | Happy Path | `HashPassword("correct")` already applied | `ValidateUser("correct")` | Returns true | P0 |  |
+| ACT-12 | ValidateUser | Happy Path | an account hashed with a fixed salt | `ValidateUser("correct")` | Returns true | P0 |  |
 | ACT-13 | ValidateUser | Edge Case | Same setup | `ValidateUser("wrong")` | Returns false | P0 |  |
 | ACT-14 | ValidateUser | Edge Case | `HashedSecret`/`Salt` both nil (password never set) | | Returns false without panicking | P1 |  |
 | ACT-19 | RemoveRole | Happy Path | `Roles == ["a","b","c"]` | `RemoveRole("b")` | `Roles == ["a","c"]` | P1 |  |

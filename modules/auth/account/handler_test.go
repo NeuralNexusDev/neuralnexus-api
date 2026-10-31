@@ -68,10 +68,7 @@ func (s *stubService) NewSession(_ context.Context, a *Account, expiresAt int64)
 }
 
 func TestAU01LoginHandlerUsernameHappyPath(t *testing.T) {
-	account, err := NewAccount(testutil.NewConfig().Auth.Account.Pepper, "testuser", "test@example.com", "correct-password")
-	if err != nil {
-		t.Fatalf("failed to build account: %v", err)
-	}
+	account := passwordAccount("testuser", "test@example.com", "correct-password")
 	as := &stubService{account: account}
 	ss := &authtest.FakeSessionService{CreateJWTFunc: func(*session.Session) (string, error) { return "test-jwt", nil }}
 	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
@@ -94,10 +91,7 @@ func TestAU01LoginHandlerUsernameHappyPath(t *testing.T) {
 }
 
 func TestAU02LoginHandlerEmailHappyPath(t *testing.T) {
-	account, err := NewAccount(testutil.NewConfig().Auth.Account.Pepper, "testuser", "test@example.com", "correct-password")
-	if err != nil {
-		t.Fatalf("failed to build account: %v", err)
-	}
+	account := passwordAccount("testuser", "test@example.com", "correct-password")
 	as := &stubService{account: account}
 	ss := &authtest.FakeSessionService{CreateJWTFunc: func(*session.Session) (string, error) { return "test-jwt", nil }}
 	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"email":"test@example.com","password":"correct-password"}`))
@@ -151,10 +145,7 @@ func TestAU04LoginHandlerAccountLookupFails(t *testing.T) {
 }
 
 func TestAU05LoginHandlerWrongPassword(t *testing.T) {
-	account, err := NewAccount(testutil.NewConfig().Auth.Account.Pepper, "testuser", "test@example.com", "correct-password")
-	if err != nil {
-		t.Fatalf("failed to build account: %v", err)
-	}
+	account := passwordAccount("testuser", "test@example.com", "correct-password")
 	as := &stubService{account: account}
 	ss := &authtest.FakeSessionService{}
 	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"wrong-password"}`))
@@ -174,10 +165,7 @@ func TestAU05LoginHandlerWrongPassword(t *testing.T) {
 }
 
 func TestAU06LoginHandlerPasswordAuthCheckErrors(t *testing.T) {
-	account, err := NewAccount(testutil.NewConfig().Auth.Account.Pepper, "testuser", "test@example.com", "correct-password")
-	if err != nil {
-		t.Fatalf("failed to build account: %v", err)
-	}
+	account := passwordAccount("testuser", "test@example.com", "correct-password")
 	as := &stubService{account: account, passwordAuthErr: testutil.ErrDBDown}
 	ss := &authtest.FakeSessionService{}
 	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
@@ -194,10 +182,7 @@ func TestAU06LoginHandlerPasswordAuthCheckErrors(t *testing.T) {
 }
 
 func TestAU07LoginHandlerPasswordAuthDisabled(t *testing.T) {
-	account, err := NewAccount(testutil.NewConfig().Auth.Account.Pepper, "testuser", "test@example.com", "correct-password")
-	if err != nil {
-		t.Fatalf("failed to build account: %v", err)
-	}
+	account := passwordAccount("testuser", "test@example.com", "correct-password")
 	as := &stubService{account: account, passwordAuthDisabled: true}
 	ss := &authtest.FakeSessionService{}
 	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
@@ -217,10 +202,7 @@ func TestAU07LoginHandlerPasswordAuthDisabled(t *testing.T) {
 }
 
 func TestAU08LoginHandlerAddSessionFails(t *testing.T) {
-	account, err := NewAccount(testutil.NewConfig().Auth.Account.Pepper, "testuser", "test@example.com", "correct-password")
-	if err != nil {
-		t.Fatalf("failed to build account: %v", err)
-	}
+	account := passwordAccount("testuser", "test@example.com", "correct-password")
 	as := &stubService{account: account}
 	ss := &authtest.FakeSessionService{AddSessionErr: testutil.ErrDBDown}
 	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
@@ -289,10 +271,7 @@ func TestAU12LogoutHandlerDeleteSessionFails(t *testing.T) {
 }
 
 func TestAU58LoginHandlerNewSessionFails(t *testing.T) {
-	account := &Account{UserID: "u1", Username: "testuser"}
-	if err := account.HashPassword(testutil.NewConfig().Auth.Account.Pepper, "correct-password"); err != nil {
-		t.Fatalf("failed to hash password: %v", err)
-	}
+	account := passwordAccount("testuser", "", "correct-password")
 	as := &stubService{account: account, newSessionErr: testutil.ErrBoom}
 	ss := &authtest.FakeSessionService{CreateJWTFunc: func(*session.Session) (string, error) { return "test-jwt", nil }}
 	r := testutil.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"testuser","password":"correct-password"}`))
