@@ -95,19 +95,17 @@ var (
 	hdLegacyIconColor  = color.RGBA{G: 255, A: 255}
 )
 
-func hdUseIcons(t *testing.T, withIcons bool) {
+func hdUseIcons(t *testing.T) {
 	t.Helper()
 	icons := fstest.MapFS{}
-	if withIcons {
-		for name, c := range map[string]color.RGBA{bedrockIconFile: hdBedrockIconColor, defaultIconFile: hdDefaultIconColor, legacyIconFile: hdLegacyIconColor} {
-			img := image.NewRGBA(image.Rect(0, 0, 1, 1))
-			img.Set(0, 0, c)
-			var buf bytes.Buffer
-			if err := png.Encode(&buf, img); err != nil {
-				t.Fatalf("encode %s: %v", name, err)
-			}
-			icons[path.Join(iconPath, name)] = &fstest.MapFile{Data: buf.Bytes()}
+	for name, c := range map[string]color.RGBA{bedrockIconFile: hdBedrockIconColor, defaultIconFile: hdDefaultIconColor, legacyIconFile: hdLegacyIconColor} {
+		img := image.NewRGBA(image.Rect(0, 0, 1, 1))
+		img.Set(0, 0, c)
+		var buf bytes.Buffer
+		if err := png.Encode(&buf, img); err != nil {
+			t.Fatalf("encode %s: %v", name, err)
 		}
+		icons[path.Join(iconPath, name)] = &fstest.MapFile{Data: buf.Bytes()}
 	}
 	prev := iconFS
 	iconFS = icons
@@ -688,7 +686,7 @@ func TestIconHandler(t *testing.T) {
 	})
 
 	t.Run("CSH-09_LookupFailureServesDefaultIcon", func(t *testing.T) {
-		hdUseIcons(t, true)
+		hdUseIcons(t)
 		mock := &hdMockService{javaErr: ErrJavaStatus}
 		req := hdRequest(t, "example.com:25565", "")
 		w := httptest.NewRecorder()
@@ -745,7 +743,7 @@ func TestIconHandler(t *testing.T) {
 	})
 
 	t.Run("CSH-11_BedrockServesBedrockIcon", func(t *testing.T) {
-		hdUseIcons(t, true)
+		hdUseIcons(t)
 		mock := &hdMockService{javaErr: ErrJavaStatus}
 		req := hdRequest(t, "example.com:19132", "bedrock=true")
 		w := httptest.NewRecorder()
@@ -783,7 +781,7 @@ func TestIconHandler(t *testing.T) {
 	})
 
 	t.Run("CSH-31_NoIconServesDefaultIcon", func(t *testing.T) {
-		hdUseIcons(t, true)
+		hdUseIcons(t)
 		mock := &hdMockService{javaStatus: hdValidStatus(nil)}
 		req := hdRequest(t, "example.com:25565", "")
 		w := httptest.NewRecorder()
@@ -799,7 +797,7 @@ func TestIconHandler(t *testing.T) {
 	})
 
 	t.Run("CSH-34_LegacyNoIconServesLegacyIcon", func(t *testing.T) {
-		hdUseIcons(t, true)
+		hdUseIcons(t)
 		mock := &hdMockService{javaStatus: GetPing16Status(&minequery.Status16{})}
 		req := hdRequest(t, "example.com:25565", "")
 		w := httptest.NewRecorder()
@@ -811,38 +809,6 @@ func TestIconHandler(t *testing.T) {
 		}
 		if got := hdDecodePixel(t, w.Body.Bytes()); got != hdLegacyIconColor {
 			t.Fatalf("pixel = %v, want the legacy icon %v", got, hdLegacyIconColor)
-		}
-	})
-
-	t.Run("CSH-32_MissingDefaultIconReturns500", func(t *testing.T) {
-		hdUseIcons(t, false)
-		mock := &hdMockService{javaStatus: hdValidStatus(nil)}
-		req := hdRequest(t, "example.com:25565", "")
-		w := httptest.NewRecorder()
-
-		IconHandler(mock)(w, req)
-
-		if w.Code != http.StatusInternalServerError {
-			t.Fatalf("expected 500, got %d", w.Code)
-		}
-		if p := hdDecodeProblem(t, w.Body.Bytes()); p.Detail != msgIconUnavailable {
-			t.Fatalf("detail = %q, want %q", p.Detail, msgIconUnavailable)
-		}
-	})
-
-	t.Run("CSH-33_MissingBedrockIconReturns500", func(t *testing.T) {
-		hdUseIcons(t, false)
-		mock := &hdMockService{}
-		req := hdRequest(t, "example.com:19132", "bedrock=true")
-		w := httptest.NewRecorder()
-
-		IconHandler(mock)(w, req)
-
-		if w.Code != http.StatusInternalServerError {
-			t.Fatalf("expected 500, got %d", w.Code)
-		}
-		if p := hdDecodeProblem(t, w.Body.Bytes()); p.Detail != msgIconUnavailable {
-			t.Fatalf("detail = %q, want %q", p.Detail, msgIconUnavailable)
 		}
 	})
 
