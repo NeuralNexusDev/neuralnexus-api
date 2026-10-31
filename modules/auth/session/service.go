@@ -20,10 +20,7 @@ var (
 	ErrSessionSubjectMismatch = errors.New("session does not match token subject")
 )
 
-const (
-	CookieName           = "session"
-	logFailedToCreateJWT = "Failed to create JWT:\n\t"
-)
+const CookieName = "session"
 
 // Service - The session service interface
 type Service interface {
@@ -115,8 +112,7 @@ func (s *service) DeleteSession(ctx context.Context, id string) error {
 func (s *service) SetSessionCookie(ctx context.Context, w http.ResponseWriter, session *Session) error {
 	jwtString, err := s.CreateJWT(ctx, session)
 	if err != nil {
-		reqctx.Log(ctx, logFailedToCreateJWT, err.Error())
-		return err
+		panic("session cookie signing failed although config.FromEnv requires JWT_SECRET: " + err.Error())
 	}
 	cookie := &http.Cookie{
 		Name:     CookieName,

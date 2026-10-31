@@ -44,7 +44,7 @@ func (d *DiscordData) CreateLinkedAccount(userID string) *LinkedAccount {
 func GetDiscordUser(token *OAuthToken) (*DiscordData, error) {
 	discord, err := discordgo.New(AuthBearer + token.AccessToken)
 	if err != nil {
-		return nil, err
+		panic("discordgo.New returned an error although it never sets one: " + err.Error())
 	}
 	defer discord.Close()
 
