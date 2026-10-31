@@ -140,7 +140,7 @@ func (s *service) CreateRole(ctx context.Context, name, description string) (*Ro
 	}
 	id, err := database.GenSnowflake()
 	if err != nil {
-		return nil, err
+		panic("snowflake generation failed although config.FromEnv limits SNOWFLAKE_NODE_ID and SNOWFLAKE_WORKER_ID to 31: " + err.Error())
 	}
 	if err := s.store.CreateRole(ctx, id, name, description); err != nil {
 		return nil, err
@@ -238,7 +238,7 @@ func (s *service) CreatePermission(ctx context.Context, node, description, value
 	}
 	id, err := database.GenSnowflake()
 	if err != nil {
-		return nil, err
+		panic("snowflake generation failed although config.FromEnv limits SNOWFLAKE_NODE_ID and SNOWFLAKE_WORKER_ID to 31: " + err.Error())
 	}
 	if err := s.store.CreatePermission(ctx, id, node, description, valueType, merge); err != nil {
 		return nil, err
@@ -315,7 +315,7 @@ func (s *service) AttachPermission(ctx context.Context, roleID, permissionID str
 		}
 		encoded, err = json.Marshal(n)
 		if err != nil {
-			return err
+			panic("rbac: json.Marshal of an int64 cannot fail: " + err.Error())
 		}
 	case ValueTypeString:
 		text, ok := value.(string)
@@ -324,7 +324,7 @@ func (s *service) AttachPermission(ctx context.Context, roleID, permissionID str
 		}
 		encoded, err = json.Marshal(text)
 		if err != nil {
-			return err
+			panic("rbac: json.Marshal of a string cannot fail: " + err.Error())
 		}
 	case ValueTypeStringList:
 		var items []string
@@ -352,7 +352,7 @@ func (s *service) AttachPermission(ctx context.Context, roleID, permissionID str
 		}
 		encoded, err = json.Marshal(slices.Compact(slices.Sorted(slices.Values(items))))
 		if err != nil {
-			return err
+			panic("rbac: json.Marshal of a string list cannot fail: " + err.Error())
 		}
 	default:
 		return ErrInvalidValue

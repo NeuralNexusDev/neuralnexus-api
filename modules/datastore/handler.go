@@ -36,9 +36,7 @@ func CreateDataStoreHandler(s DSService) http.HandlerFunc {
 
 		id, err := database.GenSnowflake()
 		if err != nil {
-			reqctx.Log(r.Context(), "Failed to generate snowflake:\n\t", err.Error())
-			responses.InternalServerError(w, r, msgFailedToCreateDatastore)
-			return
+			panic("snowflake generation failed although config.FromEnv limits SNOWFLAKE_NODE_ID and SNOWFLAKE_WORKER_ID to 31: " + err.Error())
 		}
 		ds := NewDataStore(id, session.UserID)
 		ds, err = s.Create(r.Context(), ds)
