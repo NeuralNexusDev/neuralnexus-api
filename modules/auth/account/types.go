@@ -23,10 +23,10 @@ type Account struct {
 }
 
 // NewAccount creates a new account
-func NewAccount(pepper []byte, username, email, password string) (*Account, error) {
+func NewAccount(pepper []byte, username, email, password string) *Account {
 	id, err := database.GenSnowflake()
 	if err != nil {
-		return nil, err
+		panic("snowflake generation failed although config.FromEnv limits SNOWFLAKE_NODE_ID and SNOWFLAKE_WORKER_ID to 31: " + err.Error())
 	}
 	user := &Account{
 		UserID:   id,
@@ -35,15 +35,12 @@ func NewAccount(pepper []byte, username, email, password string) (*Account, erro
 	if email != "" {
 		user.Email = &email
 	}
-	err = user.HashPassword(pepper, password)
-	if err != nil {
-		return user, err
-	}
-	return user, nil
+	user.HashPassword(pepper, password)
+	return user
 }
 
 // NewPasswordLessAccount creates a new account without a password.
-func NewPasswordLessAccount(username, email string) (*Account, error) {
+func NewPasswordLessAccount(username, email string) *Account {
 	id, err := database.GenSnowflake()
 	if err != nil {
 		panic("snowflake generation failed although config.FromEnv limits SNOWFLAKE_NODE_ID and SNOWFLAKE_WORKER_ID to 31: " + err.Error())
@@ -55,18 +52,18 @@ func NewPasswordLessAccount(username, email string) (*Account, error) {
 	if email != "" {
 		account.Email = &email
 	}
-	return account, nil
+	return account
 }
 
 // NewIDOnlyAccount creates a new account with only an ID
-func NewIDOnlyAccount() (*Account, error) {
+func NewIDOnlyAccount() *Account {
 	id, err := database.GenSnowflake()
 	if err != nil {
 		panic("snowflake generation failed although config.FromEnv limits SNOWFLAKE_NODE_ID and SNOWFLAKE_WORKER_ID to 31: " + err.Error())
 	}
 	return &Account{
 		UserID: id,
-	}, nil
+	}
 }
 
 //go:linkname deriveKey golang.org/x/crypto/argon2.deriveKey
@@ -82,16 +79,12 @@ func IDKeyWithSecret(password, salt []byte, secret []byte, time, memory uint32, 
 }
 
 // HashPassword hashes the password
-func (user *Account) HashPassword(pepper []byte, password string) error {
+func (user *Account) HashPassword(pepper []byte, password string) {
 	salt := make([]byte, 16)
-	_, err := rand.Read(salt)
-	if err != nil {
-		return err
-	}
+	_, _ = rand.Read(salt)
 	hashedSecret := IDKeyWithSecret([]byte(password), salt, pepper, 3, 64*1024, 4, 32)
 	user.HashedSecret = hashedSecret
 	user.Salt = salt
-	return nil
 }
 
 // ValidateUser validate the user's password

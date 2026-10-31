@@ -234,19 +234,13 @@ func TestST50AddAccountToDBNilEmailsDoNotCollide(t *testing.T) {
 func TestST51AddAccountToDBEmptyUsernamesDoNotCollide(t *testing.T) {
 	as, _ := stLiveStore(t)
 	t.Run("ACS-51_EmptyUsernamesDoNotCollide", func(t *testing.T) {
-		a1, err := NewIDOnlyAccount()
-		if err != nil {
-			t.Fatalf("NewIDOnlyAccount returned error: %v", err)
-		}
+		a1 := NewIDOnlyAccount()
 		a1.UserID = "910000000000000004"
 		if err := as.AddAccountToDB(context.Background(), a1); err != nil {
 			t.Fatalf("first empty-username AddAccountToDB returned error: %v", err)
 		}
 
-		a2, err := NewIDOnlyAccount()
-		if err != nil {
-			t.Fatalf("NewIDOnlyAccount returned error: %v", err)
-		}
+		a2 := NewIDOnlyAccount()
 		a2.UserID = "910000000000000005"
 		if err := as.AddAccountToDB(context.Background(), a2); err != nil {
 			t.Fatalf("second empty-username AddAccountToDB returned error (regression: an empty username must never collide): %v", err)
