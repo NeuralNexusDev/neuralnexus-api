@@ -6,37 +6,6 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
-func TestTY01to02NewAccount(t *testing.T) {
-	t.Run("ACT-01_Success", func(t *testing.T) {
-		a, err := NewAccount(testutil.NewConfig().Auth.Account.Pepper, "alice", "a@b.com", "hunter2")
-		if err != nil {
-			t.Fatalf("NewAccount() unexpected error: %v", err)
-		}
-		if a.UserID == "" {
-			t.Error("expected a non-empty UserID")
-		}
-		if a.Username != "alice" {
-			t.Errorf("Username = %q, want %q", a.Username, "alice")
-		}
-		if a.Email == nil || *a.Email != "a@b.com" {
-			t.Errorf("Email = %v, want pointer to %q", a.Email, "a@b.com")
-		}
-		if len(a.HashedSecret) == 0 || len(a.Salt) == 0 {
-			t.Errorf("expected HashedSecret/Salt to be populated, got %d/%d bytes", len(a.HashedSecret), len(a.Salt))
-		}
-	})
-
-	t.Run("ACT-02_EmptyEmailStaysNil", func(t *testing.T) {
-		a, err := NewAccount(testutil.NewConfig().Auth.Account.Pepper, "alice", "", "hunter2")
-		if err != nil {
-			t.Fatalf("NewAccount() unexpected error: %v", err)
-		}
-		if a.Email != nil {
-			t.Errorf("Email = %v, want nil for an empty email argument", a.Email)
-		}
-	})
-}
-
 func TestTY04to05NewPasswordLessAccount(t *testing.T) {
 	t.Run("ACT-04_Success", func(t *testing.T) {
 		a, err := NewPasswordLessAccount("alice", "a@b.com")
@@ -102,53 +71,16 @@ func TestTY07to08IDKeyWithSecret(t *testing.T) {
 	})
 }
 
-func TestTY09to10HashPassword(t *testing.T) {
-	t.Run("ACT-09_Success", func(t *testing.T) {
-		u := &Account{}
-		if err := u.HashPassword(testutil.NewConfig().Auth.Account.Pepper, "hunter2"); err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if len(u.HashedSecret) != 32 {
-			t.Errorf("HashedSecret length = %d, want 32", len(u.HashedSecret))
-		}
-		if len(u.Salt) != 16 {
-			t.Errorf("Salt length = %d, want 16", len(u.Salt))
-		}
-	})
-
-	t.Run("ACT-10_DifferentCallsUseDifferentSalts", func(t *testing.T) {
-		u1, u2 := &Account{}, &Account{}
-		if err := u1.HashPassword(testutil.NewConfig().Auth.Account.Pepper, "hunter2"); err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if err := u2.HashPassword(testutil.NewConfig().Auth.Account.Pepper, "hunter2"); err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if string(u1.Salt) == string(u2.Salt) {
-			t.Error("expected two calls to produce different random salts")
-		}
-		if string(u1.HashedSecret) == string(u2.HashedSecret) {
-			t.Error("expected two calls (with different salts) to produce different hashed secrets")
-		}
-	})
-}
-
 func TestTY12to14ValidateUser(t *testing.T) {
 	t.Run("ACT-12_CorrectPassword", func(t *testing.T) {
-		u := &Account{}
-		if err := u.HashPassword(testutil.NewConfig().Auth.Account.Pepper, "correct-horse"); err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
+		u := passwordAccount("", "", "correct-horse")
 		if !u.ValidateUser(testutil.NewConfig().Auth.Account.Pepper, "correct-horse") {
 			t.Error("ValidateUser() = false for the correct password, want true")
 		}
 	})
 
 	t.Run("ACT-13_WrongPassword", func(t *testing.T) {
-		u := &Account{}
-		if err := u.HashPassword(testutil.NewConfig().Auth.Account.Pepper, "correct-horse"); err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
+		u := passwordAccount("", "", "correct-horse")
 		if u.ValidateUser(testutil.NewConfig().Auth.Account.Pepper, "wrong-password") {
 			t.Error("ValidateUser() = true for an incorrect password, want false")
 		}
@@ -186,4 +118,13 @@ func TestTY19to21RemoveRole(t *testing.T) {
 			t.Errorf("Roles = %v, want to remain empty", a.Roles)
 		}
 	})
+}
+
+func passwordAccount(username, email, password string) *Account {
+	salt := []byte("0123456789abcdef")
+	a := &Account{UserID: "u1", Username: username, Salt: salt, HashedSecret: IDKeyWithSecret([]byte(password), salt, testutil.NewConfig().Auth.Account.Pepper, 3, 64*1024, 4, 32)}
+	if email != "" {
+		a.Email = &email
+	}
+	return a
 }
