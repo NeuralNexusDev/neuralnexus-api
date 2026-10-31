@@ -207,10 +207,7 @@ func resolveOrCreateAccountForPlatformUser(ctx context.Context, as account.Servi
 		return nil, err
 	}
 
-	a, err := account.NewPasswordLessAccount(user.GetUsername(), user.GetEmail())
-	if err != nil {
-		return nil, err
-	}
+	a := account.NewPasswordLessAccount(user.GetUsername(), user.GetEmail())
 	if err := as.AddAccount(ctx, a); err != nil {
 		return nil, err
 	}
@@ -397,10 +394,7 @@ func resolveOrCreateAccountForMicrosoftUser(ctx context.Context, as account.Serv
 		if java != nil {
 			username = java.GetUsername()
 		}
-		a, err = account.NewPasswordLessAccount(username, "")
-		if err != nil {
-			return nil, err
-		}
+		a = account.NewPasswordLessAccount(username, "")
 		if err := as.AddAccount(ctx, a); err != nil {
 			return nil, err
 		}
