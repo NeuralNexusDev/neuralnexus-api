@@ -28,7 +28,7 @@ type Service interface {
 	GetSession(ctx context.Context, id string) (*Session, error)
 	UpdateSession(ctx context.Context, session *Session) error
 	DeleteSession(ctx context.Context, id string) error
-	SetSessionCookie(ctx context.Context, w http.ResponseWriter, session *Session) error
+	SetSessionCookie(ctx context.Context, w http.ResponseWriter, session *Session)
 	CreateJWT(ctx context.Context, session *Session) (string, error)
 	ReadJWT(ctx context.Context, token string) (*Session, error)
 }
@@ -109,7 +109,7 @@ func (s *service) DeleteSession(ctx context.Context, id string) error {
 }
 
 // SetSessionCookie creates a JWT for an already-persisted session and sets it as the session cookie.
-func (s *service) SetSessionCookie(ctx context.Context, w http.ResponseWriter, session *Session) error {
+func (s *service) SetSessionCookie(ctx context.Context, w http.ResponseWriter, session *Session) {
 	jwtString, err := s.CreateJWT(ctx, session)
 	if err != nil {
 		panic("session cookie signing failed although config.FromEnv requires JWT_SECRET: " + err.Error())
@@ -125,7 +125,6 @@ func (s *service) SetSessionCookie(ctx context.Context, w http.ResponseWriter, s
 		SameSite: http.SameSiteLaxMode,
 	}
 	http.SetCookie(w, cookie)
-	return nil
 }
 
 // CreateJWT creates a JWT for a session

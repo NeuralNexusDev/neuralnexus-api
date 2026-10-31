@@ -51,10 +51,7 @@ func (s *service) UpdateFromPlatform(ctx context.Context, platform Platform, pla
 		if err != account.ErrNotFound {
 			return "", err
 		}
-		a, err := account.NewIDOnlyAccount()
-		if err != nil {
-			return "", err
-		}
+		a := account.NewIDOnlyAccount()
 		err = s.as.AddAccountToDB(context.WithoutCancel(ctx), a)
 		if err != nil {
 			return "", err

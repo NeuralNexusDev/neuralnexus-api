@@ -22,8 +22,25 @@ type Account struct {
 	UpdatedAt    time.Time `db:"updated_at" json:"updated_at" xml:"updated_at"`
 }
 
+// NewAccount creates a new account
+func NewAccount(pepper []byte, username, email, password string) *Account {
+	id, err := database.GenSnowflake()
+	if err != nil {
+		panic("snowflake generation failed although config.FromEnv limits SNOWFLAKE_NODE_ID and SNOWFLAKE_WORKER_ID to 31: " + err.Error())
+	}
+	user := &Account{
+		UserID:   id,
+		Username: username,
+	}
+	if email != "" {
+		user.Email = &email
+	}
+	user.HashPassword(pepper, password)
+	return user
+}
+
 // NewPasswordLessAccount creates a new account without a password.
-func NewPasswordLessAccount(username, email string) (*Account, error) {
+func NewPasswordLessAccount(username, email string) *Account {
 	id, err := database.GenSnowflake()
 	if err != nil {
 		panic("snowflake generation failed although config.FromEnv limits SNOWFLAKE_NODE_ID and SNOWFLAKE_WORKER_ID to 31: " + err.Error())
@@ -35,18 +52,18 @@ func NewPasswordLessAccount(username, email string) (*Account, error) {
 	if email != "" {
 		account.Email = &email
 	}
-	return account, nil
+	return account
 }
 
 // NewIDOnlyAccount creates a new account with only an ID
-func NewIDOnlyAccount() (*Account, error) {
+func NewIDOnlyAccount() *Account {
 	id, err := database.GenSnowflake()
 	if err != nil {
 		panic("snowflake generation failed although config.FromEnv limits SNOWFLAKE_NODE_ID and SNOWFLAKE_WORKER_ID to 31: " + err.Error())
 	}
 	return &Account{
 		UserID: id,
-	}, nil
+	}
 }
 
 //go:linkname deriveKey golang.org/x/crypto/argon2.deriveKey
@@ -59,6 +76,15 @@ var argon2id int
 // IDKeyWithSecret Adds pepper support to the IDKey function
 func IDKeyWithSecret(password, salt []byte, secret []byte, time, memory uint32, threads uint8, keyLen uint32) []byte {
 	return deriveKey(argon2id, password, salt, secret, nil, time, memory, threads, keyLen)
+}
+
+// HashPassword hashes the password
+func (user *Account) HashPassword(pepper []byte, password string) {
+	salt := make([]byte, 16)
+	_, _ = rand.Read(salt)
+	hashedSecret := IDKeyWithSecret([]byte(password), salt, pepper, 3, 64*1024, 4, 32)
+	user.HashedSecret = hashedSecret
+	user.Salt = salt
 }
 
 // ValidateUser validate the user's password

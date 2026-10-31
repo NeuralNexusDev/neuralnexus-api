@@ -52,14 +52,13 @@ func (f *FakeSessionService) CreateJWT(_ context.Context, sess *session.Session)
 	return "", nil
 }
 
-// SetSessionCookie sets the session cookie from CreateJWT, or returns the CreateJWT error.
-func (f *FakeSessionService) SetSessionCookie(ctx context.Context, w http.ResponseWriter, sess *session.Session) error {
+// SetSessionCookie sets the session cookie from CreateJWT and panics on its error, like the real service.
+func (f *FakeSessionService) SetSessionCookie(ctx context.Context, w http.ResponseWriter, sess *session.Session) {
 	jwt, err := f.CreateJWT(ctx, sess)
 	if err != nil {
-		return err
+		panic(err)
 	}
 	http.SetCookie(w, &http.Cookie{Name: session.CookieName, Value: jwt})
-	return nil
 }
 
 // ReadJWT returns session.ErrNotFound.
