@@ -90,7 +90,7 @@ func (s *service) NewSession(ctx context.Context, account *Account, expiresAt in
 	}
 	id, err := database.GenSnowflake()
 	if err != nil {
-		return nil, err
+		panic("snowflake generation failed although config.FromEnv limits SNOWFLAKE_NODE_ID and SNOWFLAKE_WORKER_ID to 31: " + err.Error())
 	}
 	now := time.Now().Unix()
 	return &session.Session{

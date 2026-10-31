@@ -105,7 +105,7 @@ func VerifySteamOpenIDCallback(ctx context.Context, cfg config.Steam, query url.
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, cfg.OpenIDLoginURL, strings.NewReader(checkValues.Encode()))
 	if err != nil {
-		return "", err
+		panic("http.NewRequestWithContext failed although config.FromEnv sets OpenIDLoginURL to a literal URL: " + err.Error())
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
@@ -151,7 +151,7 @@ func GetSteamUser(ctx context.Context, cfg config.Steam, steamID64 string) (*Ste
 	reqURL := cfg.PlayerSummaryURL + "?key=" + url.QueryEscape(cfg.APIKey) + "&steamids=" + url.QueryEscape(steamID64)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
-		return nil, err
+		panic("http.NewRequestWithContext failed although config.FromEnv sets PlayerSummaryURL to a literal URL: " + err.Error())
 	}
 
 	resp, err := steamHTTPClient.Do(req)

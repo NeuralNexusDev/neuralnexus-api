@@ -52,10 +52,8 @@ func stSeedBareAccount(t *testing.T, as Store, userID string) {
 
 func stSeedPasswordAccount(t *testing.T, as Store, userID string) *Account {
 	t.Helper()
-	a := &Account{UserID: userID, Username: "sttest-" + userID}
-	if err := a.HashPassword(testutil.NewConfig().Auth.Account.Pepper, "sttest-password"); err != nil {
-		t.Fatalf("HashPassword returned error: %v", err)
-	}
+	a := passwordAccount("sttest-"+userID, "", "sttest-password")
+	a.UserID = userID
 	if err := as.AddAccountToDB(context.Background(), a); err != nil {
 		t.Fatalf("failed to seed passworded account %s: %v", userID, err)
 	}

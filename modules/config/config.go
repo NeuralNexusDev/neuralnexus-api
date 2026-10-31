@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/kkrypt0nn/spaceflake"
 	"golang.org/x/crypto/ed25519"
 	"golang.org/x/oauth2"
 )
@@ -145,10 +146,16 @@ func FromEnv() *Config {
 		nodeID = 1
 		log.Println("Failed to parse SNOWFLAKE_NODE_ID, defaulting to 1")
 	}
+	if nodeID > spaceflake.MAX5BITS {
+		log.Fatal("SNOWFLAKE_NODE_ID is above 31")
+	}
 	workerID, err := strconv.ParseUint(checkEnvVar("SNOWFLAKE_WORKER_ID"), 10, 64)
 	if err != nil {
 		workerID = 1
 		log.Println("Failed to parse SNOWFLAKE_WORKER_ID, defaulting to 1")
+	}
+	if workerID > spaceflake.MAX5BITS {
+		log.Fatal("SNOWFLAKE_WORKER_ID is above 31")
 	}
 
 	// ---------- Discord ---------

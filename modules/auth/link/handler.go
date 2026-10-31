@@ -68,6 +68,8 @@ func OAuthHandler(cfg *config.Config, as account.Service, las Store, ss session.
 			sess, err = ProcessOAuthLogin(ctx, cfg, as, las, ss, code, &state)
 		case ModeLink:
 			sess, err = ProcessOAuthLink(r, cfg, las, code, &state)
+		default:
+			panic("OAuthHandler: mode is neither login nor link although requireValidModeAndSession rejects other modes")
 		}
 		if err != nil {
 			reqctx.Log(ctx, "Failed to process OAuth:\n\t", err.Error())
@@ -145,6 +147,8 @@ func OpenIDHandler(cfg config.Steam, as account.Service, las Store, ss session.S
 			sess, err = ProcessSteamLogin(ctx, as, las, ss, user)
 		case ModeLink:
 			sess, err = ProcessSteamLink(r, las, user)
+		default:
+			panic("OpenIDHandler: mode is neither login nor link although requireValidModeAndSession rejects other modes")
 		}
 		if err != nil {
 			reqctx.Log(ctx, "Failed to process Steam OpenID:\n\t", err.Error())
@@ -244,9 +248,7 @@ func requireValidModeAndSession(w http.ResponseWriter, r *http.Request, mode Mod
 func redirectWithError(w http.ResponseWriter, r *http.Request, target string, status int, title, detail string) {
 	problemJSON, err := json.Marshal(responses.NewProblem("about:blank", status, title, detail, "").Problem)
 	if err != nil {
-		reqctx.Log(r.Context(), "Failed to marshal error problem:\n\t", err.Error())
-		http.Redirect(w, r, target, http.StatusSeeOther)
-		return
+		panic("json.Marshal of problempb.Problem failed although it holds only strings and an int32: " + err.Error())
 	}
 	problemB64 := base64.URLEncoding.EncodeToString(problemJSON)
 

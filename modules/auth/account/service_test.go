@@ -7,8 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
-	"github.com/NeuralNexusDev/neuralnexus-api/modules/database"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
@@ -268,21 +266,6 @@ func TestAC14to16IsPasswordAuthEnabled(t *testing.T) {
 		got, err := svc.IsPasswordAuthEnabled(context.Background(), "u1")
 		if got != false || !errors.Is(err, wantErr) {
 			t.Errorf("IsPasswordAuthEnabled() = (%v, %v), want (false, %v)", got, err, wantErr)
-		}
-	})
-}
-
-func TestAC22NewSessionSnowflakeFails(t *testing.T) {
-	database.InitSnowflake(testutil.NewConfig(func(c *config.Config) { c.Snowflake.NodeId = 99 }).Snowflake)
-	t.Cleanup(func() { database.InitSnowflake(testutil.NewConfig().Snowflake) })
-
-	t.Run("AC-22_SnowflakeFailureFailsTheSession", func(t *testing.T) {
-		svc := NewService(&acFakeAccountStore{}, &acFakeAccountSettingsStore{}, testutil.DefaultRoleStore())
-
-		s, err := svc.NewSession(context.Background(), &Account{UserID: "u1"}, 1)
-
-		if s != nil || err == nil {
-			t.Errorf("NewSession() = (%v, %v), want (nil, an error)", s, err)
 		}
 	})
 }

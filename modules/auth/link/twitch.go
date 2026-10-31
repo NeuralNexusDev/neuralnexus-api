@@ -48,7 +48,7 @@ func GetTwitchUser(ctx context.Context, cfg config.Twitch, token *OAuthToken) (*
 		APIBaseURL:      cfg.APIBaseUrl,
 	})
 	if err != nil {
-		return nil, err
+		panic("helix.NewClientWithContext failed although config.FromEnv requires TWITCH_CLIENT_ID: " + err.Error())
 	}
 
 	users, err := client.GetUsers(&helix.UsersParams{})

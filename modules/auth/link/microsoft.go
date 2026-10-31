@@ -151,7 +151,7 @@ func (m *MicrosoftUserData) CreateLinkedAccount(userID string) *LinkedAccount {
 func GetMicrosoftUser(ctx context.Context, cfg config.Microsoft, token *OAuthToken) (*MicrosoftUserData, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cfg.MicrosoftUserInfoURL, nil)
 	if err != nil {
-		return nil, err
+		panic("http.NewRequestWithContext failed although config.FromEnv sets MicrosoftUserInfoURL to a literal URL: " + err.Error())
 	}
 	req.Header.Set(HeaderAuthorization, AuthBearer+token.AccessToken)
 	req.Header.Set(HeaderAccept, ContentTypeJSON)
@@ -257,12 +257,12 @@ func xblAuthenticate(ctx context.Context, cfg config.Microsoft, msAccessToken st
 	}
 	body, err := json.Marshal(reqBody)
 	if err != nil {
-		return "", err
+		panic("json.Marshal of xblAuthRequest failed although it holds only strings: " + err.Error())
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, cfg.XboxLiveAuthenticateURL, bytes.NewReader(body))
 	if err != nil {
-		return "", err
+		panic("http.NewRequestWithContext failed although config.FromEnv sets XboxLiveAuthenticateURL to a literal URL: " + err.Error())
 	}
 	req.Header.Set(HeaderAccept, ContentTypeJSON)
 	req.Header.Set(HeaderContentType, ContentTypeJSON)
@@ -304,12 +304,12 @@ func xstsAuthorize(ctx context.Context, cfg config.Microsoft, xblToken, relyingP
 	}
 	body, err := json.Marshal(reqBody)
 	if err != nil {
-		return "", "", "", "", err
+		panic("json.Marshal of xstsAuthRequest failed although it holds only strings: " + err.Error())
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, cfg.XstsAuthorizeURL, bytes.NewReader(body))
 	if err != nil {
-		return "", "", "", "", err
+		panic("http.NewRequestWithContext failed although config.FromEnv sets XstsAuthorizeURL to a literal URL: " + err.Error())
 	}
 	req.Header.Set(HeaderAccept, ContentTypeJSON)
 	req.Header.Set(HeaderContentType, ContentTypeJSON)
@@ -356,12 +356,12 @@ func minecraftLoginWithXbox(ctx context.Context, cfg config.Microsoft, userHash,
 	}
 	body, err := json.Marshal(reqBody)
 	if err != nil {
-		return "", err
+		panic("json.Marshal of mcLoginWithXboxRequest failed although it holds only a string: " + err.Error())
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, cfg.MinecraftLoginURL, bytes.NewReader(body))
 	if err != nil {
-		return "", err
+		panic("http.NewRequestWithContext failed although config.FromEnv sets MinecraftLoginURL to a literal URL: " + err.Error())
 	}
 	req.Header.Set(HeaderAccept, ContentTypeJSON)
 	req.Header.Set(HeaderContentType, ContentTypeJSON)
@@ -397,7 +397,7 @@ func minecraftLoginWithXbox(ctx context.Context, cfg config.Microsoft, userHash,
 func getMinecraftProfile(ctx context.Context, cfg config.Microsoft, mcAccessToken string) (*MinecraftData, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cfg.MinecraftProfileURL, nil)
 	if err != nil {
-		return nil, err
+		panic("http.NewRequestWithContext failed although config.FromEnv sets MinecraftProfileURL to a literal URL: " + err.Error())
 	}
 	req.Header.Set(HeaderAuthorization, AuthBearer+mcAccessToken)
 

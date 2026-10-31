@@ -95,9 +95,3 @@
 | GR-06 | flattenGrants | Edge Case | values containing colons | list element `a:b` and string `x:y:z` | the value is kept whole after the first colon | P1 |  |
 | GR-07 | flattenGrants | Edge Case | valued nodes without a value | nil value, empty list, unknown type, and a nil value beside a real one | a bare node, except the real value wins | P2 |  |
 | GR-08 | flattenGrants | Error Path | stored values of the wrong shape | text for an int, a fraction for an int, a number for a string, a string or broken JSON for a list | an error and no result | P2 |  |
-
-## empty tables
-
-| ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
-|----|----------|---------------|----------|---------------|------------------|----------|-------|
-| EM-01 | ListRoles / ListPermissions | Edge Case | no rows exist | scratch schema with empty copies of the three tables | Both return empty non-nil slices and nil errors | P2 |  |

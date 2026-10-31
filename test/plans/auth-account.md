@@ -24,23 +24,18 @@
 | AC-19 | NewSession (service) | Edge Case | the account has no roles |  | `Permissions` is empty and non-nil, the error is nil and the role store is never called | P2 |   |
 | AC-20 | NewSession (service) | Error Path | the role store fails | role store returns `testutil.ErrBoom` | Returns a nil session and an error matching the store error, so no session is issued with missing permissions | P1 |   |
 | AC-21 | NewSession (service) | Edge Case | the account's role grants nothing | role store returns no permissions | `Permissions` is empty and non-nil | P1 |   |
-| AC-22 | NewSession (service) | Error Path | the snowflake generator fails | the test binary re-executes itself with `SNOWFLAKE_NODE_ID` above 31 | Returns a nil session and an error | P2 | Re-exec because the snowflake settings are read when the package loads |
 | AC-24 | AddAccount | Edge Case | the call context is cancelled before the write | fake store records `ctx.Err()` and a marker value at `AddAccountToDB` | The call succeeds, and `AddAccountToDB` sees a context that is not done and still carries the marker, so the account insert is not cancelled with the client | P1 |  |
 
 ## types.go
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| ACT-01 | NewAccount | Happy Path | Valid username/email/password | `database.GenSnowflake`/`HashPassword` succeed | Returns `*Account` with `UserID` set, `Username` set, `Email == &email`, non-empty `HashedSecret`/`Salt`, nil error | P1 |  |
-| ACT-02 | NewAccount | Edge Case | `email == ""` | | `Account.Email == nil` | P2 |  |
 | ACT-04 | NewPasswordLessAccount | Happy Path | Valid username/email | | Returns `*Account` with `UserID`, `Username`, `Email == &email`; `HashedSecret`/`Salt` nil | P2 |  |
 | ACT-05 | NewPasswordLessAccount | Edge Case | `email == ""` | | `Account.Email == nil` | P3 |  |
 | ACT-06 | NewIDOnlyAccount | Happy Path | n/a | | Returns `*Account` with only `UserID` set | P2 |  |
 | ACT-07 | IDKeyWithSecret | Happy Path | Same password/salt/secret/params called twice | | Identical output both times (deterministic) | P2 |  |
 | ACT-08 | IDKeyWithSecret | Edge Case | Same password/salt/params, different `secret` | | Different output (the pepper/secret genuinely affects the digest) | P1 |  |
-| ACT-09 | HashPassword | Happy Path | Any password | `rand.Read` succeeds | Sets `user.HashedSecret` (32 bytes) and `user.Salt` (16 bytes); nil error | P1 |  |
-| ACT-10 | HashPassword | Edge Case | Called twice with the same password on two different accounts | | Produces different `Salt`/`HashedSecret` each time (random per-call salt) | P2 |  |
-| ACT-12 | ValidateUser | Happy Path | `HashPassword("correct")` already applied | `ValidateUser("correct")` | Returns true | P0 |  |
+| ACT-12 | ValidateUser | Happy Path | an account hashed with a fixed salt | `ValidateUser("correct")` | Returns true | P0 |  |
 | ACT-13 | ValidateUser | Edge Case | Same setup | `ValidateUser("wrong")` | Returns false | P0 |  |
 | ACT-14 | ValidateUser | Edge Case | `HashedSecret`/`Salt` both nil (password never set) | | Returns false without panicking | P1 |  |
 | ACT-19 | RemoveRole | Happy Path | `Roles == ["a","b","c"]` | `RemoveRole("b")` | `Roles == ["a","c"]` | P1 |  |

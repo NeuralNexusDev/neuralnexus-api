@@ -29,7 +29,6 @@ const (
 	msgJavaStatusFailed        = "failed to get java server status"
 	msgBedrockStatusFailed     = "failed to get bedrock server status"
 	msgFailedToGetServerStatus = "Failed to get server status"
-	msgIconUnavailable         = "Failed to load server icon"
 	msgInvalidHost             = "The host must be a domain name, an IPv4 address or an IPv6 address, optionally followed by a port."
 	logUnableToGetServerStatus = "[Error]: Unable to get server status:\n\t"
 )
@@ -218,12 +217,10 @@ func writeIcon(w http.ResponseWriter, img image.Image) {
 	png.Encode(w, img)
 }
 
-func writeStockIcon(w http.ResponseWriter, r *http.Request, name string) {
+func writeStockIcon(w http.ResponseWriter, name string) {
 	img, err := LoadImgFromFS(iconFS, path.Join(iconPath, name))
 	if err != nil {
-		reqctx.Log(r.Context(), "[Error]: Unable to load stock icon:\n\t", err.Error())
-		responses.InternalServerError(w, r, msgIconUnavailable)
-		return
+		panic("mcstatus: stock icon " + name + " is embedded in public.FS but cannot be loaded: " + err.Error())
 	}
 	writeIcon(w, img)
 }
@@ -239,13 +236,13 @@ func IconHandler(s MCStatusService) http.HandlerFunc {
 			return
 		}
 		if isBedrock {
-			writeStockIcon(w, r, bedrockIconFile)
+			writeStockIcon(w, bedrockIconFile)
 			return
 		}
 
 		status, err := s.GetJavaServerStatus(r.Context(), host, port, false, 0)
 		if err == ErrJavaStatus {
-			writeStockIcon(w, r, defaultIconFile)
+			writeStockIcon(w, defaultIconFile)
 			return
 		}
 		if err != nil {
@@ -258,7 +255,7 @@ func IconHandler(s MCStatusService) http.HandlerFunc {
 			if status.Legacy {
 				name = legacyIconFile
 			}
-			writeStockIcon(w, r, name)
+			writeStockIcon(w, name)
 			return
 		}
 
