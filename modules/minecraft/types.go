@@ -39,24 +39,29 @@ type TextureResult struct {
 	ContentType string
 }
 
-// Player - Minecraft player profile as returned by Mojang
+// Player - base player struct
 type Player struct {
-	ID             string     `json:"id"                   db:"id"`
-	Name           string     `json:"name"                 db:"name"`
+	ID        string `json:"id"                   db:"id"`
+	Name      string `json:"name"                 db:"name"`
+	FirstSeen int64  `json:"-"                    db:"first_seen"`
+	LastSeen  int64  `json:"-"                    db:"last_seen"`
+}
+
+// MojangPlayer - Minecraft player profile as returned by Mojang
+type MojangPlayer struct {
+	Player
 	Legacy         bool       `json:"legacy,omitempty"     db:"legacy"`
 	Demo           bool       `json:"demo,omitempty"       db:"demo"`
 	Properties     []Property `json:"properties,omitempty" db:"-"`
 	ProfileActions []string   `json:"profileActions"       db:"profile_actions"`
-	FirstSeen      int64      `json:"-"                    db:"first_seen"`
-	LastSeen       int64      `json:"-"                    db:"last_seen"`
 }
 
-// MarshalJSON customizes Player's JSON output so ProfileActions is omitted
+// MarshalJSON customizes MojangPlayer's JSON output so ProfileActions is omitted
 // only when it was never populated (nil) — a genuinely empty slice (fetched,
 // zero actions) still serializes as []. Plain `omitempty` can't tell those
 // apart since both have len == 0.
-func (p *Player) MarshalJSON() ([]byte, error) {
-	type Alias Player
+func (p *MojangPlayer) MarshalJSON() ([]byte, error) {
+	type Alias MojangPlayer
 	if p.ProfileActions == nil {
 		return json.Marshal(struct {
 			*Alias
@@ -92,7 +97,7 @@ func EncodeTextureValue(ctx context.Context, textures *TexturesValue) string {
 }
 
 // ParseProperties parse the player's properties
-func (p *Player) ParseProperties(ctx context.Context) *TexturesValue {
+func (p *MojangPlayer) ParseProperties(ctx context.Context) *TexturesValue {
 	for _, prop := range p.Properties {
 		if prop.Name != TEXTURES {
 			reqctx.Log(ctx, "Unknown property:\n\t"+prop.String())
@@ -104,14 +109,14 @@ func (p *Player) ParseProperties(ctx context.Context) *TexturesValue {
 }
 
 // IsStale returns true if the player's last_seen is older than the staleness threshold
-func (p *Player) IsStale() bool {
+func (p *MojangPlayer) IsStale() bool {
 	return time.Now().UnixMilli()-p.LastSeen > stalenessThreshold.Milliseconds()
 }
 
-// ToProfile converts a Player fetched live from Mojang into our canonical,
+// ToProfile converts a MojangPlayer fetched live from Mojang into our canonical,
 // decoded shape for storage and caching.
-func (p *Player) ToProfile(ctx context.Context) *Profile {
-	return &Profile{
+func (p *MojangPlayer) ToProfile(ctx context.Context) *MojangProfile {
+	return &MojangProfile{
 		ID:             p.ID,
 		Name:           p.Name,
 		Legacy:         p.Legacy,
@@ -200,30 +205,36 @@ type Model string
 // SLIM The only known value for Metadata.Model
 const SLIM Model = "slim"
 
-// Profile - a player's full profile
+// Profile - base profile struct
 type Profile struct {
-	ID             string         `json:"id"`
-	Name           string         `json:"name"`
+	ID        string         `json:"id"`
+	Name      string         `json:"name"`
+	Textures  *TexturesValue `json:"textures,omitempty"`
+	FirstSeen int64          `json:"-"`
+	LastSeen  int64          `json:"-"`
+}
+
+// MojangProfile - a player's full profile
+type MojangProfile struct {
+	Profile
 	Legacy         bool           `json:"legacy,omitempty"`
 	Demo           bool           `json:"demo,omitempty"`
 	ProfileActions []string       `json:"profileActions,omitempty"`
 	Textures       *TexturesValue `json:"textures,omitempty"`
-	FirstSeen      int64          `json:"-"`
-	LastSeen       int64          `json:"-"`
 }
 
 // IsStale returns true if the profile's last_seen is older than the staleness threshold
-func (p *Profile) IsStale() bool {
+func (p *MojangProfile) IsStale() bool {
 	return time.Now().UnixMilli()-p.LastSeen > stalenessThreshold.Milliseconds()
 }
 
-// ToPlayer converts a Profile into Mojang's raw session-server mirror shape.
-func (p *Profile) ToPlayer() (*Player, error) {
+// ToPlayer converts a MojangProfile into Mojang's raw session-server mirror shape.
+func (p *MojangProfile) ToPlayer() (*MojangPlayer, error) {
 	prop, err := p.Textures.ToProperty()
 	if err != nil {
 		return nil, err
 	}
-	player := &Player{
+	player := &MojangPlayer{
 		ID:             p.ID,
 		Name:           p.Name,
 		Legacy:         p.Legacy,
@@ -270,13 +281,22 @@ func (t *TexturesRow) Value(playerName, textureUrl string) *TexturesValue {
 	}
 }
 
+// GeyserXUID result returned by Geyser's API
+type GeyserXUID struct {
+	XUID int64 `json:"xuid"`
+}
+
+// GeyserGamertag result returned by Geyser's API
+type GeyserGamertag struct {
+	Gamertag string `json:"gamertag"`
+}
+
 // GeyserPlayer - a Bedrock player's identity derived from Geyser's Xbox XUID lookup.
 type GeyserPlayer struct {
-	ID        string `json:"floodgate_uuid" db:"id"`
-	XUID      int64  `json:"xuid"           db:"xuid"`
-	Gamertag  string `json:"gamertag"       db:"gamertag"`
-	FirstSeen int64  `json:"-"              db:"first_seen"`
-	LastSeen  int64  `json:"-"              db:"last_seen"`
+	Player
+	ID   string `json:"floodgate_uuid" db:"id"`
+	XUID int64  `json:"xuid"           db:"xuid"`
+	Name string `json:"gamertag"       db:"gamertag"`
 }
 
 // IsStale returns true if the GeyserPlayer's last_seen is older than the staleness threshold
@@ -300,17 +320,18 @@ func (s *GeyserSkin) IsStale() bool {
 	return time.Now().UnixMilli()-s.LastSeen > stalenessThreshold.Milliseconds()
 }
 
-func (s *GeyserSkin) FromTexturesValue(ctx context.Context, t *TexturesValue) {
+func (s *GeyserSkin) FromTexturesValue(ctx context.Context, t *TexturesValue) error {
 	if t == nil || t.Textures.SKIN == nil {
-		return
+		return ErrSkinNotFound
 	}
-	s.Hash = t.Textures.SKIN.Hash()
+	// TODO: RGBA hash from the PNG, or just go get it from the DB
+	s.TextureBytesHash = "NOT_A_HASH_USE_TEXTURE_ID"
 	s.IsSteve = t.Textures.SKIN.Metadata != nil && t.Textures.SKIN.Metadata.Model == SLIM
+	s.Hash = t.Textures.SKIN.Hash()
 	s.Value = EncodeTextureValue(ctx, t)
-	// TODO: Hash PNG in some manner? Check that the "hash" stored in the image DB is actually a hash
-	s.TextureBytesHash = "TODO"
 	s.FirstSeen = t.Timestamp
 	s.LastSeen = t.Timestamp
+	return nil
 }
 
 // xuidToUUID derives a synthetic UUID from an Xbox XUID: its zero-padded hex
@@ -337,11 +358,11 @@ func uuidToXUID(id string) (int64, error) {
 
 // GeyserProfile - a Bedrock player's full profile
 type GeyserProfile struct {
-	ID        string         `json:"floodgate_uuid"`
-	XUID      int64          `json:"xuid"`
-	Gamertag  string         `json:"gamertag"`
-	Textures  *TexturesValue `json:"textures,omitempty"`
-	SkinID    string         `json:"-"`
-	FirstSeen int64          `json:"-"`
-	LastSeen  int64          `json:"last_updated"`
+	Profile
+	ID       string         `json:"floodgate_uuid"`
+	XUID     int64          `json:"xuid"`
+	Name     string         `json:"gamertag"`
+	Textures *TexturesValue `json:"textures,omitempty"`
+	SkinID   string         `json:"-"`
+	LastSeen int64          `json:"last_updated"`
 }

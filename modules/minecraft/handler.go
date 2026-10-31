@@ -12,26 +12,27 @@ import (
 )
 
 const (
-	msgInvalidName              = "Invalid name"
-	msgFailedToGetPlayer        = "Failed to get player"
-	msgNotAValidUUID            = "Not a valid UUID: "
-	msgFailedToGetPlayerProfile = "Failed to get player profile"
-	msgInvalidGamertag          = "Invalid gamertag"
-	msgInvalidXuid              = "Invalid xuid"
-	msgFailedToGetGeyserProfile = "Failed to get Geyser profile"
-	msgInvalidHash              = "Invalid hash"
-	msgTextureNotFound          = "Texture not found"
-	msgPlayerNotFound           = "player not found"
-	msgFailedToGetTexture       = "Failed to get texture"
-	msgRequestMustBeJSON        = "Request must be of type application/json"
-	msgInvalidRequestBody       = "Invalid request body"
-	msgInvalidSize              = "size must be between 1 and 10"
-	msgInvalidProfileName       = "Invalid profile name"
-	msgFailedToGetPlayers       = "Failed to get players"
-	msgFailedToGetGeyserXUID    = "Failed to get Geyser XUID"
-	msgFailedToGetGeyserSkin    = "Failed to get Geyser skin"
-	msgNotAValidBedrockUUID     = "Not a valid Bedrock UUID: "
-	logFailedToGetPlayerProfile = "Failed to get player profile:\n\t"
+	msgInvalidName               = "Invalid name"
+	msgFailedToGetPlayer         = "Failed to get player"
+	msgNotAValidUUID             = "Not a valid UUID: "
+	msgFailedToGetPlayerProfile  = "Failed to get player profile"
+	msgInvalidGamertag           = "Invalid gamertag"
+	msgInvalidXuid               = "Invalid xuid"
+	msgFailedToGetGeyserProfile  = "Failed to get Geyser profile"
+	msgInvalidHash               = "Invalid hash"
+	msgTextureNotFound           = "Texture not found"
+	msgPlayerNotFound            = "player not found"
+	msgFailedToGetTexture        = "Failed to get texture"
+	msgRequestMustBeJSON         = "Request must be of type application/json"
+	msgInvalidRequestBody        = "Invalid request body"
+	msgInvalidSize               = "size must be between 1 and 10"
+	msgInvalidProfileName        = "Invalid profile name"
+	msgFailedToGetPlayers        = "Failed to get players"
+	msgFailedToGetGeyserXUID     = "Failed to get Geyser XUID"
+	msgFailedToGetGeyserGamertag = "Failed to get Geyser Gamertag"
+	msgFailedToGetGeyserSkin     = "Failed to get Geyser skin"
+	msgNotAValidBedrockUUID      = "Not a valid Bedrock UUID: "
+	logFailedToGetPlayerProfile  = "Failed to get player profile:\n\t"
 )
 
 // GetMojangPlayerByNameHandler - Get a player by name
@@ -182,8 +183,8 @@ func GetProfileByNameHandler(s Service) http.HandlerFunc {
 	}
 }
 
-// GetGeyserXUIDHandler - Look up a Bedrock player's XUID by gamertag
-func GetGeyserXUIDHandler(s Service) http.HandlerFunc {
+// GetGeyserPlayerByGamertagHandler - Look up a Bedrock player by gamertag
+func GetGeyserPlayerByGamertagHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		gamertag := r.PathValue("gamertag")
 		if gamertag == "" {
@@ -191,7 +192,7 @@ func GetGeyserXUIDHandler(s Service) http.HandlerFunc {
 			return
 		}
 
-		player, err := s.GetGeyserXUID(r.Context(), gamertag)
+		player, err := s.GetGeyserPlayerByGamertag(r.Context(), gamertag)
 		switch err {
 		case ErrPlayerNotFound:
 			responses.NotFound(w, r, msgPlayerNotFound)
@@ -202,6 +203,37 @@ func GetGeyserXUIDHandler(s Service) http.HandlerFunc {
 		default:
 			reqctx.Log(r.Context(), "Failed to get Geyser XUID:\n\t", err.Error())
 			responses.InternalServerError(w, r, msgFailedToGetGeyserXUID)
+		}
+	}
+}
+
+// GetGeyserPlayerByXUIDHandler - Look up a Bedrock player by xuid
+func GetGeyserPlayerByXUIDHandler(s Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		xuidStr := r.PathValue("xuid")
+		var xuid int64
+		if id, err := uuidToXUID(xuidStr); err == nil {
+			xuid = id
+		} else {
+			id, err := strconv.ParseInt(xuidStr, 10, 64)
+			xuid = id
+			if err != nil {
+				responses.BadRequest(w, r, msgInvalidXuid)
+				return
+			}
+		}
+
+		player, err := s.GetGeyserPlayerByXUID(r.Context(), xuid)
+		switch err {
+		case ErrPlayerNotFound:
+			responses.NotFound(w, r, msgPlayerNotFound)
+		case ErrInvalidGeyserRequest:
+			responses.BadRequest(w, r, msgInvalidGamertag)
+		case nil:
+			responses.StructOK(w, r, player)
+		default:
+			reqctx.Log(r.Context(), "Failed to get Geyser XUID:\n\t", err.Error())
+			responses.InternalServerError(w, r, msgFailedToGetGeyserGamertag)
 		}
 	}
 }
@@ -234,13 +266,12 @@ func GetGeyserSkinHandler(s Service) http.HandlerFunc {
 func GetGeyserProfileHandler(s Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("uuid")
-		xuid, err := uuidToXUID(id)
-		if err != nil {
+		if _, err := uuidToXUID(id); err != nil {
 			responses.BadRequest(w, r, msgNotAValidBedrockUUID+id)
 			return
 		}
 
-		profile, err := s.GetGeyserProfile(r.Context(), xuid)
+		profile, err := s.GetGeyserProfile(r.Context(), id)
 		switch err {
 		case ErrPlayerNotFound:
 			responses.NotFound(w, r, msgPlayerNotFound)
@@ -264,7 +295,7 @@ func GetGeyserProfileByNameHandler(s Service) http.HandlerFunc {
 			return
 		}
 
-		profile, err := s.GetGeyserProfileByGamertag(r.Context(), gamertag)
+		profile, err := s.GetGeyserProfileByName(r.Context(), gamertag)
 		switch err {
 		case ErrPlayerNotFound:
 			responses.NotFound(w, r, msgPlayerNotFound)
