@@ -91,9 +91,7 @@ func LoginHandler(cfg config.Account, as Service, ss session.Service) http.Handl
 			return
 		}
 
-		if err := ss.SetSessionCookie(ctx, w, s); err != nil {
-			panic("session cookie signing failed although config.FromEnv requires JWT_SECRET: " + err.Error())
-		}
+		ss.SetSessionCookie(ctx, w, s)
 		responses.NoContent(w, r)
 	}
 }
