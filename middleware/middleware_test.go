@@ -44,8 +44,7 @@ func (f *mwFakeSessionSvc) GetSession(context.Context, string) (*session.Session
 	return nil, errors.New("not implemented")
 }
 func (f *mwFakeSessionSvc) UpdateSession(context.Context, *session.Session) error { return nil }
-func (f *mwFakeSessionSvc) SetSessionCookie(context.Context, http.ResponseWriter, *session.Session) error {
-	return nil
+func (f *mwFakeSessionSvc) SetSessionCookie(context.Context, http.ResponseWriter, *session.Session) {
 }
 func (f *mwFakeSessionSvc) CreateJWT(context.Context, *session.Session) (string, error) {
 	return "", nil
