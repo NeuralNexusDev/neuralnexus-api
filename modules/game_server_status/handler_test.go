@@ -286,22 +286,6 @@ func TestSimpleGameServerStatus(t *testing.T) {
 			t.Error("QueryGameServer should not have been called")
 		}
 	})
-
-	t.Run("GSH-10_ErrorPath_Offline", func(t *testing.T) {
-		fake := &fakeGSSService{err: ErrServerOffline}
-		req := testutil.NewRequest("GET", "/gss/minecraft/simple?host=1.2.3.4&port=25565", nil)
-		req.SetPathValue("game", "minecraft")
-		rec := httptest.NewRecorder()
-
-		SimpleGameServerStatus(fake)(rec, req)
-
-		if rec.Code != 404 {
-			t.Fatalf("status = %d, want 404", rec.Code)
-		}
-		if got := rec.Body.String(); got != "Offline" {
-			t.Errorf("body = %q, want %q", got, "Offline")
-		}
-	})
 }
 
 func TestSimpleGameServerStatusErrors(t *testing.T) {

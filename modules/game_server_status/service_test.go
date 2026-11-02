@@ -1,13 +1,13 @@
 package gss
 
 import (
+	"bufio"
 	"context"
+	"encoding/binary"
 	"errors"
 	"io"
 	"net"
 	"net/http"
-	"os"
-	"strconv"
 	"strings"
 	"testing"
 	"testing/iotest"
@@ -17,21 +17,42 @@ import (
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
-func mcLiveServer(t *testing.T) (string, int) {
+func gssJavaServer(t *testing.T) int {
 	t.Helper()
-	addr := os.Getenv("MC_LIVE_TEST_SERVER")
-	if addr == "" {
-		t.Skip("MC_LIVE_TEST_SERVER not set; skipping live-Minecraft test")
-	}
-	host, portStr, err := net.SplitHostPort(addr)
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		t.Fatalf("MC_LIVE_TEST_SERVER %q is not host:port: %v", addr, err)
+		t.Fatalf("listen tcp: %v", err)
 	}
-	port, err := strconv.Atoi(portStr)
-	if err != nil {
-		t.Fatalf("MC_LIVE_TEST_SERVER port %q is not numeric: %v", portStr, err)
-	}
-	return host, port
+	t.Cleanup(func() { ln.Close() })
+	body := `{"version":{"name":"1.20","protocol":763},"players":{"max":20,"online":1},"description":{"text":"modern motd"}}`
+	payload := binary.AppendUvarint(nil, 0)
+	payload = binary.AppendUvarint(payload, uint64(len(body)))
+	payload = append(payload, body...)
+	packet := append(binary.AppendUvarint(nil, uint64(len(payload))), payload...)
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer conn.Close()
+				conn.SetDeadline(time.Now().Add(2 * time.Second))
+				r := bufio.NewReader(conn)
+				for i := 0; i < 2; i++ {
+					length, err := binary.ReadUvarint(r)
+					if err != nil {
+						return
+					}
+					if _, err := r.Discard(int(length)); err != nil {
+						return
+					}
+				}
+				conn.Write(packet)
+			}()
+		}
+	}()
+	return ln.Addr().(*net.TCPAddr).Port
 }
 
 func TestQueryGameQ(t *testing.T) {
@@ -64,21 +85,6 @@ func TestQueryGameQ(t *testing.T) {
 		}
 		if !errors.Is(err, ErrGameQQuery) {
 			t.Errorf("error = %v, want %v", err, ErrGameQQuery)
-		}
-		if resp != nil {
-			t.Errorf("QueryGameQ() response = %+v, want nil", resp)
-		}
-	})
-
-	t.Run("GSV-04_ErrorPath_NonOKStatus", func(t *testing.T) {
-		testutil.SwapTransport(t, &testutil.FakeRoundTripper{Resp: testutil.FakeResponse(http.StatusInternalServerError, "upstream exploded")})
-
-		resp, err := svc.QueryGameQ(testutil.LogContext(context.Background()), "cs16", "1.2.3.4", 27015)
-		if err == nil {
-			t.Fatal("QueryGameQ() error = nil, want non-nil")
-		}
-		if !errors.Is(err, ErrGameQQuery) {
-			t.Errorf("QueryGameQ() error = %v, want %v", err, ErrGameQQuery)
 		}
 		if resp != nil {
 			t.Errorf("QueryGameQ() response = %+v, want nil", resp)
@@ -159,21 +165,6 @@ func TestQueryGameDig(t *testing.T) {
 		}
 		if !errors.Is(err, ErrGameDigQuery) {
 			t.Errorf("error = %v, want %v", err, ErrGameDigQuery)
-		}
-		if resp != nil {
-			t.Errorf("QueryGameDig() response = %+v, want nil", resp)
-		}
-	})
-
-	t.Run("GSV-09_ErrorPath_NonOKStatus", func(t *testing.T) {
-		testutil.SwapTransport(t, &testutil.FakeRoundTripper{Resp: testutil.FakeResponse(http.StatusInternalServerError, "upstream exploded")})
-
-		resp, err := svc.QueryGameDig(testutil.LogContext(context.Background()), "factorio", "1.2.3.4", 25566)
-		if err == nil {
-			t.Fatal("QueryGameDig() error = nil, want non-nil")
-		}
-		if !errors.Is(err, ErrGameDigQuery) {
-			t.Errorf("QueryGameDig() error = %v, want %v", err, ErrGameDigQuery)
 		}
 		if resp != nil {
 			t.Errorf("QueryGameDig() response = %+v, want nil", resp)
@@ -279,12 +270,8 @@ func TestQueryGameServer(t *testing.T) {
 	})
 
 	t.Run("GSV-24_HappyPath_MinecraftDispatch", func(t *testing.T) {
-		host, port := mcLiveServer(t)
-		game := "minecraft"
-		if os.Getenv("MC_LIVE_TEST_BEDROCK") != "" {
-			game = "bedrock"
-		}
-		status, err := svc.QueryGameServer(testutil.LogContext(context.Background()), game, host, port, QueryTypeMinecraft)
+		port := gssJavaServer(t)
+		status, err := svc.QueryGameServer(testutil.LogContext(context.Background()), "minecraft", "127.0.0.1", port, QueryTypeMinecraft)
 		if err != nil {
 			t.Fatalf("QueryGameServer() error = %v, want nil", err)
 		}

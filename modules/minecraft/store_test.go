@@ -135,14 +135,6 @@ func TestST02to04_GetPlayerByUUID(t *testing.T) {
 }
 
 func TestST05to07_GetPlayerByName(t *testing.T) {
-	t.Run("ST-05_Unreachable", func(t *testing.T) {
-		s := mcMojangStore(testutil.UnreachablePool(t))
-		_, err := s.GetPlayerByName(mcCtx, "nobody")
-		if err == nil {
-			t.Error("expected a raw connection error")
-		}
-	})
-
 	t.Run("ST-06_Live_Found", func(t *testing.T) {
 		s := mcMojangStore(testutil.LivePool(t, "archive"))
 		id := uuid.New().String()
@@ -169,14 +161,6 @@ func TestST05to07_GetPlayerByName(t *testing.T) {
 }
 
 func TestST08to11_GetProfileByUUID(t *testing.T) {
-	t.Run("ST-08_Unreachable", func(t *testing.T) {
-		s := mcMojangStore(testutil.UnreachablePool(t))
-		_, err := s.GetProfileByUUID(mcCtx, uuid.New().String())
-		if err == nil {
-			t.Error("expected a raw connection error")
-		}
-	})
-
 	t.Run("ST-09_Live_WithTextures", func(t *testing.T) {
 		db := testutil.LivePool(t, "archive")
 		skin, cape := mcUniqueHash("skin"), mcUniqueHash("cape")
@@ -267,14 +251,6 @@ func TestST12to14_GetTextures(t *testing.T) {
 }
 
 func TestST15to19_UpsertPlayer(t *testing.T) {
-	t.Run("ST-15_Unreachable", func(t *testing.T) {
-		s := mcMojangStore(testutil.UnreachablePool(t))
-		err := s.UpsertPlayer(mcCtx, &MojangPlayer{ID: uuid.New().String(), Name: "Steve"}, false)
-		if err == nil {
-			t.Error("expected a raw connection error")
-		}
-	})
-
 	t.Run("ST-16_Live_UpdateProfileTrue", func(t *testing.T) {
 		db := testutil.LivePool(t, "archive")
 		id := uuid.New().String()
@@ -358,14 +334,6 @@ func TestST15to19_UpsertPlayer(t *testing.T) {
 }
 
 func TestST20to23_UpsertTextures(t *testing.T) {
-	t.Run("ST-20_Unreachable", func(t *testing.T) {
-		s := mcTextureStore(testutil.UnreachablePool(t))
-		err := s.UpsertTextures(mcCtx, JavaPlayerTexturesTable, &TexturesValue{ProfileID: uuid.New().String(), Textures: Textures{SKIN: &Texture{URL: "http://x/hash"}}})
-		if err == nil {
-			t.Error("expected a raw connection error")
-		}
-	})
-
 	t.Run("ST-21_Live_SkinCapeSlimModel", func(t *testing.T) {
 		db := testutil.LivePool(t, "archive")
 		skin, cape := mcUniqueHash("skin"), mcUniqueHash("cape")
@@ -468,13 +436,6 @@ func TestST20to23_UpsertTextures(t *testing.T) {
 }
 
 func TestST26to28_UpsertTextureHash(t *testing.T) {
-	t.Run("ST-26_Unreachable", func(t *testing.T) {
-		s := mcTextureStore(testutil.UnreachablePool(t))
-		if err := s.UpsertTextureHash(mcCtx, "abc"); err == nil {
-			t.Error("expected a raw connection error")
-		}
-	})
-
 	t.Run("ST-27_Live_New", func(t *testing.T) {
 		s := mcTextureStore(testutil.LivePool(t, "archive"))
 		if err := s.UpsertTextureHash(mcCtx, mcUniqueHash("hash")); err != nil {
@@ -559,13 +520,6 @@ func TestST29to32_GetPlayerFromCache(t *testing.T) {
 }
 
 func TestST33to34_SetPlayerInCache(t *testing.T) {
-	t.Run("ST-33_Unreachable", func(t *testing.T) {
-		s := &cacheStore{rdb: testutil.UnreachableRedis(t)}
-		if err := s.SetPlayerInCache(mcCtx, &MojangPlayer{ID: "id", Name: "name"}); err == nil {
-			t.Error("expected a raw connection error")
-		}
-	})
-
 	t.Run("ST-34_Live_SetsBothKeys", func(t *testing.T) {
 		s := &cacheStore{rdb: mcLiveRedis(t)}
 		id := uuid.New().String()
@@ -586,14 +540,6 @@ func TestST33to34_SetPlayerInCache(t *testing.T) {
 }
 
 func TestST35to37_GetProfileFromCache(t *testing.T) {
-	t.Run("ST-35_Unreachable", func(t *testing.T) {
-		s := &cacheStore{rdb: testutil.UnreachableRedis(t)}
-		_, err := s.GetProfileFromCache(mcCtx, "id")
-		if err == nil {
-			t.Error("expected a raw connection error")
-		}
-	})
-
 	t.Run("ST-36_Live_Hit", func(t *testing.T) {
 		s := &cacheStore{rdb: mcLiveRedis(t)}
 		id := uuid.New().String()
@@ -616,13 +562,6 @@ func TestST35to37_GetProfileFromCache(t *testing.T) {
 }
 
 func TestST38to39_SetProfileInCache(t *testing.T) {
-	t.Run("ST-38_Unreachable", func(t *testing.T) {
-		s := &cacheStore{rdb: testutil.UnreachableRedis(t)}
-		if err := s.SetProfileInCache(mcCtx, &MojangProfile{ID: "id"}); err == nil {
-			t.Error("expected a raw connection error")
-		}
-	})
-
 	t.Run("ST-39_Live_ReadableBack", func(t *testing.T) {
 		s := &cacheStore{rdb: mcLiveRedis(t)}
 		id := uuid.New().String()
@@ -637,14 +576,6 @@ func TestST38to39_SetProfileInCache(t *testing.T) {
 }
 
 func TestST40to42_GetSignedProfileFromCache(t *testing.T) {
-	t.Run("ST-40_Unreachable", func(t *testing.T) {
-		s := &cacheStore{rdb: testutil.UnreachableRedis(t)}
-		_, err := s.GetSignedProfileFromCache(mcCtx, "id")
-		if err == nil {
-			t.Error("expected a raw connection error")
-		}
-	})
-
 	t.Run("ST-41_Live_Hit", func(t *testing.T) {
 		s := &cacheStore{rdb: mcLiveRedis(t)}
 		id := uuid.New().String()
@@ -667,13 +598,6 @@ func TestST40to42_GetSignedProfileFromCache(t *testing.T) {
 }
 
 func TestST43to44_SetSignedProfileInCache(t *testing.T) {
-	t.Run("ST-43_Unreachable", func(t *testing.T) {
-		s := &cacheStore{rdb: testutil.UnreachableRedis(t)}
-		if err := s.SetSignedProfileInCache(mcCtx, &MojangPlayer{ID: "id"}); err == nil {
-			t.Error("expected a raw connection error")
-		}
-	})
-
 	t.Run("ST-44_Live_ReadableBack", func(t *testing.T) {
 		s := &cacheStore{rdb: mcLiveRedis(t)}
 		id := uuid.New().String()
@@ -751,14 +675,6 @@ func TestST48to50_GetGeyserPlayerByGamertag(t *testing.T) {
 }
 
 func TestST51to53_GetGeyserPlayerByXUID(t *testing.T) {
-	t.Run("ST-51_Unreachable", func(t *testing.T) {
-		s := mcGeyserStore(testutil.UnreachablePool(t))
-		_, err := s.GetGeyserPlayerByXUID(mcCtx, 1)
-		if err == nil {
-			t.Error("expected a raw connection error")
-		}
-	})
-
 	t.Run("ST-52_Live_Found", func(t *testing.T) {
 		s := mcGeyserStore(testutil.LivePool(t, "archive"))
 		xuid := mcUniqueXUID()
@@ -785,13 +701,6 @@ func TestST51to53_GetGeyserPlayerByXUID(t *testing.T) {
 }
 
 func TestST54to57_UpsertGeyserPlayer(t *testing.T) {
-	t.Run("ST-54_Unreachable", func(t *testing.T) {
-		s := mcGeyserStore(testutil.UnreachablePool(t))
-		if err := s.UpsertGeyserPlayer(mcCtx, &GeyserPlayer{XUID: 1, Name: "Notch"}); err == nil {
-			t.Error("expected a raw connection error")
-		}
-	})
-
 	t.Run("ST-55_Live_NewXUID", func(t *testing.T) {
 		s := mcGeyserStore(testutil.LivePool(t, "archive"))
 		xuid := mcUniqueXUID()

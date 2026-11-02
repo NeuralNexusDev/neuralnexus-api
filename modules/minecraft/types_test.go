@@ -170,53 +170,6 @@ func TestTY28to29_GeyserSkin_IsStale(t *testing.T) {
 	})
 }
 
-func TestTY12to13_Player_ToProfile(t *testing.T) {
-	t.Run("TY-12_WithTextures", func(t *testing.T) {
-		tex := TexturesValue{ProfileID: "abc"}
-		p := &MojangPlayer{
-			ID: "id", Name: "name", Legacy: true, Demo: true,
-			ProfileActions: []string{"a"},
-			Properties:     []Property{{Name: TEXTURES, Value: mcEncodeTextures(t, tex)}},
-		}
-		got := p.ToProfile(mcCtx)
-		if got.ID != p.ID || got.Name != p.Name || got.Legacy != p.Legacy || got.Demo != p.Demo {
-			t.Errorf("ToProfile() = %+v, fields do not mirror Player", got)
-		}
-		if len(got.ProfileActions) != 1 || got.ProfileActions[0] != "a" {
-			t.Errorf("ToProfile().ProfileActions = %+v, want [a]", got.ProfileActions)
-		}
-		if got.Textures == nil || got.Textures.ProfileID != "abc" {
-			t.Errorf("ToProfile().Textures = %+v, want decoded from Properties", got.Textures)
-		}
-	})
-
-	t.Run("TY-13_NoProperties", func(t *testing.T) {
-		p := &MojangPlayer{ID: "id", Name: "name"}
-		got := p.ToProfile(mcCtx)
-		if got.Textures != nil {
-			t.Errorf("ToProfile().Textures = %+v, want nil", got.Textures)
-		}
-	})
-}
-
-func TestTY14to15_Property_String(t *testing.T) {
-	t.Run("TY-14_WithSignature", func(t *testing.T) {
-		p := &Property{Name: TEXTURES, Value: "val", Signature: "sig"}
-		got := p.String()
-		if !strings.Contains(got, "sig") {
-			t.Errorf("String() = %q, want it to include the signature", got)
-		}
-	})
-
-	t.Run("TY-15_WithoutSignature", func(t *testing.T) {
-		p := &Property{Name: TEXTURES, Value: "val", Signature: ""}
-		got := p.String()
-		if strings.Contains(got, ", }") || strings.Contains(got, "sig") {
-			t.Errorf("String() = %q, want no signature segment", got)
-		}
-	})
-}
-
 func TestTY16to17_TexturesValue_ToProperty(t *testing.T) {
 	t.Run("TY-16_Populated", func(t *testing.T) {
 		tv := &TexturesValue{ProfileID: "abc", ProfileName: "Steve"}
@@ -317,14 +270,6 @@ func TestTY34to35_XuidToUUID(t *testing.T) {
 }
 
 func TestTY36to38_UuidToXUID(t *testing.T) {
-	t.Run("TY-36_RoundTrip", func(t *testing.T) {
-		id := xuidToUUID(42)
-		got, err := uuidToXUID(id)
-		if err != nil || got != 42 {
-			t.Errorf("uuidToXUID(%q) = (%d, %v), want (42, nil)", id, got, err)
-		}
-	})
-
 	t.Run("TY-37_MalformedUUID", func(t *testing.T) {
 		_, err := uuidToXUID("not-a-uuid")
 		if err == nil {

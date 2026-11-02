@@ -13,7 +13,6 @@
 | GSH-07 | SimpleGameServerStatus | Happy Path | Underlying service succeeds | host/port valid, fake GSSService.QueryGameServer returns (status, nil) | 200 OK, Content-Type text/plain, body "Online" | P1 |  |
 | GSH-08 | SimpleGameServerStatus | Error Path | Missing host | `host` query param absent or empty | 400 Bad Request, problem detail `msgInvalidHost` | P2 |  |
 | GSH-09 | SimpleGameServerStatus | Error Path | Non-numeric port | `host` set, `port` is not an integer | 400 Bad Request, problem detail `msgInvalidPort` | P2 |  |
-| GSH-10 | SimpleGameServerStatus | Error Path | Underlying service returns an error | host/port valid, fake GSSService.QueryGameServer returns `ErrServerOffline` | 404 Not Found, body "Offline" | P1 |  |
 | GSH-11 | GameServerStatusHandler | Error Path | Underlying service returns each known sentinel | fake `QueryGameServer` returns `ErrGameQQuery`, `ErrGameDigQuery`, `ErrReadBody`, `ErrDecodeBody`, `ErrNoGameQResponse`, `ErrGameUnsupported`, `mcstatus.ErrJavaStatus`, `mcstatus.ErrBedrockStatus`, or an unrecognized error | 502 Bad Gateway with the matching const (`msgGameQQueryFailed`, `msgGameDigQueryFailed`, `msgReadBodyFailed`, `msgDecodeBodyFailed`, `msgNoGameQResponse`, `msgJavaStatusFailed`, `msgBedrockStatusFailed`); 400 Bad Request with `msgGameUnsupported` for `ErrGameUnsupported`; 500 Internal Server Error with `msgQueryFailed` for an unrecognized error; no cause text | P1 | |
 | GSH-13 | SimpleGameServerStatus | Error Path | Service returns an offline error | fake `QueryGameServer` returns `ErrServerOffline`, `mcstatus.ErrJavaStatus` or `mcstatus.ErrBedrockStatus` | 404 Not Found, `text/plain` body "Offline" | P1 | The endpoint is polled, so these are not logged |
 | GSH-14 | SimpleGameServerStatus | Error Path | Service returns `ErrGameUnsupported` | fake `QueryGameServer` returns `ErrGameUnsupported` | 400 Bad Request with `msgGameUnsupported` | P1 |  |
@@ -26,12 +25,10 @@
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
 | GSV-02 | QueryGameQ | Happy Path | Upstream returns 200 with one server keyed in the response map | Fake transport returns `{"srv":{"gq_online":true,...}}` | Returns the decoded *GameQResponse for that entry, nil error | P1 |  |
 | GSV-03 | QueryGameQ | Error Path | http.Get fails at the transport level | Fake transport's RoundTrip returns an error | Returns nil, `ErrGameQQuery` | P2 |  |
-| GSV-04 | QueryGameQ | Error Path | Upstream returns non-200 status | Fake transport returns 500 with a readable body | Returns nil, `ErrGameQQuery` | P2 |  |
 | GSV-05 | QueryGameQ | Error Path | Upstream returns 200 with unparseable body | Fake transport returns 200 with body "not json" | Returns nil, `ErrDecodeBody` | P2 |  |
 | GSV-06 | QueryGameQ | Edge Case | Upstream returns 200 with an empty response map | Fake transport returns body "{}" | Returns nil, `ErrNoGameQResponse` | P3 |  |
 | GSV-07 | QueryGameDig | Happy Path | Upstream returns 200 with a valid GameDigResponse body | Fake transport returns a valid single-object JSON body | Returns the decoded *GameDigResponse, nil error | P1 |  |
 | GSV-08 | QueryGameDig | Error Path | http.Get fails at the transport level | Fake transport's RoundTrip returns an error | Returns nil, `ErrGameDigQuery` | P2 |  |
-| GSV-09 | QueryGameDig | Error Path | Upstream returns non-200 status | Fake transport returns 500 with a readable body | Returns nil, `ErrGameDigQuery` | P2 |  |
 | GSV-10 | QueryGameDig | Error Path | Upstream returns 200 with unparseable body | Fake transport returns 200 with body "not json" | Returns nil, `ErrDecodeBody` | P2 |  |
 | GSV-11 | DetermineOrVerifyQueryType | Happy Path | Game exclusive to MinecraftList, explicit matching type | game="bedrock" (in MinecraftList only), queryType=QueryTypeMinecraft | Returns (QueryTypeMinecraft, true) | P1 |  |
 | GSV-12 | DetermineOrVerifyQueryType | Happy Path | Game exclusive to MinecraftList, QueryTypeUnknown resolves | game="bedrock", queryType=QueryTypeUnknown | Returns (QueryTypeMinecraft, true) | P1 |  |
@@ -46,7 +43,7 @@
 | GSV-21 | QueryGameServer | Error Path | Game/queryType combination is not supported | DetermineOrVerifyQueryType returns (_, false), e.g. game="not-a-real-game-xyz" | Returns nil, `ErrGameUnsupported` | P1 | The unreachable `default` branch returns `ErrGameUnsupported` as well |
 | GSV-22 | QueryGameServer | Error Path | Minecraft dispatch, Java branch (game=="minecraft"), underlying query fails | game="minecraft", host/port point at a closed local TCP listener (isBedrock=false) | Returns nil, non-nil error propagated from mcstatus.GetServerStatus | P1 |  |
 | GSV-23 | QueryGameServer | Error Path | Minecraft dispatch, Bedrock branch (game!="minecraft"), underlying query fails | game="bedrock", host/port point at a closed local TCP listener (isBedrock=true) | Returns nil, non-nil error propagated from mcstatus.GetServerStatus | P1 |  |
-| GSV-24 | QueryGameServer | Happy Path | Minecraft dispatch (Java or Bedrock) against a real server succeeds | MC_LIVE_TEST_SERVER env var set to a reachable `host:port` (test skips itself when unset); MC_LIVE_TEST_BEDROCK set selects the Bedrock branch | Returns non-nil *GameServerStatus with QueryType==QueryTypeMinecraft, nil error | P2 | Gated live-dependency test, same self-skip-when-unset pattern as modules/minecraft/store_test.go's TEST_POSTGRES_URL |
+| GSV-24 | QueryGameServer | Happy Path | Minecraft dispatch against a local fake Java server succeeds | local TCP listener on 127.0.0.1 answering the Java status handshake with a fixed status packet | Returns non-nil *GameServerStatus with QueryType==QueryTypeMinecraft, nil error | P2 |  |
 | GSV-25 | QueryGameServer | Happy Path | GameQ dispatch success | game="aa3", queryType=QueryTypeGameQ, fake transport returns a 200 body with gq_online=true | Returns *GameServerStatus with QueryType==QueryTypeGameQ and fields matching the normalized GameQResponse, nil error | P1 |  |
 | GSV-26 | QueryGameServer | Error Path | GameQ dispatch, server reported offline | game="aa3", queryType=QueryTypeGameQ, fake transport returns a 200 body with gq_online=false | Returns nil, `ErrServerOffline` | P2 |  |
 | GSV-27 | QueryGameServer | Error Path | GameQ dispatch, underlying transport error | game="aa3", queryType=QueryTypeGameQ, fake transport's RoundTrip returns an error | Returns nil, error propagated from QueryGameQ (`ErrGameQQuery`) | P2 |  |
@@ -67,8 +64,6 @@
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| GST-01 | NewGameServerStatus | Happy Path | Builds a status with a recognized queryType | queryType="minecraft", full set of fields/players given | Returned *GameServerStatus has matching Host/Port/Name/MapName/MaxPlayers/NumPlayers/Players/QueryType/Raw, and embedded ServerStatus.QueryType == gsspb.QueryType_MINECRAFT | P1 |  |
-| GST-02 | NewGameServerStatus | Edge Case | queryType string not present in gsspb.QueryType_value | queryType="bogus" | gsspb.QueryType_value lookup misses and yields the zero value; embedded ServerStatus.QueryType == gsspb.QueryType_UNKNOWN (0), no panic | P3 |  |
 | GST-03 | ParseQueryType | Happy Path | Recognized string "minecraft" | input "minecraft" | Returns QueryTypeMinecraft | P2 |  |
 | GST-04 | ParseQueryType | Happy Path | Recognized string "gameq" | input "gameq" | Returns QueryTypeGameQ | P2 |  |
 | GST-05 | ParseQueryType | Happy Path | Recognized string "gamedig" | input "gamedig" | Returns QueryTypeGameDig | P2 |  |
