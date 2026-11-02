@@ -28,7 +28,6 @@ type mcMockService struct {
 	getGeyserProfile        func(id string) (*GeyserProfile, error)
 	getGeyserProfileByXUID  func(xuid int64) (*GeyserProfile, error)
 	getGeyserProfileByName  func(gamertag string) (*GeyserProfile, error)
-	getGeyserTextureContent func(hash string) (*TextureResult, error)
 }
 
 var _ Service = (*mcMockService)(nil)
@@ -81,9 +80,6 @@ func (m *mcMockService) GetGeyserProfileByXUID(_ context.Context, xuid int64) (*
 }
 func (m *mcMockService) GetGeyserProfileByName(_ context.Context, gamertag string) (*GeyserProfile, error) {
 	return m.getGeyserProfileByName(gamertag)
-}
-func (m *mcMockService) GetGeyserTextureContent(_ context.Context, hash string) (*TextureResult, error) {
-	return m.getGeyserTextureContent(hash)
 }
 
 func mcRequest(t *testing.T, method, target string, body io.Reader, pathValues map[string]string) *http.Request {
@@ -337,7 +333,8 @@ func TestHD21to24_GetProfileHandler(t *testing.T) {
 		h := NewHandler(svc).GetProfile
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/p/"+validUUID, nil, map[string]string{"uuid": validUUID}))
-		mcRequireStatus(t, w, http.StatusNoContent)
+		mcRequireStatus(t, w, http.StatusNotFound)
+		testutil.ExpectDetail(t, w, msgPlayerNotFound)
 	})
 
 	t.Run("HD-24_InternalError", func(t *testing.T) {
@@ -364,7 +361,8 @@ func TestHD25to28_GetProfileByNameHandler(t *testing.T) {
 		h := NewHandler(svc).GetProfileByName
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/pn/x", nil, map[string]string{"name": "x"}))
-		mcRequireStatus(t, w, http.StatusNoContent)
+		mcRequireStatus(t, w, http.StatusNotFound)
+		testutil.ExpectDetail(t, w, msgPlayerNotFound)
 	})
 
 	t.Run("HD-28_InternalError", func(t *testing.T) {
@@ -582,23 +580,179 @@ func TestHD49to52_GetTextureHandler(t *testing.T) {
 	})
 }
 
-func TestHD57to58_GeyserProfileUpstreamFailure(t *testing.T) {
-	bedrockUUID := xuidToUUID(42)
-
-	t.Run("HD-57_ByNameGeyserAPIError", func(t *testing.T) {
-		svc := &mcMockService{getGeyserProfileByName: func(string) (*GeyserProfile, error) { return nil, ErrGeyserAPI }}
-		h := NewHandler(svc).GetGeyserProfileByName
+func TestHD59to65_GetGeyserPlayerByXUIDHandler(t *testing.T) {
+	t.Run("HD-59_DecimalXUID", func(t *testing.T) {
+		var gotXUID int64
+		svc := &mcMockService{getGeyserPlayerByXUID: func(xuid int64) (*GeyserPlayer, error) {
+			gotXUID = xuid
+			return &GeyserPlayer{}, nil
+		}}
+		h := NewHandler(svc).GetGeyserPlayerByXUID
 		w := httptest.NewRecorder()
-		h(w, mcRequest(t, http.MethodGet, "/gpn/x", nil, map[string]string{"name": "x"}))
-		mcRequireStatus(t, w, http.StatusInternalServerError)
-		testutil.ExpectDetail(t, w, msgFailedToGetGeyserProfile)
+		h(w, mcRequest(t, http.MethodGet, "/gx/42", nil, map[string]string{"xuid": "42"}))
+		mcRequireStatus(t, w, http.StatusOK)
+		if gotXUID != 42 {
+			t.Errorf("service xuid = %d, want 42", gotXUID)
+		}
 	})
 
-	t.Run("HD-58_ByUUIDGeyserAPIError", func(t *testing.T) {
-		svc := &mcMockService{getGeyserProfile: func(string) (*GeyserProfile, error) { return nil, ErrGeyserAPI }}
-		h := NewHandler(svc).GetGeyserProfile
+	t.Run("HD-60_FloodgateUUIDXUID", func(t *testing.T) {
+		var gotXUID int64
+		svc := &mcMockService{getGeyserPlayerByXUID: func(xuid int64) (*GeyserPlayer, error) {
+			gotXUID = xuid
+			return &GeyserPlayer{}, nil
+		}}
+		h := NewHandler(svc).GetGeyserPlayerByXUID
 		w := httptest.NewRecorder()
-		h(w, mcRequest(t, http.MethodGet, "/gp/"+bedrockUUID, nil, map[string]string{"uuid": bedrockUUID}))
+		bedrockUUID := xuidToUUID(42)
+		h(w, mcRequest(t, http.MethodGet, "/gx/"+bedrockUUID, nil, map[string]string{"xuid": bedrockUUID}))
+		mcRequireStatus(t, w, http.StatusOK)
+		if gotXUID != 42 {
+			t.Errorf("service xuid = %d, want 42", gotXUID)
+		}
+	})
+
+	t.Run("HD-61_InvalidXUID", func(t *testing.T) {
+		var called bool
+		svc := &mcMockService{getGeyserPlayerByXUID: func(int64) (*GeyserPlayer, error) {
+			called = true
+			return nil, nil
+		}}
+		h := NewHandler(svc).GetGeyserPlayerByXUID
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/gx/zz", nil, map[string]string{"xuid": "zz"}))
+		mcRequireStatus(t, w, http.StatusBadRequest)
+		testutil.ExpectDetail(t, w, msgInvalidXuid)
+		if called {
+			t.Error("service was called for an invalid xuid")
+		}
+	})
+
+	t.Run("HD-62_NotFound", func(t *testing.T) {
+		svc := &mcMockService{getGeyserPlayerByXUID: func(int64) (*GeyserPlayer, error) { return nil, ErrPlayerNotFound }}
+		h := NewHandler(svc).GetGeyserPlayerByXUID
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/gx/42", nil, map[string]string{"xuid": "42"}))
+		mcRequireStatus(t, w, http.StatusNotFound)
+		testutil.ExpectDetail(t, w, msgPlayerNotFound)
+	})
+
+	t.Run("HD-63_InvalidGeyserRequest", func(t *testing.T) {
+		svc := &mcMockService{getGeyserPlayerByXUID: func(int64) (*GeyserPlayer, error) { return nil, ErrInvalidGeyserRequest }}
+		h := NewHandler(svc).GetGeyserPlayerByXUID
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/gx/42", nil, map[string]string{"xuid": "42"}))
+		mcRequireStatus(t, w, http.StatusBadRequest)
+	})
+
+	t.Run("HD-64_OK", func(t *testing.T) {
+		svc := &mcMockService{getGeyserPlayerByXUID: func(int64) (*GeyserPlayer, error) {
+			return &GeyserPlayer{XUID: 42, Name: "Notch"}, nil
+		}}
+		h := NewHandler(svc).GetGeyserPlayerByXUID
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/gx/42", nil, map[string]string{"xuid": "42"}))
+		mcRequireStatus(t, w, http.StatusOK)
+		var got GeyserPlayer
+		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil || got.XUID != 42 || got.Name != "Notch" {
+			t.Errorf("body = %s, want xuid 42 and gamertag Notch", w.Body.String())
+		}
+	})
+
+	t.Run("HD-65_InternalError", func(t *testing.T) {
+		svc := &mcMockService{getGeyserPlayerByXUID: func(int64) (*GeyserPlayer, error) { return nil, testutil.ErrBoom }}
+		h := NewHandler(svc).GetGeyserPlayerByXUID
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/gx/42", nil, map[string]string{"xuid": "42"}))
+		mcRequireStatus(t, w, http.StatusInternalServerError)
+		testutil.ExpectDetail(t, w, msgFailedToGetGeyserGamertag)
+	})
+}
+
+func TestHD66to72_GetGeyserProfileByXUIDHandler(t *testing.T) {
+	t.Run("HD-66_DecimalXUID", func(t *testing.T) {
+		var gotXUID int64
+		svc := &mcMockService{getGeyserProfileByXUID: func(xuid int64) (*GeyserProfile, error) {
+			gotXUID = xuid
+			return &GeyserProfile{}, nil
+		}}
+		h := NewHandler(svc).GetGeyserProfileByXUID
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/gpx/42", nil, map[string]string{"xuid": "42"}))
+		mcRequireStatus(t, w, http.StatusOK)
+		if gotXUID != 42 {
+			t.Errorf("service xuid = %d, want 42", gotXUID)
+		}
+	})
+
+	t.Run("HD-67_FloodgateUUIDXUID", func(t *testing.T) {
+		var gotXUID int64
+		svc := &mcMockService{getGeyserProfileByXUID: func(xuid int64) (*GeyserProfile, error) {
+			gotXUID = xuid
+			return &GeyserProfile{}, nil
+		}}
+		h := NewHandler(svc).GetGeyserProfileByXUID
+		w := httptest.NewRecorder()
+		bedrockUUID := xuidToUUID(42)
+		h(w, mcRequest(t, http.MethodGet, "/gpx/"+bedrockUUID, nil, map[string]string{"xuid": bedrockUUID}))
+		mcRequireStatus(t, w, http.StatusOK)
+		if gotXUID != 42 {
+			t.Errorf("service xuid = %d, want 42", gotXUID)
+		}
+	})
+
+	t.Run("HD-68_InvalidXUID", func(t *testing.T) {
+		var called bool
+		svc := &mcMockService{getGeyserProfileByXUID: func(int64) (*GeyserProfile, error) {
+			called = true
+			return nil, nil
+		}}
+		h := NewHandler(svc).GetGeyserProfileByXUID
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/gpx/zz", nil, map[string]string{"xuid": "zz"}))
+		mcRequireStatus(t, w, http.StatusBadRequest)
+		testutil.ExpectDetail(t, w, msgInvalidXuid)
+		if called {
+			t.Error("service was called for an invalid xuid")
+		}
+	})
+
+	t.Run("HD-69_NotFound", func(t *testing.T) {
+		svc := &mcMockService{getGeyserProfileByXUID: func(int64) (*GeyserProfile, error) { return nil, ErrPlayerNotFound }}
+		h := NewHandler(svc).GetGeyserProfileByXUID
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/gpx/42", nil, map[string]string{"xuid": "42"}))
+		mcRequireStatus(t, w, http.StatusNotFound)
+		testutil.ExpectDetail(t, w, msgPlayerNotFound)
+	})
+
+	t.Run("HD-70_InvalidGeyserRequest", func(t *testing.T) {
+		svc := &mcMockService{getGeyserProfileByXUID: func(int64) (*GeyserProfile, error) { return nil, ErrInvalidGeyserRequest }}
+		h := NewHandler(svc).GetGeyserProfileByXUID
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/gpx/42", nil, map[string]string{"xuid": "42"}))
+		mcRequireStatus(t, w, http.StatusBadRequest)
+	})
+
+	t.Run("HD-71_OK", func(t *testing.T) {
+		svc := &mcMockService{getGeyserProfileByXUID: func(int64) (*GeyserProfile, error) {
+			return &GeyserProfile{XUID: 42, Name: "Notch"}, nil
+		}}
+		h := NewHandler(svc).GetGeyserProfileByXUID
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/gpx/42", nil, map[string]string{"xuid": "42"}))
+		mcRequireStatus(t, w, http.StatusOK)
+		var got GeyserProfile
+		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil || got.XUID != 42 || got.Name != "Notch" {
+			t.Errorf("body = %s, want xuid 42 and gamertag Notch", w.Body.String())
+		}
+	})
+
+	t.Run("HD-72_InternalError", func(t *testing.T) {
+		svc := &mcMockService{getGeyserProfileByXUID: func(int64) (*GeyserProfile, error) { return nil, testutil.ErrBoom }}
+		h := NewHandler(svc).GetGeyserProfileByXUID
+		w := httptest.NewRecorder()
+		h(w, mcRequest(t, http.MethodGet, "/gpx/42", nil, map[string]string{"xuid": "42"}))
 		mcRequireStatus(t, w, http.StatusInternalServerError)
 		testutil.ExpectDetail(t, w, msgFailedToGetGeyserProfile)
 	})

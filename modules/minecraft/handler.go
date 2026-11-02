@@ -170,7 +170,7 @@ func (h *handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	profile, err := h.s.Mojang().GetProfile(r.Context(), id)
 	switch err {
 	case ErrPlayerNotFound:
-		responses.NoContent(w, r)
+		responses.NotFound(w, r, msgPlayerNotFound)
 	case nil:
 		responses.StructOK(w, r, profile)
 	default:
@@ -190,7 +190,7 @@ func (h *handler) GetProfileByName(w http.ResponseWriter, r *http.Request) {
 	profile, err := h.s.Mojang().GetProfileByName(r.Context(), name)
 	switch err {
 	case ErrPlayerNotFound:
-		responses.NoContent(w, r)
+		responses.NotFound(w, r, msgPlayerNotFound)
 	case nil:
 		responses.StructOK(w, r, profile)
 	default:
