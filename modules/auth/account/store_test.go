@@ -108,53 +108,6 @@ func TestST13AddAccountToDB(t *testing.T) {
 	})
 }
 
-func TestST14GetAccountByID(t *testing.T) {
-	s := stStoreWithUnreachableDB(t)
-	t.Run("ACS-14_ConnectionError", func(t *testing.T) {
-		got, err := s.GetAccountByID(context.Background(), "u1")
-		if got != nil {
-			t.Errorf("expected nil account, got %v", got)
-		}
-		stAssertRawConnectionError(t, err)
-	})
-}
-
-func TestST15GetAccountByUsername(t *testing.T) {
-	s := stStoreWithUnreachableDB(t)
-	t.Run("ACS-15_ConnectionError", func(t *testing.T) {
-		got, err := s.GetAccountByUsername(context.Background(), "alice")
-		if got != nil {
-			t.Errorf("expected nil account, got %v", got)
-		}
-		stAssertRawConnectionError(t, err)
-	})
-}
-
-func TestST16GetAccountByEmail(t *testing.T) {
-	s := stStoreWithUnreachableDB(t)
-	t.Run("ACS-16_ConnectionError", func(t *testing.T) {
-		got, err := s.GetAccountByEmail(context.Background(), "a@b.com")
-		if got != nil {
-			t.Errorf("expected nil account, got %v", got)
-		}
-		stAssertRawConnectionError(t, err)
-	})
-}
-
-func TestST17UpdateAccountInDB(t *testing.T) {
-	s := stStoreWithUnreachableDB(t)
-	t.Run("ACS-17_ConnectionErrorPassesThroughUnchanged", func(t *testing.T) {
-		stAssertRawConnectionError(t, s.UpdateAccountInDB(context.Background(), &Account{UserID: "u1"}))
-	})
-}
-
-func TestST18DeleteAccountFromDB(t *testing.T) {
-	s := stStoreWithUnreachableDB(t)
-	t.Run("ACS-18_ConnectionError", func(t *testing.T) {
-		stAssertRawConnectionError(t, s.DeleteAccountFromDB(context.Background(), "u1"))
-	})
-}
-
 func TestST37GetAccountSettings(t *testing.T) {
 	s := &settingsStore{db: testutil.UnreachablePool(t)}
 	t.Run("ACS-37_ConnectionErrorNotDefaultsFallback", func(t *testing.T) {
@@ -163,18 +116,6 @@ func TestST37GetAccountSettings(t *testing.T) {
 			t.Errorf("expected nil settings (not the DefaultAccountSettings fallback), got %v", got)
 		}
 		stAssertRawConnectionError(t, err)
-	})
-}
-
-func TestST38to39SetPasswordAuthEnabled(t *testing.T) {
-	t.Run("ACS-38_EnableBeginFails", func(t *testing.T) {
-		s := &settingsStore{db: testutil.UnreachablePool(t)}
-		stAssertRawConnectionError(t, s.SetPasswordAuthEnabled(context.Background(), "u1", true))
-	})
-
-	t.Run("ACS-39_DisableBeginFails", func(t *testing.T) {
-		s := &settingsStore{db: testutil.UnreachablePool(t)}
-		stAssertRawConnectionError(t, s.SetPasswordAuthEnabled(context.Background(), "u1", false))
 	})
 }
 

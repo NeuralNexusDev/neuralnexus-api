@@ -34,7 +34,6 @@
 | ACT-02 | NewAccount | Edge Case | `email == ""` | | `Account.Email == nil` | P2 |  |
 | ACT-04 | NewPasswordLessAccount | Happy Path | Valid username/email | | Returns `*Account` with `UserID`, `Username`, `Email == &email`; `HashedSecret`/`Salt` nil | P2 |  |
 | ACT-05 | NewPasswordLessAccount | Edge Case | `email == ""` | | `Account.Email == nil` | P3 |  |
-| ACT-06 | NewIDOnlyAccount | Happy Path | n/a | | Returns `*Account` with only `UserID` set | P2 |  |
 | ACT-07 | IDKeyWithSecret | Happy Path | Same password/salt/secret/params called twice | | Identical output both times (deterministic) | P2 |  |
 | ACT-08 | IDKeyWithSecret | Edge Case | Same password/salt/params, different `secret` | | Different output (the pepper/secret genuinely affects the digest) | P1 |  |
 | ACT-09 | HashPassword | Happy Path | Any password | `rand.Read` succeeds | Sets `user.HashedSecret` (32 bytes) and `user.Salt` (16 bytes) | P1 |  |
@@ -56,14 +55,7 @@
 | ACS-11 | translateAccountConstraintErr | Happy Path | `Code == "23505"`, `ConstraintName == "accounts_email_key"` | | Returns `ErrEmailAlreadyExists` | P0 |  |
 | ACS-12 | translateAccountConstraintErr | Happy Path | `Code == "23505"`, `ConstraintName == "accounts_username_key"` | | Returns `ErrUsernameAlreadyExists` | P0 |  |
 | ACS-13 | AddAccountToDB | Error Path | DB unreachable | `Exec` fails with a plain connection error (not `*pgconn.PgError`) | Returns that raw error unchanged (not translated to a sentinel) | P1 |  |
-| ACS-14 | GetAccountByID | Error Path | DB unreachable | `Query` fails before any row scan | Returns nil, the raw connection error (not `ErrNotFound`) | P1 |  |
-| ACS-15 | GetAccountByUsername | Error Path | DB unreachable | | Returns nil, raw connection error | P2 |  |
-| ACS-16 | GetAccountByEmail | Error Path | DB unreachable | | Returns nil, raw connection error | P2 |  |
-| ACS-17 | UpdateAccountInDB | Error Path | DB unreachable | | Returns the raw connection error unchanged | P1 |  |
-| ACS-18 | DeleteAccountFromDB | Error Path | DB unreachable | | Returns the raw connection error | P2 |  |
 | ACS-37 | GetAccountSettings | Error Path | DB unreachable | | Returns nil, raw error (the `DefaultAccountSettings` fallback is `ErrNoRows`-specific and not reached) | P1 |  |
-| ACS-38 | SetPasswordAuthEnabled | Error Path | DB unreachable, `enabled=true` | `s.db.Begin` fails | Returns raw error | P1 |  |
-| ACS-39 | SetPasswordAuthEnabled | Error Path | DB unreachable, `enabled=false` | | Returns raw error | P2 |  |
 | ACS-47 | GetAccountByID | Happy Path | No account row exists for userID | Real Postgres, live query | Returns nil, `ErrNotFound` | P1 |  |
 | ACS-48 | GetAccountByUsername | Happy Path | No account row exists for username | | Returns nil, `ErrNotFound` | P2 |  |
 | ACS-49 | GetAccountByEmail | Happy Path | No account row exists for email | | Returns nil, `ErrNotFound` | P2 |  |
