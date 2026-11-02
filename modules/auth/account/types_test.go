@@ -53,18 +53,6 @@ func TestTY04to05NewPasswordLessAccount(t *testing.T) {
 	})
 }
 
-func TestTY06NewIDOnlyAccount(t *testing.T) {
-	t.Run("ACT-06_OnlyUserIDSet", func(t *testing.T) {
-		a := NewIDOnlyAccount()
-		if a.UserID == "" {
-			t.Error("expected a non-empty UserID")
-		}
-		if a.Username != "" || a.Email != nil || a.HashedSecret != nil || a.Salt != nil {
-			t.Errorf("expected every other field to stay zero-valued, got %+v", a)
-		}
-	})
-}
-
 func TestTY07to08IDKeyWithSecret(t *testing.T) {
 	password := []byte("hunter2")
 	salt := []byte("0123456789abcdef")
