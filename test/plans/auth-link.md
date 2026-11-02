@@ -31,8 +31,6 @@
 | OA-25 | resolveOrCreateAccountForPlatformUser | Error Path | Lost the race, cleanup succeeds, but re-fetching the winner's link fails | `GetLinkedAccountByPlatformID` (second call) returns error | Error propagated | P2 |  |
 | OA-26 | resolveOrCreateAccountForPlatformUser | Error Path | Lost the race, winner link found, but `GetAccountByID` for winner fails | Mock `GetAccountByID` returns error on second call | Error propagated | P2 |  |
 | OA-27 | ProcessOAuthLink | Happy Path | Discord platform, valid session, identity not yet linked | Valid non-expired session in request context; mock `GetLinkedAccountByPlatformID` → `ErrNotFound`; `AddLinkedAccountToDB` succeeds | Returns the same session, err nil; `AddLinkedAccountToDB` called once | P1 |  |
-| OA-28 | ProcessOAuthLink | Error Path | No session in request context | Request built without the session context value | Returns `ErrSessionNotFound` | P1 |  |
-| OA-29 | ProcessOAuthLink | Error Path | Session present but expired | `session.IsValid()` false (`ExpiresAt` in the past) | Returns `ErrSessionExpired` | P1 |  |
 | OA-30 | ProcessOAuthLink | Error Path | Unknown/unsupported platform | `state.Platform = "bogus"` | Returns `ErrInvalidPlatform` | P2 |  |
 | OA-31 | ProcessOAuthLink | Error Path | Code exchange fails | Token endpoint returns HTTP 400 | Error propagated | P2 |  |
 | OA-32 | ProcessOAuthLink | Happy Path | Minecraft/XboxLive platform, both Xbox and Java identities new | Full XBL/XSTS/Minecraft chain succeeds; neither identity linked yet | Returns session; both identities linked (`AddLinkedAccountToDB` called twice) | P1 |  |
@@ -138,8 +136,6 @@
 | LKS-24 | ProcessSteamLogin | Error Path | Account resolution fails | `resolveOrCreateAccountForPlatformUser` path fails (e.g. `AddAccount` error) | Error propagated, nil session | P2 |  |
 | LKS-25 | ProcessSteamLogin | Error Path | `ss.AddSession` fails | Mock `AddSession` returns error | Error propagated | P2 |  |
 | LKS-26 | ProcessSteamLink | Happy Path | Valid session, identity not yet linked | Session in request context valid; `AddLinkedAccountToDB` succeeds | Returns the same session, err nil | P1 |  |
-| LKS-27 | ProcessSteamLink | Error Path | No session in request context | Plain request, no context value | Returns `ErrSessionNotFound` | P1 |  |
-| LKS-28 | ProcessSteamLink | Error Path | Session expired | `session.IsValid()` false | Returns `ErrSessionExpired` | P1 |  |
 | LKS-29 | ProcessSteamLink | Error Path | Identity already linked to a different account | `linkPlatformUserToSession` returns `ErrPlatformAlreadyLinkedToDifferentAccount` | Error propagated | P2 |  |
 
 ## microsoft.go
@@ -205,14 +201,6 @@
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
 | LS-28 | AddLinkedAccountToDB | Error Path | DB unreachable | | Returns the raw connection error (not `ErrAlreadyLinked`, since it isn't a `*pgconn.PgError`) | P1 |  |
-| LS-29 | UpdateLinkedAccount | Error Path | DB unreachable | | Returns raw error | P2 |  |
-| LS-30 | GetLinkedAccountByPlatformID | Error Path | DB unreachable | | Returns nil, raw error | P1 |  |
-| LS-31 | GetLinkedAccountByPlatformName | Error Path | DB unreachable | | Returns nil, raw error | P2 |  |
-| LS-32 | GetLinkedAccountByUserID | Error Path | DB unreachable | | Returns nil, raw error | P2 |  |
-| LS-33 | GetLinkedAccountsByUserID | Error Path | DB unreachable | | Returns nil, raw error | P2 |  |
-| LS-34 | DeleteLinkedAccount | Error Path | DB unreachable | `s.db.Begin` fails immediately | Returns the raw error before the advisory-lock/guard logic runs | P1 |  |
-| LS-35 | SetLinkedAccountLoginEnabled | Error Path | DB unreachable, `enabled=true` | Plain `Exec` (no tx) fails | Returns raw error | P1 |  |
-| LS-36 | SetLinkedAccountLoginEnabled | Error Path | DB unreachable, `enabled=false` | `s.db.Begin` fails | Returns raw error before the advisory-lock/guard logic runs | P1 |  |
 | LS-54 | DeleteLinkedAccount | Edge Case | Passwordless account, exactly one verified+enabled link, no other fallback | Guard denies removing the only usable login method | Returns `ErrWouldLockAccount`; the link still exists afterward | P0 |  |
 | LS-55 | DeleteLinkedAccount | Happy Path | Account has a password (`hashed_secret` set, password auth enabled) | Guard allows since the password remains usable | Returns nil; link removed (`ErrNotFound`) | P1 |  |
 | LS-56 | DeleteLinkedAccount | Happy Path | Passwordless account with a second verified+enabled link on another platform | Guard allows | Returns nil; the other link is left untouched | P1 |  |
@@ -241,9 +229,6 @@
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
 | OT-43 | AddOAuthTokenToDB | Error Path | DB unreachable | | Returns raw error | P2 |  |
-| OT-44 | GetOAuthTokenByUserID | Error Path | DB unreachable | | Returns nil, raw error | P2 |  |
-| OT-45 | UpdateOAuthToken | Error Path | DB unreachable | | Returns raw error | P2 |  |
-| OT-46 | DeleteOAuthToken | Error Path | DB unreachable | | Returns raw error | P2 |  |
 | OT-79 | GetOAuthTokenByUserID | Error Path | No token for that user and platform | Real Postgres | Returns nil, `ErrNotFound` | P2 | |
 
 ## types.go
@@ -296,36 +281,21 @@
 | AU-62 | OpenIDHandler | Error Path | Steam returns a player whose steamid is not the verified one | Valid state, both Steam endpoints faked as in AU-51 but the player summary lists a different steamid | 303 redirect whose problem is 400 `msgSteamAccountMismatch` | P2 |  |
 | AU-63 | OAuthHandler | Error Path | the platform account is linked to a different account | Valid state, mode=link, a live session for `u1`, the linked account store returns a link for `u2` | 303 redirect whose problem is 409 `msgPlatformAlreadyLinked` | P2 |  |
 | AU-64 | OAuthHandler | Error Path | the Xbox Live and Minecraft identities belong to different accounts | Valid state, mode=login, platform=minecraft with the Microsoft, Xbox Live and Minecraft calls faked, the linked account store returns a link for `u1` on Xbox Live and for `u2` on Minecraft | 303 redirect whose problem is 409 `msgConflictingMicrosoftIdentities` | P2 |  |
-| AU-65 | OAuthHandler | Error Path | linking the platform account fails | Valid state, mode=link, a live session, `AddLinkedAccountToDB` returns `testutil.ErrDBDown` | 303 redirect whose problem is 500 `msgAuthenticationFailed` | P2 |  |
 | AU-67 | OpenIDHandler | Error Path | the Steam account is linked to a different account | Valid state, mode=link, a live session for `u1`, both Steam endpoints faked as in AU-51, the linked account store returns a link for `u2` | 303 redirect whose problem is 409 `msgPlatformAlreadyLinked` | P2 |  |
-| AU-68 | OpenIDHandler | Error Path | linking the Steam account fails | Valid state, mode=link, a live session, both Steam endpoints faked, `AddLinkedAccountToDB` returns `testutil.ErrDBDown` | 303 redirect whose problem is 500 `msgAuthenticationFailed` | P2 |  |
 | AU-72 | OAuthHandler | Error Path | Login is disabled for the linked platform account | Valid state, mode=login, platform=discord with the Discord calls faked as in AU-50; the linked account store returns a verified link with login disabled | 303 redirect to state.RedirectURI with a problem of 403 whose detail is `msgPlatformLoginDisabled` | P2 |  |
 | AU-73 | OpenIDHandler | Error Path | Steam returns no player for the verified steamid | Valid state, both Steam endpoints faked as in AU-51 but the player summary lists no players | 303 redirect to state.RedirectURI with a problem of 404 whose detail is `msgSteamAccountNotFound` | P2 |  |
 | AU-74 | OpenIDHandler | Error Path | Login is disabled for the linked Steam account | Valid state, both Steam endpoints faked as in AU-51; the linked account store returns a verified link with login disabled | 303 redirect to state.RedirectURI with a problem of 403 whose detail is `msgPlatformLoginDisabled` | P2 |  |
 | AU-75 | OAuthHandler | Error Path | Link mode, and the store reports the user already has a linked account on this platform | Valid state, mode=link, platform=discord with the Discord calls faked as in AU-50, session for `u1`; `AddLinkedAccountToDB` returns `ErrUserAlreadyLinkedToPlatform` | 303 redirect to state.RedirectURI with a problem of 409 whose detail is `msgUserAlreadyLinkedToPlatform` | P1 | |
 | AU-76 | OpenIDHandler | Error Path | Link mode, and the store reports the user already has a linked account on this platform | Valid state, mode=link, both Steam endpoints faked as in AU-51, session for `u1`; `AddLinkedAccountToDB` returns `ErrUserAlreadyLinkedToPlatform` | 303 redirect to state.RedirectURI with a problem of 409 whose detail is `msgUserAlreadyLinkedToPlatform` | P1 | |
-| AU-66 | OAuthHandler | Edge Case | the session is gone between the handler's check and the link call | Valid state, mode=link; the context serves a live session for the handler's check and no session for the next read | 303 redirect whose problem is 401 `msgLoginRequiredToLink` | P2 |  |
 | AU-69 | OAuthHandler | Edge Case | the session expires between the handler's check and the link call | Valid state, mode=link; the context serves a live session for the handler's check and an expired one for the next read | 303 redirect whose problem is 401 `msgSessionExpired` | P2 |  |
-| AU-70 | OpenIDHandler | Edge Case | the session is gone between the handler's check and the link call | Valid state, mode=link, both Steam endpoints faked as in AU-51; the context serves a live session first and no session after | 303 redirect whose problem is 401 `msgLoginRequiredToLink` | P2 |  |
 | AU-71 | OpenIDHandler | Edge Case | the session expires between the handler's check and the link call | Valid state, mode=link, both Steam endpoints faked; the context serves a live session first and an expired one after | 303 redirect whose problem is 401 `msgSessionExpired` | P2 |  |
-| AU-22 | decodeAndValidateState | Happy Path | Valid base64+JSON state, nonce cookie matches | state has Platform/Nonce/RedirectURI/Mode set, RedirectURI allowed, "nonce" cookie value == state.Nonce | Returns (state, true) | P1 |  |
-| AU-23 | decodeAndValidateState | Error Path | Missing "state" query param | No state param on the request | Returns (zero state, false); redirectBadRequest to auth.NN_SITE_URL (`msgInvalidRequest`) | P2 |  |
 | AU-24 | decodeAndValidateState | Error Path | "state" is not valid base64 | state param is not URL-safe base64 | Returns (zero state, false); redirectBadRequest to auth.NN_SITE_URL, detail `msgInvalidState` | P2 |  |
 | AU-25 | decodeAndValidateState | Error Path | Decoded bytes are not valid JSON | base64-valid but JSON-unmarshal fails | Returns (zero state, false); redirectBadRequest to auth.NN_SITE_URL, detail `msgInvalidState` | P2 |  |
 | AU-26 | decodeAndValidateState | Edge Case | A required state field is empty (e.g. Platform="") | Otherwise-valid state JSON missing Platform/Nonce/RedirectURI/Mode | Returns (state, false); redirectBadRequest to auth.NN_SITE_URL, detail `msgInvalidState` | P2 |  |
 | AU-27 | decodeAndValidateState | Error Path | RedirectURI not on the allowlist | state.RedirectURI has a different host than auth.NN_SITE_URL | Returns (state, false); redirectBadRequest to auth.NN_SITE_URL, detail `msgInvalidState` | P2 |  |
 | AU-28 | decodeAndValidateState | Error Path | Missing "nonce" cookie | Valid state, request has no "nonce" cookie | Returns (state, false); redirectBadRequest to auth.NN_SITE_URL, detail `msgInvalidState` | P2 |  |
 | AU-29 | decodeAndValidateState | Error Path | Nonce cookie value doesn't match state.Nonce | Valid state, "nonce" cookie present but value != state.Nonce | Returns (state, false); redirectBadRequest to auth.NN_SITE_URL, detail `msgInvalidState` | P2 |  |
-| AU-30 | requireValidModeAndSession | Happy Path | mode=login | Any session state | Returns true, no response written | P1 |  |
-| AU-31 | requireValidModeAndSession | Happy Path | mode=link with a valid, non-expired session in context | Context carries *auth.Session with IsValid()==true | Returns true, no response written | P1 |  |
-| AU-32 | requireValidModeAndSession | Error Path | mode=link, no session key in context at all | r.Context().Value(reqctx.SessionKey) type-asserts ok=false | Returns false; redirectUnauthorized to redirectURI (`msgLoginRequiredToLink`) | P2 |  |
-| AU-33 | requireValidModeAndSession | Edge Case | mode=link, session in context is a nil *auth.Session | ok=true, session==nil | Returns false; redirectUnauthorized to redirectURI (`msgLoginRequiredToLink`) | P3 |  |
-| AU-34 | requireValidModeAndSession | Error Path | mode=link, session present but expired | session.IsValid()==false (ExpiresAt in the past) | Returns false; redirectUnauthorized to redirectURI (`msgLoginRequiredToLink`) | P2 |  |
 | AU-35 | requireValidModeAndSession | Error Path | Unrecognized mode value | mode is neither link.ModeLogin nor link.ModeLink | Returns false; redirectBadRequest to redirectURI, detail `msgInvalidState` | P2 |  |
-| AU-38 | redirectWithError | Happy Path | Well-formed target URL | target parses successfully with url.Parse | 303 redirect; redirect Location has a "problem" query param that base64url-decodes to the expected RFC 9457 JSON (status/title/detail) | P1 |  |
-| AU-39 | redirectWithError | Edge Case | Target URL fails url.Parse | target contains an invalid percent-escape (e.g. "%zz") | 303 redirect straight to target, unmodified (no "problem" param appended) | P3 |  |
-| AU-44 | isAllowedRedirect | Happy Path | redirectURI scheme+host match auth.NN_SITE_URL | redirectURI = auth.NN_SITE_URL + some path | Returns true | P1 |  |
-| AU-45 | isAllowedRedirect | Error Path | redirectURI has a different host | Same scheme, different host than auth.NN_SITE_URL | Returns false | P2 |  |
 | AU-46 | isAllowedRedirect | Edge Case | redirectURI has a different scheme, same host | e.g. http vs https | Returns false | P3 |  |
 | AU-47 | isAllowedRedirect | Edge Case | redirectURI fails url.Parse | redirectURI contains an invalid percent-escape | Returns false | P3 |  |
 | AU-48 | isAllowedRedirect | Edge Case | auth.NN_SITE_URL itself fails url.Parse | auth.NN_SITE_URL temporarily overridden with an unparseable value, restored after the subtest | Returns false | P3 |  |

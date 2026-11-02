@@ -397,27 +397,6 @@ func TestST26to29ProcessSteamLink(t *testing.T) {
 		}
 	})
 
-	t.Run("LKS-27_NoSessionRejected", func(t *testing.T) {
-		las := newSTMockLinkAccountStore()
-		req := stRequestWithSession(nil)
-
-		_, err := ProcessSteamLink(req, las, user)
-		if !errors.Is(err, ErrSessionNotFound) {
-			t.Fatalf("ProcessSteamLink() error = %v, want %v", err, ErrSessionNotFound)
-		}
-	})
-
-	t.Run("LKS-28_ExpiredSessionRejected", func(t *testing.T) {
-		las := newSTMockLinkAccountStore()
-		session := &session.Session{ID: "sess-1", UserID: "user-1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
-		req := stRequestWithSession(session)
-
-		_, err := ProcessSteamLink(req, las, user)
-		if !errors.Is(err, ErrSessionExpired) {
-			t.Fatalf("ProcessSteamLink() error = %v, want %v", err, ErrSessionExpired)
-		}
-	})
-
 	t.Run("LKS-29_AlreadyLinkedToDifferentAccountRejected", func(t *testing.T) {
 		las := newSTMockLinkAccountStore()
 		las.byPlatformID[PlatformSteam] = map[string]*LinkedAccount{

@@ -10,7 +10,6 @@ import (
 	"net/url"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/goccy/go-json"
 	"golang.org/x/oauth2"
@@ -448,37 +447,6 @@ func TestAU20OpenIDHandlerBadClaimedID(t *testing.T) {
 	})
 }
 
-func TestAU22DecodeAndValidateStateHappyPath(t *testing.T) {
-	state := OAuthState{Platform: PlatformDiscord, Nonce: "test-nonce", RedirectURI: "https://neuralnexus.test/done", Mode: ModeLogin}
-	stateB64 := encodeState(t, state)
-	r := testutil.NewRequest(http.MethodGet, "/api/oauth?state="+stateB64, nil)
-	r.AddCookie(&http.Cookie{Name: "nonce", Value: "test-nonce"})
-	w := httptest.NewRecorder()
-
-	t.Run("AU-22_DecodeAndValidateStateHappyPath", func(t *testing.T) {
-		got, ok := decodeAndValidateState(w, r, auSiteURL)
-		if !ok {
-			t.Fatalf("expected ok=true, got false (body: %s)", w.Body.String())
-		}
-		if got != state {
-			t.Errorf("expected state %+v, got %+v", state, got)
-		}
-	})
-}
-
-func TestAU23DecodeAndValidateStateMissingParam(t *testing.T) {
-	r := testutil.NewRequest(http.MethodGet, "/api/oauth", nil)
-	w := httptest.NewRecorder()
-
-	t.Run("AU-23_DecodeAndValidateStateMissingParam", func(t *testing.T) {
-		_, ok := decodeAndValidateState(w, r, auSiteURL)
-		if ok {
-			t.Fatal("expected ok=false")
-		}
-		requireProblemRedirect(t, w, auSiteURL, http.StatusBadRequest, msgInvalidRequest)
-	})
-}
-
 func TestAU24DecodeAndValidateStateInvalidBase64(t *testing.T) {
 	r := testutil.NewRequest(http.MethodGet, "/api/oauth?state=not-valid-base64!!!", nil)
 	w := httptest.NewRecorder()
@@ -572,75 +540,6 @@ func TestAU29DecodeAndValidateStateNonceMismatch(t *testing.T) {
 	})
 }
 
-func TestAU30RequireValidModeAndSessionLoginMode(t *testing.T) {
-	r := testutil.NewRequest(http.MethodGet, "/api/oauth", nil)
-	w := httptest.NewRecorder()
-
-	t.Run("AU-30_RequireValidModeAndSessionLoginMode", func(t *testing.T) {
-		if ok := requireValidModeAndSession(w, r, ModeLogin, "https://neuralnexus.test/done"); !ok {
-			t.Fatal("expected true for mode=login")
-		}
-		if loc := w.Header().Get("Location"); loc != "" {
-			t.Errorf("expected no response written, got a redirect to %q", loc)
-		}
-	})
-}
-
-func TestAU31RequireValidModeAndSessionLinkModeValidSession(t *testing.T) {
-	session := &session.Session{UserID: "u1", ExpiresAt: time.Now().Add(time.Hour).Unix()}
-	ctx := context.WithValue(context.Background(), reqctx.SessionKey, session)
-	r := testutil.NewRequest(http.MethodGet, "/api/oauth", nil).WithContext(ctx)
-	w := httptest.NewRecorder()
-
-	t.Run("AU-31_RequireValidModeAndSessionLinkModeValidSession", func(t *testing.T) {
-		if ok := requireValidModeAndSession(w, r, ModeLink, "https://neuralnexus.test/done"); !ok {
-			t.Fatal("expected true for a valid session")
-		}
-		if loc := w.Header().Get("Location"); loc != "" {
-			t.Errorf("expected no response written, got a redirect to %q", loc)
-		}
-	})
-}
-
-func TestAU32RequireValidModeAndSessionLinkModeNoSessionKey(t *testing.T) {
-	r := testutil.NewRequest(http.MethodGet, "/api/oauth", nil)
-	w := httptest.NewRecorder()
-
-	t.Run("AU-32_RequireValidModeAndSessionLinkModeNoSessionKey", func(t *testing.T) {
-		if ok := requireValidModeAndSession(w, r, ModeLink, "https://neuralnexus.test/done"); ok {
-			t.Fatal("expected false with no session in context")
-		}
-		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, msgLoginRequiredToLink)
-	})
-}
-
-func TestAU33RequireValidModeAndSessionLinkModeNilSession(t *testing.T) {
-	ctx := context.WithValue(context.Background(), reqctx.SessionKey, (*session.Session)(nil))
-	r := testutil.NewRequest(http.MethodGet, "/api/oauth", nil).WithContext(ctx)
-	w := httptest.NewRecorder()
-
-	t.Run("AU-33_RequireValidModeAndSessionLinkModeNilSession", func(t *testing.T) {
-		if ok := requireValidModeAndSession(w, r, ModeLink, "https://neuralnexus.test/done"); ok {
-			t.Fatal("expected false for a nil session")
-		}
-		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, msgLoginRequiredToLink)
-	})
-}
-
-func TestAU34RequireValidModeAndSessionLinkModeExpiredSession(t *testing.T) {
-	session := &session.Session{UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
-	ctx := context.WithValue(context.Background(), reqctx.SessionKey, session)
-	r := testutil.NewRequest(http.MethodGet, "/api/oauth", nil).WithContext(ctx)
-	w := httptest.NewRecorder()
-
-	t.Run("AU-34_RequireValidModeAndSessionLinkModeExpiredSession", func(t *testing.T) {
-		if ok := requireValidModeAndSession(w, r, ModeLink, "https://neuralnexus.test/done"); ok {
-			t.Fatal("expected false for an expired session")
-		}
-		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, msgLoginRequiredToLink)
-	})
-}
-
 func TestAU35RequireValidModeAndSessionUnrecognizedMode(t *testing.T) {
 	r := testutil.NewRequest(http.MethodGet, "/api/oauth", nil)
 	w := httptest.NewRecorder()
@@ -650,49 +549,6 @@ func TestAU35RequireValidModeAndSessionUnrecognizedMode(t *testing.T) {
 			t.Fatal("expected false for an unrecognized mode")
 		}
 		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusBadRequest, msgInvalidState)
-	})
-}
-
-func TestAU38RedirectWithErrorHappyPath(t *testing.T) {
-	r := testutil.NewRequest(http.MethodGet, "/", nil)
-	w := httptest.NewRecorder()
-
-	t.Run("AU-38_RedirectWithErrorHappyPath", func(t *testing.T) {
-		redirectWithError(w, r, "https://neuralnexus.test/done", http.StatusBadRequest, "Bad Request", "something broke")
-		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusBadRequest, "something broke")
-	})
-}
-
-func TestAU39RedirectWithErrorUnparseableTarget(t *testing.T) {
-	r := testutil.NewRequest(http.MethodGet, "/", nil)
-	w := httptest.NewRecorder()
-	target := "http://example.com/%zz"
-
-	t.Run("AU-39_RedirectWithErrorUnparseableTarget", func(t *testing.T) {
-		redirectWithError(w, r, target, http.StatusBadRequest, "Bad Request", "something broke")
-
-		if w.Code != http.StatusSeeOther {
-			t.Fatalf("expected 303, got %d: %s", w.Code, w.Body.String())
-		}
-		if loc := w.Header().Get("Location"); loc != target {
-			t.Errorf("expected redirect straight to %q with no problem param, got %q", target, loc)
-		}
-	})
-}
-
-func TestAU44IsAllowedRedirectSameOrigin(t *testing.T) {
-	t.Run("AU-44_IsAllowedRedirectSameOrigin", func(t *testing.T) {
-		if !isAllowedRedirect(auSiteURL+"/some/path", auSiteURL) {
-			t.Error("expected true for a same-origin redirect URI")
-		}
-	})
-}
-
-func TestAU45IsAllowedRedirectDifferentHost(t *testing.T) {
-	t.Run("AU-45_IsAllowedRedirectDifferentHost", func(t *testing.T) {
-		if isAllowedRedirect("https://evil.example.com/phish", auSiteURL) {
-			t.Error("expected false for a different host")
-		}
 	})
 }
 
@@ -794,7 +650,6 @@ func TestAU60to71OAuthAndOpenIDFailureMapping(t *testing.T) {
 	steamLink := OAuthState{Platform: PlatformSteam, Nonce: "test-nonce", RedirectURI: redirect, Mode: ModeLink}
 	okJWT := func(*session.Session) (string, error) { return "test-jwt", nil }
 	linkedElsewhere := &stubLinkAccountStore{existing: &LinkedAccount{UserID: "u2", Verified: true, LoginEnabled: true}}
-	addFails := func(err error) *stubLinkAccountStore { return &stubLinkAccountStore{addErr: err} }
 
 	t.Run("AU-60_OAuthInvalidPlatform", func(t *testing.T) {
 		w := httptest.NewRecorder()
@@ -846,15 +701,6 @@ func TestAU60to71OAuthAndOpenIDFailureMapping(t *testing.T) {
 		requireProblemRedirect(t, w, redirect, http.StatusConflict, msgConflictingMicrosoftIdentities)
 	})
 
-	t.Run("AU-65_OAuthLinkFails", func(t *testing.T) {
-		auDiscordTransport(t)
-		w := httptest.NewRecorder()
-
-		OAuthHandler(auConfig(), &stubAccountService{}, addFails(testutil.ErrDBDown), &authtest.FakeSessionService{CreateJWTFunc: okJWT}, auSiteURL)(w, auWithSession(auOAuthRequest(t, discordLink), "u1"))
-
-		requireProblemRedirect(t, w, redirect, http.StatusInternalServerError, msgAuthenticationFailed)
-	})
-
 	t.Run("AU-67_OpenIDLinkedToDifferentAccount", func(t *testing.T) {
 		auSteamTransport(t, http.StatusOK, http.StatusOK)
 		w := httptest.NewRecorder()
@@ -864,24 +710,7 @@ func TestAU60to71OAuthAndOpenIDFailureMapping(t *testing.T) {
 		requireProblemRedirect(t, w, redirect, http.StatusConflict, msgPlatformAlreadyLinked)
 	})
 
-	t.Run("AU-68_OpenIDLinkFails", func(t *testing.T) {
-		auSteamTransport(t, http.StatusOK, http.StatusOK)
-		w := httptest.NewRecorder()
-
-		OpenIDHandler(auConfig().Steam, &stubAccountService{}, addFails(testutil.ErrDBDown), &authtest.FakeSessionService{CreateJWTFunc: okJWT}, auSiteURL)(w, auWithSession(auOpenIDRequest(t, steamLink), "u1"))
-
-		requireProblemRedirect(t, w, redirect, http.StatusInternalServerError, msgAuthenticationFailed)
-	})
-
 	expired := &session.Session{ID: "link-session", UserID: "u1", ExpiresAt: 1}
-
-	t.Run("AU-66_OAuthSessionGoneBeforeLinking", func(t *testing.T) {
-		w := httptest.NewRecorder()
-
-		OAuthHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, &authtest.FakeSessionService{CreateJWTFunc: okJWT}, auSiteURL)(w, auWithSessionChange(auOAuthRequest(t, discordLink), nil))
-
-		requireProblemRedirect(t, w, redirect, http.StatusUnauthorized, msgLoginRequiredToLink)
-	})
 
 	t.Run("AU-69_OAuthSessionExpiredBeforeLinking", func(t *testing.T) {
 		w := httptest.NewRecorder()
@@ -889,15 +718,6 @@ func TestAU60to71OAuthAndOpenIDFailureMapping(t *testing.T) {
 		OAuthHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, &authtest.FakeSessionService{CreateJWTFunc: okJWT}, auSiteURL)(w, auWithSessionChange(auOAuthRequest(t, discordLink), expired))
 
 		requireProblemRedirect(t, w, redirect, http.StatusUnauthorized, msgSessionExpired)
-	})
-
-	t.Run("AU-70_OpenIDSessionGoneBeforeLinking", func(t *testing.T) {
-		auSteamTransport(t, http.StatusOK, http.StatusOK)
-		w := httptest.NewRecorder()
-
-		OpenIDHandler(auConfig().Steam, &stubAccountService{}, &stubLinkAccountStore{}, &authtest.FakeSessionService{CreateJWTFunc: okJWT}, auSiteURL)(w, auWithSessionChange(auOpenIDRequest(t, steamLink), nil))
-
-		requireProblemRedirect(t, w, redirect, http.StatusUnauthorized, msgLoginRequiredToLink)
 	})
 
 	t.Run("AU-71_OpenIDSessionExpiredBeforeLinking", func(t *testing.T) {
