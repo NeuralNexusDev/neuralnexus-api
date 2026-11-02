@@ -804,6 +804,45 @@
                 }
             }
         },
+        "/mc/geyser/gamertag/{xuid}": {
+            "get": {
+                "summary": "Look up a Bedrock player's gamertag and derived UUID by XUID",
+                "description": "Looks up a Bedrock player by Xbox XUID, DB-cache-first (24h staleness) with a fallback to Geyser's gamertag lookup API on a miss or stale entry. The path value is a decimal XUID or a Floodgate UUID derived from one (see GeyserPlayer.floodgate_uuid); anything else is a 400. The UUID is synthesized from the XUID and is never stored; it is not a real Mojang UUID.",
+                "security": [],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XUIDSlug"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GeyserPlayer"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
         "/mc/geyser/xuid/{gamertag}": {
             "get": {
                 "summary": "Look up a Bedrock player's XUID and derived UUID by gamertag",
@@ -1049,10 +1088,49 @@
                 }
             }
         },
+        "/mc/profile/bedrock/xuid/{xuid}": {
+            "get": {
+                "summary": "Get a Bedrock player's full profile by XUID",
+                "description": "Looks up a Bedrock player by Xbox XUID (a decimal XUID or a Floodgate UUID derived from one) and returns their identity and most recently converted skin as a decoded textures value. Returns 400 if the value is neither.",
+                "security": [],
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/XUIDSlug"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GeyserProfile"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/401Unauthorized"
+                    },
+                    "404": {
+                        "$ref": "#/components/responses/404NotFound"
+                    },
+                    "429": {
+                        "$ref": "#/components/responses/429TooManyRequests"
+                    },
+                    "500": {
+                        "$ref": "#/components/responses/500InternalServerError"
+                    }
+                }
+            }
+        },
         "/mc/profile/bedrock/{uuid}": {
             "get": {
                 "summary": "Get a Bedrock player's full profile (identity + skin) by derived UUID",
-                "description": "Looks up a Bedrock player by their synthetic UUID, derived from an Xbox XUID (see GeyserPlayer.uuid). Returns 400 if the UUID isn't a validly-derived Bedrock UUID.",
+                "description": "Looks up a Bedrock player by their synthetic UUID, derived from an Xbox XUID (see GeyserPlayer.floodgate_uuid). Returns 400 if the UUID isn't a validly-derived Bedrock UUID.",
                 "security": [],
                 "parameters": [
                     {
@@ -3775,7 +3853,7 @@
                 "required": [
                     "gamertag",
                     "xuid",
-                    "uuid"
+                    "floodgate_uuid"
                 ],
                 "properties": {
                     "gamertag": {
@@ -3785,7 +3863,7 @@
                         "type": "integer",
                         "format": "int64"
                     },
-                    "uuid": {
+                    "floodgate_uuid": {
                         "type": "string",
                         "description": "Synthesized from the XUID, not a real Mojang UUID."
                     }
@@ -3798,7 +3876,8 @@
                     "hash",
                     "is_steve",
                     "texture_id",
-                    "value"
+                    "value",
+                    "last_update"
                 ],
                 "properties": {
                     "hash": {
@@ -3820,6 +3899,11 @@
                     "value": {
                         "type": "string",
                         "description": "Base64-encoded skin property value, same shape as a Mojang textures property value."
+                    },
+                    "last_update": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "Unix time in milliseconds when the skin was last updated."
                     }
                 }
             },
@@ -3829,7 +3913,8 @@
                 "required": [
                     "gamertag",
                     "xuid",
-                    "uuid"
+                    "floodgate_uuid",
+                    "last_updated"
                 ],
                 "properties": {
                     "gamertag": {
@@ -3839,12 +3924,51 @@
                         "type": "integer",
                         "format": "int64"
                     },
-                    "uuid": {
+                    "floodgate_uuid": {
                         "type": "string",
                         "description": "Synthesized from the XUID, not a real Mojang UUID."
                     },
-                    "skin": {
-                        "$ref": "#/components/schemas/GeyserSkin"
+                    "textures": {
+                        "type": "object",
+                        "description": "Omitted when the player has no skin.",
+                        "required": [
+                            "timestamp",
+                            "profileId",
+                            "profileName",
+                            "textures"
+                        ],
+                        "properties": {
+                            "timestamp": {
+                                "type": "integer",
+                                "format": "int64"
+                            },
+                            "profileId": {
+                                "type": "string"
+                            },
+                            "profileName": {
+                                "type": "string"
+                            },
+                            "signatureRequired": {
+                                "type": "boolean",
+                                "description": "Omitted when false."
+                            },
+                            "textures": {
+                                "type": "object",
+                                "properties": {
+                                    "SKIN": {
+                                        "$ref": "#/components/schemas/MCTexture"
+                                    },
+                                    "CAPE": {
+                                        "$ref": "#/components/schemas/MCTexture"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "last_updated": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "Unix time in milliseconds when the player was last seen."
                     }
                 }
             },
@@ -4265,7 +4389,7 @@
                 "schema": {
                     "type": "string"
                 },
-                "description": "A Bedrock player's synthetic UUID, derived from their Xbox XUID (see GeyserPlayer.uuid). Not a real Mojang UUID."
+                "description": "A Bedrock player's synthetic UUID, derived from their Xbox XUID (see GeyserPlayer.floodgate_uuid). Not a real Mojang UUID."
             },
             "BedrockGamertagNameSlug": {
                 "name": "name",
