@@ -346,6 +346,7 @@ func uuidToXUID(id string) (int64, error) {
 	return int64(binary.BigEndian.Uint64(parsed[8:16])), nil
 }
 
+// GeyserProfile - a Bedrock player's full profile
 type GeyserProfile struct {
 	ID        string         `json:"floodgate_uuid"`
 	XUID      int64          `json:"xuid"`
