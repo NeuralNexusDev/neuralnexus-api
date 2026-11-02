@@ -19,49 +19,6 @@ import (
 
 var svCtx = context.Background()
 
-type svCreatePetPictureArgs struct {
-	id             string
-	fileExt        string
-	primarySubject int
-	othersSubjects []int
-	aliases        []string
-}
-
-type svMockStore struct {
-	createPetPictureResult *PetPicture
-	createPetPictureErr    error
-	createPetPictureCalls  []svCreatePetPictureArgs
-}
-
-func (m *svMockStore) CreatePet(_ context.Context, name string) (*Pet, error) {
-	panic("CreatePet not used by UploadPetPicture")
-}
-func (m *svMockStore) GetPet(_ context.Context, id int) (*Pet, error) {
-	panic("GetPet not used by UploadPetPicture")
-}
-func (m *svMockStore) GetPetByName(_ context.Context, name string) (*Pet, error) {
-	panic("GetPetByName not used by UploadPetPicture")
-}
-func (m *svMockStore) UpdatePet(_ context.Context, pet *Pet) (*Pet, error) {
-	panic("UpdatePet not used by UploadPetPicture")
-}
-func (m *svMockStore) CreatePetPicture(_ context.Context, id string, fileExt string, primarySubject int, othersSubjects []int, aliases []string) (*PetPicture, error) {
-	m.createPetPictureCalls = append(m.createPetPictureCalls, svCreatePetPictureArgs{id, fileExt, primarySubject, othersSubjects, aliases})
-	return m.createPetPictureResult, m.createPetPictureErr
-}
-func (m *svMockStore) GetRandPetPictureByName(_ context.Context, name string) (*PetPicture, error) {
-	panic("GetRandPetPictureByName not used by UploadPetPicture")
-}
-func (m *svMockStore) GetPetPicture(_ context.Context, id string) (*PetPicture, error) {
-	panic("GetPetPicture not used by UploadPetPicture")
-}
-func (m *svMockStore) UpdatePetPicture(_ context.Context, picture PetPicture) (*PetPicture, error) {
-	panic("UpdatePetPicture not used by UploadPetPicture")
-}
-func (m *svMockStore) DeletePetPicture(_ context.Context, id string) (*PetPicture, error) {
-	panic("DeletePetPicture not used by UploadPetPicture")
-}
-
 func svOKResponse() *http.Response {
 	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(nil)), Header: make(http.Header)}
 }
@@ -88,7 +45,7 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 		mockPic := &PetPicture{ID: "sv03-mock-id", FileExt: "jpg", PrimarySubject: 4, OthersSubjects: []int{5}, Aliases: []string{"a"}}
 		t.Cleanup(func() { os.Remove("sv03-mock-id.jpg") })
 
-		mock := &svMockStore{createPetPictureResult: mockPic}
+		mock := &ppMockStore{createPetPictureResult: mockPic}
 		svc := NewService(mock)
 		file := svTempFile(t, "sv03-upload-*.jpg", []byte("some picture bytes"))
 
@@ -147,7 +104,7 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 
 	t.Run("PPV-04_StoreErrorPropagates", func(t *testing.T) {
 		wantErr := testutil.ErrDBDown
-		mock := &svMockStore{createPetPictureErr: wantErr}
+		mock := &ppMockStore{createPetPictureErr: wantErr}
 		svc := NewService(mock)
 		file := svTempFile(t, "sv04-upload-*.jpg", []byte("bytes"))
 
@@ -167,7 +124,7 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 	})
 
 	t.Run("PPV-05_RenameFailsWhenSourceFileIsGone", func(t *testing.T) {
-		mock := &svMockStore{createPetPictureResult: &PetPicture{ID: "sv05-mock-id", FileExt: "jpg"}}
+		mock := &ppMockStore{createPetPictureResult: &PetPicture{ID: "sv05-mock-id", FileExt: "jpg"}}
 		svc := NewService(mock)
 		file := svTempFile(t, "sv05-upload-*.jpg", []byte("bytes"))
 		if err := os.Remove(file.Name()); err != nil {
@@ -186,7 +143,7 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 	t.Run("PPV-06_TransportErrorPropagates", func(t *testing.T) {
 		mockPic := &PetPicture{ID: "sv06-mock-id", FileExt: "jpg"}
 		t.Cleanup(func() { os.Remove("sv06-mock-id.jpg") })
-		mock := &svMockStore{createPetPictureResult: mockPic}
+		mock := &ppMockStore{createPetPictureResult: mockPic}
 		svc := NewService(mock)
 		file := svTempFile(t, "sv06-upload-*.jpg", []byte("bytes"))
 
@@ -205,7 +162,7 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 	t.Run("PPV-07_MultiDotFilenameUsesLastSegment", func(t *testing.T) {
 		mockPic := &PetPicture{ID: "sv07-mock-id"}
 		t.Cleanup(func() { os.Remove("sv07-mock-id.gz") })
-		mock := &svMockStore{createPetPictureResult: mockPic}
+		mock := &ppMockStore{createPetPictureResult: mockPic}
 		svc := NewService(mock)
 		file := svTempFile(t, "sv07-photo-*.tar.gz", []byte("bytes"))
 
@@ -221,7 +178,7 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 
 	t.Run("PPV-08_NoDotFilenameUsesWholeBasename", func(t *testing.T) {
 		mockPic := &PetPicture{ID: "sv08-mock-id"}
-		mock := &svMockStore{createPetPictureResult: mockPic}
+		mock := &ppMockStore{createPetPictureResult: mockPic}
 		svc := NewService(mock)
 		file := svTempFile(t, "sv08photo", []byte("bytes"))
 		base := filepath.Base(file.Name())
@@ -240,7 +197,7 @@ func TestSV03to08_UploadPetPicture(t *testing.T) {
 }
 
 type svCtxStore struct {
-	svMockStore
+	ppMockStore
 	got context.Context
 }
 

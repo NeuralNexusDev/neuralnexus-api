@@ -25,6 +25,7 @@ import (
 )
 
 type stubAccountService struct {
+	inertAccountService
 	account              *account.Account
 	lookupErr            error
 	passwordAuthDisabled bool
@@ -78,6 +79,7 @@ func (s *stubAccountService) NewSession(_ context.Context, a *account.Account, e
 }
 
 type stubLinkAccountStore struct {
+	inertLinkStore
 	existing   *LinkedAccount
 	byPlatform map[Platform]*LinkedAccount
 	addErr     error
@@ -89,8 +91,6 @@ func (s *stubLinkAccountStore) AddLinkedAccountToDB(context.Context, *LinkedAcco
 	return s.addErr
 }
 
-func (s *stubLinkAccountStore) UpdateLinkedAccount(context.Context, *LinkedAccount) error { return nil }
-
 func (s *stubLinkAccountStore) GetLinkedAccountByPlatformID(_ context.Context, platform Platform, _ string) (*LinkedAccount, error) {
 	if la, ok := s.byPlatform[platform]; ok {
 		return la, nil
@@ -99,26 +99,6 @@ func (s *stubLinkAccountStore) GetLinkedAccountByPlatformID(_ context.Context, p
 		return s.existing, nil
 	}
 	return nil, account.ErrNotFound
-}
-
-func (s *stubLinkAccountStore) GetLinkedAccountByPlatformName(context.Context, Platform, string) (*LinkedAccount, error) {
-	return nil, account.ErrNotFound
-}
-
-func (s *stubLinkAccountStore) GetLinkedAccountByUserID(context.Context, string, Platform) (*LinkedAccount, error) {
-	return nil, account.ErrNotFound
-}
-
-func (s *stubLinkAccountStore) GetLinkedAccountsByUserID(context.Context, string) ([]*LinkedAccount, error) {
-	return nil, nil
-}
-
-func (s *stubLinkAccountStore) DeleteLinkedAccount(context.Context, string, Platform) error {
-	return nil
-}
-
-func (s *stubLinkAccountStore) SetLinkedAccountLoginEnabled(context.Context, string, Platform, bool) error {
-	return nil
 }
 
 func encodeState(t *testing.T, state OAuthState) string {

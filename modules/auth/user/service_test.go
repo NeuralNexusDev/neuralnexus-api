@@ -62,35 +62,14 @@ type usLinkResult struct {
 type usFakeLinkAccountStore struct {
 	getByPlatformIDResults []usLinkResult
 	getByPlatformIDCalls   int
-
-	addErr               error
-	addCalls             int
-	addLastLinkedAccount *link.LinkedAccount
-
-	updateErr               error
-	updateCalls             int
-	updateLastLinkedAccount *link.LinkedAccount
-
-	getsByUserID    []*link.LinkedAccount
-	getsByUserIDErr error
-
-	deleteErr   error
-	deleteCalls int
-
-	setLoginEnabledErr   error
-	setLoginEnabledCalls int
 }
 
-func (f *usFakeLinkAccountStore) AddLinkedAccountToDB(_ context.Context, la *link.LinkedAccount) error {
-	f.addCalls++
-	f.addLastLinkedAccount = la
-	return f.addErr
+func (f *usFakeLinkAccountStore) AddLinkedAccountToDB(context.Context, *link.LinkedAccount) error {
+	return nil
 }
 
-func (f *usFakeLinkAccountStore) UpdateLinkedAccount(_ context.Context, la *link.LinkedAccount) error {
-	f.updateCalls++
-	f.updateLastLinkedAccount = la
-	return f.updateErr
+func (f *usFakeLinkAccountStore) UpdateLinkedAccount(context.Context, *link.LinkedAccount) error {
+	return nil
 }
 
 func (f *usFakeLinkAccountStore) GetLinkedAccountByPlatformID(_ context.Context, _ link.Platform, _ string) (*link.LinkedAccount, error) {
@@ -104,26 +83,24 @@ func (f *usFakeLinkAccountStore) GetLinkedAccountByPlatformID(_ context.Context,
 	return last.la, last.err
 }
 
-func (f *usFakeLinkAccountStore) GetLinkedAccountByPlatformName(_ context.Context, _ link.Platform, _ string) (*link.LinkedAccount, error) {
+func (f *usFakeLinkAccountStore) GetLinkedAccountByPlatformName(context.Context, link.Platform, string) (*link.LinkedAccount, error) {
 	return nil, account.ErrNotFound
 }
 
-func (f *usFakeLinkAccountStore) GetLinkedAccountByUserID(_ context.Context, _ string, _ link.Platform) (*link.LinkedAccount, error) {
+func (f *usFakeLinkAccountStore) GetLinkedAccountByUserID(context.Context, string, link.Platform) (*link.LinkedAccount, error) {
 	return nil, account.ErrNotFound
 }
 
-func (f *usFakeLinkAccountStore) GetLinkedAccountsByUserID(_ context.Context, _ string) ([]*link.LinkedAccount, error) {
-	return f.getsByUserID, f.getsByUserIDErr
+func (f *usFakeLinkAccountStore) GetLinkedAccountsByUserID(context.Context, string) ([]*link.LinkedAccount, error) {
+	return nil, nil
 }
 
-func (f *usFakeLinkAccountStore) DeleteLinkedAccount(_ context.Context, _ string, _ link.Platform) error {
-	f.deleteCalls++
-	return f.deleteErr
+func (f *usFakeLinkAccountStore) DeleteLinkedAccount(context.Context, string, link.Platform) error {
+	return nil
 }
 
-func (f *usFakeLinkAccountStore) SetLinkedAccountLoginEnabled(_ context.Context, _ string, _ link.Platform, _ bool) error {
-	f.setLoginEnabledCalls++
-	return f.setLoginEnabledErr
+func (f *usFakeLinkAccountStore) SetLinkedAccountLoginEnabled(context.Context, string, link.Platform, bool) error {
+	return nil
 }
 
 type usFakeAccountSettingsStore struct {

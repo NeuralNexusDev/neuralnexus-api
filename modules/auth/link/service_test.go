@@ -17,6 +17,7 @@ type usLinkResult struct {
 }
 
 type usFakeLinkAccountStore struct {
+	inertLinkStore
 	getByPlatformIDResults []usLinkResult
 	getByPlatformIDCalls   int
 
@@ -61,14 +62,6 @@ func (f *usFakeLinkAccountStore) GetLinkedAccountByPlatformID(_ context.Context,
 	}
 	last := f.getByPlatformIDResults[len(f.getByPlatformIDResults)-1]
 	return last.la, last.err
-}
-
-func (f *usFakeLinkAccountStore) GetLinkedAccountByPlatformName(_ context.Context, _ Platform, _ string) (*LinkedAccount, error) {
-	return nil, account.ErrNotFound
-}
-
-func (f *usFakeLinkAccountStore) GetLinkedAccountByUserID(_ context.Context, _ string, _ Platform) (*LinkedAccount, error) {
-	return nil, account.ErrNotFound
 }
 
 func (f *usFakeLinkAccountStore) GetLinkedAccountsByUserID(_ context.Context, _ string) ([]*LinkedAccount, error) {
@@ -158,41 +151,14 @@ func TestUS32to33SetPlatformLoginEnabled(t *testing.T) {
 	})
 }
 
-type usFakePlatformData struct {
-	username string
-}
-
-func (f usFakePlatformData) GetID() string { return "pid" }
-
-func (f usFakePlatformData) GetEmail() string { return "" }
-
-func (f usFakePlatformData) GetUsername() string { return f.username }
-
-func (f usFakePlatformData) GetData() string { return "{}" }
-
-func (f usFakePlatformData) CreateLinkedAccount(_ string) *LinkedAccount {
-	return nil
-}
-
 type usConcurrentStore struct {
 	*accountMap
-	mu    sync.Mutex
-	links map[string]*LinkedAccount
-
-	barrierMu    sync.Mutex
-	barrierWG    sync.WaitGroup
-	barrierN     int
-	barrierCount int
+	*concurrentLinkStore
 }
 
 func newUSConcurrentStore(barrierN int) *usConcurrentStore {
-	s := &usConcurrentStore{accountMap: newAccountMap(), links: map[string]*LinkedAccount{}, barrierN: barrierN}
-	s.barrierWG.Add(barrierN)
+	s := &usConcurrentStore{accountMap: newAccountMap(), concurrentLinkStore: newConcurrentLinkStore(barrierN)}
 	return s
-}
-
-func usLinkKey(platform Platform, platformID string) string {
-	return string(platform) + "|" + platformID
 }
 
 func (s *usConcurrentStore) AddAccountToDB(ctx context.Context, a *account.Account) error {
@@ -219,75 +185,13 @@ func (s *usConcurrentStore) DeleteAccountFromDB(ctx context.Context, userID stri
 	return s.DeleteAccount(ctx, userID)
 }
 
-func (s *usConcurrentStore) AddLinkedAccountToDB(_ context.Context, la *LinkedAccount) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	key := usLinkKey(la.Platform, la.PlatformID)
-	if _, exists := s.links[key]; exists {
-		return ErrAlreadyLinked
-	}
-	cp := *la
-	s.links[key] = &cp
-	return nil
-}
-
-func (s *usConcurrentStore) UpdateLinkedAccount(_ context.Context, la *LinkedAccount) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	cp := *la
-	s.links[usLinkKey(la.Platform, la.PlatformID)] = &cp
-	return nil
-}
-
-func (s *usConcurrentStore) GetLinkedAccountByPlatformID(_ context.Context, platform Platform, platformID string) (*LinkedAccount, error) {
-	s.barrierMu.Lock()
-	participates := s.barrierCount < s.barrierN
-	if participates {
-		s.barrierCount++
-	}
-	s.barrierMu.Unlock()
-	if participates {
-		s.barrierWG.Done()
-		s.barrierWG.Wait()
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	la, ok := s.links[usLinkKey(platform, platformID)]
-	if !ok {
-		return nil, account.ErrNotFound
-	}
-	cp := *la
-	return &cp, nil
-}
-
-func (s *usConcurrentStore) GetLinkedAccountByPlatformName(_ context.Context, _ Platform, _ string) (*LinkedAccount, error) {
-	return nil, account.ErrNotFound
-}
-
-func (s *usConcurrentStore) GetLinkedAccountByUserID(_ context.Context, _ string, _ Platform) (*LinkedAccount, error) {
-	return nil, account.ErrNotFound
-}
-
-func (s *usConcurrentStore) GetLinkedAccountsByUserID(_ context.Context, _ string) ([]*LinkedAccount, error) {
-	return nil, nil
-}
-
-func (s *usConcurrentStore) DeleteLinkedAccount(_ context.Context, _ string, _ Platform) error {
-	return nil
-}
-
-func (s *usConcurrentStore) SetLinkedAccountLoginEnabled(_ context.Context, _ string, _ Platform, _ bool) error {
-	return nil
-}
-
 func TestUS15to23UpdateFromPlatform(t *testing.T) {
 	t.Run("LKV-15_NewIdentityCreatesAccount", func(t *testing.T) {
 		as := &accounttest.FakeStore{GetByIDAccount: &account.Account{UserID: "resolved"}}
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, account.ErrNotFound}}}
 		svc := NewService(als, as)
 
-		got, err := svc.UpdateFromPlatform(context.Background(), PlatformDiscord, "p1", usFakePlatformData{username: "alice"})
+		got, err := svc.UpdateFromPlatform(context.Background(), PlatformDiscord, "p1", &fakePlatformData{id: "pid", username: "alice"})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -307,7 +211,7 @@ func TestUS15to23UpdateFromPlatform(t *testing.T) {
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{existing, nil}}}
 		svc := NewService(als, as)
 
-		got, err := svc.UpdateFromPlatform(context.Background(), PlatformDiscord, "p1", usFakePlatformData{username: "alice"})
+		got, err := svc.UpdateFromPlatform(context.Background(), PlatformDiscord, "p1", &fakePlatformData{id: "pid", username: "alice"})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -327,7 +231,7 @@ func TestUS15to23UpdateFromPlatform(t *testing.T) {
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, wantErr}}}
 		svc := NewService(als, as)
 
-		_, err := svc.UpdateFromPlatform(context.Background(), PlatformDiscord, "p1", usFakePlatformData{})
+		_, err := svc.UpdateFromPlatform(context.Background(), PlatformDiscord, "p1", &fakePlatformData{id: "pid"})
 		if !errors.Is(err, wantErr) {
 			t.Errorf("UpdateFromPlatform() err = %v, want %v", err, wantErr)
 		}
@@ -341,7 +245,7 @@ func TestUS15to23UpdateFromPlatform(t *testing.T) {
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, account.ErrNotFound}}}
 		svc := NewService(als, as)
 
-		_, err := svc.UpdateFromPlatform(context.Background(), PlatformDiscord, "p1", usFakePlatformData{})
+		_, err := svc.UpdateFromPlatform(context.Background(), PlatformDiscord, "p1", &fakePlatformData{id: "pid"})
 		if !errors.Is(err, wantErr) {
 			t.Errorf("UpdateFromPlatform() err = %v, want %v", err, wantErr)
 		}
@@ -355,7 +259,7 @@ func TestUS15to23UpdateFromPlatform(t *testing.T) {
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, account.ErrNotFound}}, addErr: wantErr}
 		svc := NewService(als, as)
 
-		_, err := svc.UpdateFromPlatform(context.Background(), PlatformDiscord, "p1", usFakePlatformData{})
+		_, err := svc.UpdateFromPlatform(context.Background(), PlatformDiscord, "p1", &fakePlatformData{id: "pid"})
 		if !errors.Is(err, wantErr) {
 			t.Errorf("UpdateFromPlatform() err = %v, want %v", err, wantErr)
 		}
@@ -370,7 +274,7 @@ func TestUS15to23UpdateFromPlatform(t *testing.T) {
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{nil, account.ErrNotFound}}, addErr: linkErr}
 		svc := NewService(als, as)
 
-		_, err := svc.UpdateFromPlatform(testutil.LogContext(context.Background()), PlatformDiscord, "p1", usFakePlatformData{})
+		_, err := svc.UpdateFromPlatform(testutil.LogContext(context.Background()), PlatformDiscord, "p1", &fakePlatformData{id: "pid"})
 		if err == nil {
 			t.Fatal("expected a non-nil error")
 		}
@@ -387,7 +291,7 @@ func TestUS15to23UpdateFromPlatform(t *testing.T) {
 		}
 		svc := NewService(als, as)
 
-		got, err := svc.UpdateFromPlatform(context.Background(), PlatformDiscord, "p1", usFakePlatformData{})
+		got, err := svc.UpdateFromPlatform(context.Background(), PlatformDiscord, "p1", &fakePlatformData{id: "pid"})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -413,7 +317,7 @@ func TestUS15to23UpdateFromPlatform(t *testing.T) {
 		}
 		svc := NewService(als, as)
 
-		_, err := svc.UpdateFromPlatform(context.Background(), PlatformDiscord, "p1", usFakePlatformData{})
+		_, err := svc.UpdateFromPlatform(context.Background(), PlatformDiscord, "p1", &fakePlatformData{id: "pid"})
 		if !errors.Is(err, wantErr) {
 			t.Errorf("UpdateFromPlatform() err = %v, want %v", err, wantErr)
 		}
@@ -425,7 +329,7 @@ func TestUS15to23UpdateFromPlatform(t *testing.T) {
 		als := &usFakeLinkAccountStore{getByPlatformIDResults: []usLinkResult{{existing, nil}}, updateErr: wantErr}
 		svc := NewService(als, as)
 
-		_, err := svc.UpdateFromPlatform(context.Background(), PlatformDiscord, "p1", usFakePlatformData{})
+		_, err := svc.UpdateFromPlatform(context.Background(), PlatformDiscord, "p1", &fakePlatformData{id: "pid"})
 		if !errors.Is(err, wantErr) {
 			t.Errorf("UpdateFromPlatform() err = %v, want %v", err, wantErr)
 		}
@@ -448,7 +352,7 @@ func TestUS25UpdateFromPlatformConcurrentRace(t *testing.T) {
 				i := i
 				go func() {
 					defer wg.Done()
-					results[i], errs[i] = svc.UpdateFromPlatform(context.Background(), PlatformDiscord, "shared-platform-id", usFakePlatformData{username: "alice"})
+					results[i], errs[i] = svc.UpdateFromPlatform(context.Background(), PlatformDiscord, "shared-platform-id", &fakePlatformData{id: "pid", username: "alice"})
 				}()
 			}
 			wg.Wait()
@@ -478,7 +382,7 @@ func TestUS40UpdateFromPlatformCreateAndCleanupIgnoreCancel(t *testing.T) {
 		ctx, cancel := context.WithCancel(testutil.LogContext(context.Background()))
 		cancel()
 
-		if _, err := NewService(als, as).UpdateFromPlatform(ctx, PlatformDiscord, "p1", usFakePlatformData{}); !errors.Is(err, testutil.ErrInsertFailed) {
+		if _, err := NewService(als, as).UpdateFromPlatform(ctx, PlatformDiscord, "p1", &fakePlatformData{id: "pid"}); !errors.Is(err, testutil.ErrInsertFailed) {
 			t.Fatalf("UpdateFromPlatform() err = %v, want %v", err, testutil.ErrInsertFailed)
 		}
 		if as.AddCtxErr != nil || als.addCtxErr != nil || as.DeleteCtxErr != nil {
