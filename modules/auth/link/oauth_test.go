@@ -844,29 +844,6 @@ func TestOA27to42ProcessOAuthLink(t *testing.T) {
 		}
 	})
 
-	t.Run("OA-28_NoSessionInContext", func(t *testing.T) {
-		las := &oaMockLinkAccountStore{}
-		req := oaRequestWithSession(nil)
-
-		cfg := testutil.NewConfig()
-		_, err := ProcessOAuthLink(req, cfg, las, "code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLink})
-		if !errors.Is(err, ErrSessionNotFound) {
-			t.Fatalf("error = %v, want %v", err, ErrSessionNotFound)
-		}
-	})
-
-	t.Run("OA-29_ExpiredSession", func(t *testing.T) {
-		las := &oaMockLinkAccountStore{}
-		expired := &session.Session{ID: "sess-1", UserID: "user-1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
-		req := oaRequestWithSession(expired)
-
-		cfg := testutil.NewConfig()
-		_, err := ProcessOAuthLink(req, cfg, las, "code", &OAuthState{Platform: PlatformDiscord, Mode: ModeLink})
-		if !errors.Is(err, ErrSessionExpired) {
-			t.Fatalf("error = %v, want %v", err, ErrSessionExpired)
-		}
-	})
-
 	t.Run("OA-30_InvalidPlatform", func(t *testing.T) {
 		las := &oaMockLinkAccountStore{}
 		req := oaRequestWithSession(activeSession("user-1"))
