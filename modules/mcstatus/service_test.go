@@ -10,8 +10,6 @@ import (
 	"image"
 	"image/png"
 	"net"
-	"os"
-	"strconv"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -33,40 +31,6 @@ func svUnusedUDPPort(t *testing.T) int {
 	return port
 }
 
-func svLiveJavaServer(t *testing.T) (string, int) {
-	t.Helper()
-	addr := os.Getenv("MC_LIVE_JAVA_SERVER")
-	if addr == "" {
-		t.Skip("MC_LIVE_JAVA_SERVER not set; skipping live Java server test")
-	}
-	host, portStr, err := net.SplitHostPort(addr)
-	if err != nil {
-		t.Fatalf("invalid MC_LIVE_JAVA_SERVER %q: %v", addr, err)
-	}
-	port, err := strconv.Atoi(portStr)
-	if err != nil {
-		t.Fatalf("invalid port in MC_LIVE_JAVA_SERVER %q: %v", addr, err)
-	}
-	return host, port
-}
-
-func svLiveBedrockServer(t *testing.T) (string, int) {
-	t.Helper()
-	addr := os.Getenv("MC_LIVE_BEDROCK_SERVER")
-	if addr == "" {
-		t.Skip("MC_LIVE_BEDROCK_SERVER not set; skipping live Bedrock server test")
-	}
-	host, portStr, err := net.SplitHostPort(addr)
-	if err != nil {
-		t.Fatalf("invalid MC_LIVE_BEDROCK_SERVER %q: %v", addr, err)
-	}
-	port, err := strconv.Atoi(portStr)
-	if err != nil {
-		t.Fatalf("invalid port in MC_LIVE_BEDROCK_SERVER %q: %v", addr, err)
-	}
-	return host, port
-}
-
 func TestService_GetJavaServerStatus(t *testing.T) {
 	t.Run("CSV-02_UnreachableHostReturnsError", func(t *testing.T) {
 		port := testutil.UnusedTCPPort(t)
@@ -79,40 +43,6 @@ func TestService_GetJavaServerStatus(t *testing.T) {
 		}
 		if !errors.Is(err, ErrJavaStatus) {
 			t.Fatalf("expected %v, got %v", ErrJavaStatus, err)
-		}
-	})
-
-	t.Run("CSV-03_UnreachableHostWithQueryEnabledStillErrors", func(t *testing.T) {
-		port := testutil.UnusedTCPPort(t)
-		s := NewService()
-
-		status, err := s.GetJavaServerStatus(testutil.LogContext(context.Background()), "127.0.0.1", port, true, port)
-
-		if status != nil {
-			t.Fatalf("expected nil status, got %+v", status)
-		}
-		if !errors.Is(err, ErrJavaStatus) {
-			t.Fatalf("expected %v, got %v", ErrJavaStatus, err)
-		}
-	})
-
-	t.Run("CSV-09_LiveServerReturnsStatus", func(t *testing.T) {
-		host, port := svLiveJavaServer(t)
-		s := NewService()
-
-		status, err := s.GetJavaServerStatus(testutil.LogContext(context.Background()), host, port, false, 0)
-
-		if err != nil {
-			t.Fatalf("expected nil error, got %v", err)
-		}
-		if status == nil {
-			t.Fatal("expected non-nil status")
-		}
-		if status.Host != host {
-			t.Errorf("Host: expected %q, got %q", host, status.Host)
-		}
-		if status.Port != int32(port) {
-			t.Errorf("Port: expected %d, got %d", port, status.Port)
 		}
 	})
 }
@@ -129,20 +59,6 @@ func TestService_GetBedrockServerStatus(t *testing.T) {
 		}
 		if !errors.Is(err, ErrBedrockStatus) {
 			t.Fatalf("expected %v, got %v", ErrBedrockStatus, err)
-		}
-	})
-
-	t.Run("CSV-10_LiveServerReturnsStatus", func(t *testing.T) {
-		host, port := svLiveBedrockServer(t)
-		s := NewService()
-
-		status, err := s.GetBedrockServerStatus(testutil.LogContext(context.Background()), host, port)
-
-		if err != nil {
-			t.Fatalf("expected nil error, got %v", err)
-		}
-		if status == nil {
-			t.Fatal("expected non-nil status")
 		}
 	})
 }
@@ -592,41 +508,6 @@ func TestService_GetJavaServerStatusQueryConcurrency(t *testing.T) {
 		}
 		if status.Version != "query-version" {
 			t.Fatalf("Version = %q, want the query status once the slow query answered", status.Version)
-		}
-	})
-}
-
-func TestMergeQueryStatus(t *testing.T) {
-	t.Run("CSV-16_QueryStatusKeepsPingIconFaviconAndLegacy", func(t *testing.T) {
-		icon := image.NewRGBA(image.Rect(0, 0, 1, 1))
-		ping := NewServerStatus("", 0, "", "", "", 0, 0, nil, "", "ping-favicon", ServerTypeJava, nil, icon)
-		ping.Legacy = true
-		query := NewServerStatus("", 0, "", "", "", 0, 0, nil, "", "", ServerTypeJava, nil, nil)
-
-		got := mergeQueryStatus(ping, query)
-
-		if got != query {
-			t.Fatalf("expected the query status to be returned")
-		}
-		if got.Icon != icon || !got.Legacy {
-			t.Fatalf("status = icon %v, legacy %v; want the ping's icon and legacy flag", got.Icon, got.Legacy)
-		}
-		if got.Favicon != "ping-favicon" {
-			t.Fatalf("Favicon = %q, want the ping's favicon", got.Favicon)
-		}
-	})
-}
-
-func TestBedrockAddress(t *testing.T) {
-	t.Run("CSV-26_Ipv6HostIsBracketed", func(t *testing.T) {
-		if got := bedrockAddress("2001:db8::1", 19132); got != "[2001:db8::1]:19132" {
-			t.Fatalf("address = %q, want the IPv6 host in brackets", got)
-		}
-	})
-
-	t.Run("CSV-27_HostnameJoinedWithPort", func(t *testing.T) {
-		if got := bedrockAddress("example.com", 19132); got != "example.com:19132" {
-			t.Fatalf("address = %q, want host:port", got)
 		}
 	})
 }

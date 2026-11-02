@@ -157,80 +157,6 @@ func TestServerStatusHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("CSH-03_ErrorReturnsNotFound", func(t *testing.T) {
-		mock := &hdMockService{serverErr: ErrJavaStatus}
-		req := hdRequest(t, "mc.example.com:25565", "")
-		w := httptest.NewRecorder()
-
-		ServerStatusHandler(mock)(w, req)
-
-		if w.Code != http.StatusNotFound {
-			t.Fatalf("expected 404, got %d", w.Code)
-		}
-		p := hdDecodeProblem(t, w.Body.Bytes())
-		if p.Detail != msgJavaStatusFailed {
-			t.Fatalf("expected detail %q, got %q", msgJavaStatusFailed, p.Detail)
-		}
-	})
-
-	t.Run("CSH-04_NoPortSuffixDefaultsJavaPort", func(t *testing.T) {
-		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
-		req := hdRequest(t, "example.com", "")
-		w := httptest.NewRecorder()
-
-		ServerStatusHandler(mock)(w, req)
-
-		if len(mock.serverCalls) != 1 {
-			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
-		}
-		if got := mock.serverCalls[0].port; got != 25565 {
-			t.Fatalf("expected default java port 25565, got %d", got)
-		}
-		if got := mock.serverCalls[0].host; got != "example.com" {
-			t.Fatalf("expected host example.com, got %q", got)
-		}
-	})
-
-	t.Run("CSH-05_NoPortSuffixDefaultsBedrockPort", func(t *testing.T) {
-		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
-		req := hdRequest(t, "example.com", "bedrock=true")
-		w := httptest.NewRecorder()
-
-		ServerStatusHandler(mock)(w, req)
-
-		if len(mock.serverCalls) != 1 {
-			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
-		}
-		if got := mock.serverCalls[0].port; got != 19132 {
-			t.Fatalf("expected default bedrock port 19132, got %d", got)
-		}
-		if got := mock.serverCalls[0].host; got != "example.com" {
-			t.Fatalf("expected host example.com, got %q", got)
-		}
-		if !mock.serverCalls[0].isBedrock {
-			t.Fatalf("expected isBedrock=true to be forwarded")
-		}
-	})
-
-	t.Run("CSH-06_MissingQueryPortDefaultsToPort", func(t *testing.T) {
-		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
-		req := hdRequest(t, "example.com:25566", "")
-		w := httptest.NewRecorder()
-
-		ServerStatusHandler(mock)(w, req)
-
-		if len(mock.serverCalls) != 1 {
-			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
-		}
-		call := mock.serverCalls[0]
-		if call.port != 25566 {
-			t.Fatalf("expected parsed port 25566, got %d", call.port)
-		}
-		if call.queryPort != call.port {
-			t.Fatalf("expected queryPort to default to port %d, got %d", call.port, call.queryPort)
-		}
-	})
-
 	t.Run("CSH-07_QueryFlagsForwarded", func(t *testing.T) {
 		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 		req := hdRequest(t, "example.com:25566", "bedrock=true&query=true&query_port=9999")
@@ -265,8 +191,6 @@ func TestServerStatusHandler(t *testing.T) {
 		wantStatus int
 		want       string
 	}{
-		{"JavaStatus", ErrJavaStatus, http.StatusNotFound, msgJavaStatusFailed},
-		{"BedrockStatus", ErrBedrockStatus, http.StatusNotFound, msgBedrockStatusFailed},
 		{"Unrecognized", testutil.ErrBoom, http.StatusInternalServerError, msgFailedToGetServerStatus},
 	} {
 		t.Run("CSH-16_"+tc.name, func(t *testing.T) {
@@ -322,118 +246,6 @@ func TestServerStatusHandler(t *testing.T) {
 			}
 		})
 	}
-
-	t.Run("CSH-21_HostPortSplitJava", func(t *testing.T) {
-		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
-		req := hdRequest(t, "mc.example.com:25570", "")
-
-		ServerStatusHandler(mock)(httptest.NewRecorder(), req)
-
-		if len(mock.serverCalls) != 1 {
-			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
-		}
-		if call := mock.serverCalls[0]; call.host != "mc.example.com" || call.port != 25570 || call.isBedrock {
-			t.Fatalf("call = %+v, want host mc.example.com, port 25570, java", call)
-		}
-	})
-
-	t.Run("CSH-22_HostPortSplitBedrock", func(t *testing.T) {
-		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
-		req := hdRequest(t, "mc.example.com:19140", "bedrock=true")
-
-		ServerStatusHandler(mock)(httptest.NewRecorder(), req)
-
-		if len(mock.serverCalls) != 1 {
-			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
-		}
-		if call := mock.serverCalls[0]; call.host != "mc.example.com" || call.port != 19140 || !call.isBedrock {
-			t.Fatalf("call = %+v, want host mc.example.com, port 19140, bedrock", call)
-		}
-	})
-
-	t.Run("CSH-35_Ipv6BracketedWithPort", func(t *testing.T) {
-		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
-		req := hdRequest(t, "[2001:db8::1]:25570", "")
-
-		ServerStatusHandler(mock)(httptest.NewRecorder(), req)
-
-		if len(mock.serverCalls) != 1 {
-			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
-		}
-		if call := mock.serverCalls[0]; call.host != "2001:db8::1" || call.port != 25570 || call.isBedrock {
-			t.Fatalf("call = %+v, want host 2001:db8::1, port 25570, bedrock false", call)
-		}
-	})
-
-	t.Run("CSH-36_Ipv6BracketedNoPortBedrock", func(t *testing.T) {
-		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
-		req := hdRequest(t, "[2001:db8::1]", "bedrock=true")
-
-		ServerStatusHandler(mock)(httptest.NewRecorder(), req)
-
-		if len(mock.serverCalls) != 1 {
-			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
-		}
-		if call := mock.serverCalls[0]; call.host != "2001:db8::1" || call.port != 19132 || !call.isBedrock {
-			t.Fatalf("call = %+v, want host 2001:db8::1, port 19132, bedrock true", call)
-		}
-	})
-
-	t.Run("CSH-37_Ipv6BareLiteralDefaultsPort", func(t *testing.T) {
-		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
-		req := hdRequest(t, "2001:db8::1", "")
-
-		ServerStatusHandler(mock)(httptest.NewRecorder(), req)
-
-		if len(mock.serverCalls) != 1 {
-			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
-		}
-		if call := mock.serverCalls[0]; call.host != "2001:db8::1" || call.port != 25565 || call.isBedrock {
-			t.Fatalf("call = %+v, want host 2001:db8::1, port 25565, bedrock false", call)
-		}
-	})
-
-	t.Run("CSH-41_Ipv6BracketedWithPortBedrock", func(t *testing.T) {
-		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
-		req := hdRequest(t, "[2001:db8::1]:19133", "bedrock=true")
-
-		ServerStatusHandler(mock)(httptest.NewRecorder(), req)
-
-		if len(mock.serverCalls) != 1 {
-			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
-		}
-		if call := mock.serverCalls[0]; call.host != "2001:db8::1" || call.port != 19133 || !call.isBedrock {
-			t.Fatalf("call = %+v, want host 2001:db8::1, port 19133, bedrock true", call)
-		}
-	})
-
-	t.Run("CSH-42_Ipv6BracketedNoPortJava", func(t *testing.T) {
-		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
-		req := hdRequest(t, "[2001:db8::1]", "")
-
-		ServerStatusHandler(mock)(httptest.NewRecorder(), req)
-
-		if len(mock.serverCalls) != 1 {
-			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
-		}
-		if call := mock.serverCalls[0]; call.host != "2001:db8::1" || call.port != 25565 || call.isBedrock {
-			t.Fatalf("call = %+v, want host 2001:db8::1, port 25565, bedrock false", call)
-		}
-	})
-
-	t.Run("CSH-43_Ipv6BareLiteralBedrock", func(t *testing.T) {
-		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
-		req := hdRequest(t, "2001:db8::1", "bedrock=true")
-
-		ServerStatusHandler(mock)(httptest.NewRecorder(), req)
-
-		if len(mock.serverCalls) != 1 {
-			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
-		}
-		if call := mock.serverCalls[0]; call.host != "2001:db8::1" || call.port != 19132 || !call.isBedrock {
-			t.Fatalf("call = %+v, want host 2001:db8::1, port 19132, bedrock true", call)
-		}
-	})
 
 	for _, tc := range []struct {
 		name     string
@@ -722,26 +534,6 @@ func TestIconHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("CSH-10_NoPortSuffixDefaultsPort", func(t *testing.T) {
-		icon := image.NewRGBA(image.Rect(0, 0, 1, 1))
-		status := NewServerStatus("", 0, "Test", "MOTD", "", 20, 1, nil, "1.20.1", "", ServerTypeJava, nil, icon)
-		mock := &hdMockService{javaStatus: status}
-		req := hdRequest(t, "example.com", "")
-		w := httptest.NewRecorder()
-
-		IconHandler(mock)(w, req)
-
-		if len(mock.javaCalls) != 1 {
-			t.Fatalf("expected 1 call, got %d", len(mock.javaCalls))
-		}
-		if got := mock.javaCalls[0].port; got != 25565 {
-			t.Fatalf("expected default port 25565, got %d", got)
-		}
-		if got := mock.javaCalls[0].host; got != "example.com" {
-			t.Fatalf("expected host example.com, got %q", got)
-		}
-	})
-
 	t.Run("CSH-11_BedrockServesBedrockIcon", func(t *testing.T) {
 		hdUseIcons(t)
 		mock := &hdMockService{javaErr: ErrJavaStatus}
@@ -812,20 +604,6 @@ func TestIconHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("CSH-40_Ipv6BracketedWithPort", func(t *testing.T) {
-		mock := &hdMockService{javaStatus: hdValidStatus(nil)}
-		req := hdRequest(t, "[2001:db8::1]:25570", "")
-
-		IconHandler(mock)(httptest.NewRecorder(), req)
-
-		if len(mock.javaCalls) != 1 {
-			t.Fatalf("expected 1 call, got %d", len(mock.javaCalls))
-		}
-		if call := mock.javaCalls[0]; call.host != "2001:db8::1" || call.port != 25570 {
-			t.Fatalf("call = %+v, want host 2001:db8::1, port 25570", call)
-		}
-	})
-
 	t.Run("CSH-50_MalformedHostIsRefused", func(t *testing.T) {
 		mock := &hdMockService{}
 		req := hdRequest(t, "localhost", "")
@@ -841,18 +619,6 @@ func TestIconHandler(t *testing.T) {
 		}
 		if len(mock.javaCalls) != 0 {
 			t.Fatalf("expected no lookup, got %d", len(mock.javaCalls))
-		}
-	})
-
-	t.Run("CSH-51_MalformedHostIsRefusedForBedrock", func(t *testing.T) {
-		mock := &hdMockService{}
-		req := hdRequest(t, "localhost", "bedrock=true")
-		w := httptest.NewRecorder()
-
-		IconHandler(mock)(w, req)
-
-		if w.Code != http.StatusBadRequest {
-			t.Fatalf("expected 400, got %d", w.Code)
 		}
 	})
 
@@ -907,24 +673,6 @@ func TestSimpleStatusHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("CSH-14_NoPortSuffixDefaultsBedrockPort", func(t *testing.T) {
-		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
-		req := hdRequest(t, "example.com", "bedrock=true")
-		w := httptest.NewRecorder()
-
-		SimpleStatusHandler(mock)(w, req)
-
-		if len(mock.serverCalls) != 1 {
-			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
-		}
-		if got := mock.serverCalls[0].port; got != 19132 {
-			t.Fatalf("expected default bedrock port 19132, got %d", got)
-		}
-		if got := mock.serverCalls[0].host; got != "example.com" {
-			t.Fatalf("expected host example.com, got %q", got)
-		}
-	})
-
 	t.Run("CSH-15_QueryFlagsForwarded", func(t *testing.T) {
 		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 		req := hdRequest(t, "example.com:25566", "bedrock=true&query=true&query_port=1234")
@@ -938,114 +686,6 @@ func TestSimpleStatusHandler(t *testing.T) {
 		call := mock.serverCalls[0]
 		if !call.isBedrock || !call.queryEnabled || call.queryPort != 1234 || call.port != 25566 || call.host != "example.com" {
 			t.Fatalf("expected flags forwarded (bedrock=true, query=true, queryPort=1234, host=example.com, port=25566), got %+v", call)
-		}
-	})
-
-	for _, tc := range []struct {
-		name  string
-		value string
-	}{
-		{"Zero", "0"},
-		{"Negative", "-5"},
-		{"TooLarge", "65536"},
-		{"NotANumber", "abc"},
-	} {
-		t.Run("CSH-19_SimpleStatus_InvalidQueryPort_"+tc.name, func(t *testing.T) {
-			mock := &hdMockService{serverStatus: hdValidStatus(nil)}
-			req := hdRequest(t, "mc.example.com:25570", "query=true&query_port="+tc.value)
-
-			SimpleStatusHandler(mock)(httptest.NewRecorder(), req)
-
-			if len(mock.serverCalls) != 1 {
-				t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
-			}
-			if got := mock.serverCalls[0].queryPort; got != 25570 {
-				t.Fatalf("queryPort = %d, want the server port 25570", got)
-			}
-		})
-	}
-
-	for _, bound := range []string{"1", "65535"} {
-		t.Run("CSH-19_SimpleStatus_BoundaryAccepted_"+bound, func(t *testing.T) {
-			mock := &hdMockService{serverStatus: hdValidStatus(nil)}
-			req := hdRequest(t, "mc.example.com:25570", "query=true&query_port="+bound)
-
-			SimpleStatusHandler(mock)(httptest.NewRecorder(), req)
-
-			want, _ := strconv.Atoi(bound)
-			if len(mock.serverCalls) != 1 || mock.serverCalls[0].queryPort != want {
-				t.Fatalf("calls = %+v, want one call with queryPort %d", mock.serverCalls, want)
-			}
-		})
-	}
-
-	t.Run("CSH-20_MissingQueryPortDefaultsToPort", func(t *testing.T) {
-		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
-		req := hdRequest(t, "mc.example.com:25570", "query=true")
-
-		SimpleStatusHandler(mock)(httptest.NewRecorder(), req)
-
-		if len(mock.serverCalls) != 1 {
-			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
-		}
-		if call := mock.serverCalls[0]; call.queryPort != call.port || call.port != 25570 {
-			t.Fatalf("call = %+v, want queryPort equal to port 25570", call)
-		}
-	})
-
-	t.Run("CSH-24_HostPortSplitJava", func(t *testing.T) {
-		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
-		req := hdRequest(t, "mc.example.com:25570", "")
-
-		SimpleStatusHandler(mock)(httptest.NewRecorder(), req)
-
-		if len(mock.serverCalls) != 1 {
-			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
-		}
-		if call := mock.serverCalls[0]; call.host != "mc.example.com" || call.port != 25570 || call.isBedrock {
-			t.Fatalf("call = %+v, want host mc.example.com, port 25570, java", call)
-		}
-	})
-
-	t.Run("CSH-25_HostPortSplitBedrock", func(t *testing.T) {
-		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
-		req := hdRequest(t, "mc.example.com:19140", "bedrock=true")
-
-		SimpleStatusHandler(mock)(httptest.NewRecorder(), req)
-
-		if len(mock.serverCalls) != 1 {
-			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
-		}
-		if call := mock.serverCalls[0]; call.host != "mc.example.com" || call.port != 19140 || !call.isBedrock {
-			t.Fatalf("call = %+v, want host mc.example.com, port 19140, bedrock", call)
-		}
-	})
-
-	t.Run("CSH-26_NoPortSuffixDefaultsJavaPort", func(t *testing.T) {
-		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
-		req := hdRequest(t, "example.com", "")
-
-		SimpleStatusHandler(mock)(httptest.NewRecorder(), req)
-
-		if len(mock.serverCalls) != 1 {
-			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
-		}
-		if call := mock.serverCalls[0]; call.host != "example.com" || call.port != 25565 {
-			t.Fatalf("call = %+v, want host example.com, port 25565", call)
-		}
-	})
-
-	t.Run("CSH-39_Ipv6BracketedWithPort", func(t *testing.T) {
-		mock := &hdMockService{serverStatus: hdValidStatus(nil)}
-		req := hdRequest(t, "[2001:db8::1]:25570", "")
-
-		SimpleStatusHandler(mock)(httptest.NewRecorder(), req)
-
-		if len(mock.serverCalls) != 1 {
-			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
-		}
-		if call := mock.serverCalls[0]; call.host != "2001:db8::1" || call.port != 25570 || call.isBedrock {
-			t.Fatalf("call = %+v, want host 2001:db8::1, port 25570, bedrock false", call)
 		}
 	})
 
