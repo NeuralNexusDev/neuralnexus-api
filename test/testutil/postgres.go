@@ -1,9 +1,12 @@
 package testutil
 
 import (
+	"context"
 	"net/url"
 	"os"
 	"testing"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // PostgresURL returns the connection URL for the named database on the server
@@ -20,4 +23,15 @@ func PostgresURL(t *testing.T, database string) string {
 	}
 	u.Path, u.RawPath = "/"+database, ""
 	return u.String()
+}
+
+// LivePool opens a pool on the named database and closes it when the test ends.
+func LivePool(t *testing.T, database string) *pgxpool.Pool {
+	t.Helper()
+	pool, err := pgxpool.New(context.Background(), PostgresURL(t, database))
+	if err != nil {
+		t.Fatalf("failed to connect to the %s database: %v", database, err)
+	}
+	t.Cleanup(pool.Close)
+	return pool
 }

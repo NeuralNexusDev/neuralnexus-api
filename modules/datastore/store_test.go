@@ -20,11 +20,7 @@ const (
 func newDSStore(t *testing.T) (DSStore, *pgxpool.Pool) {
 	t.Helper()
 	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, testutil.PostgresURL(t, "neuralnexus"))
-	if err != nil {
-		t.Fatalf("failed to connect to postgres: %v", err)
-	}
-	t.Cleanup(pool.Close)
+	pool := testutil.LivePool(t, "neuralnexus")
 
 	owner, _ := strconv.ParseInt(dsOwnerID, 10, 64)
 	other, _ := strconv.ParseInt(dsOtherID, 10, 64)

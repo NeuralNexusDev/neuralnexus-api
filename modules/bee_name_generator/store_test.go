@@ -27,18 +27,8 @@ func bngStoreWithUnreachableDB(t *testing.T) *store {
 	return &store{db: testutil.UnreachablePool(t)}
 }
 
-func bngLiveDB(t *testing.T) *pgxpool.Pool {
-	t.Helper()
-	pool, err := pgxpool.New(context.Background(), testutil.PostgresURL(t, "bee_name_generator"))
-	if err != nil {
-		t.Fatalf("failed to connect to the bee_name_generator database: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	return pool
-}
-
 func bngLiveStore(t *testing.T) (*store, *pgxpool.Pool) {
-	db := bngLiveDB(t)
+	db := testutil.LivePool(t, "bee_name_generator")
 	return &store{db: db}, db
 }
 
