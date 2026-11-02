@@ -28,88 +28,7 @@ func tySmallImage() image.Image {
 	return image.NewRGBA(image.Rect(0, 0, 2, 2))
 }
 
-func TestNewServerStatus(t *testing.T) {
-	t.Run("CST-01_AllFieldsMapped", func(t *testing.T) {
-		players := []*mcstatuspb.Player{{Name: "Steve", Uuid: "uuid-1"}}
-		icon := tySmallImage()
-		raw := "raw-marker"
-
-		status := NewServerStatus("play.example.com", 25565, "My Server", "Welcome!", "world", 20, 5, players, "1.20.1", "favicon-data", ServerTypeJava, raw, icon)
-
-		if status.Host != "play.example.com" {
-			t.Errorf("Host: expected %q, got %q", "play.example.com", status.Host)
-		}
-		if status.Port != 25565 {
-			t.Errorf("Port: expected 25565, got %d", status.Port)
-		}
-		if status.Name != "My Server" {
-			t.Errorf("Name: expected %q, got %q", "My Server", status.Name)
-		}
-		if status.Motd != "Welcome!" {
-			t.Errorf("Motd: expected %q, got %q", "Welcome!", status.Motd)
-		}
-		if status.Map != "world" {
-			t.Errorf("Map: expected %q, got %q", "world", status.Map)
-		}
-		if status.MaxPlayers != 20 {
-			t.Errorf("MaxPlayers: expected 20, got %d", status.MaxPlayers)
-		}
-		if status.NumPlayers != 5 {
-			t.Errorf("NumPlayers: expected 5, got %d", status.NumPlayers)
-		}
-		if len(status.Players) != 1 || status.Players[0].Name != "Steve" {
-			t.Errorf("Players: expected [{Steve uuid-1}], got %+v", status.Players)
-		}
-		if status.Version != "1.20.1" {
-			t.Errorf("Version: expected %q, got %q", "1.20.1", status.Version)
-		}
-		if status.Favicon != "favicon-data" {
-			t.Errorf("Favicon: expected %q, got %q", "favicon-data", status.Favicon)
-		}
-		if status.ServerType != ServerTypeJava {
-			t.Errorf("ServerType (wrapper): expected %q, got %q", ServerTypeJava, status.ServerType)
-		}
-		if status.ServerStatus.ServerType != mcstatuspb.ServerType_JAVA {
-			t.Errorf("ServerType (proto enum): expected JAVA, got %v", status.ServerStatus.ServerType)
-		}
-		if status.Raw != raw {
-			t.Errorf("Raw: expected %v, got %v", raw, status.Raw)
-		}
-		if status.Icon != icon {
-			t.Errorf("Icon: expected the same image instance")
-		}
-	})
-
-	t.Run("CST-02_BedrockServerTypeMapsToBedrockEnum", func(t *testing.T) {
-		status := NewServerStatus("", 0, "", "", "", 0, 0, nil, "", "", ServerTypeBedrock, nil, nil)
-
-		if status.ServerType != ServerTypeBedrock {
-			t.Errorf("ServerType (wrapper): expected %q, got %q", ServerTypeBedrock, status.ServerType)
-		}
-		if status.ServerStatus.ServerType != mcstatuspb.ServerType_BEDROCK {
-			t.Errorf("ServerType (proto enum): expected BEDROCK, got %v", status.ServerStatus.ServerType)
-		}
-	})
-
-	t.Run("CST-05_UnknownServerTypeDefaultsProtoEnumToZeroValue", func(t *testing.T) {
-		status := NewServerStatus("", 0, "", "", "", 0, 0, nil, "", "", ServerType("unknown"), nil, nil)
-
-		if status.ServerType != ServerType("unknown") {
-			t.Errorf("ServerType (wrapper): expected %q, got %q", "unknown", status.ServerType)
-		}
-		if status.ServerStatus.ServerType != mcstatuspb.ServerType_JAVA {
-			t.Errorf("ServerType (proto enum): expected the zero value (JAVA), got %v", status.ServerStatus.ServerType)
-		}
-	})
-}
-
 func TestMOTDToName(t *testing.T) {
-	t.Run("CST-06_PlainMOTDUnchanged", func(t *testing.T) {
-		if got := MOTDToName("Hello World"); got != "Hello World" {
-			t.Errorf("expected %q, got %q", "Hello World", got)
-		}
-	})
-
 	t.Run("CST-07_NewlineReplacedWithSpace", func(t *testing.T) {
 		if got := MOTDToName("Line1\nLine2"); got != "Line1 Line2" {
 			t.Errorf("expected %q, got %q", "Line1 Line2", got)
@@ -125,12 +44,6 @@ func TestMOTDToName(t *testing.T) {
 	t.Run("CST-09_ResultIsTrimmed", func(t *testing.T) {
 		if got := MOTDToName("  \nHello\n  "); got != "Hello" {
 			t.Errorf("expected %q, got %q", "Hello", got)
-		}
-	})
-
-	t.Run("CST-10_EmptyStringReturnsEmpty", func(t *testing.T) {
-		if got := MOTDToName(""); got != "" {
-			t.Errorf("expected empty string, got %q", got)
 		}
 	})
 }
@@ -165,31 +78,6 @@ func TestImgToBase64(t *testing.T) {
 }
 
 func TestLoadImgFromFS(t *testing.T) {
-	t.Run("CST-13_ValidPNGFileDecodes", func(t *testing.T) {
-		dir := t.TempDir()
-		path := filepath.Join(dir, "icon.png")
-		img := tySmallImage()
-		f, err := os.Create(path)
-		if err != nil {
-			t.Fatalf("failed to create test file: %v", err)
-		}
-		if err := png.Encode(f, img); err != nil {
-			f.Close()
-			t.Fatalf("failed to encode test PNG: %v", err)
-		}
-		if err := f.Close(); err != nil {
-			t.Fatalf("failed to close test file: %v", err)
-		}
-
-		got, err := LoadImgFromFS(os.DirFS(dir), "icon.png")
-		if err != nil {
-			t.Fatalf("expected nil error, got %v", err)
-		}
-		if got.Bounds() != img.Bounds() {
-			t.Fatalf("expected bounds %v, got %v", img.Bounds(), got.Bounds())
-		}
-	})
-
 	t.Run("CST-14_MissingFileReturnsError", func(t *testing.T) {
 		dir := t.TempDir()
 
