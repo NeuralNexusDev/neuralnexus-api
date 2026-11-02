@@ -16,16 +16,9 @@ import (
 
 // Service - Minecraft player service
 type Service interface {
-	MojangService
-	GeyserService
-
-	GetProfile(ctx context.Context, id string) (*MojangProfile, error)
-	GetProfileByName(ctx context.Context, name string) (*MojangProfile, error)
-
-	GetGeyserProfile(ctx context.Context, id string) (*GeyserProfile, error)
-	GetGeyserProfileByName(ctx context.Context, name string) (*GeyserProfile, error)
-
-	GetTextureContent(ctx context.Context, hash string) (*TextureResult, error)
+	Mojang() MojangService
+	Geyser() GeyserService
+	Texture() TextureService
 }
 
 type MojangService interface {
@@ -33,6 +26,9 @@ type MojangService interface {
 	GetMojangPlayerByUUID(ctx context.Context, id string) (*MojangPlayer, error)
 	GetMojangPlayersByNames(ctx context.Context, names []string) ([]*MojangPlayer, error)
 	GetMojangProfile(ctx context.Context, id string, signed bool) (*MojangPlayer, error)
+
+	GetProfile(ctx context.Context, id string) (*MojangProfile, error)
+	GetProfileByName(ctx context.Context, name string) (*MojangProfile, error)
 }
 
 type GeyserService interface {
@@ -40,19 +36,33 @@ type GeyserService interface {
 	GetGeyserPlayerByGamertag(ctx context.Context, gamertag string) (*GeyserPlayer, error)
 	GetGeyserPlayerByUUID(ctx context.Context, id string) (*GeyserPlayer, error)
 	GetGeyserSkin(ctx context.Context, xuid int64) (*GeyserSkin, error)
+
+	GetGeyserProfile(ctx context.Context, id string) (*GeyserProfile, error)
+	GetGeyserProfileByXUID(ctx context.Context, xuid int64) (*GeyserProfile, error)
+	GetGeyserProfileByName(ctx context.Context, name string) (*GeyserProfile, error)
 }
 
-type CommonService interface {
-	GetProfile(ctx context.Context, id string) (*MojangProfile, error)
-	GetProfileByName(ctx context.Context, name string) (*MojangProfile, error)
+type TextureService interface {
 	GetTextureContent(ctx context.Context, hash string) (*TextureResult, error)
 }
 
 // service - Minecraft player service implementation
 type service struct {
-	mojangService
-	geyserService
-	textureService
+	mojangService  mojangService
+	geyserService  geyserService
+	textureService textureService
+}
+
+func (s *service) Mojang() MojangService {
+	return &s.mojangService
+}
+
+func (s *service) Geyser() GeyserService {
+	return &s.geyserService
+}
+
+func (s *service) Texture() TextureService {
+	return &s.textureService
 }
 
 type mojangService struct {
@@ -609,30 +619,30 @@ func (g *geyserService) getGeyserProfileFromPlayer(ctx context.Context, player *
 }
 
 // GetGeyserProfile resolves a Bedrock player's full profile by Floodgate UUID
-func (s *service) GetGeyserProfile(ctx context.Context, id string) (*GeyserProfile, error) {
-	player, err := s.GetGeyserPlayerByUUID(ctx, id)
+func (g *geyserService) GetGeyserProfile(ctx context.Context, id string) (*GeyserProfile, error) {
+	player, err := g.GetGeyserPlayerByUUID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	return s.getGeyserProfileFromPlayer(ctx, player)
+	return g.getGeyserProfileFromPlayer(ctx, player)
 }
 
 // GetGeyserProfileByXUID resolves a Bedrock player's full profile by XUID
-func (s *service) GetGeyserProfileByXUID(ctx context.Context, xuid int64) (*GeyserProfile, error) {
-	player, err := s.GetGeyserPlayerByXUID(ctx, xuid)
+func (g *geyserService) GetGeyserProfileByXUID(ctx context.Context, xuid int64) (*GeyserProfile, error) {
+	player, err := g.GetGeyserPlayerByXUID(ctx, xuid)
 	if err != nil {
 		return nil, err
 	}
-	return s.getGeyserProfileFromPlayer(ctx, player)
+	return g.getGeyserProfileFromPlayer(ctx, player)
 }
 
 // GetGeyserProfileByName resolves a Bedrock player's full profile by gamertag.
-func (s *service) GetGeyserProfileByName(ctx context.Context, gamertag string) (*GeyserProfile, error) {
-	player, err := s.GetGeyserPlayerByGamertag(ctx, gamertag)
+func (g *geyserService) GetGeyserProfileByName(ctx context.Context, gamertag string) (*GeyserProfile, error) {
+	player, err := g.GetGeyserPlayerByGamertag(ctx, gamertag)
 	if err != nil {
 		return nil, err
 	}
-	return s.getGeyserProfileFromPlayer(ctx, player)
+	return g.getGeyserProfileFromPlayer(ctx, player)
 }
 
 // bytesReadCloser adapts a *bytes.Reader to io.ReadCloser while keeping Len()
