@@ -19,6 +19,7 @@ import (
 )
 
 type stMockAccountService struct {
+	inertAccountService
 	accounts        map[string]*account.Account
 	addAccountErr   error
 	getByIDErr      error
@@ -51,12 +52,6 @@ func (m *stMockAccountService) GetAccountByID(_ context.Context, userID string) 
 	}
 	return a, nil
 }
-func (m *stMockAccountService) GetAccountByUsername(context.Context, string) (*account.Account, error) {
-	return nil, account.ErrNotFound
-}
-func (m *stMockAccountService) GetAccountByEmail(context.Context, string) (*account.Account, error) {
-	return nil, account.ErrNotFound
-}
 func (m *stMockAccountService) UpdateAccount(_ context.Context, a *account.Account) error {
 	m.accounts[a.UserID] = a
 	return nil
@@ -69,14 +64,9 @@ func (m *stMockAccountService) DeleteAccount(_ context.Context, userID string) e
 	delete(m.accounts, userID)
 	return nil
 }
-func (m *stMockAccountService) IsPasswordAuthEnabled(context.Context, string) (bool, error) {
-	return false, nil
-}
-func (m *stMockAccountService) NewSession(_ context.Context, a *account.Account, expiresAt int64) (*session.Session, error) {
-	return &session.Session{ID: "stub-session", UserID: a.UserID, Permissions: []string{"stub:perm"}, ExpiresAt: expiresAt}, nil
-}
 
 type stMockLinkAccountStore struct {
+	inertLinkStore
 	byPlatformID map[Platform]map[string]*LinkedAccount
 	getErr       error
 	addErr       error
@@ -100,9 +90,6 @@ func (m *stMockLinkAccountStore) AddLinkedAccountToDB(_ context.Context, la *Lin
 	m.byPlatformID[la.Platform][la.PlatformID] = la
 	return nil
 }
-func (m *stMockLinkAccountStore) UpdateLinkedAccount(context.Context, *LinkedAccount) error {
-	return nil
-}
 func (m *stMockLinkAccountStore) GetLinkedAccountByPlatformID(_ context.Context, platform Platform, platformID string) (*LinkedAccount, error) {
 	if m.getErr != nil {
 		return nil, m.getErr
@@ -113,22 +100,6 @@ func (m *stMockLinkAccountStore) GetLinkedAccountByPlatformID(_ context.Context,
 	}
 	return la, nil
 }
-func (m *stMockLinkAccountStore) GetLinkedAccountByPlatformName(context.Context, Platform, string) (*LinkedAccount, error) {
-	return nil, account.ErrNotFound
-}
-func (m *stMockLinkAccountStore) GetLinkedAccountByUserID(context.Context, string, Platform) (*LinkedAccount, error) {
-	return nil, account.ErrNotFound
-}
-func (m *stMockLinkAccountStore) GetLinkedAccountsByUserID(context.Context, string) ([]*LinkedAccount, error) {
-	return nil, nil
-}
-func (m *stMockLinkAccountStore) DeleteLinkedAccount(context.Context, string, Platform) error {
-	return nil
-}
-func (m *stMockLinkAccountStore) SetLinkedAccountLoginEnabled(context.Context, string, Platform, bool) error {
-	return nil
-}
-
 func stRequestWithSession(session *session.Session) *http.Request {
 	req := testutil.NewRequest(http.MethodGet, "/", nil)
 	if session == nil {

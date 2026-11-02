@@ -24,20 +24,6 @@ func mustUUID(s string) uuid.UUID {
 	return uuid.MustParse(s)
 }
 
-type oaIdentity struct {
-	id       string
-	email    string
-	username string
-}
-
-func (f *oaIdentity) GetID() string       { return f.id }
-func (f *oaIdentity) GetEmail() string    { return f.email }
-func (f *oaIdentity) GetUsername() string { return f.username }
-func (f *oaIdentity) GetData() string     { return "{}" }
-func (f *oaIdentity) CreateLinkedAccount(userID string) *LinkedAccount {
-	return NewLinkedAccount(userID, PlatformDiscord, f.username, f.id, f)
-}
-
 type oaCtxMarkerKey struct{}
 
 type oaCtxRecord struct {
@@ -51,6 +37,7 @@ func (r *oaCtxRecord) record(ctx context.Context) {
 }
 
 type oaMockAccountService struct {
+	inertAccountService
 	AddAccountFunc     func(*account.Account) error
 	GetAccountByIDFunc func(string) (*account.Account, error)
 	DeleteAccountFunc  func(string) error
@@ -77,12 +64,6 @@ func (m *oaMockAccountService) GetAccountByID(_ context.Context, userID string) 
 	}
 	return nil, account.ErrNotFound
 }
-func (m *oaMockAccountService) GetAccountByUsername(context.Context, string) (*account.Account, error) {
-	return nil, account.ErrNotFound
-}
-func (m *oaMockAccountService) GetAccountByEmail(context.Context, string) (*account.Account, error) {
-	return nil, account.ErrNotFound
-}
 func (m *oaMockAccountService) UpdateAccount(context.Context, *account.Account) error { return nil }
 func (m *oaMockAccountService) DeleteAccount(ctx context.Context, userID string) error {
 	m.DeleteAccountCalls++
@@ -92,14 +73,9 @@ func (m *oaMockAccountService) DeleteAccount(ctx context.Context, userID string)
 	}
 	return nil
 }
-func (m *oaMockAccountService) IsPasswordAuthEnabled(context.Context, string) (bool, error) {
-	return false, nil
-}
-func (m *oaMockAccountService) NewSession(_ context.Context, a *account.Account, expiresAt int64) (*session.Session, error) {
-	return &session.Session{ID: "stub-session", UserID: a.UserID, Permissions: []string{"stub:perm"}, ExpiresAt: expiresAt}, nil
-}
 
 type oaMockLinkAccountStore struct {
+	inertLinkStore
 	GetLinkedAccountByPlatformIDFunc func(Platform, string) (*LinkedAccount, error)
 	AddLinkedAccountToDBFunc         func(*LinkedAccount) error
 
@@ -122,30 +98,12 @@ func (m *oaMockLinkAccountStore) AddLinkedAccountToDB(ctx context.Context, la *L
 	m.AddedLinkedAccounts = append(m.AddedLinkedAccounts, la)
 	return nil
 }
-func (m *oaMockLinkAccountStore) UpdateLinkedAccount(context.Context, *LinkedAccount) error {
-	return nil
-}
 func (m *oaMockLinkAccountStore) GetLinkedAccountByPlatformID(_ context.Context, platform Platform, platformID string) (*LinkedAccount, error) {
 	m.GetLinkedAccountByPlatformIDCalls++
 	if m.GetLinkedAccountByPlatformIDFunc != nil {
 		return m.GetLinkedAccountByPlatformIDFunc(platform, platformID)
 	}
 	return nil, account.ErrNotFound
-}
-func (m *oaMockLinkAccountStore) GetLinkedAccountByPlatformName(context.Context, Platform, string) (*LinkedAccount, error) {
-	return nil, account.ErrNotFound
-}
-func (m *oaMockLinkAccountStore) GetLinkedAccountByUserID(context.Context, string, Platform) (*LinkedAccount, error) {
-	return nil, account.ErrNotFound
-}
-func (m *oaMockLinkAccountStore) GetLinkedAccountsByUserID(context.Context, string) ([]*LinkedAccount, error) {
-	return nil, nil
-}
-func (m *oaMockLinkAccountStore) DeleteLinkedAccount(context.Context, string, Platform) error {
-	return nil
-}
-func (m *oaMockLinkAccountStore) SetLinkedAccountLoginEnabled(context.Context, string, Platform, bool) error {
-	return nil
 }
 
 func oaRequestWithSession(session *session.Session) *http.Request {
@@ -673,7 +631,7 @@ func TestOA76to78ProcessOAuthLoginAdditionalPlatformDispatch(t *testing.T) {
 }
 
 func TestOA17to26ResolveOrCreateAccountForPlatformUser(t *testing.T) {
-	user := &oaIdentity{id: "p1", username: "alice", email: "a@b.com"}
+	user := &fakePlatformData{id: "p1", username: "alice", email: "a@b.com"}
 
 	t.Run("OA-17_NoExistingLink", func(t *testing.T) {
 		as := &oaMockAccountService{}
@@ -1679,7 +1637,7 @@ func TestOA56to66EnsureMicrosoftIdentityLinked(t *testing.T) {
 }
 
 func TestOA67to71and85LinkPlatformUserToSession(t *testing.T) {
-	user := &oaIdentity{id: "p1", username: "alice"}
+	user := &fakePlatformData{id: "p1", username: "alice"}
 
 	t.Run("OA-67_NotYetLinked", func(t *testing.T) {
 		las := &oaMockLinkAccountStore{}
@@ -1822,7 +1780,7 @@ func TestOA87to92LinkHelpersDetachedWritesIgnoreCancel(t *testing.T) {
 			}
 		}
 	}
-	user := &oaIdentity{id: "p1", username: "alice", email: "a@b.com"}
+	user := &fakePlatformData{id: "p1", username: "alice", email: "a@b.com"}
 	xbox := &XboxLiveData{XUID: "xid1", Gamertag: "Tag"}
 	acct := &account.Account{UserID: "user-1"}
 
@@ -1909,94 +1867,22 @@ func TestOA87to92LinkHelpersDetachedWritesIgnoreCancel(t *testing.T) {
 	})
 }
 
-// The functions under test hold no locks themselves; the race is between
-// separate callers, arbitrated by the store's (platform, platform_id)
-// uniqueness constraint. The doubles below enforce that constraint
-// atomically under a mutex, so launching real goroutines against them
-// exercises the actual race instead of just asserting behavior for a canned
-// ErrAlreadyLinked return.
-
 type oaConcurrentAccountService struct {
+	inertAccountService
 	*accountMap
 }
 
 var _ account.Service = (*oaConcurrentAccountService)(nil)
 
 func newOAConcurrentAccountService() *oaConcurrentAccountService {
-	return &oaConcurrentAccountService{newAccountMap()}
-}
-
-func (m *oaConcurrentAccountService) GetAccountByUsername(context.Context, string) (*account.Account, error) {
-	return nil, account.ErrNotFound
-}
-func (m *oaConcurrentAccountService) GetAccountByEmail(context.Context, string) (*account.Account, error) {
-	return nil, account.ErrNotFound
-}
-func (m *oaConcurrentAccountService) IsPasswordAuthEnabled(context.Context, string) (bool, error) {
-	return false, nil
-}
-func (m *oaConcurrentAccountService) NewSession(_ context.Context, a *account.Account, expiresAt int64) (*session.Session, error) {
-	return &session.Session{ID: "stub-session", UserID: a.UserID, Permissions: []string{"stub:perm"}, ExpiresAt: expiresAt}, nil
-}
-
-func oaLinkKey(platform Platform, platformID string) string {
-	return string(platform) + "|" + platformID
-}
-
-type oaConcurrentLinkAccountStore struct {
-	mu    sync.Mutex
-	byKey map[string]*LinkedAccount
-}
-
-var _ Store = (*oaConcurrentLinkAccountStore)(nil)
-
-func newOAConcurrentLinkAccountStore() *oaConcurrentLinkAccountStore {
-	return &oaConcurrentLinkAccountStore{byKey: map[string]*LinkedAccount{}}
-}
-
-func (m *oaConcurrentLinkAccountStore) AddLinkedAccountToDB(_ context.Context, la *LinkedAccount) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	key := oaLinkKey(la.Platform, la.PlatformID)
-	if _, exists := m.byKey[key]; exists {
-		return ErrAlreadyLinked
-	}
-	m.byKey[key] = la
-	return nil
-}
-func (m *oaConcurrentLinkAccountStore) UpdateLinkedAccount(context.Context, *LinkedAccount) error {
-	return nil
-}
-func (m *oaConcurrentLinkAccountStore) GetLinkedAccountByPlatformID(_ context.Context, platform Platform, platformID string) (*LinkedAccount, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	la, ok := m.byKey[oaLinkKey(platform, platformID)]
-	if !ok {
-		return nil, account.ErrNotFound
-	}
-	return la, nil
-}
-func (m *oaConcurrentLinkAccountStore) GetLinkedAccountByPlatformName(context.Context, Platform, string) (*LinkedAccount, error) {
-	return nil, account.ErrNotFound
-}
-func (m *oaConcurrentLinkAccountStore) GetLinkedAccountByUserID(context.Context, string, Platform) (*LinkedAccount, error) {
-	return nil, account.ErrNotFound
-}
-func (m *oaConcurrentLinkAccountStore) GetLinkedAccountsByUserID(context.Context, string) ([]*LinkedAccount, error) {
-	return nil, nil
-}
-func (m *oaConcurrentLinkAccountStore) DeleteLinkedAccount(context.Context, string, Platform) error {
-	return nil
-}
-func (m *oaConcurrentLinkAccountStore) SetLinkedAccountLoginEnabled(context.Context, string, Platform, bool) error {
-	return nil
+	return &oaConcurrentAccountService{accountMap: newAccountMap()}
 }
 
 func TestOA72ResolveOrCreateAccountForPlatformUserConcurrentRace(t *testing.T) {
 	t.Run("OA-72_ConcurrentCallersConvergeOnOneAccount", func(t *testing.T) {
 		as := newOAConcurrentAccountService()
-		las := newOAConcurrentLinkAccountStore()
-		user := &oaIdentity{id: "race-1", username: "alice"}
+		las := newConcurrentLinkStore(0)
+		user := &fakePlatformData{id: "race-1", username: "alice"}
 
 		const n = 2
 		var wg sync.WaitGroup
@@ -2032,7 +1918,7 @@ func TestOA72ResolveOrCreateAccountForPlatformUserConcurrentRace(t *testing.T) {
 func TestOA73And74EnsureMicrosoftIdentityLinkedConcurrentRace(t *testing.T) {
 	t.Run("OA-73_NeitherLinkedYetConvergesAndCleansUpLoser", func(t *testing.T) {
 		as := newOAConcurrentAccountService()
-		las := newOAConcurrentLinkAccountStore()
+		las := newConcurrentLinkStore(0)
 		xbox := &XboxLiveData{XUID: "race-xuid-73", Gamertag: "Tag"}
 
 		placeholderA := &account.Account{UserID: "placeholder-a"}
@@ -2070,7 +1956,7 @@ func TestOA73And74EnsureMicrosoftIdentityLinkedConcurrentRace(t *testing.T) {
 
 	t.Run("OA-74_PartialStateRaceNeverDeletesAnExistingAccount", func(t *testing.T) {
 		as := newOAConcurrentAccountService()
-		las := newOAConcurrentLinkAccountStore()
+		las := newConcurrentLinkStore(0)
 		xbox := &XboxLiveData{XUID: "race-xuid-74", Gamertag: "Tag2"}
 
 		existingAccount := &account.Account{UserID: "existing-account"}
@@ -2132,7 +2018,7 @@ func TestOA73And74EnsureMicrosoftIdentityLinkedConcurrentRace(t *testing.T) {
 func TestOA75ResolveOrCreateAccountForMicrosoftUserConcurrentRace(t *testing.T) {
 	t.Run("OA-75_ConcurrentFreshLoginsConvergeOnOneAccount", func(t *testing.T) {
 		as := newOAConcurrentAccountService()
-		las := newOAConcurrentLinkAccountStore()
+		las := newConcurrentLinkStore(0)
 		xbox := &XboxLiveData{XUID: "race-full-xuid", Gamertag: "Tag3"}
 		java := &MinecraftData{ID: mustUUID("99999999-9999-9999-9999-999999999999"), Username: "Steve3"}
 
@@ -2173,84 +2059,10 @@ func TestOA75ResolveOrCreateAccountForMicrosoftUserConcurrentRace(t *testing.T) 
 	})
 }
 
-// oaBarrierLinkAccountStore extends oaConcurrentLinkAccountStore: its
-// GetLinkedAccountByPlatformID also holds every caller at a barrier until
-// each has read, forcing linkPlatformUserToSession's check-then-act window to
-// overlap deterministically - without it a fast in-memory store could let one
-// goroutine finish before another starts, only occasionally racing.
-type oaBarrierLinkAccountStore struct {
-	mu    sync.Mutex
-	byKey map[string]*LinkedAccount
-
-	barrierMu    sync.Mutex
-	barrierWG    sync.WaitGroup
-	barrierN     int
-	barrierCount int
-}
-
-var _ Store = (*oaBarrierLinkAccountStore)(nil)
-
-func newOABarrierLinkAccountStore(barrierN int) *oaBarrierLinkAccountStore {
-	s := &oaBarrierLinkAccountStore{byKey: map[string]*LinkedAccount{}, barrierN: barrierN}
-	s.barrierWG.Add(barrierN)
-	return s
-}
-
-func (m *oaBarrierLinkAccountStore) GetLinkedAccountByPlatformID(_ context.Context, platform Platform, platformID string) (*LinkedAccount, error) {
-	m.barrierMu.Lock()
-	participates := m.barrierCount < m.barrierN
-	if participates {
-		m.barrierCount++
-	}
-	m.barrierMu.Unlock()
-	if participates {
-		m.barrierWG.Done()
-		m.barrierWG.Wait()
-	}
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	la, ok := m.byKey[oaLinkKey(platform, platformID)]
-	if !ok {
-		return nil, account.ErrNotFound
-	}
-	cp := *la
-	return &cp, nil
-}
-func (m *oaBarrierLinkAccountStore) AddLinkedAccountToDB(_ context.Context, la *LinkedAccount) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	key := oaLinkKey(la.Platform, la.PlatformID)
-	if _, exists := m.byKey[key]; exists {
-		return ErrAlreadyLinked
-	}
-	cp := *la
-	m.byKey[key] = &cp
-	return nil
-}
-func (m *oaBarrierLinkAccountStore) UpdateLinkedAccount(context.Context, *LinkedAccount) error {
-	return nil
-}
-func (m *oaBarrierLinkAccountStore) GetLinkedAccountByPlatformName(context.Context, Platform, string) (*LinkedAccount, error) {
-	return nil, account.ErrNotFound
-}
-func (m *oaBarrierLinkAccountStore) GetLinkedAccountByUserID(context.Context, string, Platform) (*LinkedAccount, error) {
-	return nil, account.ErrNotFound
-}
-func (m *oaBarrierLinkAccountStore) GetLinkedAccountsByUserID(context.Context, string) ([]*LinkedAccount, error) {
-	return nil, nil
-}
-func (m *oaBarrierLinkAccountStore) DeleteLinkedAccount(context.Context, string, Platform) error {
-	return nil
-}
-func (m *oaBarrierLinkAccountStore) SetLinkedAccountLoginEnabled(context.Context, string, Platform, bool) error {
-	return nil
-}
-
 func TestOA82LinkPlatformUserToSessionConcurrentRace(t *testing.T) {
 	t.Run("OA-82_ConcurrentCallersToDifferentSessionsExactlyOneWins", func(t *testing.T) {
-		las := newOABarrierLinkAccountStore(2)
-		user := &oaIdentity{id: "race-82", username: "alice"}
+		las := newConcurrentLinkStore(2)
+		user := &fakePlatformData{id: "race-82", username: "alice"}
 
 		var wg sync.WaitGroup
 		errs := make([]error, 2)
@@ -2287,7 +2099,7 @@ func TestOA82LinkPlatformUserToSessionConcurrentRace(t *testing.T) {
 
 func TestOA96LinkPlatformUserToSessionConcurrentLinksSettle(t *testing.T) {
 	t.Run("OA-96_ConcurrentLinksSettle", func(t *testing.T) {
-		link := func(las Store, user *oaIdentity, userIDs ...string) []error {
+		link := func(las Store, user *fakePlatformData, userIDs ...string) []error {
 			errs := make([]error, len(userIDs))
 			var wg sync.WaitGroup
 			wg.Add(len(userIDs))
@@ -2301,14 +2113,14 @@ func TestOA96LinkPlatformUserToSessionConcurrentLinksSettle(t *testing.T) {
 			return errs
 		}
 
-		for _, err := range link(newOAConcurrentLinkAccountStore(), &oaIdentity{id: "race-96a", username: "alice"}, "user-A", "user-A") {
+		for _, err := range link(newConcurrentLinkStore(0), &fakePlatformData{id: "race-96a", username: "alice"}, "user-A", "user-A") {
 			if err != nil {
 				t.Errorf("same user: error = %v, want nil", err)
 			}
 		}
 
 		nils, conflicts := 0, 0
-		for _, err := range link(newOAConcurrentLinkAccountStore(), &oaIdentity{id: "race-96b", username: "alice"}, "user-A", "user-B") {
+		for _, err := range link(newConcurrentLinkStore(0), &fakePlatformData{id: "race-96b", username: "alice"}, "user-A", "user-B") {
 			switch {
 			case err == nil:
 				nils++
