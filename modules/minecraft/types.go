@@ -39,17 +39,12 @@ type TextureResult struct {
 	ContentType string
 }
 
-// Player - base player struct
-type Player struct {
-	ID        string `json:"id"                   db:"id"`
-	Name      string `json:"name"                 db:"name"`
-	FirstSeen int64  `json:"-"                    db:"first_seen"`
-	LastSeen  int64  `json:"-"                    db:"last_seen"`
-}
-
 // MojangPlayer - Minecraft player profile as returned by Mojang
 type MojangPlayer struct {
-	Player
+	ID             string     `json:"id"                   db:"id"`
+	Name           string     `json:"name"                 db:"name"`
+	FirstSeen      int64      `json:"-"                    db:"first_seen"`
+	LastSeen       int64      `json:"-"                    db:"last_seen"`
 	Legacy         bool       `json:"legacy,omitempty"     db:"legacy"`
 	Demo           bool       `json:"demo,omitempty"       db:"demo"`
 	Properties     []Property `json:"properties,omitempty" db:"-"`
@@ -205,18 +200,12 @@ type Model string
 // SLIM The only known value for Metadata.Model
 const SLIM Model = "slim"
 
-// Profile - base profile struct
-type Profile struct {
-	ID        string         `json:"id"`
-	Name      string         `json:"name"`
-	Textures  *TexturesValue `json:"textures,omitempty"`
-	FirstSeen int64          `json:"-"`
-	LastSeen  int64          `json:"-"`
-}
-
 // MojangProfile - a player's full profile
 type MojangProfile struct {
-	Profile
+	ID             string         `json:"id"`
+	Name           string         `json:"name"`
+	FirstSeen      int64          `json:"-"`
+	LastSeen       int64          `json:"-"`
 	Legacy         bool           `json:"legacy,omitempty"`
 	Demo           bool           `json:"demo,omitempty"`
 	ProfileActions []string       `json:"profileActions,omitempty"`
@@ -293,10 +282,11 @@ type GeyserGamertag struct {
 
 // GeyserPlayer - a Bedrock player's identity derived from Geyser's Xbox XUID lookup.
 type GeyserPlayer struct {
-	Player
-	ID   string `json:"floodgate_uuid" db:"id"`
-	XUID int64  `json:"xuid"           db:"xuid"`
-	Name string `json:"gamertag"       db:"gamertag"`
+	ID        string `json:"floodgate_uuid" db:"id"`
+	XUID      int64  `json:"xuid"           db:"xuid"`
+	Name      string `json:"gamertag"       db:"gamertag"`
+	FirstSeen int64  `json:"-"              db:"first_seen"`
+	LastSeen  int64  `json:"-"              db:"last_seen"`
 }
 
 // IsStale returns true if the GeyserPlayer's last_seen is older than the staleness threshold
@@ -358,11 +348,11 @@ func uuidToXUID(id string) (int64, error) {
 
 // GeyserProfile - a Bedrock player's full profile
 type GeyserProfile struct {
-	Profile
-	ID       string         `json:"floodgate_uuid"`
-	XUID     int64          `json:"xuid"`
-	Name     string         `json:"gamertag"`
-	Textures *TexturesValue `json:"textures,omitempty"`
-	SkinID   string         `json:"-"`
-	LastSeen int64          `json:"last_updated"`
+	ID        string         `json:"floodgate_uuid"`
+	XUID      int64          `json:"xuid"`
+	Name      string         `json:"gamertag"`
+	Textures  *TexturesValue `json:"textures,omitempty"`
+	SkinID    string         `json:"-"`
+	FirstSeen int64          `json:"-"`
+	LastSeen  int64          `json:"last_updated"`
 }

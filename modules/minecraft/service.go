@@ -455,7 +455,7 @@ func (g *geyserService) GetGeyserPlayerByXUID(ctx context.Context, xuid int64) (
 		return dbPlayer, nil
 	}
 
-	result, err := g.queryGeyserAPI[GeyserGamertag](ctx, g.cfg.GeyserGamertagLookup, strconv.FormatInt(xuid, 10))
+	result, err := queryGeyserAPI[GeyserGamertag](ctx, g.client, g.cfg.GeyserGamertagLookup, strconv.FormatInt(xuid, 10))
 	if err != nil {
 		return nil, err
 	}
@@ -482,7 +482,7 @@ func (g *geyserService) GetGeyserPlayerByGamertag(ctx context.Context, gamertag 
 		return dbPlayer, nil
 	}
 
-	result, err := g.queryGeyserAPI[GeyserXUID](ctx, g.cfg.GeyserXUIDLookup, url.PathEscape(gamertag))
+	result, err := queryGeyserAPI[GeyserXUID](ctx, g.client, g.cfg.GeyserXUIDLookup, url.PathEscape(gamertag))
 	if err != nil {
 		return nil, err
 	}
@@ -515,8 +515,8 @@ func (g *geyserService) GetGeyserPlayerByUUID(ctx context.Context, id string) (*
 	return g.GetGeyserPlayerByXUID(ctx, xuid)
 }
 
-func (g *geyserService) queryGeyserAPI[T any](ctx context.Context, uri string, value string) (*T, error) {
-	resp, err := get(ctx, g.client, uri+value)
+func queryGeyserAPI[T any](ctx context.Context, client *http.Client, uri string, value string) (*T, error) {
+	resp, err := get(ctx, client, uri+value)
 	if err != nil {
 		return nil, err
 	}
@@ -615,6 +615,7 @@ func (g *geyserService) getGeyserProfileFromPlayer(ctx context.Context, player *
 		XUID:     player.XUID,
 		Name:     player.Name,
 		Textures: textures,
+		LastSeen: player.LastSeen,
 	}, nil
 }
 
