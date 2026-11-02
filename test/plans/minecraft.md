@@ -69,10 +69,10 @@
 | HD-20 | handler.GetMojangProfile | Error Path | Service returns a generic error | mock error | 500 Internal Server Error, `detail` is `msgFailedToGetPlayerProfile` | P2 |  |
 | HD-21 | handler.GetProfile | Error Path | Invalid UUID path value | invalid uuid | 400 Bad Request, `detail` is `msgNotAValidUUID` followed by the id | P2 |  |
 | HD-22 | handler.GetProfile | Happy Path | Valid UUID, service succeeds | mock returns *MojangProfile | 200 OK with profile JSON body | P1 |  |
-| HD-23 | handler.GetProfile | Error Path | Service returns ErrPlayerNotFound | mock error | 204 No Content | P1 |  |
+| HD-23 | handler.GetProfile | Error Path | Service returns ErrPlayerNotFound | mock error | 404 Not Found, `detail` is `msgPlayerNotFound` | P1 |  |
 | HD-24 | handler.GetProfile | Error Path | Service returns a generic error | mock error | 500 Internal Server Error, `detail` is `msgFailedToGetPlayerProfile` | P2 |  |
 | HD-26 | handler.GetProfileByName | Happy Path | Valid name, service succeeds | mock returns *MojangProfile | 200 OK with profile JSON body | P1 |  |
-| HD-27 | handler.GetProfileByName | Error Path | Service returns ErrPlayerNotFound | mock error | 204 No Content | P1 |  |
+| HD-27 | handler.GetProfileByName | Error Path | Service returns ErrPlayerNotFound | mock error | 404 Not Found, `detail` is `msgPlayerNotFound` | P1 |  |
 | HD-28 | handler.GetProfileByName | Error Path | Service returns a generic error | mock error | 500 Internal Server Error, `detail` is `msgFailedToGetPlayerProfile` | P2 |  |
 | HD-30 | handler.GetGeyserPlayerByGamertag | Happy Path | Valid gamertag, service succeeds | mock returns *GeyserPlayer | 200 OK with player JSON body | P1 |  |
 | HD-31 | handler.GetGeyserPlayerByGamertag | Error Path | Service returns ErrPlayerNotFound | mock error | 404 Not Found, `detail` is `msgPlayerNotFound` | P1 |  |
@@ -95,8 +95,20 @@
 | HD-50 | handler.GetTexture | Happy Path | Valid hash, service succeeds | mock returns *TextureResult | 200 OK, body bytes copied verbatim, Content-Type header set | P1 |  |
 | HD-51 | handler.GetTexture | Error Path | Service returns ErrTextureNotFound | mock error | 404 Not Found, `detail` is `msgTextureNotFound` | P1 |  |
 | HD-52 | handler.GetTexture | Error Path | Service returns a generic error | mock error | 502 Bad Gateway, `detail` is `msgFailedToGetTexture` | P2 |  |
-| HD-57 | handler.GetGeyserProfileByName | Error Path | Service returns `ErrGeyserAPI` | mock service returns `nil, ErrGeyserAPI` | 500 Internal Server Error, `detail` is `msgFailedToGetGeyserProfile` | P1 |  |
-| HD-58 | handler.GetGeyserProfile | Error Path | Service returns `ErrGeyserAPI` | mock service returns `nil, ErrGeyserAPI` | 500 Internal Server Error, `detail` is `msgFailedToGetGeyserProfile` | P1 |  |
+| HD-59 | handler.GetGeyserPlayerByXUID | Happy Path | A decimal xuid path value | xuid == "42" | Service receives 42; 200 OK | P1 |  |
+| HD-60 | handler.GetGeyserPlayerByXUID | Edge Case | A Floodgate UUID path value | xuid == xuidToUUID(42) | Service receives 42; 200 OK | P1 |  |
+| HD-61 | handler.GetGeyserPlayerByXUID | Error Path | An invalid xuid path value | xuid == "zz" | 400 Bad Request, `detail` is `msgInvalidXuid`; service not called | P2 |  |
+| HD-62 | handler.GetGeyserPlayerByXUID | Error Path | Service returns ErrPlayerNotFound | mock error | 404 Not Found, `detail` is `msgPlayerNotFound` | P1 |  |
+| HD-63 | handler.GetGeyserPlayerByXUID | Error Path | Service returns ErrInvalidGeyserRequest | mock error | 400 Bad Request | P2 |  |
+| HD-64 | handler.GetGeyserPlayerByXUID | Happy Path | Service succeeds | mock returns the result | 200 OK with the JSON body | P1 |  |
+| HD-65 | handler.GetGeyserPlayerByXUID | Error Path | Service returns a generic error | mock error = errors.New(...) | 500 Internal Server Error | P2 |  |
+| HD-66 | handler.GetGeyserProfileByXUID | Happy Path | A decimal xuid path value | xuid == "42" | Service receives 42; 200 OK | P1 |  |
+| HD-67 | handler.GetGeyserProfileByXUID | Edge Case | A Floodgate UUID path value | xuid == xuidToUUID(42) | Service receives 42; 200 OK | P1 |  |
+| HD-68 | handler.GetGeyserProfileByXUID | Error Path | An invalid xuid path value | xuid == "zz" | 400 Bad Request, `detail` is `msgInvalidXuid`; service not called | P2 |  |
+| HD-69 | handler.GetGeyserProfileByXUID | Error Path | Service returns ErrPlayerNotFound | mock error | 404 Not Found, `detail` is `msgPlayerNotFound` | P1 |  |
+| HD-70 | handler.GetGeyserProfileByXUID | Error Path | Service returns ErrInvalidGeyserRequest | mock error | 400 Bad Request | P2 |  |
+| HD-71 | handler.GetGeyserProfileByXUID | Happy Path | Service succeeds | mock returns the result | 200 OK with the JSON body | P1 |  |
+| HD-72 | handler.GetGeyserProfileByXUID | Error Path | Service returns a generic error | mock error = errors.New(...) | 500 Internal Server Error | P2 |  |
 
 ## service.go
 
@@ -173,12 +185,23 @@
 | SV-69 | geyserService.GetGeyserPlayerByGamertag | Edge Case | Response XUID == 0 | unknown gamertag | Returns ErrPlayerNotFound | P1 |  |
 | SV-70 | geyserService.GetGeyserPlayerByGamertag | Error Path | geyserStore.UpsertGeyserPlayer fails | store error | Returns that error | P2 |  |
 | SV-71 | geyserService.GetGeyserPlayerByGamertag | Edge Case | Gamertag contains special characters | gamertag = "a b#c" | Request path is url.PathEscape'd | P2 |  |
+| SV-72 | geyserService.GetGeyserSkin | Happy Path | Player not stale and textures present | not stale | Returned without an HTTP call | P1 |  |
+| SV-73 | geyserService.GetGeyserSkin | Happy Path | DB stale/missing, Geyser succeeds | hash present | Upserted and returned | P0 |  |
+| SV-76 | geyserService.GetGeyserSkin | Error Path | Geyser body is not valid JSON | malformed body | Returns decode error | P2 |  |
+| SV-77 | geyserService.GetGeyserSkin | Edge Case | Response hash == "" | unconverted player | Returns ErrSkinNotFound | P1 |  |
+| SV-78 | geyserService.GetGeyserSkin | Error Path | textureStore.UpsertTextures fails | store error | Returns that error | P2 |  |
 | SV-79 | geyserService.GetGeyserPlayerByXUID | Happy Path | DB entry fresh | not stale | Returned without HTTP call | P1 |  |
 | SV-80 | geyserService.GetGeyserPlayerByXUID | Happy Path | DB stale/missing, Geyser succeeds | gamertag present | Upserted and returned | P1 |  |
 | SV-81 | geyserService.GetGeyserPlayerByXUID | Error Path | Geyser returns 400 | status 400 | Returns ErrInvalidGeyserRequest | P2 |  |
 | SV-82 | geyserService.GetGeyserPlayerByXUID | Error Path | Geyser returns non-200 | status 500 | Returns an error wrapping `ErrGeyserAPI` | P2 |  |
 | SV-83 | geyserService.GetGeyserPlayerByXUID | Edge Case | Response gamertag == "" | unknown xuid | Returns ErrPlayerNotFound | P1 |  |
 | SV-84 | geyserService.GetGeyserPlayerByXUID | Error Path | geyserStore.UpsertGeyserPlayer fails | store error | Returns that error | P2 |  |
+| SV-85 | geyserService.GetGeyserProfile | Happy Path | Player and skin both resolve | both succeed | Returns combined GeyserProfile with Skin set | P1 |  |
+| SV-86 | geyserService.GetGeyserProfile | Edge Case | GetGeyserSkin returns ErrSkinNotFound | no skin | Returns GeyserProfile with Textures nil, no error | P2 |  |
+| SV-88 | geyserService.GetGeyserProfile | Error Path | GetGeyserSkin misses the store and the live Geyser fetch fails | Geyser responds 500 | Returns an error wrapping `ErrGeyserAPI` | P2 | The store's own lookup error is intentionally discarded as a cache-miss signal |
+| SV-89 | geyserService.GetGeyserProfileByName | Happy Path | XUID and skin both resolve | both succeed | Returns combined GeyserProfile with Skin set | P1 |  |
+| SV-90 | geyserService.GetGeyserProfileByName | Edge Case | GetGeyserSkin returns ErrSkinNotFound | no skin | Returns GeyserProfile with Textures nil, no error | P2 |  |
+| SV-92 | geyserService.GetGeyserProfileByName | Error Path | GetGeyserSkin misses the store and the live Geyser fetch fails | Geyser responds 500 | Returns an error wrapping `ErrGeyserAPI` | P2 |  |
 | SV-93 | textureService.GetTextureContent | Happy Path | s3store.IsTextureInS3 true | present=true | Serves the texture from the S3 CDN | P1 |  |
 | SV-94 | textureService.GetTextureContent | Happy Path | s3store.IsTextureInS3 false | present=false | Fetches the texture from Mojang and archives it | P1 |  |
 | SV-95 | textureService.GetTextureContent | Error Path | s3store.IsTextureInS3 fails | store error | Returns that error | P2 |  |
@@ -195,7 +218,9 @@
 | SV-107 | textureService.GetTextureContent | Edge Case | s3store.PutTextureInS3 fails | store error | Logged only; response still succeeds; UpsertTextureHash not called | P2 |  |
 | SV-108 | textureService.GetTextureContent | Edge Case | s3store.PutTextureInS3 succeeds, textureStore.UpsertTextureHash fails | store error | Logged only; response still succeeds | P2 |  |
 | SV-109 | textureService.GetTextureContent | Edge Case | Missing Content-Type header | no header | Defaults to "image/png" | P3 |  |
-| SV-130 | geyserService.GetGeyserProfile | Error Path | Player lookup by xuid answers 400 | empty DB; fake Geyser endpoint answers 400 | Error is `ErrInvalidGeyserRequest` | P2 |  |
+| SV-128 | geyserService.GetGeyserProfileByXUID | Error Path | Skin lookup answers 400 after the player resolved | player by xuid fresh in the DB; fake Geyser skin endpoint answers 400 | Error wraps `ErrGeyserAPI` and does not satisfy `ErrInvalidGeyserRequest` | P1 |  |
+| SV-129 | geyserService.GetGeyserProfileByName | Error Path | Skin lookup answers 400 after the gamertag resolved | player by gamertag fresh in the DB; fake Geyser skin endpoint answers 400 | Error wraps `ErrGeyserAPI` and does not satisfy `ErrInvalidGeyserRequest` | P1 |  |
+| SV-130 | geyserService.GetGeyserProfileByXUID | Error Path | Player lookup by xuid answers 400 | empty DB; fake Geyser endpoint answers 400 | Error is `ErrInvalidGeyserRequest` | P2 |  |
 | SV-131 | geyserService.GetGeyserProfileByName | Error Path | Gamertag lookup answers 400 | empty DB; fake Geyser endpoint answers 400 | Error is `ErrInvalidGeyserRequest` | P2 |  |
 | SV-135 | mojangService.GetMojangPlayerByName | Error Path | Cancelling the ctx stops the outbound GET | cache and DB miss; fake Mojang endpoint blocks until the client goes away; ctx cancelled once the endpoint is reached | Returns an error wrapping `context.Canceled` without waiting for the endpoint | P1 |  |
 | SV-136 | mojangService.GetMojangPlayerByName | Happy Path | Writes after a fetch run on a ctx that outlives the cancelled request | ctx carries a marker value and is cancelled once the Mojang body is read; store records `ctx.Err()` and the marker in `mojangStore.UpsertPlayer` and `cacheStore.SetPlayerInCache` | Both writes see `ctx.Err() == nil` and the marker value | P1 |  |
@@ -209,6 +234,7 @@
 | SV-144 | mojangService.fetchProfileFromMojang | Edge Case | Unsigned fetch writes run on a ctx that outlives the cancelled request | ctx carries a marker value and is cancelled once the Mojang body is read; the profile has a skin and a cape texture; store records `ctx.Err()` and the marker in `mojangStore.UpsertPlayer`, two `textureStore.UpsertTextureHash`, `textureStore.UpsertTextures` and `cacheStore.SetProfileInCache` | All five writes, in that order, see `ctx.Err() == nil` and the marker value | P1 |  |
 | SV-145 | mojangService.fetchProfileFromMojang | Edge Case | Signed fetch writes run on a ctx that outlives the cancelled request | same response with `signed` true; store records `ctx.Err()` and the marker in `mojangStore.UpsertPlayer`, two `textureStore.UpsertTextureHash`, `textureStore.UpsertTextures` and `cacheStore.SetSignedProfileInCache` | All five writes, in that order, see `ctx.Err() == nil` and the marker value | P1 |  |
 | SV-146 | textureService.GetTextureContent | Edge Case | Archive writes run on a ctx that outlives the cancelled request | ctx carries a marker value and is cancelled once the texture body is read; store records `ctx.Err()` and the marker in `s3store.PutTextureInS3` and `textureStore.UpsertTextureHash` | Both writes see `ctx.Err() == nil` and the marker value | P1 |  |
+| SV-147 | geyserService.GetGeyserPlayerByUUID | Happy Path | A fresh DB player is returned without an HTTP call; a stale one falls through to `GetGeyserPlayerByXUID` | player by uuid fresh in the DB; then stale in the DB with the fake Geyser gamertag endpoint answering | Fresh: the DB player, no HTTP call. Stale: the player fetched for the uuid's xuid | P1 |  |
 
 ## store.go
 
@@ -223,13 +249,24 @@ Rows marked "(live)" require `TEST_POSTGRES_URL` and/or `TEST_REDIS_URL` and `t.
 | ST-06 | mojangStore.GetPlayerByName | Happy Path (live) | Row seeded via mojangStore.UpsertPlayer | live DB | Returns matching Player | P1 |  |
 | ST-07 | mojangStore.GetPlayerByName | Error Path (live) | No matching name | live DB, unknown name | Returns `ErrPlayerNotFound` | P2 |  |
 | ST-08 | mojangStore.GetProfileByUUID | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |  |
+| ST-09 | mojangStore.GetProfileByUUID | Happy Path (live) | Player+textures seeded | live DB | Returns Profile with decoded Textures | P1 |  |
+| ST-10 | mojangStore.GetProfileByUUID | Edge Case (live) | Player seeded, no textures row | live DB | Returns Profile with Textures == nil | P2 |  |
 | ST-11 | mojangStore.GetProfileByUUID | Error Path (live) | No matching player | live DB, unknown id | Returns `ErrPlayerNotFound` | P2 |  |
 | ST-12 | textureStore.GetTextures | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P3 |  |
+| ST-13 | textureStore.GetTextures | Happy Path (live) | Texture row present | live DB | Returns decoded *TexturesValue | P2 |  |
+| ST-14 | textureStore.GetTextures | Edge Case (live) | No texture row for player | live DB | Returns (nil, nil) | P2 |  |
+| ST-79 | textureStore.GetTextures | Edge Case (live) | Row stored by a skin-only UpsertTextures | live DB | Returns a TexturesValue with the skin and a nil CAPE | P2 |  |
 | ST-15 | mojangStore.UpsertPlayer | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |  |
+| ST-16 | mojangStore.UpsertPlayer | Happy Path (live) | updateProfile=true, new id | live DB | Row inserted with given profile_actions; name history row inserted | P1 |  |
 | ST-17 | mojangStore.UpsertPlayer | Happy Path (live) | updateProfile=false, new id | live DB | Row inserted with legacy=false, demo=false, profile_actions=[] | P1 |  |
 | ST-18 | mojangStore.UpsertPlayer | Edge Case (live) | Same id upserted twice | live DB | Second call updates in place; exactly one row for that id | P2 |  |
 | ST-19 | mojangStore.UpsertPlayer | Concurrency Invariant (live) | N goroutines mojangStore.UpsertPlayer the same id concurrently | live DB | No unique-violation errors from any goroutine; `players.id` being a PRIMARY KEY then guarantees exactly one surviving row (looped trials) | P0 | 50 concurrent writers — fewer wouldn't reliably reproduce a broken ON CONFLICT guard's race on every run |
 | ST-20 | textureStore.UpsertTextures | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |  |
+| ST-21 | textureStore.UpsertTextures | Happy Path (live) | Skin+cape+SLIM model, hashes pre-registered | live DB | Row inserted with model stored | P1 |  |
+| ST-22 | textureStore.UpsertTextures | Edge Case (live) | Same conflict key upserted twice | live DB | Second call updates last_seen; no duplicate row | P2 |  |
+| ST-23 | textureStore.UpsertTextures | Concurrency Invariant (live) | N goroutines UpsertTextures the same conflict key concurrently | live DB | No unique-violation errors from any goroutine; `player_textures_unique` then guarantees a single surviving row (looped trials) | P0 |  |
+| ST-77 | textureStore.UpsertTextures | Edge Case (live) | Skin and no cape | live DB, skin hash pre-registered | Row inserted with the skin hash and a NULL cape column | P1 |  |
+| ST-78 | textureStore.UpsertTextures | Edge Case (live) | Cape and no skin | live DB, cape hash pre-registered | Row inserted with the cape hash and a NULL skin column | P1 |  |
 | ST-26 | textureStore.UpsertTextureHash | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |  |
 | ST-27 | textureStore.UpsertTextureHash | Happy Path (live) | New hash | live DB | Row inserted | P1 |  |
 | ST-28 | textureStore.UpsertTextureHash | Edge Case (live) | Duplicate hash | live DB | ON CONFLICT DO NOTHING; no error | P2 |  |
@@ -254,10 +291,15 @@ Rows marked "(live)" require `TEST_POSTGRES_URL` and/or `TEST_REDIS_URL` and `t.
 | ST-46 | s3store.IsTextureInS3 | Edge Case (local fake) | HeadObject returns 404 | fake S3 server | Returns (false, nil) | P1 |  |
 | ST-47 | s3store.IsTextureInS3 | Error Path (local fake) | HeadObject returns 500 | fake S3 server | Returns (false, non-nil error) | P2 |  |
 | ST-48 | geyserStore.GetGeyserPlayerByGamertag | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |  |
+| ST-49 | geyserStore.GetGeyserPlayerByGamertag | Happy Path (live) | Row seeded via UpsertGeyserPlayer | live DB | Returns GeyserPlayer with derived UUID | P1 |  |
 | ST-50 | geyserStore.GetGeyserPlayerByGamertag | Error Path (live) | No matching gamertag | live DB, unknown gamertag | Returns `ErrPlayerNotFound` (pgx.ErrNoRows is mapped) | P2 |  |
 | ST-51 | geyserStore.GetGeyserPlayerByXUID | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |  |
+| ST-52 | geyserStore.GetGeyserPlayerByXUID | Happy Path (live) | Row seeded via UpsertGeyserPlayer | live DB | Returns GeyserPlayer with derived UUID | P1 |  |
 | ST-53 | geyserStore.GetGeyserPlayerByXUID | Error Path (live) | No matching xuid | live DB, unknown xuid | Returns `ErrPlayerNotFound` (pgx.ErrNoRows is mapped) | P2 |  |
 | ST-54 | geyserStore.UpsertGeyserPlayer | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |  |
+| ST-55 | geyserStore.UpsertGeyserPlayer | Happy Path (live) | New xuid | live DB | Row inserted | P1 |  |
+| ST-56 | geyserStore.UpsertGeyserPlayer | Edge Case (live) | Same xuid upserted twice | live DB | Second call updates gamertag/last_seen in place | P2 |  |
+| ST-57 | geyserStore.UpsertGeyserPlayer | Concurrency Invariant (live) | N goroutines UpsertGeyserPlayer the same xuid concurrently | live DB | No unique-violation errors from any goroutine; `geyser_players`' id PRIMARY KEY then guarantees a single surviving row (looped trials) | P0 |  |
 | ST-68 | s3store.PutTextureInS3 | Happy Path (local fake) | Body implements Len(); PUT returns 200 | fake S3 server | Content-Length header equals Len(); nil error | P1 |  |
 | ST-69 | s3store.PutTextureInS3 | Edge Case (local fake) | Body does not implement Len() | fake S3 server | ContentLength left unset; still succeeds | P2 |  |
 | ST-70 | s3store.PutTextureInS3 | Error Path (local fake) | PUT returns 500 | fake S3 server | Returns an error wrapping `ErrUploadS3` | P2 |  |

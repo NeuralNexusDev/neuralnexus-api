@@ -83,6 +83,34 @@ func mcUniqueHash(prefix string) string {
 	return fmt.Sprintf("%s-%s", prefix, strings.ReplaceAll(uuid.New().String(), "-", ""))
 }
 
+func mcSeedPlayerWithHashes(t *testing.T, db *pgxpool.Pool, hashes ...string) string {
+	t.Helper()
+	id := uuid.New().String()
+	if err := mcMojangStore(db).UpsertPlayer(mcCtx, &MojangPlayer{ID: id, Name: "Tex_" + mcUniqueHash("n")}, false); err != nil {
+		t.Fatalf("seed UpsertPlayer() error = %v", err)
+	}
+	for _, h := range hashes {
+		if err := mcTextureStore(db).UpsertTextureHash(mcCtx, h); err != nil {
+			t.Fatalf("seed UpsertTextureHash() error = %v", err)
+		}
+	}
+	return id
+}
+
+func mcTextureRows(t *testing.T, db *pgxpool.Pool, id string) (count int, skin, cape *string) {
+	t.Helper()
+	if err := db.QueryRow(mcCtx, "SELECT count(*) FROM player_textures WHERE player_id = $1", id).Scan(&count); err != nil {
+		t.Fatalf("count player_textures error = %v", err)
+	}
+	if count == 0 {
+		return count, nil, nil
+	}
+	if err := db.QueryRow(mcCtx, "SELECT skin, cape FROM player_textures WHERE player_id = $1 LIMIT 1", id).Scan(&skin, &cape); err != nil {
+		t.Fatalf("select player_textures error = %v", err)
+	}
+	return count, skin, cape
+}
+
 func TestST02to04_GetPlayerByUUID(t *testing.T) {
 	t.Run("ST-02_Unreachable", func(t *testing.T) {
 		s := mcMojangStore(testutil.UnreachablePool(t))
@@ -159,6 +187,35 @@ func TestST08to11_GetProfileByUUID(t *testing.T) {
 		}
 	})
 
+	t.Run("ST-09_Live_WithTextures", func(t *testing.T) {
+		db := mcLiveDB(t)
+		skin, cape := mcUniqueHash("skin"), mcUniqueHash("cape")
+		id := mcSeedPlayerWithHashes(t, db, skin, cape)
+		value := &TexturesValue{ProfileID: id, Timestamp: time.Now().UnixMilli(), Textures: Textures{SKIN: &Texture{URL: "http://t/" + skin}, CAPE: &Texture{URL: "http://t/" + cape}}}
+		if err := mcTextureStore(db).UpsertTextures(mcCtx, JavaPlayerTexturesTable, value); err != nil {
+			t.Fatalf("seed UpsertTextures() error = %v", err)
+		}
+		got, err := mcMojangStore(db).GetProfileByUUID(mcCtx, id)
+		if err != nil {
+			t.Fatalf("GetProfileByUUID() error = %v", err)
+		}
+		if got.Textures == nil || got.Textures.Textures.SKIN == nil || !strings.HasSuffix(got.Textures.Textures.SKIN.URL, skin) || got.Textures.Textures.CAPE == nil || !strings.HasSuffix(got.Textures.Textures.CAPE.URL, cape) {
+			t.Errorf("Textures = %+v, want skin %q and cape %q", got.Textures, skin, cape)
+		}
+	})
+
+	t.Run("ST-10_Live_NoTextures", func(t *testing.T) {
+		db := mcLiveDB(t)
+		id := mcSeedPlayerWithHashes(t, db)
+		got, err := mcMojangStore(db).GetProfileByUUID(mcCtx, id)
+		if err != nil {
+			t.Fatalf("GetProfileByUUID() error = %v", err)
+		}
+		if got.Textures != nil {
+			t.Errorf("Textures = %+v, want nil", got.Textures)
+		}
+	})
+
 	t.Run("ST-11_Live_NotFound", func(t *testing.T) {
 		s := mcMojangStore(mcLiveDB(t))
 		_, err := s.GetProfileByUUID(mcCtx, uuid.New().String())
@@ -176,6 +233,47 @@ func TestST12to14_GetTextures(t *testing.T) {
 			t.Error("expected a raw connection error")
 		}
 	})
+
+	t.Run("ST-13_Live_Found", func(t *testing.T) {
+		db := mcLiveDB(t)
+		skin, cape := mcUniqueHash("skin"), mcUniqueHash("cape")
+		id := mcSeedPlayerWithHashes(t, db, skin, cape)
+		value := &TexturesValue{ProfileID: id, Timestamp: time.Now().UnixMilli(), Textures: Textures{SKIN: &Texture{URL: "http://t/" + skin}, CAPE: &Texture{URL: "http://t/" + cape}}}
+		if err := mcTextureStore(db).UpsertTextures(mcCtx, JavaPlayerTexturesTable, value); err != nil {
+			t.Fatalf("seed UpsertTextures() error = %v", err)
+		}
+		got, err := mcTextureStore(db).GetTextures(mcCtx, JavaPlayerTexturesTable, id, "Steve")
+		if err != nil {
+			t.Fatalf("GetTextures() error = %v", err)
+		}
+		if got == nil || got.Textures.SKIN == nil || !strings.HasSuffix(got.Textures.SKIN.URL, skin) || got.Textures.CAPE == nil || !strings.HasSuffix(got.Textures.CAPE.URL, cape) {
+			t.Errorf("got %+v, want skin %q and cape %q", got, skin, cape)
+		}
+	})
+
+	t.Run("ST-14_Live_NoRow", func(t *testing.T) {
+		got, err := mcTextureStore(mcLiveDB(t)).GetTextures(mcCtx, JavaPlayerTexturesTable, uuid.New().String(), "Steve")
+		if got != nil || err != nil {
+			t.Errorf("got (%+v, %v), want (nil, nil)", got, err)
+		}
+	})
+
+	t.Run("ST-79_Live_SkinOnlyHasNilCape", func(t *testing.T) {
+		db := mcLiveDB(t)
+		skin := mcUniqueHash("skin")
+		id := mcSeedPlayerWithHashes(t, db, skin)
+		value := &TexturesValue{ProfileID: id, Timestamp: time.Now().UnixMilli(), Textures: Textures{SKIN: &Texture{URL: "http://t/" + skin}}}
+		if err := mcTextureStore(db).UpsertTextures(mcCtx, JavaPlayerTexturesTable, value); err != nil {
+			t.Fatalf("seed UpsertTextures() error = %v", err)
+		}
+		got, err := mcTextureStore(db).GetTextures(mcCtx, JavaPlayerTexturesTable, id, "Steve")
+		if err != nil {
+			t.Fatalf("GetTextures() error = %v", err)
+		}
+		if got == nil || got.Textures.SKIN == nil || !strings.HasSuffix(got.Textures.SKIN.URL, skin) || got.Textures.CAPE != nil {
+			t.Errorf("got %+v, want skin %q and nil CAPE", got, skin)
+		}
+	})
 }
 
 func TestST15to19_UpsertPlayer(t *testing.T) {
@@ -184,6 +282,30 @@ func TestST15to19_UpsertPlayer(t *testing.T) {
 		err := s.UpsertPlayer(mcCtx, &MojangPlayer{ID: uuid.New().String(), Name: "Steve"}, false)
 		if err == nil {
 			t.Error("expected a raw connection error")
+		}
+	})
+
+	t.Run("ST-16_Live_UpdateProfileTrue", func(t *testing.T) {
+		db := mcLiveDB(t)
+		id := uuid.New().String()
+		player := &MojangPlayer{ID: id, Name: "Alex", Legacy: true, Demo: true, ProfileActions: []string{"FORCED_NAME_CHANGE"}}
+		if err := mcMojangStore(db).UpsertPlayer(mcCtx, player, true); err != nil {
+			t.Fatalf("UpsertPlayer() error = %v", err)
+		}
+		var legacy, demo bool
+		var actions []string
+		if err := db.QueryRow(mcCtx, "SELECT legacy, demo, profile_actions FROM players WHERE id = $1", id).Scan(&legacy, &demo, &actions); err != nil {
+			t.Fatalf("select players error = %v", err)
+		}
+		if !legacy || !demo || len(actions) != 1 || actions[0] != "FORCED_NAME_CHANGE" {
+			t.Errorf("row = legacy %v demo %v actions %v, want true true [FORCED_NAME_CHANGE]", legacy, demo, actions)
+		}
+		var names int
+		if err := db.QueryRow(mcCtx, "SELECT count(*) FROM player_names WHERE player_id = $1 AND name = $2", id, "Alex").Scan(&names); err != nil {
+			t.Fatalf("count player_names error = %v", err)
+		}
+		if names != 1 {
+			t.Errorf("name history rows = %d, want 1", names)
 		}
 	})
 
@@ -251,6 +373,106 @@ func TestST20to23_UpsertTextures(t *testing.T) {
 		err := s.UpsertTextures(mcCtx, JavaPlayerTexturesTable, &TexturesValue{ProfileID: uuid.New().String(), Textures: Textures{SKIN: &Texture{URL: "http://x/hash"}}})
 		if err == nil {
 			t.Error("expected a raw connection error")
+		}
+	})
+
+	t.Run("ST-21_Live_SkinCapeSlimModel", func(t *testing.T) {
+		db := mcLiveDB(t)
+		skin, cape := mcUniqueHash("skin"), mcUniqueHash("cape")
+		id := mcSeedPlayerWithHashes(t, db, skin, cape)
+		value := &TexturesValue{ProfileID: id, Timestamp: time.Now().UnixMilli(), Textures: Textures{
+			SKIN: &Texture{URL: "http://t/" + skin, Metadata: &Metadata{Model: SLIM}},
+			CAPE: &Texture{URL: "http://t/" + cape},
+		}}
+		if err := mcTextureStore(db).UpsertTextures(mcCtx, JavaPlayerTexturesTable, value); err != nil {
+			t.Fatalf("UpsertTextures() error = %v", err)
+		}
+		var gotSkin, gotCape, model string
+		if err := db.QueryRow(mcCtx, "SELECT skin, cape, model FROM player_textures WHERE player_id = $1", id).Scan(&gotSkin, &gotCape, &model); err != nil {
+			t.Fatalf("select player_textures error = %v", err)
+		}
+		if gotSkin != skin || gotCape != cape || model != string(SLIM) {
+			t.Errorf("row = (%q, %q, %q), want (%q, %q, %q)", gotSkin, gotCape, model, skin, cape, SLIM)
+		}
+	})
+
+	t.Run("ST-22_Live_SameKeyTwice", func(t *testing.T) {
+		db := mcLiveDB(t)
+		skin := mcUniqueHash("skin")
+		id := mcSeedPlayerWithHashes(t, db, skin)
+		s := mcTextureStore(db)
+		value := &TexturesValue{ProfileID: id, Timestamp: 1000, Textures: Textures{SKIN: &Texture{URL: "http://t/" + skin}}}
+		if err := s.UpsertTextures(mcCtx, JavaPlayerTexturesTable, value); err != nil {
+			t.Fatalf("first UpsertTextures() error = %v", err)
+		}
+		value.Timestamp = 2000
+		if err := s.UpsertTextures(mcCtx, JavaPlayerTexturesTable, value); err != nil {
+			t.Fatalf("second UpsertTextures() error = %v", err)
+		}
+		var count int
+		var lastSeen int64
+		if err := db.QueryRow(mcCtx, "SELECT count(*), max(last_seen) FROM player_textures WHERE player_id = $1", id).Scan(&count, &lastSeen); err != nil {
+			t.Fatalf("select player_textures error = %v", err)
+		}
+		if count != 1 || lastSeen != 2000 {
+			t.Errorf("rows = %d, last_seen = %d, want 1 and 2000", count, lastSeen)
+		}
+	})
+
+	t.Run("ST-23_Live_ConcurrentUpsertsSameKey", func(t *testing.T) {
+		db := mcLiveDB(t)
+		s := mcTextureStore(db)
+		const n = 50
+		for trial := 0; trial < 3; trial++ {
+			skin := mcUniqueHash("skin")
+			id := mcSeedPlayerWithHashes(t, db, skin)
+			var wg sync.WaitGroup
+			errs := make([]error, n)
+			for i := 0; i < n; i++ {
+				wg.Add(1)
+				go func(i int) {
+					defer wg.Done()
+					value := &TexturesValue{ProfileID: id, Timestamp: int64(1000 + i), Textures: Textures{SKIN: &Texture{URL: "http://t/" + skin}}}
+					errs[i] = s.UpsertTextures(mcCtx, JavaPlayerTexturesTable, value)
+				}(i)
+			}
+			wg.Wait()
+			for i, err := range errs {
+				if err != nil {
+					t.Errorf("trial %d goroutine %d: UpsertTextures() error = %v, want nil", trial, i, err)
+				}
+			}
+			if count, _, _ := mcTextureRows(t, db, id); count != 1 {
+				t.Errorf("trial %d: rows = %d, want 1", trial, count)
+			}
+		}
+	})
+
+	t.Run("ST-77_Live_SkinOnlyStoresNullCape", func(t *testing.T) {
+		db := mcLiveDB(t)
+		skin := mcUniqueHash("skin")
+		id := mcSeedPlayerWithHashes(t, db, skin)
+		value := &TexturesValue{ProfileID: id, Timestamp: time.Now().UnixMilli(), Textures: Textures{SKIN: &Texture{URL: "http://t/" + skin}}}
+		if err := mcTextureStore(db).UpsertTextures(mcCtx, JavaPlayerTexturesTable, value); err != nil {
+			t.Fatalf("UpsertTextures() error = %v", err)
+		}
+		count, gotSkin, gotCape := mcTextureRows(t, db, id)
+		if count != 1 || gotSkin == nil || *gotSkin != skin || gotCape != nil {
+			t.Errorf("rows = %d, skin = %v, cape = %v, want 1 row with skin %q and NULL cape", count, gotSkin, gotCape, skin)
+		}
+	})
+
+	t.Run("ST-78_Live_CapeOnlyStoresNullSkin", func(t *testing.T) {
+		db := mcLiveDB(t)
+		cape := mcUniqueHash("cape")
+		id := mcSeedPlayerWithHashes(t, db, cape)
+		value := &TexturesValue{ProfileID: id, Timestamp: time.Now().UnixMilli(), Textures: Textures{CAPE: &Texture{URL: "http://t/" + cape}}}
+		if err := mcTextureStore(db).UpsertTextures(mcCtx, JavaPlayerTexturesTable, value); err != nil {
+			t.Fatalf("UpsertTextures() error = %v", err)
+		}
+		count, gotSkin, gotCape := mcTextureRows(t, db, id)
+		if count != 1 || gotSkin != nil || gotCape == nil || *gotCape != cape {
+			t.Errorf("rows = %d, skin = %v, cape = %v, want 1 row with NULL skin and cape %q", count, gotSkin, gotCape, cape)
 		}
 	})
 }
@@ -513,6 +735,22 @@ func TestST48to50_GetGeyserPlayerByGamertag(t *testing.T) {
 		}
 	})
 
+	t.Run("ST-49_Live_Found", func(t *testing.T) {
+		s := mcGeyserStore(mcLiveDB(t))
+		xuid := mcUniqueXUID()
+		gamertag := "gt-" + mcUniqueHash("g")
+		if err := s.UpsertGeyserPlayer(mcCtx, &GeyserPlayer{ID: xuidToUUID(xuid), XUID: xuid, Name: gamertag}); err != nil {
+			t.Fatalf("seed UpsertGeyserPlayer() error = %v", err)
+		}
+		got, err := s.GetGeyserPlayerByGamertag(mcCtx, gamertag)
+		if err != nil {
+			t.Fatalf("GetGeyserPlayerByGamertag() error = %v", err)
+		}
+		if got.ID != xuidToUUID(xuid) || got.XUID != xuid || got.Name != gamertag {
+			t.Errorf("got %+v, want id=%s xuid=%d gamertag=%s", got, xuidToUUID(xuid), xuid, gamertag)
+		}
+	})
+
 	t.Run("ST-50_Live_NotFound", func(t *testing.T) {
 		s := mcGeyserStore(mcLiveDB(t))
 		_, err := s.GetGeyserPlayerByGamertag(mcCtx, "no-such-gamertag-"+mcUniqueHash("g"))
@@ -531,6 +769,22 @@ func TestST51to53_GetGeyserPlayerByXUID(t *testing.T) {
 		}
 	})
 
+	t.Run("ST-52_Live_Found", func(t *testing.T) {
+		s := mcGeyserStore(mcLiveDB(t))
+		xuid := mcUniqueXUID()
+		gamertag := "gt-" + mcUniqueHash("g")
+		if err := s.UpsertGeyserPlayer(mcCtx, &GeyserPlayer{ID: xuidToUUID(xuid), XUID: xuid, Name: gamertag}); err != nil {
+			t.Fatalf("seed UpsertGeyserPlayer() error = %v", err)
+		}
+		got, err := s.GetGeyserPlayerByXUID(mcCtx, xuid)
+		if err != nil {
+			t.Fatalf("GetGeyserPlayerByXUID() error = %v", err)
+		}
+		if got.ID != xuidToUUID(xuid) || got.XUID != xuid || got.Name != gamertag {
+			t.Errorf("got %+v, want id=%s xuid=%d gamertag=%s", got, xuidToUUID(xuid), xuid, gamertag)
+		}
+	})
+
 	t.Run("ST-53_Live_NotFound", func(t *testing.T) {
 		s := mcGeyserStore(mcLiveDB(t))
 		_, err := s.GetGeyserPlayerByXUID(mcCtx, mcUniqueXUID())
@@ -545,6 +799,77 @@ func TestST54to57_UpsertGeyserPlayer(t *testing.T) {
 		s := mcGeyserStore(testutil.UnreachablePool(t))
 		if err := s.UpsertGeyserPlayer(mcCtx, &GeyserPlayer{XUID: 1, Name: "Notch"}); err == nil {
 			t.Error("expected a raw connection error")
+		}
+	})
+
+	t.Run("ST-55_Live_NewXUID", func(t *testing.T) {
+		s := mcGeyserStore(mcLiveDB(t))
+		xuid := mcUniqueXUID()
+		if err := s.UpsertGeyserPlayer(mcCtx, &GeyserPlayer{ID: xuidToUUID(xuid), XUID: xuid, Name: "Fresh"}); err != nil {
+			t.Fatalf("UpsertGeyserPlayer() error = %v", err)
+		}
+		got, err := s.GetGeyserPlayerByXUID(mcCtx, xuid)
+		if err != nil {
+			t.Fatalf("GetGeyserPlayerByXUID() error = %v", err)
+		}
+		if got.Name != "Fresh" {
+			t.Errorf("Name = %q, want Fresh", got.Name)
+		}
+	})
+
+	t.Run("ST-56_Live_SameXUIDTwice", func(t *testing.T) {
+		db := mcLiveDB(t)
+		s := mcGeyserStore(db)
+		xuid := mcUniqueXUID()
+		id := xuidToUUID(xuid)
+		if err := s.UpsertGeyserPlayer(mcCtx, &GeyserPlayer{ID: id, XUID: xuid, Name: "First"}); err != nil {
+			t.Fatalf("first UpsertGeyserPlayer() error = %v", err)
+		}
+		if err := s.UpsertGeyserPlayer(mcCtx, &GeyserPlayer{ID: id, XUID: xuid, Name: "Second"}); err != nil {
+			t.Fatalf("second UpsertGeyserPlayer() error = %v", err)
+		}
+		var count int
+		if err := db.QueryRow(mcCtx, "SELECT count(*) FROM geyser_players WHERE id = $1", id).Scan(&count); err != nil {
+			t.Fatalf("count geyser_players error = %v", err)
+		}
+		got, err := s.GetGeyserPlayerByXUID(mcCtx, xuid)
+		if err != nil {
+			t.Fatalf("GetGeyserPlayerByXUID() error = %v", err)
+		}
+		if count != 1 || got.Name != "Second" {
+			t.Errorf("rows = %d, Name = %q, want 1 and Second", count, got.Name)
+		}
+	})
+
+	t.Run("ST-57_Live_ConcurrentUpsertsSameXUID", func(t *testing.T) {
+		db := mcLiveDB(t)
+		s := mcGeyserStore(db)
+		const n = 50
+		for trial := 0; trial < 3; trial++ {
+			xuid := mcUniqueXUID()
+			id := xuidToUUID(xuid)
+			var wg sync.WaitGroup
+			errs := make([]error, n)
+			for i := 0; i < n; i++ {
+				wg.Add(1)
+				go func(i int) {
+					defer wg.Done()
+					errs[i] = s.UpsertGeyserPlayer(mcCtx, &GeyserPlayer{ID: id, XUID: xuid, Name: fmt.Sprintf("Name%d", i)})
+				}(i)
+			}
+			wg.Wait()
+			for i, err := range errs {
+				if err != nil {
+					t.Errorf("trial %d goroutine %d: UpsertGeyserPlayer() error = %v, want nil", trial, i, err)
+				}
+			}
+			var count int
+			if err := db.QueryRow(mcCtx, "SELECT count(*) FROM geyser_players WHERE id = $1", id).Scan(&count); err != nil {
+				t.Fatalf("count geyser_players error = %v", err)
+			}
+			if count != 1 {
+				t.Errorf("trial %d: rows = %d, want 1", trial, count)
+			}
 		}
 	})
 }
