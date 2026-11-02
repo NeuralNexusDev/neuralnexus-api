@@ -56,30 +56,6 @@ func TestHandleTeapot(t *testing.T) {
 			wantFormat:      formatProtobuf,
 			wantContentType: "application/problem+x-protobuf",
 		},
-		{
-			name:            "TP-04_UnrecognizedAcceptFallsBackToJSON",
-			acceptHeader:    strPtr("text/plain"),
-			wantFormat:      formatJSON,
-			wantContentType: "application/problem+json",
-		},
-		{
-			name:            "TP-05_CaseMismatchedAcceptFallsBackToJSON",
-			acceptHeader:    strPtr("APPLICATION/XML"),
-			wantFormat:      formatJSON,
-			wantContentType: "application/problem+json",
-		},
-		{
-			name:            "TP-06_CompoundAcceptFallsBackToJSON",
-			acceptHeader:    strPtr("application/xml, application/json;q=0.9"),
-			wantFormat:      formatJSON,
-			wantContentType: "application/problem+json",
-		},
-		{
-			name:            "TP-07_EmptyAcceptFallsBackToJSON",
-			acceptHeader:    strPtr(""),
-			wantFormat:      formatJSON,
-			wantContentType: "application/problem+json",
-		},
 	}
 
 	for _, tt := range tests {

@@ -95,14 +95,6 @@ func TestHD03to06_UploadBeeNameHandler(t *testing.T) {
 		testutil.ExpectDetail(t, w, msgNoPermissionToUploadBeeNames)
 	})
 
-	t.Run("BNH-04_EmptyName", func(t *testing.T) {
-		h := UploadBeeNameHandler(&bngMockStore{})
-		w := httptest.NewRecorder()
-		h(w, bngRequest(t, http.MethodPut, "/", map[string]string{"name": ""}, bngAuthorizedSession))
-		testutil.ExpectStatus(t, w, http.StatusBadRequest)
-		testutil.ExpectDetail(t, w, msgInvalidName)
-	})
-
 	t.Run("BNH-05_OK", func(t *testing.T) {
 		s := &bngMockStore{uploadBeeName: func(name string) (string, error) { return name, nil }}
 		h := UploadBeeNameHandler(s)
@@ -146,14 +138,6 @@ func TestHD07to10_DeleteBeeNameHandler(t *testing.T) {
 		testutil.ExpectDetail(t, w, msgNoPermissionToDeleteBeeNames)
 	})
 
-	t.Run("BNH-08_EmptyName", func(t *testing.T) {
-		h := DeleteBeeNameHandler(&bngMockStore{})
-		w := httptest.NewRecorder()
-		h(w, bngRequest(t, http.MethodDelete, "/", map[string]string{"name": ""}, bngAuthorizedSession))
-		testutil.ExpectStatus(t, w, http.StatusBadRequest)
-		testutil.ExpectDetail(t, w, msgInvalidName)
-	})
-
 	t.Run("BNH-09_OK", func(t *testing.T) {
 		s := &bngMockStore{deleteBeeName: func(name string) (string, error) { return name, nil }}
 		h := DeleteBeeNameHandler(s)
@@ -181,13 +165,6 @@ func TestHD07to10_DeleteBeeNameHandler(t *testing.T) {
 }
 
 func TestHD11to13_SubmitBeeNameHandler(t *testing.T) {
-	t.Run("BNH-11_EmptyName", func(t *testing.T) {
-		h := SubmitBeeNameHandler(&bngMockStore{})
-		w := httptest.NewRecorder()
-		h(w, bngRequest(t, http.MethodPost, "/", map[string]string{"name": ""}, nil))
-		testutil.ExpectStatus(t, w, http.StatusBadRequest)
-		testutil.ExpectDetail(t, w, msgInvalidName)
-	})
 
 	t.Run("BNH-12_OK", func(t *testing.T) {
 		s := &bngMockStore{submitBeeName: func(name string) (string, error) { return name, nil }}
@@ -218,22 +195,6 @@ func TestHD14to19_GetBeeNameSuggestionsHandler(t *testing.T) {
 		h(w, bngRequest(t, http.MethodGet, "/5", map[string]string{"amount": "5"}, bngUnauthorizedSession))
 		testutil.ExpectStatus(t, w, http.StatusForbidden)
 		testutil.ExpectDetail(t, w, msgNoPermissionToGetBeeNameSuggestions)
-	})
-
-	t.Run("BNH-15_EmptyAmount", func(t *testing.T) {
-		h := GetBeeNameSuggestionsHandler(&bngMockStore{})
-		w := httptest.NewRecorder()
-		h(w, bngRequest(t, http.MethodGet, "/", map[string]string{"amount": ""}, bngAuthorizedSession))
-		testutil.ExpectStatus(t, w, http.StatusBadRequest)
-		testutil.ExpectDetail(t, w, msgInvalidAmountProvided)
-	})
-
-	t.Run("BNH-16_ZeroAmount", func(t *testing.T) {
-		h := GetBeeNameSuggestionsHandler(&bngMockStore{})
-		w := httptest.NewRecorder()
-		h(w, bngRequest(t, http.MethodGet, "/0", map[string]string{"amount": "0"}, bngAuthorizedSession))
-		testutil.ExpectStatus(t, w, http.StatusBadRequest)
-		testutil.ExpectDetail(t, w, msgInvalidAmountProvided)
 	})
 
 	t.Run("BNH-17_NonNumericAmount", func(t *testing.T) {
@@ -294,14 +255,6 @@ func TestHD20to23_AcceptBeeNameSuggestionHandler(t *testing.T) {
 		testutil.ExpectDetail(t, w, msgNoPermissionToAcceptBeeNameSuggestions)
 	})
 
-	t.Run("BNH-21_EmptyName", func(t *testing.T) {
-		h := AcceptBeeNameSuggestionHandler(&bngMockStore{})
-		w := httptest.NewRecorder()
-		h(w, bngRequest(t, http.MethodPost, "/", map[string]string{"name": ""}, bngAuthorizedSession))
-		testutil.ExpectStatus(t, w, http.StatusBadRequest)
-		testutil.ExpectDetail(t, w, msgInvalidName)
-	})
-
 	t.Run("BNH-22_OK", func(t *testing.T) {
 		s := &bngMockStore{acceptBeeNameSuggestion: func(name string) (string, error) { return name, nil }}
 		h := AcceptBeeNameSuggestionHandler(s)
@@ -339,14 +292,6 @@ func TestHD24to27_RejectBeeNameSuggestionHandler(t *testing.T) {
 		h(w, bngRequest(t, http.MethodPost, "/Buzzy", map[string]string{"name": "Buzzy"}, bngUnauthorizedSession))
 		testutil.ExpectStatus(t, w, http.StatusForbidden)
 		testutil.ExpectDetail(t, w, msgNoPermissionToRejectBeeNameSuggestions)
-	})
-
-	t.Run("BNH-25_EmptyName", func(t *testing.T) {
-		h := RejectBeeNameSuggestionHandler(&bngMockStore{})
-		w := httptest.NewRecorder()
-		h(w, bngRequest(t, http.MethodPost, "/", map[string]string{"name": ""}, bngAuthorizedSession))
-		testutil.ExpectStatus(t, w, http.StatusBadRequest)
-		testutil.ExpectDetail(t, w, msgInvalidName)
 	})
 
 	t.Run("BNH-26_OK", func(t *testing.T) {

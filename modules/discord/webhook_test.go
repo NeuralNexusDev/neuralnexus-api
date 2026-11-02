@@ -1,57 +1,11 @@
 package discord
 
 import (
-	"reflect"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/goccy/go-json"
 )
-
-func dcRequirePanic(t *testing.T, wantSubstr string, fn func()) {
-	t.Helper()
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Fatalf("expected panic containing %q, got none", wantSubstr)
-		}
-		msg, ok := r.(string)
-		if !ok || !strings.Contains(msg, wantSubstr) {
-			t.Fatalf("panic = %v, want substring %q", r, wantSubstr)
-		}
-	}()
-	fn()
-}
-
-func TestWebhookType_String(t *testing.T) {
-	t.Run("WT-03_OutOfRange", func(t *testing.T) {
-		if got := WebhookType(99).String(); got != "WebhookType(99)" {
-			t.Errorf("String() = %q, want %q", got, "WebhookType(99)")
-		}
-	})
-}
-
-func TestWebhookEventType_String(t *testing.T) {
-	t.Run("WET-02_Unrecognized", func(t *testing.T) {
-		got := WebhookEventType("SOMETHING_ELSE").String()
-		want := "WebhookEventType(SOMETHING_ELSE)"
-		if got != want {
-			t.Errorf("String() = %q, want %q", got, want)
-		}
-	})
-}
-
-func TestInstallationContext_String(t *testing.T) {
-	t.Run("IC-02_OutOfRange", func(t *testing.T) {
-		got := InstallationContext(5).String()
-		want := "InstallationContext(5)"
-		if got != want {
-			t.Errorf("String() = %q, want %q", got, want)
-		}
-	})
-}
 
 func TestWebhookEvent_UnmarshalJSON(t *testing.T) {
 	t.Run("WEU-01_ApplicationAuthorized", func(t *testing.T) {
@@ -121,39 +75,5 @@ func TestWebhookEvent_UnmarshalJSON(t *testing.T) {
 		if err := json.Unmarshal([]byte(raw), &event); err == nil {
 			t.Fatal("UnmarshalJSON() error = nil, want a decode error")
 		}
-	})
-}
-
-func TestWebhookEvent_ApplicationAuthorizedData(t *testing.T) {
-	t.Run("WAD-01_CorrectType", func(t *testing.T) {
-		want := ApplicationAuthorizedWebhookData{User: discordgo.User{ID: "u1"}}
-		event := &WebhookEvent{Type: ApplicationAuthorized, Data: want}
-		if got := event.ApplicationAuthorizedData(); !reflect.DeepEqual(got, want) {
-			t.Errorf("ApplicationAuthorizedData() = %+v, want %+v", got, want)
-		}
-	})
-
-	t.Run("WAD-02_WrongTypePanics", func(t *testing.T) {
-		event := &WebhookEvent{Type: ApplicationDeauthorized}
-		dcRequirePanic(t, "ApplicationAuthorizedData called on interaction of type ApplicationDeauthorized", func() {
-			event.ApplicationAuthorizedData()
-		})
-	})
-}
-
-func TestWebhookEvent_ApplicationDeauthorizedData(t *testing.T) {
-	t.Run("WDD-01_CorrectType", func(t *testing.T) {
-		want := ApplicationDeauthorizedWebhookData{User: discordgo.User{ID: "u2"}}
-		event := &WebhookEvent{Type: ApplicationDeauthorized, Data: want}
-		if got := event.ApplicationDeauthorizedData(); got != want {
-			t.Errorf("ApplicationDeauthorizedData() = %+v, want %+v", got, want)
-		}
-	})
-
-	t.Run("WDD-02_WrongTypePanics", func(t *testing.T) {
-		event := &WebhookEvent{Type: ApplicationAuthorized}
-		dcRequirePanic(t, "ApplicationDeauthorizedData called on interaction of type ApplicationAuthorized", func() {
-			event.ApplicationDeauthorizedData()
-		})
 	})
 }

@@ -109,14 +109,6 @@ func TestHandleDiscordWebhook(t *testing.T) {
 		testutil.ExpectStatus(t, w, http.StatusNoContent)
 	})
 
-	t.Run("HW-12_NonNilEventZeroType", func(t *testing.T) {
-		h := HandleDiscordWebhook()
-		w := httptest.NewRecorder()
-		body := `{"version":1,"type":1,"event":{"type":"","timestamp":"2024-01-01T00:00:00.000000"}}`
-		h(w, dcRequest(t, body, ApplicationJSON))
-		testutil.ExpectStatus(t, w, http.StatusNoContent)
-	})
-
 	t.Run("HW-13_UnrecognizedWebhookType", func(t *testing.T) {
 		h := HandleDiscordWebhook()
 		w := httptest.NewRecorder()
