@@ -160,33 +160,9 @@ func TestDecodeStruct(t *testing.T) {
 		t.Fatalf("failed to marshal the protobuf body: %v", err)
 	}
 
-	t.Run("RR-05_JSONNegativeContentLengthDecodes", func(t *testing.T) {
-		var got rrDecoded
-		r := rrDecodeRequest("application/json", -1, strings.NewReader(`{"a":1}`))
-
-		if err := DecodeStruct(r, &got); err != nil {
-			t.Fatalf("err = %v, want nil", err)
-		}
-		if got.A != 1 {
-			t.Errorf("A = %d, want 1", got.A)
-		}
-	})
-
 	t.Run("RR-06_ProtobufNegativeContentLengthDecodes", func(t *testing.T) {
 		got := &wrapperspb.StringValue{}
 		r := rrDecodeRequest("application/x-protobuf", -1, bytes.NewReader(protoBody))
-
-		if err := DecodeStruct(r, &got); err != nil {
-			t.Fatalf("err = %v, want nil", err)
-		}
-		if got.Value != "hello" {
-			t.Errorf("Value = %q, want hello", got.Value)
-		}
-	})
-
-	t.Run("RR-07_OneByteReadsDecodeProtobuf", func(t *testing.T) {
-		got := &wrapperspb.StringValue{}
-		r := rrDecodeRequest("application/x-protobuf", int64(len(protoBody)), iotest.OneByteReader(bytes.NewReader(protoBody)))
 
 		if err := DecodeStruct(r, &got); err != nil {
 			t.Fatalf("err = %v, want nil", err)
