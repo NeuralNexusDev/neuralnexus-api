@@ -2,7 +2,6 @@ package datastore
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -40,13 +39,11 @@ func runDSHandler(t *testing.T, h http.HandlerFunc, wantStatus int) {
 }
 
 func TestDSH_DataStoreHandlers(t *testing.T) {
-	errBoom := errors.New("boom")
-
 	t.Run("DSH-01_ReadNotFound", func(t *testing.T) {
 		runDSHandler(t, ReadDataStoreHandler(&fakeDSService{err: ErrDataStoreNotFound}), http.StatusNotFound)
 	})
 	t.Run("DSH-02_ReadUnexpectedError", func(t *testing.T) {
-		runDSHandler(t, ReadDataStoreHandler(&fakeDSService{err: errBoom}), http.StatusInternalServerError)
+		runDSHandler(t, ReadDataStoreHandler(&fakeDSService{err: testutil.ErrBoom}), http.StatusInternalServerError)
 	})
 	t.Run("DSH-03_ReadSuccess", func(t *testing.T) {
 		runDSHandler(t, ReadDataStoreHandler(&fakeDSService{}), http.StatusOK)
@@ -58,7 +55,7 @@ func TestDSH_DataStoreHandlers(t *testing.T) {
 		runDSHandler(t, UpdateDataStoreHandler(&fakeDSService{err: ErrDataStoreOwnerNotFound}), http.StatusNotFound)
 	})
 	t.Run("DSH-06_UpdateUnexpectedError", func(t *testing.T) {
-		runDSHandler(t, UpdateDataStoreHandler(&fakeDSService{err: errBoom}), http.StatusInternalServerError)
+		runDSHandler(t, UpdateDataStoreHandler(&fakeDSService{err: testutil.ErrBoom}), http.StatusInternalServerError)
 	})
 	t.Run("DSH-07_DeleteNotFound", func(t *testing.T) {
 		runDSHandler(t, DeleteDataStoreHandler(&fakeDSService{err: ErrDataStoreNotFound}), http.StatusNotFound)
@@ -67,7 +64,7 @@ func TestDSH_DataStoreHandlers(t *testing.T) {
 		runDSHandler(t, DeleteDataStoreHandler(&fakeDSService{err: ErrDataStoreInUse}), http.StatusConflict)
 	})
 	t.Run("DSH-09_DeleteUnexpectedError", func(t *testing.T) {
-		runDSHandler(t, DeleteDataStoreHandler(&fakeDSService{err: errBoom}), http.StatusInternalServerError)
+		runDSHandler(t, DeleteDataStoreHandler(&fakeDSService{err: testutil.ErrBoom}), http.StatusInternalServerError)
 	})
 	t.Run("DSH-10_DeleteSuccess", func(t *testing.T) {
 		runDSHandler(t, DeleteDataStoreHandler(&fakeDSService{}), http.StatusNoContent)

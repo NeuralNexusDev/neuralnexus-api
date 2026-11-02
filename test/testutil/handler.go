@@ -47,15 +47,21 @@ func ExpectStatus(t *testing.T, w *httptest.ResponseRecorder, want int) {
 	}
 }
 
-// ExpectDetail fails unless the problem body of w has the detail want.
-func ExpectDetail(t *testing.T, w *httptest.ResponseRecorder, want string) {
+// Detail returns the detail of the problem body of w.
+func Detail(t *testing.T, w *httptest.ResponseRecorder) string {
 	t.Helper()
 	var p responses.Problem
 	if err := json.Unmarshal(w.Body.Bytes(), &p); err != nil {
 		t.Fatalf("failed to decode problem body %q: %v", w.Body.String(), err)
 	}
-	if p.Detail != want {
-		t.Fatalf("detail = %q, want %q", p.Detail, want)
+	return p.Detail
+}
+
+// ExpectDetail fails unless the problem body of w has the detail want.
+func ExpectDetail(t *testing.T, w *httptest.ResponseRecorder, want string) {
+	t.Helper()
+	if got := Detail(t, w); got != want {
+		t.Fatalf("detail = %q, want %q", got, want)
 	}
 }
 

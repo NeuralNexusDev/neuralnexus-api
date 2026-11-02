@@ -204,13 +204,6 @@ func auJSONResponse(status int, body string) *http.Response {
 	return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader(body)), Header: h}
 }
 
-// auTextResponse builds a canned *http.Response with a plain-text body, for
-// Steam's check_authentication response format (newline-separated
-// "key:value" lines, not JSON).
-func auTextResponse(status int, body string) *http.Response {
-	return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}
-}
-
 const auSiteURL = "https://neuralnexus.test"
 
 func auConfig() *config.Config {
@@ -272,7 +265,7 @@ func TestAU51OpenIDHandlerLoginHappyPath(t *testing.T) {
 	testutil.SwapTransport(t, auRoundTripperFunc(func(req *http.Request) (*http.Response, error) {
 		switch {
 		case req.Method == http.MethodPost && req.URL.Host == "steamcommunity.com" && req.URL.Path == "/openid/login":
-			return auTextResponse(http.StatusOK, "ns:http://specs.openid.net/auth/2.0\nis_valid:true\n"), nil
+			return testutil.FakeResponse(http.StatusOK, "ns:http://specs.openid.net/auth/2.0\nis_valid:true\n"), nil
 		case req.Method == http.MethodGet && req.URL.Host == "api.steampowered.com" && req.URL.Path == "/ISteamUser/GetPlayerSummaries/v2/":
 			return auJSONResponse(http.StatusOK, `{"response":{"players":[{"steamid":"76561198000000000","personaname":"steamplayer","profileurl":"https://steamcommunity.com/id/steamplayer","avatarfull":"https://avatar.example/a.jpg"}]}}`), nil
 		default:
@@ -348,7 +341,7 @@ func auSteamTransportBody(t *testing.T, checkStatus, summaryStatus int, summaryB
 	testutil.SwapTransport(t, auRoundTripperFunc(func(req *http.Request) (*http.Response, error) {
 		switch {
 		case req.Method == http.MethodPost && req.URL.Host == "steamcommunity.com" && req.URL.Path == "/openid/login":
-			return auTextResponse(checkStatus, "ns:http://specs.openid.net/auth/2.0\nis_valid:true\n"), nil
+			return testutil.FakeResponse(checkStatus, "ns:http://specs.openid.net/auth/2.0\nis_valid:true\n"), nil
 		case req.Method == http.MethodGet && req.URL.Host == "api.steampowered.com" && req.URL.Path == "/ISteamUser/GetPlayerSummaries/v2/":
 			return auJSONResponse(summaryStatus, summaryBody), nil
 		default:

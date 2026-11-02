@@ -5,8 +5,6 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
 
@@ -20,11 +18,7 @@ const (
 func ndsLiveStore(t *testing.T) (*numberStore, string, string) {
 	t.Helper()
 
-	pool, err := pgxpool.New(context.Background(), testutil.PostgresURL(t, "neuralnexus"))
-	if err != nil {
-		t.Fatalf("failed to connect to postgres: %v", err)
-	}
-	t.Cleanup(pool.Close)
+	pool := testutil.LivePool(t, "neuralnexus")
 
 	ctx := context.Background()
 	cleanup := func() {

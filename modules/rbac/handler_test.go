@@ -2,7 +2,6 @@ package rbac
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -130,17 +129,6 @@ func rbAdmin() *session.Session {
 	return rbSession(perms.ScopeAdminRoles.Node)
 }
 
-func rbDetail(t *testing.T, w *httptest.ResponseRecorder) string {
-	t.Helper()
-	var p struct {
-		Detail string `json:"detail"`
-	}
-	if err := json.Unmarshal(w.Body.Bytes(), &p); err != nil {
-		t.Fatalf("response is not a problem document: %v: %s", err, w.Body.String())
-	}
-	return p.Detail
-}
-
 func TestRH01to03Handlers(t *testing.T) {
 	t.Run("RH-01_EveryHandlerRejectsASessionWithoutTheRolesAdminNode", func(t *testing.T) {
 		for _, c := range handlerCases {
@@ -148,7 +136,7 @@ func TestRH01to03Handlers(t *testing.T) {
 				svc := &stubService{}
 				w := httptest.NewRecorder()
 				c.handler(svc)(w, rbRequest(c, session, c.body))
-				if w.Code != http.StatusForbidden || rbDetail(t, w) != msgNoPermission {
+				if w.Code != http.StatusForbidden || testutil.Detail(t, w) != msgNoPermission {
 					t.Fatalf("%s with %v: got %d %s", c.name, session.Permissions, w.Code, w.Body.String())
 				}
 				if svc.args != nil {
@@ -181,7 +169,7 @@ func TestRH01to03Handlers(t *testing.T) {
 			svc := &stubService{}
 			w := httptest.NewRecorder()
 			c.handler(svc)(w, rbRequest(c, rbAdmin(), "{not json"))
-			if w.Code != http.StatusBadRequest || rbDetail(t, w) != msgUnableToParseBody {
+			if w.Code != http.StatusBadRequest || testutil.Detail(t, w) != msgUnableToParseBody {
 				t.Fatalf("%s: got %d %s", c.name, w.Code, w.Body.String())
 			}
 			if svc.args != nil {
@@ -233,7 +221,7 @@ func TestRH04ServiceFailureMapping(t *testing.T) {
 	respond := func(c handlerCase, err error) (outcome, *httptest.ResponseRecorder) {
 		w := httptest.NewRecorder()
 		c.handler(&stubService{err: err})(w, rbRequest(c, rbAdmin(), c.body))
-		return outcome{w.Code, rbDetail(t, w)}, w
+		return outcome{w.Code, testutil.Detail(t, w)}, w
 	}
 
 	t.Run("RH-04_EachHandlerMapsItsOwnServiceErrorsAndTheRestTo500", func(t *testing.T) {
@@ -279,7 +267,7 @@ func TestRH05AttachValueNumbers(t *testing.T) {
 		}
 		for _, body := range []string{`{"value":9007199254740993}`, `{"value":-9007199254740993}`, `{"value":1e2}`, `{"value":5.0}`, `{"value":1.5}`, `{"value":"5"}`, `{}`} {
 			w, f := attach(body)
-			if w.Code != http.StatusBadRequest || rbDetail(t, w) != msgInvalidValue || slices.Contains(f.calls, "AttachPermission") {
+			if w.Code != http.StatusBadRequest || testutil.Detail(t, w) != msgInvalidValue || slices.Contains(f.calls, "AttachPermission") {
 				t.Fatalf("body %s: got %d %s with calls %v, want 400 and no attach", body, w.Code, w.Body.String(), f.calls)
 			}
 		}
