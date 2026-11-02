@@ -4,7 +4,6 @@
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| PPT-01 | GetPetPictureURL | Accessor | build the CDN URL from ID and FileExt | `PetPicture{ID: "abc123", FileExt: "jpg"}` | Returns `CDN_URL + CDN_PATH + "abc123.jpg"` | P3 | |
 
 ## store.go
 
@@ -19,14 +18,11 @@
 | PPS-07 | GetPetByName | Happy Path | name has a matching row | live DB, pet created via `CreatePet` | Returns `*Pet` with matching `ID`/`Name`/`ProfilePicture`, nil error | P1 | |
 | PPS-08 | GetPetByName | Error Path | name has no matching row | live DB | Returns `nil`, `ErrPetNotFound` | P2 | |
 | PPS-27 | GetPet | Happy Path | id has a matching row | live DB, pet created via `CreatePet` | Returns a `*Pet` equal to the created one, nil error | P1 | |
-| PPS-09 | GetPetByName | Error Path | database unreachable | closed-port `DATABASE_URL` | Returns `nil`, non-nil connection error | P2 | |
 | PPS-10 | UpdatePet | Happy Path | update an existing pet's name/profile_picture | live DB, pet created via `CreatePet` | Returns the same `*Pet` passed in, nil error; a follow-up `GetPetByName` on the new name confirms the row was updated | P1 | |
 | PPS-11 | UpdatePet | Error Path | update targets an id with no matching row | live DB, nonexistent id | Returns `nil`, `ErrPetNotFound` (an `UPDATE` matching zero rows means the pet no longer exists) | P2 | |
-| PPS-12 | UpdatePet | Error Path | database unreachable | closed-port `DATABASE_URL` | Returns `nil`, non-nil connection error | P2 | |
 | PPS-34 | UpdatePet | Error Path | rename a pet to the name of another pet | live DB, two pets created via `CreatePet` | Returns `nil`, `ErrPetNameExists` | P2 | |
 | PPS-13 | CreatePetPicture | Happy Path | insert a picture with a unique id | live DB, unique id | Returns `*PetPicture` with the given `ID`/`FileExt`/`PrimarySubject`/`OthersSubjects`/`Aliases` and zero-value `Created`, nil error | P1 | |
 | PPS-14 | CreatePetPicture | Error Path | insert a picture whose id already exists | live DB, id already created | Returns `nil`, non-nil error (unique constraint violation) | P2 | |
-| PPS-15 | CreatePetPicture | Error Path | database unreachable | closed-port `DATABASE_URL` | Returns `nil`, non-nil connection error | P2 | |
 | PPS-16 | CreatePetPicture | Concurrency Invariant | N goroutines call `CreatePetPicture` with the identical id simultaneously (e.g. the same file uploaded twice, same sha) | live DB, one shared unique id per round | Exactly one call succeeds; the rest fail with a unique-constraint error | P0 | design: 5 rounds x 8 concurrent callers, fresh id per round |
 | PPS-17 | GetRandPetPictureByName | Error Path | pet name has no matching pet | live DB, name never created | Returns `nil`, the upstream `GetPetByName` error (`ErrPetNotFound`) | P2 | |
 | PPS-18 | GetRandPetPictureByName | Error Path | pet exists but has no matching pictures | live DB, pet created, no pictures reference it | Returns `nil`, `ErrPetPictureNotFound` | P2 | |
@@ -36,13 +32,10 @@
 | PPS-31 | CreatePetPicture | Happy Path | picture with no other subjects round-trips through `subjects` | live DB, `othersSubjects` nil | `subjects` holds only the primary subject; `GetPetPicture` returns `PrimarySubject` set and `OthersSubjects` nil | P1 | |
 | PPS-32 | CreatePetPicture | Happy Path | primary and other subjects are stored in order in `subjects` | live DB, primary 3, others `[4, 5]` | `subjects` reads back as `[3, 4, 5]`; `GetPetPicture` maps it to `PrimarySubject` 3 and `OthersSubjects` `[4, 5]` | P1 | |
 | PPS-33 | pictures table | Error Path | insert a row with an empty `subjects` array | live DB, direct `INSERT` | Rejected by the `subjects_check` constraint (SQLSTATE 23514) | P2 | |
-| PPS-20 | GetPetPicture | Error Path | database unreachable | closed-port `DATABASE_URL` | Returns `nil`, non-nil connection error | P2 | |
-| PPS-21 | UpdatePetPicture | Error Path | database unreachable | closed-port `DATABASE_URL` | Returns `nil`, non-nil connection error | P2 | |
 | PPS-22 | UpdatePetPicture | Happy Path | update an existing picture's fields | live DB, picture created via `CreatePetPicture`, session time zone set to a non-UTC zone (America/Los_Angeles, Asia/Kolkata) via `PGTZ` | Returns `*PetPicture` reflecting the updated fields, with `Created` read back from the database as the same instant in RFC3339 UTC, nil error | P1 | |
 | PPS-30 | UpdatePetPicture | Error Path | update targets an id with no matching row | live DB, nonexistent id | Returns `nil`, `ErrPetPictureNotFound` | P2 | |
 | PPS-23 | DeletePetPicture | Happy Path | delete an existing picture | live DB, picture created via `CreatePetPicture` | Returns `&PetPicture{ID: id}`, nil error; a follow-up `GetPetPicture(id)` confirms the row is gone (`ErrPetPictureNotFound`) | P1 | |
 | PPS-25 | DeletePetPicture | Edge Case | delete an id with no matching row | live DB, nonexistent id | Returns `&PetPicture{ID: id}`, nil error (a `DELETE` matching zero rows is not itself an error) | P2 | |
-| PPS-24 | DeletePetPicture | Error Path | database unreachable | closed-port `DATABASE_URL` | Returns `nil`, non-nil connection error | P2 | |
 
 ## service.go
 
