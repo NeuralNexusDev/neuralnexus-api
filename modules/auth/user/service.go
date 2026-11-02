@@ -34,7 +34,7 @@ func NewService(as account.Store, als link.Store, links link.Service, ass accoun
 
 func userFromAccount(a *account.Account) *User {
 	if a == nil {
-		return nil
+		panic("userFromAccount: the account store returned a nil account without an error")
 	}
 	return &User{UserID: a.UserID, Username: a.Username, Roles: a.Roles, UpdatedAt: a.UpdatedAt}
 }

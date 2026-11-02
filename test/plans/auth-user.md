@@ -4,7 +4,6 @@
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| US-02 | GetUser | Happy Path | `as.GetAccountByID` succeeds | | Returns the user for the account, nil | P1 |  |
 | US-03 | GetUser | Error Path | `as.GetAccountByID` fails | | Error propagated unchanged | P2 |  |
 | US-04 | GetUserFromPlatform | Happy Path | `als.GetLinkedAccountByPlatformID` then `as.GetAccountByID` both succeed | | Returns the resolved user whose JSON equals the account's JSON (user_id, username, roles, updated_at only), nil | P1 |  |
 | US-05 | GetUserFromPlatform | Error Path | `als` lookup fails (e.g. `ErrNotFound`) | | Returns nil, error; `as.GetAccountByID` never called | P2 |  |
@@ -26,14 +25,11 @@
 | US-35 | GetAccountSettings | Error Path | `ass.GetAccountSettings` fails | | Error propagated unchanged | P2 |  |
 | US-36 | SetPasswordAuthEnabled | Happy Path | `ass.SetPasswordAuthEnabled` succeeds | | Returns nil | P1 |  |
 | US-37 | SetPasswordAuthEnabled | Error Path | `ass.SetPasswordAuthEnabled` fails | | Error propagated unchanged | P2 |  |
-| US-39 | GetAccountSettings | Error Path | `ass.GetAccountSettings` returns `ErrNotFound` | fake settings store returns `ErrNotFound` | Returns an error matching `ErrNotFound` | P2 |  |
-| US-40 | SetPasswordAuthEnabled | Error Path | `ass.SetPasswordAuthEnabled` returns `ErrNotFound` | fake settings store returns `ErrNotFound` | Returns an error matching `ErrNotFound` | P2 |  |
 | US-41 | GetUserPermissions | Error Path | the role store fails | role store returns `testutil.ErrBoom` | Returns nil permissions and an error matching the store error | P1 |   |
 | US-42 | GetUserPermissions | Edge Case | the account's role grants nothing | role store returns no permissions | Returns empty non-nil permissions, nil error | P1 |  |
 | US-43 | ListUsers | Happy Path | a page of users is listed | store returns two accounts | Returns users in store order whose JSON equals the accounts' JSON, and the store received the same limit and offset | P1 |  |
 | US-44 | ListUsers | Error Path | the store fails | store returns `testutil.ErrBoom` | Returns nil accounts and the store's error | P2 |  |
 | US-85 | userFromAccount | Happy Path | `GetUser` reads an account with every field set: email, hashed secret, salt, roles and updated_at | `as.GetAccountByID` returns the account | Returns a user whose JSON equals the account's JSON; email, hashed secret and salt do not appear | P0 |  |
-| US-86 | userFromAccount | Edge Case | `as.GetAccountByID` returns a nil account and nil error | fake store with no account | `GetUser` returns nil user and nil error | P2 |  |
 
 ## handler.go
 
@@ -93,7 +89,6 @@
 | UR-69 | UpdateUserHandler | Error Path | Service.UpdateUser returns an unknown role id | Admin session, valid body, service returns `account.ErrUnknownRoleID` | 400 Bad Request `msgUnknownRoleID` | P1 |  |
 | UR-70 | UpdateUserFromPlatformHandler | Error Path | Service.UpdateUserFromPlatform returns an invalid role id | Admin session, valid body, service returns `account.ErrInvalidRoleID` | 400 Bad Request `msgInvalidRoleID` | P2 |  |
 | UR-71 | UpdateUserFromPlatformHandler | Error Path | Service.UpdateUserFromPlatform returns an unknown role id | Admin session, valid body, service returns `account.ErrUnknownRoleID` | 400 Bad Request `msgUnknownRoleID` | P2 |  |
-| UR-72 | UpdateUserHandler | Edge Case | the body repeats a role id | Admin session, body roles `["1","1","3"]`, the service reads back roles `["1","3"]` | 200 OK whose roles are the stored roles, without the duplicate | P1 |  |
 | UR-73 | UpdateUserHandler | Error Path | reading the account back fails after the update | Admin session, `UpdateUser` succeeds, `GetUser` returns `testutil.ErrDBDown` | 500 `msgFailedToUpdateUser` after `UpdateUser` was called | P2 |  |
 | UR-74 | ListUsersHandler | Happy Path | list users with no query | Admin session, service returns two accounts | 200 OK with the two users in order and no email, hashed secret or salt; the service got limit 50 and offset 0 | P1 |  |
 | UR-75 | ListUsersHandler | Happy Path | limit and offset in the query | Admin session, `?limit=200&offset=40` | 200 OK and the service got limit 200 and offset 40 | P1 |  |

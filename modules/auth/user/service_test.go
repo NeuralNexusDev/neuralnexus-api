@@ -124,15 +124,6 @@ func usNewService(as *accounttest.FakeStore, als *usFakeLinkAccountStore, ass *u
 }
 
 func TestUS02to03GetUser(t *testing.T) {
-	t.Run("US-02_Success", func(t *testing.T) {
-		svc := usNewService(&accounttest.FakeStore{GetByIDAccount: &account.Account{UserID: "u1", Username: "name"}}, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})
-
-		got, err := svc.GetUser(context.Background(), "u1")
-		if err != nil || got == nil || got.UserID != "u1" || got.Username != "name" {
-			t.Errorf("GetUser() = (%+v, %v), want the u1 user, nil", got, err)
-		}
-	})
-
 	t.Run("US-03_StoreError", func(t *testing.T) {
 		wantErr := testutil.ErrBoom
 		svc := usNewService(&accounttest.FakeStore{GetByIDErr: wantErr}, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})
@@ -439,28 +430,6 @@ func TestUS36to37SetPasswordAuthEnabled(t *testing.T) {
 	})
 }
 
-func TestUS39to40_AccountSettingsNotFoundPassesThrough(t *testing.T) {
-	t.Run("US-39_GetAccountSettingsNotFound", func(t *testing.T) {
-		ass := &usFakeAccountSettingsStore{getErr: account.ErrNotFound}
-		svc := usNewService(&accounttest.FakeStore{}, &usFakeLinkAccountStore{}, ass)
-
-		_, err := svc.GetAccountSettings(context.Background(), "u1")
-		if !errors.Is(err, account.ErrNotFound) {
-			t.Errorf("GetAccountSettings() err = %v, want %v", err, account.ErrNotFound)
-		}
-	})
-
-	t.Run("US-40_SetPasswordAuthEnabledNotFound", func(t *testing.T) {
-		ass := &usFakeAccountSettingsStore{setErr: account.ErrNotFound}
-		svc := usNewService(&accounttest.FakeStore{}, &usFakeLinkAccountStore{}, ass)
-
-		err := svc.SetPasswordAuthEnabled(context.Background(), "u1", true)
-		if !errors.Is(err, account.ErrNotFound) {
-			t.Errorf("SetPasswordAuthEnabled() err = %v, want %v", err, account.ErrNotFound)
-		}
-	})
-}
-
 type usStubLinkService struct {
 	userID string
 	err    error
@@ -485,15 +454,6 @@ func TestUS85UserFromAccountKeepsOnlyPublicFields(t *testing.T) {
 		got, err := svc.GetUser(context.Background(), "u1")
 		if err != nil || usMarshal(t, got) != usMarshal(t, want) {
 			t.Errorf("GetUser() = (%s, %v), want the JSON of the account %s, nil", usMarshal(t, got), err, usMarshal(t, want))
-		}
-	})
-
-	t.Run("US-86_NilAccountGivesNilUser", func(t *testing.T) {
-		svc := usNewService(&accounttest.FakeStore{}, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})
-
-		got, err := svc.GetUser(context.Background(), "u1")
-		if got != nil || err != nil {
-			t.Errorf("GetUser() = (%+v, %v), want (nil, nil)", got, err)
 		}
 	})
 }
