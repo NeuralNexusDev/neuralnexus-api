@@ -602,7 +602,12 @@ func (g *geyserService) getGeyserProfileFromPlayer(ctx context.Context, player *
 		if err != ErrSkinNotFound {
 			return nil, skinStepFailure(ctx, err)
 		}
-		return nil, err
+		return &GeyserProfile{
+			ID:       player.ID,
+			XUID:     player.XUID,
+			Name:     player.Name,
+			LastSeen: player.LastSeen,
+		}, nil
 	}
 	textures := ParseTextureValue(ctx, skin.Value)
 	if textures != nil {

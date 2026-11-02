@@ -327,7 +327,7 @@ func (g *geyserStore) UpsertGeyserPlayer(ctx context.Context, player *GeyserPlay
 	_, err := g.db.Exec(ctx, `
 		INSERT INTO geyser_players (id, xuid, gamertag, first_seen, last_seen)
 		VALUES ($1, $2, $3, $4, $4)
-		ON CONFLICT (xuid) DO UPDATE SET
+		ON CONFLICT (id) DO UPDATE SET
 			gamertag  = EXCLUDED.gamertag,
 			last_seen = EXCLUDED.last_seen
 		`,
@@ -347,7 +347,7 @@ func (t *textureStore) GetTextures(ctx context.Context, table, id, name string) 
 		FROM `+table+
 		` WHERE player_id = $1
 		ORDER BY last_seen DESC
-		LIMIT 1`, table, id)
+		LIMIT 1`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -371,12 +371,20 @@ func (t *textureStore) UpsertTextures(ctx context.Context, table string, value *
 	}
 	cape := value.Textures.CAPE
 
+	var skinHash, capeHash *string
+	if h := skin.Hash(); h != "" {
+		skinHash = &h
+	}
+	if h := cape.Hash(); h != "" {
+		capeHash = &h
+	}
+
 	_, err := t.db.Exec(ctx, `
 		INSERT INTO `+table+` (player_id, skin, model, cape, first_seen, last_seen)
 		VALUES ($1, $2, $3, $4, $5, $5)
 		ON CONFLICT (player_id, COALESCE(skin, ''), COALESCE(model, ''), COALESCE(cape, '')) DO UPDATE SET
 			last_seen = EXCLUDED.last_seen
-		`, value.ProfileID, skin.Hash(), model, cape.Hash(), value.Timestamp)
+		`, value.ProfileID, skinHash, model, capeHash, value.Timestamp)
 	return err
 }
 
