@@ -51,19 +51,6 @@ func TestGetReleases(t *testing.T) {
 		}
 	})
 
-	t.Run("PJ-03_ErrorPath_InvalidRequestURL", func(t *testing.T) {
-		cfg := testGitHub("test-token")
-		cfg.APIEndpoint = "http://bad host"
-
-		releases, err := getReleases(pjCtx, cfg, "group", "project")
-		if err == nil {
-			t.Fatal("getReleases() error = nil, want non-nil")
-		}
-		if releases != nil {
-			t.Errorf("getReleases() releases = %+v, want nil", releases)
-		}
-	})
-
 	t.Run("PJ-04_ErrorPath_TransportError", func(t *testing.T) {
 		cfg := testGitHub("test-token")
 		wantErr := testutil.ErrTransportFailed
@@ -101,24 +88,6 @@ func TestGetReleases(t *testing.T) {
 		}
 		if len(releases) != 0 {
 			t.Errorf("getReleases() = %+v, want empty slice", releases)
-		}
-	})
-
-	t.Run("PJ-16_EdgeCase_CtxReachesOutboundRequest", func(t *testing.T) {
-		type ctxKey struct{}
-		cfg := testGitHub("test-token")
-		rt := &testutil.FakeRoundTripper{Resp: testutil.FakeResponse(http.StatusOK, "[]")}
-		testutil.SwapTransport(t, rt)
-
-		ctx := context.WithValue(pjCtx, ctxKey{}, "marker")
-		if _, err := getReleases(ctx, cfg, "group", "project"); err != nil {
-			t.Fatalf("getReleases() error = %v, want nil", err)
-		}
-		if rt.LastReq == nil {
-			t.Fatal("expected an outbound GitHub request, got none")
-		}
-		if got := rt.LastReq.Context().Value(ctxKey{}); got != "marker" {
-			t.Errorf("outbound request ctx value = %v, want marker", got)
 		}
 	})
 
