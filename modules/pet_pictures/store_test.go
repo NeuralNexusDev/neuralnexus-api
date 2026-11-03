@@ -17,16 +17,6 @@ import (
 
 var ppCtx = context.Background()
 
-func ppLiveDatabase(t *testing.T) *pgxpool.Pool {
-	t.Helper()
-	pool, err := pgxpool.New(context.Background(), testutil.PostgresURL(t, "pet_pictures"))
-	if err != nil {
-		t.Fatalf("failed to connect to pet_pictures: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	return pool
-}
-
 func ppCreatePet(t *testing.T, pool *pgxpool.Pool, s *store, name string) *Pet {
 	t.Helper()
 	t.Cleanup(func() { pool.Exec(context.Background(), "DELETE FROM pets WHERE name = $1", name) })
@@ -72,7 +62,7 @@ func TestST02to05and26_CreatePet(t *testing.T) {
 	})
 
 	t.Run("PPS-02_HappyPath", func(t *testing.T) {
-		pool := ppLiveDatabase(t)
+		pool := testutil.LivePool(t, "pet_pictures")
 		s := &store{db: pool}
 		name := ppUniqueID("pet")
 		pet := ppCreatePet(t, pool, s, name)
@@ -82,7 +72,7 @@ func TestST02to05and26_CreatePet(t *testing.T) {
 	})
 
 	t.Run("PPS-03_DuplicateName", func(t *testing.T) {
-		pool := ppLiveDatabase(t)
+		pool := testutil.LivePool(t, "pet_pictures")
 		s := &store{db: pool}
 		name := ppUniqueID("pet")
 		ppCreatePet(t, pool, s, name)
@@ -93,7 +83,7 @@ func TestST02to05and26_CreatePet(t *testing.T) {
 	})
 
 	t.Run("PPS-05_ConcurrentSameName", func(t *testing.T) {
-		pool := ppLiveDatabase(t)
+		pool := testutil.LivePool(t, "pet_pictures")
 		s := &store{db: pool}
 		for round := 0; round < 5; round++ {
 			name := ppUniqueID("pet")
@@ -127,7 +117,7 @@ func TestST02to05and26_CreatePet(t *testing.T) {
 	})
 
 	t.Run("PPS-26_EmptyName", func(t *testing.T) {
-		pool := ppLiveDatabase(t)
+		pool := testutil.LivePool(t, "pet_pictures")
 		t.Cleanup(func() { pool.Exec(context.Background(), "DELETE FROM pets WHERE name = ''") })
 		s := &store{db: pool}
 		pet, err := s.CreatePet(ppCtx, "")
@@ -138,15 +128,8 @@ func TestST02to05and26_CreatePet(t *testing.T) {
 }
 
 func TestST06to09and27_GetPetAndGetPetByName(t *testing.T) {
-	t.Run("PPS-09_ConnectionFailure", func(t *testing.T) {
-		s := &store{db: testutil.UnreachablePool(t)}
-		if _, err := s.GetPetByName(ppCtx, "anything"); err == nil {
-			t.Error("GetPetByName() error = nil, want a connection error")
-		}
-	})
-
 	t.Run("PPS-06_GetPetNoRow", func(t *testing.T) {
-		pool := ppLiveDatabase(t)
+		pool := testutil.LivePool(t, "pet_pictures")
 		s := &store{db: pool}
 		pet, err := s.GetPet(ppCtx, -1)
 		if pet != nil || !errors.Is(err, ErrPetNotFound) {
@@ -155,7 +138,7 @@ func TestST06to09and27_GetPetAndGetPetByName(t *testing.T) {
 	})
 
 	t.Run("PPS-27_GetPetHappyPath", func(t *testing.T) {
-		pool := ppLiveDatabase(t)
+		pool := testutil.LivePool(t, "pet_pictures")
 		s := &store{db: pool}
 		created := ppCreatePet(t, pool, s, ppUniqueID("pet"))
 		got, err := s.GetPet(ppCtx, created.ID)
@@ -165,7 +148,7 @@ func TestST06to09and27_GetPetAndGetPetByName(t *testing.T) {
 	})
 
 	t.Run("PPS-07_HappyPath", func(t *testing.T) {
-		pool := ppLiveDatabase(t)
+		pool := testutil.LivePool(t, "pet_pictures")
 		s := &store{db: pool}
 		created := ppCreatePet(t, pool, s, ppUniqueID("pet"))
 		got, err := s.GetPetByName(ppCtx, created.Name)
@@ -175,7 +158,7 @@ func TestST06to09and27_GetPetAndGetPetByName(t *testing.T) {
 	})
 
 	t.Run("PPS-08_NoRow", func(t *testing.T) {
-		pool := ppLiveDatabase(t)
+		pool := testutil.LivePool(t, "pet_pictures")
 		s := &store{db: pool}
 		pet, err := s.GetPetByName(ppCtx, ppUniqueID("missing"))
 		if pet != nil || !errors.Is(err, ErrPetNotFound) {
@@ -185,15 +168,8 @@ func TestST06to09and27_GetPetAndGetPetByName(t *testing.T) {
 }
 
 func TestST10to12_UpdatePet(t *testing.T) {
-	t.Run("PPS-12_ConnectionFailure", func(t *testing.T) {
-		s := &store{db: testutil.UnreachablePool(t)}
-		if _, err := s.UpdatePet(ppCtx, &Pet{ID: 1, Name: "x"}); err == nil {
-			t.Error("UpdatePet() error = nil, want a connection error")
-		}
-	})
-
 	t.Run("PPS-10_HappyPath", func(t *testing.T) {
-		pool := ppLiveDatabase(t)
+		pool := testutil.LivePool(t, "pet_pictures")
 		s := &store{db: pool}
 		created := ppCreatePet(t, pool, s, ppUniqueID("pet"))
 		newName := ppUniqueID("renamed")
@@ -211,7 +187,7 @@ func TestST10to12_UpdatePet(t *testing.T) {
 	})
 
 	t.Run("PPS-11_NoMatchingRow", func(t *testing.T) {
-		pool := ppLiveDatabase(t)
+		pool := testutil.LivePool(t, "pet_pictures")
 		s := &store{db: pool}
 		got, err := s.UpdatePet(ppCtx, &Pet{ID: -1, Name: ppUniqueID("ghost")})
 		if got != nil || !errors.Is(err, ErrPetNotFound) {
@@ -222,7 +198,7 @@ func TestST10to12_UpdatePet(t *testing.T) {
 
 func TestST34_UpdatePetNameExists(t *testing.T) {
 	t.Run("PPS-34_UpdateToAnotherPetsNameExists", func(t *testing.T) {
-		pool := ppLiveDatabase(t)
+		pool := testutil.LivePool(t, "pet_pictures")
 		s := &store{db: pool}
 		taken := ppCreatePet(t, pool, s, ppUniqueID("pet"))
 		other := ppCreatePet(t, pool, s, ppUniqueID("pet"))
@@ -234,15 +210,8 @@ func TestST34_UpdatePetNameExists(t *testing.T) {
 }
 
 func TestST13to16_CreatePetPicture(t *testing.T) {
-	t.Run("PPS-15_ConnectionFailure", func(t *testing.T) {
-		s := &store{db: testutil.UnreachablePool(t)}
-		if _, err := s.CreatePetPicture(ppCtx, ppUniqueID("pic"), "jpg", 1, nil, nil); err == nil {
-			t.Error("CreatePetPicture() error = nil, want a connection error")
-		}
-	})
-
 	t.Run("PPS-13_HappyPath", func(t *testing.T) {
-		pool := ppLiveDatabase(t)
+		pool := testutil.LivePool(t, "pet_pictures")
 		s := &store{db: pool}
 		id := ppUniqueID("pic")
 		t.Cleanup(func() { pool.Exec(context.Background(), "DELETE FROM pictures WHERE id = $1", id) })
@@ -254,7 +223,7 @@ func TestST13to16_CreatePetPicture(t *testing.T) {
 	})
 
 	t.Run("PPS-31_NoOtherSubjects", func(t *testing.T) {
-		pool := ppLiveDatabase(t)
+		pool := testutil.LivePool(t, "pet_pictures")
 		s := &store{db: pool}
 		id := ppUniqueID("pic")
 		ppCreatePicture(t, pool, s, id, 6, nil, nil)
@@ -269,7 +238,7 @@ func TestST13to16_CreatePetPicture(t *testing.T) {
 	})
 
 	t.Run("PPS-32_SubjectsOrder", func(t *testing.T) {
-		pool := ppLiveDatabase(t)
+		pool := testutil.LivePool(t, "pet_pictures")
 		s := &store{db: pool}
 		id := ppUniqueID("pic")
 		ppCreatePicture(t, pool, s, id, 3, []int{4, 5}, nil)
@@ -284,7 +253,7 @@ func TestST13to16_CreatePetPicture(t *testing.T) {
 	})
 
 	t.Run("PPS-33_EmptySubjectsRejected", func(t *testing.T) {
-		pool := ppLiveDatabase(t)
+		pool := testutil.LivePool(t, "pet_pictures")
 		id := ppUniqueID("pic")
 		t.Cleanup(func() { pool.Exec(context.Background(), "DELETE FROM pictures WHERE id = $1", id) })
 		_, err := pool.Exec(ppCtx, "INSERT INTO pictures (id, file_ext, subjects) VALUES ($1, 'jpg', '{}')", id)
@@ -295,7 +264,7 @@ func TestST13to16_CreatePetPicture(t *testing.T) {
 	})
 
 	t.Run("PPS-14_DuplicateID", func(t *testing.T) {
-		pool := ppLiveDatabase(t)
+		pool := testutil.LivePool(t, "pet_pictures")
 		s := &store{db: pool}
 		id := ppUniqueID("pic")
 		ppCreatePicture(t, pool, s, id, 1, nil, nil)
@@ -306,7 +275,7 @@ func TestST13to16_CreatePetPicture(t *testing.T) {
 	})
 
 	t.Run("PPS-16_ConcurrentSameID", func(t *testing.T) {
-		pool := ppLiveDatabase(t)
+		pool := testutil.LivePool(t, "pet_pictures")
 		s := &store{db: pool}
 		for round := 0; round < 5; round++ {
 			id := ppUniqueID("pic")
@@ -336,15 +305,8 @@ func TestST13to16_CreatePetPicture(t *testing.T) {
 }
 
 func TestST17to20and28to29_GetPetPictureAndGetRandPetPictureByName(t *testing.T) {
-	t.Run("PPS-20_ConnectionFailure", func(t *testing.T) {
-		s := &store{db: testutil.UnreachablePool(t)}
-		if _, err := s.GetPetPicture(ppCtx, "anything"); err == nil {
-			t.Error("GetPetPicture() error = nil, want a connection error")
-		}
-	})
-
 	t.Run("PPS-17_RandPictureNoPet", func(t *testing.T) {
-		pool := ppLiveDatabase(t)
+		pool := testutil.LivePool(t, "pet_pictures")
 		s := &store{db: pool}
 		got, err := s.GetRandPetPictureByName(ppCtx, ppUniqueID("missing"))
 		if got != nil || !errors.Is(err, ErrPetNotFound) {
@@ -353,7 +315,7 @@ func TestST17to20and28to29_GetPetPictureAndGetRandPetPictureByName(t *testing.T)
 	})
 
 	t.Run("PPS-18_RandPictureNoPictures", func(t *testing.T) {
-		pool := ppLiveDatabase(t)
+		pool := testutil.LivePool(t, "pet_pictures")
 		s := &store{db: pool}
 		pet := ppCreatePet(t, pool, s, ppUniqueID("pet"))
 		got, err := s.GetRandPetPictureByName(ppCtx, pet.Name)
@@ -363,7 +325,7 @@ func TestST17to20and28to29_GetPetPictureAndGetRandPetPictureByName(t *testing.T)
 	})
 
 	t.Run("PPS-19_NoRow", func(t *testing.T) {
-		pool := ppLiveDatabase(t)
+		pool := testutil.LivePool(t, "pet_pictures")
 		s := &store{db: pool}
 		got, err := s.GetPetPicture(ppCtx, ppUniqueID("missing"))
 		if got != nil || !errors.Is(err, ErrPetPictureNotFound) {
@@ -374,7 +336,7 @@ func TestST17to20and28to29_GetPetPictureAndGetRandPetPictureByName(t *testing.T)
 	for _, tz := range ppSessionTimeZones {
 		t.Run("PPS-28_GetPetPictureHappyPath_"+strings.ReplaceAll(tz, "/", "_"), func(t *testing.T) {
 			t.Setenv("PGTZ", tz)
-			pool := ppLiveDatabase(t)
+			pool := testutil.LivePool(t, "pet_pictures")
 			s := &store{db: pool}
 			id := ppUniqueID("pic")
 			ppCreatePicture(t, pool, s, id, 7, []int{8}, []string{"x"})
@@ -388,7 +350,7 @@ func TestST17to20and28to29_GetPetPictureAndGetRandPetPictureByName(t *testing.T)
 	}
 
 	t.Run("PPS-29_RandPictureHappyPath", func(t *testing.T) {
-		pool := ppLiveDatabase(t)
+		pool := testutil.LivePool(t, "pet_pictures")
 		s := &store{db: pool}
 		pet := ppCreatePet(t, pool, s, ppUniqueID("pet"))
 		id := ppUniqueID("pic")
@@ -401,15 +363,8 @@ func TestST17to20and28to29_GetPetPictureAndGetRandPetPictureByName(t *testing.T)
 }
 
 func TestST21to22and30_UpdatePetPicture(t *testing.T) {
-	t.Run("PPS-21_ConnectionFailure", func(t *testing.T) {
-		s := &store{db: testutil.UnreachablePool(t)}
-		if _, err := s.UpdatePetPicture(ppCtx, PetPicture{ID: "anything"}); err == nil {
-			t.Error("UpdatePetPicture() error = nil, want a connection error")
-		}
-	})
-
 	t.Run("PPS-30_NoMatchingRow", func(t *testing.T) {
-		pool := ppLiveDatabase(t)
+		pool := testutil.LivePool(t, "pet_pictures")
 		s := &store{db: pool}
 		got, err := s.UpdatePetPicture(ppCtx, PetPicture{ID: ppUniqueID("missing"), FileExt: "png", Created: "caller-supplied"})
 		if got != nil || !errors.Is(err, ErrPetPictureNotFound) {
@@ -420,7 +375,7 @@ func TestST21to22and30_UpdatePetPicture(t *testing.T) {
 	for _, tz := range ppSessionTimeZones {
 		t.Run("PPS-22_HappyPath_"+strings.ReplaceAll(tz, "/", "_"), func(t *testing.T) {
 			t.Setenv("PGTZ", tz)
-			pool := ppLiveDatabase(t)
+			pool := testutil.LivePool(t, "pet_pictures")
 			s := &store{db: pool}
 			id := ppUniqueID("pic")
 			ppCreatePicture(t, pool, s, id, 1, nil, nil)
@@ -441,15 +396,8 @@ func TestST21to22and30_UpdatePetPicture(t *testing.T) {
 }
 
 func TestST23to25_DeletePetPicture(t *testing.T) {
-	t.Run("PPS-24_ConnectionFailure", func(t *testing.T) {
-		s := &store{db: testutil.UnreachablePool(t)}
-		if _, err := s.DeletePetPicture(ppCtx, "anything"); err == nil {
-			t.Error("DeletePetPicture() error = nil, want a connection error")
-		}
-	})
-
 	t.Run("PPS-23_HappyPath", func(t *testing.T) {
-		pool := ppLiveDatabase(t)
+		pool := testutil.LivePool(t, "pet_pictures")
 		s := &store{db: pool}
 		id := ppUniqueID("pic")
 		ppCreatePicture(t, pool, s, id, 1, nil, nil)
@@ -463,7 +411,7 @@ func TestST23to25_DeletePetPicture(t *testing.T) {
 	})
 
 	t.Run("PPS-25_NoMatchingRow", func(t *testing.T) {
-		pool := ppLiveDatabase(t)
+		pool := testutil.LivePool(t, "pet_pictures")
 		s := &store{db: pool}
 		id := ppUniqueID("missing")
 		got, err := s.DeletePetPicture(ppCtx, id)

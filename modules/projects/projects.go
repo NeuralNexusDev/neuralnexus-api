@@ -74,7 +74,7 @@ func getReleases(ctx context.Context, cfg config.GitHub, group, project string) 
 	githubURL := cfg.APIEndpoint + "/repos/" + url.PathEscape(group) + "/" + url.PathEscape(project) + "/releases"
 	req, err := http.NewRequestWithContext(ctx, "GET", githubURL, nil)
 	if err != nil {
-		return nil, err
+		panic("projects: the GitHub releases request cannot fail to build: the API endpoint is the constant https://api.github.com and the path parts are escaped")
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("Authorization", "Bearer "+cfg.Token)

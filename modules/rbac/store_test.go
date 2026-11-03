@@ -27,16 +27,12 @@ const (
 func rbLive(t *testing.T) (Service, *pgxpool.Pool) {
 	t.Helper()
 
-	db, err := pgxpool.New(context.Background(), testutil.PostgresURL(t, "neuralnexus"))
-	if err != nil {
-		t.Fatalf("failed to connect to postgres: %v", err)
-	}
+	db := testutil.LivePool(t, "neuralnexus")
 	t.Cleanup(func() {
 		ctx := context.Background()
 		db.Exec(ctx, "DELETE FROM accounts WHERE user_id >= $1 AND user_id < $2", int64(rbAccountIDBase), int64(rbAccountIDBase)+1000)
 		db.Exec(ctx, "DELETE FROM roles WHERE name LIKE 'rbtest_%'")
 		db.Exec(ctx, "DELETE FROM permissions WHERE node LIKE 'rbtest.%'")
-		db.Close()
 	})
 	return NewService(NewStore(db)), db
 }

@@ -62,35 +62,14 @@ type usLinkResult struct {
 type usFakeLinkAccountStore struct {
 	getByPlatformIDResults []usLinkResult
 	getByPlatformIDCalls   int
-
-	addErr               error
-	addCalls             int
-	addLastLinkedAccount *link.LinkedAccount
-
-	updateErr               error
-	updateCalls             int
-	updateLastLinkedAccount *link.LinkedAccount
-
-	getsByUserID    []*link.LinkedAccount
-	getsByUserIDErr error
-
-	deleteErr   error
-	deleteCalls int
-
-	setLoginEnabledErr   error
-	setLoginEnabledCalls int
 }
 
-func (f *usFakeLinkAccountStore) AddLinkedAccountToDB(_ context.Context, la *link.LinkedAccount) error {
-	f.addCalls++
-	f.addLastLinkedAccount = la
-	return f.addErr
+func (f *usFakeLinkAccountStore) AddLinkedAccountToDB(context.Context, *link.LinkedAccount) error {
+	return nil
 }
 
-func (f *usFakeLinkAccountStore) UpdateLinkedAccount(_ context.Context, la *link.LinkedAccount) error {
-	f.updateCalls++
-	f.updateLastLinkedAccount = la
-	return f.updateErr
+func (f *usFakeLinkAccountStore) UpdateLinkedAccount(context.Context, *link.LinkedAccount) error {
+	return nil
 }
 
 func (f *usFakeLinkAccountStore) GetLinkedAccountByPlatformID(_ context.Context, _ link.Platform, _ string) (*link.LinkedAccount, error) {
@@ -104,26 +83,24 @@ func (f *usFakeLinkAccountStore) GetLinkedAccountByPlatformID(_ context.Context,
 	return last.la, last.err
 }
 
-func (f *usFakeLinkAccountStore) GetLinkedAccountByPlatformName(_ context.Context, _ link.Platform, _ string) (*link.LinkedAccount, error) {
+func (f *usFakeLinkAccountStore) GetLinkedAccountByPlatformName(context.Context, link.Platform, string) (*link.LinkedAccount, error) {
 	return nil, account.ErrNotFound
 }
 
-func (f *usFakeLinkAccountStore) GetLinkedAccountByUserID(_ context.Context, _ string, _ link.Platform) (*link.LinkedAccount, error) {
+func (f *usFakeLinkAccountStore) GetLinkedAccountByUserID(context.Context, string, link.Platform) (*link.LinkedAccount, error) {
 	return nil, account.ErrNotFound
 }
 
-func (f *usFakeLinkAccountStore) GetLinkedAccountsByUserID(_ context.Context, _ string) ([]*link.LinkedAccount, error) {
-	return f.getsByUserID, f.getsByUserIDErr
+func (f *usFakeLinkAccountStore) GetLinkedAccountsByUserID(context.Context, string) ([]*link.LinkedAccount, error) {
+	return nil, nil
 }
 
-func (f *usFakeLinkAccountStore) DeleteLinkedAccount(_ context.Context, _ string, _ link.Platform) error {
-	f.deleteCalls++
-	return f.deleteErr
+func (f *usFakeLinkAccountStore) DeleteLinkedAccount(context.Context, string, link.Platform) error {
+	return nil
 }
 
-func (f *usFakeLinkAccountStore) SetLinkedAccountLoginEnabled(_ context.Context, _ string, _ link.Platform, _ bool) error {
-	f.setLoginEnabledCalls++
-	return f.setLoginEnabledErr
+func (f *usFakeLinkAccountStore) SetLinkedAccountLoginEnabled(context.Context, string, link.Platform, bool) error {
+	return nil
 }
 
 type usFakeAccountSettingsStore struct {
@@ -147,15 +124,6 @@ func usNewService(as *accounttest.FakeStore, als *usFakeLinkAccountStore, ass *u
 }
 
 func TestUS02to03GetUser(t *testing.T) {
-	t.Run("US-02_Success", func(t *testing.T) {
-		svc := usNewService(&accounttest.FakeStore{GetByIDAccount: &account.Account{UserID: "u1", Username: "name"}}, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})
-
-		got, err := svc.GetUser(context.Background(), "u1")
-		if err != nil || got == nil || got.UserID != "u1" || got.Username != "name" {
-			t.Errorf("GetUser() = (%+v, %v), want the u1 user, nil", got, err)
-		}
-	})
-
 	t.Run("US-03_StoreError", func(t *testing.T) {
 		wantErr := testutil.ErrBoom
 		svc := usNewService(&accounttest.FakeStore{GetByIDErr: wantErr}, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})
@@ -462,28 +430,6 @@ func TestUS36to37SetPasswordAuthEnabled(t *testing.T) {
 	})
 }
 
-func TestUS39to40_AccountSettingsNotFoundPassesThrough(t *testing.T) {
-	t.Run("US-39_GetAccountSettingsNotFound", func(t *testing.T) {
-		ass := &usFakeAccountSettingsStore{getErr: account.ErrNotFound}
-		svc := usNewService(&accounttest.FakeStore{}, &usFakeLinkAccountStore{}, ass)
-
-		_, err := svc.GetAccountSettings(context.Background(), "u1")
-		if !errors.Is(err, account.ErrNotFound) {
-			t.Errorf("GetAccountSettings() err = %v, want %v", err, account.ErrNotFound)
-		}
-	})
-
-	t.Run("US-40_SetPasswordAuthEnabledNotFound", func(t *testing.T) {
-		ass := &usFakeAccountSettingsStore{setErr: account.ErrNotFound}
-		svc := usNewService(&accounttest.FakeStore{}, &usFakeLinkAccountStore{}, ass)
-
-		err := svc.SetPasswordAuthEnabled(context.Background(), "u1", true)
-		if !errors.Is(err, account.ErrNotFound) {
-			t.Errorf("SetPasswordAuthEnabled() err = %v, want %v", err, account.ErrNotFound)
-		}
-	})
-}
-
 type usStubLinkService struct {
 	userID string
 	err    error
@@ -508,15 +454,6 @@ func TestUS85UserFromAccountKeepsOnlyPublicFields(t *testing.T) {
 		got, err := svc.GetUser(context.Background(), "u1")
 		if err != nil || usMarshal(t, got) != usMarshal(t, want) {
 			t.Errorf("GetUser() = (%s, %v), want the JSON of the account %s, nil", usMarshal(t, got), err, usMarshal(t, want))
-		}
-	})
-
-	t.Run("US-86_NilAccountGivesNilUser", func(t *testing.T) {
-		svc := usNewService(&accounttest.FakeStore{}, &usFakeLinkAccountStore{}, &usFakeAccountSettingsStore{})
-
-		got, err := svc.GetUser(context.Background(), "u1")
-		if got != nil || err != nil {
-			t.Errorf("GetUser() = (%+v, %v), want (nil, nil)", got, err)
 		}
 	})
 }

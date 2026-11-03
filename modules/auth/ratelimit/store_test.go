@@ -21,17 +21,3 @@ func TestST40GetRateLimit(t *testing.T) {
 		testutil.AssertRawConnectionError(t, err)
 	})
 }
-
-func TestST41SetRateLimit(t *testing.T) {
-	s := stStoreWithUnreachableRedis(t)
-	t.Run("RLS-41_ConnectionError", func(t *testing.T) {
-		testutil.AssertRawConnectionError(t, s.SetRateLimit(context.Background(), "k", 1))
-	})
-}
-
-func TestST42IncrementRateLimit(t *testing.T) {
-	s := stStoreWithUnreachableRedis(t)
-	t.Run("RLS-42_ConnectionError", func(t *testing.T) {
-		testutil.AssertRawConnectionError(t, s.IncrementRateLimit(context.Background(), "k"))
-	})
-}

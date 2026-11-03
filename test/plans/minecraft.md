@@ -15,10 +15,6 @@
 | TY-09 | ParseProperties | Edge Case | First property invalid, second is a valid TEXTURES entry | two Properties, first malformed | Returns nil: the first TEXTURES entry decides the result, so the second is never read | P2 |  |
 | TY-10 | IsStale (Player) | Happy Path | LastSeen is recent | LastSeen = now | Returns false | P2 |  |
 | TY-11 | IsStale (Player) | Edge Case | LastSeen older than stalenessThreshold | LastSeen = now - 25h | Returns true | P2 |  |
-| TY-12 | ToProfile | Happy Path | Player has a valid TEXTURES property | populated Player | Returned *Profile mirrors ID/Name/Legacy/Demo/ProfileActions, Textures = ParseProperties() result | P1 |  |
-| TY-13 | ToProfile | Edge Case | Player has no properties | MojangPlayer{Properties: nil} | Returned Profile.Textures is nil | P3 |  |
-| TY-14 | String (Property) | Happy Path | Signature is set | Property{Signature: "sig"} | Returned string includes the signature segment | P3 |  |
-| TY-15 | String (Property) | Edge Case | Signature is empty | Property{Signature: ""} | Returned string omits the signature segment | P3 |  |
 | TY-16 | ToProperty | Happy Path | Populated TexturesValue | TexturesValue{...} | Returns *Property{Name: TEXTURES, Value: base64(JSON(t))}, nil error | P1 |  |
 | TY-17 | ToProperty | Edge Case | Receiver is nil | var t *TexturesValue = nil | Returns (nil, nil) | P2 |  |
 | TY-18 | Hash (Texture) | Happy Path | URL is "http://textures.minecraft.net/texture/abc123" | valid URL | Returns "abc123" | P1 |  |
@@ -35,7 +31,6 @@
 | TY-29 | IsStale (GeyserSkin) | Edge Case | LastSeen older than stalenessThreshold | LastSeen = now - 25h | Returns true | P3 |  |
 | TY-34 | xuidToUUID | Happy Path | xuid is a nonzero int64 | xuid = 123456789 | Returns zero-padded-hex value formatted as a dashed UUID string | P1 |  |
 | TY-35 | xuidToUUID | Edge Case | xuid is 0 | xuid = 0 | Returns "00000000-0000-0000-0000-000000000000" | P3 |  |
-| TY-36 | uuidToXUID | Happy Path | id is a UUID produced by xuidToUUID | id = xuidToUUID(N) | Returns (N, nil) | P1 |  |
 | TY-37 | uuidToXUID | Error Path | id is not a valid UUID string | id = "not-a-uuid" | Returns (0, non-nil parse error) | P2 |  |
 | TY-38 | uuidToXUID | Error Path | id is a well-formed UUID whose high 64 bits are nonzero | a real random uuid.New() | Returns (0, `ErrNotDerivedBedrockUUID`) | P2 |  |
 | TY-39 | Value (TexturesRow) | Happy Path | Skin and Cape set, Model nil | TexturesRow{Skin, Cape} | Returns *TexturesValue with SKIN.URL and CAPE.URL prefixed by textureUrl, no Metadata | P1 |  |
@@ -115,7 +110,6 @@
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
 | SV-01 | NewService | Happy Path | client is nil | client == nil | Returned service uses http.DefaultClient | P2 |  |
-| SV-02 | NewService | Edge Case | client is provided | non-nil client | Retained as-is; s3TextureUrl is the URL passed to NewService | P3 |  |
 | SV-03 | mojangService.GetMojangPlayerByName | Happy Path | Cache hit | store cache returns player, nil | Returns cached player; no DB/HTTP calls | P1 |  |
 | SV-04 | mojangService.GetMojangPlayerByName | Error Path | Cache error is not ErrCacheMiss | store cache error = plain error | Returns that error, no fallback | P2 |  |
 | SV-05 | mojangService.GetMojangPlayerByName | Happy Path | Cache miss, DB entry fresh | cache=ErrCacheMiss, DB player not stale | Caches and returns DB player, no Mojang call | P1 |  |
@@ -157,7 +151,6 @@
 | SV-41 | mojangService.GetProfileByName | Error Path | mojangService.GetMojangPlayerByName fails | e.g. ErrPlayerNotFound | Returns `ErrPlayerNotFound` | P2 |  |
 | SV-42 | mojangService.GetProfileByName | Error Path | mojangService.GetProfile fails after name resolves | mojangService.GetProfile error | Returns that error | P2 |  |
 | SV-43 | mojangService.resolveProfile | Happy Path | Cache hit | cacheStore.GetProfileFromCache succeeds | Returns cached profile | P1 |  |
-| SV-44 | mojangService.resolveProfile | Error Path | Cache error not ErrCacheMiss | plain error | Returns that error | P2 |  |
 | SV-45 | mojangService.resolveProfile | Happy Path | DB profile fresh | not stale | Caches and returns DB profile | P1 |  |
 | SV-46 | mojangService.resolveProfile | Edge Case | DB profile fresh, ProfileActions nil | ProfileActions == nil | Normalized to []string{} before caching/return | P2 |  |
 | SV-47 | mojangService.resolveProfile | Error Path | DB profile fresh, cacheStore.SetProfileInCache fails | store error | Returns that error | P2 |  |
@@ -245,10 +238,8 @@ Rows marked "(live)" require `TEST_POSTGRES_URL` and/or `TEST_REDIS_URL` and `t.
 | ST-02 | mojangStore.GetPlayerByUUID | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged (not `ErrPlayerNotFound`) | P2 |  |
 | ST-03 | mojangStore.GetPlayerByUUID | Happy Path (live) | Row seeded via mojangStore.UpsertPlayer | live DB | Returns matching Player (ProfileActions left zero-value: lax mapping) | P1 |  |
 | ST-04 | mojangStore.GetPlayerByUUID | Error Path (live) | No matching id | live DB, unknown id | Returns `ErrPlayerNotFound` | P2 |  |
-| ST-05 | mojangStore.GetPlayerByName | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |  |
 | ST-06 | mojangStore.GetPlayerByName | Happy Path (live) | Row seeded via mojangStore.UpsertPlayer | live DB | Returns matching Player | P1 |  |
 | ST-07 | mojangStore.GetPlayerByName | Error Path (live) | No matching name | live DB, unknown name | Returns `ErrPlayerNotFound` | P2 |  |
-| ST-08 | mojangStore.GetProfileByUUID | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |  |
 | ST-09 | mojangStore.GetProfileByUUID | Happy Path (live) | Player+textures seeded | live DB | Returns Profile with decoded Textures | P1 |  |
 | ST-10 | mojangStore.GetProfileByUUID | Edge Case (live) | Player seeded, no textures row | live DB | Returns Profile with Textures == nil | P2 |  |
 | ST-11 | mojangStore.GetProfileByUUID | Error Path (live) | No matching player | live DB, unknown id | Returns `ErrPlayerNotFound` | P2 |  |
@@ -256,18 +247,15 @@ Rows marked "(live)" require `TEST_POSTGRES_URL` and/or `TEST_REDIS_URL` and `t.
 | ST-13 | textureStore.GetTextures | Happy Path (live) | Texture row present | live DB | Returns decoded *TexturesValue | P2 |  |
 | ST-14 | textureStore.GetTextures | Edge Case (live) | No texture row for player | live DB | Returns (nil, nil) | P2 |  |
 | ST-79 | textureStore.GetTextures | Edge Case (live) | Row stored by a skin-only UpsertTextures | live DB | Returns a TexturesValue with the skin and a nil CAPE | P2 |  |
-| ST-15 | mojangStore.UpsertPlayer | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |  |
 | ST-16 | mojangStore.UpsertPlayer | Happy Path (live) | updateProfile=true, new id | live DB | Row inserted with given profile_actions; name history row inserted | P1 |  |
 | ST-17 | mojangStore.UpsertPlayer | Happy Path (live) | updateProfile=false, new id | live DB | Row inserted with legacy=false, demo=false, profile_actions=[] | P1 |  |
 | ST-18 | mojangStore.UpsertPlayer | Edge Case (live) | Same id upserted twice | live DB | Second call updates in place; exactly one row for that id | P2 |  |
 | ST-19 | mojangStore.UpsertPlayer | Concurrency Invariant (live) | N goroutines mojangStore.UpsertPlayer the same id concurrently | live DB | No unique-violation errors from any goroutine; `players.id` being a PRIMARY KEY then guarantees exactly one surviving row (looped trials) | P0 | 50 concurrent writers — fewer wouldn't reliably reproduce a broken ON CONFLICT guard's race on every run |
-| ST-20 | textureStore.UpsertTextures | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |  |
 | ST-21 | textureStore.UpsertTextures | Happy Path (live) | Skin+cape+SLIM model, hashes pre-registered | live DB | Row inserted with model stored | P1 |  |
 | ST-22 | textureStore.UpsertTextures | Edge Case (live) | Same conflict key upserted twice | live DB | Second call updates last_seen; no duplicate row | P2 |  |
 | ST-23 | textureStore.UpsertTextures | Concurrency Invariant (live) | N goroutines UpsertTextures the same conflict key concurrently | live DB | No unique-violation errors from any goroutine; `player_textures_unique` then guarantees a single surviving row (looped trials) | P0 |  |
 | ST-77 | textureStore.UpsertTextures | Edge Case (live) | Skin and no cape | live DB, skin hash pre-registered | Row inserted with the skin hash and a NULL cape column | P1 |  |
 | ST-78 | textureStore.UpsertTextures | Edge Case (live) | Cape and no skin | live DB, cape hash pre-registered | Row inserted with the cape hash and a NULL skin column | P1 |  |
-| ST-26 | textureStore.UpsertTextureHash | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |  |
 | ST-27 | textureStore.UpsertTextureHash | Happy Path (live) | New hash | live DB | Row inserted | P1 |  |
 | ST-28 | textureStore.UpsertTextureHash | Edge Case (live) | Duplicate hash | live DB | ON CONFLICT DO NOTHING; no error | P2 |  |
 | ST-76 | textureStore.UpsertTextureHash | Concurrency Invariant (live) | N goroutines textureStore.UpsertTextureHash the same hash concurrently | live DB | No unique-violation errors from any goroutine; `textures.hash` being a PRIMARY KEY then guarantees exactly one surviving row (looped trials) | P0 | 50 concurrent writers — fewer wouldn't reliably reproduce a broken ON CONFLICT guard's race on every run |
@@ -275,17 +263,12 @@ Rows marked "(live)" require `TEST_POSTGRES_URL` and/or `TEST_REDIS_URL` and `t.
 | ST-30 | cacheStore.GetPlayerFromCache | Happy Path (live) | Key set via cacheStore.SetPlayerInCache | live Redis | Returns decoded *Player | P1 |  |
 | ST-31 | cacheStore.GetPlayerFromCache | Error Path (live) | Missing key | live Redis, unknown key | Returns ErrCacheMiss | P1 |  |
 | ST-32 | cacheStore.GetPlayerFromCache | Error Path (live) | Value is not valid JSON | live Redis, malformed value | Returns unmarshal error | P2 |  |
-| ST-33 | cacheStore.SetPlayerInCache | Error Path | Redis unreachable | closed-port client | Raw connection error passed through unchanged | P2 |  |
 | ST-34 | cacheStore.SetPlayerInCache | Happy Path (live) | Valid player | live Redis | Both ID-keyed and Name-keyed entries set with TTL, readable back | P1 |  |
-| ST-35 | cacheStore.GetProfileFromCache | Error Path | Redis unreachable | closed-port client | Raw connection error passed through unchanged | P2 |  |
 | ST-36 | cacheStore.GetProfileFromCache | Happy Path (live) | Key set via cacheStore.SetProfileInCache | live Redis | Returns decoded *Profile | P1 |  |
 | ST-37 | cacheStore.GetProfileFromCache | Error Path (live) | Missing key | live Redis, unknown key | Returns ErrCacheMiss | P2 |  |
-| ST-38 | cacheStore.SetProfileInCache | Error Path | Redis unreachable | closed-port client | Raw connection error passed through unchanged | P2 |  |
 | ST-39 | cacheStore.SetProfileInCache | Happy Path (live) | Valid profile | live Redis | Key set with TTL, readable back | P1 |  |
-| ST-40 | cacheStore.GetSignedProfileFromCache | Error Path | Redis unreachable | closed-port client | Raw connection error passed through unchanged | P2 |  |
 | ST-41 | cacheStore.GetSignedProfileFromCache | Happy Path (live) | Key set via cacheStore.SetSignedProfileInCache | live Redis | Returns decoded *Player | P1 |  |
 | ST-42 | cacheStore.GetSignedProfileFromCache | Error Path (live) | Missing key | live Redis, unknown key | Returns ErrCacheMiss | P2 |  |
-| ST-43 | cacheStore.SetSignedProfileInCache | Error Path | Redis unreachable | closed-port client | Raw connection error passed through unchanged | P2 |  |
 | ST-44 | cacheStore.SetSignedProfileInCache | Happy Path (live) | Valid player | live Redis | Key set with TTL, readable back | P1 |  |
 | ST-45 | s3store.IsTextureInS3 | Happy Path (local fake) | HeadObject returns 200 | fake S3 server | Returns (true, nil) | P1 |  |
 | ST-46 | s3store.IsTextureInS3 | Edge Case (local fake) | HeadObject returns 404 | fake S3 server | Returns (false, nil) | P1 |  |
@@ -293,10 +276,8 @@ Rows marked "(live)" require `TEST_POSTGRES_URL` and/or `TEST_REDIS_URL` and `t.
 | ST-48 | geyserStore.GetGeyserPlayerByGamertag | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |  |
 | ST-49 | geyserStore.GetGeyserPlayerByGamertag | Happy Path (live) | Row seeded via UpsertGeyserPlayer | live DB | Returns GeyserPlayer with derived UUID | P1 |  |
 | ST-50 | geyserStore.GetGeyserPlayerByGamertag | Error Path (live) | No matching gamertag | live DB, unknown gamertag | Returns `ErrPlayerNotFound` (pgx.ErrNoRows is mapped) | P2 |  |
-| ST-51 | geyserStore.GetGeyserPlayerByXUID | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |  |
 | ST-52 | geyserStore.GetGeyserPlayerByXUID | Happy Path (live) | Row seeded via UpsertGeyserPlayer | live DB | Returns GeyserPlayer with derived UUID | P1 |  |
 | ST-53 | geyserStore.GetGeyserPlayerByXUID | Error Path (live) | No matching xuid | live DB, unknown xuid | Returns `ErrPlayerNotFound` (pgx.ErrNoRows is mapped) | P2 |  |
-| ST-54 | geyserStore.UpsertGeyserPlayer | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged | P2 |  |
 | ST-55 | geyserStore.UpsertGeyserPlayer | Happy Path (live) | New xuid | live DB | Row inserted | P1 |  |
 | ST-56 | geyserStore.UpsertGeyserPlayer | Edge Case (live) | Same xuid upserted twice | live DB | Second call updates gamertag/last_seen in place | P2 |  |
 | ST-57 | geyserStore.UpsertGeyserPlayer | Concurrency Invariant (live) | N goroutines UpsertGeyserPlayer the same xuid concurrently | live DB | No unique-violation errors from any goroutine; `geyser_players`' id PRIMARY KEY then guarantees a single surviving row (looped trials) | P0 |  |

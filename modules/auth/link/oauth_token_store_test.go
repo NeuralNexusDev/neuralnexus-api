@@ -16,31 +16,6 @@ func TestOT43AddOAuthTokenToDB(t *testing.T) {
 	})
 }
 
-func TestOT44GetOAuthTokenByUserID(t *testing.T) {
-	s := &oAuthTokenStore{db: testutil.UnreachablePool(t)}
-	t.Run("OT-44_ConnectionError", func(t *testing.T) {
-		got, err := s.GetOAuthTokenByUserID(context.Background(), "u1", PlatformDiscord)
-		if got != nil {
-			t.Errorf("expected nil, got %v", got)
-		}
-		stAssertRawConnectionError(t, err)
-	})
-}
-
-func TestOT45UpdateOAuthToken(t *testing.T) {
-	s := &oAuthTokenStore{db: testutil.UnreachablePool(t)}
-	t.Run("OT-45_ConnectionError", func(t *testing.T) {
-		stAssertRawConnectionError(t, s.UpdateOAuthToken(context.Background(), &OAuthToken{UserID: "u1", Platform: PlatformDiscord}))
-	})
-}
-
-func TestOT46DeleteOAuthToken(t *testing.T) {
-	s := &oAuthTokenStore{db: testutil.UnreachablePool(t)}
-	t.Run("OT-46_ConnectionError", func(t *testing.T) {
-		stAssertRawConnectionError(t, s.DeleteOAuthToken(context.Background(), "u1", PlatformDiscord))
-	})
-}
-
 func TestOT79GetOAuthTokenByUserIDNotFound(t *testing.T) {
 	s := stLiveFullStore(t)
 

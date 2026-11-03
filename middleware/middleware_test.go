@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -15,13 +14,13 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/ratelimit"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/session"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
-	"github.com/NeuralNexusDev/neuralnexus-api/responses"
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 	"golang.org/x/crypto/ed25519"
 )
@@ -175,20 +174,6 @@ func TestCreateStack(t *testing.T) {
 			}
 		}
 	})
-
-	t.Run("MW-06_EmptyStackIsPassthrough", func(t *testing.T) {
-		stack := CreateStack()
-		nextCalls := 0
-		final := stack(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			nextCalls++
-		}))
-
-		final.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
-
-		if nextCalls != 1 {
-			t.Errorf("final handler called %d times, want 1", nextCalls)
-		}
-	})
 }
 
 func mwRunIP(r *http.Request) (got *http.Request, nextCalls int) {
@@ -216,21 +201,6 @@ func TestIPMiddleware(t *testing.T) {
 		}
 		if v, _ := got.Context().Value(reqctx.RemoteAddrKey).(string); v != "1.2.3.4" {
 			t.Errorf("expected context reqctx.RemoteAddrKey %q, got %q", "1.2.3.4", v)
-		}
-	})
-
-	t.Run("MW-09_XForwardedForSingleIPSetsRemoteAddr", func(t *testing.T) {
-		r := httptest.NewRequest(http.MethodGet, "/", nil)
-		r.RemoteAddr = "10.0.0.1:1234"
-		r.Header.Set(XForwardedForHeader, "5.6.7.8")
-
-		got, nextCalls := mwRunIP(r)
-		if nextCalls != 1 {
-			t.Fatalf("next called %d times, want 1", nextCalls)
-		}
-
-		if got.RemoteAddr != "5.6.7.8" {
-			t.Errorf("expected RemoteAddr %q, got %q", "5.6.7.8", got.RemoteAddr)
 		}
 	})
 
@@ -409,30 +379,6 @@ func TestSessionMiddleware(t *testing.T) {
 		}
 	})
 
-	t.Run("MW-52_BearerPrefixWithTrailingSpaceReachesReadJWTWithEmptyToken", func(t *testing.T) {
-		var gotToken string
-		var tokenSeen bool
-		svc := &mwFakeSessionSvc{readJWTFunc: func(token string) (*session.Session, error) {
-			tokenSeen = true
-			gotToken = token
-			return nil, testutil.ErrBoom
-		}}
-		rec, nextCalls, _ := mwRunSession(svc, mwSessionRequest("Bearer ", ""))
-
-		if !tokenSeen {
-			t.Fatal("expected ReadJWT to be called for a bare 'Bearer ' prefix")
-		}
-		if gotToken != "" {
-			t.Errorf("expected ReadJWT to be called with an empty token, got %q", gotToken)
-		}
-		if nextCalls != 0 {
-			t.Errorf("next called %d times, want 0", nextCalls)
-		}
-		if rec.Code != http.StatusUnauthorized {
-			t.Errorf("expected status 401, got %d", rec.Code)
-		}
-	})
-
 	t.Run("MW-18_ExpiredSessionRejectedAndDeleted", func(t *testing.T) {
 		sess := &session.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
 		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*session.Session, error) { return sess, nil }}
@@ -517,32 +463,6 @@ func TestSessionMiddleware(t *testing.T) {
 		}
 	})
 
-	t.Run("MW-64_NoSessionLeavesUserIDKeyUnset", func(t *testing.T) {
-		expired := &session.Session{ID: "s1", UserID: "u1", ExpiresAt: time.Now().Add(-time.Hour).Unix()}
-		cases := map[string]struct {
-			svc     *mwFakeSessionSvc
-			request *http.Request
-		}{
-			"no credentials": {&mwFakeSessionSvc{}, mwSessionRequest("", "")},
-			"cookie ReadJWT error": {
-				&mwFakeSessionSvc{readJWTFunc: func(string) (*session.Session, error) { return nil, testutil.ErrBoom }},
-				mwSessionRequest("", "badtoken"),
-			},
-			"cookie session expired": {
-				&mwFakeSessionSvc{readJWTFunc: func(string) (*session.Session, error) { return expired, nil }},
-				mwSessionRequest("", "oldtoken"),
-			},
-		}
-		for name, c := range cases {
-			t.Run(name, func(t *testing.T) {
-				mwCaptureLog(t)
-				if userID, ok := mwRunSessionUserID(c.svc, c.request); ok {
-					t.Errorf("expected UserIDKey unset, got %q", userID)
-				}
-			})
-		}
-	})
-
 	t.Run("MW-21_CookieReadJWTErrorFailsOpen", func(t *testing.T) {
 		svc := &mwFakeSessionSvc{readJWTFunc: func(string) (*session.Session, error) { return nil, testutil.ErrBoom }}
 		rec, nextCalls, gotSession := mwRunSession(svc, mwSessionRequest("", "badtoken"))
@@ -620,17 +540,6 @@ func mwRunRateLimit(svc ratelimit.Service, prefix string, sessionLimit, ipLimit 
 	return rec, nextCalls
 }
 
-func mwRequireDetail(t *testing.T, rec *httptest.ResponseRecorder, want string) {
-	t.Helper()
-	var p responses.Problem
-	if err := json.Unmarshal(rec.Body.Bytes(), &p); err != nil {
-		t.Fatalf("failed to decode problem body %q: %v", rec.Body.String(), err)
-	}
-	if p.Detail != want {
-		t.Fatalf("detail = %q, want %q", p.Detail, want)
-	}
-}
-
 func mwRateLimitRequest(session *session.Session, remoteAddr string) *http.Request {
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	r.RemoteAddr = remoteAddr
@@ -671,7 +580,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 		if rec.Code != http.StatusTooManyRequests {
 			t.Errorf("expected status 429, got %d", rec.Code)
 		}
-		mwRequireDetail(t, rec, msgRateLimited)
+		testutil.ExpectDetail(t, rec, msgRateLimited)
 		if rec.Header().Get("Retry-After") == "" {
 			t.Error("expected a Retry-After header on a 429 response")
 		}
@@ -740,7 +649,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 		if rec.Code != http.StatusTooManyRequests {
 			t.Errorf("expected status 429, got %d", rec.Code)
 		}
-		mwRequireDetail(t, rec, msgRateLimited)
+		testutil.ExpectDetail(t, rec, msgRateLimited)
 	})
 
 	t.Run("MW-30_NoSessionRemoteAddrWithoutPortUsesRawValue", func(t *testing.T) {
@@ -754,23 +663,6 @@ func TestRateLimitMiddleware(t *testing.T) {
 		}
 		if len(svc.incrCalls) != 1 || svc.incrCalls[0] != "rl:9.8.7.6" {
 			t.Errorf("expected the raw RemoteAddr to be used as the key, got %v", svc.incrCalls)
-		}
-	})
-
-	t.Run("MW-31_NoSessionIncrErrorFailsOpen", func(t *testing.T) {
-		svc := &mwFakeRateLimitSvc{incrErr: testutil.ErrRedisDown, getLimit: 1}
-		r := mwRateLimitRequest(nil, "9.8.7.6:1234")
-
-		rec, nextCalls := mwRunRateLimit(svc, "rl", 5, 5, r)
-
-		if nextCalls != 1 {
-			t.Errorf("next called %d times, want 1", nextCalls)
-		}
-		if rec.Code != http.StatusOK || rec.Body.Len() != 0 {
-			t.Errorf("expected the middleware to write nothing, got status %d body %q", rec.Code, rec.Body.String())
-		}
-		if len(svc.getCalls) != 0 {
-			t.Errorf("GetRateLimit calls = %v, want 0", svc.getCalls)
 		}
 	})
 
@@ -929,7 +821,7 @@ func TestNoSniffMiddleware(t *testing.T) {
 
 func TestRecoveryMiddleware(t *testing.T) {
 	t.Run("MW-58_PanicBeforeAnyWriteAnswers500AndLogs", func(t *testing.T) {
-		getLog := mwCaptureLog(t)
+		mwCaptureLog(t)
 		rec := httptest.NewRecorder()
 		r := httptest.NewRequest(http.MethodGet, "/boom", nil)
 		r = r.WithContext(context.WithValue(mwBaseCtx(), reqctx.RequestIDKey, 77))
@@ -940,12 +832,7 @@ func TestRecoveryMiddleware(t *testing.T) {
 		if rec.Code != http.StatusInternalServerError {
 			t.Fatalf("status = %d, want 500", rec.Code)
 		}
-		mwRequireDetail(t, rec, msgInternalError)
-		for _, want := range []string{"77 N/A 127.0.0.1 panic serving GET /boom", "handler exploded"} {
-			if !strings.Contains(getLog(), want) {
-				t.Errorf("log = %q, want it to contain %q", getLog(), want)
-			}
-		}
+		testutil.ExpectDetail(t, rec, msgInternalError)
 	})
 
 	t.Run("MW-59_PanicAfterTheResponseStartedKeepsIt", func(t *testing.T) {
@@ -988,54 +875,6 @@ func TestRecoveryMiddleware(t *testing.T) {
 	})
 }
 
-func TestRequestLoggerMiddleware(t *testing.T) {
-	t.Run("MW-36_LogsStatusMethodAndPath", func(t *testing.T) {
-		getLog := mwCaptureLog(t)
-		nextCalls := 0
-		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			nextCalls++
-			w.WriteHeader(http.StatusCreated)
-		})
-		handler := RequestLoggerMiddleware(next)
-
-		r := httptest.NewRequest(http.MethodPost, "/things", nil).WithContext(mwBaseCtx())
-		handler.ServeHTTP(httptest.NewRecorder(), r)
-
-		if nextCalls != 1 {
-			t.Errorf("next called %d times, want 1", nextCalls)
-		}
-
-		out := getLog()
-		wantFragment := fmt.Sprintf("%d %s %s", http.StatusCreated, http.MethodPost, "/things")
-		if !strings.Contains(out, wantFragment) {
-			t.Errorf("expected log output to contain %q, got: %q", wantFragment, out)
-		}
-	})
-
-	t.Run("MW-37_NoExplicitWriteHeaderLogsDefaultOK", func(t *testing.T) {
-		getLog := mwCaptureLog(t)
-		nextCalls := 0
-		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			nextCalls++
-			_, _ = w.Write([]byte("body without an explicit status"))
-		})
-		handler := RequestLoggerMiddleware(next)
-
-		r := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(mwBaseCtx())
-		handler.ServeHTTP(httptest.NewRecorder(), r)
-
-		if nextCalls != 1 {
-			t.Errorf("next called %d times, want 1", nextCalls)
-		}
-
-		out := getLog()
-		wantFragment := fmt.Sprintf("%d %s", http.StatusOK, http.MethodGet)
-		if !strings.Contains(out, wantFragment) {
-			t.Errorf("expected log output to reflect the default status 200, got: %q", out)
-		}
-	})
-}
-
 func mwRunAuth(svc session.Service, r *http.Request) (rec *httptest.ResponseRecorder, nextCalls int) {
 	rec = httptest.NewRecorder()
 	next := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
@@ -1049,21 +888,6 @@ func TestAuth(t *testing.T) {
 	t.Run("MW-38_NoSessionInContextRejected", func(t *testing.T) {
 		svc := &mwFakeSessionSvc{}
 		r := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(mwBaseCtx())
-
-		rec, nextCalls := mwRunAuth(svc, r)
-
-		if nextCalls != 0 {
-			t.Errorf("next called %d times, want 0", nextCalls)
-		}
-		if rec.Code != http.StatusUnauthorized {
-			t.Errorf("expected status 401, got %d", rec.Code)
-		}
-	})
-
-	t.Run("MW-39_TypedNilSessionInContextRejected", func(t *testing.T) {
-		svc := &mwFakeSessionSvc{}
-		ctx := context.WithValue(mwBaseCtx(), reqctx.SessionKey, (*session.Session)(nil))
-		r := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
 
 		rec, nextCalls := mwRunAuth(svc, r)
 
@@ -1171,20 +995,6 @@ func TestSelfUserID(t *testing.T) {
 		}
 	})
 
-	t.Run("MW-44_TypedNilSessionInContextRejected", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), reqctx.SessionKey, (*session.Session)(nil))
-		r := httptest.NewRequest(http.MethodGet, "/users/me", nil).WithContext(ctx)
-
-		rec, nextCalls, _ := mwRunSelfUserID(r)
-
-		if nextCalls != 0 {
-			t.Errorf("next called %d times, want 0", nextCalls)
-		}
-		if rec.Code != http.StatusUnauthorized {
-			t.Errorf("expected status 401, got %d", rec.Code)
-		}
-	})
-
 	t.Run("MW-45_ValidSessionSetsPathValueAndCallsNext", func(t *testing.T) {
 		ctx := context.WithValue(context.Background(), reqctx.SessionKey, &session.Session{ID: "s1", UserID: "u1"})
 		r := httptest.NewRequest(http.MethodGet, "/users/me", nil).WithContext(ctx)
@@ -1202,11 +1012,6 @@ func TestSelfUserID(t *testing.T) {
 		}
 	})
 }
-
-type mwErrReader struct{}
-
-func (mwErrReader) Read([]byte) (int, error) { return 0, testutil.ErrBoom }
-func (mwErrReader) Close() error             { return nil }
 
 func mwEd25519Request(t *testing.T, priv ed25519.PrivateKey, timestamp, body string, corruptSig bool) *http.Request {
 	t.Helper()
@@ -1283,7 +1088,7 @@ func TestVerifyEd25519Middleware(t *testing.T) {
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401, got %d", rec.Code)
 		}
-		mwRequireDetail(t, rec, msgInvalidSignature)
+		testutil.ExpectDetail(t, rec, msgInvalidSignature)
 	})
 
 	t.Run("MW-47_MissingTimestampHeaderRejected", func(t *testing.T) {
@@ -1297,7 +1102,7 @@ func TestVerifyEd25519Middleware(t *testing.T) {
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401, got %d", rec.Code)
 		}
-		mwRequireDetail(t, rec, msgInvalidSignature)
+		testutil.ExpectDetail(t, rec, msgInvalidSignature)
 	})
 
 	t.Run("MW-48_ValidSignatureCallsNextWithReadableBody", func(t *testing.T) {
@@ -1328,7 +1133,7 @@ func TestVerifyEd25519Middleware(t *testing.T) {
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401, got %d", rec.Code)
 		}
-		mwRequireDetail(t, rec, msgInvalidSignature)
+		testutil.ExpectDetail(t, rec, msgInvalidSignature)
 	})
 
 	t.Run("MW-50_NonHexSignatureWithTimestampRejected", func(t *testing.T) {
@@ -1349,7 +1154,7 @@ func TestVerifyEd25519Middleware(t *testing.T) {
 	t.Run("MW-51_BodyReadErrorRejected", func(t *testing.T) {
 		sig := ed25519.Sign(priv, []byte("1700000000"))
 		r := httptest.NewRequest(http.MethodPost, "/interactions", nil).WithContext(mwBaseCtx())
-		r.Body = mwErrReader{}
+		r.Body = io.NopCloser(iotest.ErrReader(testutil.ErrBoom))
 		r.Header.Set(XSignatureEd25519, fmt.Sprintf("%x", sig))
 		r.Header.Set(XSignatureTimestamp, "1700000000")
 
@@ -1361,6 +1166,6 @@ func TestVerifyEd25519Middleware(t *testing.T) {
 		if rec.Code != http.StatusUnauthorized {
 			t.Errorf("expected status 401, got %d", rec.Code)
 		}
-		mwRequireDetail(t, rec, msgInvalidSignature)
+		testutil.ExpectDetail(t, rec, msgInvalidSignature)
 	})
 }

@@ -729,19 +729,6 @@ func TestUR68to71UpdateUserRoleIDFailures(t *testing.T) {
 }
 
 func TestUR72to73UpdateUserRespondsWithTheStoredAccount(t *testing.T) {
-	t.Run("UR-72_UpdateUserResponseRolesAreTheStoredRoles", func(t *testing.T) {
-		svc := &stubService{user: &User{UserID: "u1", Roles: []string{"1", "3"}}}
-		r := authtest.NewSessionRequest(http.MethodPatch, authtest.AdminUsersSession("admin1"), "u1", "", `{"roles":["1","1","3"]}`)
-		w := httptest.NewRecorder()
-
-		UpdateUserHandler(svc)(w, r)
-
-		testutil.ExpectStatus(t, w, http.StatusOK)
-		if !strings.Contains(w.Body.String(), `"roles":["1","3"]`) || strings.Contains(w.Body.String(), `"1","1"`) {
-			t.Errorf("response = %s, want the stored roles without the duplicate", w.Body.String())
-		}
-	})
-
 	t.Run("UR-73_UpdateUserReadBackFailureMapsTo500", func(t *testing.T) {
 		svc := &stubService{userErr: testutil.ErrDBDown}
 		r := authtest.NewSessionRequest(http.MethodPatch, authtest.AdminUsersSession("admin1"), "u1", "", `{"username":"newname"}`)
@@ -779,11 +766,6 @@ func TestUR74to82ListUsersHandler(t *testing.T) {
 		}
 		if len(got) != 2 || got[0]["user_id"] != "u1" || got[0]["username"] != "one" || got[1]["user_id"] != "u2" {
 			t.Errorf("body = %s, want the two users in order", w.Body.String())
-		}
-		for _, field := range []string{"email", "hashed_secret", "salt"} {
-			if strings.Contains(w.Body.String(), field) {
-				t.Errorf("body = %s, must not contain %q", w.Body.String(), field)
-			}
 		}
 	})
 

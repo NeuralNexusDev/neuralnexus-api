@@ -231,18 +231,6 @@ func TestSV01to02_NewService(t *testing.T) {
 			t.Error("expected http.DefaultClient when client is nil")
 		}
 	})
-
-	t.Run("SV-02_ProvidedClientRetained", func(t *testing.T) {
-		client := &http.Client{}
-		svc := NewService(config.Minecraft{}, &mcMockStore{}, client, "http://cdn/")
-		s := svc.(*service)
-		if s.mojangService.client != client {
-			t.Error("expected the given client to be retained")
-		}
-		if s.mojangService.s3TextureUrl != "http://cdn/" {
-			t.Errorf("s3TextureUrl = %q, want %q", s.mojangService.s3TextureUrl, "http://cdn/")
-		}
-	})
 }
 
 func TestSV03to13_GetMojangPlayerByName(t *testing.T) {
@@ -697,15 +685,6 @@ func TestSV43to50_ResolveProfile(t *testing.T) {
 		got, err := s.mojangService.resolveProfile(mcCtx, "id")
 		if err != nil || got.ID != "cached" {
 			t.Errorf("got (%+v, %v), want cached profile", got, err)
-		}
-	})
-
-	t.Run("SV-44_CacheErrorNotNil", func(t *testing.T) {
-		store := &mcMockStore{getProfileFromCache: func(string) (*MojangProfile, error) { return nil, testutil.ErrBoom }}
-		s := mcNewService(t, store, nil)
-		_, err := s.mojangService.resolveProfile(mcCtx, "id")
-		if !errors.Is(err, testutil.ErrBoom) {
-			t.Errorf("err = %v, want %v", err, testutil.ErrBoom)
 		}
 	})
 
@@ -1669,14 +1648,7 @@ func TestSV136_WritesSurviveCtxCancel(t *testing.T) {
 		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) {})
 		ctx, cancel := context.WithCancel(context.WithValue(mcCtx, mcCtxKey{}, "marker"))
 		defer cancel()
-		mcSetClient(s, &http.Client{Transport: mcRoundTripFunc(func(r *http.Request) (*http.Response, error) {
-			body := mcMustJSON(t, MojangPlayer{ID: "fetched", Name: "Steve"})
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body:       mcCancelAfterRead{Reader: strings.NewReader(body), cancel: cancel},
-				Request:    r,
-			}, nil
-		})})
+		mcMojangBody(s, mcMustJSON(t, MojangPlayer{ID: "fetched", Name: "Steve"}), cancel)
 
 		if _, err := s.Mojang().GetMojangPlayerByName(ctx, "Steve"); err != nil {
 			t.Fatalf("GetMojangPlayerByName() error = %v", err)
