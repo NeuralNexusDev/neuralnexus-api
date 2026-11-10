@@ -67,252 +67,258 @@ func respondUpdateUserFailure(w http.ResponseWriter, r *http.Request, err error)
 	}
 }
 
-// ListUsersHandler - List a page of users
-func ListUsersHandler(service Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
-		if !session.HasPermission(perms.ScopeAdminUsers) {
-			responses.Forbidden(w, r, msgNoPermissionToGetUsers)
-			return
-		}
-		limit := defaultListUsersLimit
-		if raw := r.URL.Query().Get("limit"); raw != "" {
-			n, err := strconv.Atoi(raw)
-			if err != nil || n < 1 || n > maxListUsersLimit {
-				responses.BadRequest(w, r, msgInvalidLimit)
-				return
-			}
-			limit = n
-		}
-		offset := 0
-		if raw := r.URL.Query().Get("offset"); raw != "" {
-			n, err := strconv.Atoi(raw)
-			if err != nil || n < 0 {
-				responses.BadRequest(w, r, msgInvalidOffset)
-				return
-			}
-			offset = n
-		}
-		users, err := service.ListUsers(r.Context(), limit, offset)
-		if err != nil {
-			reqctx.Log(r.Context(), logFailedToListUsers, err.Error())
-			responses.InternalServerError(w, r, msgFailedToListUsers)
-			return
-		}
-		if users == nil {
-			users = []*User{}
-		}
-		responses.StructOK(w, r, users)
-	}
+// Handler serves the user routes.
+type Handler interface {
+	ListUsers(w http.ResponseWriter, r *http.Request)
+	GetUser(w http.ResponseWriter, r *http.Request)
+	GetUserFromPlatform(w http.ResponseWriter, r *http.Request)
+	GetUserPermissions(w http.ResponseWriter, r *http.Request)
+	UpdateUser(w http.ResponseWriter, r *http.Request)
+	UpdateUserFromPlatform(w http.ResponseWriter, r *http.Request)
+	DeleteUser(w http.ResponseWriter, r *http.Request)
+	GetAccountSettings(w http.ResponseWriter, r *http.Request)
+	UpdateAccountSettings(w http.ResponseWriter, r *http.Request)
 }
 
-// GetUserHandler - Get a user
-func GetUserHandler(service Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
-		userID := r.PathValue("user_id")
-		// Locked down to self-lookup and admins for now. Cross-user lookup
-		// with the target's consent is a planned feature (for account-link
-		// integrations) but isn't implemented yet - don't open this up
-		// generally until that consent mechanism actually exists.
-		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
-			responses.Forbidden(w, r, msgNoPermissionToGetUser)
-			return
-		}
-		user, err := service.GetUser(r.Context(), userID)
-		if err != nil {
-			if err == account.ErrNotFound {
-				responses.NotFound(w, r, msgUserNotFound)
-				return
-			}
-			reqctx.Log(r.Context(), logFailedToGetUser, err.Error())
-			responses.InternalServerError(w, r, msgFailedToGetUser)
-			return
-		}
-		responses.StructOK(w, r, user)
-	}
+type handler struct {
+	s Service
 }
 
-// GetUserFromPlatformHandler - Get a user from a platform
-func GetUserFromPlatformHandler(service Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
-		if !session.HasPermission(perms.ScopeAdminUsers) {
-			responses.Forbidden(w, r, msgNoPermissionToGetUsers)
-			return
-		}
-		platform := link.Platform(r.PathValue("platform"))
-		platformID := r.PathValue("platform_id")
-		user, err := service.GetUserFromPlatform(r.Context(), platform, platformID)
-		if err != nil {
-			if err == account.ErrNotFound {
-				responses.NotFound(w, r, msgUserNotFound)
-				return
-			}
-			reqctx.Log(r.Context(), logFailedToGetUser, err.Error())
-			responses.InternalServerError(w, r, msgFailedToGetUser)
-			return
-		}
-		responses.StructOK(w, r, user)
-	}
+// NewHandler returns a Handler that serves the user routes from the given service.
+func NewHandler(s Service) Handler {
+	return &handler{s}
 }
 
-// GetUserPermissionsHandler - Get a user's permissions
-func GetUserPermissionsHandler(service Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
-		userID := r.PathValue("user_id")
-		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
-			responses.Forbidden(w, r, msgNoPermissionToGetUserPermissions)
-			return
-		}
-		permissions, err := service.GetUserPermissions(r.Context(), userID)
-		if err != nil {
-			if err == account.ErrNotFound {
-				responses.NotFound(w, r, msgUserNotFound)
-				return
-			}
-			reqctx.Log(r.Context(), logFailedToGetUser, err.Error())
-			responses.InternalServerError(w, r, msgFailedToGetUser)
-			return
-		}
-		responses.StructOK(w, r, permissions)
+// ListUsers - List a page of users
+func (h *handler) ListUsers(w http.ResponseWriter, r *http.Request) {
+	session := r.Context().Value(reqctx.SessionKey).(*session.Session)
+	if !session.HasPermission(perms.ScopeAdminUsers) {
+		responses.Forbidden(w, r, msgNoPermissionToGetUsers)
+		return
 	}
+	limit := defaultListUsersLimit
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 1 || n > maxListUsersLimit {
+			responses.BadRequest(w, r, msgInvalidLimit)
+			return
+		}
+		limit = n
+	}
+	offset := 0
+	if raw := r.URL.Query().Get("offset"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 0 {
+			responses.BadRequest(w, r, msgInvalidOffset)
+			return
+		}
+		offset = n
+	}
+	users, err := h.s.ListUsers(r.Context(), limit, offset)
+	if err != nil {
+		reqctx.Log(r.Context(), logFailedToListUsers, err.Error())
+		responses.InternalServerError(w, r, msgFailedToListUsers)
+		return
+	}
+	if users == nil {
+		users = []*User{}
+	}
+	responses.StructOK(w, r, users)
 }
 
-// UpdateUserHandler - Update a user
-func UpdateUserHandler(service Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
-		if !session.HasPermission(perms.ScopeAdminUsers) {
-			responses.Forbidden(w, r, msgNoPermissionToUpdateUsers)
+// GetUser - Get a user
+func (h *handler) GetUser(w http.ResponseWriter, r *http.Request) {
+	session := r.Context().Value(reqctx.SessionKey).(*session.Session)
+	userID := r.PathValue("user_id")
+	// Locked down to self-lookup and admins for now. Cross-user lookup
+	// with the target's consent is a planned feature (for account-link
+	// integrations) but isn't implemented yet - don't open this up
+	// generally until that consent mechanism actually exists.
+	if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
+		responses.Forbidden(w, r, msgNoPermissionToGetUser)
+		return
+	}
+	user, err := h.s.GetUser(r.Context(), userID)
+	if err != nil {
+		if err == account.ErrNotFound {
+			responses.NotFound(w, r, msgUserNotFound)
 			return
 		}
-		userID := r.PathValue("user_id")
-		var update UserUpdate
-		err := responses.DecodeStruct(r, &update)
-		if err != nil {
+		reqctx.Log(r.Context(), logFailedToGetUser, err.Error())
+		responses.InternalServerError(w, r, msgFailedToGetUser)
+		return
+	}
+	responses.StructOK(w, r, user)
+}
+
+// GetUserFromPlatform - Get a user from a platform
+func (h *handler) GetUserFromPlatform(w http.ResponseWriter, r *http.Request) {
+	session := r.Context().Value(reqctx.SessionKey).(*session.Session)
+	if !session.HasPermission(perms.ScopeAdminUsers) {
+		responses.Forbidden(w, r, msgNoPermissionToGetUsers)
+		return
+	}
+	platform := link.Platform(r.PathValue("platform"))
+	platformID := r.PathValue("platform_id")
+	user, err := h.s.GetUserFromPlatform(r.Context(), platform, platformID)
+	if err != nil {
+		if err == account.ErrNotFound {
+			responses.NotFound(w, r, msgUserNotFound)
+			return
+		}
+		reqctx.Log(r.Context(), logFailedToGetUser, err.Error())
+		responses.InternalServerError(w, r, msgFailedToGetUser)
+		return
+	}
+	responses.StructOK(w, r, user)
+}
+
+// GetUserPermissions - Get a user's permissions
+func (h *handler) GetUserPermissions(w http.ResponseWriter, r *http.Request) {
+	session := r.Context().Value(reqctx.SessionKey).(*session.Session)
+	userID := r.PathValue("user_id")
+	if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
+		responses.Forbidden(w, r, msgNoPermissionToGetUserPermissions)
+		return
+	}
+	permissions, err := h.s.GetUserPermissions(r.Context(), userID)
+	if err != nil {
+		if err == account.ErrNotFound {
+			responses.NotFound(w, r, msgUserNotFound)
+			return
+		}
+		reqctx.Log(r.Context(), logFailedToGetUser, err.Error())
+		responses.InternalServerError(w, r, msgFailedToGetUser)
+		return
+	}
+	responses.StructOK(w, r, permissions)
+}
+
+// UpdateUser - Update a user
+func (h *handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
+	session := r.Context().Value(reqctx.SessionKey).(*session.Session)
+	if !session.HasPermission(perms.ScopeAdminUsers) {
+		responses.Forbidden(w, r, msgNoPermissionToUpdateUsers)
+		return
+	}
+	userID := r.PathValue("user_id")
+	var update UserUpdate
+	err := responses.DecodeStruct(r, &update)
+	if err != nil {
+		responses.BadRequest(w, r, msgInvalidRequestBody)
+		return
+	}
+	err = h.s.UpdateUser(r.Context(), userID, &update)
+	if err != nil {
+		respondUpdateUserFailure(w, r, err)
+		return
+	}
+	stored, err := h.s.GetUser(r.Context(), userID)
+	if err != nil {
+		respondUpdateUserFailure(w, r, err)
+		return
+	}
+	responses.StructOK(w, r, stored)
+}
+
+// UpdateUserFromPlatform - Update a user from a platform
+func (h *handler) UpdateUserFromPlatform(w http.ResponseWriter, r *http.Request) {
+	session := r.Context().Value(reqctx.SessionKey).(*session.Session)
+	if !session.HasPermission(perms.ScopeAdminUsers) {
+		responses.Forbidden(w, r, msgNoPermissionToUpdateUsers)
+		return
+	}
+	platform := link.Platform(r.PathValue("platform"))
+	platformID := r.PathValue("platform_id")
+
+	var data link.PlatformData
+	switch platform {
+	case link.PlatformDiscord:
+		var d link.DiscordData
+		if err := responses.DecodeStruct(r, &d); err != nil {
 			responses.BadRequest(w, r, msgInvalidRequestBody)
 			return
 		}
-		err = service.UpdateUser(r.Context(), userID, &update)
-		if err != nil {
-			respondUpdateUserFailure(w, r, err)
+		data = &d
+	case link.PlatformMinecraft:
+		var d link.MinecraftData
+		if err := responses.DecodeStruct(r, &d); err != nil {
+			responses.BadRequest(w, r, msgInvalidRequestBody)
 			return
 		}
-		stored, err := service.GetUser(r.Context(), userID)
-		if err != nil {
-			respondUpdateUserFailure(w, r, err)
+		data = &d
+	case link.PlatformTwitch:
+		var d link.TwitchData
+		if err := responses.DecodeStruct(r, &d); err != nil {
+			responses.BadRequest(w, r, msgInvalidRequestBody)
 			return
 		}
-		responses.StructOK(w, r, stored)
+		data = &d
+	case link.PlatformXboxLive:
+		var d link.XboxLiveData
+		if err := responses.DecodeStruct(r, &d); err != nil {
+			responses.BadRequest(w, r, msgInvalidRequestBody)
+			return
+		}
+		data = &d
+	case link.PlatformMicrosoft:
+		var d link.MicrosoftUserData
+		if err := responses.DecodeStruct(r, &d); err != nil {
+			responses.BadRequest(w, r, msgInvalidRequestBody)
+			return
+		}
+		data = &d
+	default:
+		responses.BadRequest(w, r, msgUnsupportedPlatform)
+		return
 	}
+
+	user, err := h.s.UpdateUserFromPlatform(r.Context(), platform, platformID, data)
+	if err != nil {
+		respondUpdateUserFailure(w, r, err)
+		return
+	}
+	responses.StructOK(w, r, user)
 }
 
-// UpdateUserFromPlatformHandler - Update a user from a platform
-func UpdateUserFromPlatformHandler(service Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
-		if !session.HasPermission(perms.ScopeAdminUsers) {
-			responses.Forbidden(w, r, msgNoPermissionToUpdateUsers)
-			return
-		}
-		platform := link.Platform(r.PathValue("platform"))
-		platformID := r.PathValue("platform_id")
-
-		var data link.PlatformData
-		switch platform {
-		case link.PlatformDiscord:
-			var d link.DiscordData
-			if err := responses.DecodeStruct(r, &d); err != nil {
-				responses.BadRequest(w, r, msgInvalidRequestBody)
-				return
-			}
-			data = &d
-		case link.PlatformMinecraft:
-			var d link.MinecraftData
-			if err := responses.DecodeStruct(r, &d); err != nil {
-				responses.BadRequest(w, r, msgInvalidRequestBody)
-				return
-			}
-			data = &d
-		case link.PlatformTwitch:
-			var d link.TwitchData
-			if err := responses.DecodeStruct(r, &d); err != nil {
-				responses.BadRequest(w, r, msgInvalidRequestBody)
-				return
-			}
-			data = &d
-		case link.PlatformXboxLive:
-			var d link.XboxLiveData
-			if err := responses.DecodeStruct(r, &d); err != nil {
-				responses.BadRequest(w, r, msgInvalidRequestBody)
-				return
-			}
-			data = &d
-		case link.PlatformMicrosoft:
-			var d link.MicrosoftUserData
-			if err := responses.DecodeStruct(r, &d); err != nil {
-				responses.BadRequest(w, r, msgInvalidRequestBody)
-				return
-			}
-			data = &d
-		default:
-			responses.BadRequest(w, r, msgUnsupportedPlatform)
-			return
-		}
-
-		user, err := service.UpdateUserFromPlatform(r.Context(), platform, platformID, data)
-		if err != nil {
-			respondUpdateUserFailure(w, r, err)
-			return
-		}
-		responses.StructOK(w, r, user)
+// DeleteUser - Delete a user
+func (h *handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
+	session := r.Context().Value(reqctx.SessionKey).(*session.Session)
+	if !session.HasPermission(perms.ScopeAdminUsers) {
+		responses.Forbidden(w, r, msgNoPermissionToDeleteUsers)
+		return
 	}
+	userID := r.PathValue("user_id")
+	err := h.s.DeleteUser(r.Context(), userID)
+	if err != nil {
+		reqctx.Log(r.Context(), logFailedToDeleteUser, err.Error())
+		responses.InternalServerError(w, r, msgFailedToDeleteUser)
+		return
+	}
+	responses.NoContent(w, r)
 }
 
-// DeleteUserHandler - Delete a user
-func DeleteUserHandler(service Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
-		if !session.HasPermission(perms.ScopeAdminUsers) {
-			responses.Forbidden(w, r, msgNoPermissionToDeleteUsers)
-			return
-		}
-		userID := r.PathValue("user_id")
-		err := service.DeleteUser(r.Context(), userID)
-		if err != nil {
-			reqctx.Log(r.Context(), logFailedToDeleteUser, err.Error())
-			responses.InternalServerError(w, r, msgFailedToDeleteUser)
-			return
-		}
-		responses.NoContent(w, r)
+// GetAccountSettings - Get a user's account settings
+func (h *handler) GetAccountSettings(w http.ResponseWriter, r *http.Request) {
+	session := r.Context().Value(reqctx.SessionKey).(*session.Session)
+	userID := r.PathValue("user_id")
+	if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
+		responses.Forbidden(w, r, msgNoPermissionToViewSettings)
+		return
 	}
+	settings, err := h.s.GetAccountSettings(r.Context(), userID)
+	if err != nil {
+		if err == account.ErrNotFound {
+			responses.NotFound(w, r, msgUserNotFound)
+			return
+		}
+		responses.InternalServerError(w, r, msgFailedToGetAccountSettings)
+		return
+	}
+	responses.StructOK(w, r, settings)
 }
 
-// GetAccountSettingsHandler - Get a user's account settings
-func GetAccountSettingsHandler(service Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
-		userID := r.PathValue("user_id")
-		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
-			responses.Forbidden(w, r, msgNoPermissionToViewSettings)
-			return
-		}
-		settings, err := service.GetAccountSettings(r.Context(), userID)
-		if err != nil {
-			if err == account.ErrNotFound {
-				responses.NotFound(w, r, msgUserNotFound)
-				return
-			}
-			responses.InternalServerError(w, r, msgFailedToGetAccountSettings)
-			return
-		}
-		responses.StructOK(w, r, settings)
-	}
-}
-
-// UpdateAccountSettingsRequest - Body for UpdateAccountSettingsHandler. Each
+// UpdateAccountSettingsRequest - Body for UpdateAccountSettings. Each
 // field is a pointer so a PATCH can update one setting without touching the
 // others - a nil field means "leave this alone," the usual PATCH contract
 // once there's more than one setting to change independently.
@@ -320,33 +326,31 @@ type UpdateAccountSettingsRequest struct {
 	PasswordAuthEnabled *bool `json:"password_auth" xml:"password_auth"`
 }
 
-// UpdateAccountSettingsHandler - Update a user's account settings
-func UpdateAccountSettingsHandler(service Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
-		userID := r.PathValue("user_id")
-		if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
-			responses.Forbidden(w, r, msgNoPermissionToUpdateSettings)
-			return
-		}
-		var body UpdateAccountSettingsRequest
-		if err := responses.DecodeStruct(r, &body); err != nil || body.PasswordAuthEnabled == nil {
-			responses.BadRequest(w, r, msgInvalidRequestBody)
-			return
-		}
+// UpdateAccountSettings - Update a user's account settings
+func (h *handler) UpdateAccountSettings(w http.ResponseWriter, r *http.Request) {
+	session := r.Context().Value(reqctx.SessionKey).(*session.Session)
+	userID := r.PathValue("user_id")
+	if session.UserID != userID && !session.HasPermission(perms.ScopeAdminUsers) {
+		responses.Forbidden(w, r, msgNoPermissionToUpdateSettings)
+		return
+	}
+	var body UpdateAccountSettingsRequest
+	if err := responses.DecodeStruct(r, &body); err != nil || body.PasswordAuthEnabled == nil {
+		responses.BadRequest(w, r, msgInvalidRequestBody)
+		return
+	}
 
-		err := service.SetPasswordAuthEnabled(r.Context(), userID, *body.PasswordAuthEnabled)
-		switch err {
-		case nil:
-			responses.NoContent(w, r)
-		case account.ErrNotFound:
-			responses.NotFound(w, r, msgUserNotFound)
-		case account.ErrWouldLockAccount:
-			responses.BadRequest(w, r, msgEnableLoginMethodBeforeDisablingPassword)
-		case account.ErrNoPasswordSet:
-			responses.BadRequest(w, r, msgSetPasswordBeforeEnablingPasswordLogin)
-		default:
-			responses.InternalServerError(w, r, msgFailedToUpdateUserSettings)
-		}
+	err := h.s.SetPasswordAuthEnabled(r.Context(), userID, *body.PasswordAuthEnabled)
+	switch err {
+	case nil:
+		responses.NoContent(w, r)
+	case account.ErrNotFound:
+		responses.NotFound(w, r, msgUserNotFound)
+	case account.ErrWouldLockAccount:
+		responses.BadRequest(w, r, msgEnableLoginMethodBeforeDisablingPassword)
+	case account.ErrNoPasswordSet:
+		responses.BadRequest(w, r, msgSetPasswordBeforeEnablingPasswordLogin)
+	default:
+		responses.InternalServerError(w, r, msgFailedToUpdateUserSettings)
 	}
 }
