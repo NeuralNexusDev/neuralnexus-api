@@ -1,0 +1,298 @@
+ACT-02: constructor branch: an empty email becomes an absent email, the nullable-email rule of the accounts table
+ACT-05: constructor branch: an empty email becomes an absent email, the nullable-email rule of the accounts table
+ACT-07: argon2 key derivation with the pepper: same inputs give the same key, another secret gives another key (owner ruling 2026-11-02: argon2, pepper, salt)
+ACT-08: argon2 key derivation with the pepper: same inputs give the same key, another secret gives another key (owner ruling 2026-11-02: argon2, pepper, salt)
+ACT-09: password hashing with a per-account salt (owner ruling 2026-11-02: argon2, pepper, salt)
+ACT-10: password hashing with a per-account salt (owner ruling 2026-11-02: argon2, pepper, salt)
+ACT-12: validation of a login password against the stored hash and salt (owner ruling 2026-11-02: validation)
+ACT-13: validation of a login password against the stored hash and salt (owner ruling 2026-11-02: validation)
+ACT-14: validation of a login password against the stored hash and salt (owner ruling 2026-11-02: validation)
+ACT-19: exported method kept by the owner's dead-code ruling of 2026-11-02: the method and its tests stay
+ACT-20: exported method kept by the owner's dead-code ruling of 2026-11-02: the method and its tests stay
+ACT-21: exported method kept by the owner's dead-code ruling of 2026-11-02: the method and its tests stay
+OA-01: OAuth token exchange with the provider: reads both shapes of the scope field and maps provider failures; the flow has no service type
+OA-02: OAuth token exchange with the provider: reads both shapes of the scope field and maps provider failures; the flow has no service type
+OA-03: OAuth token exchange with the provider: reads both shapes of the scope field and maps provider failures; the flow has no service type
+OA-04: OAuth token exchange with the provider: reads both shapes of the scope field and maps provider failures; the flow has no service type
+OA-05: exported method kept by the owner's dead-code ruling of 2026-11-02: link.RefreshToken and its tests stay
+OA-06: exported method kept by the owner's dead-code ruling of 2026-11-02: link.RefreshToken and its tests stay
+OA-07: exported method kept by the owner's dead-code ruling of 2026-11-02: link.RefreshToken and its tests stay
+OA-08: exported method kept by the owner's dead-code ruling of 2026-11-02: link.RefreshToken and its tests stay
+OA-09: OAuth login callback written as a package function (no service type): picks the provider, resolves the account and creates the session
+OA-10: OAuth login callback written as a package function (no service type): picks the provider, resolves the account and creates the session
+OA-11: OAuth login callback written as a package function (no service type): picks the provider, resolves the account and creates the session
+OA-12: OAuth login callback written as a package function (no service type): picks the provider, resolves the account and creates the session
+OA-13: OAuth login callback written as a package function (no service type): picks the provider, resolves the account and creates the session
+OA-14: OAuth login callback written as a package function (no service type): picks the provider, resolves the account and creates the session
+OA-15: OAuth login callback written as a package function (no service type): picks the provider, resolves the account and creates the session
+OA-16: OAuth login callback written as a package function (no service type): picks the provider, resolves the account and creates the session
+OA-17: account resolution of the OAuth flow with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-18: account resolution of the OAuth flow with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-19: account resolution of the OAuth flow with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-20: account resolution of the OAuth flow with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-21: account resolution of the OAuth flow with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-22: account resolution of the OAuth flow with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-23: account resolution of the OAuth flow with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-24: account resolution of the OAuth flow with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-25: account resolution of the OAuth flow with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-26: account resolution of the OAuth flow with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-27: OAuth link callback written as a package function (no service type): picks the provider and links the identity to the session's account
+OA-30: OAuth link callback written as a package function (no service type): picks the provider and links the identity to the session's account
+OA-31: OAuth link callback written as a package function (no service type): picks the provider and links the identity to the session's account
+OA-32: OAuth link callback written as a package function (no service type): picks the provider and links the identity to the session's account
+OA-33: OAuth link callback written as a package function (no service type): picks the provider and links the identity to the session's account
+OA-34: OAuth link callback written as a package function (no service type): picks the provider and links the identity to the session's account
+OA-35: OAuth link callback written as a package function (no service type): picks the provider and links the identity to the session's account
+OA-36: OAuth link callback written as a package function (no service type): picks the provider and links the identity to the session's account
+OA-37: OAuth link callback written as a package function (no service type): picks the provider and links the identity to the session's account
+OA-38: OAuth link callback written as a package function (no service type): picks the provider and links the identity to the session's account
+OA-39: OAuth link callback written as a package function (no service type): picks the provider and links the identity to the session's account
+OA-40: OAuth link callback written as a package function (no service type): picks the provider and links the identity to the session's account
+OA-41: OAuth link callback written as a package function (no service type): picks the provider and links the identity to the session's account
+OA-42: OAuth link callback written as a package function (no service type): picks the provider and links the identity to the session's account
+OA-43: account resolution for the Xbox and Java identities with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-44: account resolution for the Xbox and Java identities with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-45: account resolution for the Xbox and Java identities with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-46: account resolution for the Xbox and Java identities with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-47: account resolution for the Xbox and Java identities with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-48: account resolution for the Xbox and Java identities with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-49: account resolution for the Xbox and Java identities with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-50: account resolution for the Xbox and Java identities with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-51: account resolution for the Xbox and Java identities with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-52: account resolution for the Xbox and Java identities with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-53: account resolution for the Xbox and Java identities with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-54: account resolution for the Xbox and Java identities with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-55: account resolution for the Xbox and Java identities with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-56: identity linking with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-57: identity linking with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-58: identity linking with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-59: identity linking with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-60: identity linking with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-61: identity linking with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-62: identity linking with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-63: identity linking with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-64: identity linking with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-65: identity linking with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-66: identity linking with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-67: identity linking to a session's account with race branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-68: identity linking to a session's account with race branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-69: identity linking to a session's account with race branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-70: identity linking to a session's account with race branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-71: identity linking to a session's account with race branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-72: account resolution of the OAuth flow with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-73: identity linking with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-74: identity linking with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-75: account resolution for the Xbox and Java identities with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-76: OAuth login callback written as a package function (no service type): picks the provider, resolves the account and creates the session
+OA-77: OAuth login callback written as a package function (no service type): picks the provider, resolves the account and creates the session
+OA-78: OAuth login callback written as a package function (no service type): picks the provider, resolves the account and creates the session
+OA-79: OAuth link callback written as a package function (no service type): picks the provider and links the identity to the session's account
+OA-80: OAuth link callback written as a package function (no service type): picks the provider and links the identity to the session's account
+OA-81: OAuth link callback written as a package function (no service type): picks the provider and links the identity to the session's account
+OA-82: identity linking to a session's account with race branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-85: identity linking to a session's account with race branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-86: identity linking with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-87: account resolution of the OAuth flow with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-88: identity linking with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-89: identity linking with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-90: identity linking with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-91: identity linking with race and cleanup branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-92: identity linking to a session's account with race branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-93: identity linking to a session's account with race branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-94: identity linking to a session's account with race branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-95: identity linking to a session's account with race branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-96: identity linking to a session's account with race branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+OA-97: OAuth login callback written as a package function (no service type): picks the provider, resolves the account and creates the session
+OA-98: OAuth login callback written as a package function (no service type): picks the provider, resolves the account and creates the session
+OA-99: OAuth login callback written as a package function (no service type): picks the provider, resolves the account and creates the session
+OA-100: OAuth link callback written as a package function (no service type): picks the provider and links the identity to the session's account
+OA-101: identity linking to a session's account with race branching; kept by the owner's ruling of 2026-11-02 (OAuth helper tests)
+DC-06: outbound client of the Discord API: maps its status codes and malformed replies to errors; no store or service type exists for it
+DC-07: outbound client of the Discord API: maps its status codes and malformed replies to errors; no store or service type exists for it
+DC-08: outbound client of the Discord API: maps its status codes and malformed replies to errors; no store or service type exists for it
+DC-04: exported method kept by the owner's dead-code ruling of 2026-11-02: the method and its tests stay
+LKS-06: validation of the Steam OpenID assertion on the callback: mode, claimed id, signed fields and Steam's confirmation
+LKS-07: validation of the Steam OpenID assertion on the callback: mode, claimed id, signed fields and Steam's confirmation
+LKS-08: validation of the Steam OpenID assertion on the callback: mode, claimed id, signed fields and Steam's confirmation
+LKS-09: validation of the Steam OpenID assertion on the callback: mode, claimed id, signed fields and Steam's confirmation
+LKS-10: validation of the Steam OpenID assertion on the callback: mode, claimed id, signed fields and Steam's confirmation
+LKS-11: validation of the Steam OpenID assertion on the callback: mode, claimed id, signed fields and Steam's confirmation
+LKS-12: validation of the Steam OpenID assertion on the callback: mode, claimed id, signed fields and Steam's confirmation
+LKS-13: reading Steam's verification reply, which decides whether a login is accepted
+LKS-14: reading Steam's verification reply, which decides whether a login is accepted
+LKS-15: reading Steam's verification reply, which decides whether a login is accepted
+LKS-16: outbound client of the Steam API: maps its status codes and malformed replies to errors; no store or service type exists for it
+LKS-18: outbound client of the Steam API: maps its status codes and malformed replies to errors; no store or service type exists for it
+LKS-19: outbound client of the Steam API: maps its status codes and malformed replies to errors; no store or service type exists for it
+LKS-20: outbound client of the Steam API: maps its status codes and malformed replies to errors; no store or service type exists for it
+LKS-21: outbound client of the Steam API: maps its status codes and malformed replies to errors; no store or service type exists for it
+LKS-22: outbound client of the Steam API: maps its status codes and malformed replies to errors; no store or service type exists for it
+LKS-23: Steam login callback written as a package function (no service type): resolves the account and creates the session
+LKS-24: Steam login callback written as a package function (no service type): resolves the account and creates the session
+LKS-25: Steam login callback written as a package function (no service type): resolves the account and creates the session
+LKS-26: Steam link callback written as a package function (no service type): links the identity to the session's account
+LKS-29: Steam link callback written as a package function (no service type): links the identity to the session's account
+LKS-04: exported method kept by the owner's dead-code ruling of 2026-11-02: the method and its tests stay
+MS-16: maps Xbox service error codes to the errors callers see
+MS-17: outbound client of the Microsoft API: maps its status codes and malformed replies to errors; no store or service type exists for it
+MS-18: outbound client of the Microsoft API: maps its status codes and malformed replies to errors; no store or service type exists for it
+MS-19: outbound client of the Microsoft API: maps its status codes and malformed replies to errors; no store or service type exists for it
+MS-20: outbound client of the Microsoft API: maps its status codes and malformed replies to errors; no store or service type exists for it
+MS-21: outbound client of the Microsoft API: maps its status codes and malformed replies to errors; no store or service type exists for it
+MS-22: outbound client of the Xbox Live API: maps its status codes and malformed replies to errors; no store or service type exists for it
+MS-23: outbound client of the Xbox Live API: maps its status codes and malformed replies to errors; no store or service type exists for it
+MS-24: outbound client of the Xbox Live API: maps its status codes and malformed replies to errors; no store or service type exists for it
+MS-25: outbound client of the Xbox Live API: maps its status codes and malformed replies to errors; no store or service type exists for it
+MS-26: outbound client of the Xbox Live API: maps its status codes and malformed replies to errors; no store or service type exists for it
+MS-27: outbound client of the Xbox security token service: maps its status codes, error codes and malformed replies to errors; no store or service type exists for it
+MS-28: outbound client of the Xbox security token service: maps its status codes, error codes and malformed replies to errors; no store or service type exists for it
+MS-29: outbound client of the Xbox security token service: maps its status codes, error codes and malformed replies to errors; no store or service type exists for it
+MS-30: outbound client of the Xbox security token service: maps its status codes, error codes and malformed replies to errors; no store or service type exists for it
+MS-31: outbound client of the Xbox security token service: maps its status codes, error codes and malformed replies to errors; no store or service type exists for it
+MS-32: outbound client of the Xbox security token service: maps its status codes, error codes and malformed replies to errors; no store or service type exists for it
+MS-33: outbound client of the Xbox security token service: maps its status codes, error codes and malformed replies to errors; no store or service type exists for it
+MS-34: outbound client of the Xbox security token service: maps its status codes, error codes and malformed replies to errors; no store or service type exists for it
+MS-35: outbound client of the Minecraft services API: maps its status codes and malformed or unreadable replies to errors; no store or service type exists for it
+MS-36: outbound client of the Minecraft services API: maps its status codes and malformed or unreadable replies to errors; no store or service type exists for it
+MS-37: outbound client of the Minecraft services API: maps its status codes and malformed or unreadable replies to errors; no store or service type exists for it
+MS-38: outbound client of the Minecraft services API: maps its status codes and malformed or unreadable replies to errors; no store or service type exists for it
+MS-39: outbound client of the Minecraft services API: maps its status codes and malformed or unreadable replies to errors; no store or service type exists for it
+MS-40: outbound client of the Minecraft services API: maps a missing profile, other status codes and malformed replies; no store or service type exists for it
+MS-41: outbound client of the Minecraft services API: maps a missing profile, other status codes and malformed replies; no store or service type exists for it
+MS-42: outbound client of the Minecraft services API: maps a missing profile, other status codes and malformed replies; no store or service type exists for it
+MS-43: outbound client of the Minecraft services API: maps a missing profile, other status codes and malformed replies; no store or service type exists for it
+MS-44: outbound client of the Minecraft services API: maps a missing profile, other status codes and malformed replies; no store or service type exists for it
+MS-45: outbound client of the Minecraft services API: maps a missing profile, other status codes and malformed replies; no store or service type exists for it
+MS-46: outbound client of the Minecraft services API: maps a missing profile, other status codes and malformed replies; no store or service type exists for it
+MS-47: builds the Xbox Live identity from the security token reply and rejects an incomplete one; no store or service type exists for it
+MS-48: builds the Xbox Live identity from the security token reply and rejects an incomplete one; no store or service type exists for it
+MS-49: builds the Xbox Live identity from the security token reply and rejects an incomplete one; no store or service type exists for it
+MS-50: Xbox Live sign-in chain written as a package function (no service type): runs the authentication steps in order and stops at the first failure
+MS-51: Xbox Live sign-in chain written as a package function (no service type): runs the authentication steps in order and stops at the first failure
+MS-52: Xbox Live and Minecraft sign-in chain written as a package function (no service type): decides what a failed Minecraft step leaves of the Xbox identity
+MS-53: Xbox Live and Minecraft sign-in chain written as a package function (no service type): decides what a failed Minecraft step leaves of the Xbox identity
+MS-54: Xbox Live and Minecraft sign-in chain written as a package function (no service type): decides what a failed Minecraft step leaves of the Xbox identity
+MS-55: Xbox Live and Minecraft sign-in chain written as a package function (no service type): decides what a failed Minecraft step leaves of the Xbox identity
+MS-56: Xbox Live and Minecraft sign-in chain written as a package function (no service type): decides what a failed Minecraft step leaves of the Xbox identity
+MS-57: Xbox Live and Minecraft sign-in chain written as a package function (no service type): decides what a failed Minecraft step leaves of the Xbox identity
+MS-58: Xbox Live and Minecraft sign-in chain written as a package function (no service type): decides what a failed Minecraft step leaves of the Xbox identity
+MS-59: outbound client of the Minecraft services API: maps its status codes and malformed or unreadable replies to errors; no store or service type exists for it
+MS-60: outbound client of the Minecraft services API: maps its status codes and malformed or unreadable replies to errors; no store or service type exists for it
+MS-04: exported method kept by the owner's dead-code ruling of 2026-11-02: the method and its tests stay
+MS-09: exported method kept by the owner's dead-code ruling of 2026-11-02: the method and its tests stay
+MC-04: exported method kept by the owner's dead-code ruling of 2026-11-02: the method and its tests stay
+RB-01: permission node of the public contract that sessions carry (owner ruling 2026-11-02: TestScopeNodes)
+RB-02: permission node of the public contract that sessions carry (owner ruling 2026-11-02: TestScopeNodes)
+RB-03: permission node of the public contract that sessions carry (owner ruling 2026-11-02: TestScopeNodes)
+RB-04: permission node of the public contract that sessions carry (owner ruling 2026-11-02: TestScopeNodes)
+RB-05: permission node of the public contract that sessions carry (owner ruling 2026-11-02: TestScopeNodes)
+RB-06: permission node of the public contract that sessions carry (owner ruling 2026-11-02: TestScopeNodes)
+RB-07: permission node of the public contract that sessions carry (owner ruling 2026-11-02: TestScopeNodes)
+RB-08: permission node of the public contract that sessions carry (owner ruling 2026-11-02: TestScopeNodes)
+SE-02: permission matching rule of a session (owner ruling 2026-11-02: permission matching)
+SE-03: permission matching rule of a session (owner ruling 2026-11-02: permission matching)
+SE-04: session expiry rule (owner ruling 2026-11-02: expiry)
+SE-05: session expiry rule (owner ruling 2026-11-02: expiry)
+SE-06: session expiry rule (owner ruling 2026-11-02: expiry)
+SE-35: permission value matching rule of a session (owner ruling 2026-11-02: permission matching)
+SE-36: permission value matching rule of a session (owner ruling 2026-11-02: permission matching)
+WEU-01: JSON decoding of the Discord webhook envelope: picks the event body by event type (encoding)
+WEU-02: JSON decoding of the Discord webhook envelope: picks the event body by event type (encoding)
+WEU-03: JSON decoding of the Discord webhook envelope: picks the event body by event type (encoding)
+WEU-04: JSON decoding of the Discord webhook envelope: picks the event body by event type (encoding)
+WEU-05: JSON decoding of the Discord webhook envelope: picks the event body by event type (encoding)
+GST-03: validation of the query type the route accepts
+GST-04: validation of the query type the route accepts
+GST-05: validation of the query type the route accepts
+GST-06: validation of the query type the route accepts
+GST-07: converts the Minecraft status shape to the common player list the handler returns
+GST-08: converts the Minecraft status shape to the common player list the handler returns
+GST-09: converts the GameQ shape to the common player list the handler returns
+GST-10: converts the GameQ shape to the common player list the handler returns
+GST-11: converts the GameDig shape to the common player list the handler returns
+GST-12: converts the GameDig shape to the common player list the handler returns
+CST-07: text clean-up of the server description callers see: newlines, colour codes and whitespace
+CST-08: text clean-up of the server description callers see: newlines, colour codes and whitespace
+CST-09: text clean-up of the server description callers see: newlines, colour codes and whitespace
+CST-11: encoding of the server icon as base64 for the status body, including the case of no image
+CST-12: encoding of the server icon as base64 for the status body, including the case of no image
+CST-14: loading of a server icon from the embedded files: a missing file and an invalid image are errors
+CST-15: loading of a server icon from the embedded files: a missing file and an invalid image are errors
+CST-16: maps one query protocol's reply to the common status body callers receive
+CST-17: maps one query protocol's reply to the common status body callers receive
+CST-18: maps one query protocol's reply to the common status body callers receive
+CST-19: maps one query protocol's reply to the common status body callers receive
+CST-20: maps one query protocol's reply to the common status body callers receive
+CST-21: maps one query protocol's reply to the common status body callers receive
+CST-22: maps one query protocol's reply to the common status body callers receive
+CST-23: maps one query protocol's reply to the common status body callers receive
+CST-24: maps one query protocol's reply to the common status body callers receive
+CST-25: maps one query protocol's reply to the common status body callers receive
+CST-26: maps one query protocol's reply to the common status body callers receive
+MW-05: middleware factory that composes middlewares in declaration order; handler-equivalent but not among the six wrappers the owner named
+MW-08: middleware factory that sets the caller's address from the proxy headers before the wrapped handler runs; handler-equivalent but not among the six wrappers the owner named
+MW-10: middleware factory that sets the caller's address from the proxy headers before the wrapped handler runs; handler-equivalent but not among the six wrappers the owner named
+MW-11: middleware factory that sets the caller's address from the proxy headers before the wrapped handler runs; handler-equivalent but not among the six wrappers the owner named
+MW-12: middleware factory that sets the caller's address from the proxy headers before the wrapped handler runs; handler-equivalent but not among the six wrappers the owner named
+MW-13: middleware factory that sets the caller's address from the proxy headers before the wrapped handler runs; handler-equivalent but not among the six wrappers the owner named
+MW-33: middleware factory that sets the request id from the request header before the wrapped handler runs; handler-equivalent but not among the six wrappers the owner named
+MW-34: middleware factory that sets the request id from the request header before the wrapped handler runs; handler-equivalent but not among the six wrappers the owner named
+MW-35: middleware factory that sets the request id from the request header before the wrapped handler runs; handler-equivalent but not among the six wrappers the owner named
+MW-57: middleware factory that sets the no-sniff header on every response; handler-equivalent but not among the six wrappers the owner named
+TY-34: encoding of an Xbox user id as the UUID callers see
+TY-35: encoding of an Xbox user id as the UUID callers see
+TY-37: decoding of a UUID into the Xbox user id used for lookups
+TY-38: decoding of a UUID into the Xbox user id used for lookups
+TY-01: JSON encoding of the player: an absent and an empty list of profile actions (encoding)
+TY-02: JSON encoding of the player: an absent and an empty list of profile actions (encoding)
+TY-03: JSON encoding of the player: an absent and an empty list of profile actions (encoding)
+TY-04: decoding of the base64 JSON textures property, skipping invalid entries (encoding)
+TY-05: decoding of the base64 JSON textures property, skipping invalid entries (encoding)
+TY-06: decoding of the base64 JSON textures property, skipping invalid entries (encoding)
+TY-07: decoding of the base64 JSON textures property, skipping invalid entries (encoding)
+TY-08: decoding of the base64 JSON textures property, skipping invalid entries (encoding)
+TY-09: decoding of the base64 JSON textures property, skipping invalid entries (encoding)
+TY-16: encoding of the textures into the base64 JSON property (encoding)
+TY-17: encoding of the textures into the base64 JSON property (encoding)
+TY-18: extracts the texture hash from its URL, the key under which textures are stored and fetched
+TY-19: extracts the texture hash from its URL, the key under which textures are stored and fetched
+TY-20: extracts the texture hash from its URL, the key under which textures are stored and fetched
+TY-21: extracts the texture hash from its URL, the key under which textures are stored and fetched
+TY-24: maps a fetched profile to the stored player, with and without textures
+TY-25: maps a fetched profile to the stored player, with and without textures
+TY-28: exported method kept by the owner's dead-code ruling of 2026-11-02: the method and its tests stay
+TY-29: exported method kept by the owner's dead-code ruling of 2026-11-02: the method and its tests stay
+TY-39: decodes a stored texture row into the texture value: model, absent skin or cape, absent row (encoding)
+TY-40: decodes a stored texture row into the texture value: model, absent skin or cape, absent row (encoding)
+TY-41: decodes a stored texture row into the texture value: model, absent skin or cape, absent row (encoding)
+TY-42: decodes a stored texture row into the texture value: model, absent skin or cape, absent row (encoding)
+TY-43: decodes a stored texture row into the texture value: model, absent skin or cape, absent row (encoding)
+PJ-01: the module has no service or store: getReleases is the GitHub client behind the handler and maps 404, 403 and 429 to errors
+PJ-04: the module has no service or store: getReleases is the GitHub client behind the handler and maps 404, 403 and 429 to errors
+PJ-05: the module has no service or store: getReleases is the GitHub client behind the handler and maps 404, 403 and 429 to errors
+PJ-06: the module has no service or store: getReleases is the GitHub client behind the handler and maps 404, 403 and 429 to errors
+PJ-17: the module has no service or store: getReleases is the GitHub client behind the handler and maps 404, 403 and 429 to errors
+PJ-18: the module has no service or store: getReleases is the GitHub client behind the handler and maps 404, 403 and 429 to errors
+PJ-19: the module has no service or store: getReleases is the GitHub client behind the handler and maps 404, 403 and 429 to errors
+PJ-20: the module has no service or store: getReleases is the GitHub client behind the handler and maps 404, 403 and 429 to errors
+PJ-07: format conversion of the releases into the Forge update body callers receive
+PJ-08: format conversion of the releases into the Forge update body callers receive
+PJ-09: format conversion of the releases into the Forge update body callers receive
+PJ-10: format conversion of the releases into the Forge update body callers receive
+GR-01: merge logic: combines the grants of several roles by each permission's value type and merge rule (owner ruling 2026-11-02: merge logic)
+GR-02: merge logic: combines the grants of several roles by each permission's value type and merge rule (owner ruling 2026-11-02: merge logic)
+GR-03: merge logic: combines the grants of several roles by each permission's value type and merge rule (owner ruling 2026-11-02: merge logic)
+GR-04: merge logic: combines the grants of several roles by each permission's value type and merge rule (owner ruling 2026-11-02: merge logic)
+GR-05: merge logic: combines the grants of several roles by each permission's value type and merge rule (owner ruling 2026-11-02: merge logic)
+GR-06: merge logic: combines the grants of several roles by each permission's value type and merge rule (owner ruling 2026-11-02: merge logic)
+GR-07: merge logic: combines the grants of several roles by each permission's value type and merge rule (owner ruling 2026-11-02: merge logic)
+GR-08: merge logic: combines the grants of several roles by each permission's value type and merge rule (owner ruling 2026-11-02: merge logic)
+RR-06: owner ruling 2026-11-02: the DecodeStruct tests stay (length limits, null, protobuf)
+RR-08: owner ruling 2026-11-02: the DecodeStruct tests stay (length limits, null, protobuf)
+RR-09: owner ruling 2026-11-02: the DecodeStruct tests stay (length limits, null, protobuf)
+RR-10: owner ruling 2026-11-02: the DecodeStruct tests stay (length limits, null, protobuf)
+RR-11: owner ruling 2026-11-02: the DecodeStruct tests stay (length limits, null, protobuf)
+RR-12: owner ruling 2026-11-02: the DecodeStruct tests stay (length limits, null, protobuf)
+RR-13: owner ruling 2026-11-02: the DecodeStruct tests stay (length limits, null, protobuf)
+RR-14: owner ruling 2026-11-02: the DecodeStruct tests stay (length limits, null, protobuf)
+RR-15: owner ruling 2026-11-02: the DecodeStruct tests stay (length limits, null, protobuf)
