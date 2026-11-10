@@ -10,6 +10,14 @@ datastore.admin
 numberstore.admin
 
 # 04 pet_pictures, projects, responses, teapot, cct_turtle
+petpictures.admin
+group
+project
+format
+promos
+homepage
+application/x-protobuf
+null
 
 # 05 auth-account, auth-session, auth-user, auth-ratelimit
 
