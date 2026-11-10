@@ -136,43 +136,55 @@ func ConvertToFMLFormat(gitHubReleasesURL string, releases []Release) map[string
 	return fmlFormat
 }
 
-// GetReleasesHandler - Get the releases
-func GetReleasesHandler(cfg config.GitHub) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		group := r.PathValue("group")
-		project := r.PathValue("project")
+// Handler serves the projects routes.
+type Handler interface {
+	GetReleases(w http.ResponseWriter, r *http.Request)
+}
 
-		format := r.URL.Query().Get("format")
+type handler struct {
+	cfg config.GitHub
+}
 
-		releases, err := getReleases(r.Context(), cfg, group, project)
-		if err != nil {
-			reqctx.Log(r.Context(), err.Error())
-			switch err {
-			case ErrReleasesNotFound:
-				http.Error(w, msgReleasesNotFound, http.StatusNotFound)
-			case ErrGitHubRateLimited:
-				http.Error(w, msgGitHubRateLimited, http.StatusServiceUnavailable)
-			case ErrGitHubStatus:
-				http.Error(w, msgGitHubBadStatus, http.StatusBadGateway)
-			default:
-				http.Error(w, msgFailedToGetReleases, http.StatusInternalServerError)
-			}
-			return
+// NewHandler returns a Handler that serves the projects routes with the given GitHub configuration.
+func NewHandler(cfg config.GitHub) Handler {
+	return &handler{cfg}
+}
+
+// GetReleases - Get the releases
+func (h *handler) GetReleases(w http.ResponseWriter, r *http.Request) {
+	group := r.PathValue("group")
+	project := r.PathValue("project")
+
+	format := r.URL.Query().Get("format")
+
+	releases, err := getReleases(r.Context(), h.cfg, group, project)
+	if err != nil {
+		reqctx.Log(r.Context(), err.Error())
+		switch err {
+		case ErrReleasesNotFound:
+			http.Error(w, msgReleasesNotFound, http.StatusNotFound)
+		case ErrGitHubRateLimited:
+			http.Error(w, msgGitHubRateLimited, http.StatusServiceUnavailable)
+		case ErrGitHubStatus:
+			http.Error(w, msgGitHubBadStatus, http.StatusBadGateway)
+		default:
+			http.Error(w, msgFailedToGetReleases, http.StatusInternalServerError)
 		}
+		return
+	}
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 
-		if format == "fml" {
-			gitHubReleasesURL := "https://github.com/" + group + "/" + project + "/releases"
-			forgeModUpdates := ConvertToFMLFormat(gitHubReleasesURL, releases)
-			if err := json.NewEncoder(w).Encode(forgeModUpdates); err != nil {
-				reqctx.Log(r.Context(), "Failed to write releases:\n\t", err.Error())
-			}
-			return
-		}
-		if err := json.NewEncoder(w).Encode(releases); err != nil {
+	if format == "fml" {
+		gitHubReleasesURL := "https://github.com/" + group + "/" + project + "/releases"
+		forgeModUpdates := ConvertToFMLFormat(gitHubReleasesURL, releases)
+		if err := json.NewEncoder(w).Encode(forgeModUpdates); err != nil {
 			reqctx.Log(r.Context(), "Failed to write releases:\n\t", err.Error())
 		}
+		return
+	}
+	if err := json.NewEncoder(w).Encode(releases); err != nil {
+		reqctx.Log(r.Context(), "Failed to write releases:\n\t", err.Error())
 	}
 }
