@@ -22,5 +22,15 @@ null
 # 05 auth-account, auth-session, auth-user, auth-ratelimit
 
 # 06 mcstatus, game_server_status, discord
+query_port
+application/json
+text/plain
+event.type
+data.integration_type
+data.user
+data.guild
+APPLICATION_AUTHORIZED
+APPLICATION_DEAUTHORIZED
+ENTITLEMENT_CREATE
 
 # 07 middleware, rbac, bee_name_generator
