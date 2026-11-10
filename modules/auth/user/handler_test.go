@@ -92,7 +92,7 @@ func TestUR01GetUserHandlerSelfHappyPath(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-01_GetUserSelfHappyPath", func(t *testing.T) {
-		GetUserHandler(svc)(w, r)
+		NewHandler(svc).GetUser(w, r)
 		testutil.ExpectStatus(t, w, http.StatusOK)
 	})
 }
@@ -103,7 +103,7 @@ func TestUR02GetUserHandlerAdminHappyPath(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-02_GetUserAdminHappyPath", func(t *testing.T) {
-		GetUserHandler(svc)(w, r)
+		NewHandler(svc).GetUser(w, r)
 		testutil.ExpectStatus(t, w, http.StatusOK)
 	})
 }
@@ -114,7 +114,7 @@ func TestUR03GetUserHandlerForbidden(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-03_GetUserForbidden", func(t *testing.T) {
-		GetUserHandler(svc)(w, r)
+		NewHandler(svc).GetUser(w, r)
 		testutil.ExpectStatus(t, w, http.StatusForbidden)
 		testutil.ExpectDetail(t, w, msgNoPermissionToGetUser)
 	})
@@ -126,7 +126,7 @@ func TestUR04GetUserHandlerServiceErrorMapsTo500(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-04_GetUserServiceErrorMapsTo500", func(t *testing.T) {
-		GetUserHandler(svc)(w, r)
+		NewHandler(svc).GetUser(w, r)
 		testutil.ExpectStatus(t, w, http.StatusInternalServerError)
 		testutil.ExpectDetail(t, w, msgFailedToGetUser)
 	})
@@ -139,7 +139,7 @@ func TestUR05GetUserFromPlatformHandlerAdminHappyPath(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-05_GetUserFromPlatformAdminHappyPath", func(t *testing.T) {
-		GetUserFromPlatformHandler(svc)(w, r)
+		NewHandler(svc).GetUserFromPlatform(w, r)
 		testutil.ExpectStatus(t, w, http.StatusOK)
 	})
 }
@@ -151,7 +151,7 @@ func TestUR06GetUserFromPlatformHandlerForbidden(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-06_GetUserFromPlatformForbidden", func(t *testing.T) {
-		GetUserFromPlatformHandler(svc)(w, r)
+		NewHandler(svc).GetUserFromPlatform(w, r)
 		testutil.ExpectStatus(t, w, http.StatusForbidden)
 		testutil.ExpectDetail(t, w, msgNoPermissionToGetUsers)
 	})
@@ -164,7 +164,7 @@ func TestUR07GetUserFromPlatformHandlerServiceErrorMapsTo404(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-07_GetUserFromPlatformServiceErrorMapsTo404", func(t *testing.T) {
-		GetUserFromPlatformHandler(svc)(w, r)
+		NewHandler(svc).GetUserFromPlatform(w, r)
 		testutil.ExpectStatus(t, w, http.StatusNotFound)
 		testutil.ExpectDetail(t, w, msgUserNotFound)
 	})
@@ -176,7 +176,7 @@ func TestUR08GetUserPermissionsHandlerSelfHappyPath(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-08_GetUserPermissionsSelfHappyPath", func(t *testing.T) {
-		GetUserPermissionsHandler(svc)(w, r)
+		NewHandler(svc).GetUserPermissions(w, r)
 		testutil.ExpectStatus(t, w, http.StatusOK)
 	})
 }
@@ -187,7 +187,7 @@ func TestUR09GetUserPermissionsHandlerAdminHappyPath(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-09_GetUserPermissionsAdminHappyPath", func(t *testing.T) {
-		GetUserPermissionsHandler(svc)(w, r)
+		NewHandler(svc).GetUserPermissions(w, r)
 		testutil.ExpectStatus(t, w, http.StatusOK)
 	})
 }
@@ -198,7 +198,7 @@ func TestUR10GetUserPermissionsHandlerForbidden(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-10_GetUserPermissionsForbidden", func(t *testing.T) {
-		GetUserPermissionsHandler(svc)(w, r)
+		NewHandler(svc).GetUserPermissions(w, r)
 		testutil.ExpectStatus(t, w, http.StatusForbidden)
 		testutil.ExpectDetail(t, w, msgNoPermissionToGetUserPermissions)
 	})
@@ -210,7 +210,7 @@ func TestUR11GetUserPermissionsHandlerServiceErrorMapsTo500(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-11_GetUserPermissionsServiceErrorMapsTo500", func(t *testing.T) {
-		GetUserPermissionsHandler(svc)(w, r)
+		NewHandler(svc).GetUserPermissions(w, r)
 		testutil.ExpectStatus(t, w, http.StatusInternalServerError)
 		testutil.ExpectDetail(t, w, msgFailedToGetUser)
 	})
@@ -222,7 +222,7 @@ func TestUR12UpdateUserHandlerHappyPath(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-12_UpdateUserHappyPath", func(t *testing.T) {
-		UpdateUserHandler(svc)(w, r)
+		NewHandler(svc).UpdateUser(w, r)
 		testutil.ExpectStatus(t, w, http.StatusOK)
 		if svc.updatedUserID != "u1" {
 			t.Errorf("UpdateUser got user ID %q, want the path user_id u1", svc.updatedUserID)
@@ -239,7 +239,7 @@ func TestUR13UpdateUserHandlerForbidden(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-13_UpdateUserForbidden", func(t *testing.T) {
-		UpdateUserHandler(svc)(w, r)
+		NewHandler(svc).UpdateUser(w, r)
 		testutil.ExpectStatus(t, w, http.StatusForbidden)
 		testutil.ExpectDetail(t, w, msgNoPermissionToUpdateUsers)
 	})
@@ -251,7 +251,7 @@ func TestUR14UpdateUserHandlerMalformedBody(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-14_UpdateUserMalformedBody", func(t *testing.T) {
-		UpdateUserHandler(svc)(w, r)
+		NewHandler(svc).UpdateUser(w, r)
 		testutil.ExpectStatus(t, w, http.StatusBadRequest)
 		testutil.ExpectDetail(t, w, msgInvalidRequestBody)
 	})
@@ -263,7 +263,7 @@ func TestUR15UpdateUserHandlerServiceErrorMapsTo500(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-15_UpdateUserServiceErrorMapsTo500", func(t *testing.T) {
-		UpdateUserHandler(svc)(w, r)
+		NewHandler(svc).UpdateUser(w, r)
 		testutil.ExpectStatus(t, w, http.StatusInternalServerError)
 		testutil.ExpectDetail(t, w, msgFailedToUpdateUser)
 	})
@@ -289,7 +289,7 @@ func TestUR16to20UpdateUserFromPlatformHandlerPlatformHappyPaths(t *testing.T) {
 			r.SetPathValue("platform_id", "123")
 			w := httptest.NewRecorder()
 
-			UpdateUserFromPlatformHandler(svc)(w, r)
+			NewHandler(svc).UpdateUserFromPlatform(w, r)
 
 			testutil.ExpectStatus(t, w, http.StatusOK)
 			if !svc.updateFromPlatformCalled {
@@ -306,7 +306,7 @@ func TestUR21UpdateUserFromPlatformHandlerUnsupportedPlatform(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-21_UpdateUserFromPlatformUnsupportedPlatform", func(t *testing.T) {
-		UpdateUserFromPlatformHandler(svc)(w, r)
+		NewHandler(svc).UpdateUserFromPlatform(w, r)
 		testutil.ExpectStatus(t, w, http.StatusBadRequest)
 		testutil.ExpectDetail(t, w, msgUnsupportedPlatform)
 		if svc.updateFromPlatformCalled {
@@ -322,7 +322,7 @@ func TestUR22UpdateUserFromPlatformHandlerForbidden(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-22_UpdateUserFromPlatformForbidden", func(t *testing.T) {
-		UpdateUserFromPlatformHandler(svc)(w, r)
+		NewHandler(svc).UpdateUserFromPlatform(w, r)
 		testutil.ExpectStatus(t, w, http.StatusForbidden)
 		testutil.ExpectDetail(t, w, msgNoPermissionToUpdateUsers)
 		if svc.updateFromPlatformCalled {
@@ -338,7 +338,7 @@ func TestUR23UpdateUserFromPlatformHandlerMalformedBody(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-23_UpdateUserFromPlatformMalformedBody", func(t *testing.T) {
-		UpdateUserFromPlatformHandler(svc)(w, r)
+		NewHandler(svc).UpdateUserFromPlatform(w, r)
 		testutil.ExpectStatus(t, w, http.StatusBadRequest)
 		testutil.ExpectDetail(t, w, msgInvalidRequestBody)
 		if svc.updateFromPlatformCalled {
@@ -355,7 +355,7 @@ func TestUR56UpdateUserFromPlatformHandlerMalformedBodyOtherPlatforms(t *testing
 			r.SetPathValue("platform_id", "123")
 			w := httptest.NewRecorder()
 
-			UpdateUserFromPlatformHandler(svc)(w, r)
+			NewHandler(svc).UpdateUserFromPlatform(w, r)
 
 			testutil.ExpectStatus(t, w, http.StatusBadRequest)
 			testutil.ExpectDetail(t, w, msgInvalidRequestBody)
@@ -373,7 +373,7 @@ func TestUR24UpdateUserFromPlatformHandlerServiceErrorMapsTo500(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-24_UpdateUserFromPlatformServiceErrorMapsTo500", func(t *testing.T) {
-		UpdateUserFromPlatformHandler(svc)(w, r)
+		NewHandler(svc).UpdateUserFromPlatform(w, r)
 		testutil.ExpectStatus(t, w, http.StatusInternalServerError)
 		testutil.ExpectDetail(t, w, msgFailedToUpdateUser)
 	})
@@ -385,7 +385,7 @@ func TestUR25DeleteUserHandlerHappyPath(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-25_DeleteUserHappyPath", func(t *testing.T) {
-		DeleteUserHandler(svc)(w, r)
+		NewHandler(svc).DeleteUser(w, r)
 		testutil.ExpectStatus(t, w, http.StatusNoContent)
 	})
 }
@@ -396,7 +396,7 @@ func TestUR26DeleteUserHandlerForbidden(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-26_DeleteUserForbidden", func(t *testing.T) {
-		DeleteUserHandler(svc)(w, r)
+		NewHandler(svc).DeleteUser(w, r)
 		testutil.ExpectStatus(t, w, http.StatusForbidden)
 		testutil.ExpectDetail(t, w, msgNoPermissionToDeleteUsers)
 	})
@@ -408,7 +408,7 @@ func TestUR27DeleteUserHandlerServiceErrorMapsTo500(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-27_DeleteUserServiceErrorMapsTo500", func(t *testing.T) {
-		DeleteUserHandler(svc)(w, r)
+		NewHandler(svc).DeleteUser(w, r)
 		testutil.ExpectStatus(t, w, http.StatusInternalServerError)
 		testutil.ExpectDetail(t, w, msgFailedToDeleteUser)
 	})
@@ -420,7 +420,7 @@ func TestUR45GetAccountSettingsHandlerSelfHappyPath(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-45_GetAccountSettingsSelfHappyPath", func(t *testing.T) {
-		GetAccountSettingsHandler(svc)(w, r)
+		NewHandler(svc).GetAccountSettings(w, r)
 		testutil.ExpectStatus(t, w, http.StatusOK)
 	})
 }
@@ -431,7 +431,7 @@ func TestUR46GetAccountSettingsHandlerAdminHappyPath(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-46_GetAccountSettingsAdminHappyPath", func(t *testing.T) {
-		GetAccountSettingsHandler(svc)(w, r)
+		NewHandler(svc).GetAccountSettings(w, r)
 		testutil.ExpectStatus(t, w, http.StatusOK)
 	})
 }
@@ -442,7 +442,7 @@ func TestUR47GetAccountSettingsHandlerForbidden(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-47_GetAccountSettingsForbidden", func(t *testing.T) {
-		GetAccountSettingsHandler(svc)(w, r)
+		NewHandler(svc).GetAccountSettings(w, r)
 		testutil.ExpectStatus(t, w, http.StatusForbidden)
 		testutil.ExpectDetail(t, w, msgNoPermissionToViewSettings)
 	})
@@ -454,7 +454,7 @@ func TestUR48GetAccountSettingsHandlerServiceErrorMapsTo500(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-48_GetAccountSettingsServiceErrorMapsTo500", func(t *testing.T) {
-		GetAccountSettingsHandler(svc)(w, r)
+		NewHandler(svc).GetAccountSettings(w, r)
 		testutil.ExpectStatus(t, w, http.StatusInternalServerError)
 		testutil.ExpectDetail(t, w, msgFailedToGetAccountSettings)
 	})
@@ -466,7 +466,7 @@ func TestUR49UpdateAccountSettingsHandlerHappyPath(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-49_UpdateAccountSettingsHappyPath", func(t *testing.T) {
-		UpdateAccountSettingsHandler(svc)(w, r)
+		NewHandler(svc).UpdateAccountSettings(w, r)
 		testutil.ExpectStatus(t, w, http.StatusNoContent)
 		if len(svc.setPasswordAuthCalls) != 1 || svc.setPasswordAuthCalls[0] != true {
 			t.Errorf("expected SetPasswordAuthEnabled(true), got %v", svc.setPasswordAuthCalls)
@@ -480,7 +480,7 @@ func TestUR50UpdateAccountSettingsHandlerForbidden(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-50_UpdateAccountSettingsForbidden", func(t *testing.T) {
-		UpdateAccountSettingsHandler(svc)(w, r)
+		NewHandler(svc).UpdateAccountSettings(w, r)
 		testutil.ExpectStatus(t, w, http.StatusForbidden)
 		testutil.ExpectDetail(t, w, msgNoPermissionToUpdateSettings)
 		if len(svc.setPasswordAuthCalls) != 0 {
@@ -495,7 +495,7 @@ func TestUR51UpdateAccountSettingsHandlerMalformedBody(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-51_UpdateAccountSettingsMalformedBody", func(t *testing.T) {
-		UpdateAccountSettingsHandler(svc)(w, r)
+		NewHandler(svc).UpdateAccountSettings(w, r)
 		testutil.ExpectStatus(t, w, http.StatusBadRequest)
 		testutil.ExpectDetail(t, w, msgInvalidRequestBody)
 	})
@@ -507,7 +507,7 @@ func TestUR52UpdateAccountSettingsHandlerMissingField(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-52_UpdateAccountSettingsMissingField", func(t *testing.T) {
-		UpdateAccountSettingsHandler(svc)(w, r)
+		NewHandler(svc).UpdateAccountSettings(w, r)
 		testutil.ExpectStatus(t, w, http.StatusBadRequest)
 		testutil.ExpectDetail(t, w, msgInvalidRequestBody)
 		if len(svc.setPasswordAuthCalls) != 0 {
@@ -522,7 +522,7 @@ func TestUR53UpdateAccountSettingsHandlerWouldLockAccountMapsTo400(t *testing.T)
 	w := httptest.NewRecorder()
 
 	t.Run("UR-53_UpdateAccountSettingsWouldLockAccountMapsTo400", func(t *testing.T) {
-		UpdateAccountSettingsHandler(svc)(w, r)
+		NewHandler(svc).UpdateAccountSettings(w, r)
 		testutil.ExpectStatus(t, w, http.StatusBadRequest)
 		testutil.ExpectDetail(t, w, msgEnableLoginMethodBeforeDisablingPassword)
 	})
@@ -534,7 +534,7 @@ func TestUR54UpdateAccountSettingsHandlerNoPasswordSetMapsTo400(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-54_UpdateAccountSettingsNoPasswordSetMapsTo400", func(t *testing.T) {
-		UpdateAccountSettingsHandler(svc)(w, r)
+		NewHandler(svc).UpdateAccountSettings(w, r)
 		testutil.ExpectStatus(t, w, http.StatusBadRequest)
 		testutil.ExpectDetail(t, w, msgSetPasswordBeforeEnablingPasswordLogin)
 	})
@@ -546,7 +546,7 @@ func TestUR55UpdateAccountSettingsHandlerUnclassifiedErrorMapsTo500(t *testing.T
 	w := httptest.NewRecorder()
 
 	t.Run("UR-55_UpdateAccountSettingsUnclassifiedErrorMapsTo500", func(t *testing.T) {
-		UpdateAccountSettingsHandler(svc)(w, r)
+		NewHandler(svc).UpdateAccountSettings(w, r)
 		testutil.ExpectStatus(t, w, http.StatusInternalServerError)
 		testutil.ExpectDetail(t, w, msgFailedToUpdateUserSettings)
 	})
@@ -559,7 +559,7 @@ func TestUR57GetUserFromPlatformHandlerServiceErrorMapsTo500(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-57_GetUserFromPlatformServiceErrorMapsTo500", func(t *testing.T) {
-		GetUserFromPlatformHandler(svc)(w, r)
+		NewHandler(svc).GetUserFromPlatform(w, r)
 		testutil.ExpectStatus(t, w, http.StatusInternalServerError)
 		testutil.ExpectDetail(t, w, msgFailedToGetUser)
 	})
@@ -571,7 +571,7 @@ func TestUR58GetUserHandlerNotFoundMapsTo404(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-58_GetUserNotFoundMapsTo404", func(t *testing.T) {
-		GetUserHandler(svc)(w, r)
+		NewHandler(svc).GetUser(w, r)
 		testutil.ExpectStatus(t, w, http.StatusNotFound)
 		testutil.ExpectDetail(t, w, msgUserNotFound)
 	})
@@ -583,7 +583,7 @@ func TestUR59GetUserPermissionsHandlerNotFoundMapsTo404(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-59_GetUserPermissionsNotFoundMapsTo404", func(t *testing.T) {
-		GetUserPermissionsHandler(svc)(w, r)
+		NewHandler(svc).GetUserPermissions(w, r)
 		testutil.ExpectStatus(t, w, http.StatusNotFound)
 		testutil.ExpectDetail(t, w, msgUserNotFound)
 	})
@@ -595,7 +595,7 @@ func TestUR60UpdateUserHandlerNotFoundMapsTo404(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-60_UpdateUserNotFoundMapsTo404", func(t *testing.T) {
-		UpdateUserHandler(svc)(w, r)
+		NewHandler(svc).UpdateUser(w, r)
 		testutil.ExpectStatus(t, w, http.StatusNotFound)
 		testutil.ExpectDetail(t, w, msgUserNotFound)
 	})
@@ -607,7 +607,7 @@ func TestUR61UpdateUserHandlerEmailExistsMapsTo409(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-61_UpdateUserEmailExistsMapsTo409", func(t *testing.T) {
-		UpdateUserHandler(svc)(w, r)
+		NewHandler(svc).UpdateUser(w, r)
 		testutil.ExpectStatus(t, w, http.StatusConflict)
 		testutil.ExpectDetail(t, w, msgEmailAlreadyExists)
 	})
@@ -619,7 +619,7 @@ func TestUR62UpdateUserHandlerUsernameExistsMapsTo409(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-62_UpdateUserUsernameExistsMapsTo409", func(t *testing.T) {
-		UpdateUserHandler(svc)(w, r)
+		NewHandler(svc).UpdateUser(w, r)
 		testutil.ExpectStatus(t, w, http.StatusConflict)
 		testutil.ExpectDetail(t, w, msgUsernameAlreadyExists)
 	})
@@ -632,7 +632,7 @@ func TestUR63UpdateUserFromPlatformHandlerNotFoundMapsTo404(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-63_UpdateUserFromPlatformNotFoundMapsTo404", func(t *testing.T) {
-		UpdateUserFromPlatformHandler(svc)(w, r)
+		NewHandler(svc).UpdateUserFromPlatform(w, r)
 		testutil.ExpectStatus(t, w, http.StatusNotFound)
 		testutil.ExpectDetail(t, w, msgUserNotFound)
 	})
@@ -645,7 +645,7 @@ func TestUR64UpdateUserFromPlatformHandlerEmailExistsMapsTo409(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-64_UpdateUserFromPlatformEmailExistsMapsTo409", func(t *testing.T) {
-		UpdateUserFromPlatformHandler(svc)(w, r)
+		NewHandler(svc).UpdateUserFromPlatform(w, r)
 		testutil.ExpectStatus(t, w, http.StatusConflict)
 		testutil.ExpectDetail(t, w, msgEmailAlreadyExists)
 	})
@@ -658,7 +658,7 @@ func TestUR65UpdateUserFromPlatformHandlerUsernameExistsMapsTo409(t *testing.T) 
 	w := httptest.NewRecorder()
 
 	t.Run("UR-65_UpdateUserFromPlatformUsernameExistsMapsTo409", func(t *testing.T) {
-		UpdateUserFromPlatformHandler(svc)(w, r)
+		NewHandler(svc).UpdateUserFromPlatform(w, r)
 		testutil.ExpectStatus(t, w, http.StatusConflict)
 		testutil.ExpectDetail(t, w, msgUsernameAlreadyExists)
 	})
@@ -670,7 +670,7 @@ func TestUR66GetAccountSettingsHandlerNotFoundMapsTo404(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-66_GetAccountSettingsNotFoundMapsTo404", func(t *testing.T) {
-		GetAccountSettingsHandler(svc)(w, r)
+		NewHandler(svc).GetAccountSettings(w, r)
 		testutil.ExpectStatus(t, w, http.StatusNotFound)
 		testutil.ExpectDetail(t, w, msgUserNotFound)
 	})
@@ -682,7 +682,7 @@ func TestUR67UpdateAccountSettingsHandlerNotFoundMapsTo404(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("UR-67_UpdateAccountSettingsNotFoundMapsTo404", func(t *testing.T) {
-		UpdateAccountSettingsHandler(svc)(w, r)
+		NewHandler(svc).UpdateAccountSettings(w, r)
 		testutil.ExpectStatus(t, w, http.StatusNotFound)
 		testutil.ExpectDetail(t, w, msgUserNotFound)
 	})
@@ -702,7 +702,7 @@ func TestUR68to71UpdateUserRoleIDFailures(t *testing.T) {
 			svc := &stubService{updateUserErr: c.err}
 			r := authtest.NewSessionRequest(http.MethodPatch, authtest.AdminUsersSession("admin1"), "u1", "", `{"roles":["x"]}`)
 			w := httptest.NewRecorder()
-			UpdateUserHandler(svc)(w, r)
+			NewHandler(svc).UpdateUser(w, r)
 			testutil.ExpectStatus(t, w, http.StatusBadRequest)
 			testutil.ExpectDetail(t, w, c.msg)
 		})
@@ -721,7 +721,7 @@ func TestUR68to71UpdateUserRoleIDFailures(t *testing.T) {
 			r := authtest.NewSessionRequest(http.MethodPut, authtest.AdminUsersSession("admin1"), "", "discord", `{"id":"1"}`)
 			r.SetPathValue("platform_id", "12345")
 			w := httptest.NewRecorder()
-			UpdateUserFromPlatformHandler(svc)(w, r)
+			NewHandler(svc).UpdateUserFromPlatform(w, r)
 			testutil.ExpectStatus(t, w, http.StatusBadRequest)
 			testutil.ExpectDetail(t, w, c.msg)
 		})
@@ -734,7 +734,7 @@ func TestUR72to73UpdateUserRespondsWithTheStoredAccount(t *testing.T) {
 		r := authtest.NewSessionRequest(http.MethodPatch, authtest.AdminUsersSession("admin1"), "u1", "", `{"username":"newname"}`)
 		w := httptest.NewRecorder()
 
-		UpdateUserHandler(svc)(w, r)
+		NewHandler(svc).UpdateUser(w, r)
 
 		testutil.ExpectStatus(t, w, http.StatusInternalServerError)
 		testutil.ExpectDetail(t, w, msgFailedToUpdateUser)
@@ -754,7 +754,7 @@ func TestUR74to82ListUsersHandler(t *testing.T) {
 		svc := &stubService{listed: []*User{{UserID: "u1", Username: "one", Roles: []string{"7"}}, {UserID: "u2", Username: "two", Roles: []string{}}}}
 		w := httptest.NewRecorder()
 
-		ListUsersHandler(svc)(w, newListUsersRequest(authtest.AdminUsersSession("admin1"), ""))
+		NewHandler(svc).ListUsers(w, newListUsersRequest(authtest.AdminUsersSession("admin1"), ""))
 
 		testutil.ExpectStatus(t, w, http.StatusOK)
 		if svc.listCalls != 1 || svc.listLimit != 50 || svc.listOffset != 0 {
@@ -773,7 +773,7 @@ func TestUR74to82ListUsersHandler(t *testing.T) {
 		svc := &stubService{}
 		w := httptest.NewRecorder()
 
-		ListUsersHandler(svc)(w, newListUsersRequest(authtest.AdminUsersSession("admin1"), "?limit=200&offset=40"))
+		NewHandler(svc).ListUsers(w, newListUsersRequest(authtest.AdminUsersSession("admin1"), "?limit=200&offset=40"))
 
 		testutil.ExpectStatus(t, w, http.StatusOK)
 		if svc.listLimit != 200 || svc.listOffset != 40 {
@@ -785,7 +785,7 @@ func TestUR74to82ListUsersHandler(t *testing.T) {
 		svc := &stubService{listed: []*User{{UserID: "u1"}}}
 		w := httptest.NewRecorder()
 
-		ListUsersHandler(svc)(w, newListUsersRequest(authtest.SelfSession("u1"), ""))
+		NewHandler(svc).ListUsers(w, newListUsersRequest(authtest.SelfSession("u1"), ""))
 
 		testutil.ExpectStatus(t, w, http.StatusForbidden)
 		testutil.ExpectDetail(t, w, msgNoPermissionToGetUsers)
@@ -799,7 +799,7 @@ func TestUR74to82ListUsersHandler(t *testing.T) {
 			svc := &stubService{}
 			w := httptest.NewRecorder()
 
-			ListUsersHandler(svc)(w, newListUsersRequest(authtest.AdminUsersSession("admin1"), query))
+			NewHandler(svc).ListUsers(w, newListUsersRequest(authtest.AdminUsersSession("admin1"), query))
 
 			testutil.ExpectStatus(t, w, http.StatusBadRequest)
 			testutil.ExpectDetail(t, w, msgInvalidLimit)
@@ -814,7 +814,7 @@ func TestUR74to82ListUsersHandler(t *testing.T) {
 			svc := &stubService{}
 			w := httptest.NewRecorder()
 
-			ListUsersHandler(svc)(w, newListUsersRequest(authtest.AdminUsersSession("admin1"), query))
+			NewHandler(svc).ListUsers(w, newListUsersRequest(authtest.AdminUsersSession("admin1"), query))
 
 			testutil.ExpectStatus(t, w, http.StatusBadRequest)
 			testutil.ExpectDetail(t, w, msgInvalidOffset)
@@ -828,7 +828,7 @@ func TestUR74to82ListUsersHandler(t *testing.T) {
 		svc := &stubService{}
 		w := httptest.NewRecorder()
 
-		ListUsersHandler(svc)(w, newListUsersRequest(authtest.AdminUsersSession("admin1"), "?offset=5000"))
+		NewHandler(svc).ListUsers(w, newListUsersRequest(authtest.AdminUsersSession("admin1"), "?offset=5000"))
 
 		testutil.ExpectStatus(t, w, http.StatusOK)
 		if strings.TrimSpace(w.Body.String()) != "[]" {
@@ -840,7 +840,7 @@ func TestUR74to82ListUsersHandler(t *testing.T) {
 		svc := &stubService{listErr: testutil.ErrDBDown}
 		w := httptest.NewRecorder()
 
-		ListUsersHandler(svc)(w, newListUsersRequest(authtest.AdminUsersSession("admin1"), ""))
+		NewHandler(svc).ListUsers(w, newListUsersRequest(authtest.AdminUsersSession("admin1"), ""))
 
 		testutil.ExpectStatus(t, w, http.StatusInternalServerError)
 		testutil.ExpectDetail(t, w, msgFailedToListUsers)
@@ -850,7 +850,7 @@ func TestUR74to82ListUsersHandler(t *testing.T) {
 		svc := &stubService{}
 		w := httptest.NewRecorder()
 
-		ListUsersHandler(svc)(w, newListUsersRequest(authtest.SelfSession("u1"), "?limit=0&offset=-1"))
+		NewHandler(svc).ListUsers(w, newListUsersRequest(authtest.SelfSession("u1"), "?limit=0&offset=-1"))
 
 		testutil.ExpectStatus(t, w, http.StatusForbidden)
 		testutil.ExpectDetail(t, w, msgNoPermissionToGetUsers)
@@ -860,7 +860,7 @@ func TestUR74to82ListUsersHandler(t *testing.T) {
 		svc := &stubService{}
 		w := httptest.NewRecorder()
 
-		ListUsersHandler(svc)(w, newListUsersRequest(authtest.AdminUsersSession("admin1"), "?limit=1"))
+		NewHandler(svc).ListUsers(w, newListUsersRequest(authtest.AdminUsersSession("admin1"), "?limit=1"))
 
 		testutil.ExpectStatus(t, w, http.StatusOK)
 		if svc.listCalls != 1 || svc.listLimit != 1 {
