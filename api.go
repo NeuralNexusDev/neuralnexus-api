@@ -179,9 +179,10 @@ func ApplyRoutes(
 	mux.HandleFunc("GET /api/v1/mc/texture/{hash}", mcHandler.GetTexture)
 
 	// --------------- Minecraft Status ---------------
-	mux.Handle("GET /api/v1/mcstatus/{host}", mcs.ServerStatusHandler(mcsService))
-	mux.Handle("GET /api/v1/mcstatus/icon/{host}", mcs.IconHandler(mcsService))
-	mux.Handle("GET /api/v1/mcstatus/simple/{host}", mcs.SimpleStatusHandler(mcsService))
+	mcsHandler := mcs.NewHandler(mcsService)
+	mux.HandleFunc("GET /api/v1/mcstatus/{host}", mcsHandler.ServerStatus)
+	mux.HandleFunc("GET /api/v1/mcstatus/icon/{host}", mcsHandler.Icon)
+	mux.HandleFunc("GET /api/v1/mcstatus/simple/{host}", mcsHandler.SimpleStatus)
 
 	// --------------- Pet Pictures ---------------
 	petStore := petpics.NewStore(database.GetDB(cfg.Database.DBURL2 + "/pet_pictures"))
