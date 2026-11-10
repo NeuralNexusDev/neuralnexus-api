@@ -113,14 +113,15 @@ func ApplyRoutes(
 
 	// --------------- Bee Name Generator ---------------
 	bngStore := bng.NewStore(database.GetDB(cfg.Database.DBURL + "/bee_name_generator"))
+	bngHandler := bng.NewHandler(bngStore)
 
-	mux.Handle("GET /api/v1/bee-name-generator/name", bng.GetBeeNameHandler(bngStore))
-	mux.Handle("POST /api/v1/bee-name-generator/name/{name}", mwAuth(bng.UploadBeeNameHandler(bngStore)))
-	mux.Handle("DELETE /api/v1/bee-name-generator/name/{name}", mwAuth(bng.DeleteBeeNameHandler(bngStore)))
-	mux.Handle("POST /api/v1/bee-name-generator/suggestion/{name}", bng.SubmitBeeNameHandler(bngStore))
-	mux.Handle("GET /api/v1/bee-name-generator/suggestion/{amount}", mwAuth(bng.GetBeeNameSuggestionsHandler(bngStore)))
-	mux.Handle("PUT /api/v1/bee-name-generator/suggestion/{name}", mwAuth(bng.AcceptBeeNameSuggestionHandler(bngStore)))
-	mux.Handle("DELETE /api/v1/bee-name-generator/suggestion/{name}", mwAuth(bng.RejectBeeNameSuggestionHandler(bngStore)))
+	mux.HandleFunc("GET /api/v1/bee-name-generator/name", bngHandler.GetBeeName)
+	mux.Handle("POST /api/v1/bee-name-generator/name/{name}", mwAuth(http.HandlerFunc(bngHandler.UploadBeeName)))
+	mux.Handle("DELETE /api/v1/bee-name-generator/name/{name}", mwAuth(http.HandlerFunc(bngHandler.DeleteBeeName)))
+	mux.HandleFunc("POST /api/v1/bee-name-generator/suggestion/{name}", bngHandler.SubmitBeeName)
+	mux.Handle("GET /api/v1/bee-name-generator/suggestion/{amount}", mwAuth(http.HandlerFunc(bngHandler.GetBeeNameSuggestions)))
+	mux.Handle("PUT /api/v1/bee-name-generator/suggestion/{name}", mwAuth(http.HandlerFunc(bngHandler.AcceptBeeNameSuggestion)))
+	mux.Handle("DELETE /api/v1/bee-name-generator/suggestion/{name}", mwAuth(http.HandlerFunc(bngHandler.RejectBeeNameSuggestion)))
 
 	// --------------- Data Store ---------------
 	dsStore := ds.NewStore(nndb)

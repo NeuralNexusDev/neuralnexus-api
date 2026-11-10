@@ -66,7 +66,7 @@ func bngRequest(t *testing.T, method, target string, pathValues map[string]strin
 func TestHD01to02_GetBeeNameHandler(t *testing.T) {
 	t.Run("BNH-01_OK", func(t *testing.T) {
 		s := &bngMockStore{getBeeName: func() (string, error) { return "Buzzy", nil }}
-		h := GetBeeNameHandler(s)
+		h := NewHandler(s).GetBeeName
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodGet, "/", nil, nil))
 		testutil.ExpectStatus(t, w, http.StatusOK)
@@ -78,7 +78,7 @@ func TestHD01to02_GetBeeNameHandler(t *testing.T) {
 
 	t.Run("BNH-02_StoreError", func(t *testing.T) {
 		s := &bngMockStore{getBeeName: func() (string, error) { return "", testutil.ErrBoom }}
-		h := GetBeeNameHandler(s)
+		h := NewHandler(s).GetBeeName
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodGet, "/", nil, nil))
 		testutil.ExpectStatus(t, w, http.StatusInternalServerError)
@@ -88,7 +88,7 @@ func TestHD01to02_GetBeeNameHandler(t *testing.T) {
 
 func TestHD03to06_UploadBeeNameHandler(t *testing.T) {
 	t.Run("BNH-03_Forbidden", func(t *testing.T) {
-		h := UploadBeeNameHandler(&bngMockStore{})
+		h := NewHandler(&bngMockStore{}).UploadBeeName
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodPut, "/Buzzy", map[string]string{"name": "Buzzy"}, bngUnauthorizedSession))
 		testutil.ExpectStatus(t, w, http.StatusForbidden)
@@ -97,7 +97,7 @@ func TestHD03to06_UploadBeeNameHandler(t *testing.T) {
 
 	t.Run("BNH-05_OK", func(t *testing.T) {
 		s := &bngMockStore{uploadBeeName: func(name string) (string, error) { return name, nil }}
-		h := UploadBeeNameHandler(s)
+		h := NewHandler(s).UploadBeeName
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodPut, "/Buzzy", map[string]string{"name": "Buzzy"}, bngAuthorizedSession))
 		testutil.ExpectStatus(t, w, http.StatusOK)
@@ -109,7 +109,7 @@ func TestHD03to06_UploadBeeNameHandler(t *testing.T) {
 
 	t.Run("BNH-06_StoreError", func(t *testing.T) {
 		s := &bngMockStore{uploadBeeName: func(string) (string, error) { return "", testutil.ErrBoom }}
-		h := UploadBeeNameHandler(s)
+		h := NewHandler(s).UploadBeeName
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodPut, "/Buzzy", map[string]string{"name": "Buzzy"}, bngAuthorizedSession))
 		testutil.ExpectStatus(t, w, http.StatusInternalServerError)
@@ -131,7 +131,7 @@ func TestHD03to06_UploadBeeNameHandler(t *testing.T) {
 
 func TestHD07to10_DeleteBeeNameHandler(t *testing.T) {
 	t.Run("BNH-07_Forbidden", func(t *testing.T) {
-		h := DeleteBeeNameHandler(&bngMockStore{})
+		h := NewHandler(&bngMockStore{}).DeleteBeeName
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodDelete, "/Buzzy", map[string]string{"name": "Buzzy"}, bngUnauthorizedSession))
 		testutil.ExpectStatus(t, w, http.StatusForbidden)
@@ -140,7 +140,7 @@ func TestHD07to10_DeleteBeeNameHandler(t *testing.T) {
 
 	t.Run("BNH-09_OK", func(t *testing.T) {
 		s := &bngMockStore{deleteBeeName: func(name string) (string, error) { return name, nil }}
-		h := DeleteBeeNameHandler(s)
+		h := NewHandler(s).DeleteBeeName
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodDelete, "/Buzzy", map[string]string{"name": "Buzzy"}, bngAuthorizedSession))
 		testutil.ExpectStatus(t, w, http.StatusNoContent)
@@ -148,7 +148,7 @@ func TestHD07to10_DeleteBeeNameHandler(t *testing.T) {
 
 	t.Run("BNH-10_StoreError", func(t *testing.T) {
 		s := &bngMockStore{deleteBeeName: func(string) (string, error) { return "", testutil.ErrBoom }}
-		h := DeleteBeeNameHandler(s)
+		h := NewHandler(s).DeleteBeeName
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodDelete, "/Buzzy", map[string]string{"name": "Buzzy"}, bngAuthorizedSession))
 		testutil.ExpectStatus(t, w, http.StatusInternalServerError)
@@ -158,7 +158,7 @@ func TestHD07to10_DeleteBeeNameHandler(t *testing.T) {
 	t.Run("BNH-36_DeleteAbsentName404", func(t *testing.T) {
 		s := &bngMockStore{deleteBeeName: func(string) (string, error) { return "", ErrBeeNameNotFound }}
 		w := httptest.NewRecorder()
-		DeleteBeeNameHandler(s)(w, bngRequest(t, http.MethodDelete, "/Buzzy", map[string]string{"name": "Buzzy"}, bngAuthorizedSession))
+		NewHandler(s).DeleteBeeName(w, bngRequest(t, http.MethodDelete, "/Buzzy", map[string]string{"name": "Buzzy"}, bngAuthorizedSession))
 		testutil.ExpectStatus(t, w, http.StatusNotFound)
 		testutil.ExpectDetail(t, w, "Bee name not found")
 	})
@@ -168,7 +168,7 @@ func TestHD11to13_SubmitBeeNameHandler(t *testing.T) {
 
 	t.Run("BNH-12_OK", func(t *testing.T) {
 		s := &bngMockStore{submitBeeName: func(name string) (string, error) { return name, nil }}
-		h := SubmitBeeNameHandler(s)
+		h := NewHandler(s).SubmitBeeName
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodPost, "/Buzzy", map[string]string{"name": "Buzzy"}, nil))
 		testutil.ExpectStatus(t, w, http.StatusOK)
@@ -180,7 +180,7 @@ func TestHD11to13_SubmitBeeNameHandler(t *testing.T) {
 
 	t.Run("BNH-13_StoreError", func(t *testing.T) {
 		s := &bngMockStore{submitBeeName: func(string) (string, error) { return "", testutil.ErrBoom }}
-		h := SubmitBeeNameHandler(s)
+		h := NewHandler(s).SubmitBeeName
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodPost, "/Buzzy", map[string]string{"name": "Buzzy"}, nil))
 		testutil.ExpectStatus(t, w, http.StatusInternalServerError)
@@ -190,7 +190,7 @@ func TestHD11to13_SubmitBeeNameHandler(t *testing.T) {
 
 func TestHD14to19_GetBeeNameSuggestionsHandler(t *testing.T) {
 	t.Run("BNH-14_Forbidden", func(t *testing.T) {
-		h := GetBeeNameSuggestionsHandler(&bngMockStore{})
+		h := NewHandler(&bngMockStore{}).GetBeeNameSuggestions
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodGet, "/5", map[string]string{"amount": "5"}, bngUnauthorizedSession))
 		testutil.ExpectStatus(t, w, http.StatusForbidden)
@@ -198,7 +198,7 @@ func TestHD14to19_GetBeeNameSuggestionsHandler(t *testing.T) {
 	})
 
 	t.Run("BNH-17_NonNumericAmount", func(t *testing.T) {
-		h := GetBeeNameSuggestionsHandler(&bngMockStore{})
+		h := NewHandler(&bngMockStore{}).GetBeeNameSuggestions
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodGet, "/abc", map[string]string{"amount": "abc"}, bngAuthorizedSession))
 		testutil.ExpectStatus(t, w, http.StatusBadRequest)
@@ -211,7 +211,7 @@ func TestHD14to19_GetBeeNameSuggestionsHandler(t *testing.T) {
 			gotAmount = amount
 			return []string{"a", "b"}, nil
 		}}
-		h := GetBeeNameSuggestionsHandler(s)
+		h := NewHandler(s).GetBeeNameSuggestions
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodGet, "/5", map[string]string{"amount": "5"}, bngAuthorizedSession))
 		testutil.ExpectStatus(t, w, http.StatusOK)
@@ -226,7 +226,7 @@ func TestHD14to19_GetBeeNameSuggestionsHandler(t *testing.T) {
 
 	t.Run("BNH-19_StoreError", func(t *testing.T) {
 		s := &bngMockStore{getBeeNameSuggestions: func(int64) ([]string, error) { return nil, testutil.ErrBoom }}
-		h := GetBeeNameSuggestionsHandler(s)
+		h := NewHandler(s).GetBeeNameSuggestions
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodGet, "/5", map[string]string{"amount": "5"}, bngAuthorizedSession))
 		testutil.ExpectStatus(t, w, http.StatusInternalServerError)
@@ -237,7 +237,7 @@ func TestHD14to19_GetBeeNameSuggestionsHandler(t *testing.T) {
 		called := false
 		s := &bngMockStore{getBeeNameSuggestions: func(int64) ([]string, error) { called = true; return nil, nil }}
 		w := httptest.NewRecorder()
-		GetBeeNameSuggestionsHandler(s)(w, bngRequest(t, http.MethodGet, "/-1", map[string]string{"amount": "-1"}, bngAuthorizedSession))
+		NewHandler(s).GetBeeNameSuggestions(w, bngRequest(t, http.MethodGet, "/-1", map[string]string{"amount": "-1"}, bngAuthorizedSession))
 		testutil.ExpectStatus(t, w, http.StatusBadRequest)
 		testutil.ExpectDetail(t, w, msgInvalidAmountProvided)
 		if called {
@@ -248,7 +248,7 @@ func TestHD14to19_GetBeeNameSuggestionsHandler(t *testing.T) {
 
 func TestHD20to23_AcceptBeeNameSuggestionHandler(t *testing.T) {
 	t.Run("BNH-20_Forbidden", func(t *testing.T) {
-		h := AcceptBeeNameSuggestionHandler(&bngMockStore{})
+		h := NewHandler(&bngMockStore{}).AcceptBeeNameSuggestion
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodPost, "/Buzzy", map[string]string{"name": "Buzzy"}, bngUnauthorizedSession))
 		testutil.ExpectStatus(t, w, http.StatusForbidden)
@@ -257,7 +257,7 @@ func TestHD20to23_AcceptBeeNameSuggestionHandler(t *testing.T) {
 
 	t.Run("BNH-22_OK", func(t *testing.T) {
 		s := &bngMockStore{acceptBeeNameSuggestion: func(name string) (string, error) { return name, nil }}
-		h := AcceptBeeNameSuggestionHandler(s)
+		h := NewHandler(s).AcceptBeeNameSuggestion
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodPost, "/Buzzy", map[string]string{"name": "Buzzy"}, bngAuthorizedSession))
 		testutil.ExpectStatus(t, w, http.StatusOK)
@@ -269,7 +269,7 @@ func TestHD20to23_AcceptBeeNameSuggestionHandler(t *testing.T) {
 
 	t.Run("BNH-23_StoreError", func(t *testing.T) {
 		s := &bngMockStore{acceptBeeNameSuggestion: func(string) (string, error) { return "", testutil.ErrBoom }}
-		h := AcceptBeeNameSuggestionHandler(s)
+		h := NewHandler(s).AcceptBeeNameSuggestion
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodPost, "/Buzzy", map[string]string{"name": "Buzzy"}, bngAuthorizedSession))
 		testutil.ExpectStatus(t, w, http.StatusInternalServerError)
@@ -279,7 +279,7 @@ func TestHD20to23_AcceptBeeNameSuggestionHandler(t *testing.T) {
 	t.Run("BNH-38_AcceptNeverSuggestedName404", func(t *testing.T) {
 		s := &bngMockStore{acceptBeeNameSuggestion: func(string) (string, error) { return "", ErrBeeNameSuggestionNotFound }}
 		w := httptest.NewRecorder()
-		AcceptBeeNameSuggestionHandler(s)(w, bngRequest(t, http.MethodPost, "/Buzzy", map[string]string{"name": "Buzzy"}, bngAuthorizedSession))
+		NewHandler(s).AcceptBeeNameSuggestion(w, bngRequest(t, http.MethodPost, "/Buzzy", map[string]string{"name": "Buzzy"}, bngAuthorizedSession))
 		testutil.ExpectStatus(t, w, http.StatusNotFound)
 		testutil.ExpectDetail(t, w, "Bee name suggestion not found")
 	})
@@ -287,7 +287,7 @@ func TestHD20to23_AcceptBeeNameSuggestionHandler(t *testing.T) {
 
 func TestHD24to27_RejectBeeNameSuggestionHandler(t *testing.T) {
 	t.Run("BNH-24_Forbidden", func(t *testing.T) {
-		h := RejectBeeNameSuggestionHandler(&bngMockStore{})
+		h := NewHandler(&bngMockStore{}).RejectBeeNameSuggestion
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodPost, "/Buzzy", map[string]string{"name": "Buzzy"}, bngUnauthorizedSession))
 		testutil.ExpectStatus(t, w, http.StatusForbidden)
@@ -296,7 +296,7 @@ func TestHD24to27_RejectBeeNameSuggestionHandler(t *testing.T) {
 
 	t.Run("BNH-26_OK", func(t *testing.T) {
 		s := &bngMockStore{rejectBeeNameSuggestion: func(name string) (string, error) { return name, nil }}
-		h := RejectBeeNameSuggestionHandler(s)
+		h := NewHandler(s).RejectBeeNameSuggestion
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodPost, "/Buzzy", map[string]string{"name": "Buzzy"}, bngAuthorizedSession))
 		testutil.ExpectStatus(t, w, http.StatusNoContent)
@@ -304,7 +304,7 @@ func TestHD24to27_RejectBeeNameSuggestionHandler(t *testing.T) {
 
 	t.Run("BNH-27_StoreError", func(t *testing.T) {
 		s := &bngMockStore{rejectBeeNameSuggestion: func(string) (string, error) { return "", testutil.ErrBoom }}
-		h := RejectBeeNameSuggestionHandler(s)
+		h := NewHandler(s).RejectBeeNameSuggestion
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodPost, "/Buzzy", map[string]string{"name": "Buzzy"}, bngAuthorizedSession))
 		testutil.ExpectStatus(t, w, http.StatusInternalServerError)
@@ -314,7 +314,7 @@ func TestHD24to27_RejectBeeNameSuggestionHandler(t *testing.T) {
 	t.Run("BNH-37_RejectAbsentSuggestion404", func(t *testing.T) {
 		s := &bngMockStore{rejectBeeNameSuggestion: func(string) (string, error) { return "", ErrBeeNameSuggestionNotFound }}
 		w := httptest.NewRecorder()
-		RejectBeeNameSuggestionHandler(s)(w, bngRequest(t, http.MethodDelete, "/Buzzy", map[string]string{"name": "Buzzy"}, bngAuthorizedSession))
+		NewHandler(s).RejectBeeNameSuggestion(w, bngRequest(t, http.MethodDelete, "/Buzzy", map[string]string{"name": "Buzzy"}, bngAuthorizedSession))
 		testutil.ExpectStatus(t, w, http.StatusNotFound)
 		testutil.ExpectDetail(t, w, "Bee name suggestion not found")
 	})
@@ -323,7 +323,7 @@ func TestHD24to27_RejectBeeNameSuggestionHandler(t *testing.T) {
 func TestHD28to30_StoreConflictMapping(t *testing.T) {
 	t.Run("BNH-28_UploadBeeNameExistsConflict", func(t *testing.T) {
 		s := &bngMockStore{uploadBeeName: func(string) (string, error) { return "", ErrBeeNameExists }}
-		h := UploadBeeNameHandler(s)
+		h := NewHandler(s).UploadBeeName
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodPut, "/Buzzy", map[string]string{"name": "Buzzy"}, bngAuthorizedSession))
 		testutil.ExpectStatus(t, w, http.StatusConflict)
@@ -332,7 +332,7 @@ func TestHD28to30_StoreConflictMapping(t *testing.T) {
 
 	t.Run("BNH-29_SubmitBeeNameSuggestionExistsConflict", func(t *testing.T) {
 		s := &bngMockStore{submitBeeName: func(string) (string, error) { return "", ErrBeeNameSuggestionExists }}
-		h := SubmitBeeNameHandler(s)
+		h := NewHandler(s).SubmitBeeName
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodPost, "/Buzzy", map[string]string{"name": "Buzzy"}, nil))
 		testutil.ExpectStatus(t, w, http.StatusConflict)
@@ -341,7 +341,7 @@ func TestHD28to30_StoreConflictMapping(t *testing.T) {
 
 	t.Run("BNH-30_AcceptBeeNameSuggestionExistsConflict", func(t *testing.T) {
 		s := &bngMockStore{acceptBeeNameSuggestion: func(string) (string, error) { return "", ErrBeeNameExists }}
-		h := AcceptBeeNameSuggestionHandler(s)
+		h := NewHandler(s).AcceptBeeNameSuggestion
 		w := httptest.NewRecorder()
 		h(w, bngRequest(t, http.MethodPost, "/Buzzy", map[string]string{"name": "Buzzy"}, bngAuthorizedSession))
 		testutil.ExpectStatus(t, w, http.StatusConflict)
@@ -355,13 +355,13 @@ func bngRequireInvalidNameEverywhere(t *testing.T, badName string) {
 		name    string
 		method  string
 		session *session.Session
-		handler func(BNGStore) http.HandlerFunc
+		handler func(Handler, http.ResponseWriter, *http.Request)
 	}{
-		{"Upload", http.MethodPut, bngAuthorizedSession, UploadBeeNameHandler},
-		{"Delete", http.MethodDelete, bngAuthorizedSession, DeleteBeeNameHandler},
-		{"Submit", http.MethodPost, nil, SubmitBeeNameHandler},
-		{"Accept", http.MethodPost, bngAuthorizedSession, AcceptBeeNameSuggestionHandler},
-		{"Reject", http.MethodDelete, bngAuthorizedSession, RejectBeeNameSuggestionHandler},
+		{"Upload", http.MethodPut, bngAuthorizedSession, Handler.UploadBeeName},
+		{"Delete", http.MethodDelete, bngAuthorizedSession, Handler.DeleteBeeName},
+		{"Submit", http.MethodPost, nil, Handler.SubmitBeeName},
+		{"Accept", http.MethodPost, bngAuthorizedSession, Handler.AcceptBeeNameSuggestion},
+		{"Reject", http.MethodDelete, bngAuthorizedSession, Handler.RejectBeeNameSuggestion},
 	}
 	for _, nh := range handlers {
 		t.Run(nh.name, func(t *testing.T) {
@@ -369,7 +369,7 @@ func bngRequireInvalidNameEverywhere(t *testing.T, badName string) {
 			mark := func(string) (string, error) { called = true; return "", nil }
 			s := &bngMockStore{uploadBeeName: mark, deleteBeeName: mark, submitBeeName: mark, acceptBeeNameSuggestion: mark, rejectBeeNameSuggestion: mark}
 			w := httptest.NewRecorder()
-			nh.handler(s)(w, bngRequest(t, nh.method, "/x", map[string]string{"name": badName}, nh.session))
+			nh.handler(NewHandler(s), w, bngRequest(t, nh.method, "/x", map[string]string{"name": badName}, nh.session))
 			testutil.ExpectStatus(t, w, http.StatusBadRequest)
 			testutil.ExpectDetail(t, w, msgInvalidName)
 			if called {
