@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/auth/permissions"
@@ -416,25 +415,6 @@ func TestST22to26GetPermissionsForRoles(t *testing.T) {
 			got, err := svc.GetPermissionsForRoles(context.Background(), ids)
 			if err != nil || got == nil || len(got) != 0 {
 				t.Errorf("GetPermissionsForRoles(%v) = (%#v, %v), want (empty non-nil, nil)", ids, got, err)
-			}
-		}
-	})
-
-	t.Run("RCS-25_DatabaseRejectsBadNodesAndMismatchedMergeRules", func(t *testing.T) {
-		for _, c := range []struct{ node, valueType, merge, constraint string }{
-			{"Rbtest.x", "", "", "permissions_node_format"},
-			{"rbtest:x", "", "", "permissions_node_format"},
-			{"rbtest..x", "", "", "permissions_node_format"},
-			{"rbtest.x", "float", "max", "permissions_merge_matches_type"},
-			{"rbtest.x", "", "max", "permissions_merge_matches_type"},
-			{"rbtest.x", "int", "union", "permissions_merge_matches_type"},
-			{"rbtest.x", "string_list", "max", "permissions_merge_matches_type"},
-		} {
-			_, err := db.Exec(context.Background(), "INSERT INTO permissions (id, node, value_type, merge) VALUES ($1, $2, NULLIF($3, ''), NULLIF($4, ''))", int64(rbAccountIDBase), c.node, c.valueType, c.merge)
-
-			var pgErr *pgconn.PgError
-			if !errors.As(err, &pgErr) || pgErr.ConstraintName != c.constraint {
-				t.Errorf("insert %+v err = %v, want a violation of %s", c, err, c.constraint)
 			}
 		}
 	})

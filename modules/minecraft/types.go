@@ -305,11 +305,6 @@ type GeyserSkin struct {
 	LastSeen         int64  `json:"last_update"`
 }
 
-// IsStale returns true if the skin's last_seen is older than the staleness threshold
-func (s *GeyserSkin) IsStale() bool {
-	return time.Now().UnixMilli()-s.LastSeen > stalenessThreshold.Milliseconds()
-}
-
 func (s *GeyserSkin) FromTexturesValue(ctx context.Context, t *TexturesValue) error {
 	if t == nil || t.Textures.SKIN == nil {
 		return ErrSkinNotFound

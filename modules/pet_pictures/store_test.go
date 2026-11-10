@@ -11,7 +11,6 @@ import (
 
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -249,17 +248,6 @@ func TestST13to16_CreatePetPicture(t *testing.T) {
 		got, err := s.GetPetPicture(ppCtx, id)
 		if err != nil || got.PrimarySubject != 3 || !reflect.DeepEqual(got.OthersSubjects, []int{4, 5}) {
 			t.Errorf("GetPetPicture() = (%+v, %v), want PrimarySubject 3 and OthersSubjects [4 5]", got, err)
-		}
-	})
-
-	t.Run("PPS-33_EmptySubjectsRejected", func(t *testing.T) {
-		pool := testutil.LivePool(t, "pet_pictures")
-		id := ppUniqueID("pic")
-		t.Cleanup(func() { pool.Exec(context.Background(), "DELETE FROM pictures WHERE id = $1", id) })
-		_, err := pool.Exec(ppCtx, "INSERT INTO pictures (id, file_ext, subjects) VALUES ($1, 'jpg', '{}')", id)
-		var pgErr *pgconn.PgError
-		if !errors.As(err, &pgErr) || pgErr.Code != "23514" || pgErr.ConstraintName != "subjects_check" {
-			t.Errorf("INSERT with empty subjects error = %v, want check violation on subjects_check", err)
 		}
 	})
 

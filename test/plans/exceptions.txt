@@ -1,12 +1,13 @@
+ACT-01: constructor branch: a given email becomes the account's email; the only test that runs this line of NewAccount, which no production code calls
 ACT-02: constructor branch: an empty email becomes an absent email, the nullable-email rule of the accounts table
 ACT-05: constructor branch: an empty email becomes an absent email, the nullable-email rule of the accounts table
-ACT-07: argon2 key derivation with the pepper: same inputs give the same key, another secret gives another key (owner ruling 2026-11-02: argon2, pepper, salt)
-ACT-08: argon2 key derivation with the pepper: same inputs give the same key, another secret gives another key (owner ruling 2026-11-02: argon2, pepper, salt)
-ACT-09: password hashing with a per-account salt (owner ruling 2026-11-02: argon2, pepper, salt)
-ACT-10: password hashing with a per-account salt (owner ruling 2026-11-02: argon2, pepper, salt)
-ACT-12: validation of a login password against the stored hash and salt (owner ruling 2026-11-02: validation)
-ACT-13: validation of a login password against the stored hash and salt (owner ruling 2026-11-02: validation)
-ACT-14: validation of a login password against the stored hash and salt (owner ruling 2026-11-02: validation)
+ACT-07: argon2 key derivation with the pepper: same inputs give the same key, another secret gives another key (kept by the approved test-prune graph: pure logic with real weight; argon2, pepper, salt)
+ACT-08: argon2 key derivation with the pepper: same inputs give the same key, another secret gives another key (kept by the approved test-prune graph: pure logic with real weight; argon2, pepper, salt)
+ACT-09: password hashing with a per-account salt (kept by the approved test-prune graph: pure logic with real weight; argon2, pepper, salt)
+ACT-10: password hashing with a per-account salt (kept by the approved test-prune graph: pure logic with real weight; argon2, pepper, salt)
+ACT-12: validation of a login password against the stored hash and salt (kept by the approved test-prune graph: pure logic with real weight; validation)
+ACT-13: validation of a login password against the stored hash and salt (kept by the approved test-prune graph: pure logic with real weight; validation)
+ACT-14: validation of a login password against the stored hash and salt (kept by the approved test-prune graph: pure logic with real weight; validation)
 ACT-19: exported method kept by the owner's dead-code ruling of 2026-11-02: the method and its tests stay
 ACT-20: exported method kept by the owner's dead-code ruling of 2026-11-02: the method and its tests stay
 ACT-21: exported method kept by the owner's dead-code ruling of 2026-11-02: the method and its tests stay
@@ -181,21 +182,22 @@ MS-60: outbound client of the Minecraft services API: maps its status codes and 
 MS-04: exported method kept by the owner's dead-code ruling of 2026-11-02: the method and its tests stay
 MS-09: exported method kept by the owner's dead-code ruling of 2026-11-02: the method and its tests stay
 MC-04: exported method kept by the owner's dead-code ruling of 2026-11-02: the method and its tests stay
-RB-01: permission node of the public contract that sessions carry (owner ruling 2026-11-02: TestScopeNodes)
-RB-02: permission node of the public contract that sessions carry (owner ruling 2026-11-02: TestScopeNodes)
-RB-03: permission node of the public contract that sessions carry (owner ruling 2026-11-02: TestScopeNodes)
-RB-04: permission node of the public contract that sessions carry (owner ruling 2026-11-02: TestScopeNodes)
-RB-05: permission node of the public contract that sessions carry (owner ruling 2026-11-02: TestScopeNodes)
-RB-06: permission node of the public contract that sessions carry (owner ruling 2026-11-02: TestScopeNodes)
-RB-07: permission node of the public contract that sessions carry (owner ruling 2026-11-02: TestScopeNodes)
-RB-08: permission node of the public contract that sessions carry (owner ruling 2026-11-02: TestScopeNodes)
-SE-02: permission matching rule of a session (owner ruling 2026-11-02: permission matching)
-SE-03: permission matching rule of a session (owner ruling 2026-11-02: permission matching)
-SE-04: session expiry rule (owner ruling 2026-11-02: expiry)
-SE-05: session expiry rule (owner ruling 2026-11-02: expiry)
-SE-06: session expiry rule (owner ruling 2026-11-02: expiry)
-SE-35: permission value matching rule of a session (owner ruling 2026-11-02: permission matching)
-SE-36: permission value matching rule of a session (owner ruling 2026-11-02: permission matching)
+LKT-26: constructor defaults: a new linked account starts verified with login enabled; the only test that checks the two defaults without goroutine timing, since the concurrent race tests notice a flipped default only some of the time
+RB-01: permission node of the public contract that sessions carry (kept by the approved test-prune graph: pure logic with real weight; TestScopeNodes)
+RB-02: permission node of the public contract that sessions carry (kept by the approved test-prune graph: pure logic with real weight; TestScopeNodes)
+RB-03: permission node of the public contract that sessions carry (kept by the approved test-prune graph: pure logic with real weight; TestScopeNodes)
+RB-04: permission node of the public contract that sessions carry (kept by the approved test-prune graph: pure logic with real weight; TestScopeNodes)
+RB-05: permission node of the public contract that sessions carry (kept by the approved test-prune graph: pure logic with real weight; TestScopeNodes)
+RB-06: permission node of the public contract that sessions carry (kept by the approved test-prune graph: pure logic with real weight; TestScopeNodes)
+RB-07: permission node of the public contract that sessions carry (kept by the approved test-prune graph: pure logic with real weight; TestScopeNodes)
+RB-08: permission node of the public contract that sessions carry (kept by the approved test-prune graph: pure logic with real weight; TestScopeNodes)
+SE-02: permission matching rule of a session (kept by the approved test-prune graph: pure logic with real weight; permission matching)
+SE-03: permission matching rule of a session (kept by the approved test-prune graph: pure logic with real weight; permission matching)
+SE-04: session expiry rule (kept by the approved test-prune graph: pure logic with real weight; expiry)
+SE-05: session expiry rule (kept by the approved test-prune graph: pure logic with real weight; expiry)
+SE-06: session expiry rule (kept by the approved test-prune graph: pure logic with real weight; expiry)
+SE-35: permission value matching rule of a session (kept by the approved test-prune graph: pure logic with real weight; permission matching)
+SE-36: permission value matching rule of a session (kept by the approved test-prune graph: pure logic with real weight; permission matching)
 WEU-01: JSON decoding of the Discord webhook envelope: picks the event body by event type (encoding)
 WEU-02: JSON decoding of the Discord webhook envelope: picks the event body by event type (encoding)
 WEU-03: JSON decoding of the Discord webhook envelope: picks the event body by event type (encoding)
@@ -252,16 +254,16 @@ TY-06: decoding of the base64 JSON textures property, skipping invalid entries (
 TY-07: decoding of the base64 JSON textures property, skipping invalid entries (encoding)
 TY-08: decoding of the base64 JSON textures property, skipping invalid entries (encoding)
 TY-09: decoding of the base64 JSON textures property, skipping invalid entries (encoding)
+TY-11: expiry of a cached Mojang player: an entry last seen more than 24 hours ago is stale; no service test hands the service a stale player, so this is the only test of the stale answer
 TY-16: encoding of the textures into the base64 JSON property (encoding)
 TY-17: encoding of the textures into the base64 JSON property (encoding)
 TY-18: extracts the texture hash from its URL, the key under which textures are stored and fetched
 TY-19: extracts the texture hash from its URL, the key under which textures are stored and fetched
 TY-20: extracts the texture hash from its URL, the key under which textures are stored and fetched
 TY-21: extracts the texture hash from its URL, the key under which textures are stored and fetched
+TY-23: expiry of a cached Mojang profile: an entry last seen more than 24 hours ago is stale; no service test hands the service a stale profile, so this is the only test of the stale answer
 TY-24: maps a fetched profile to the stored player, with and without textures
 TY-25: maps a fetched profile to the stored player, with and without textures
-TY-28: exported method kept by the owner's dead-code ruling of 2026-11-02: the method and its tests stay
-TY-29: exported method kept by the owner's dead-code ruling of 2026-11-02: the method and its tests stay
 TY-39: decodes a stored texture row into the texture value: model, absent skin or cape, absent row (encoding)
 TY-40: decodes a stored texture row into the texture value: model, absent skin or cape, absent row (encoding)
 TY-41: decodes a stored texture row into the texture value: model, absent skin or cape, absent row (encoding)
@@ -279,14 +281,14 @@ PJ-07: format conversion of the releases into the Forge update body callers rece
 PJ-08: format conversion of the releases into the Forge update body callers receive
 PJ-09: format conversion of the releases into the Forge update body callers receive
 PJ-10: format conversion of the releases into the Forge update body callers receive
-GR-01: merge logic: combines the grants of several roles by each permission's value type and merge rule (owner ruling 2026-11-02: merge logic)
-GR-02: merge logic: combines the grants of several roles by each permission's value type and merge rule (owner ruling 2026-11-02: merge logic)
-GR-03: merge logic: combines the grants of several roles by each permission's value type and merge rule (owner ruling 2026-11-02: merge logic)
-GR-04: merge logic: combines the grants of several roles by each permission's value type and merge rule (owner ruling 2026-11-02: merge logic)
-GR-05: merge logic: combines the grants of several roles by each permission's value type and merge rule (owner ruling 2026-11-02: merge logic)
-GR-06: merge logic: combines the grants of several roles by each permission's value type and merge rule (owner ruling 2026-11-02: merge logic)
-GR-07: merge logic: combines the grants of several roles by each permission's value type and merge rule (owner ruling 2026-11-02: merge logic)
-GR-08: merge logic: combines the grants of several roles by each permission's value type and merge rule (owner ruling 2026-11-02: merge logic)
+GR-01: merge logic: combines the grants of several roles by each permission's value type and merge rule (kept by the approved test-prune graph: pure logic with real weight; merge logic)
+GR-02: merge logic: combines the grants of several roles by each permission's value type and merge rule (kept by the approved test-prune graph: pure logic with real weight; merge logic)
+GR-03: merge logic: combines the grants of several roles by each permission's value type and merge rule (kept by the approved test-prune graph: pure logic with real weight; merge logic)
+GR-04: merge logic: combines the grants of several roles by each permission's value type and merge rule (kept by the approved test-prune graph: pure logic with real weight; merge logic)
+GR-05: merge logic: combines the grants of several roles by each permission's value type and merge rule (kept by the approved test-prune graph: pure logic with real weight; merge logic)
+GR-06: merge logic: combines the grants of several roles by each permission's value type and merge rule (kept by the approved test-prune graph: pure logic with real weight; merge logic)
+GR-07: merge logic: combines the grants of several roles by each permission's value type and merge rule (kept by the approved test-prune graph: pure logic with real weight; merge logic)
+GR-08: merge logic: combines the grants of several roles by each permission's value type and merge rule (kept by the approved test-prune graph: pure logic with real weight; merge logic)
 RR-06: owner ruling 2026-11-02: the DecodeStruct tests stay (length limits, null, protobuf)
 RR-08: owner ruling 2026-11-02: the DecodeStruct tests stay (length limits, null, protobuf)
 RR-09: owner ruling 2026-11-02: the DecodeStruct tests stay (length limits, null, protobuf)

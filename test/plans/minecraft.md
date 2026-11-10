@@ -22,7 +22,6 @@
 | TY-07 | ParseProperties | Error Path | Property.Value is not valid base64 | Property{Name: TEXTURES, Value: "not-base64!!"} | Entry skipped (logged), returns nil | P2 |  |
 | TY-08 | ParseProperties | Error Path | Property.Value is valid base64 but not valid JSON | base64("not json") | Entry skipped (logged), returns nil | P2 |  |
 | TY-09 | ParseProperties | Edge Case | First property invalid, second is a valid TEXTURES entry | two Properties, first malformed | Returns nil: the first TEXTURES entry decides the result, so the second is never read | P2 |  |
-| TY-10 | IsStale | Happy Path | LastSeen is recent | LastSeen = now | Returns false | P2 |  |
 | TY-11 | IsStale | Edge Case | LastSeen older than stalenessThreshold | LastSeen = now - 25h | Returns true | P2 |  |
 
 ## TexturesValue
@@ -45,24 +44,9 @@
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| TY-22 | IsStale | Happy Path | LastSeen is recent | LastSeen = now | Returns false | P2 |  |
 | TY-23 | IsStale | Edge Case | LastSeen older than stalenessThreshold | LastSeen = now - 25h | Returns true | P2 |  |
 | TY-24 | ToPlayer | Happy Path | Profile has Textures | populated Profile | Returned Player.Properties has exactly one TEXTURES entry, nil error | P1 |  |
 | TY-25 | ToPlayer | Edge Case | Profile.Textures is nil | MojangProfile{Textures: nil} | Returned Player.Properties is empty/nil, nil error | P3 |  |
-
-## GeyserPlayer
-
-| ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
-|----|----------|---------------|----------|---------------|------------------|----------|-------|
-| TY-26 | IsStale | Happy Path | LastSeen is recent | LastSeen = now | Returns false | P3 |  |
-| TY-27 | IsStale | Edge Case | LastSeen older than stalenessThreshold | LastSeen = now - 25h | Returns true | P3 |  |
-
-## GeyserSkin
-
-| ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
-|----|----------|---------------|----------|---------------|------------------|----------|-------|
-| TY-28 | IsStale | Happy Path | LastSeen is recent | LastSeen = now | Returns false | P3 |  |
-| TY-29 | IsStale | Edge Case | LastSeen older than stalenessThreshold | LastSeen = now - 25h | Returns true | P3 |  |
 
 ## TexturesRow
 

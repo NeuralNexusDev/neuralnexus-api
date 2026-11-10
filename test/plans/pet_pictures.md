@@ -34,7 +34,6 @@
 | PPS-30 | UpdatePetPicture | Error Path | update targets an id with no matching row | live DB, nonexistent id | Returns `nil`, `ErrPetPictureNotFound` | P2 | |
 | PPS-31 | CreatePetPicture | Happy Path | a picture with no other subjects keeps only its primary subject | database reachable, no other subjects | Loading the picture returns `PrimarySubject` set and `OthersSubjects` nil | P1 | |
 | PPS-32 | CreatePetPicture | Happy Path | primary and other subjects keep their order | database reachable, primary subject 3, other subjects 4 and 5 | Loading the picture returns `PrimarySubject` 3 and `OthersSubjects` 4 then 5 | P1 | |
-| PPS-33 | CreatePetPicture | Error Path | store a picture row that has no subjects at all | database reachable, a picture row written directly with an empty list of subjects | The database refuses the row because a picture needs at least one subject | P2 | |
 | PPS-34 | UpdatePet | Error Path | rename a pet to the name of another pet | database reachable, two pets were created beforehand | Returns `nil`, `ErrPetNameExists` | P2 | |
 
 ## service

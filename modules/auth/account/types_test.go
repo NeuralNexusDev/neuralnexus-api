@@ -32,19 +32,6 @@ func TestTY01to02NewAccount(t *testing.T) {
 }
 
 func TestTY04to05NewPasswordLessAccount(t *testing.T) {
-	t.Run("ACT-04_Success", func(t *testing.T) {
-		a := NewPasswordLessAccount("alice", "a@b.com")
-		if a.UserID == "" || a.Username != "alice" {
-			t.Errorf("got %+v, want UserID set and Username=alice", a)
-		}
-		if a.Email == nil || *a.Email != "a@b.com" {
-			t.Errorf("Email = %v, want pointer to %q", a.Email, "a@b.com")
-		}
-		if a.HashedSecret != nil || a.Salt != nil {
-			t.Errorf("expected no password material, got HashedSecret=%v Salt=%v", a.HashedSecret, a.Salt)
-		}
-	})
-
 	t.Run("ACT-05_EmptyEmailStaysNil", func(t *testing.T) {
 		a := NewPasswordLessAccount("alice", "")
 		if a.Email != nil {

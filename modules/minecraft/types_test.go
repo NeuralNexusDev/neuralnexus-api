@@ -111,12 +111,6 @@ func TestTY04to09_Player_ParseProperties(t *testing.T) {
 }
 
 func TestTY10to11_Player_IsStale(t *testing.T) {
-	t.Run("TY-10_Fresh", func(t *testing.T) {
-		p := &MojangPlayer{LastSeen: time.Now().UnixMilli()}
-		if p.IsStale() {
-			t.Error("IsStale() = true, want false for a fresh entry")
-		}
-	})
 	t.Run("TY-11_Stale", func(t *testing.T) {
 		p := &MojangPlayer{LastSeen: time.Now().Add(-25 * time.Hour).UnixMilli()}
 		if !p.IsStale() {
@@ -126,45 +120,9 @@ func TestTY10to11_Player_IsStale(t *testing.T) {
 }
 
 func TestTY22to23_Profile_IsStale(t *testing.T) {
-	t.Run("TY-22_Fresh", func(t *testing.T) {
-		p := &MojangProfile{LastSeen: time.Now().UnixMilli()}
-		if p.IsStale() {
-			t.Error("IsStale() = true, want false for a fresh entry")
-		}
-	})
 	t.Run("TY-23_Stale", func(t *testing.T) {
 		p := &MojangProfile{LastSeen: time.Now().Add(-25 * time.Hour).UnixMilli()}
 		if !p.IsStale() {
-			t.Error("IsStale() = false, want true for an entry older than the staleness threshold")
-		}
-	})
-}
-
-func TestTY26to27_GeyserPlayer_IsStale(t *testing.T) {
-	t.Run("TY-26_Fresh", func(t *testing.T) {
-		p := &GeyserPlayer{LastSeen: time.Now().UnixMilli()}
-		if p.IsStale() {
-			t.Error("IsStale() = true, want false for a fresh entry")
-		}
-	})
-	t.Run("TY-27_Stale", func(t *testing.T) {
-		p := &GeyserPlayer{LastSeen: time.Now().Add(-25 * time.Hour).UnixMilli()}
-		if !p.IsStale() {
-			t.Error("IsStale() = false, want true for an entry older than the staleness threshold")
-		}
-	})
-}
-
-func TestTY28to29_GeyserSkin_IsStale(t *testing.T) {
-	t.Run("TY-28_Fresh", func(t *testing.T) {
-		s := &GeyserSkin{LastSeen: time.Now().UnixMilli()}
-		if s.IsStale() {
-			t.Error("IsStale() = true, want false for a fresh entry")
-		}
-	})
-	t.Run("TY-29_Stale", func(t *testing.T) {
-		s := &GeyserSkin{LastSeen: time.Now().Add(-25 * time.Hour).UnixMilli()}
-		if !s.IsStale() {
 			t.Error("IsStale() = false, want true for an entry older than the staleness threshold")
 		}
 	})

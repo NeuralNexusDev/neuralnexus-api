@@ -32,7 +32,6 @@
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
 | ACT-01 | NewAccount | Happy Path | Valid username, email and password | The snowflake id and the password hash are produced | Returns an account with a user id, the given username, the given email, and a non-empty hashed secret and salt | P1 |  |
 | ACT-02 | NewAccount | Edge Case | `email == ""` | | `Account.Email == nil` | P2 |  |
-| ACT-04 | NewPasswordLessAccount | Happy Path | Valid username/email | | Returns an account with a user id, the given username and the given email; no hashed secret and no salt | P2 |  |
 | ACT-05 | NewPasswordLessAccount | Edge Case | `email == ""` | | `Account.Email == nil` | P3 |  |
 | ACT-07 | IDKeyWithSecret | Happy Path | Same password/salt/secret/params called twice | | Identical output both times (deterministic) | P2 |  |
 | ACT-08 | IDKeyWithSecret | Edge Case | Same password, salt and parameters, different secret | | Different output (the pepper/secret genuinely affects the digest) | P1 |  |
