@@ -256,12 +256,6 @@
 | OT-43 | AddOAuthTokenToDB | Error Path | DB unreachable | | Returns raw error | P2 |  |
 | OT-79 | GetOAuthTokenByUserID | Error Path | No token for that user and platform | Real Postgres | Returns nil, `ErrNotFound` | P2 | |
 
-## types.go
-
-| ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
-|----|----------|---------------|----------|---------------|------------------|----------|-------|
-| LKT-26 | NewLinkedAccount | Happy Path | userID, platform, username, platformID, data given | | Returns a linked account with all fields copied, `Verified == true`, `LoginEnabled == true` | P2 |  |
-
 ## service
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
