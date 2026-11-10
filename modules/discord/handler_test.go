@@ -23,7 +23,7 @@ func dcRequest(t *testing.T, body string, contentType string) *http.Request {
 
 func TestHandleDiscordWebhook(t *testing.T) {
 	t.Run("HW-01_WrongContentType", func(t *testing.T) {
-		h := HandleDiscordWebhook()
+		h := NewHandler().Webhook
 		w := httptest.NewRecorder()
 		h(w, dcRequest(t, `{}`, ""))
 		testutil.ExpectStatus(t, w, http.StatusUnsupportedMediaType)
@@ -31,7 +31,7 @@ func TestHandleDiscordWebhook(t *testing.T) {
 	})
 
 	t.Run("HW-02_InvalidJSONBody", func(t *testing.T) {
-		h := HandleDiscordWebhook()
+		h := NewHandler().Webhook
 		w := httptest.NewRecorder()
 		h(w, dcRequest(t, `{not json`, ApplicationJSON))
 		testutil.ExpectStatus(t, w, http.StatusBadRequest)
@@ -39,21 +39,21 @@ func TestHandleDiscordWebhook(t *testing.T) {
 	})
 
 	t.Run("HW-03_VersionMismatchStillProcessed", func(t *testing.T) {
-		h := HandleDiscordWebhook()
+		h := NewHandler().Webhook
 		w := httptest.NewRecorder()
 		h(w, dcRequest(t, `{"version":2,"type":0}`, ApplicationJSON))
 		testutil.ExpectStatus(t, w, http.StatusNoContent)
 	})
 
 	t.Run("HW-04_Ping", func(t *testing.T) {
-		h := HandleDiscordWebhook()
+		h := NewHandler().Webhook
 		w := httptest.NewRecorder()
 		h(w, dcRequest(t, `{"version":1,"type":0}`, ApplicationJSON))
 		testutil.ExpectStatus(t, w, http.StatusNoContent)
 	})
 
 	t.Run("HW-05_AuthorizedGuildInstall", func(t *testing.T) {
-		h := HandleDiscordWebhook()
+		h := NewHandler().Webhook
 		w := httptest.NewRecorder()
 		body := `{"version":1,"type":1,"event":{"type":"APPLICATION_AUTHORIZED","timestamp":"2024-01-01T00:00:00.000000","data":{"integration_type":0,"guild":{"id":"g1"}}}}`
 		h(w, dcRequest(t, body, ApplicationJSON))
@@ -61,7 +61,7 @@ func TestHandleDiscordWebhook(t *testing.T) {
 	})
 
 	t.Run("HW-06_AuthorizedUserInstall", func(t *testing.T) {
-		h := HandleDiscordWebhook()
+		h := NewHandler().Webhook
 		w := httptest.NewRecorder()
 		body := `{"version":1,"type":1,"event":{"type":"APPLICATION_AUTHORIZED","timestamp":"2024-01-01T00:00:00.000000","data":{"integration_type":1,"user":{"id":"u1"}}}}`
 		h(w, dcRequest(t, body, ApplicationJSON))
@@ -69,7 +69,7 @@ func TestHandleDiscordWebhook(t *testing.T) {
 	})
 
 	t.Run("HW-07_AuthorizedMissingIntegrationType", func(t *testing.T) {
-		h := HandleDiscordWebhook()
+		h := NewHandler().Webhook
 		w := httptest.NewRecorder()
 		body := `{"version":1,"type":1,"event":{"type":"APPLICATION_AUTHORIZED","timestamp":"2024-01-01T00:00:00.000000","data":{"guild":{"id":"g1"}}}}`
 		h(w, dcRequest(t, body, ApplicationJSON))
@@ -77,7 +77,7 @@ func TestHandleDiscordWebhook(t *testing.T) {
 	})
 
 	t.Run("HW-08_AuthorizedOutOfRangeIntegrationType", func(t *testing.T) {
-		h := HandleDiscordWebhook()
+		h := NewHandler().Webhook
 		w := httptest.NewRecorder()
 		body := `{"version":1,"type":1,"event":{"type":"APPLICATION_AUTHORIZED","timestamp":"2024-01-01T00:00:00.000000","data":{"integration_type":2}}}`
 		h(w, dcRequest(t, body, ApplicationJSON))
@@ -86,7 +86,7 @@ func TestHandleDiscordWebhook(t *testing.T) {
 	})
 
 	t.Run("HW-09_Deauthorized", func(t *testing.T) {
-		h := HandleDiscordWebhook()
+		h := NewHandler().Webhook
 		w := httptest.NewRecorder()
 		body := `{"version":1,"type":1,"event":{"type":"APPLICATION_DEAUTHORIZED","timestamp":"2024-01-01T00:00:00.000000","data":{"user":{"id":"u2"}}}}`
 		h(w, dcRequest(t, body, ApplicationJSON))
@@ -94,7 +94,7 @@ func TestHandleDiscordWebhook(t *testing.T) {
 	})
 
 	t.Run("HW-10_GroupedUnhandledEventType", func(t *testing.T) {
-		h := HandleDiscordWebhook()
+		h := NewHandler().Webhook
 		w := httptest.NewRecorder()
 		body := `{"version":1,"type":1,"event":{"type":"ENTITLEMENT_CREATE","timestamp":"2024-01-01T00:00:00.000000"}}`
 		h(w, dcRequest(t, body, ApplicationJSON))
@@ -102,7 +102,7 @@ func TestHandleDiscordWebhook(t *testing.T) {
 	})
 
 	t.Run("HW-11_UnrecognizedEventType", func(t *testing.T) {
-		h := HandleDiscordWebhook()
+		h := NewHandler().Webhook
 		w := httptest.NewRecorder()
 		body := `{"version":1,"type":1,"event":{"type":"SOME_FUTURE_EVENT","timestamp":"2024-01-01T00:00:00.000000"}}`
 		h(w, dcRequest(t, body, ApplicationJSON))
@@ -110,7 +110,7 @@ func TestHandleDiscordWebhook(t *testing.T) {
 	})
 
 	t.Run("HW-13_UnrecognizedWebhookType", func(t *testing.T) {
-		h := HandleDiscordWebhook()
+		h := NewHandler().Webhook
 		w := httptest.NewRecorder()
 		h(w, dcRequest(t, `{"version":1,"type":99}`, ApplicationJSON))
 		testutil.ExpectStatus(t, w, http.StatusNoContent)
@@ -119,7 +119,7 @@ func TestHandleDiscordWebhook(t *testing.T) {
 
 func TestHandleDiscordInteraction(t *testing.T) {
 	t.Run("HI-01_WrongContentType", func(t *testing.T) {
-		h := HandleDiscordInteraction()
+		h := NewHandler().Interaction
 		w := httptest.NewRecorder()
 		h(w, dcRequest(t, `{}`, ""))
 		testutil.ExpectStatus(t, w, http.StatusUnsupportedMediaType)
@@ -127,7 +127,7 @@ func TestHandleDiscordInteraction(t *testing.T) {
 	})
 
 	t.Run("HI-02_InvalidJSONBody", func(t *testing.T) {
-		h := HandleDiscordInteraction()
+		h := NewHandler().Interaction
 		w := httptest.NewRecorder()
 		h(w, dcRequest(t, `{not json`, ApplicationJSON))
 		testutil.ExpectStatus(t, w, http.StatusBadRequest)
@@ -135,7 +135,7 @@ func TestHandleDiscordInteraction(t *testing.T) {
 	})
 
 	t.Run("HI-03_Ping", func(t *testing.T) {
-		h := HandleDiscordInteraction()
+		h := NewHandler().Interaction
 		w := httptest.NewRecorder()
 		h(w, dcRequest(t, `{"type":1}`, ApplicationJSON))
 		testutil.ExpectStatus(t, w, http.StatusOK)
@@ -163,7 +163,7 @@ func TestHandleDiscordInteraction(t *testing.T) {
 		}
 		for _, c := range cases {
 			t.Run(c.name, func(t *testing.T) {
-				h := HandleDiscordInteraction()
+				h := NewHandler().Interaction
 				w := httptest.NewRecorder()
 				h(w, dcRequest(t, c.body, ApplicationJSON))
 				testutil.ExpectStatus(t, w, http.StatusNoContent)
@@ -172,7 +172,7 @@ func TestHandleDiscordInteraction(t *testing.T) {
 	})
 
 	t.Run("HI-05_UnrecognizedInteractionType", func(t *testing.T) {
-		h := HandleDiscordInteraction()
+		h := NewHandler().Interaction
 		w := httptest.NewRecorder()
 		h(w, dcRequest(t, `{"type":99}`, ApplicationJSON))
 		testutil.ExpectStatus(t, w, http.StatusNoContent)

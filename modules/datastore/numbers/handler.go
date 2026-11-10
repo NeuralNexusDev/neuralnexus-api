@@ -23,120 +23,129 @@ const (
 	msgInvalidNumberIDs                = "Data store and user ids must be numbers"
 )
 
-// CreateNumberHandler - Create a new number
-func CreateNumberHandler(s NumberService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
-		if !session.HasPermission(perms.ScopeAdminNumberStore) {
-			responses.Forbidden(w, r, msgNoPermissionToCreateNumberstore)
-			return
-		}
+// Handler serves the number store routes.
+type Handler interface {
+	CreateNumber(w http.ResponseWriter, r *http.Request)
+	ReadNumber(w http.ResponseWriter, r *http.Request)
+	UpdateNumber(w http.ResponseWriter, r *http.Request)
+	DeleteNumber(w http.ResponseWriter, r *http.Request)
+}
 
-		var n *NumberData
-		err := responses.DecodeStruct(r, &n)
-		if err != nil {
-			reqctx.Log(r.Context(), logBadBody, err.Error())
-			responses.BadRequest(w, r, "")
-			return
-		}
+type handler struct {
+	s NumberService
+}
 
-		n, err = s.Create(r.Context(), n)
-		switch err {
-		case nil:
-			responses.StructOK(w, r, n)
-		case ErrNumberExists:
-			responses.Conflict(w, r, msgNumberAlreadyExists)
-		case ErrNumberStoreOrUserNotFound:
-			responses.NotFound(w, r, msgStoreOrUserNotFound)
-		case ErrNumberInvalidID:
-			responses.BadRequest(w, r, msgInvalidNumberIDs)
-		default:
-			reqctx.Log(r.Context(), "Failed to create numberstore:\n\t", err.Error())
-			responses.InternalServerError(w, r, msgFailedToCreateNumberstore)
-		}
+// NewHandler returns a Handler that serves the number store routes from the given service.
+func NewHandler(s NumberService) Handler {
+	return &handler{s}
+}
+
+// CreateNumber - Create a new number
+func (h *handler) CreateNumber(w http.ResponseWriter, r *http.Request) {
+	session := r.Context().Value(reqctx.SessionKey).(*session.Session)
+	if !session.HasPermission(perms.ScopeAdminNumberStore) {
+		responses.Forbidden(w, r, msgNoPermissionToCreateNumberstore)
+		return
+	}
+
+	var n *NumberData
+	err := responses.DecodeStruct(r, &n)
+	if err != nil {
+		reqctx.Log(r.Context(), logBadBody, err.Error())
+		responses.BadRequest(w, r, "")
+		return
+	}
+
+	n, err = h.s.Create(r.Context(), n)
+	switch err {
+	case nil:
+		responses.StructOK(w, r, n)
+	case ErrNumberExists:
+		responses.Conflict(w, r, msgNumberAlreadyExists)
+	case ErrNumberStoreOrUserNotFound:
+		responses.NotFound(w, r, msgStoreOrUserNotFound)
+	case ErrNumberInvalidID:
+		responses.BadRequest(w, r, msgInvalidNumberIDs)
+	default:
+		reqctx.Log(r.Context(), "Failed to create numberstore:\n\t", err.Error())
+		responses.InternalServerError(w, r, msgFailedToCreateNumberstore)
 	}
 }
 
-// ReadNumberHandler - Read a number
-func ReadNumberHandler(s NumberService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var n *NumberData
-		err := responses.DecodeStruct(r, &n)
-		if err != nil {
-			reqctx.Log(r.Context(), logBadBody, err.Error())
-			responses.BadRequest(w, r, "")
-			return
-		}
+// ReadNumber - Read a number
+func (h *handler) ReadNumber(w http.ResponseWriter, r *http.Request) {
+	var n *NumberData
+	err := responses.DecodeStruct(r, &n)
+	if err != nil {
+		reqctx.Log(r.Context(), logBadBody, err.Error())
+		responses.BadRequest(w, r, "")
+		return
+	}
 
-		n, err = s.Read(r.Context(), n)
-		switch err {
-		case nil:
-			responses.StructOK(w, r, n)
-		case ErrNumberNotFound:
-			responses.NotFound(w, r, msgNumberNotFound)
-		case ErrNumberInvalidID:
-			responses.BadRequest(w, r, msgInvalidNumberIDs)
-		default:
-			reqctx.Log(r.Context(), "Failed to read numberstore:\n\t", err.Error())
-			responses.InternalServerError(w, r, msgFailedToReadNumberstore)
-		}
+	n, err = h.s.Read(r.Context(), n)
+	switch err {
+	case nil:
+		responses.StructOK(w, r, n)
+	case ErrNumberNotFound:
+		responses.NotFound(w, r, msgNumberNotFound)
+	case ErrNumberInvalidID:
+		responses.BadRequest(w, r, msgInvalidNumberIDs)
+	default:
+		reqctx.Log(r.Context(), "Failed to read numberstore:\n\t", err.Error())
+		responses.InternalServerError(w, r, msgFailedToReadNumberstore)
 	}
 }
 
-// UpdateNumberHandler - Update a number
-func UpdateNumberHandler(s NumberService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value(reqctx.SessionKey).(*session.Session)
-		if !session.HasPermission(perms.ScopeAdminNumberStore) {
-			responses.Forbidden(w, r, msgNoPermissionToUpdateNumberstore)
-			return
-		}
+// UpdateNumber - Update a number
+func (h *handler) UpdateNumber(w http.ResponseWriter, r *http.Request) {
+	session := r.Context().Value(reqctx.SessionKey).(*session.Session)
+	if !session.HasPermission(perms.ScopeAdminNumberStore) {
+		responses.Forbidden(w, r, msgNoPermissionToUpdateNumberstore)
+		return
+	}
 
-		var n *NumberData
-		err := responses.DecodeStruct(r, &n)
-		if err != nil {
-			reqctx.Log(r.Context(), logBadBody, err.Error())
-			responses.BadRequest(w, r, "")
-			return
-		}
+	var n *NumberData
+	err := responses.DecodeStruct(r, &n)
+	if err != nil {
+		reqctx.Log(r.Context(), logBadBody, err.Error())
+		responses.BadRequest(w, r, "")
+		return
+	}
 
-		n, err = s.Update(r.Context(), n)
-		switch err {
-		case nil:
-			responses.StructOK(w, r, n)
-		case ErrNumberNotFound:
-			responses.NotFound(w, r, msgNumberNotFound)
-		case ErrNumberInvalidID:
-			responses.BadRequest(w, r, msgInvalidNumberIDs)
-		default:
-			reqctx.Log(r.Context(), "Failed to update numberstore:\n\t", err.Error())
-			responses.InternalServerError(w, r, msgFailedToUpdateNumberstore)
-		}
+	n, err = h.s.Update(r.Context(), n)
+	switch err {
+	case nil:
+		responses.StructOK(w, r, n)
+	case ErrNumberNotFound:
+		responses.NotFound(w, r, msgNumberNotFound)
+	case ErrNumberInvalidID:
+		responses.BadRequest(w, r, msgInvalidNumberIDs)
+	default:
+		reqctx.Log(r.Context(), "Failed to update numberstore:\n\t", err.Error())
+		responses.InternalServerError(w, r, msgFailedToUpdateNumberstore)
 	}
 }
 
-// DeleteNumberHandler - Delete a number
-func DeleteNumberHandler(s NumberService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var n *NumberData
-		err := responses.DecodeStruct(r, &n)
-		if err != nil {
-			reqctx.Log(r.Context(), logBadBody, err.Error())
-			responses.BadRequest(w, r, "")
-			return
-		}
+// DeleteNumber - Delete a number
+func (h *handler) DeleteNumber(w http.ResponseWriter, r *http.Request) {
+	var n *NumberData
+	err := responses.DecodeStruct(r, &n)
+	if err != nil {
+		reqctx.Log(r.Context(), logBadBody, err.Error())
+		responses.BadRequest(w, r, "")
+		return
+	}
 
-		err = s.Delete(r.Context(), n)
-		switch err {
-		case nil:
-			responses.StructOK(w, r, n)
-		case ErrNumberNotFound:
-			responses.NotFound(w, r, msgNumberNotFound)
-		case ErrNumberInvalidID:
-			responses.BadRequest(w, r, msgInvalidNumberIDs)
-		default:
-			reqctx.Log(r.Context(), "Failed to delete numberstore:\n\t", err.Error())
-			responses.InternalServerError(w, r, msgFailedToDeleteNumberstore)
-		}
+	err = h.s.Delete(r.Context(), n)
+	switch err {
+	case nil:
+		responses.StructOK(w, r, n)
+	case ErrNumberNotFound:
+		responses.NotFound(w, r, msgNumberNotFound)
+	case ErrNumberInvalidID:
+		responses.BadRequest(w, r, msgInvalidNumberIDs)
+	default:
+		reqctx.Log(r.Context(), "Failed to delete numberstore:\n\t", err.Error())
+		responses.InternalServerError(w, r, msgFailedToDeleteNumberstore)
 	}
 }

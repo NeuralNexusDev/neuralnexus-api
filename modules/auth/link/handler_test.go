@@ -137,7 +137,7 @@ func TestAU13OAuthHandlerMissingCode(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("AU-13_OAuthMissingCode", func(t *testing.T) {
-		OAuthHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, &authtest.FakeSessionService{}, auSiteURL)(w, r)
+		NewHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, &authtest.FakeSessionService{}, nil, auSiteURL).OAuth(w, r)
 
 		requireProblemRedirect(t, w, auSiteURL, http.StatusBadRequest, msgInvalidRequest)
 	})
@@ -148,7 +148,7 @@ func TestAU14OAuthHandlerMissingState(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("AU-14_OAuthMissingState", func(t *testing.T) {
-		OAuthHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, &authtest.FakeSessionService{}, auSiteURL)(w, r)
+		NewHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, &authtest.FakeSessionService{}, nil, auSiteURL).OAuth(w, r)
 
 		requireProblemRedirect(t, w, auSiteURL, http.StatusBadRequest, msgInvalidRequest)
 	})
@@ -162,7 +162,7 @@ func TestAU15OAuthHandlerLinkModeNoSession(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("AU-15_OAuthLinkModeNoSession", func(t *testing.T) {
-		OAuthHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, &authtest.FakeSessionService{}, auSiteURL)(w, r)
+		NewHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, &authtest.FakeSessionService{}, nil, auSiteURL).OAuth(w, r)
 
 		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, msgLoginRequiredToLink)
 	})
@@ -225,7 +225,7 @@ func TestAU50OAuthHandlerLoginHappyPath(t *testing.T) {
 	ss := &authtest.FakeSessionService{CreateJWTFunc: func(*session.Session) (string, error) { return "test-jwt", nil }}
 
 	t.Run("AU-50_OAuthHandlerLoginHappyPath", func(t *testing.T) {
-		OAuthHandler(auConfig(), as, las, ss, auSiteURL)(w, r)
+		NewHandler(auConfig(), as, las, ss, nil, auSiteURL).OAuth(w, r)
 
 		if w.Code != http.StatusSeeOther {
 			t.Fatalf("expected 303, got %d: %s", w.Code, w.Body.String())
@@ -272,7 +272,7 @@ func TestAU51OpenIDHandlerLoginHappyPath(t *testing.T) {
 	ss := &authtest.FakeSessionService{CreateJWTFunc: func(*session.Session) (string, error) { return "test-jwt", nil }}
 
 	t.Run("AU-51_OpenIDHandlerLoginHappyPath", func(t *testing.T) {
-		OpenIDHandler(auConfig().Steam, as, las, ss, auSiteURL)(w, r)
+		NewHandler(auConfig(), as, las, ss, nil, auSiteURL).OpenID(w, r)
 
 		if w.Code != http.StatusSeeOther {
 			t.Fatalf("expected 303, got %d: %s", w.Code, w.Body.String())
@@ -356,7 +356,7 @@ func TestAU52to56OAuthAndOpenIDFailuresHideCause(t *testing.T) {
 		w := httptest.NewRecorder()
 		ss := &authtest.FakeSessionService{CreateJWTFunc: okJWT, AddSessionErr: testutil.ErrDBDown}
 
-		OAuthHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, ss, auSiteURL)(w, auOAuthRequest(t, oauthState))
+		NewHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, ss, nil, auSiteURL).OAuth(w, auOAuthRequest(t, oauthState))
 
 		requireProblemRedirect(t, w, oauthState.RedirectURI, http.StatusInternalServerError, msgAuthenticationFailed)
 	})
@@ -366,7 +366,7 @@ func TestAU52to56OAuthAndOpenIDFailuresHideCause(t *testing.T) {
 		w := httptest.NewRecorder()
 		ss := &authtest.FakeSessionService{CreateJWTFunc: okJWT}
 
-		OpenIDHandler(auConfig().Steam, &stubAccountService{}, &stubLinkAccountStore{}, ss, auSiteURL)(w, auOpenIDRequest(t, steamState))
+		NewHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, ss, nil, auSiteURL).OpenID(w, auOpenIDRequest(t, steamState))
 
 		requireProblemRedirect(t, w, steamState.RedirectURI, http.StatusInternalServerError, msgAuthenticationFailed)
 	})
@@ -376,7 +376,7 @@ func TestAU52to56OAuthAndOpenIDFailuresHideCause(t *testing.T) {
 		w := httptest.NewRecorder()
 		ss := &authtest.FakeSessionService{CreateJWTFunc: okJWT}
 
-		OpenIDHandler(auConfig().Steam, &stubAccountService{}, &stubLinkAccountStore{}, ss, auSiteURL)(w, auOpenIDRequest(t, steamState))
+		NewHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, ss, nil, auSiteURL).OpenID(w, auOpenIDRequest(t, steamState))
 
 		requireProblemRedirect(t, w, steamState.RedirectURI, http.StatusInternalServerError, msgAuthenticationFailed)
 	})
@@ -386,7 +386,7 @@ func TestAU52to56OAuthAndOpenIDFailuresHideCause(t *testing.T) {
 		w := httptest.NewRecorder()
 		ss := &authtest.FakeSessionService{CreateJWTFunc: okJWT, AddSessionErr: testutil.ErrDBDown}
 
-		OpenIDHandler(auConfig().Steam, &stubAccountService{}, &stubLinkAccountStore{}, ss, auSiteURL)(w, auOpenIDRequest(t, steamState))
+		NewHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, ss, nil, auSiteURL).OpenID(w, auOpenIDRequest(t, steamState))
 
 		requireProblemRedirect(t, w, steamState.RedirectURI, http.StatusInternalServerError, msgAuthenticationFailed)
 	})
@@ -397,7 +397,7 @@ func TestAU17OpenIDHandlerMissingState(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("AU-17_OpenIDMissingState", func(t *testing.T) {
-		OpenIDHandler(auConfig().Steam, &stubAccountService{}, &stubLinkAccountStore{}, &authtest.FakeSessionService{}, auSiteURL)(w, r)
+		NewHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, &authtest.FakeSessionService{}, nil, auSiteURL).OpenID(w, r)
 
 		requireProblemRedirect(t, w, auSiteURL, http.StatusBadRequest, msgInvalidRequest)
 	})
@@ -411,7 +411,7 @@ func TestAU18OpenIDHandlerLinkModeNoSession(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("AU-18_OpenIDLinkModeNoSession", func(t *testing.T) {
-		OpenIDHandler(auConfig().Steam, &stubAccountService{}, &stubLinkAccountStore{}, &authtest.FakeSessionService{}, auSiteURL)(w, r)
+		NewHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, &authtest.FakeSessionService{}, nil, auSiteURL).OpenID(w, r)
 
 		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusUnauthorized, msgLoginRequiredToLink)
 	})
@@ -426,7 +426,7 @@ func TestAU19OpenIDHandlerBadOpenIDMode(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("AU-19_OpenIDBadOpenIDMode", func(t *testing.T) {
-		OpenIDHandler(auConfig().Steam, &stubAccountService{}, &stubLinkAccountStore{}, &authtest.FakeSessionService{}, auSiteURL)(w, r)
+		NewHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, &authtest.FakeSessionService{}, nil, auSiteURL).OpenID(w, r)
 
 		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusBadRequest, msgInvalidState)
 	})
@@ -441,7 +441,7 @@ func TestAU20OpenIDHandlerBadClaimedID(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("AU-20_OpenIDBadClaimedID", func(t *testing.T) {
-		OpenIDHandler(auConfig().Steam, &stubAccountService{}, &stubLinkAccountStore{}, &authtest.FakeSessionService{}, auSiteURL)(w, r)
+		NewHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, &authtest.FakeSessionService{}, nil, auSiteURL).OpenID(w, r)
 
 		requireProblemRedirect(t, w, "https://neuralnexus.test/done", http.StatusBadRequest, msgInvalidState)
 	})
@@ -655,7 +655,7 @@ func TestAU60to71OAuthAndOpenIDFailureMapping(t *testing.T) {
 		w := httptest.NewRecorder()
 		state := OAuthState{Platform: "nonexistent", Nonce: "test-nonce", RedirectURI: redirect, Mode: ModeLogin}
 
-		OAuthHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, &authtest.FakeSessionService{CreateJWTFunc: okJWT}, auSiteURL)(w, auOAuthRequest(t, state))
+		NewHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, &authtest.FakeSessionService{CreateJWTFunc: okJWT}, nil, auSiteURL).OAuth(w, auOAuthRequest(t, state))
 
 		requireProblemRedirect(t, w, redirect, http.StatusBadRequest, msgInvalidPlatform)
 	})
@@ -664,7 +664,7 @@ func TestAU60to71OAuthAndOpenIDFailureMapping(t *testing.T) {
 		auDiscordTransportWithoutScope(t)
 		w := httptest.NewRecorder()
 
-		OAuthHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, &authtest.FakeSessionService{CreateJWTFunc: okJWT}, auSiteURL)(w, auOAuthRequest(t, discordLogin))
+		NewHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, &authtest.FakeSessionService{CreateJWTFunc: okJWT}, nil, auSiteURL).OAuth(w, auOAuthRequest(t, discordLogin))
 
 		requireProblemRedirect(t, w, redirect, http.StatusBadRequest, msgMissingOAuthScope)
 	})
@@ -673,7 +673,7 @@ func TestAU60to71OAuthAndOpenIDFailureMapping(t *testing.T) {
 		auSteamTransportBody(t, http.StatusOK, http.StatusOK, `{"response":{"players":[{"steamid":"76561198999999999","personaname":"someone"}]}}`)
 		w := httptest.NewRecorder()
 
-		OpenIDHandler(auConfig().Steam, &stubAccountService{}, &stubLinkAccountStore{}, &authtest.FakeSessionService{CreateJWTFunc: okJWT}, auSiteURL)(w, auOpenIDRequest(t, steamLogin))
+		NewHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, &authtest.FakeSessionService{CreateJWTFunc: okJWT}, nil, auSiteURL).OpenID(w, auOpenIDRequest(t, steamLogin))
 
 		requireProblemRedirect(t, w, redirect, http.StatusBadRequest, msgSteamAccountMismatch)
 	})
@@ -682,7 +682,7 @@ func TestAU60to71OAuthAndOpenIDFailureMapping(t *testing.T) {
 		auDiscordTransport(t)
 		w := httptest.NewRecorder()
 
-		OAuthHandler(auConfig(), &stubAccountService{}, linkedElsewhere, &authtest.FakeSessionService{CreateJWTFunc: okJWT}, auSiteURL)(w, auWithSession(auOAuthRequest(t, discordLink), "u1"))
+		NewHandler(auConfig(), &stubAccountService{}, linkedElsewhere, &authtest.FakeSessionService{CreateJWTFunc: okJWT}, nil, auSiteURL).OAuth(w, auWithSession(auOAuthRequest(t, discordLink), "u1"))
 
 		requireProblemRedirect(t, w, redirect, http.StatusConflict, msgPlatformAlreadyLinked)
 	})
@@ -696,7 +696,7 @@ func TestAU60to71OAuthAndOpenIDFailureMapping(t *testing.T) {
 		}}
 		state := OAuthState{Platform: PlatformMinecraft, Nonce: "test-nonce", RedirectURI: redirect, Mode: ModeLogin}
 
-		OAuthHandler(auConfig(), &stubAccountService{}, las, &authtest.FakeSessionService{CreateJWTFunc: okJWT}, auSiteURL)(w, auOAuthRequest(t, state))
+		NewHandler(auConfig(), &stubAccountService{}, las, &authtest.FakeSessionService{CreateJWTFunc: okJWT}, nil, auSiteURL).OAuth(w, auOAuthRequest(t, state))
 
 		requireProblemRedirect(t, w, redirect, http.StatusConflict, msgConflictingMicrosoftIdentities)
 	})
@@ -705,7 +705,7 @@ func TestAU60to71OAuthAndOpenIDFailureMapping(t *testing.T) {
 		auSteamTransport(t, http.StatusOK, http.StatusOK)
 		w := httptest.NewRecorder()
 
-		OpenIDHandler(auConfig().Steam, &stubAccountService{}, linkedElsewhere, &authtest.FakeSessionService{CreateJWTFunc: okJWT}, auSiteURL)(w, auWithSession(auOpenIDRequest(t, steamLink), "u1"))
+		NewHandler(auConfig(), &stubAccountService{}, linkedElsewhere, &authtest.FakeSessionService{CreateJWTFunc: okJWT}, nil, auSiteURL).OpenID(w, auWithSession(auOpenIDRequest(t, steamLink), "u1"))
 
 		requireProblemRedirect(t, w, redirect, http.StatusConflict, msgPlatformAlreadyLinked)
 	})
@@ -715,7 +715,7 @@ func TestAU60to71OAuthAndOpenIDFailureMapping(t *testing.T) {
 	t.Run("AU-69_OAuthSessionExpiredBeforeLinking", func(t *testing.T) {
 		w := httptest.NewRecorder()
 
-		OAuthHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, &authtest.FakeSessionService{CreateJWTFunc: okJWT}, auSiteURL)(w, auWithSessionChange(auOAuthRequest(t, discordLink), expired))
+		NewHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, &authtest.FakeSessionService{CreateJWTFunc: okJWT}, nil, auSiteURL).OAuth(w, auWithSessionChange(auOAuthRequest(t, discordLink), expired))
 
 		requireProblemRedirect(t, w, redirect, http.StatusUnauthorized, msgSessionExpired)
 	})
@@ -724,7 +724,7 @@ func TestAU60to71OAuthAndOpenIDFailureMapping(t *testing.T) {
 		auSteamTransport(t, http.StatusOK, http.StatusOK)
 		w := httptest.NewRecorder()
 
-		OpenIDHandler(auConfig().Steam, &stubAccountService{}, &stubLinkAccountStore{}, &authtest.FakeSessionService{CreateJWTFunc: okJWT}, auSiteURL)(w, auWithSessionChange(auOpenIDRequest(t, steamLink), expired))
+		NewHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, &authtest.FakeSessionService{CreateJWTFunc: okJWT}, nil, auSiteURL).OpenID(w, auWithSessionChange(auOpenIDRequest(t, steamLink), expired))
 
 		requireProblemRedirect(t, w, redirect, http.StatusUnauthorized, msgSessionExpired)
 	})
@@ -741,7 +741,7 @@ func TestAU72to74OAuthAndOpenIDFailuresUseMapping(t *testing.T) {
 		w := httptest.NewRecorder()
 		ss := &authtest.FakeSessionService{CreateJWTFunc: okJWT}
 
-		OAuthHandler(auConfig(), &stubAccountService{}, disabledLink, ss, auSiteURL)(w, auOAuthRequest(t, oauthState))
+		NewHandler(auConfig(), &stubAccountService{}, disabledLink, ss, nil, auSiteURL).OAuth(w, auOAuthRequest(t, oauthState))
 
 		requireProblemRedirect(t, w, oauthState.RedirectURI, http.StatusForbidden, msgPlatformLoginDisabled)
 	})
@@ -751,7 +751,7 @@ func TestAU72to74OAuthAndOpenIDFailuresUseMapping(t *testing.T) {
 		w := httptest.NewRecorder()
 		ss := &authtest.FakeSessionService{CreateJWTFunc: okJWT}
 
-		OpenIDHandler(auConfig().Steam, &stubAccountService{}, &stubLinkAccountStore{}, ss, auSiteURL)(w, auOpenIDRequest(t, steamState))
+		NewHandler(auConfig(), &stubAccountService{}, &stubLinkAccountStore{}, ss, nil, auSiteURL).OpenID(w, auOpenIDRequest(t, steamState))
 
 		requireProblemRedirect(t, w, steamState.RedirectURI, http.StatusNotFound, msgSteamAccountNotFound)
 	})
@@ -761,7 +761,7 @@ func TestAU72to74OAuthAndOpenIDFailuresUseMapping(t *testing.T) {
 		w := httptest.NewRecorder()
 		ss := &authtest.FakeSessionService{CreateJWTFunc: okJWT}
 
-		OpenIDHandler(auConfig().Steam, &stubAccountService{}, disabledLink, ss, auSiteURL)(w, auOpenIDRequest(t, steamState))
+		NewHandler(auConfig(), &stubAccountService{}, disabledLink, ss, nil, auSiteURL).OpenID(w, auOpenIDRequest(t, steamState))
 
 		requireProblemRedirect(t, w, steamState.RedirectURI, http.StatusForbidden, msgPlatformLoginDisabled)
 	})
@@ -777,7 +777,7 @@ func TestAU75to76SecondPlatformAccountConflict(t *testing.T) {
 		w := httptest.NewRecorder()
 		state := OAuthState{Platform: PlatformDiscord, Nonce: "test-nonce", RedirectURI: redirect, Mode: ModeLink}
 
-		OAuthHandler(auConfig(), &stubAccountService{}, secondAccount, &authtest.FakeSessionService{CreateJWTFunc: okJWT}, auSiteURL)(w, auWithSession(auOAuthRequest(t, state), "u1"))
+		NewHandler(auConfig(), &stubAccountService{}, secondAccount, &authtest.FakeSessionService{CreateJWTFunc: okJWT}, nil, auSiteURL).OAuth(w, auWithSession(auOAuthRequest(t, state), "u1"))
 
 		requireProblemRedirect(t, w, redirect, http.StatusConflict, msgUserAlreadyLinkedToPlatform)
 	})
@@ -787,7 +787,7 @@ func TestAU75to76SecondPlatformAccountConflict(t *testing.T) {
 		w := httptest.NewRecorder()
 		state := OAuthState{Platform: PlatformSteam, Nonce: "test-nonce", RedirectURI: redirect, Mode: ModeLink}
 
-		OpenIDHandler(auConfig().Steam, &stubAccountService{}, secondAccount, &authtest.FakeSessionService{CreateJWTFunc: okJWT}, auSiteURL)(w, auWithSession(auOpenIDRequest(t, state), "u1"))
+		NewHandler(auConfig(), &stubAccountService{}, secondAccount, &authtest.FakeSessionService{CreateJWTFunc: okJWT}, nil, auSiteURL).OpenID(w, auWithSession(auOpenIDRequest(t, state), "u1"))
 
 		requireProblemRedirect(t, w, redirect, http.StatusConflict, msgUserAlreadyLinkedToPlatform)
 	})
@@ -827,7 +827,7 @@ func TestUR28GetUserLinkedAccountsHandlerSelfHappyPath(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("LKU-28_GetUserLinkedAccountsSelfHappyPath", func(t *testing.T) {
-		GetUserLinkedAccountsHandler(svc)(w, r)
+		NewHandler(nil, nil, nil, nil, svc, "").GetUserLinkedAccounts(w, r)
 		testutil.ExpectStatus(t, w, http.StatusOK)
 	})
 }
@@ -838,7 +838,7 @@ func TestUR29GetUserLinkedAccountsHandlerAdminHappyPath(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("LKU-29_GetUserLinkedAccountsAdminHappyPath", func(t *testing.T) {
-		GetUserLinkedAccountsHandler(svc)(w, r)
+		NewHandler(nil, nil, nil, nil, svc, "").GetUserLinkedAccounts(w, r)
 		testutil.ExpectStatus(t, w, http.StatusOK)
 	})
 }
@@ -849,7 +849,7 @@ func TestUR30GetUserLinkedAccountsHandlerForbidden(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("LKU-30_GetUserLinkedAccountsForbidden", func(t *testing.T) {
-		GetUserLinkedAccountsHandler(svc)(w, r)
+		NewHandler(nil, nil, nil, nil, svc, "").GetUserLinkedAccounts(w, r)
 		testutil.ExpectStatus(t, w, http.StatusForbidden)
 		testutil.ExpectDetail(t, w, msgNoPermissionToViewLinkedAccounts)
 	})
@@ -861,7 +861,7 @@ func TestUR31GetUserLinkedAccountsHandlerServiceErrorMapsTo500(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("LKU-31_GetUserLinkedAccountsServiceErrorMapsTo500", func(t *testing.T) {
-		GetUserLinkedAccountsHandler(svc)(w, r)
+		NewHandler(nil, nil, nil, nil, svc, "").GetUserLinkedAccounts(w, r)
 		testutil.ExpectStatus(t, w, http.StatusInternalServerError)
 		testutil.ExpectDetail(t, w, msgFailedToGetLinkedAccounts)
 	})
@@ -873,7 +873,7 @@ func TestUR32UnlinkPlatformHandlerHappyPath(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("LKU-32_UnlinkPlatformHappyPath", func(t *testing.T) {
-		UnlinkPlatformHandler(svc)(w, r)
+		NewHandler(nil, nil, nil, nil, svc, "").UnlinkPlatform(w, r)
 		testutil.ExpectStatus(t, w, http.StatusNoContent)
 		if len(svc.unlinkCalls) != 1 || svc.unlinkCalls[0] != PlatformDiscord {
 			t.Errorf("expected UnlinkPlatform(discord) to be called, got %v", svc.unlinkCalls)
@@ -887,7 +887,7 @@ func TestUR33UnlinkPlatformHandlerForbidden(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("LKU-33_UnlinkPlatformForbidden", func(t *testing.T) {
-		UnlinkPlatformHandler(svc)(w, r)
+		NewHandler(nil, nil, nil, nil, svc, "").UnlinkPlatform(w, r)
 		testutil.ExpectStatus(t, w, http.StatusForbidden)
 		testutil.ExpectDetail(t, w, msgNoPermissionToUnlinkPlatforms)
 		if len(svc.unlinkCalls) != 0 {
@@ -902,7 +902,7 @@ func TestUR34UnlinkPlatformHandlerNotFoundMapsTo404(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("LKU-34_UnlinkPlatformNotFoundMapsTo404", func(t *testing.T) {
-		UnlinkPlatformHandler(svc)(w, r)
+		NewHandler(nil, nil, nil, nil, svc, "").UnlinkPlatform(w, r)
 		testutil.ExpectStatus(t, w, http.StatusNotFound)
 		testutil.ExpectDetail(t, w, msgPlatformNotLinked)
 	})
@@ -914,7 +914,7 @@ func TestUR35UnlinkPlatformHandlerWouldLockAccountMapsTo400(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("LKU-35_UnlinkPlatformWouldLockAccountMapsTo400", func(t *testing.T) {
-		UnlinkPlatformHandler(svc)(w, r)
+		NewHandler(nil, nil, nil, nil, svc, "").UnlinkPlatform(w, r)
 		testutil.ExpectStatus(t, w, http.StatusBadRequest)
 		testutil.ExpectDetail(t, w, msgSetPasswordOrLinkBeforeUnlinking)
 	})
@@ -926,7 +926,7 @@ func TestUR36UnlinkPlatformHandlerUnclassifiedErrorMapsTo500(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("LKU-36_UnlinkPlatformUnclassifiedErrorMapsTo500", func(t *testing.T) {
-		UnlinkPlatformHandler(svc)(w, r)
+		NewHandler(nil, nil, nil, nil, svc, "").UnlinkPlatform(w, r)
 		testutil.ExpectStatus(t, w, http.StatusInternalServerError)
 		testutil.ExpectDetail(t, w, msgFailedToUnlinkPlatform)
 	})
@@ -938,7 +938,7 @@ func TestUR37SetPlatformLoginEnabledHandlerHappyPath(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("LKU-37_SetPlatformLoginEnabledHappyPath", func(t *testing.T) {
-		SetPlatformLoginEnabledHandler(svc)(w, r)
+		NewHandler(nil, nil, nil, nil, svc, "").SetPlatformLoginEnabled(w, r)
 		testutil.ExpectStatus(t, w, http.StatusNoContent)
 		if len(svc.setEnableCalls) != 1 || svc.setEnableCalls[0] != true {
 			t.Errorf("expected SetPlatformLoginEnabled(true), got %v", svc.setEnableCalls)
@@ -952,7 +952,7 @@ func TestUR38SetPlatformLoginEnabledHandlerForbidden(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("LKU-38_SetPlatformLoginEnabledForbidden", func(t *testing.T) {
-		SetPlatformLoginEnabledHandler(svc)(w, r)
+		NewHandler(nil, nil, nil, nil, svc, "").SetPlatformLoginEnabled(w, r)
 		testutil.ExpectStatus(t, w, http.StatusForbidden)
 		testutil.ExpectDetail(t, w, msgNoPermissionToUpdatePlatforms)
 	})
@@ -964,7 +964,7 @@ func TestUR39SetPlatformLoginEnabledHandlerMalformedBody(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("LKU-39_SetPlatformLoginEnabledMalformedBody", func(t *testing.T) {
-		SetPlatformLoginEnabledHandler(svc)(w, r)
+		NewHandler(nil, nil, nil, nil, svc, "").SetPlatformLoginEnabled(w, r)
 		testutil.ExpectStatus(t, w, http.StatusBadRequest)
 		testutil.ExpectDetail(t, w, msgInvalidRequestBody)
 		if len(svc.setEnableCalls) != 0 {
@@ -979,7 +979,7 @@ func TestUR40SetPlatformLoginEnabledHandlerMissingField(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("LKU-40_SetPlatformLoginEnabledMissingField", func(t *testing.T) {
-		SetPlatformLoginEnabledHandler(svc)(w, r)
+		NewHandler(nil, nil, nil, nil, svc, "").SetPlatformLoginEnabled(w, r)
 		testutil.ExpectStatus(t, w, http.StatusBadRequest)
 		testutil.ExpectDetail(t, w, msgInvalidRequestBody)
 		if len(svc.setEnableCalls) != 0 {
@@ -994,7 +994,7 @@ func TestUR41SetPlatformLoginEnabledHandlerNotFoundMapsTo404(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("LKU-41_SetPlatformLoginEnabledNotFoundMapsTo404", func(t *testing.T) {
-		SetPlatformLoginEnabledHandler(svc)(w, r)
+		NewHandler(nil, nil, nil, nil, svc, "").SetPlatformLoginEnabled(w, r)
 		testutil.ExpectStatus(t, w, http.StatusNotFound)
 		testutil.ExpectDetail(t, w, msgPlatformNotLinked)
 	})
@@ -1006,7 +1006,7 @@ func TestUR42SetPlatformLoginEnabledHandlerWouldLockAccountMapsTo400(t *testing.
 	w := httptest.NewRecorder()
 
 	t.Run("LKU-42_SetPlatformLoginEnabledWouldLockAccountMapsTo400", func(t *testing.T) {
-		SetPlatformLoginEnabledHandler(svc)(w, r)
+		NewHandler(nil, nil, nil, nil, svc, "").SetPlatformLoginEnabled(w, r)
 		testutil.ExpectStatus(t, w, http.StatusBadRequest)
 		testutil.ExpectDetail(t, w, msgSetPasswordOrLinkBeforeDisabling)
 	})
@@ -1018,7 +1018,7 @@ func TestUR43SetPlatformLoginEnabledHandlerUnverifiedMapsTo400(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("LKU-43_SetPlatformLoginEnabledUnverifiedMapsTo400", func(t *testing.T) {
-		SetPlatformLoginEnabledHandler(svc)(w, r)
+		NewHandler(nil, nil, nil, nil, svc, "").SetPlatformLoginEnabled(w, r)
 		testutil.ExpectStatus(t, w, http.StatusBadRequest)
 		testutil.ExpectDetail(t, w, msgLinkedAccountUnverified)
 	})
@@ -1030,7 +1030,7 @@ func TestUR44SetPlatformLoginEnabledHandlerUnclassifiedErrorMapsTo500(t *testing
 	w := httptest.NewRecorder()
 
 	t.Run("LKU-44_SetPlatformLoginEnabledUnclassifiedErrorMapsTo500", func(t *testing.T) {
-		SetPlatformLoginEnabledHandler(svc)(w, r)
+		NewHandler(nil, nil, nil, nil, svc, "").SetPlatformLoginEnabled(w, r)
 		testutil.ExpectStatus(t, w, http.StatusInternalServerError)
 		testutil.ExpectDetail(t, w, msgFailedToUpdatePlatform)
 	})

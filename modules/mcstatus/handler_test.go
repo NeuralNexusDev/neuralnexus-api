@@ -127,7 +127,7 @@ func TestServerStatusHandler(t *testing.T) {
 		req := hdRequest(t, "mc.example.com:25565", "")
 		w := httptest.NewRecorder()
 
-		ServerStatusHandler(mock)(w, req)
+		NewHandler(mock).ServerStatus(w, req)
 
 		if w.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d", w.Code)
@@ -146,7 +146,7 @@ func TestServerStatusHandler(t *testing.T) {
 		req := hdRequest(t, "mc.example.com:25565", "raw=true")
 		w := httptest.NewRecorder()
 
-		ServerStatusHandler(mock)(w, req)
+		NewHandler(mock).ServerStatus(w, req)
 
 		if w.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d", w.Code)
@@ -162,7 +162,7 @@ func TestServerStatusHandler(t *testing.T) {
 		req := hdRequest(t, "example.com:25566", "bedrock=true&query=true&query_port=9999")
 		w := httptest.NewRecorder()
 
-		ServerStatusHandler(mock)(w, req)
+		NewHandler(mock).ServerStatus(w, req)
 
 		if len(mock.serverCalls) != 1 {
 			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
@@ -198,7 +198,7 @@ func TestServerStatusHandler(t *testing.T) {
 			req := hdRequest(t, "mc.example.com:25565", "")
 			w := httptest.NewRecorder()
 
-			ServerStatusHandler(mock)(w, req)
+			NewHandler(mock).ServerStatus(w, req)
 
 			if w.Code != tc.wantStatus {
 				t.Fatalf("expected %d, got %d", tc.wantStatus, w.Code)
@@ -222,7 +222,7 @@ func TestServerStatusHandler(t *testing.T) {
 			mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 			req := hdRequest(t, "mc.example.com:25570", "query=true&query_port="+tc.value)
 
-			ServerStatusHandler(mock)(httptest.NewRecorder(), req)
+			NewHandler(mock).ServerStatus(httptest.NewRecorder(), req)
 
 			if len(mock.serverCalls) != 1 {
 				t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
@@ -238,7 +238,7 @@ func TestServerStatusHandler(t *testing.T) {
 			mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 			req := hdRequest(t, "mc.example.com:25570", "query=true&query_port="+bound)
 
-			ServerStatusHandler(mock)(httptest.NewRecorder(), req)
+			NewHandler(mock).ServerStatus(httptest.NewRecorder(), req)
 
 			want, _ := strconv.Atoi(bound)
 			if len(mock.serverCalls) != 1 || mock.serverCalls[0].queryPort != want {
@@ -281,7 +281,7 @@ func TestServerStatusHandler(t *testing.T) {
 			mock := &hdMockService{serverStatus: hdValidStatus(nil)}
 			req := hdRequest(t, tc.input, tc.query)
 
-			ServerStatusHandler(mock)(httptest.NewRecorder(), req)
+			NewHandler(mock).ServerStatus(httptest.NewRecorder(), req)
 
 			if len(mock.serverCalls) != 1 {
 				t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
@@ -343,7 +343,7 @@ func TestServerStatusHandler(t *testing.T) {
 			req := hdRequest(t, tc.input, "")
 			w := httptest.NewRecorder()
 
-			ServerStatusHandler(mock)(w, req)
+			NewHandler(mock).ServerStatus(w, req)
 
 			if w.Code != http.StatusBadRequest {
 				t.Fatalf("expected 400, got %d", w.Code)
@@ -362,7 +362,7 @@ func TestServerStatusHandler(t *testing.T) {
 		req := hdRequest(t, "Example.COM:25570", "")
 		w := httptest.NewRecorder()
 
-		ServerStatusHandler(mock)(w, req)
+		NewHandler(mock).ServerStatus(w, req)
 
 		if w.Code != http.StatusNotFound {
 			t.Fatalf("expected 404, got %d", w.Code)
@@ -395,7 +395,7 @@ func TestServerStatusHandler(t *testing.T) {
 		req := hdRequest(t, "example.com:25570", "")
 		w := httptest.NewRecorder()
 
-		ServerStatusHandler(mock)(w, req)
+		NewHandler(mock).ServerStatus(w, req)
 
 		var body map[string]any
 		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
@@ -415,7 +415,7 @@ func TestServerStatusHandler(t *testing.T) {
 		req.Header.Set("Accept", "application/xml")
 		w := httptest.NewRecorder()
 
-		ServerStatusHandler(mock)(w, req)
+		NewHandler(mock).ServerStatus(w, req)
 
 		if ct := w.Header().Get("Content-Type"); ct != "application/problem+xml" {
 			t.Fatalf("expected Content-Type application/problem+xml, got %q", ct)
@@ -432,7 +432,7 @@ func TestServerStatusHandler(t *testing.T) {
 		req.Header.Set("Accept", "application/x-protobuf")
 		w := httptest.NewRecorder()
 
-		ServerStatusHandler(mock)(w, req)
+		NewHandler(mock).ServerStatus(w, req)
 
 		if w.Code != http.StatusNotFound {
 			t.Fatalf("expected 404, got %d", w.Code)
@@ -447,7 +447,7 @@ func TestServerStatusHandler(t *testing.T) {
 		req := hdRequest(t, "Example.COM", "bedrock=true")
 		w := httptest.NewRecorder()
 
-		ServerStatusHandler(mock)(w, req)
+		NewHandler(mock).ServerStatus(w, req)
 
 		if w.Code != http.StatusNotFound {
 			t.Fatalf("expected 404, got %d", w.Code)
@@ -474,7 +474,7 @@ func TestIconHandler(t *testing.T) {
 		req := hdRequest(t, "example.com:25565", "")
 		w := httptest.NewRecorder()
 
-		IconHandler(mock)(w, req)
+		NewHandler(mock).Icon(w, req)
 
 		if w.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d", w.Code)
@@ -503,7 +503,7 @@ func TestIconHandler(t *testing.T) {
 		req := hdRequest(t, "example.com:25565", "")
 		w := httptest.NewRecorder()
 
-		IconHandler(mock)(w, req)
+		NewHandler(mock).Icon(w, req)
 
 		if w.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d", w.Code)
@@ -524,7 +524,7 @@ func TestIconHandler(t *testing.T) {
 		req := hdRequest(t, "example.com:25565", "")
 		w := httptest.NewRecorder()
 
-		IconHandler(mock)(w, req)
+		NewHandler(mock).Icon(w, req)
 
 		if w.Code != http.StatusInternalServerError {
 			t.Fatalf("expected 500, got %d", w.Code)
@@ -540,7 +540,7 @@ func TestIconHandler(t *testing.T) {
 		req := hdRequest(t, "example.com:19132", "bedrock=true")
 		w := httptest.NewRecorder()
 
-		IconHandler(mock)(w, req)
+		NewHandler(mock).Icon(w, req)
 
 		if w.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d", w.Code)
@@ -562,7 +562,7 @@ func TestIconHandler(t *testing.T) {
 		mock := &hdMockService{javaStatus: status}
 		req := hdRequest(t, "mc.example.com:25570", "")
 
-		IconHandler(mock)(httptest.NewRecorder(), req)
+		NewHandler(mock).Icon(httptest.NewRecorder(), req)
 
 		if len(mock.javaCalls) != 1 {
 			t.Fatalf("expected 1 call, got %d", len(mock.javaCalls))
@@ -578,7 +578,7 @@ func TestIconHandler(t *testing.T) {
 		req := hdRequest(t, "example.com:25565", "")
 		w := httptest.NewRecorder()
 
-		IconHandler(mock)(w, req)
+		NewHandler(mock).Icon(w, req)
 
 		if w.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d", w.Code)
@@ -594,7 +594,7 @@ func TestIconHandler(t *testing.T) {
 		req := hdRequest(t, "example.com:25565", "")
 		w := httptest.NewRecorder()
 
-		IconHandler(mock)(w, req)
+		NewHandler(mock).Icon(w, req)
 
 		if w.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d", w.Code)
@@ -609,7 +609,7 @@ func TestIconHandler(t *testing.T) {
 		req := hdRequest(t, "localhost", "")
 		w := httptest.NewRecorder()
 
-		IconHandler(mock)(w, req)
+		NewHandler(mock).Icon(w, req)
 
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400, got %d", w.Code)
@@ -641,7 +641,7 @@ func TestSimpleStatusHandler(t *testing.T) {
 		req := hdRequest(t, "example.com:25565", "")
 		w := httptest.NewRecorder()
 
-		SimpleStatusHandler(mock)(w, req)
+		NewHandler(mock).SimpleStatus(w, req)
 
 		if w.Code != http.StatusOK {
 			t.Fatalf("expected 200, got %d", w.Code)
@@ -663,7 +663,7 @@ func TestSimpleStatusHandler(t *testing.T) {
 		req := hdRequest(t, "example.com:25565", "")
 		w := httptest.NewRecorder()
 
-		SimpleStatusHandler(mock)(w, req)
+		NewHandler(mock).SimpleStatus(w, req)
 
 		if w.Code != http.StatusNotFound {
 			t.Fatalf("expected 404, got %d", w.Code)
@@ -678,7 +678,7 @@ func TestSimpleStatusHandler(t *testing.T) {
 		req := hdRequest(t, "example.com:25566", "bedrock=true&query=true&query_port=1234")
 		w := httptest.NewRecorder()
 
-		SimpleStatusHandler(mock)(w, req)
+		NewHandler(mock).SimpleStatus(w, req)
 
 		if len(mock.serverCalls) != 1 {
 			t.Fatalf("expected 1 call, got %d", len(mock.serverCalls))
@@ -694,7 +694,7 @@ func TestSimpleStatusHandler(t *testing.T) {
 		req := hdRequest(t, "localhost", "")
 		w := httptest.NewRecorder()
 
-		SimpleStatusHandler(mock)(w, req)
+		NewHandler(mock).SimpleStatus(w, req)
 
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400, got %d", w.Code)

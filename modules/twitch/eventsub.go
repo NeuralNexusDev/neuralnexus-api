@@ -24,51 +24,66 @@ const (
 	msgFailedToHandleEventSubEvent = "Failed to handle EventSub event"
 )
 
-// HandleEventSub handles the EventSub notifications
-func HandleEventSub(cfg config.Twitch, eventsub EventSubService, tokens link.OAuthTokenStore, linked link.Store) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get(EventSubMessageType) == "" {
-			reqctx.Log(r.Context(), "EventSub message type not set")
-			responses.BadRequest(w, r, "")
-			return
-		}
+// Handler serves the Twitch EventSub route.
+type Handler interface {
+	EventSub(w http.ResponseWriter, r *http.Request)
+}
 
-		var err error
-		var body []byte
-		body, err = io.ReadAll(r.Body)
-		if err != nil {
-			reqctx.Log(r.Context(), "Failed to read EventSub body:", err.Error())
-			responses.BadRequest(w, r, "")
-			return
-		}
-		defer r.Body.Close()
+type handler struct {
+	cfg      config.Twitch
+	eventsub EventSubService
+	tokens   link.OAuthTokenStore
+	linked   link.Store
+}
 
-		vals, err := validateEventSubNotification(cfg.EventSubSecret, r.Header, body)
-		if err != nil {
-			reqctx.Log(r.Context(), "Failed to validate EventSub notification:", err.Error())
-			responses.BadRequest(w, r, "")
-			return
-		}
+// NewHandler returns a Handler that serves the Twitch EventSub route from the given configuration, service and stores.
+func NewHandler(cfg config.Twitch, eventsub EventSubService, tokens link.OAuthTokenStore, linked link.Store) Handler {
+	return &handler{cfg, eventsub, tokens, linked}
+}
 
-		var userId = vals.Subscription.Condition.BroadcasterUserID
-		var messageType = strings.ToLower(r.Header.Get(EventSubMessageType))
-		switch messageType {
-		case EventSubTypeRevocation:
-			err = handleRevocation(r.Context(), userId, eventsub, tokens, *vals)
-		case EventSubTypeVerification:
-			err = handleVerification(w, r.Context(), userId, eventsub, *vals)
-		case EventSubTypeNotification:
-			err = handleNotification(r.Context(), userId, eventsub, tokens, *vals, linked)
-		default:
-			reqctx.Log(r.Context(), userId, "Unexpected EventSub message type:", messageType)
-			responses.BadRequest(w, r, "")
-			return
-		}
-		if err != nil {
-			reqctx.Log(r.Context(), userId, "Failed to handle EventSub event:", err.Error())
-			responses.InternalServerError(w, r, msgFailedToHandleEventSubEvent)
-			return
-		}
-		responses.NoContent(w, r)
+// EventSub handles the EventSub notifications
+func (h *handler) EventSub(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get(EventSubMessageType) == "" {
+		reqctx.Log(r.Context(), "EventSub message type not set")
+		responses.BadRequest(w, r, "")
+		return
 	}
+
+	var err error
+	var body []byte
+	body, err = io.ReadAll(r.Body)
+	if err != nil {
+		reqctx.Log(r.Context(), "Failed to read EventSub body:", err.Error())
+		responses.BadRequest(w, r, "")
+		return
+	}
+	defer r.Body.Close()
+
+	vals, err := validateEventSubNotification(h.cfg.EventSubSecret, r.Header, body)
+	if err != nil {
+		reqctx.Log(r.Context(), "Failed to validate EventSub notification:", err.Error())
+		responses.BadRequest(w, r, "")
+		return
+	}
+
+	var userId = vals.Subscription.Condition.BroadcasterUserID
+	var messageType = strings.ToLower(r.Header.Get(EventSubMessageType))
+	switch messageType {
+	case EventSubTypeRevocation:
+		err = handleRevocation(r.Context(), userId, h.eventsub, h.tokens, *vals)
+	case EventSubTypeVerification:
+		err = handleVerification(w, r.Context(), userId, h.eventsub, *vals)
+	case EventSubTypeNotification:
+		err = handleNotification(r.Context(), userId, h.eventsub, h.tokens, *vals, h.linked)
+	default:
+		reqctx.Log(r.Context(), userId, "Unexpected EventSub message type:", messageType)
+		responses.BadRequest(w, r, "")
+		return
+	}
+	if err != nil {
+		reqctx.Log(r.Context(), userId, "Failed to handle EventSub event:", err.Error())
+		responses.InternalServerError(w, r, msgFailedToHandleEventSubEvent)
+		return
+	}
+	responses.NoContent(w, r)
 }

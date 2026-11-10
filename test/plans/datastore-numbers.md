@@ -18,17 +18,17 @@
 | NDS-06 | Delete | Happy Path | Delete of an existing number row | Live database; number row created | The delete returns nil; a following read returns `ErrNumberNotFound` | P1 |  |
 | NDS-07 | Create | Error Path | Store id `"abc"` is not a number | Live database; account row inserted | Each of the four methods returns `ErrNumberInvalidID` (the database reports an invalid text representation) | P1 | Runs for create, read, update and delete |
 
-## handler.go
+## handler
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| NDH-01 | CreateNumberHandler | Error Path | Service returns `ErrNumberExists` | Service fails with the error; valid body; session holds `numberstore.admin` | 409 with detail `A number already exists for this data store` | P1 |  |
-| NDH-02 | CreateNumberHandler | Error Path | Service returns `ErrNumberStoreOrUserNotFound` | Service fails with the error; valid body; session holds `numberstore.admin` | 404 with detail `Data store or user not found` | P1 |  |
-| NDH-03 | CreateNumberHandler | Error Path | Service returns an unexpected error | Service fails with the error; valid body; session holds `numberstore.admin` | 500 with detail `Failed to create numberstore` | P1 |  |
-| NDH-04 | ReadNumberHandler | Error Path | Service returns `ErrNumberNotFound` | Service fails with the error; valid body; session holds `numberstore.admin` | 404 with detail `Number not found` | P1 |  |
-| NDH-05 | ReadNumberHandler | Error Path | Service returns an unexpected error | Service fails with the error; valid body; session holds `numberstore.admin` | 500 with detail `Failed to read numberstore` | P1 |  |
-| NDH-06 | UpdateNumberHandler | Error Path | Service returns `ErrNumberNotFound` | Service fails with the error; valid body; session holds `numberstore.admin` | 404 with detail `Number not found` | P1 |  |
-| NDH-07 | UpdateNumberHandler | Error Path | Service returns an unexpected error | Service fails with the error; valid body; session holds `numberstore.admin` | 500 with detail `Failed to update numberstore` | P1 |  |
-| NDH-08 | DeleteNumberHandler | Error Path | Service returns `ErrNumberNotFound` | Service fails with the error; valid body; session holds `numberstore.admin` | 404 with detail `Number not found` | P1 |  |
-| NDH-09 | DeleteNumberHandler | Error Path | Service returns an unexpected error | Service fails with the error; valid body; session holds `numberstore.admin` | 500 with detail `Failed to delete numberstore` | P1 |  |
-| NDH-10 | CreateNumberHandler | Error Path | Service returns `ErrNumberInvalidID` | Service fails with the error; valid body; session holds `numberstore.admin` | Each handler answers 400 with detail `Data store and user ids must be numbers` | P1 | Runs for the create, read, update and delete handlers |
+| NDH-01 | CreateNumber | Error Path | Service returns `ErrNumberExists` | Service fails with the error; valid body; session holds `numberstore.admin` | 409 with detail `A number already exists for this data store` | P1 |  |
+| NDH-02 | CreateNumber | Error Path | Service returns `ErrNumberStoreOrUserNotFound` | Service fails with the error; valid body; session holds `numberstore.admin` | 404 with detail `Data store or user not found` | P1 |  |
+| NDH-03 | CreateNumber | Error Path | Service returns an unexpected error | Service fails with the error; valid body; session holds `numberstore.admin` | 500 with detail `Failed to create numberstore` | P1 |  |
+| NDH-04 | ReadNumber | Error Path | Service returns `ErrNumberNotFound` | Service fails with the error; valid body; session holds `numberstore.admin` | 404 with detail `Number not found` | P1 |  |
+| NDH-05 | ReadNumber | Error Path | Service returns an unexpected error | Service fails with the error; valid body; session holds `numberstore.admin` | 500 with detail `Failed to read numberstore` | P1 |  |
+| NDH-06 | UpdateNumber | Error Path | Service returns `ErrNumberNotFound` | Service fails with the error; valid body; session holds `numberstore.admin` | 404 with detail `Number not found` | P1 |  |
+| NDH-07 | UpdateNumber | Error Path | Service returns an unexpected error | Service fails with the error; valid body; session holds `numberstore.admin` | 500 with detail `Failed to update numberstore` | P1 |  |
+| NDH-08 | DeleteNumber | Error Path | Service returns `ErrNumberNotFound` | Service fails with the error; valid body; session holds `numberstore.admin` | 404 with detail `Number not found` | P1 |  |
+| NDH-09 | DeleteNumber | Error Path | Service returns an unexpected error | Service fails with the error; valid body; session holds `numberstore.admin` | 500 with detail `Failed to delete numberstore` | P1 |  |
+| NDH-10 | CreateNumber | Error Path | Service returns `ErrNumberInvalidID` | Service fails with the error; valid body; session holds `numberstore.admin` | Each handler answers 400 with detail `Data store and user ids must be numbers` | P1 | Runs for the create, read, update and delete handlers |

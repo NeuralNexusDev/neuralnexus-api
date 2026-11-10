@@ -40,39 +40,39 @@ func runDSHandler(t *testing.T, h http.HandlerFunc, wantStatus int) {
 
 func TestDSH_DataStoreHandlers(t *testing.T) {
 	t.Run("DSH-01_ReadNotFound", func(t *testing.T) {
-		runDSHandler(t, ReadDataStoreHandler(&fakeDSService{err: ErrDataStoreNotFound}), http.StatusNotFound)
+		runDSHandler(t, NewHandler(&fakeDSService{err: ErrDataStoreNotFound}).ReadDataStore, http.StatusNotFound)
 	})
 	t.Run("DSH-02_ReadUnexpectedError", func(t *testing.T) {
-		runDSHandler(t, ReadDataStoreHandler(&fakeDSService{err: testutil.ErrBoom}), http.StatusInternalServerError)
+		runDSHandler(t, NewHandler(&fakeDSService{err: testutil.ErrBoom}).ReadDataStore, http.StatusInternalServerError)
 	})
 	t.Run("DSH-03_ReadSuccess", func(t *testing.T) {
-		runDSHandler(t, ReadDataStoreHandler(&fakeDSService{}), http.StatusOK)
+		runDSHandler(t, NewHandler(&fakeDSService{}).ReadDataStore, http.StatusOK)
 	})
 	t.Run("DSH-04_UpdateNotFound", func(t *testing.T) {
-		runDSHandler(t, UpdateDataStoreHandler(&fakeDSService{err: ErrDataStoreNotFound}), http.StatusNotFound)
+		runDSHandler(t, NewHandler(&fakeDSService{err: ErrDataStoreNotFound}).UpdateDataStore, http.StatusNotFound)
 	})
 	t.Run("DSH-05_UpdateOwnerNotFound", func(t *testing.T) {
-		runDSHandler(t, UpdateDataStoreHandler(&fakeDSService{err: ErrDataStoreOwnerNotFound}), http.StatusNotFound)
+		runDSHandler(t, NewHandler(&fakeDSService{err: ErrDataStoreOwnerNotFound}).UpdateDataStore, http.StatusNotFound)
 	})
 	t.Run("DSH-06_UpdateUnexpectedError", func(t *testing.T) {
-		runDSHandler(t, UpdateDataStoreHandler(&fakeDSService{err: testutil.ErrBoom}), http.StatusInternalServerError)
+		runDSHandler(t, NewHandler(&fakeDSService{err: testutil.ErrBoom}).UpdateDataStore, http.StatusInternalServerError)
 	})
 	t.Run("DSH-07_DeleteNotFound", func(t *testing.T) {
-		runDSHandler(t, DeleteDataStoreHandler(&fakeDSService{err: ErrDataStoreNotFound}), http.StatusNotFound)
+		runDSHandler(t, NewHandler(&fakeDSService{err: ErrDataStoreNotFound}).DeleteDataStore, http.StatusNotFound)
 	})
 	t.Run("DSH-08_DeleteInUse", func(t *testing.T) {
-		runDSHandler(t, DeleteDataStoreHandler(&fakeDSService{err: ErrDataStoreInUse}), http.StatusConflict)
+		runDSHandler(t, NewHandler(&fakeDSService{err: ErrDataStoreInUse}).DeleteDataStore, http.StatusConflict)
 	})
 	t.Run("DSH-09_DeleteUnexpectedError", func(t *testing.T) {
-		runDSHandler(t, DeleteDataStoreHandler(&fakeDSService{err: testutil.ErrBoom}), http.StatusInternalServerError)
+		runDSHandler(t, NewHandler(&fakeDSService{err: testutil.ErrBoom}).DeleteDataStore, http.StatusInternalServerError)
 	})
 	t.Run("DSH-10_DeleteSuccess", func(t *testing.T) {
-		runDSHandler(t, DeleteDataStoreHandler(&fakeDSService{}), http.StatusNoContent)
+		runDSHandler(t, NewHandler(&fakeDSService{}).DeleteDataStore, http.StatusNoContent)
 	})
 	t.Run("DSH-11_InvalidIDIs400", func(t *testing.T) {
 		svc := &fakeDSService{err: ErrDataStoreInvalidID}
-		runDSHandler(t, ReadDataStoreHandler(svc), http.StatusBadRequest)
-		runDSHandler(t, UpdateDataStoreHandler(svc), http.StatusBadRequest)
-		runDSHandler(t, DeleteDataStoreHandler(svc), http.StatusBadRequest)
+		runDSHandler(t, NewHandler(svc).ReadDataStore, http.StatusBadRequest)
+		runDSHandler(t, NewHandler(svc).UpdateDataStore, http.StatusBadRequest)
+		runDSHandler(t, NewHandler(svc).DeleteDataStore, http.StatusBadRequest)
 	})
 }

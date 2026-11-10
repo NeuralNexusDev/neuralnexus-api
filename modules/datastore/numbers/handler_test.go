@@ -40,69 +40,70 @@ func ndhServe(t *testing.T, h http.HandlerFunc) *httptest.ResponseRecorder {
 
 func TestNumberHandlerErrors(t *testing.T) {
 	t.Run("NDH-01_CreateExists", func(t *testing.T) {
-		w := ndhServe(t, CreateNumberHandler(&ndhService{err: ErrNumberExists}))
+		w := ndhServe(t, NewHandler(&ndhService{err: ErrNumberExists}).CreateNumber)
 		testutil.ExpectStatus(t, w, http.StatusConflict)
 		testutil.ExpectDetail(t, w, "A number already exists for this data store")
 	})
 
 	t.Run("NDH-02_CreateStoreOrUserNotFound", func(t *testing.T) {
-		w := ndhServe(t, CreateNumberHandler(&ndhService{err: ErrNumberStoreOrUserNotFound}))
+		w := ndhServe(t, NewHandler(&ndhService{err: ErrNumberStoreOrUserNotFound}).CreateNumber)
 		testutil.ExpectStatus(t, w, http.StatusNotFound)
 		testutil.ExpectDetail(t, w, "Data store or user not found")
 	})
 
 	t.Run("NDH-03_CreateUnexpectedError", func(t *testing.T) {
-		w := ndhServe(t, CreateNumberHandler(&ndhService{err: testutil.ErrBoom}))
+		w := ndhServe(t, NewHandler(&ndhService{err: testutil.ErrBoom}).CreateNumber)
 		testutil.ExpectStatus(t, w, http.StatusInternalServerError)
 		testutil.ExpectDetail(t, w, "Failed to create numberstore")
 	})
 
 	t.Run("NDH-04_ReadNotFound", func(t *testing.T) {
-		w := ndhServe(t, ReadNumberHandler(&ndhService{err: ErrNumberNotFound}))
+		w := ndhServe(t, NewHandler(&ndhService{err: ErrNumberNotFound}).ReadNumber)
 		testutil.ExpectStatus(t, w, http.StatusNotFound)
 		testutil.ExpectDetail(t, w, "Number not found")
 	})
 
 	t.Run("NDH-05_ReadUnexpectedError", func(t *testing.T) {
-		w := ndhServe(t, ReadNumberHandler(&ndhService{err: testutil.ErrBoom}))
+		w := ndhServe(t, NewHandler(&ndhService{err: testutil.ErrBoom}).ReadNumber)
 		testutil.ExpectStatus(t, w, http.StatusInternalServerError)
 		testutil.ExpectDetail(t, w, "Failed to read numberstore")
 	})
 
 	t.Run("NDH-06_UpdateNotFound", func(t *testing.T) {
-		w := ndhServe(t, UpdateNumberHandler(&ndhService{err: ErrNumberNotFound}))
+		w := ndhServe(t, NewHandler(&ndhService{err: ErrNumberNotFound}).UpdateNumber)
 		testutil.ExpectStatus(t, w, http.StatusNotFound)
 		testutil.ExpectDetail(t, w, "Number not found")
 	})
 
 	t.Run("NDH-07_UpdateUnexpectedError", func(t *testing.T) {
-		w := ndhServe(t, UpdateNumberHandler(&ndhService{err: testutil.ErrBoom}))
+		w := ndhServe(t, NewHandler(&ndhService{err: testutil.ErrBoom}).UpdateNumber)
 		testutil.ExpectStatus(t, w, http.StatusInternalServerError)
 		testutil.ExpectDetail(t, w, "Failed to update numberstore")
 	})
 
 	t.Run("NDH-08_DeleteNotFound", func(t *testing.T) {
-		w := ndhServe(t, DeleteNumberHandler(&ndhService{err: ErrNumberNotFound}))
+		w := ndhServe(t, NewHandler(&ndhService{err: ErrNumberNotFound}).DeleteNumber)
 		testutil.ExpectStatus(t, w, http.StatusNotFound)
 		testutil.ExpectDetail(t, w, "Number not found")
 	})
 
 	t.Run("NDH-09_DeleteUnexpectedError", func(t *testing.T) {
-		w := ndhServe(t, DeleteNumberHandler(&ndhService{err: testutil.ErrBoom}))
+		w := ndhServe(t, NewHandler(&ndhService{err: testutil.ErrBoom}).DeleteNumber)
 		testutil.ExpectStatus(t, w, http.StatusInternalServerError)
 		testutil.ExpectDetail(t, w, "Failed to delete numberstore")
 	})
 
 	t.Run("NDH-10_InvalidIDsAre400", func(t *testing.T) {
-		handlers := map[string]func(NumberService) http.HandlerFunc{
-			"Create": CreateNumberHandler,
-			"Read":   ReadNumberHandler,
-			"Update": UpdateNumberHandler,
-			"Delete": DeleteNumberHandler,
+		h := NewHandler(&ndhService{err: ErrNumberInvalidID})
+		handlers := map[string]http.HandlerFunc{
+			"Create": h.CreateNumber,
+			"Read":   h.ReadNumber,
+			"Update": h.UpdateNumber,
+			"Delete": h.DeleteNumber,
 		}
 		for name, handler := range handlers {
 			t.Run(name, func(t *testing.T) {
-				w := ndhServe(t, handler(&ndhService{err: ErrNumberInvalidID}))
+				w := ndhServe(t, handler)
 				testutil.ExpectStatus(t, w, http.StatusBadRequest)
 				testutil.ExpectDetail(t, w, "Data store and user ids must be numbers")
 			})

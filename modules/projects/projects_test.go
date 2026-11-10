@@ -266,7 +266,7 @@ func TestGetReleasesHandler(t *testing.T) {
 		req.SetPathValue("project", "project")
 		rec := httptest.NewRecorder()
 
-		GetReleasesHandler(cfg)(rec, req)
+		NewHandler(cfg).GetReleases(rec, req)
 
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
@@ -293,7 +293,7 @@ func TestGetReleasesHandler(t *testing.T) {
 		req.SetPathValue("project", "project")
 		rec := httptest.NewRecorder()
 
-		GetReleasesHandler(cfg)(rec, req)
+		NewHandler(cfg).GetReleases(rec, req)
 
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
@@ -326,7 +326,7 @@ func TestGetReleasesHandler(t *testing.T) {
 		req.SetPathValue("project", "project")
 		rec := httptest.NewRecorder()
 
-		GetReleasesHandler(cfg)(rec, req)
+		NewHandler(cfg).GetReleases(rec, req)
 
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
@@ -353,7 +353,7 @@ func TestGetReleasesHandler(t *testing.T) {
 		req.SetPathValue("project", "project")
 		rec := httptest.NewRecorder()
 
-		GetReleasesHandler(cfg)(rec, req)
+		NewHandler(cfg).GetReleases(rec, req)
 
 		if rec.Code != http.StatusInternalServerError {
 			t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
@@ -382,7 +382,7 @@ func TestGetReleasesHandler(t *testing.T) {
 			req.SetPathValue("project", "project")
 			rec := httptest.NewRecorder()
 
-			GetReleasesHandler(testGitHub("test-token"))(rec, req)
+			NewHandler(testGitHub("test-token")).GetReleases(rec, req)
 
 			if rec.Code != tc.want {
 				t.Fatalf("status = %d, want %d", rec.Code, tc.want)
@@ -401,7 +401,7 @@ func TestGetReleasesHandler(t *testing.T) {
 			req.SetPathValue("group", "group")
 			req.SetPathValue("project", "project")
 
-			GetReleasesHandler(testGitHub("test-token"))(&failingWriter{header: make(http.Header)}, req)
+			NewHandler(testGitHub("test-token")).GetReleases(&failingWriter{header: make(http.Header)}, req)
 		}
 	})
 }

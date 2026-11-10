@@ -30,7 +30,7 @@ func TestHD01to05_CreatePetHandler(t *testing.T) {
 		req = req.WithContext(hdCtxWithSession(session.Session{}))
 		w := httptest.NewRecorder()
 
-		CreatePetHandler(svc)(w, req)
+		NewHandler(svc).CreatePet(w, req)
 
 		if w.Code != http.StatusForbidden {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusForbidden)
@@ -49,7 +49,7 @@ func TestHD01to05_CreatePetHandler(t *testing.T) {
 		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.admin")))
 		w := httptest.NewRecorder()
 
-		CreatePetHandler(svc)(w, req)
+		NewHandler(svc).CreatePet(w, req)
 
 		if w.Code != http.StatusCreated {
 			t.Fatalf("status = %d, want %d", w.Code, http.StatusCreated)
@@ -70,7 +70,7 @@ func TestHD01to05_CreatePetHandler(t *testing.T) {
 		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.admin")))
 		w := httptest.NewRecorder()
 
-		CreatePetHandler(svc)(w, req)
+		NewHandler(svc).CreatePet(w, req)
 
 		if w.Code != http.StatusCreated {
 			t.Fatalf("status = %d, want %d", w.Code, http.StatusCreated)
@@ -87,7 +87,7 @@ func TestHD01to05_CreatePetHandler(t *testing.T) {
 		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.admin")))
 		w := httptest.NewRecorder()
 
-		CreatePetHandler(svc)(w, req)
+		NewHandler(svc).CreatePet(w, req)
 
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
@@ -106,7 +106,7 @@ func TestHD01to05_CreatePetHandler(t *testing.T) {
 		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.admin")))
 		w := httptest.NewRecorder()
 
-		CreatePetHandler(svc)(w, req)
+		NewHandler(svc).CreatePet(w, req)
 
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
@@ -123,7 +123,7 @@ func TestHD06to10_GetPetHandler(t *testing.T) {
 		req.SetPathValue("id", "7")
 		w := httptest.NewRecorder()
 
-		GetPetHandler(svc)(w, req)
+		NewHandler(svc).GetPet(w, req)
 
 		if w.Code != http.StatusOK {
 			t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
@@ -139,7 +139,7 @@ func TestHD06to10_GetPetHandler(t *testing.T) {
 		req := testutil.NewRequest(http.MethodGet, "/pets", strings.NewReader(`{"id":7}`))
 		w := httptest.NewRecorder()
 
-		GetPetHandler(svc)(w, req)
+		NewHandler(svc).GetPet(w, req)
 
 		if w.Code != http.StatusOK {
 			t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
@@ -155,7 +155,7 @@ func TestHD06to10_GetPetHandler(t *testing.T) {
 		req := testutil.NewRequest(http.MethodGet, "/pets", nil)
 		w := httptest.NewRecorder()
 
-		GetPetHandler(svc)(w, req)
+		NewHandler(svc).GetPet(w, req)
 
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
@@ -173,7 +173,7 @@ func TestHD06to10_GetPetHandler(t *testing.T) {
 		req.SetPathValue("id", "abc")
 		w := httptest.NewRecorder()
 
-		GetPetHandler(svc)(w, req)
+		NewHandler(svc).GetPet(w, req)
 
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
@@ -191,7 +191,7 @@ func TestHD06to10_GetPetHandler(t *testing.T) {
 		req.SetPathValue("id", "7")
 		w := httptest.NewRecorder()
 
-		GetPetHandler(svc)(w, req)
+		NewHandler(svc).GetPet(w, req)
 
 		if w.Code != http.StatusNotFound {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
@@ -207,7 +207,7 @@ func TestHD11to14and35_UpdatePetHandler(t *testing.T) {
 		req := testutil.NewRequest(http.MethodPut, "/pets", strings.NewReader(`not json`))
 		w := httptest.NewRecorder()
 
-		UpdatePetHandler(svc)(w, req)
+		NewHandler(svc).UpdatePet(w, req)
 
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
@@ -225,7 +225,7 @@ func TestHD11to14and35_UpdatePetHandler(t *testing.T) {
 		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.pets:SomeoneElsesPet")))
 		w := httptest.NewRecorder()
 
-		UpdatePetHandler(svc)(w, req)
+		NewHandler(svc).UpdatePet(w, req)
 
 		if w.Code != http.StatusForbidden {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusForbidden)
@@ -243,7 +243,7 @@ func TestHD11to14and35_UpdatePetHandler(t *testing.T) {
 		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.pets:Rex")))
 		w := httptest.NewRecorder()
 
-		UpdatePetHandler(svc)(w, req)
+		NewHandler(svc).UpdatePet(w, req)
 
 		if w.Code != http.StatusOK {
 			t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
@@ -260,7 +260,7 @@ func TestHD11to14and35_UpdatePetHandler(t *testing.T) {
 		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.pets:Rex")))
 		w := httptest.NewRecorder()
 
-		UpdatePetHandler(svc)(w, req)
+		NewHandler(svc).UpdatePet(w, req)
 
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
@@ -275,7 +275,7 @@ func TestHD11to14and35_UpdatePetHandler(t *testing.T) {
 		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.pets:Rex")))
 		w := httptest.NewRecorder()
 
-		UpdatePetHandler(svc)(w, req)
+		NewHandler(svc).UpdatePet(w, req)
 
 		if w.Code != http.StatusNotFound {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
@@ -292,7 +292,7 @@ func TestHD15to18_GetRandPetPictureByNameHandler(t *testing.T) {
 		req.SetPathValue("name", "Rex")
 		w := httptest.NewRecorder()
 
-		GetRandPetPictureByNameHandler(svc)(w, req)
+		NewHandler(svc).GetRandPetPictureByName(w, req)
 
 		if w.Code != http.StatusOK {
 			t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
@@ -308,7 +308,7 @@ func TestHD15to18_GetRandPetPictureByNameHandler(t *testing.T) {
 		req := testutil.NewRequest(http.MethodGet, "/pets/picture", strings.NewReader(`{"name":"Rex"}`))
 		w := httptest.NewRecorder()
 
-		GetRandPetPictureByNameHandler(svc)(w, req)
+		NewHandler(svc).GetRandPetPictureByName(w, req)
 
 		if w.Code != http.StatusOK {
 			t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
@@ -324,7 +324,7 @@ func TestHD15to18_GetRandPetPictureByNameHandler(t *testing.T) {
 		req := testutil.NewRequest(http.MethodGet, "/pets/picture", nil)
 		w := httptest.NewRecorder()
 
-		GetRandPetPictureByNameHandler(svc)(w, req)
+		NewHandler(svc).GetRandPetPictureByName(w, req)
 
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
@@ -339,7 +339,7 @@ func TestHD15to18_GetRandPetPictureByNameHandler(t *testing.T) {
 		req.SetPathValue("name", "Rex")
 		w := httptest.NewRecorder()
 
-		GetRandPetPictureByNameHandler(svc)(w, req)
+		NewHandler(svc).GetRandPetPictureByName(w, req)
 
 		if w.Code != http.StatusNotFound {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
@@ -356,7 +356,7 @@ func TestHD19to22_GetPetPictureHandler(t *testing.T) {
 		req.SetPathValue("id", "abc123")
 		w := httptest.NewRecorder()
 
-		GetPetPictureHandler(svc)(w, req)
+		NewHandler(svc).GetPetPicture(w, req)
 
 		if w.Code != http.StatusOK {
 			t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
@@ -372,7 +372,7 @@ func TestHD19to22_GetPetPictureHandler(t *testing.T) {
 		req := testutil.NewRequest(http.MethodGet, "/pictures", strings.NewReader(`{"id":"abc123"}`))
 		w := httptest.NewRecorder()
 
-		GetPetPictureHandler(svc)(w, req)
+		NewHandler(svc).GetPetPicture(w, req)
 
 		if w.Code != http.StatusOK {
 			t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
@@ -388,7 +388,7 @@ func TestHD19to22_GetPetPictureHandler(t *testing.T) {
 		req := testutil.NewRequest(http.MethodGet, "/pictures", nil)
 		w := httptest.NewRecorder()
 
-		GetPetPictureHandler(svc)(w, req)
+		NewHandler(svc).GetPetPicture(w, req)
 
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
@@ -403,7 +403,7 @@ func TestHD19to22_GetPetPictureHandler(t *testing.T) {
 		req.SetPathValue("id", "abc123")
 		w := httptest.NewRecorder()
 
-		GetPetPictureHandler(svc)(w, req)
+		NewHandler(svc).GetPetPicture(w, req)
 
 		if w.Code != http.StatusNotFound {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
@@ -419,7 +419,7 @@ func TestHD23to27and36_UpdatePetPictureHandler(t *testing.T) {
 		req := testutil.NewRequest(http.MethodPut, "/pictures", strings.NewReader(`not json`))
 		w := httptest.NewRecorder()
 
-		UpdatePetPictureHandler(svc)(w, req)
+		NewHandler(svc).UpdatePetPicture(w, req)
 
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
@@ -436,7 +436,7 @@ func TestHD23to27and36_UpdatePetPictureHandler(t *testing.T) {
 		req := testutil.NewRequest(http.MethodPut, "/pictures", strings.NewReader(`{"id":"abc123","prime_subj":1}`))
 		w := httptest.NewRecorder()
 
-		UpdatePetPictureHandler(svc)(w, req)
+		NewHandler(svc).UpdatePetPicture(w, req)
 
 		if w.Code != http.StatusNotFound {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
@@ -454,7 +454,7 @@ func TestHD23to27and36_UpdatePetPictureHandler(t *testing.T) {
 		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.pets:SomeoneElse")))
 		w := httptest.NewRecorder()
 
-		UpdatePetPictureHandler(svc)(w, req)
+		NewHandler(svc).UpdatePetPicture(w, req)
 
 		if w.Code != http.StatusForbidden {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusForbidden)
@@ -475,7 +475,7 @@ func TestHD23to27and36_UpdatePetPictureHandler(t *testing.T) {
 		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.pets:Rex")))
 		w := httptest.NewRecorder()
 
-		UpdatePetPictureHandler(svc)(w, req)
+		NewHandler(svc).UpdatePetPicture(w, req)
 
 		if w.Code != http.StatusOK {
 			t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
@@ -495,7 +495,7 @@ func TestHD23to27and36_UpdatePetPictureHandler(t *testing.T) {
 		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.pets:Rex")))
 		w := httptest.NewRecorder()
 
-		UpdatePetPictureHandler(svc)(w, req)
+		NewHandler(svc).UpdatePetPicture(w, req)
 
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
@@ -513,7 +513,7 @@ func TestHD23to27and36_UpdatePetPictureHandler(t *testing.T) {
 		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.pets:Rex")))
 		w := httptest.NewRecorder()
 
-		UpdatePetPictureHandler(svc)(w, req)
+		NewHandler(svc).UpdatePetPicture(w, req)
 
 		if w.Code != http.StatusNotFound {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
@@ -534,7 +534,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.pets:Rex")))
 		w := httptest.NewRecorder()
 
-		DeletePetPictureHandler(svc)(w, req)
+		NewHandler(svc).DeletePetPicture(w, req)
 
 		if w.Code != http.StatusNoContent {
 			t.Fatalf("status = %d, want %d", w.Code, http.StatusNoContent)
@@ -554,7 +554,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.pets:Rex")))
 		w := httptest.NewRecorder()
 
-		DeletePetPictureHandler(svc)(w, req)
+		NewHandler(svc).DeletePetPicture(w, req)
 
 		if w.Code != http.StatusNoContent {
 			t.Fatalf("status = %d, want %d", w.Code, http.StatusNoContent)
@@ -570,7 +570,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 		req := testutil.NewRequest(http.MethodDelete, "/pictures", nil)
 		w := httptest.NewRecorder()
 
-		DeletePetPictureHandler(svc)(w, req)
+		NewHandler(svc).DeletePetPicture(w, req)
 
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
@@ -585,7 +585,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 		req.SetPathValue("id", "abc123")
 		w := httptest.NewRecorder()
 
-		DeletePetPictureHandler(svc)(w, req)
+		NewHandler(svc).DeletePetPicture(w, req)
 
 		if w.Code != http.StatusNotFound {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
@@ -606,7 +606,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 		req.SetPathValue("id", "abc123")
 		w := httptest.NewRecorder()
 
-		DeletePetPictureHandler(svc)(w, req)
+		NewHandler(svc).DeletePetPicture(w, req)
 
 		if w.Code != http.StatusNotFound {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
@@ -628,7 +628,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.pets:SomeoneElse")))
 		w := httptest.NewRecorder()
 
-		DeletePetPictureHandler(svc)(w, req)
+		NewHandler(svc).DeletePetPicture(w, req)
 
 		if w.Code != http.StatusForbidden {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusForbidden)
@@ -651,7 +651,7 @@ func TestHD28to34_DeletePetPictureHandler(t *testing.T) {
 		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.pets:Rex")))
 		w := httptest.NewRecorder()
 
-		DeletePetPictureHandler(svc)(w, req)
+		NewHandler(svc).DeletePetPicture(w, req)
 
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
@@ -669,7 +669,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.admin")))
 		w := httptest.NewRecorder()
 
-		CreatePetHandler(svc)(w, req)
+		NewHandler(svc).CreatePet(w, req)
 
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
@@ -684,7 +684,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.pets:Rex")))
 		w := httptest.NewRecorder()
 
-		UpdatePetHandler(svc)(w, req)
+		NewHandler(svc).UpdatePet(w, req)
 
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
@@ -699,7 +699,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 		req.SetPathValue("id", "7")
 		w := httptest.NewRecorder()
 
-		GetPetHandler(svc)(w, req)
+		NewHandler(svc).GetPet(w, req)
 
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
@@ -714,7 +714,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 		req.SetPathValue("name", "Rex")
 		w := httptest.NewRecorder()
 
-		GetRandPetPictureByNameHandler(svc)(w, req)
+		NewHandler(svc).GetRandPetPictureByName(w, req)
 
 		if w.Code != http.StatusNotFound {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusNotFound)
@@ -730,7 +730,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.admin")))
 		w := httptest.NewRecorder()
 
-		CreatePetHandler(svc)(w, req)
+		NewHandler(svc).CreatePet(w, req)
 
 		if w.Code != http.StatusConflict {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusConflict)
@@ -745,7 +745,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.pets:Rex")))
 		w := httptest.NewRecorder()
 
-		UpdatePetHandler(svc)(w, req)
+		NewHandler(svc).UpdatePet(w, req)
 
 		if w.Code != http.StatusConflict {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusConflict)
@@ -765,7 +765,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 			req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.admin")))
 			w := httptest.NewRecorder()
 
-			CreatePetHandler(svc)(w, req)
+			NewHandler(svc).CreatePet(w, req)
 
 			if w.Code != http.StatusBadRequest {
 				t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
@@ -784,7 +784,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 		req = req.WithContext(hdCtxWithSession(hdSessionWithPermissions("petpictures.pets:Re\x00x")))
 		w := httptest.NewRecorder()
 
-		UpdatePetHandler(svc)(w, req)
+		NewHandler(svc).UpdatePet(w, req)
 
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusBadRequest)
@@ -802,7 +802,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 		req.SetPathValue("name", "Rex")
 		w := httptest.NewRecorder()
 
-		GetRandPetPictureByNameHandler(svc)(w, req)
+		NewHandler(svc).GetRandPetPictureByName(w, req)
 
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
@@ -817,7 +817,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 		req.SetPathValue("id", "abc123")
 		w := httptest.NewRecorder()
 
-		GetPetPictureHandler(svc)(w, req)
+		NewHandler(svc).GetPetPicture(w, req)
 
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
@@ -831,7 +831,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 		req := testutil.NewRequest(http.MethodPut, "/pictures", strings.NewReader(`{"id":"abc123","prime_subj":1}`))
 		w := httptest.NewRecorder()
 
-		UpdatePetPictureHandler(svc)(w, req)
+		NewHandler(svc).UpdatePetPicture(w, req)
 
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
@@ -849,7 +849,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 		req.SetPathValue("id", "abc123")
 		w := httptest.NewRecorder()
 
-		DeletePetPictureHandler(svc)(w, req)
+		NewHandler(svc).DeletePetPicture(w, req)
 
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
@@ -870,7 +870,7 @@ func TestHD37to44_StoreFailureMapping(t *testing.T) {
 		req.SetPathValue("id", "abc123")
 		w := httptest.NewRecorder()
 
-		DeletePetPictureHandler(svc)(w, req)
+		NewHandler(svc).DeletePetPicture(w, req)
 
 		if w.Code != http.StatusInternalServerError {
 			t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
