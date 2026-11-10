@@ -1,6 +1,6 @@
 # Test plan: modules/auth/session
 
-## service.go
+## service
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
@@ -29,7 +29,7 @@
 | SE-38 | AddSession | Edge Case | the call context is cancelled before the writes | fake store records `ctx.Err()` and a marker value at each call | The call succeeds, and `AddSessionToDB` and `AddSessionToCache` each see a context that is not done and still carries the marker, so the session is stored in both places | P1 |  |
 | SE-39 | UpdateSession | Edge Case | the call context is cancelled before the writes | fake store records `ctx.Err()` and a marker value at each call | The call succeeds, and `UpdateSessionInDB` and `AddSessionToCache` each see a context that is not done and still carries the marker, so the update lands in both places | P1 |  |
 
-## types.go
+## Session
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
@@ -41,7 +41,7 @@
 | SE-35 | HasPermissionValue | Happy Path | the session holds `node:a` and `node:b:c` | | true for `a` and `b:c` | P1 |  |
 | SE-36 | HasPermissionValue | Error Path | the value is absent, empty, extends a held value, or is the node itself | | false | P1 |  |
 
-## store.go
+## store
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|

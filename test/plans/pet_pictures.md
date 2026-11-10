@@ -5,7 +5,7 @@
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
 
-## store.go
+## store
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
@@ -13,31 +13,31 @@
 | PPS-03 | CreatePet | Error Path | insert a pet whose name already exists | live DB, name already created by a prior `CreatePet` | Returns `nil`, `ErrPetNameExists` (translated from the `name_check` unique violation, SQLSTATE 23505) | P2 | |
 | PPS-04 | CreatePet | Error Path | database unreachable | `DATABASE_URL` points at a closed local port | Returns `nil`, non-nil connection error | P2 | |
 | PPS-05 | CreatePet | Concurrency Invariant | N goroutines call `CreatePet` with the identical name simultaneously | live DB, one shared unique name per round | Exactly one call succeeds (nonzero `ID`, nil error); every other call fails with `ErrPetNameExists` | P0 | design: 5 rounds x 8 concurrent callers, fresh name per round |
-| PPS-26 | CreatePet | Error Path | insert a pet with an empty name | live DB, `name = ""` | Returns `nil`, `ErrPetNameEmpty` (translated from the `pets_name_not_empty` CHECK violation, not a raw Postgres error) | P1 | |
 | PPS-06 | GetPet | Error Path | id has no matching row | live DB, id not present in `pets` | Returns `nil`, `ErrPetNotFound` | P2 | |
 | PPS-07 | GetPetByName | Happy Path | name has a matching row | live DB, pet created via `CreatePet` | Returns `*Pet` with matching `ID`/`Name`/`ProfilePicture`, nil error | P1 | |
 | PPS-08 | GetPetByName | Error Path | name has no matching row | live DB | Returns `nil`, `ErrPetNotFound` | P2 | |
-| PPS-27 | GetPet | Happy Path | id has a matching row | live DB, pet created via `CreatePet` | Returns a `*Pet` equal to the created one, nil error | P1 | |
 | PPS-10 | UpdatePet | Happy Path | update an existing pet's name/profile_picture | live DB, pet created via `CreatePet` | Returns the same `*Pet` passed in, nil error; a follow-up `GetPetByName` on the new name confirms the row was updated | P1 | |
 | PPS-11 | UpdatePet | Error Path | update targets an id with no matching row | live DB, nonexistent id | Returns `nil`, `ErrPetNotFound` (an `UPDATE` matching zero rows means the pet no longer exists) | P2 | |
-| PPS-34 | UpdatePet | Error Path | rename a pet to the name of another pet | live DB, two pets created via `CreatePet` | Returns `nil`, `ErrPetNameExists` | P2 | |
 | PPS-13 | CreatePetPicture | Happy Path | insert a picture with a unique id | live DB, unique id | Returns `*PetPicture` with the given `ID`/`FileExt`/`PrimarySubject`/`OthersSubjects`/`Aliases` and zero-value `Created`, nil error | P1 | |
 | PPS-14 | CreatePetPicture | Error Path | insert a picture whose id already exists | live DB, id already created | Returns `nil`, non-nil error (unique constraint violation) | P2 | |
 | PPS-16 | CreatePetPicture | Concurrency Invariant | N goroutines call `CreatePetPicture` with the identical id simultaneously (e.g. the same file uploaded twice, same sha) | live DB, one shared unique id per round | Exactly one call succeeds; the rest fail with a unique-constraint error | P0 | design: 5 rounds x 8 concurrent callers, fresh id per round |
 | PPS-17 | GetRandPetPictureByName | Error Path | pet name has no matching pet | live DB, name never created | Returns `nil`, the upstream `GetPetByName` error (`ErrPetNotFound`) | P2 | |
 | PPS-18 | GetRandPetPictureByName | Error Path | pet exists but has no matching pictures | live DB, pet created, no pictures reference it | Returns `nil`, `ErrPetPictureNotFound` | P2 | |
 | PPS-19 | GetPetPicture | Error Path | id has no matching row | live DB, id not present in `pictures` | Returns `nil`, `ErrPetPictureNotFound` | P2 | |
-| PPS-28 | GetPetPicture | Happy Path | id has a matching row | live DB, picture created via `CreatePetPicture`, session time zone set to a non-UTC zone (America/Los_Angeles, Asia/Kolkata) via `PGTZ` | Returns the row's `ID`/`FileExt`/`PrimarySubject`/`OthersSubjects`/`Aliases`, and `Created` as the same instant in RFC3339 UTC ending in `Z`, nil error | P1 | |
-| PPS-29 | GetRandPetPictureByName | Happy Path | pet has a picture | live DB, pet created and one picture whose primary subject is its id | Returns that picture, nil error | P1 | |
-| PPS-31 | CreatePetPicture | Happy Path | picture with no other subjects round-trips through `subjects` | live DB, `othersSubjects` nil | `subjects` holds only the primary subject; `GetPetPicture` returns `PrimarySubject` set and `OthersSubjects` nil | P1 | |
-| PPS-32 | CreatePetPicture | Happy Path | primary and other subjects are stored in order in `subjects` | live DB, primary 3, others `[4, 5]` | `subjects` reads back as `[3, 4, 5]`; `GetPetPicture` maps it to `PrimarySubject` 3 and `OthersSubjects` `[4, 5]` | P1 | |
-| PPS-33 | pictures table | Error Path | insert a row with an empty `subjects` array | live DB, direct `INSERT` | Rejected by the `subjects_check` constraint (SQLSTATE 23514) | P2 | |
 | PPS-22 | UpdatePetPicture | Happy Path | update an existing picture's fields | live DB, picture created via `CreatePetPicture`, session time zone set to a non-UTC zone (America/Los_Angeles, Asia/Kolkata) via `PGTZ` | Returns `*PetPicture` reflecting the updated fields, with `Created` read back from the database as the same instant in RFC3339 UTC, nil error | P1 | |
-| PPS-30 | UpdatePetPicture | Error Path | update targets an id with no matching row | live DB, nonexistent id | Returns `nil`, `ErrPetPictureNotFound` | P2 | |
 | PPS-23 | DeletePetPicture | Happy Path | delete an existing picture | live DB, picture created via `CreatePetPicture` | Returns `&PetPicture{ID: id}`, nil error; a follow-up `GetPetPicture(id)` confirms the row is gone (`ErrPetPictureNotFound`) | P1 | |
 | PPS-25 | DeletePetPicture | Edge Case | delete an id with no matching row | live DB, nonexistent id | Returns `&PetPicture{ID: id}`, nil error (a `DELETE` matching zero rows is not itself an error) | P2 | |
+| PPS-26 | CreatePet | Error Path | insert a pet with an empty name | live DB, `name = ""` | Returns `nil`, `ErrPetNameEmpty` (translated from the `pets_name_not_empty` CHECK violation, not a raw Postgres error) | P1 | |
+| PPS-27 | GetPet | Happy Path | id has a matching row | live DB, pet created via `CreatePet` | Returns a `*Pet` equal to the created one, nil error | P1 | |
+| PPS-28 | GetPetPicture | Happy Path | id has a matching row | live DB, picture created via `CreatePetPicture`, session time zone set to a non-UTC zone (America/Los_Angeles, Asia/Kolkata) via `PGTZ` | Returns the row's `ID`/`FileExt`/`PrimarySubject`/`OthersSubjects`/`Aliases`, and `Created` as the same instant in RFC3339 UTC ending in `Z`, nil error | P1 | |
+| PPS-29 | GetRandPetPictureByName | Happy Path | pet has a picture | live DB, pet created and one picture whose primary subject is its id | Returns that picture, nil error | P1 | |
+| PPS-30 | UpdatePetPicture | Error Path | update targets an id with no matching row | live DB, nonexistent id | Returns `nil`, `ErrPetPictureNotFound` | P2 | |
+| PPS-31 | CreatePetPicture | Happy Path | picture with no other subjects round-trips through `subjects` | live DB, `othersSubjects` nil | `subjects` holds only the primary subject; `GetPetPicture` returns `PrimarySubject` set and `OthersSubjects` nil | P1 | |
+| PPS-32 | CreatePetPicture | Happy Path | primary and other subjects are stored in order in `subjects` | live DB, primary 3, others `[4, 5]` | `subjects` reads back as `[3, 4, 5]`; `GetPetPicture` maps it to `PrimarySubject` 3 and `OthersSubjects` `[4, 5]` | P1 | |
+| PPS-33 | CreatePetPicture | Error Path | insert a row with an empty `subjects` array | live DB, direct `INSERT` | Rejected by the `subjects_check` constraint (SQLSTATE 23514) | P2 | |
+| PPS-34 | UpdatePet | Error Path | rename a pet to the name of another pet | live DB, two pets created via `CreatePet` | Returns `nil`, `ErrPetNameExists` | P2 | |
 
-## service.go
+## service
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
@@ -67,7 +67,6 @@
 | PPH-12 | UpdatePetHandler | Error Path | session lacks permission for the decoded pet's name | session scoped to a different pet name | 403 Forbidden; `store.UpdatePet` never called, `detail` is `msgNoPermissionToUpdatePet` | P1 | |
 | PPH-13 | UpdatePetHandler | Happy Path | valid body, session has permission | mock `UpdatePet` succeeds | 200 OK with the decoded pet JSON; `UpdatePet` called with the decoded pet | P1 | |
 | PPH-14 | UpdatePetHandler | Error Path | `store.UpdatePet` returns an error | mock returns `nil, err` | 500 Internal Server Error (`msgUnableToUpdatePet`) | P2 | |
-| PPH-35 | UpdatePetHandler | Error Path | `store.UpdatePet` returns `ErrPetNotFound` | mock returns `nil, ErrPetNotFound` | 404 Not Found, `detail` is `msgPetNotFound` | P2 | |
 | PPH-15 | GetRandPetPictureByNameHandler | Happy Path | path value `name` present | mock returns `*PetPicture` | 200 OK with picture JSON; `GetRandPetPictureByName` called with the path name | P1 | |
 | PPH-16 | GetRandPetPictureByNameHandler | Edge Case | path value absent, body supplies name | JSON body `{"name":"Rex"}` | `GetRandPetPictureByName` called with `"Rex"`; 200 OK | P2 | |
 | PPH-17 | GetRandPetPictureByNameHandler | Error Path | both path value and body name absent/empty | empty body | 400 Bad Request, `detail` is `msgPetNameIsRequired` | P2 | |
@@ -81,7 +80,6 @@
 | PPH-25 | UpdatePetPictureHandler | Error Path | session lacks permission for the pet's name | mock `GetPet` succeeds, session scoped to a different name | 403 Forbidden; `store.UpdatePetPicture` never called, `detail` is `msgNoPermissionToUpdatePet` | P1 | |
 | PPH-26 | UpdatePetPictureHandler | Happy Path | valid body, pet found, session has permission | mock `UpdatePetPicture` succeeds | 200 OK with picture JSON | P1 | |
 | PPH-27 | UpdatePetPictureHandler | Error Path | `store.UpdatePetPicture` returns an error | mock returns `nil, err` | 500 Internal Server Error (`msgUnableToUpdatePetPicture`) | P2 | |
-| PPH-36 | UpdatePetPictureHandler | Error Path | `store.UpdatePetPicture` returns `ErrPetPictureNotFound` | mock returns `nil, ErrPetPictureNotFound` | 404 Not Found, `detail` is `msgPetPictureNotFound` | P2 | |
 | PPH-28 | DeletePetPictureHandler | Happy Path | path value `id` present, all checks pass | mocks succeed, session has permission | 204 No Content; `DeletePetPicture` called with the id | P1 | |
 | PPH-29 | DeletePetPictureHandler | Edge Case | path value absent, body supplies id | JSON body `{"id":"abc123"}` | `GetPetPicture` called with `"abc123"`; 204 No Content | P2 | |
 | PPH-30 | DeletePetPictureHandler | Error Path | both path value and body id absent/empty | empty body | 400 Bad Request, `detail` is `msgPetPictureIDIsRequired` | P2 | |
@@ -89,6 +87,8 @@
 | PPH-32 | DeletePetPictureHandler | Error Path | `store.GetPet(PrimarySubject)` returns `ErrPetNotFound` | mock `GetPetPicture` succeeds, `GetPet` returns `nil, ErrPetNotFound` | 404 Not Found; `store.DeletePetPicture` never called, `detail` is `msgPetNotFound` | P2 | |
 | PPH-33 | DeletePetPictureHandler | Error Path | session lacks permission for the pet's name | mocks succeed, session scoped to a different name | 403 Forbidden; `store.DeletePetPicture` never called, `detail` is `msgNoPermissionToUpdatePet` | P1 | |
 | PPH-34 | DeletePetPictureHandler | Error Path | `store.DeletePetPicture` returns an error | mock returns `nil, err` | 500 Internal Server Error (`msgUnableToDeletePetPicture`) | P2 | |
+| PPH-35 | UpdatePetHandler | Error Path | `store.UpdatePet` returns `ErrPetNotFound` | mock returns `nil, ErrPetNotFound` | 404 Not Found, `detail` is `msgPetNotFound` | P2 | |
+| PPH-36 | UpdatePetPictureHandler | Error Path | `store.UpdatePetPicture` returns `ErrPetPictureNotFound` | mock returns `nil, ErrPetPictureNotFound` | 404 Not Found, `detail` is `msgPetPictureNotFound` | P2 | |
 | PPH-37 | CreatePetHandler | Error Path | `store.CreatePet` returns `ErrPetNameEmpty` | admin session, mock returns `nil, ErrPetNameEmpty` | 400 Bad Request, `detail` is `msgPetNameMustNotBeEmpty` | P2 |  |
 | PPH-38 | UpdatePetHandler | Error Path | `store.UpdatePet` returns `ErrPetNameEmpty` | scoped session, mock returns `nil, ErrPetNameEmpty` | 400 Bad Request, `detail` is `msgPetNameMustNotBeEmpty` | P2 |  |
 | PPH-39 | GetPetHandler | Error Path | `store.GetPet` fails with a non-not-found error | mock returns `nil, testutil.ErrDBDown` | 500 Internal Server Error, `detail` is `msgUnableToGetPet` | P2 |  |

@@ -1,6 +1,6 @@
 # Test plan: datastore
 
-## store.go
+## dataStore
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
@@ -9,7 +9,7 @@
 | DSS-03 | DeleteDataStore | Error Path | Delete a store that a `datastore_numbers` row references | Store and number row exist | Returns `ErrDataStoreInUse` | P1 |  |
 | DSS-04 | UpdateDataStore | Error Path | Update a store to an owner id with no account | Store exists; owner id has no `accounts` row | Returns `ErrDataStoreOwnerNotFound` | P1 |  |
 | DSS-05 | CreateNewDataStore | Error Path | Create a store for an owner id with no account | Owner id has no `accounts` row | Returns `ErrDataStoreOwnerNotFound` | P1 |  |
-| DSS-06 | GetDataStore, UpdateDataStore, DeleteDataStore, CreateNewDataStore | Edge Case | Store id `"abc"` is not a number | Live schema | Each of the four calls returns `ErrDataStoreInvalidID` | P1 |  |
+| DSS-06 | GetDataStore | Edge Case | Store id `"abc"` is not a number | Live schema | Each of the four calls returns `ErrDataStoreInvalidID` | P1 | Runs for get, update, delete and create |
 
 ## handler.go
 
@@ -25,4 +25,4 @@
 | DSH-08 | DeleteDataStoreHandler | Error Path | Service returns `ErrDataStoreInUse` | Session holds `datastore.admin` | Status 409 | P1 |  |
 | DSH-09 | DeleteDataStoreHandler | Error Path | Service returns an unexpected error | Session holds `datastore.admin` | Status 500 | P1 |  |
 | DSH-10 | DeleteDataStoreHandler | Happy Path | Service returns nil | Session holds `datastore.admin` | Status 204 | P1 |  |
-| DSH-11 | ReadDataStoreHandler, UpdateDataStoreHandler, DeleteDataStoreHandler | Error Path | Service returns `ErrDataStoreInvalidID` | Session holds `datastore.admin` | Each handler answers status 400 | P1 |  |
+| DSH-11 | ReadDataStoreHandler | Error Path | Service returns `ErrDataStoreInvalidID` | Session holds `datastore.admin` | Each handler answers status 400 | P1 | Runs for the read, update and delete handlers |
