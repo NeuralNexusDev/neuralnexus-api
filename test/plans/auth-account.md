@@ -98,19 +98,19 @@
 | ACS-83 | SetPasswordAuthEnabled | Error Path (live) | Disable for a user ID with no account | Real Postgres, unknown user ID | Returns `ErrNotFound` | P1 |  |
 | ACS-84 | SetPasswordAuthEnabled | Concurrency Invariant (live) | The account is deleted while the enable call waits on its row | Real Postgres; a separate transaction has deleted the account but not committed; the call is running and blocked on the account row | After the delete commits the call returns `ErrNotFound` | P1 |  |
 
-## handler.go
+## handler
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| ACH-01 | LoginHandler | Happy Path | Login with username+password | Account exists for username, password matches, password auth enabled | 204 No Content, session cookie set, and the stored session carries the permissions the account service built | P1 |  |
-| ACH-02 | LoginHandler | Happy Path | Login with email+password (username field empty) | Account exists for email, password matches, password auth enabled | 204 No Content, session cookie set | P1 |  |
-| ACH-03 | LoginHandler | Error Path | Malformed request body | Body is not valid JSON | 400 Bad Request `msgInvalidUsernameOrPassword` | P2 |  |
-| ACH-04 | LoginHandler | Error Path | Account lookup finds no account | Service.GetAccountByUsername/GetAccountByEmail returns `account.ErrNotFound` | 400 Bad Request `msgInvalidUsernameOrPassword` | P2 |  |
-| ACH-05 | LoginHandler | Error Path | Wrong password | Account found, Account.ValidateUser returns false | 400 Bad Request `msgInvalidUsernameOrPassword` | P2 |  |
-| ACH-06 | LoginHandler | Error Path | IsPasswordAuthEnabled errors | Account and password valid, Service.IsPasswordAuthEnabled returns an error | 500 Internal Server Error `msgAuthenticationFailed` | P2 |  |
-| ACH-07 | LoginHandler | Edge Case | Password auth disabled for account | Account and password valid, IsPasswordAuthEnabled returns (false, nil) | 400 Bad Request `msgInvalidUsernameOrPassword` | P2 |  |
-| ACH-08 | LoginHandler | Error Path | session.Service.AddSession fails | Account/password/enabled all valid, ss.AddSession returns an error | 500 Internal Server Error `msgAuthenticationFailed` | P2 |  |
-| ACH-10 | LogoutHandler | Happy Path | Logout with a valid session | Context carries a non-nil *auth.Session, ss.DeleteSession succeeds | 204 No Content, session cookie cleared (empty value, expiry in the past) | P1 |  |
-| ACH-12 | LogoutHandler | Error Path | session.Service.DeleteSession fails | Valid session in context, ss.DeleteSession returns an error | 500 Internal Server Error `msgFailedToDeleteSession` | P2 |  |
-| ACH-58 | LoginHandler | Error Path | the account service fails to build the session | Account, password and password login are valid; building the session fails with an error | 500 Internal Server Error, `detail` is `msgAuthenticationFailed`, and no session is stored | P2 |  |
-| ACH-59 | LoginHandler | Error Path | Account lookup fails with a non-not-found error | Looking up the account fails with a database error | 500 Internal Server Error `msgAuthenticationFailed`; no session cookie | P2 |  |
+| ACH-01 | Login | Happy Path | Login with username+password | Account exists for username, password matches, password auth enabled | 204 No Content, session cookie set, and the stored session carries the permissions the account service built | P1 |  |
+| ACH-02 | Login | Happy Path | Login with email+password (username field empty) | Account exists for email, password matches, password auth enabled | 204 No Content, session cookie set | P1 |  |
+| ACH-03 | Login | Error Path | Malformed request body | Body is not valid JSON | 400 Bad Request `msgInvalidUsernameOrPassword` | P2 |  |
+| ACH-04 | Login | Error Path | Account lookup finds no account | Service.GetAccountByUsername/GetAccountByEmail returns `account.ErrNotFound` | 400 Bad Request `msgInvalidUsernameOrPassword` | P2 |  |
+| ACH-05 | Login | Error Path | Wrong password | Account found, Account.ValidateUser returns false | 400 Bad Request `msgInvalidUsernameOrPassword` | P2 |  |
+| ACH-06 | Login | Error Path | IsPasswordAuthEnabled errors | Account and password valid, Service.IsPasswordAuthEnabled returns an error | 500 Internal Server Error `msgAuthenticationFailed` | P2 |  |
+| ACH-07 | Login | Edge Case | Password auth disabled for account | Account and password valid, IsPasswordAuthEnabled returns (false, nil) | 400 Bad Request `msgInvalidUsernameOrPassword` | P2 |  |
+| ACH-08 | Login | Error Path | session.Service.AddSession fails | Account/password/enabled all valid, ss.AddSession returns an error | 500 Internal Server Error `msgAuthenticationFailed` | P2 |  |
+| ACH-10 | Logout | Happy Path | Logout with a valid session | Context carries a non-nil *auth.Session, ss.DeleteSession succeeds | 204 No Content, session cookie cleared (empty value, expiry in the past) | P1 |  |
+| ACH-12 | Logout | Error Path | session.Service.DeleteSession fails | Valid session in context, ss.DeleteSession returns an error | 500 Internal Server Error `msgFailedToDeleteSession` | P2 |  |
+| ACH-58 | Login | Error Path | the account service fails to build the session | Account, password and password login are valid; building the session fails with an error | 500 Internal Server Error, `detail` is `msgAuthenticationFailed`, and no session is stored | P2 |  |
+| ACH-59 | Login | Error Path | Account lookup fails with a non-not-found error | Looking up the account fails with a database error | 500 Internal Server Error `msgAuthenticationFailed`; no session cookie | P2 |  |

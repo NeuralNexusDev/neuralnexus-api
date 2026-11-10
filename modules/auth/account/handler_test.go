@@ -75,7 +75,7 @@ func TestAU01LoginHandlerUsernameHappyPath(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("ACH-01_LoginUsernameHappyPath", func(t *testing.T) {
-		LoginHandler(testutil.NewConfig().Auth.Account, as, ss)(w, r)
+		NewHandler(testutil.NewConfig().Auth.Account, as, ss).Login(w, r)
 
 		if w.Code != http.StatusNoContent {
 			t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
@@ -98,7 +98,7 @@ func TestAU02LoginHandlerEmailHappyPath(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("ACH-02_LoginEmailHappyPath", func(t *testing.T) {
-		LoginHandler(testutil.NewConfig().Auth.Account, as, ss)(w, r)
+		NewHandler(testutil.NewConfig().Auth.Account, as, ss).Login(w, r)
 
 		if w.Code != http.StatusNoContent {
 			t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
@@ -116,7 +116,7 @@ func TestAU03LoginHandlerMalformedBody(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("ACH-03_LoginMalformedBody", func(t *testing.T) {
-		LoginHandler(testutil.NewConfig().Auth.Account, as, ss)(w, r)
+		NewHandler(testutil.NewConfig().Auth.Account, as, ss).Login(w, r)
 
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
@@ -132,7 +132,7 @@ func TestAU04LoginHandlerAccountLookupFails(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("ACH-04_LoginAccountLookupFails", func(t *testing.T) {
-		LoginHandler(testutil.NewConfig().Auth.Account, as, ss)(w, r)
+		NewHandler(testutil.NewConfig().Auth.Account, as, ss).Login(w, r)
 
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
@@ -152,7 +152,7 @@ func TestAU05LoginHandlerWrongPassword(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("ACH-05_LoginWrongPassword", func(t *testing.T) {
-		LoginHandler(testutil.NewConfig().Auth.Account, as, ss)(w, r)
+		NewHandler(testutil.NewConfig().Auth.Account, as, ss).Login(w, r)
 
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
@@ -172,7 +172,7 @@ func TestAU06LoginHandlerPasswordAuthCheckErrors(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("ACH-06_LoginPasswordAuthCheckErrors", func(t *testing.T) {
-		LoginHandler(testutil.NewConfig().Auth.Account, as, ss)(w, r)
+		NewHandler(testutil.NewConfig().Auth.Account, as, ss).Login(w, r)
 
 		if w.Code != http.StatusInternalServerError {
 			t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
@@ -189,7 +189,7 @@ func TestAU07LoginHandlerPasswordAuthDisabled(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("ACH-07_LoginPasswordAuthDisabled", func(t *testing.T) {
-		LoginHandler(testutil.NewConfig().Auth.Account, as, ss)(w, r)
+		NewHandler(testutil.NewConfig().Auth.Account, as, ss).Login(w, r)
 
 		if w.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
@@ -209,7 +209,7 @@ func TestAU08LoginHandlerAddSessionFails(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("ACH-08_LoginAddSessionFails", func(t *testing.T) {
-		LoginHandler(testutil.NewConfig().Auth.Account, as, ss)(w, r)
+		NewHandler(testutil.NewConfig().Auth.Account, as, ss).Login(w, r)
 
 		if w.Code != http.StatusInternalServerError {
 			t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
@@ -229,7 +229,7 @@ func TestAU10LogoutHandlerHappyPath(t *testing.T) {
 	ss := &authtest.FakeSessionService{}
 
 	t.Run("ACH-10_LogoutHappyPath", func(t *testing.T) {
-		LogoutHandler(ss)(w, r)
+		NewHandler(testutil.NewConfig().Auth.Account, nil, ss).Logout(w, r)
 
 		if w.Code != http.StatusNoContent {
 			t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
@@ -258,7 +258,7 @@ func TestAU12LogoutHandlerDeleteSessionFails(t *testing.T) {
 	ss := &authtest.FakeSessionService{DeleteSessionErr: testutil.ErrDBDown}
 
 	t.Run("ACH-12_LogoutDeleteSessionFails", func(t *testing.T) {
-		LogoutHandler(ss)(w, r)
+		NewHandler(testutil.NewConfig().Auth.Account, nil, ss).Logout(w, r)
 
 		if w.Code != http.StatusInternalServerError {
 			t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
@@ -278,7 +278,7 @@ func TestAU58LoginHandlerNewSessionFails(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("ACH-58_LoginNewSessionFails", func(t *testing.T) {
-		LoginHandler(testutil.NewConfig().Auth.Account, as, ss)(w, r)
+		NewHandler(testutil.NewConfig().Auth.Account, as, ss).Login(w, r)
 
 		if w.Code != http.StatusInternalServerError {
 			t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
@@ -297,7 +297,7 @@ func TestAU59LoginHandlerAccountLookupInfraFails(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	t.Run("ACH-59_LoginAccountLookupInfraFails", func(t *testing.T) {
-		LoginHandler(testutil.NewConfig().Auth.Account, as, ss)(w, r)
+		NewHandler(testutil.NewConfig().Auth.Account, as, ss).Login(w, r)
 
 		if w.Code != http.StatusInternalServerError {
 			t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())

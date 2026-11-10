@@ -70,9 +70,10 @@ func ApplyRoutes(
 	usr := user.NewService(accountStore, linkAccountStore, linkingService, settingsStore, rbacService)
 
 	loginRateLimit := mw.RateLimitMiddleware(cfg.Auth.RateLimit, rateLimit, "login", 5, 5)
+	accountHandler := account.NewHandler(cfg.Auth.Account, acct, session)
 
-	mux.Handle("POST /api/v1/auth/login", loginRateLimit(account.LoginHandler(cfg.Auth.Account, acct, session)))
-	mux.Handle("POST /api/v1/auth/logout", loginRateLimit(mwAuth(account.LogoutHandler(session))))
+	mux.Handle("POST /api/v1/auth/login", loginRateLimit(http.HandlerFunc(accountHandler.Login)))
+	mux.Handle("POST /api/v1/auth/logout", loginRateLimit(mwAuth(http.HandlerFunc(accountHandler.Logout))))
 
 	mux.Handle("/api/oauth", loginRateLimit(link.OAuthHandler(cfg, acct, linkAccountStore, session, cfg.SiteUrl)))
 	mux.Handle("/api/openid", loginRateLimit(link.OpenIDHandler(cfg.Steam, acct, linkAccountStore, session, cfg.SiteUrl)))
