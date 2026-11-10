@@ -69,16 +69,15 @@
 | RCV-23 | AttachPermission | Error Path | the permission does not exist | store returns `ErrPermissionNotFound` | `ErrPermissionNotFound` and no attach | P2 |  |
 | RCV-25 | AttachPermission | Edge Case | the call context is cancelled before the write | the store records the context it is given | The store receives a context that is not done and still carries the request value, so the grant write is not cancelled with the client | P1 | Runs for attach and detach |
 
-## handler.go
+## handler
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| RH-01 | ListRolesHandler | Error Path | a session without the roles.admin node | sessions with no permissions, with a different node under roles, with a node that only extends the admin node name, with the admin node of another area, and with only the roles prefix | 403 with `msgNoPermission` and the service is never called | P1 | Runs for every handler |
-| RH-02 | ListRolesHandler | Happy Path | a session with the roles.admin node | a service that records its inputs | The documented status code, the path and body values reaching the service, and the response body carrying the service's result (empty for 204) | P1 | Runs for every handler |
-| RH-03 | CreateRoleHandler | Error Path | an unparseable body | create and update handlers | 400 with `msgUnableToParseBody` and the service is never called | P1 | Runs for every handler that reads a body |
-| RH-04 | ListRolesHandler | Error Path | the service returns each sentinel and an unknown error | a service that returns each sentinel and an unknown error; the sentinels each handler handles are listed per handler | each handled sentinel gives its 400, 404 or 409 with the matching detail message, and every other sentinel and an unknown error give 500 `msgFailedToHandleRbac` | P1 | Runs for every handler |
-| RH-05 | AttachPermissionHandler | Edge Case | int values in the body, with the real service | permission of integer type | 1000 is stored as given and 2^53 and -2^53 are accepted; a number beyond plus or minus 2^53, 1e2, 5.0, 1.5, a string and a missing value give 400 `msgInvalidValue` and no attach | P1 |  |
-
+| RH-01 | ListRoles | Error Path | a session without the roles.admin node | sessions with no permissions, with a different node under roles, with a node that only extends the admin node name, with the admin node of another area, and with only the roles prefix | 403 with `msgNoPermission` and the service is never called | P1 | Runs for every handler |
+| RH-02 | ListRoles | Happy Path | a session with the roles.admin node | a service that records its inputs | The documented status code, the path and body values reaching the service, and the response body carrying the service's result (empty for 204) | P1 | Runs for every handler |
+| RH-03 | CreateRole | Error Path | an unparseable body | create and update handlers | 400 with `msgUnableToParseBody` and the service is never called | P1 | Runs for every handler that reads a body |
+| RH-04 | ListRoles | Error Path | the service returns each sentinel and an unknown error | a service that returns each sentinel and an unknown error; the sentinels each handler handles are listed per handler | each handled sentinel gives its 400, 404 or 409 with the matching detail message, and every other sentinel and an unknown error give 500 `msgFailedToHandleRbac` | P1 | Runs for every handler |
+| RH-05 | AttachPermission | Edge Case | int values in the body, with the real service | permission of integer type | 1000 is stored as given and 2^53 and -2^53 are accepted; a number beyond plus or minus 2^53, 1e2, 5.0, 1.5, a string and a missing value give 400 `msgInvalidValue` and no attach | P1 |  |
 
 ## grants.go
 
