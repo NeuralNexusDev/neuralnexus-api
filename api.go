@@ -135,11 +135,12 @@ func ApplyRoutes(
 	// --------------- Numbers Data Store ---------------
 	nStore := nds.NewStore(nndb)
 	nService := nds.NewService(nStore)
+	numbersHandler := nds.NewHandler(nService)
 
-	mux.Handle("POST /api/v1/datastore/number", mwAuth(nds.CreateNumberHandler(nService)))
-	mux.Handle("GET /api/v1/datastore/number", nds.ReadNumberHandler(nService))
-	mux.Handle("PUT /api/v1/datastore/number", mwAuth(nds.UpdateNumberHandler(nService)))
-	mux.Handle("DELETE /api/v1/datastore/number", mwAuth(nds.DeleteNumberHandler(nService)))
+	mux.Handle("POST /api/v1/datastore/number", mwAuth(http.HandlerFunc(numbersHandler.CreateNumber)))
+	mux.HandleFunc("GET /api/v1/datastore/number", numbersHandler.ReadNumber)
+	mux.Handle("PUT /api/v1/datastore/number", mwAuth(http.HandlerFunc(numbersHandler.UpdateNumber)))
+	mux.Handle("DELETE /api/v1/datastore/number", mwAuth(http.HandlerFunc(numbersHandler.DeleteNumber)))
 
 	// --------------- Discord ---------------
 	verify := mw.VerifyEd25519Middleware(cfg)
