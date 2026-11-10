@@ -26,92 +26,103 @@ const (
 	logUnableToQueryGameServer = "[Error]: Unable to query game server:\n\t"
 )
 
-// GameServerStatusHandler - Get the game server status
-func GameServerStatusHandler(s GSSService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		game := r.PathValue("game")
-		host := r.URL.Query().Get("host")
-		if host == "" {
-			responses.BadRequest(w, r, msgInvalidHost)
-			return
-		}
-		port, err := strconv.Atoi(r.URL.Query().Get("port"))
-		if err != nil {
-			responses.BadRequest(w, r, msgInvalidPort)
-			return
-		}
+// Handler serves the game server status routes.
+type Handler interface {
+	GameServerStatus(w http.ResponseWriter, r *http.Request)
+	SimpleGameServerStatus(w http.ResponseWriter, r *http.Request)
+}
 
-		queryType := ParseQueryType(r.URL.Query().Get("query_type"))
-		status, err := s.QueryGameServer(r.Context(), game, host, port, queryType)
-		if err != nil {
-			reqctx.Log(r.Context(), logUnableToQueryGameServer, err.Error())
-			switch err {
-			case ErrServerOffline:
-				responses.NotFound(w, r, msgServerOffline)
-			case ErrGameUnsupported:
-				responses.BadRequest(w, r, msgGameUnsupported)
-			case ErrGameQQuery:
-				responses.BadGateway(w, r, msgGameQQueryFailed)
-			case ErrGameDigQuery:
-				responses.BadGateway(w, r, msgGameDigQueryFailed)
-			case ErrReadBody:
-				responses.BadGateway(w, r, msgReadBodyFailed)
-			case ErrDecodeBody:
-				responses.BadGateway(w, r, msgDecodeBodyFailed)
-			case ErrNoGameQResponse:
-				responses.BadGateway(w, r, msgNoGameQResponse)
-			case mcstatus.ErrJavaStatus:
-				responses.BadGateway(w, r, msgJavaStatusFailed)
-			case mcstatus.ErrBedrockStatus:
-				responses.BadGateway(w, r, msgBedrockStatusFailed)
-			default:
-				responses.InternalServerError(w, r, msgQueryFailed)
-			}
-			return
-		}
-		returnRaw := r.URL.Query().Get("raw") == "true"
-		if !returnRaw {
-			status.Raw = nil
-		}
-		responses.StructOK(w, r, status)
+type handler struct {
+	s GSSService
+}
+
+// NewHandler returns a Handler that serves the game server status routes from the given service.
+func NewHandler(s GSSService) Handler {
+	return &handler{s}
+}
+
+// GameServerStatus - Get the game server status
+func (h *handler) GameServerStatus(w http.ResponseWriter, r *http.Request) {
+	game := r.PathValue("game")
+	host := r.URL.Query().Get("host")
+	if host == "" {
+		responses.BadRequest(w, r, msgInvalidHost)
+		return
 	}
+	port, err := strconv.Atoi(r.URL.Query().Get("port"))
+	if err != nil {
+		responses.BadRequest(w, r, msgInvalidPort)
+		return
+	}
+
+	queryType := ParseQueryType(r.URL.Query().Get("query_type"))
+	status, err := h.s.QueryGameServer(r.Context(), game, host, port, queryType)
+	if err != nil {
+		reqctx.Log(r.Context(), logUnableToQueryGameServer, err.Error())
+		switch err {
+		case ErrServerOffline:
+			responses.NotFound(w, r, msgServerOffline)
+		case ErrGameUnsupported:
+			responses.BadRequest(w, r, msgGameUnsupported)
+		case ErrGameQQuery:
+			responses.BadGateway(w, r, msgGameQQueryFailed)
+		case ErrGameDigQuery:
+			responses.BadGateway(w, r, msgGameDigQueryFailed)
+		case ErrReadBody:
+			responses.BadGateway(w, r, msgReadBodyFailed)
+		case ErrDecodeBody:
+			responses.BadGateway(w, r, msgDecodeBodyFailed)
+		case ErrNoGameQResponse:
+			responses.BadGateway(w, r, msgNoGameQResponse)
+		case mcstatus.ErrJavaStatus:
+			responses.BadGateway(w, r, msgJavaStatusFailed)
+		case mcstatus.ErrBedrockStatus:
+			responses.BadGateway(w, r, msgBedrockStatusFailed)
+		default:
+			responses.InternalServerError(w, r, msgQueryFailed)
+		}
+		return
+	}
+	returnRaw := r.URL.Query().Get("raw") == "true"
+	if !returnRaw {
+		status.Raw = nil
+	}
+	responses.StructOK(w, r, status)
 }
 
 // SimpleGameServerStatus - Get the simple game server status
-func SimpleGameServerStatus(s GSSService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		game := r.PathValue("game")
-		host := r.URL.Query().Get("host")
-		if host == "" {
-			responses.BadRequest(w, r, msgInvalidHost)
-			return
-		}
-		port, err := strconv.Atoi(r.URL.Query().Get("port"))
-		if err != nil {
-			responses.BadRequest(w, r, msgInvalidPort)
-			return
-		}
+func (h *handler) SimpleGameServerStatus(w http.ResponseWriter, r *http.Request) {
+	game := r.PathValue("game")
+	host := r.URL.Query().Get("host")
+	if host == "" {
+		responses.BadRequest(w, r, msgInvalidHost)
+		return
+	}
+	port, err := strconv.Atoi(r.URL.Query().Get("port"))
+	if err != nil {
+		responses.BadRequest(w, r, msgInvalidPort)
+		return
+	}
 
-		plain := func(code int, text string) {
-			w.Header().Set("Content-Type", "text/plain")
-			w.WriteHeader(code)
-			w.Write([]byte(text))
-		}
-		queryType := ParseQueryType(r.URL.Query().Get("query_type"))
-		_, err = s.QueryGameServer(r.Context(), game, host, port, queryType)
-		switch err {
-		case nil:
-			plain(http.StatusOK, "Online")
-		case ErrServerOffline, mcstatus.ErrJavaStatus, mcstatus.ErrBedrockStatus:
-			plain(http.StatusNotFound, "Offline")
-		case ErrGameUnsupported:
-			responses.BadRequest(w, r, msgGameUnsupported)
-		case ErrGameQQuery, ErrGameDigQuery, ErrReadBody, ErrDecodeBody, ErrNoGameQResponse:
-			reqctx.Log(r.Context(), "Unable to query game server:\n\t", err.Error())
-			responses.BadGateway(w, r, msgUpstreamQueryFailed)
-		default:
-			reqctx.Log(r.Context(), "Unable to query game server:\n\t", err.Error())
-			responses.InternalServerError(w, r, msgQueryFailed)
-		}
+	plain := func(code int, text string) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(code)
+		w.Write([]byte(text))
+	}
+	queryType := ParseQueryType(r.URL.Query().Get("query_type"))
+	_, err = h.s.QueryGameServer(r.Context(), game, host, port, queryType)
+	switch err {
+	case nil:
+		plain(http.StatusOK, "Online")
+	case ErrServerOffline, mcstatus.ErrJavaStatus, mcstatus.ErrBedrockStatus:
+		plain(http.StatusNotFound, "Offline")
+	case ErrGameUnsupported:
+		responses.BadRequest(w, r, msgGameUnsupported)
+	case ErrGameQQuery, ErrGameDigQuery, ErrReadBody, ErrDecodeBody, ErrNoGameQResponse:
+		reqctx.Log(r.Context(), "Unable to query game server:\n\t", err.Error())
+		responses.BadGateway(w, r, msgUpstreamQueryFailed)
+	default:
+		reqctx.Log(r.Context(), "Unable to query game server:\n\t", err.Error())
+		responses.InternalServerError(w, r, msgQueryFailed)
 	}
 }

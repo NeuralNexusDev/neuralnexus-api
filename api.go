@@ -151,8 +151,9 @@ func ApplyRoutes(
 	// --------------- Game Server Status ---------------
 	mcsService := mcs.NewService()
 	gssService := gss.NewService(cfg.GameServerStatus, mcsService)
-	mux.Handle("GET /api/v1/game-server-status/{game}", gss.GameServerStatusHandler(gssService))
-	mux.Handle("GET /api/v1/game-server-status/simple/{game}", gss.SimpleGameServerStatus(gssService))
+	gssHandler := gss.NewHandler(gssService)
+	mux.HandleFunc("GET /api/v1/game-server-status/{game}", gssHandler.GameServerStatus)
+	mux.HandleFunc("GET /api/v1/game-server-status/simple/{game}", gssHandler.SimpleGameServerStatus)
 
 	// --------------- Minecraft ---------------
 	mcStore := mc.NewStore(
