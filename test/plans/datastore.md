@@ -11,18 +11,18 @@
 | DSS-05 | CreateNewDataStore | Error Path | Create a store for an owner id with no account | Owner id has no account | Returns `ErrDataStoreOwnerNotFound` | P1 |  |
 | DSS-06 | GetDataStore | Edge Case | Store id `"abc"` is not a number | Live schema | Each of the four calls returns `ErrDataStoreInvalidID` | P1 | Runs for get, update, delete and create |
 
-## handler.go
+## handler
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| DSH-01 | ReadDataStoreHandler | Error Path | Service returns `ErrDataStoreNotFound` | Service fails with `ErrDataStoreNotFound` | Status 404 | P1 |  |
-| DSH-02 | ReadDataStoreHandler | Error Path | Service returns an unexpected error | Service fails with an unexpected error | Status 500 | P1 |  |
-| DSH-03 | ReadDataStoreHandler | Happy Path | Service returns the store | Service finds the store | Status 200 | P1 |  |
-| DSH-04 | UpdateDataStoreHandler | Error Path | Service returns `ErrDataStoreNotFound` | Session holds `datastore.admin` | Status 404 | P1 |  |
-| DSH-05 | UpdateDataStoreHandler | Error Path | Service returns `ErrDataStoreOwnerNotFound` | Session holds `datastore.admin` | Status 404 | P1 |  |
-| DSH-06 | UpdateDataStoreHandler | Error Path | Service returns an unexpected error | Session holds `datastore.admin` | Status 500 | P1 |  |
-| DSH-07 | DeleteDataStoreHandler | Error Path | Service returns `ErrDataStoreNotFound` | Session holds `datastore.admin` | Status 404 | P1 |  |
-| DSH-08 | DeleteDataStoreHandler | Error Path | Service returns `ErrDataStoreInUse` | Session holds `datastore.admin` | Status 409 | P1 |  |
-| DSH-09 | DeleteDataStoreHandler | Error Path | Service returns an unexpected error | Session holds `datastore.admin` | Status 500 | P1 |  |
-| DSH-10 | DeleteDataStoreHandler | Happy Path | Service returns nil | Session holds `datastore.admin` | Status 204 | P1 |  |
-| DSH-11 | ReadDataStoreHandler | Error Path | Service returns `ErrDataStoreInvalidID` | Session holds `datastore.admin` | Each handler answers status 400 | P1 | Runs for the read, update and delete handlers |
+| DSH-01 | ReadDataStore | Error Path | Service returns `ErrDataStoreNotFound` | Service fails with `ErrDataStoreNotFound` | Status 404 | P1 |  |
+| DSH-02 | ReadDataStore | Error Path | Service returns an unexpected error | Service fails with an unexpected error | Status 500 | P1 |  |
+| DSH-03 | ReadDataStore | Happy Path | Service returns the store | Service finds the store | Status 200 | P1 |  |
+| DSH-04 | UpdateDataStore | Error Path | Service returns `ErrDataStoreNotFound` | Session holds `datastore.admin` | Status 404 | P1 |  |
+| DSH-05 | UpdateDataStore | Error Path | Service returns `ErrDataStoreOwnerNotFound` | Session holds `datastore.admin` | Status 404 | P1 |  |
+| DSH-06 | UpdateDataStore | Error Path | Service returns an unexpected error | Session holds `datastore.admin` | Status 500 | P1 |  |
+| DSH-07 | DeleteDataStore | Error Path | Service returns `ErrDataStoreNotFound` | Session holds `datastore.admin` | Status 404 | P1 |  |
+| DSH-08 | DeleteDataStore | Error Path | Service returns `ErrDataStoreInUse` | Session holds `datastore.admin` | Status 409 | P1 |  |
+| DSH-09 | DeleteDataStore | Error Path | Service returns an unexpected error | Session holds `datastore.admin` | Status 500 | P1 |  |
+| DSH-10 | DeleteDataStore | Happy Path | Service returns nil | Session holds `datastore.admin` | Status 204 | P1 |  |
+| DSH-11 | ReadDataStore | Error Path | Service returns `ErrDataStoreInvalidID` | Session holds `datastore.admin` | Each handler answers status 400 | P1 | Runs for the read, update and delete handlers |
