@@ -48,57 +48,57 @@
 | PPV-08 | UploadPetPicture | Edge Case | source file name has no dot | file name with no dot, opened through a relative path | The extension is the whole file name (there is no dot to split on); the picture is created with it | P3 | |
 | PPV-09 | UploadPetPicture | Happy Path | the caller's context reaches creating the picture, and the record write outlives a cancelled request | the caller's context carries a marker value and is cancelled before the call; the CDN answers 200 | Creating the picture receives the marker value and a context that is not cancelled; the request to the CDN carries the marker value; the upload returns a nil error | P1 | |
 
-## handler.go
+## handler
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| PPH-01 | CreatePetHandler | Error Path | session lacks `petpictures.admin` | session with unrelated/no permissions | 403 Forbidden; no pet is created (`msgNoPermissionToCreatePet`) | P1 | |
-| PPH-02 | CreatePetHandler | Happy Path | path value `name` present, session has permission | creating the pet succeeds | 201 Created with the pet JSON; the pet is created with the path name | P1 | |
-| PPH-03 | CreatePetHandler | Edge Case | path value absent, body supplies name | JSON body `{"name":"Fido"}` | The pet is created with the name "Fido"; 201 Created | P2 | |
-| PPH-04 | CreatePetHandler | Error Path | both path value and body name absent/empty | empty body, no path value | 400 Bad Request; no pet is created, `detail` is `msgPetNameIsRequired` | P2 | |
-| PPH-05 | CreatePetHandler | Error Path | creating the pet fails | an unexpected error occurs | 500 Internal Server Error (`msgUnableToCreatePet`) | P2 | |
-| PPH-06 | GetPetHandler | Happy Path | path value `id` present and numeric | the pet exists | 200 OK with pet JSON; the pet with the parsed id is loaded | P1 | |
-| PPH-07 | GetPetHandler | Edge Case | path value absent, body supplies id | JSON body `{"id":7}` | The pet with id 7 is loaded; 200 OK | P2 | |
-| PPH-08 | GetPetHandler | Error Path | both path value and body id absent/zero | empty body, no path value | 400 Bad Request; the pet is not loaded (`msgPetIDIsRequired`) | P2 | |
-| PPH-09 | GetPetHandler | Edge Case | path value present but non-numeric, no body fallback | path id = `"abc"` | falls back to id `0`; 400 Bad Request (`msgPetIDIsRequired`) | P3 | |
-| PPH-10 | GetPetHandler | Error Path | loading the pet fails with `ErrPetNotFound` | the pet does not exist | 404 Not Found, `detail` is `msgPetNotFound` | P2 | |
-| PPH-11 | UpdatePetHandler | Error Path | request body fails to decode | malformed JSON body | 400 Bad Request; the pet is not updated, `detail` is `msgUnableToParseBody` | P2 | |
-| PPH-12 | UpdatePetHandler | Error Path | session lacks permission for the decoded pet's name | session scoped to a different pet name | 403 Forbidden; the pet is not updated, `detail` is `msgNoPermissionToUpdatePet` | P1 | |
-| PPH-13 | UpdatePetHandler | Happy Path | valid body, session has permission | updating the pet succeeds | 200 OK with the decoded pet JSON; the pet is updated with the decoded pet | P1 | |
-| PPH-14 | UpdatePetHandler | Error Path | updating the pet fails | an unexpected error occurs | 500 Internal Server Error (`msgUnableToUpdatePet`) | P2 | |
-| PPH-15 | GetRandPetPictureByNameHandler | Happy Path | path value `name` present | the pet has a picture | 200 OK with picture JSON; the picture is loaded for the path name | P1 | |
-| PPH-16 | GetRandPetPictureByNameHandler | Edge Case | path value absent, body supplies name | JSON body `{"name":"Rex"}` | The picture is loaded for the name "Rex"; 200 OK | P2 | |
-| PPH-17 | GetRandPetPictureByNameHandler | Error Path | both path value and body name absent/empty | empty body | 400 Bad Request, `detail` is `msgPetNameIsRequired` | P2 | |
-| PPH-18 | GetRandPetPictureByNameHandler | Error Path | loading fails with `ErrPetPictureNotFound` | the picture does not exist | 404 Not Found, `detail` is `msgPetPictureNotFound` | P2 | |
-| PPH-19 | GetPetPictureHandler | Happy Path | path value `id` present | the picture exists | 200 OK with picture JSON; the picture with the path id is loaded | P1 | |
-| PPH-20 | GetPetPictureHandler | Edge Case | path value absent, body supplies id | JSON body `{"id":"abc123"}` | The picture with id "abc123" is loaded; 200 OK | P2 | |
-| PPH-21 | GetPetPictureHandler | Error Path | both path value and body id absent/empty | empty body | 400 Bad Request, `detail` is `msgPetPictureIDIsRequired` | P2 | |
-| PPH-22 | GetPetPictureHandler | Error Path | loading fails with `ErrPetPictureNotFound` | the picture does not exist | 404 Not Found, `detail` is `msgPetPictureNotFound` | P2 | |
-| PPH-23 | UpdatePetPictureHandler | Error Path | request body fails to decode | malformed JSON body | 400 Bad Request; the pet is not loaded and the picture is not updated, `detail` is `msgUnableToParseBody` | P2 | |
-| PPH-24 | UpdatePetPictureHandler | Error Path | loading the pet of the picture's primary subject fails with `ErrPetNotFound` | the pet does not exist | 404 Not Found; the picture is not updated, `detail` is `msgPetNotFound` | P2 | |
-| PPH-25 | UpdatePetPictureHandler | Error Path | session lacks permission for the pet's name | the pet exists, session scoped to a different name | 403 Forbidden; the picture is not updated, `detail` is `msgNoPermissionToUpdatePet` | P1 | |
-| PPH-26 | UpdatePetPictureHandler | Happy Path | valid body, pet found, session has permission | updating the picture succeeds | 200 OK with picture JSON | P1 | |
-| PPH-27 | UpdatePetPictureHandler | Error Path | updating the picture fails | an unexpected error occurs | 500 Internal Server Error (`msgUnableToUpdatePetPicture`) | P2 | |
-| PPH-28 | DeletePetPictureHandler | Happy Path | path value `id` present, all checks pass | the picture and its pet exist, session has permission | 204 No Content; the picture with the id is deleted | P1 | |
-| PPH-29 | DeletePetPictureHandler | Edge Case | path value absent, body supplies id | JSON body `{"id":"abc123"}` | The picture with id "abc123" is loaded; 204 No Content | P2 | |
-| PPH-30 | DeletePetPictureHandler | Error Path | both path value and body id absent/empty | empty body | 400 Bad Request, `detail` is `msgPetPictureIDIsRequired` | P2 | |
-| PPH-31 | DeletePetPictureHandler | Error Path | loading the picture fails with `ErrPetPictureNotFound` | the picture does not exist | 404 Not Found; the picture is not deleted, `detail` is `msgPetPictureNotFound` | P2 | |
-| PPH-32 | DeletePetPictureHandler | Error Path | loading the pet of the picture's primary subject fails with `ErrPetNotFound` | the picture is found; its pet does not exist | 404 Not Found; the picture is not deleted, `detail` is `msgPetNotFound` | P2 | |
-| PPH-33 | DeletePetPictureHandler | Error Path | session lacks permission for the pet's name | the picture and its pet exist, session scoped to a different name | 403 Forbidden; the picture is not deleted, `detail` is `msgNoPermissionToUpdatePet` | P1 | |
-| PPH-34 | DeletePetPictureHandler | Error Path | deleting the picture fails | an unexpected error occurs | 500 Internal Server Error (`msgUnableToDeletePetPicture`) | P2 | |
-| PPH-35 | UpdatePetHandler | Error Path | updating the pet fails with `ErrPetNotFound` | the pet does not exist | 404 Not Found, `detail` is `msgPetNotFound` | P2 | |
-| PPH-36 | UpdatePetPictureHandler | Error Path | updating the picture fails with `ErrPetPictureNotFound` | the picture does not exist | 404 Not Found, `detail` is `msgPetPictureNotFound` | P2 | |
-| PPH-37 | CreatePetHandler | Error Path | creating the pet fails with `ErrPetNameEmpty` | admin session, the failure is `ErrPetNameEmpty` | 400 Bad Request, `detail` is `msgPetNameMustNotBeEmpty` | P2 |  |
-| PPH-38 | UpdatePetHandler | Error Path | updating the pet fails with `ErrPetNameEmpty` | scoped session, the failure is `ErrPetNameEmpty` | 400 Bad Request, `detail` is `msgPetNameMustNotBeEmpty` | P2 |  |
-| PPH-39 | GetPetHandler | Error Path | loading the pet fails for a reason other than not found | the database is down | 500 Internal Server Error, `detail` is `msgUnableToGetPet` | P2 |  |
-| PPH-40 | GetRandPetPictureByNameHandler | Error Path | loading fails for a reason other than not found | the database is down | 500 Internal Server Error, `detail` is `msgUnableToGetRandomPetPicture` | P2 |  |
-| PPH-41 | GetPetPictureHandler | Error Path | loading the picture fails for a reason other than not found | the database is down | 500 Internal Server Error, `detail` is `msgUnableToGetPetPicture` | P2 |  |
-| PPH-42 | UpdatePetPictureHandler | Error Path | loading the pet of the picture's primary subject fails for a reason other than not found | the database is down | 500 Internal Server Error; the picture is not updated, `detail` is `msgUnableToGetPet` | P2 |  |
-| PPH-43 | DeletePetPictureHandler | Error Path | loading the picture fails for a reason other than not found | the database is down | 500 Internal Server Error; the picture is not deleted, `detail` is `msgUnableToGetPetPicture` | P2 |  |
-| PPH-44 | DeletePetPictureHandler | Error Path | loading the pet of the picture's primary subject fails for a reason other than not found | the picture is found; the database is down when the pet is loaded | 500 Internal Server Error; the picture is not deleted, `detail` is `msgUnableToGetPet` | P2 |  |
-| PPH-45 | GetRandPetPictureByNameHandler | Error Path | loading fails with `ErrPetNotFound` for an unknown pet name | the pet does not exist | 404 Not Found, `detail` is `msgPetNotFound` | P2 |  |
-| PPH-46 | CreatePetHandler | Error Path | creating the pet fails with `ErrPetNameExists` | the failure is `ErrPetNameExists` | 409 Conflict, `detail` is `msgPetNameAlreadyExists` | P1 | |
-| PPH-47 | UpdatePetHandler | Error Path | updating the pet fails with `ErrPetNameExists` | the failure is `ErrPetNameExists` | 409 Conflict, `detail` is `msgPetNameAlreadyExists` | P1 | |
-| PPH-48 | CreatePetHandler | Error Path | name from the path contains a NUL byte | path value `"Re\x00x"` | 400 Bad Request, `detail` is `msgInvalidPetName`; no pet is created | P1 | |
-| PPH-49 | CreatePetHandler | Error Path | name from the path is not valid UTF-8 | path value `"Re\xffx"` | 400 Bad Request, `detail` is `msgInvalidPetName`; no pet is created | P1 | |
-| PPH-50 | UpdatePetHandler | Error Path | body name contains a NUL byte | body `{"id":1,"name":"Re\u0000x"}`, session permitted for that name | 400 Bad Request, `detail` is `msgInvalidPetName`; the pet is not updated | P1 | |
+| PPH-01 | CreatePet | Error Path | session lacks `petpictures.admin` | session with unrelated/no permissions | 403 Forbidden; no pet is created (`msgNoPermissionToCreatePet`) | P1 | |
+| PPH-02 | CreatePet | Happy Path | path value `name` present, session has permission | creating the pet succeeds | 201 Created with the pet JSON; the pet is created with the path name | P1 | |
+| PPH-03 | CreatePet | Edge Case | path value absent, body supplies name | JSON body `{"name":"Fido"}` | The pet is created with the name "Fido"; 201 Created | P2 | |
+| PPH-04 | CreatePet | Error Path | both path value and body name absent/empty | empty body, no path value | 400 Bad Request; no pet is created, `detail` is `msgPetNameIsRequired` | P2 | |
+| PPH-05 | CreatePet | Error Path | creating the pet fails | an unexpected error occurs | 500 Internal Server Error (`msgUnableToCreatePet`) | P2 | |
+| PPH-06 | GetPet | Happy Path | path value `id` present and numeric | the pet exists | 200 OK with pet JSON; the pet with the parsed id is loaded | P1 | |
+| PPH-07 | GetPet | Edge Case | path value absent, body supplies id | JSON body `{"id":7}` | The pet with id 7 is loaded; 200 OK | P2 | |
+| PPH-08 | GetPet | Error Path | both path value and body id absent/zero | empty body, no path value | 400 Bad Request; the pet is not loaded (`msgPetIDIsRequired`) | P2 | |
+| PPH-09 | GetPet | Edge Case | path value present but non-numeric, no body fallback | path id = `"abc"` | falls back to id `0`; 400 Bad Request (`msgPetIDIsRequired`) | P3 | |
+| PPH-10 | GetPet | Error Path | loading the pet fails with `ErrPetNotFound` | the pet does not exist | 404 Not Found, `detail` is `msgPetNotFound` | P2 | |
+| PPH-11 | UpdatePet | Error Path | request body fails to decode | malformed JSON body | 400 Bad Request; the pet is not updated, `detail` is `msgUnableToParseBody` | P2 | |
+| PPH-12 | UpdatePet | Error Path | session lacks permission for the decoded pet's name | session scoped to a different pet name | 403 Forbidden; the pet is not updated, `detail` is `msgNoPermissionToUpdatePet` | P1 | |
+| PPH-13 | UpdatePet | Happy Path | valid body, session has permission | updating the pet succeeds | 200 OK with the decoded pet JSON; the pet is updated with the decoded pet | P1 | |
+| PPH-14 | UpdatePet | Error Path | updating the pet fails | an unexpected error occurs | 500 Internal Server Error (`msgUnableToUpdatePet`) | P2 | |
+| PPH-15 | GetRandPetPictureByName | Happy Path | path value `name` present | the pet has a picture | 200 OK with picture JSON; the picture is loaded for the path name | P1 | |
+| PPH-16 | GetRandPetPictureByName | Edge Case | path value absent, body supplies name | JSON body `{"name":"Rex"}` | The picture is loaded for the name "Rex"; 200 OK | P2 | |
+| PPH-17 | GetRandPetPictureByName | Error Path | both path value and body name absent/empty | empty body | 400 Bad Request, `detail` is `msgPetNameIsRequired` | P2 | |
+| PPH-18 | GetRandPetPictureByName | Error Path | loading fails with `ErrPetPictureNotFound` | the picture does not exist | 404 Not Found, `detail` is `msgPetPictureNotFound` | P2 | |
+| PPH-19 | GetPetPicture | Happy Path | path value `id` present | the picture exists | 200 OK with picture JSON; the picture with the path id is loaded | P1 | |
+| PPH-20 | GetPetPicture | Edge Case | path value absent, body supplies id | JSON body `{"id":"abc123"}` | The picture with id "abc123" is loaded; 200 OK | P2 | |
+| PPH-21 | GetPetPicture | Error Path | both path value and body id absent/empty | empty body | 400 Bad Request, `detail` is `msgPetPictureIDIsRequired` | P2 | |
+| PPH-22 | GetPetPicture | Error Path | loading fails with `ErrPetPictureNotFound` | the picture does not exist | 404 Not Found, `detail` is `msgPetPictureNotFound` | P2 | |
+| PPH-23 | UpdatePetPicture | Error Path | request body fails to decode | malformed JSON body | 400 Bad Request; the pet is not loaded and the picture is not updated, `detail` is `msgUnableToParseBody` | P2 | |
+| PPH-24 | UpdatePetPicture | Error Path | loading the pet of the picture's primary subject fails with `ErrPetNotFound` | the pet does not exist | 404 Not Found; the picture is not updated, `detail` is `msgPetNotFound` | P2 | |
+| PPH-25 | UpdatePetPicture | Error Path | session lacks permission for the pet's name | the pet exists, session scoped to a different name | 403 Forbidden; the picture is not updated, `detail` is `msgNoPermissionToUpdatePet` | P1 | |
+| PPH-26 | UpdatePetPicture | Happy Path | valid body, pet found, session has permission | updating the picture succeeds | 200 OK with picture JSON | P1 | |
+| PPH-27 | UpdatePetPicture | Error Path | updating the picture fails | an unexpected error occurs | 500 Internal Server Error (`msgUnableToUpdatePetPicture`) | P2 | |
+| PPH-28 | DeletePetPicture | Happy Path | path value `id` present, all checks pass | the picture and its pet exist, session has permission | 204 No Content; the picture with the id is deleted | P1 | |
+| PPH-29 | DeletePetPicture | Edge Case | path value absent, body supplies id | JSON body `{"id":"abc123"}` | The picture with id "abc123" is loaded; 204 No Content | P2 | |
+| PPH-30 | DeletePetPicture | Error Path | both path value and body id absent/empty | empty body | 400 Bad Request, `detail` is `msgPetPictureIDIsRequired` | P2 | |
+| PPH-31 | DeletePetPicture | Error Path | loading the picture fails with `ErrPetPictureNotFound` | the picture does not exist | 404 Not Found; the picture is not deleted, `detail` is `msgPetPictureNotFound` | P2 | |
+| PPH-32 | DeletePetPicture | Error Path | loading the pet of the picture's primary subject fails with `ErrPetNotFound` | the picture is found; its pet does not exist | 404 Not Found; the picture is not deleted, `detail` is `msgPetNotFound` | P2 | |
+| PPH-33 | DeletePetPicture | Error Path | session lacks permission for the pet's name | the picture and its pet exist, session scoped to a different name | 403 Forbidden; the picture is not deleted, `detail` is `msgNoPermissionToUpdatePet` | P1 | |
+| PPH-34 | DeletePetPicture | Error Path | deleting the picture fails | an unexpected error occurs | 500 Internal Server Error (`msgUnableToDeletePetPicture`) | P2 | |
+| PPH-35 | UpdatePet | Error Path | updating the pet fails with `ErrPetNotFound` | the pet does not exist | 404 Not Found, `detail` is `msgPetNotFound` | P2 | |
+| PPH-36 | UpdatePetPicture | Error Path | updating the picture fails with `ErrPetPictureNotFound` | the picture does not exist | 404 Not Found, `detail` is `msgPetPictureNotFound` | P2 | |
+| PPH-37 | CreatePet | Error Path | creating the pet fails with `ErrPetNameEmpty` | admin session, the failure is `ErrPetNameEmpty` | 400 Bad Request, `detail` is `msgPetNameMustNotBeEmpty` | P2 |  |
+| PPH-38 | UpdatePet | Error Path | updating the pet fails with `ErrPetNameEmpty` | scoped session, the failure is `ErrPetNameEmpty` | 400 Bad Request, `detail` is `msgPetNameMustNotBeEmpty` | P2 |  |
+| PPH-39 | GetPet | Error Path | loading the pet fails for a reason other than not found | the database is down | 500 Internal Server Error, `detail` is `msgUnableToGetPet` | P2 |  |
+| PPH-40 | GetRandPetPictureByName | Error Path | loading fails for a reason other than not found | the database is down | 500 Internal Server Error, `detail` is `msgUnableToGetRandomPetPicture` | P2 |  |
+| PPH-41 | GetPetPicture | Error Path | loading the picture fails for a reason other than not found | the database is down | 500 Internal Server Error, `detail` is `msgUnableToGetPetPicture` | P2 |  |
+| PPH-42 | UpdatePetPicture | Error Path | loading the pet of the picture's primary subject fails for a reason other than not found | the database is down | 500 Internal Server Error; the picture is not updated, `detail` is `msgUnableToGetPet` | P2 |  |
+| PPH-43 | DeletePetPicture | Error Path | loading the picture fails for a reason other than not found | the database is down | 500 Internal Server Error; the picture is not deleted, `detail` is `msgUnableToGetPetPicture` | P2 |  |
+| PPH-44 | DeletePetPicture | Error Path | loading the pet of the picture's primary subject fails for a reason other than not found | the picture is found; the database is down when the pet is loaded | 500 Internal Server Error; the picture is not deleted, `detail` is `msgUnableToGetPet` | P2 |  |
+| PPH-45 | GetRandPetPictureByName | Error Path | loading fails with `ErrPetNotFound` for an unknown pet name | the pet does not exist | 404 Not Found, `detail` is `msgPetNotFound` | P2 |  |
+| PPH-46 | CreatePet | Error Path | creating the pet fails with `ErrPetNameExists` | the failure is `ErrPetNameExists` | 409 Conflict, `detail` is `msgPetNameAlreadyExists` | P1 | |
+| PPH-47 | UpdatePet | Error Path | updating the pet fails with `ErrPetNameExists` | the failure is `ErrPetNameExists` | 409 Conflict, `detail` is `msgPetNameAlreadyExists` | P1 | |
+| PPH-48 | CreatePet | Error Path | name from the path contains a NUL byte | path value `"Re\x00x"` | 400 Bad Request, `detail` is `msgInvalidPetName`; no pet is created | P1 | |
+| PPH-49 | CreatePet | Error Path | name from the path is not valid UTF-8 | path value `"Re\xffx"` | 400 Bad Request, `detail` is `msgInvalidPetName`; no pet is created | P1 | |
+| PPH-50 | UpdatePet | Error Path | body name contains a NUL byte | body `{"id":1,"name":"Re\u0000x"}`, session permitted for that name | 400 Bad Request, `detail` is `msgInvalidPetName`; the pet is not updated | P1 | |
