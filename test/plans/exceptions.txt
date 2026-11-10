@@ -182,6 +182,7 @@ MS-60: outbound client of the Minecraft services API: maps its status codes and 
 MS-04: exported method kept by the owner's dead-code ruling of 2026-11-02: the method and its tests stay
 MS-09: exported method kept by the owner's dead-code ruling of 2026-11-02: the method and its tests stay
 MC-04: exported method kept by the owner's dead-code ruling of 2026-11-02: the method and its tests stay
+LKT-26: constructor defaults: a new linked account starts verified with login enabled; the only test that checks the two defaults without goroutine timing, since the concurrent race tests notice a flipped default only some of the time
 RB-01: permission node of the public contract that sessions carry (kept by the approved test-prune graph: pure logic with real weight; TestScopeNodes)
 RB-02: permission node of the public contract that sessions carry (kept by the approved test-prune graph: pure logic with real weight; TestScopeNodes)
 RB-03: permission node of the public contract that sessions carry (kept by the approved test-prune graph: pure logic with real weight; TestScopeNodes)
