@@ -30,12 +30,14 @@
 | CSH-54 | ServerStatusHandler | Error Path | `bedrock=true` and `GetServerStatus` returns `ErrBedrockStatus` | host = `"Example.COM"` | Response is 404 and the problem carries `detail` `msgBedrockStatusFailed`, `host` `"example.com"` and `port` 19132 | P1 |  |
 | CSH-56 | IconHandler | Happy Path | the three stock icon files exist in the embedded public file system and decode | `bedrockIconFile`, `defaultIconFile` and `legacyIconFile` under `iconPath` in `public.FS` | `LoadImgFromFS` returns a nil error and a non-nil image for each of the three files | P1 |  |
 
-## service.go
+## service
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
 | CSV-02 | GetJavaServerStatus | Error Path | all of Ping17/16/14/Beta18 fail because the host is unreachable | `host`/`port` point at a closed local TCP port, `queryEnabled=false` | Returns `nil, ErrJavaStatus` | P1 |  |
 | CSV-05 | GetBedrockServerStatus | Error Path | `bedrockping.Query` fails because the host is unreachable | `host`/`port` point at a closed local port | Returns `nil` and `ErrBedrockStatus` | P1 |  |
+| CSV-07 | GetServerStatus | Happy Path | `isBedrock=false` | unreachable host | Delegates to `GetJavaServerStatus`; returns its distinct error `ErrJavaStatus` | P1 |  |
+| CSV-08 | GetServerStatus | Happy Path | `isBedrock=true` | unreachable host | Delegates to `GetBedrockServerStatus`; returns its distinct error `ErrBedrockStatus` | P1 |  |
 | CSV-11 | GetJavaServerStatus | Edge Case | Query is enabled and `queryPort` differs from `port` | local UDP recorders on two distinct ports (one as `port`, one as `queryPort`), `queryEnabled=true` | The recorder on `queryPort` receives a query handshake packet (prefix `FE FD 09`); the recorder on `port` receives nothing; returns `ErrJavaStatus` | P1 |  |
 | CSV-12 | GetJavaServerStatus | Edge Case | Query is enabled and `queryPort` equals `port` | local UDP recorder on `port`, `queryEnabled=true`, `queryPort == port` | The recorder receives a query handshake packet; returns `ErrJavaStatus` | P1 |  |
 | CSV-13 | GetJavaServerStatus | Edge Case | Query is disabled | local UDP recorders on `port` and `queryPort`, `queryEnabled=false` | Neither recorder receives a packet; returns `ErrJavaStatus` | P2 |  |
@@ -50,8 +52,6 @@
 | CSV-24 | GetJavaServerStatus | Edge Case | `queryEnabled` is true and the 1.7 ping answers at once but the query answers after a delay | local TCP server answering at once, UDP query server delaying its reply | The query status is returned, so the call waited for the query | P1 |  |
 | CSV-25 | GetJavaServerStatus | Edge Case | `queryEnabled` is true, every ping is refused and the query answers after a delay | closed TCP port, UDP query server delaying its reply | The query status is returned, so the call waited for the query | P1 |  |
 | CSV-28 | GetBedrockServerStatus | Happy Path | a local UDP server answers the unconnected ping | local UDP server | The returned status has `Host` and `Port` set to the queried host and port | P1 |  |
-| CSV-07 | GetServerStatus | Happy Path | `isBedrock=false` | unreachable host | Delegates to `GetJavaServerStatus`; returns its distinct error `ErrJavaStatus` | P1 |  |
-| CSV-08 | GetServerStatus | Happy Path | `isBedrock=true` | unreachable host | Delegates to `GetBedrockServerStatus`; returns its distinct error `ErrBedrockStatus` | P1 |  |
 
 ## types.go
 

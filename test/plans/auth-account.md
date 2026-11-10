@@ -1,6 +1,6 @@
 # Test plan: modules/auth/account
 
-## service.go
+## service
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
@@ -19,11 +19,11 @@
 | AC-14 | IsPasswordAuthEnabled | Happy Path | `ass.GetAccountSettings` returns `{PasswordAuthEnabled: true}` | | Returns `(true, nil)` | P1 |  |
 | AC-15 | IsPasswordAuthEnabled | Edge Case | `ass.GetAccountSettings` returns `{PasswordAuthEnabled: false}` | | Returns `(false, nil)` | P2 |  |
 | AC-16 | IsPasswordAuthEnabled | Error Path | `ass.GetAccountSettings` fails | | Returns `(false, err)` | P2 |  |
-| AC-17 | NewSession (service) | Happy Path | the account holds role ids | fake role store returns three permissions | Returns a `*Session` with a snowflake `ID`, `IssuedAt` and `LastUsedAt` set to now, `UserID`, `ExpiresAt` as given and `Permissions` exactly as the role store returned them; the role store is called once with the account's role ids | P1 |   |
-| AC-18 | NewSession (service) | Edge Case | the account holds two role ids | fake role store | The role store is called once with both ids and the permissions of both roles are returned | P1 |   |
-| AC-19 | NewSession (service) | Edge Case | the account has no roles |  | `Permissions` is empty and non-nil, the error is nil and the role store is never called | P2 |   |
-| AC-20 | NewSession (service) | Error Path | the role store fails | role store returns `testutil.ErrBoom` | Returns a nil session and an error matching the store error, so no session is issued with missing permissions | P1 |   |
-| AC-21 | NewSession (service) | Edge Case | the account's role grants nothing | role store returns no permissions | `Permissions` is empty and non-nil | P1 |   |
+| AC-17 | NewSession | Happy Path | the account holds role ids | fake role store returns three permissions | Returns a `*Session` with a snowflake `ID`, `IssuedAt` and `LastUsedAt` set to now, `UserID`, `ExpiresAt` as given and `Permissions` exactly as the role store returned them; the role store is called once with the account's role ids | P1 |   |
+| AC-18 | NewSession | Edge Case | the account holds two role ids | fake role store | The role store is called once with both ids and the permissions of both roles are returned | P1 |   |
+| AC-19 | NewSession | Edge Case | the account has no roles |  | `Permissions` is empty and non-nil, the error is nil and the role store is never called | P2 |   |
+| AC-20 | NewSession | Error Path | the role store fails | role store returns `testutil.ErrBoom` | Returns a nil session and an error matching the store error, so no session is issued with missing permissions | P1 |   |
+| AC-21 | NewSession | Edge Case | the account's role grants nothing | role store returns no permissions | `Permissions` is empty and non-nil | P1 |   |
 | AC-24 | AddAccount | Edge Case | the call context is cancelled before the write | fake store records `ctx.Err()` and a marker value at `AddAccountToDB` | The call succeeds, and `AddAccountToDB` sees a context that is not done and still carries the marker, so the account insert is not cancelled with the client | P1 |  |
 
 ## types.go
@@ -36,6 +36,11 @@
 | ACT-05 | NewPasswordLessAccount | Edge Case | `email == ""` | | `Account.Email == nil` | P3 |  |
 | ACT-07 | IDKeyWithSecret | Happy Path | Same password/salt/secret/params called twice | | Identical output both times (deterministic) | P2 |  |
 | ACT-08 | IDKeyWithSecret | Edge Case | Same password/salt/params, different `secret` | | Different output (the pepper/secret genuinely affects the digest) | P1 |  |
+
+## Account
+
+| ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
+|----|----------|---------------|----------|---------------|------------------|----------|-------|
 | ACT-09 | HashPassword | Happy Path | Any password | `rand.Read` succeeds | Sets `user.HashedSecret` (32 bytes) and `user.Salt` (16 bytes) | P1 |  |
 | ACT-10 | HashPassword | Edge Case | Called twice with the same password on two different accounts | | Produces different `Salt`/`HashedSecret` each time (random per-call salt) | P2 |  |
 | ACT-12 | ValidateUser | Happy Path | an account hashed with a fixed salt | `ValidateUser("correct")` | Returns true | P0 |  |
@@ -54,8 +59,12 @@
 | ACS-10 | translateAccountConstraintErr | Edge Case | `Code == "23505"`, unrecognized `ConstraintName` | | Returned unchanged (falls through the switch) | P1 |  |
 | ACS-11 | translateAccountConstraintErr | Happy Path | `Code == "23505"`, `ConstraintName == "accounts_email_key"` | | Returns `ErrEmailAlreadyExists` | P0 |  |
 | ACS-12 | translateAccountConstraintErr | Happy Path | `Code == "23505"`, `ConstraintName == "accounts_username_key"` | | Returns `ErrUsernameAlreadyExists` | P0 |  |
+
+## store
+
+| ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
+|----|----------|---------------|----------|---------------|------------------|----------|-------|
 | ACS-13 | AddAccountToDB | Error Path | DB unreachable | `Exec` fails with a plain connection error (not `*pgconn.PgError`) | Returns that raw error unchanged (not translated to a sentinel) | P1 |  |
-| ACS-37 | GetAccountSettings | Error Path | DB unreachable | | Returns nil, raw error (the `DefaultAccountSettings` fallback is `ErrNoRows`-specific and not reached) | P1 |  |
 | ACS-47 | GetAccountByID | Happy Path | No account row exists for userID | Real Postgres, live query | Returns nil, `ErrNotFound` | P1 |  |
 | ACS-48 | GetAccountByUsername | Happy Path | No account row exists for username | | Returns nil, `ErrNotFound` | P2 |  |
 | ACS-49 | GetAccountByEmail | Happy Path | No account row exists for email | | Returns nil, `ErrNotFound` | P2 |  |
@@ -63,13 +72,6 @@
 | ACS-51 | AddAccountToDB | Edge Case | Two accounts inserted via `NewIDOnlyAccount` (`Username == ""`) | `NULLIF` converts `""` to `NULL` before insert | Both inserts succeed (regression test for a previously-fixed empty-username collision bug) | P0 |  |
 | ACS-52 | AddAccountToDB | Error Path | Second account reuses an existing non-empty username | Real Postgres unique-violation on `accounts_username_key` | Returns `ErrUsernameAlreadyExists` | P1 |  |
 | ACS-53 | AddAccountToDB | Error Path | Second account reuses an existing non-empty email | Real Postgres unique-violation on `accounts_email_key` | Returns `ErrEmailAlreadyExists` | P1 |  |
-| ACS-67 | GetAccountSettings | Edge Case | The account exists but has no `account_settings` row yet | Real Postgres, `pgx.ErrNoRows` | Returns `DefaultAccountSettings(userID)` (`PasswordAuthEnabled: true`), nil error | P1 |  |
-| ACS-68 | SetPasswordAuthEnabled | Error Path | `enabled=true`, account has no `hashed_secret` | 0 rows match the `INSERT ... WHERE EXISTS` clause | Returns `ErrNoPasswordSet` | P1 |  |
-| ACS-70 | SetPasswordAuthEnabled | Edge Case | `enabled=false`, account has a password but no linked platform | Guard denies (no fallback) | Returns `ErrWouldLockAccount`; settings unchanged | P0 |  |
-| ACS-81 | GetAccountSettings | Error Path (live) | No account exists for userID | Real Postgres, unknown user ID | Returns nil settings and `ErrNotFound` | P1 |  |
-| ACS-82 | SetPasswordAuthEnabled | Error Path (live) | Enable for a user ID with no account | Real Postgres, unknown user ID | Returns `ErrNotFound` | P1 |  |
-| ACS-83 | SetPasswordAuthEnabled | Error Path (live) | Disable for a user ID with no account | Real Postgres, unknown user ID | Returns `ErrNotFound` | P1 |  |
-| ACS-84 | SetPasswordAuthEnabled | Concurrency Invariant (live) | The account is deleted while the enable call waits on its row | Real Postgres; a separate transaction has deleted the account but not committed; the call is running and blocked on the account row | After the delete commits the call returns `ErrNotFound` | P1 |  |
 | ACS-85 | AddAccountToDB | Happy Path (live) | an account is added with two existing role ids | Real Postgres; the two roles exist | `GetAccountByID`, `GetAccountByUsername` and `GetAccountByEmail` return the same two ids in order | P1 |   |
 | ACS-86 | UpdateAccountInDB | Happy Path (live) | the role ids of a stored account are replaced | Real Postgres; account without roles, an existing role | The next read returns only the new ids | P1 |   |
 | ACS-87 | AddAccountToDB | Edge Case (live) | an account is added with nil roles | Real Postgres | The stored account has no role ids | P2 |   |
@@ -83,6 +85,19 @@
 | ACS-96 | ListAccounts | Happy Path (live) | accounts with a short ID and long IDs are stored, one without a username | accounts `95`, `...601`, `...602`, and `...603` stored without a username | The accounts come back ordered by number, so `95` is before the long IDs; every account lists its roles as a non-nil slice; the account without a username lists an empty username | P1 |  |
 | ACS-97 | ListAccounts | Happy Path (live) | a limit and an offset select a page | the accounts above | `ListAccounts(2, i)` returns `...601` and `...602`, `ListAccounts(1, i+1)` returns only `...602` and `ListAccounts(1, i)` returns only `...601` | P1 |  |
 | ACS-98 | ListAccounts | Edge Case (live) | the offset is past the last account | offset 1000000 | An empty page and a nil error | P2 |  |
+
+## settingsStore
+
+| ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
+|----|----------|---------------|----------|---------------|------------------|----------|-------|
+| ACS-37 | GetAccountSettings | Error Path | DB unreachable | | Returns nil, raw error (the `DefaultAccountSettings` fallback is `ErrNoRows`-specific and not reached) | P1 |  |
+| ACS-67 | GetAccountSettings | Edge Case | The account exists but has no `account_settings` row yet | Real Postgres, `pgx.ErrNoRows` | Returns `DefaultAccountSettings(userID)` (`PasswordAuthEnabled: true`), nil error | P1 |  |
+| ACS-68 | SetPasswordAuthEnabled | Error Path | `enabled=true`, account has no `hashed_secret` | 0 rows match the `INSERT ... WHERE EXISTS` clause | Returns `ErrNoPasswordSet` | P1 |  |
+| ACS-70 | SetPasswordAuthEnabled | Edge Case | `enabled=false`, account has a password but no linked platform | Guard denies (no fallback) | Returns `ErrWouldLockAccount`; settings unchanged | P0 |  |
+| ACS-81 | GetAccountSettings | Error Path (live) | No account exists for userID | Real Postgres, unknown user ID | Returns nil settings and `ErrNotFound` | P1 |  |
+| ACS-82 | SetPasswordAuthEnabled | Error Path (live) | Enable for a user ID with no account | Real Postgres, unknown user ID | Returns `ErrNotFound` | P1 |  |
+| ACS-83 | SetPasswordAuthEnabled | Error Path (live) | Disable for a user ID with no account | Real Postgres, unknown user ID | Returns `ErrNotFound` | P1 |  |
+| ACS-84 | SetPasswordAuthEnabled | Concurrency Invariant (live) | The account is deleted while the enable call waits on its row | Real Postgres; a separate transaction has deleted the account but not committed; the call is running and blocked on the account row | After the delete commits the call returns `ErrNotFound` | P1 |  |
 
 ## handler.go
 
