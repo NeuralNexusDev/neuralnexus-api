@@ -149,8 +149,9 @@ func ApplyRoutes(
 
 	// --------------- Discord ---------------
 	verify := mw.VerifyEd25519Middleware(cfg)
-	mux.Handle("POST /api/discord/webhook", verify(discord.HandleDiscordWebhook()))
-	mux.Handle("POST /api/discord/interactions", verify(discord.HandleDiscordInteraction()))
+	discordHandler := discord.NewHandler()
+	mux.Handle("POST /api/discord/webhook", verify(http.HandlerFunc(discordHandler.Webhook)))
+	mux.Handle("POST /api/discord/interactions", verify(http.HandlerFunc(discordHandler.Interaction)))
 
 	// --------------- Game Server Status ---------------
 	mcsService := mcs.NewService()
@@ -206,7 +207,8 @@ func ApplyRoutes(
 	mux.Handle("DELETE /api/v1/pet-pictures/pictures", mwAuth(http.HandlerFunc(petHandler.DeletePetPicture)))
 
 	// --------------- Projects ---------------
-	mux.HandleFunc("GET /api/v1/projects/releases/{group}/{project}", projects.GetReleasesHandler(cfg.GitHub))
+	projectsHandler := projects.NewHandler(cfg.GitHub)
+	mux.HandleFunc("GET /api/v1/projects/releases/{group}/{project}", projectsHandler.GetReleases)
 
 	// --------------- Switchboard ---------------
 	// mux.HandleFunc("GET /ws/v1/switchboard/relay", switchboard.ebSocketRelayHandler)
@@ -218,7 +220,8 @@ func ApplyRoutes(
 	// --------------- Twitch ---------------
 	twitchStore := twitch.NewStore(database.GetDB(cfg.Database.DBURL + "/twitch"))
 	twitchService := twitch.NewService(twitchStore)
-	mux.HandleFunc("POST /api/twitch/eventsub", twitch.HandleEventSub(cfg.Twitch, twitchService, oauthTokenStore, linkAccountStore))
+	twitchHandler := twitch.NewHandler(cfg.Twitch, twitchService, oauthTokenStore, linkAccountStore)
+	mux.HandleFunc("POST /api/twitch/eventsub", twitchHandler.EventSub)
 
 	// --------------- Health Check ---------------
 	mux.HandleFunc("GET /api/v1/health", func(w http.ResponseWriter, r *http.Request) {
