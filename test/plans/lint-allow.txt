@@ -2,6 +2,8 @@
 # 02 auth-link
 
 # 03 minecraft, datastore, datastore-numbers
+datastore.admin
+numberstore.admin
 
 # 04 pet_pictures, projects, responses, teapot, cct_turtle
 
