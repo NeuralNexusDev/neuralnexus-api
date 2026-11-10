@@ -316,7 +316,7 @@ func (s *GeyserSkin) FromTexturesValue(ctx context.Context, t *TexturesValue) er
 	}
 	// TODO: RGBA hash from the PNG, or just go get it from the DB
 	s.TextureBytesHash = "NOT_A_HASH_USE_TEXTURE_ID"
-	s.IsSteve = t.Textures.SKIN.Metadata != nil || t.Textures.SKIN.Metadata.Model != SLIM
+	s.IsSteve = t.Textures.SKIN.Metadata == nil || t.Textures.SKIN.Metadata.Model != SLIM
 	s.Hash = t.Textures.SKIN.Hash()
 	s.Value = EncodeTextureValue(ctx, t)
 	s.FirstSeen = t.Timestamp
