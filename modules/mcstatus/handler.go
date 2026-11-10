@@ -175,40 +175,54 @@ func queryPortOrDefault(raw string, port int) int {
 	return queryPort
 }
 
-// ServerStatusHandler - Route that returns the server status
-func ServerStatusHandler(s MCStatusService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		host := r.PathValue("host")
-		isBedrock := r.URL.Query().Get("bedrock") == "true"
-		queryEnabled := r.URL.Query().Get("query") == "true"
-		raw := r.URL.Query().Get("raw") == "true"
-		host, port, ok := parseHost(host, isBedrock)
-		if !ok {
-			responses.BadRequest(w, r, msgInvalidHost)
-			return
-		}
-		queryPort := queryPortOrDefault(r.URL.Query().Get("query_port"), port)
+// Handler serves the Minecraft status routes.
+type Handler interface {
+	ServerStatus(w http.ResponseWriter, r *http.Request)
+	Icon(w http.ResponseWriter, r *http.Request)
+	SimpleStatus(w http.ResponseWriter, r *http.Request)
+}
 
-		status, err := s.GetServerStatus(r.Context(), host, port, isBedrock, queryEnabled, queryPort)
-		if err != nil {
-			reqctx.Log(r.Context(), logUnableToGetServerStatus, err.Error())
-			switch err {
-			case ErrJavaStatus:
-				problem := responses.NewNotFoundProblem(msgJavaStatusFailed)
-				responses.SendProblemStruct(w, r, problem, offlineProblem{Problem: problem, Host: host, Port: port})
-			case ErrBedrockStatus:
-				problem := responses.NewNotFoundProblem(msgBedrockStatusFailed)
-				responses.SendProblemStruct(w, r, problem, offlineProblem{Problem: problem, Host: host, Port: port})
-			default:
-				responses.InternalServerError(w, r, msgFailedToGetServerStatus)
-			}
-			return
-		}
-		if !raw {
-			status.Raw = nil
-		}
-		responses.StructOK(w, r, status)
+type handler struct {
+	s MCStatusService
+}
+
+// NewHandler returns a Handler that serves the Minecraft status routes from the given service.
+func NewHandler(s MCStatusService) Handler {
+	return &handler{s}
+}
+
+// ServerStatus - Route that returns the server status
+func (h *handler) ServerStatus(w http.ResponseWriter, r *http.Request) {
+	host := r.PathValue("host")
+	isBedrock := r.URL.Query().Get("bedrock") == "true"
+	queryEnabled := r.URL.Query().Get("query") == "true"
+	raw := r.URL.Query().Get("raw") == "true"
+	host, port, ok := parseHost(host, isBedrock)
+	if !ok {
+		responses.BadRequest(w, r, msgInvalidHost)
+		return
 	}
+	queryPort := queryPortOrDefault(r.URL.Query().Get("query_port"), port)
+
+	status, err := h.s.GetServerStatus(r.Context(), host, port, isBedrock, queryEnabled, queryPort)
+	if err != nil {
+		reqctx.Log(r.Context(), logUnableToGetServerStatus, err.Error())
+		switch err {
+		case ErrJavaStatus:
+			problem := responses.NewNotFoundProblem(msgJavaStatusFailed)
+			responses.SendProblemStruct(w, r, problem, offlineProblem{Problem: problem, Host: host, Port: port})
+		case ErrBedrockStatus:
+			problem := responses.NewNotFoundProblem(msgBedrockStatusFailed)
+			responses.SendProblemStruct(w, r, problem, offlineProblem{Problem: problem, Host: host, Port: port})
+		default:
+			responses.InternalServerError(w, r, msgFailedToGetServerStatus)
+		}
+		return
+	}
+	if !raw {
+		status.Raw = nil
+	}
+	responses.StructOK(w, r, status)
 }
 
 func writeIcon(w http.ResponseWriter, img image.Image) {
@@ -225,67 +239,63 @@ func writeStockIcon(w http.ResponseWriter, name string) {
 	writeIcon(w, img)
 }
 
-// IconHandler - Route that returns the server icon as a PNG
-func IconHandler(s MCStatusService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		host := r.PathValue("host")
-		isBedrock := r.URL.Query().Get("bedrock") == "true"
-		host, port, ok := parseHost(host, isBedrock)
-		if !ok {
-			responses.BadRequest(w, r, msgInvalidHost)
-			return
-		}
-		if isBedrock {
-			writeStockIcon(w, bedrockIconFile)
-			return
-		}
-
-		status, err := s.GetJavaServerStatus(r.Context(), host, port, false, 0)
-		if err == ErrJavaStatus {
-			writeStockIcon(w, defaultIconFile)
-			return
-		}
-		if err != nil {
-			reqctx.Log(r.Context(), logUnableToGetServerStatus, err.Error())
-			responses.InternalServerError(w, r, msgFailedToGetServerStatus)
-			return
-		}
-		if status.Icon == nil {
-			name := defaultIconFile
-			if status.Legacy {
-				name = legacyIconFile
-			}
-			writeStockIcon(w, name)
-			return
-		}
-
-		writeIcon(w, status.Icon)
+// Icon - Route that returns the server icon as a PNG
+func (h *handler) Icon(w http.ResponseWriter, r *http.Request) {
+	host := r.PathValue("host")
+	isBedrock := r.URL.Query().Get("bedrock") == "true"
+	host, port, ok := parseHost(host, isBedrock)
+	if !ok {
+		responses.BadRequest(w, r, msgInvalidHost)
+		return
 	}
+	if isBedrock {
+		writeStockIcon(w, bedrockIconFile)
+		return
+	}
+
+	status, err := h.s.GetJavaServerStatus(r.Context(), host, port, false, 0)
+	if err == ErrJavaStatus {
+		writeStockIcon(w, defaultIconFile)
+		return
+	}
+	if err != nil {
+		reqctx.Log(r.Context(), logUnableToGetServerStatus, err.Error())
+		responses.InternalServerError(w, r, msgFailedToGetServerStatus)
+		return
+	}
+	if status.Icon == nil {
+		name := defaultIconFile
+		if status.Legacy {
+			name = legacyIconFile
+		}
+		writeStockIcon(w, name)
+		return
+	}
+
+	writeIcon(w, status.Icon)
 }
 
-// SimpleStatusHandler - Route that returns the server status in a simple format
-func SimpleStatusHandler(s MCStatusService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		host := r.PathValue("host")
-		isBedrock := r.URL.Query().Get("bedrock") == "true"
-		queryEnabled := r.URL.Query().Get("query") == "true"
-		host, port, ok := parseHost(host, isBedrock)
-		if !ok {
-			responses.BadRequest(w, r, msgInvalidHost)
-			return
-		}
-		queryPort := queryPortOrDefault(r.URL.Query().Get("query_port"), port)
-
-		status := "Online"
-		statusCode := http.StatusOK
-		_, err := s.GetServerStatus(r.Context(), host, port, isBedrock, queryEnabled, queryPort)
-		if err != nil {
-			status = "Offline"
-			statusCode = http.StatusNotFound
-		}
-
-		w.Header().Set("Content-Type", "text/plain")
-		w.WriteHeader(statusCode)
-		w.Write([]byte(status))
+// SimpleStatus - Route that returns the server status in a simple format
+func (h *handler) SimpleStatus(w http.ResponseWriter, r *http.Request) {
+	host := r.PathValue("host")
+	isBedrock := r.URL.Query().Get("bedrock") == "true"
+	queryEnabled := r.URL.Query().Get("query") == "true"
+	host, port, ok := parseHost(host, isBedrock)
+	if !ok {
+		responses.BadRequest(w, r, msgInvalidHost)
+		return
 	}
+	queryPort := queryPortOrDefault(r.URL.Query().Get("query_port"), port)
+
+	status := "Online"
+	statusCode := http.StatusOK
+	_, err := h.s.GetServerStatus(r.Context(), host, port, isBedrock, queryEnabled, queryPort)
+	if err != nil {
+		status = "Offline"
+		statusCode = http.StatusNotFound
+	}
+
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(statusCode)
+	w.Write([]byte(status))
 }
