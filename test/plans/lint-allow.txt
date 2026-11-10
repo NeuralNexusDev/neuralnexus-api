@@ -20,6 +20,8 @@ application/x-protobuf
 null
 
 # 05 auth-account, auth-session, auth-user, auth-ratelimit
+NN_SITE_URL
+NN_API_URL
 
 # 06 mcstatus, game_server_status, discord
 query_port
