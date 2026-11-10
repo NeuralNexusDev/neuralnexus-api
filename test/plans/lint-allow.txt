@@ -1,5 +1,9 @@
 # Tokens that plan cells may put in backticks because a caller or an operator sees them: permission nodes, configuration keys, request and response fields, media types, cookies and headers. One per line. Each ticket adds its tokens under its own marker line.
 # 02 auth-link
+openid.mode
+openid.signed
+openid.claimed_id
+STEAM_API_KEY
 
 # 03 minecraft, datastore, datastore-numbers
 datastore.admin
