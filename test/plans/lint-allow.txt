@@ -34,3 +34,9 @@ APPLICATION_DEAUTHORIZED
 ENTITLEMENT_CREATE
 
 # 07 middleware, rbac, bee_name_generator
+session
+X-Signature-Ed25519
+X-Signature-Timestamp
+roles.admin
+ratelimit:1000
+beenamegenerator.admin
