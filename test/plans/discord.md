@@ -11,7 +11,7 @@
 | HI-05 | HandleDiscordInteraction | Edge Case | Unrecognized interaction type | Body `{"type":99}` | A 204 response | P2 |  |
 | HW-01 | HandleDiscordWebhook | Error Path | Request has no `Content-Type` header | No `Content-Type` header set | A 415 response, `detail` is `msgRequestMustBeJSON` | P1 |  |
 | HW-02 | HandleDiscordWebhook | Error Path | `Content-Type: application/json` but the body is not valid JSON | Body is `"{not json"` | A 400 response, `detail` is `msgInvalidRequestBody` | P1 |  |
-| HW-03 | HandleDiscordWebhook | Edge Case | Valid ping payload but `version` is not 1 | Body `{"version":2,"type":0}` | A 204 response; the payload is processed as if the version were 1 | P2 |  |
+| HW-03 | HandleDiscordWebhook | Edge Case | Valid ping payload but `version` is not 1 | Body `{"version":2,"type":0}` | A 204 response | P2 |  |
 | HW-04 | HandleDiscordWebhook | Happy Path | Webhook ping (`type` 0) | Body `{"version":1,"type":0}` | A 204 response | P1 |  |
 | HW-05 | HandleDiscordWebhook | Happy Path | Event `type`, `event.type` is `APPLICATION_AUTHORIZED` and `data.integration_type` is 0 (guild install) with guild data present | Body has `data.integration_type` 0 and a `data.guild` with id "g1" | A 204 response | P1 |  |
 | HW-06 | HandleDiscordWebhook | Happy Path | Same as HW-05 but `data.integration_type` is 1 (user install) with user data present | Body has `data.integration_type` 1 and a `data.user` with id "u1" | A 204 response | P2 |  |
