@@ -62,313 +62,313 @@ func authorized(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
-// ListRolesHandler lists every role with its permissions
-func ListRolesHandler(s Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if !authorized(w, r) {
-			return
-		}
-		roles, err := s.ListRoles(r.Context())
-		if err != nil {
-			reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
-			responses.InternalServerError(w, r, msgFailedToHandleRbac)
-			return
-		}
-		responses.StructOK(w, r, roles)
+// Handler serves the roles and permissions routes.
+type Handler interface {
+	ListRoles(w http.ResponseWriter, r *http.Request)
+	GetRole(w http.ResponseWriter, r *http.Request)
+	GetRoleByName(w http.ResponseWriter, r *http.Request)
+	CreateRole(w http.ResponseWriter, r *http.Request)
+	UpdateRole(w http.ResponseWriter, r *http.Request)
+	DeleteRole(w http.ResponseWriter, r *http.Request)
+	ListPermissions(w http.ResponseWriter, r *http.Request)
+	GetPermission(w http.ResponseWriter, r *http.Request)
+	GetPermissionByNode(w http.ResponseWriter, r *http.Request)
+	CreatePermission(w http.ResponseWriter, r *http.Request)
+	DeletePermission(w http.ResponseWriter, r *http.Request)
+	AttachPermission(w http.ResponseWriter, r *http.Request)
+	DetachPermission(w http.ResponseWriter, r *http.Request)
+}
+
+type handler struct {
+	s Service
+}
+
+// NewHandler returns a Handler that serves the roles and permissions routes from the given service.
+func NewHandler(s Service) Handler {
+	return &handler{s}
+}
+
+// ListRoles lists every role with its permissions
+func (h *handler) ListRoles(w http.ResponseWriter, r *http.Request) {
+	if !authorized(w, r) {
+		return
+	}
+	roles, err := h.s.ListRoles(r.Context())
+	if err != nil {
+		reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
+		responses.InternalServerError(w, r, msgFailedToHandleRbac)
+		return
+	}
+	responses.StructOK(w, r, roles)
+}
+
+// GetRole gets a role by ID
+func (h *handler) GetRole(w http.ResponseWriter, r *http.Request) {
+	if !authorized(w, r) {
+		return
+	}
+	role, err := h.s.GetRole(r.Context(), r.PathValue("id"))
+	switch err {
+	case ErrInvalidID:
+		responses.BadRequest(w, r, msgInvalidID)
+	case ErrRoleNotFound:
+		responses.NotFound(w, r, msgRoleNotFound)
+	case nil:
+		responses.StructOK(w, r, role)
+	default:
+		reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
+		responses.InternalServerError(w, r, msgFailedToHandleRbac)
 	}
 }
 
-// GetRoleHandler gets a role by ID
-func GetRoleHandler(s Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if !authorized(w, r) {
-			return
-		}
-		role, err := s.GetRole(r.Context(), r.PathValue("id"))
-		switch err {
-		case ErrInvalidID:
-			responses.BadRequest(w, r, msgInvalidID)
-		case ErrRoleNotFound:
-			responses.NotFound(w, r, msgRoleNotFound)
-		case nil:
-			responses.StructOK(w, r, role)
-		default:
-			reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
-			responses.InternalServerError(w, r, msgFailedToHandleRbac)
-		}
+// GetRoleByName gets a role by name
+func (h *handler) GetRoleByName(w http.ResponseWriter, r *http.Request) {
+	if !authorized(w, r) {
+		return
+	}
+	role, err := h.s.GetRoleByName(r.Context(), r.PathValue("name"))
+	switch err {
+	case ErrRoleNotFound:
+		responses.NotFound(w, r, msgRoleNotFound)
+	case nil:
+		responses.StructOK(w, r, role)
+	default:
+		reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
+		responses.InternalServerError(w, r, msgFailedToHandleRbac)
 	}
 }
 
-// GetRoleByNameHandler gets a role by name
-func GetRoleByNameHandler(s Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if !authorized(w, r) {
-			return
-		}
-		role, err := s.GetRoleByName(r.Context(), r.PathValue("name"))
-		switch err {
-		case ErrRoleNotFound:
-			responses.NotFound(w, r, msgRoleNotFound)
-		case nil:
-			responses.StructOK(w, r, role)
-		default:
-			reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
-			responses.InternalServerError(w, r, msgFailedToHandleRbac)
-		}
+// CreateRole creates a role
+func (h *handler) CreateRole(w http.ResponseWriter, r *http.Request) {
+	if !authorized(w, r) {
+		return
+	}
+	var body createRoleRequest
+	if err := responses.DecodeStruct(r, &body); err != nil {
+		responses.BadRequest(w, r, msgUnableToParseBody)
+		return
+	}
+	role, err := h.s.CreateRole(r.Context(), body.Name, body.Description)
+	switch err {
+	case ErrInvalidRoleName:
+		responses.BadRequest(w, r, msgInvalidRoleName)
+	case ErrInvalidDescription:
+		responses.BadRequest(w, r, msgInvalidDescription)
+	case ErrRoleNameTaken:
+		responses.Conflict(w, r, msgRoleNameTaken)
+	case nil:
+		responses.SendStruct(w, r, http.StatusCreated, role)
+	default:
+		reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
+		responses.InternalServerError(w, r, msgFailedToHandleRbac)
 	}
 }
 
-// CreateRoleHandler creates a role
-func CreateRoleHandler(s Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if !authorized(w, r) {
-			return
-		}
-		var body createRoleRequest
-		if err := responses.DecodeStruct(r, &body); err != nil {
+// UpdateRole renames a role or changes its description
+func (h *handler) UpdateRole(w http.ResponseWriter, r *http.Request) {
+	if !authorized(w, r) {
+		return
+	}
+	var body updateRoleRequest
+	if err := responses.DecodeStruct(r, &body); err != nil {
+		responses.BadRequest(w, r, msgUnableToParseBody)
+		return
+	}
+	role, err := h.s.UpdateRole(r.Context(), r.PathValue("id"), body.Name, body.Description)
+	switch err {
+	case ErrInvalidID:
+		responses.BadRequest(w, r, msgInvalidID)
+	case ErrInvalidRoleName:
+		responses.BadRequest(w, r, msgInvalidRoleName)
+	case ErrInvalidDescription:
+		responses.BadRequest(w, r, msgInvalidDescription)
+	case ErrRoleNotFound:
+		responses.NotFound(w, r, msgRoleNotFound)
+	case ErrRoleNameTaken:
+		responses.Conflict(w, r, msgRoleNameTaken)
+	case ErrBuiltinRole:
+		responses.Conflict(w, r, msgBuiltinRole)
+	case nil:
+		responses.StructOK(w, r, role)
+	default:
+		reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
+		responses.InternalServerError(w, r, msgFailedToHandleRbac)
+	}
+}
+
+// DeleteRole deletes a role no account holds
+func (h *handler) DeleteRole(w http.ResponseWriter, r *http.Request) {
+	if !authorized(w, r) {
+		return
+	}
+	err := h.s.DeleteRole(r.Context(), r.PathValue("id"))
+	switch err {
+	case ErrInvalidID:
+		responses.BadRequest(w, r, msgInvalidID)
+	case ErrRoleNotFound:
+		responses.NotFound(w, r, msgRoleNotFound)
+	case ErrRoleInUse:
+		responses.Conflict(w, r, msgRoleInUse)
+	case ErrBuiltinRole:
+		responses.Conflict(w, r, msgBuiltinRole)
+	case nil:
+		responses.NoContent(w, r)
+	default:
+		reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
+		responses.InternalServerError(w, r, msgFailedToHandleRbac)
+	}
+}
+
+// ListPermissions lists every permission
+func (h *handler) ListPermissions(w http.ResponseWriter, r *http.Request) {
+	if !authorized(w, r) {
+		return
+	}
+	permissions, err := h.s.ListPermissions(r.Context())
+	if err != nil {
+		reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
+		responses.InternalServerError(w, r, msgFailedToHandleRbac)
+		return
+	}
+	responses.StructOK(w, r, permissions)
+}
+
+// GetPermission gets a permission by ID
+func (h *handler) GetPermission(w http.ResponseWriter, r *http.Request) {
+	if !authorized(w, r) {
+		return
+	}
+	permission, err := h.s.GetPermission(r.Context(), r.PathValue("id"))
+	switch err {
+	case ErrInvalidID:
+		responses.BadRequest(w, r, msgInvalidID)
+	case ErrPermissionNotFound:
+		responses.NotFound(w, r, msgPermissionNotFound)
+	case nil:
+		responses.StructOK(w, r, permission)
+	default:
+		reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
+		responses.InternalServerError(w, r, msgFailedToHandleRbac)
+	}
+}
+
+// GetPermissionByNode gets a permission by its node
+func (h *handler) GetPermissionByNode(w http.ResponseWriter, r *http.Request) {
+	if !authorized(w, r) {
+		return
+	}
+	permission, err := h.s.GetPermissionByNode(r.Context(), r.PathValue("node"))
+	switch err {
+	case ErrPermissionNotFound:
+		responses.NotFound(w, r, msgPermissionNotFound)
+	case nil:
+		responses.StructOK(w, r, permission)
+	default:
+		reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
+		responses.InternalServerError(w, r, msgFailedToHandleRbac)
+	}
+}
+
+// CreatePermission creates a permission
+func (h *handler) CreatePermission(w http.ResponseWriter, r *http.Request) {
+	if !authorized(w, r) {
+		return
+	}
+	var body createPermissionRequest
+	if err := responses.DecodeStruct(r, &body); err != nil {
+		responses.BadRequest(w, r, msgUnableToParseBody)
+		return
+	}
+	permission, err := h.s.CreatePermission(r.Context(), body.Node, body.Description, body.ValueType, body.Merge)
+	switch err {
+	case ErrInvalidNode:
+		responses.BadRequest(w, r, msgInvalidNode)
+	case ErrInvalidDescription:
+		responses.BadRequest(w, r, msgInvalidDescription)
+	case ErrInvalidValueType:
+		responses.BadRequest(w, r, msgInvalidValueType)
+	case ErrPermissionExists:
+		responses.Conflict(w, r, msgPermissionExists)
+	case nil:
+		responses.SendStruct(w, r, http.StatusCreated, permission)
+	default:
+		reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
+		responses.InternalServerError(w, r, msgFailedToHandleRbac)
+	}
+}
+
+// DeletePermission deletes a permission no role grants
+func (h *handler) DeletePermission(w http.ResponseWriter, r *http.Request) {
+	if !authorized(w, r) {
+		return
+	}
+	err := h.s.DeletePermission(r.Context(), r.PathValue("id"))
+	switch err {
+	case ErrInvalidID:
+		responses.BadRequest(w, r, msgInvalidID)
+	case ErrPermissionNotFound:
+		responses.NotFound(w, r, msgPermissionNotFound)
+	case ErrPermissionInUse:
+		responses.Conflict(w, r, msgPermissionInUse)
+	case nil:
+		responses.NoContent(w, r)
+	default:
+		reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
+		responses.InternalServerError(w, r, msgFailedToHandleRbac)
+	}
+}
+
+// AttachPermission grants a permission to a role, with a value if the permission takes one
+func (h *handler) AttachPermission(w http.ResponseWriter, r *http.Request) {
+	if !authorized(w, r) {
+		return
+	}
+	var body attachPermissionRequest
+	if r.ContentLength != 0 {
+		dec := json.NewDecoder(r.Body)
+		dec.UseNumber()
+		if err := dec.Decode(&body); err != nil && !errors.Is(err, io.EOF) {
 			responses.BadRequest(w, r, msgUnableToParseBody)
 			return
 		}
-		role, err := s.CreateRole(r.Context(), body.Name, body.Description)
-		switch err {
-		case ErrInvalidRoleName:
-			responses.BadRequest(w, r, msgInvalidRoleName)
-		case ErrInvalidDescription:
-			responses.BadRequest(w, r, msgInvalidDescription)
-		case ErrRoleNameTaken:
-			responses.Conflict(w, r, msgRoleNameTaken)
-		case nil:
-			responses.SendStruct(w, r, http.StatusCreated, role)
-		default:
-			reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
-			responses.InternalServerError(w, r, msgFailedToHandleRbac)
-		}
+	}
+	err := h.s.AttachPermission(r.Context(), r.PathValue("id"), r.PathValue("permission_id"), body.Value)
+	switch err {
+	case ErrInvalidID:
+		responses.BadRequest(w, r, msgInvalidID)
+	case ErrInvalidValue:
+		responses.BadRequest(w, r, msgInvalidValue)
+	case ErrRoleNotFound:
+		responses.NotFound(w, r, msgRoleNotFound)
+	case ErrPermissionNotFound:
+		responses.NotFound(w, r, msgPermissionNotFound)
+	case nil:
+		responses.NoContent(w, r)
+	default:
+		reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
+		responses.InternalServerError(w, r, msgFailedToHandleRbac)
 	}
 }
 
-// UpdateRoleHandler renames a role or changes its description
-func UpdateRoleHandler(s Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if !authorized(w, r) {
-			return
-		}
-		var body updateRoleRequest
-		if err := responses.DecodeStruct(r, &body); err != nil {
-			responses.BadRequest(w, r, msgUnableToParseBody)
-			return
-		}
-		role, err := s.UpdateRole(r.Context(), r.PathValue("id"), body.Name, body.Description)
-		switch err {
-		case ErrInvalidID:
-			responses.BadRequest(w, r, msgInvalidID)
-		case ErrInvalidRoleName:
-			responses.BadRequest(w, r, msgInvalidRoleName)
-		case ErrInvalidDescription:
-			responses.BadRequest(w, r, msgInvalidDescription)
-		case ErrRoleNotFound:
-			responses.NotFound(w, r, msgRoleNotFound)
-		case ErrRoleNameTaken:
-			responses.Conflict(w, r, msgRoleNameTaken)
-		case ErrBuiltinRole:
-			responses.Conflict(w, r, msgBuiltinRole)
-		case nil:
-			responses.StructOK(w, r, role)
-		default:
-			reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
-			responses.InternalServerError(w, r, msgFailedToHandleRbac)
-		}
+// DetachPermission removes a permission from a role
+func (h *handler) DetachPermission(w http.ResponseWriter, r *http.Request) {
+	if !authorized(w, r) {
+		return
 	}
-}
-
-// DeleteRoleHandler deletes a role no account holds
-func DeleteRoleHandler(s Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if !authorized(w, r) {
-			return
-		}
-		err := s.DeleteRole(r.Context(), r.PathValue("id"))
-		switch err {
-		case ErrInvalidID:
-			responses.BadRequest(w, r, msgInvalidID)
-		case ErrRoleNotFound:
-			responses.NotFound(w, r, msgRoleNotFound)
-		case ErrRoleInUse:
-			responses.Conflict(w, r, msgRoleInUse)
-		case ErrBuiltinRole:
-			responses.Conflict(w, r, msgBuiltinRole)
-		case nil:
-			responses.NoContent(w, r)
-		default:
-			reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
-			responses.InternalServerError(w, r, msgFailedToHandleRbac)
-		}
-	}
-}
-
-// ListPermissionsHandler lists every permission
-func ListPermissionsHandler(s Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if !authorized(w, r) {
-			return
-		}
-		permissions, err := s.ListPermissions(r.Context())
-		if err != nil {
-			reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
-			responses.InternalServerError(w, r, msgFailedToHandleRbac)
-			return
-		}
-		responses.StructOK(w, r, permissions)
-	}
-}
-
-// GetPermissionHandler gets a permission by ID
-func GetPermissionHandler(s Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if !authorized(w, r) {
-			return
-		}
-		permission, err := s.GetPermission(r.Context(), r.PathValue("id"))
-		switch err {
-		case ErrInvalidID:
-			responses.BadRequest(w, r, msgInvalidID)
-		case ErrPermissionNotFound:
-			responses.NotFound(w, r, msgPermissionNotFound)
-		case nil:
-			responses.StructOK(w, r, permission)
-		default:
-			reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
-			responses.InternalServerError(w, r, msgFailedToHandleRbac)
-		}
-	}
-}
-
-// GetPermissionByNodeHandler gets a permission by its node
-func GetPermissionByNodeHandler(s Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if !authorized(w, r) {
-			return
-		}
-		permission, err := s.GetPermissionByNode(r.Context(), r.PathValue("node"))
-		switch err {
-		case ErrPermissionNotFound:
-			responses.NotFound(w, r, msgPermissionNotFound)
-		case nil:
-			responses.StructOK(w, r, permission)
-		default:
-			reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
-			responses.InternalServerError(w, r, msgFailedToHandleRbac)
-		}
-	}
-}
-
-// CreatePermissionHandler creates a permission
-func CreatePermissionHandler(s Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if !authorized(w, r) {
-			return
-		}
-		var body createPermissionRequest
-		if err := responses.DecodeStruct(r, &body); err != nil {
-			responses.BadRequest(w, r, msgUnableToParseBody)
-			return
-		}
-		permission, err := s.CreatePermission(r.Context(), body.Node, body.Description, body.ValueType, body.Merge)
-		switch err {
-		case ErrInvalidNode:
-			responses.BadRequest(w, r, msgInvalidNode)
-		case ErrInvalidDescription:
-			responses.BadRequest(w, r, msgInvalidDescription)
-		case ErrInvalidValueType:
-			responses.BadRequest(w, r, msgInvalidValueType)
-		case ErrPermissionExists:
-			responses.Conflict(w, r, msgPermissionExists)
-		case nil:
-			responses.SendStruct(w, r, http.StatusCreated, permission)
-		default:
-			reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
-			responses.InternalServerError(w, r, msgFailedToHandleRbac)
-		}
-	}
-}
-
-// DeletePermissionHandler deletes a permission no role grants
-func DeletePermissionHandler(s Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if !authorized(w, r) {
-			return
-		}
-		err := s.DeletePermission(r.Context(), r.PathValue("id"))
-		switch err {
-		case ErrInvalidID:
-			responses.BadRequest(w, r, msgInvalidID)
-		case ErrPermissionNotFound:
-			responses.NotFound(w, r, msgPermissionNotFound)
-		case ErrPermissionInUse:
-			responses.Conflict(w, r, msgPermissionInUse)
-		case nil:
-			responses.NoContent(w, r)
-		default:
-			reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
-			responses.InternalServerError(w, r, msgFailedToHandleRbac)
-		}
-	}
-}
-
-// AttachPermissionHandler grants a permission to a role, with a value if the permission takes one
-func AttachPermissionHandler(s Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if !authorized(w, r) {
-			return
-		}
-		var body attachPermissionRequest
-		if r.ContentLength != 0 {
-			dec := json.NewDecoder(r.Body)
-			dec.UseNumber()
-			if err := dec.Decode(&body); err != nil && !errors.Is(err, io.EOF) {
-				responses.BadRequest(w, r, msgUnableToParseBody)
-				return
-			}
-		}
-		err := s.AttachPermission(r.Context(), r.PathValue("id"), r.PathValue("permission_id"), body.Value)
-		switch err {
-		case ErrInvalidID:
-			responses.BadRequest(w, r, msgInvalidID)
-		case ErrInvalidValue:
-			responses.BadRequest(w, r, msgInvalidValue)
-		case ErrRoleNotFound:
-			responses.NotFound(w, r, msgRoleNotFound)
-		case ErrPermissionNotFound:
-			responses.NotFound(w, r, msgPermissionNotFound)
-		case nil:
-			responses.NoContent(w, r)
-		default:
-			reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
-			responses.InternalServerError(w, r, msgFailedToHandleRbac)
-		}
-	}
-}
-
-// DetachPermissionHandler removes a permission from a role
-func DetachPermissionHandler(s Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if !authorized(w, r) {
-			return
-		}
-		err := s.DetachPermission(r.Context(), r.PathValue("id"), r.PathValue("permission_id"))
-		switch err {
-		case ErrInvalidID:
-			responses.BadRequest(w, r, msgInvalidID)
-		case ErrRoleNotFound:
-			responses.NotFound(w, r, msgRoleNotFound)
-		case ErrPermissionNotFound:
-			responses.NotFound(w, r, msgPermissionNotFound)
-		case ErrBuiltinRole:
-			responses.Conflict(w, r, msgBuiltinRole)
-		case nil:
-			responses.NoContent(w, r)
-		default:
-			reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
-			responses.InternalServerError(w, r, msgFailedToHandleRbac)
-		}
+	err := h.s.DetachPermission(r.Context(), r.PathValue("id"), r.PathValue("permission_id"))
+	switch err {
+	case ErrInvalidID:
+		responses.BadRequest(w, r, msgInvalidID)
+	case ErrRoleNotFound:
+		responses.NotFound(w, r, msgRoleNotFound)
+	case ErrPermissionNotFound:
+		responses.NotFound(w, r, msgPermissionNotFound)
+	case ErrBuiltinRole:
+		responses.Conflict(w, r, msgBuiltinRole)
+	case nil:
+		responses.NoContent(w, r)
+	default:
+		reqctx.Log(r.Context(), logFailedToHandleRbac, err.Error())
+		responses.InternalServerError(w, r, msgFailedToHandleRbac)
 	}
 }

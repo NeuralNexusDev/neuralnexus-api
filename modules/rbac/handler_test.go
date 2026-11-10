@@ -80,7 +80,7 @@ func (s *stubService) GetPermissionsForRoles(context.Context, []string) ([]strin
 
 type handlerCase struct {
 	name    string
-	handler func(Service) http.HandlerFunc
+	handler func(Handler, http.ResponseWriter, *http.Request)
 	body    string
 	paths   map[string]string
 	status  int
@@ -88,21 +88,21 @@ type handlerCase struct {
 }
 
 var handlerCases = []handlerCase{
-	{"ListRoles", ListRolesHandler, "", nil, http.StatusOK, nil},
-	{"GetRole", GetRoleHandler, "", map[string]string{"id": "7"}, http.StatusOK, []string{"7"}},
-	{"GetRoleByName", GetRoleByNameHandler, "", map[string]string{"name": "mod"}, http.StatusOK, []string{"mod"}},
-	{"CreateRole", CreateRoleHandler, `{"name":"mod","description":"d"}`, nil, http.StatusCreated, []string{"mod", "d"}},
-	{"UpdateRole", UpdateRoleHandler, `{"name":"n","description":"d"}`, map[string]string{"id": "7"}, http.StatusOK, []string{"7", "name=n", "description=d"}},
-	{"DeleteRole", DeleteRoleHandler, "", map[string]string{"id": "7"}, http.StatusNoContent, []string{"7"}},
-	{"ListPermissions", ListPermissionsHandler, "", nil, http.StatusOK, nil},
-	{"GetPermission", GetPermissionHandler, "", map[string]string{"id": "8"}, http.StatusOK, []string{"8"}},
-	{"GetPermissionByNode", GetPermissionByNodeHandler, "", map[string]string{"node": "a.b"}, http.StatusOK, []string{"a.b"}},
-	{"CreatePermission", CreatePermissionHandler, `{"node":"a.b","description":"d","value_type":"int","merge":"max"}`, nil, http.StatusCreated, []string{"a.b", "d", "int", "max"}},
-	{"DeletePermission", DeletePermissionHandler, "", map[string]string{"id": "8"}, http.StatusNoContent, []string{"8"}},
-	{"AttachPermission", AttachPermissionHandler, "", map[string]string{"id": "7", "permission_id": "8"}, http.StatusNoContent, []string{"7", "8", "<nil>"}},
-	{"AttachPermissionWithValue", AttachPermissionHandler, `{"value":["a","b"]}`, map[string]string{"id": "7", "permission_id": "8"}, http.StatusNoContent, []string{"7", "8", "[a b]"}},
-	{"AttachPermissionWithNumber", AttachPermissionHandler, `{"value":1000}`, map[string]string{"id": "7", "permission_id": "8"}, http.StatusNoContent, []string{"7", "8", "1000"}},
-	{"DetachPermission", DetachPermissionHandler, "", map[string]string{"id": "7", "permission_id": "8"}, http.StatusNoContent, []string{"7", "8"}},
+	{"ListRoles", Handler.ListRoles, "", nil, http.StatusOK, nil},
+	{"GetRole", Handler.GetRole, "", map[string]string{"id": "7"}, http.StatusOK, []string{"7"}},
+	{"GetRoleByName", Handler.GetRoleByName, "", map[string]string{"name": "mod"}, http.StatusOK, []string{"mod"}},
+	{"CreateRole", Handler.CreateRole, `{"name":"mod","description":"d"}`, nil, http.StatusCreated, []string{"mod", "d"}},
+	{"UpdateRole", Handler.UpdateRole, `{"name":"n","description":"d"}`, map[string]string{"id": "7"}, http.StatusOK, []string{"7", "name=n", "description=d"}},
+	{"DeleteRole", Handler.DeleteRole, "", map[string]string{"id": "7"}, http.StatusNoContent, []string{"7"}},
+	{"ListPermissions", Handler.ListPermissions, "", nil, http.StatusOK, nil},
+	{"GetPermission", Handler.GetPermission, "", map[string]string{"id": "8"}, http.StatusOK, []string{"8"}},
+	{"GetPermissionByNode", Handler.GetPermissionByNode, "", map[string]string{"node": "a.b"}, http.StatusOK, []string{"a.b"}},
+	{"CreatePermission", Handler.CreatePermission, `{"node":"a.b","description":"d","value_type":"int","merge":"max"}`, nil, http.StatusCreated, []string{"a.b", "d", "int", "max"}},
+	{"DeletePermission", Handler.DeletePermission, "", map[string]string{"id": "8"}, http.StatusNoContent, []string{"8"}},
+	{"AttachPermission", Handler.AttachPermission, "", map[string]string{"id": "7", "permission_id": "8"}, http.StatusNoContent, []string{"7", "8", "<nil>"}},
+	{"AttachPermissionWithValue", Handler.AttachPermission, `{"value":["a","b"]}`, map[string]string{"id": "7", "permission_id": "8"}, http.StatusNoContent, []string{"7", "8", "[a b]"}},
+	{"AttachPermissionWithNumber", Handler.AttachPermission, `{"value":1000}`, map[string]string{"id": "7", "permission_id": "8"}, http.StatusNoContent, []string{"7", "8", "1000"}},
+	{"DetachPermission", Handler.DetachPermission, "", map[string]string{"id": "7", "permission_id": "8"}, http.StatusNoContent, []string{"7", "8"}},
 }
 
 var handlerBodies = map[string]string{
@@ -135,7 +135,7 @@ func TestRH01to03Handlers(t *testing.T) {
 			for _, session := range []*session.Session{rbSession(), rbSession("roles.other"), rbSession("roles.admins"), rbSession("other.admin"), rbSession("roles")} {
 				svc := &stubService{}
 				w := httptest.NewRecorder()
-				c.handler(svc)(w, rbRequest(c, session, c.body))
+				c.handler(NewHandler(svc), w, rbRequest(c, session, c.body))
 				if w.Code != http.StatusForbidden || testutil.Detail(t, w) != msgNoPermission {
 					t.Fatalf("%s with %v: got %d %s", c.name, session.Permissions, w.Code, w.Body.String())
 				}
@@ -149,7 +149,7 @@ func TestRH01to03Handlers(t *testing.T) {
 		for _, c := range handlerCases {
 			svc := &stubService{}
 			w := httptest.NewRecorder()
-			c.handler(svc)(w, rbRequest(c, rbAdmin(), c.body))
+			c.handler(NewHandler(svc), w, rbRequest(c, rbAdmin(), c.body))
 			if w.Code != c.status {
 				t.Fatalf("%s: got %d %s, want %d", c.name, w.Code, w.Body.String(), c.status)
 			}
@@ -168,7 +168,7 @@ func TestRH01to03Handlers(t *testing.T) {
 			}
 			svc := &stubService{}
 			w := httptest.NewRecorder()
-			c.handler(svc)(w, rbRequest(c, rbAdmin(), "{not json"))
+			c.handler(NewHandler(svc), w, rbRequest(c, rbAdmin(), "{not json"))
 			if w.Code != http.StatusBadRequest || testutil.Detail(t, w) != msgUnableToParseBody {
 				t.Fatalf("%s: got %d %s", c.name, w.Code, w.Body.String())
 			}
@@ -220,7 +220,7 @@ func TestRH04ServiceFailureMapping(t *testing.T) {
 	internal := outcome{http.StatusInternalServerError, msgFailedToHandleRbac}
 	respond := func(c handlerCase, err error) (outcome, *httptest.ResponseRecorder) {
 		w := httptest.NewRecorder()
-		c.handler(&stubService{err: err})(w, rbRequest(c, rbAdmin(), c.body))
+		c.handler(NewHandler(&stubService{err: err}), w, rbRequest(c, rbAdmin(), c.body))
 		return outcome{w.Code, testutil.Detail(t, w)}, w
 	}
 
@@ -250,7 +250,7 @@ func TestRH05AttachValueNumbers(t *testing.T) {
 		f := &fakeStore{role: &Role{Name: "mod"}, permission: &Permission{ID: "8", Node: "a.b", ValueType: ValueTypeInt, Merge: MergeMax}}
 		c := handlerCase{paths: map[string]string{"id": "7", "permission_id": "8"}}
 		w := httptest.NewRecorder()
-		AttachPermissionHandler(NewService(f))(w, rbRequest(c, rbAdmin(), body))
+		NewHandler(NewService(f)).AttachPermission(w, rbRequest(c, rbAdmin(), body))
 		return w, f
 	}
 
