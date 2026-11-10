@@ -57,7 +57,7 @@ func TestGameServerStatusHandler(t *testing.T) {
 		req.SetPathValue("game", "minecraft")
 		rec := httptest.NewRecorder()
 
-		GameServerStatusHandler(fake)(rec, req)
+		NewHandler(fake).GameServerStatus(rec, req)
 
 		if rec.Code != 200 {
 			t.Fatalf("status = %d, want 200", rec.Code)
@@ -87,7 +87,7 @@ func TestGameServerStatusHandler(t *testing.T) {
 		req.SetPathValue("game", "minecraft")
 		rec := httptest.NewRecorder()
 
-		GameServerStatusHandler(fake)(rec, req)
+		NewHandler(fake).GameServerStatus(rec, req)
 
 		if rec.Code != 200 {
 			t.Fatalf("status = %d, want 200", rec.Code)
@@ -107,7 +107,7 @@ func TestGameServerStatusHandler(t *testing.T) {
 		req.SetPathValue("game", "minecraft")
 		rec := httptest.NewRecorder()
 
-		GameServerStatusHandler(fake)(rec, req)
+		NewHandler(fake).GameServerStatus(rec, req)
 
 		if rec.Code != 400 {
 			t.Fatalf("status = %d, want 400", rec.Code)
@@ -130,7 +130,7 @@ func TestGameServerStatusHandler(t *testing.T) {
 		req.SetPathValue("game", "minecraft")
 		rec := httptest.NewRecorder()
 
-		GameServerStatusHandler(fake)(rec, req)
+		NewHandler(fake).GameServerStatus(rec, req)
 
 		if rec.Code != 400 {
 			t.Fatalf("status = %d, want 400", rec.Code)
@@ -153,7 +153,7 @@ func TestGameServerStatusHandler(t *testing.T) {
 		req.SetPathValue("game", "minecraft")
 		rec := httptest.NewRecorder()
 
-		GameServerStatusHandler(fake)(rec, req)
+		NewHandler(fake).GameServerStatus(rec, req)
 
 		if rec.Code != 404 {
 			t.Fatalf("status = %d, want 404", rec.Code)
@@ -189,7 +189,7 @@ func TestGameServerStatusHandler(t *testing.T) {
 			req.SetPathValue("game", "minecraft")
 			rec := httptest.NewRecorder()
 
-			GameServerStatusHandler(fake)(rec, req)
+			NewHandler(fake).GameServerStatus(rec, req)
 
 			var body map[string]interface{}
 			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
@@ -207,7 +207,7 @@ func TestGameServerStatusHandler(t *testing.T) {
 		req.SetPathValue("game", "minecraft")
 		rec := httptest.NewRecorder()
 
-		GameServerStatusHandler(fake)(rec, req)
+		NewHandler(fake).GameServerStatus(rec, req)
 
 		if rec.Code != 200 {
 			t.Fatalf("status = %d, want 200", rec.Code)
@@ -228,7 +228,7 @@ func TestSimpleGameServerStatus(t *testing.T) {
 		req.SetPathValue("game", "minecraft")
 		rec := httptest.NewRecorder()
 
-		SimpleGameServerStatus(fake)(rec, req)
+		NewHandler(fake).SimpleGameServerStatus(rec, req)
 
 		if rec.Code != 200 {
 			t.Fatalf("status = %d, want 200", rec.Code)
@@ -247,7 +247,7 @@ func TestSimpleGameServerStatus(t *testing.T) {
 		req.SetPathValue("game", "minecraft")
 		rec := httptest.NewRecorder()
 
-		SimpleGameServerStatus(fake)(rec, req)
+		NewHandler(fake).SimpleGameServerStatus(rec, req)
 
 		if rec.Code != 400 {
 			t.Fatalf("status = %d, want 400", rec.Code)
@@ -270,7 +270,7 @@ func TestSimpleGameServerStatus(t *testing.T) {
 		req.SetPathValue("game", "minecraft")
 		rec := httptest.NewRecorder()
 
-		SimpleGameServerStatus(fake)(rec, req)
+		NewHandler(fake).SimpleGameServerStatus(rec, req)
 
 		if rec.Code != 400 {
 			t.Fatalf("status = %d, want 400", rec.Code)
@@ -294,7 +294,7 @@ func TestSimpleGameServerStatusErrors(t *testing.T) {
 		req := testutil.NewRequest("GET", "/gss/minecraft/simple?host=1.2.3.4&port=25565", nil)
 		req.SetPathValue("game", "minecraft")
 		rec := httptest.NewRecorder()
-		SimpleGameServerStatus(fake)(rec, req)
+		NewHandler(fake).SimpleGameServerStatus(rec, req)
 		return rec
 	}
 
