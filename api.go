@@ -125,11 +125,12 @@ func ApplyRoutes(
 	// --------------- Data Store ---------------
 	dsStore := ds.NewStore(nndb)
 	dsService := ds.NewService(dsStore)
+	dsHandler := ds.NewHandler(dsService)
 
-	mux.Handle("POST /api/v1/datastore", mwAuth(ds.CreateDataStoreHandler(dsService)))
-	mux.Handle("GET /api/v1/datastore", ds.ReadDataStoreHandler(dsService))
-	mux.Handle("PUT /api/v1/datastore", mwAuth(ds.UpdateDataStoreHandler(dsService)))
-	mux.Handle("DELETE /api/v1/datastore", mwAuth(ds.DeleteDataStoreHandler(dsService)))
+	mux.Handle("POST /api/v1/datastore", mwAuth(http.HandlerFunc(dsHandler.CreateDataStore)))
+	mux.HandleFunc("GET /api/v1/datastore", dsHandler.ReadDataStore)
+	mux.Handle("PUT /api/v1/datastore", mwAuth(http.HandlerFunc(dsHandler.UpdateDataStore)))
+	mux.Handle("DELETE /api/v1/datastore", mwAuth(http.HandlerFunc(dsHandler.DeleteDataStore)))
 
 	// --------------- Numbers Data Store ---------------
 	nStore := nds.NewStore(nndb)
