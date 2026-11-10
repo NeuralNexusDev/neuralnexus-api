@@ -42,134 +42,153 @@ const (
 	msgFailedToUpdatePlatform           = "Failed to update platform"
 )
 
-// OAuthHandler handles the OAuth route
-func OAuthHandler(cfg *config.Config, as account.Service, las Store, ss session.Service, siteUrl string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		code := r.URL.Query().Get("code")
-		if code == "" {
-			reqctx.Log(ctx, "No code provided")
-			redirectBadRequest(w, r, siteUrl, msgInvalidRequest)
-			return
-		}
-
-		state, ok := decodeAndValidateState(w, r, siteUrl)
-		if !ok {
-			return
-		}
-		if !requireValidModeAndSession(w, r, state.Mode, state.RedirectURI) {
-			return
-		}
-
-		var sess *session.Session
-		var err error
-		switch state.Mode {
-		case ModeLogin:
-			sess, err = ProcessOAuthLogin(ctx, cfg, as, las, ss, code, &state)
-		case ModeLink:
-			sess, err = ProcessOAuthLink(r, cfg, las, code, &state)
-		default:
-			panic("OAuthHandler: mode is neither login nor link although requireValidModeAndSession rejects other modes")
-		}
-		if err != nil {
-			reqctx.Log(ctx, "Failed to process OAuth:\n\t", err.Error())
-			switch err {
-			case ErrSessionNotFound:
-				redirectUnauthorized(w, r, state.RedirectURI, msgLoginRequiredToLink)
-			case ErrSessionExpired:
-				redirectUnauthorized(w, r, state.RedirectURI, msgSessionExpired)
-			case ErrInvalidPlatform:
-				redirectBadRequest(w, r, state.RedirectURI, msgInvalidPlatform)
-			case ErrNoScopeInToken:
-				redirectBadRequest(w, r, state.RedirectURI, msgMissingOAuthScope)
-			case ErrPlatformLoginDisabled:
-				redirectProblem(w, r, state.RedirectURI, http.StatusForbidden, msgPlatformLoginDisabled)
-			case ErrConflictingMicrosoftIdentities:
-				redirectProblem(w, r, state.RedirectURI, http.StatusConflict, msgConflictingMicrosoftIdentities)
-			case ErrPlatformAlreadyLinkedToDifferentAccount:
-				redirectProblem(w, r, state.RedirectURI, http.StatusConflict, msgPlatformAlreadyLinked)
-			case ErrUserAlreadyLinkedToPlatform:
-				redirectProblem(w, r, state.RedirectURI, http.StatusConflict, msgUserAlreadyLinkedToPlatform)
-			default:
-				redirectInternalServerError(w, r, state.RedirectURI, msgAuthenticationFailed)
-			}
-			return
-		}
-
-		ss.SetSessionCookie(ctx, w, sess)
-		http.Redirect(w, r, state.RedirectURI, http.StatusSeeOther)
-	}
+// Handler serves the OAuth, OpenID and linked account routes.
+type Handler interface {
+	OAuth(w http.ResponseWriter, r *http.Request)
+	OpenID(w http.ResponseWriter, r *http.Request)
+	GetUserLinkedAccounts(w http.ResponseWriter, r *http.Request)
+	UnlinkPlatform(w http.ResponseWriter, r *http.Request)
+	SetPlatformLoginEnabled(w http.ResponseWriter, r *http.Request)
 }
 
-// OpenIDHandler handles the Steam OpenID 2.0 login/link callback.
-func OpenIDHandler(cfg config.Steam, as account.Service, las Store, ss session.Service, siteUrl string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		state, ok := decodeAndValidateState(w, r, siteUrl)
-		if !ok {
-			return
-		}
-		if !requireValidModeAndSession(w, r, state.Mode, state.RedirectURI) {
-			return
-		}
+type handler struct {
+	cfg     *config.Config
+	as      account.Service
+	las     Store
+	ss      session.Service
+	service Service
+	siteUrl string
+}
 
-		steamID64, err := VerifySteamOpenIDCallback(ctx, cfg, r.URL.Query())
-		if err != nil {
-			reqctx.Log(ctx, "Failed to verify Steam OpenID callback:\n\t", err.Error())
-			switch err {
-			case ErrInvalidAssertion:
-				redirectBadRequest(w, r, state.RedirectURI, msgInvalidState)
-			default:
-				redirectInternalServerError(w, r, state.RedirectURI, msgAuthenticationFailed)
-			}
-			return
-		}
+// NewHandler returns a Handler that serves the OAuth, OpenID and linked account routes from the given configuration, services and stores.
+func NewHandler(cfg *config.Config, as account.Service, las Store, ss session.Service, service Service, siteUrl string) Handler {
+	return &handler{cfg, as, las, ss, service, siteUrl}
+}
 
-		user, err := GetSteamUser(ctx, cfg, steamID64)
-		if err != nil {
-			reqctx.Log(ctx, "Failed to get Steam user:\n\t", err.Error())
-			switch err {
-			case ErrSteamNoPlayers:
-				redirectProblem(w, r, state.RedirectURI, http.StatusNotFound, msgSteamAccountNotFound)
-			case ErrSteamIDMismatch:
-				redirectBadRequest(w, r, state.RedirectURI, msgSteamAccountMismatch)
-			default:
-				redirectInternalServerError(w, r, state.RedirectURI, msgAuthenticationFailed)
-			}
-			return
-		}
-
-		var sess *session.Session
-		switch state.Mode {
-		case ModeLogin:
-			sess, err = ProcessSteamLogin(ctx, as, las, ss, user)
-		case ModeLink:
-			sess, err = ProcessSteamLink(r, las, user)
-		default:
-			panic("OpenIDHandler: mode is neither login nor link although requireValidModeAndSession rejects other modes")
-		}
-		if err != nil {
-			reqctx.Log(ctx, "Failed to process Steam OpenID:\n\t", err.Error())
-			switch err {
-			case ErrSessionNotFound:
-				redirectUnauthorized(w, r, state.RedirectURI, msgLoginRequiredToLink)
-			case ErrSessionExpired:
-				redirectUnauthorized(w, r, state.RedirectURI, msgSessionExpired)
-			case ErrPlatformLoginDisabled:
-				redirectProblem(w, r, state.RedirectURI, http.StatusForbidden, msgPlatformLoginDisabled)
-			case ErrPlatformAlreadyLinkedToDifferentAccount:
-				redirectProblem(w, r, state.RedirectURI, http.StatusConflict, msgPlatformAlreadyLinked)
-			case ErrUserAlreadyLinkedToPlatform:
-				redirectProblem(w, r, state.RedirectURI, http.StatusConflict, msgUserAlreadyLinkedToPlatform)
-			default:
-				redirectInternalServerError(w, r, state.RedirectURI, msgAuthenticationFailed)
-			}
-			return
-		}
-
-		ss.SetSessionCookie(ctx, w, sess)
-		http.Redirect(w, r, state.RedirectURI, http.StatusSeeOther)
+// OAuth handles the OAuth route
+func (h *handler) OAuth(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	code := r.URL.Query().Get("code")
+	if code == "" {
+		reqctx.Log(ctx, "No code provided")
+		redirectBadRequest(w, r, h.siteUrl, msgInvalidRequest)
+		return
 	}
+
+	state, ok := decodeAndValidateState(w, r, h.siteUrl)
+	if !ok {
+		return
+	}
+	if !requireValidModeAndSession(w, r, state.Mode, state.RedirectURI) {
+		return
+	}
+
+	var sess *session.Session
+	var err error
+	switch state.Mode {
+	case ModeLogin:
+		sess, err = ProcessOAuthLogin(ctx, h.cfg, h.as, h.las, h.ss, code, &state)
+	case ModeLink:
+		sess, err = ProcessOAuthLink(r, h.cfg, h.las, code, &state)
+	default:
+		panic("OAuth: mode is neither login nor link although requireValidModeAndSession rejects other modes")
+	}
+	if err != nil {
+		reqctx.Log(ctx, "Failed to process OAuth:\n\t", err.Error())
+		switch err {
+		case ErrSessionNotFound:
+			redirectUnauthorized(w, r, state.RedirectURI, msgLoginRequiredToLink)
+		case ErrSessionExpired:
+			redirectUnauthorized(w, r, state.RedirectURI, msgSessionExpired)
+		case ErrInvalidPlatform:
+			redirectBadRequest(w, r, state.RedirectURI, msgInvalidPlatform)
+		case ErrNoScopeInToken:
+			redirectBadRequest(w, r, state.RedirectURI, msgMissingOAuthScope)
+		case ErrPlatformLoginDisabled:
+			redirectProblem(w, r, state.RedirectURI, http.StatusForbidden, msgPlatformLoginDisabled)
+		case ErrConflictingMicrosoftIdentities:
+			redirectProblem(w, r, state.RedirectURI, http.StatusConflict, msgConflictingMicrosoftIdentities)
+		case ErrPlatformAlreadyLinkedToDifferentAccount:
+			redirectProblem(w, r, state.RedirectURI, http.StatusConflict, msgPlatformAlreadyLinked)
+		case ErrUserAlreadyLinkedToPlatform:
+			redirectProblem(w, r, state.RedirectURI, http.StatusConflict, msgUserAlreadyLinkedToPlatform)
+		default:
+			redirectInternalServerError(w, r, state.RedirectURI, msgAuthenticationFailed)
+		}
+		return
+	}
+
+	h.ss.SetSessionCookie(ctx, w, sess)
+	http.Redirect(w, r, state.RedirectURI, http.StatusSeeOther)
+}
+
+// OpenID handles the Steam OpenID 2.0 login/link callback.
+func (h *handler) OpenID(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	state, ok := decodeAndValidateState(w, r, h.siteUrl)
+	if !ok {
+		return
+	}
+	if !requireValidModeAndSession(w, r, state.Mode, state.RedirectURI) {
+		return
+	}
+
+	steamID64, err := VerifySteamOpenIDCallback(ctx, h.cfg.Steam, r.URL.Query())
+	if err != nil {
+		reqctx.Log(ctx, "Failed to verify Steam OpenID callback:\n\t", err.Error())
+		switch err {
+		case ErrInvalidAssertion:
+			redirectBadRequest(w, r, state.RedirectURI, msgInvalidState)
+		default:
+			redirectInternalServerError(w, r, state.RedirectURI, msgAuthenticationFailed)
+		}
+		return
+	}
+
+	user, err := GetSteamUser(ctx, h.cfg.Steam, steamID64)
+	if err != nil {
+		reqctx.Log(ctx, "Failed to get Steam user:\n\t", err.Error())
+		switch err {
+		case ErrSteamNoPlayers:
+			redirectProblem(w, r, state.RedirectURI, http.StatusNotFound, msgSteamAccountNotFound)
+		case ErrSteamIDMismatch:
+			redirectBadRequest(w, r, state.RedirectURI, msgSteamAccountMismatch)
+		default:
+			redirectInternalServerError(w, r, state.RedirectURI, msgAuthenticationFailed)
+		}
+		return
+	}
+
+	var sess *session.Session
+	switch state.Mode {
+	case ModeLogin:
+		sess, err = ProcessSteamLogin(ctx, h.as, h.las, h.ss, user)
+	case ModeLink:
+		sess, err = ProcessSteamLink(r, h.las, user)
+	default:
+		panic("OpenID: mode is neither login nor link although requireValidModeAndSession rejects other modes")
+	}
+	if err != nil {
+		reqctx.Log(ctx, "Failed to process Steam OpenID:\n\t", err.Error())
+		switch err {
+		case ErrSessionNotFound:
+			redirectUnauthorized(w, r, state.RedirectURI, msgLoginRequiredToLink)
+		case ErrSessionExpired:
+			redirectUnauthorized(w, r, state.RedirectURI, msgSessionExpired)
+		case ErrPlatformLoginDisabled:
+			redirectProblem(w, r, state.RedirectURI, http.StatusForbidden, msgPlatformLoginDisabled)
+		case ErrPlatformAlreadyLinkedToDifferentAccount:
+			redirectProblem(w, r, state.RedirectURI, http.StatusConflict, msgPlatformAlreadyLinked)
+		case ErrUserAlreadyLinkedToPlatform:
+			redirectProblem(w, r, state.RedirectURI, http.StatusConflict, msgUserAlreadyLinkedToPlatform)
+		default:
+			redirectInternalServerError(w, r, state.RedirectURI, msgAuthenticationFailed)
+		}
+		return
+	}
+
+	h.ss.SetSessionCookie(ctx, w, sess)
+	http.Redirect(w, r, state.RedirectURI, http.StatusSeeOther)
 }
 
 // decodeAndValidateState decodes state from the query param, checking it
@@ -286,83 +305,77 @@ func isAllowedRedirect(redirectURI, siteUrl string) bool {
 	return target.Scheme == siteURL.Scheme && target.Host == siteURL.Host
 }
 
-// GetUserLinkedAccountsHandler - List a user's linked platforms
-func GetUserLinkedAccountsHandler(service Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		sess := r.Context().Value(reqctx.SessionKey).(*session.Session)
-		userID := r.PathValue("user_id")
-		if sess.UserID != userID && !sess.HasPermission(perms.ScopeAdminUsers) {
-			responses.Forbidden(w, r, msgNoPermissionToViewLinkedAccounts)
-			return
-		}
-		links, err := service.GetUserLinkedAccounts(r.Context(), userID)
-		if err != nil {
-			responses.InternalServerError(w, r, msgFailedToGetLinkedAccounts)
-			return
-		}
-		responses.StructOK(w, r, links)
+// GetUserLinkedAccounts - List a user's linked platforms
+func (h *handler) GetUserLinkedAccounts(w http.ResponseWriter, r *http.Request) {
+	sess := r.Context().Value(reqctx.SessionKey).(*session.Session)
+	userID := r.PathValue("user_id")
+	if sess.UserID != userID && !sess.HasPermission(perms.ScopeAdminUsers) {
+		responses.Forbidden(w, r, msgNoPermissionToViewLinkedAccounts)
+		return
+	}
+	links, err := h.service.GetUserLinkedAccounts(r.Context(), userID)
+	if err != nil {
+		responses.InternalServerError(w, r, msgFailedToGetLinkedAccounts)
+		return
+	}
+	responses.StructOK(w, r, links)
+}
+
+// UnlinkPlatform - Unlink a platform from a user
+func (h *handler) UnlinkPlatform(w http.ResponseWriter, r *http.Request) {
+	sess := r.Context().Value(reqctx.SessionKey).(*session.Session)
+	userID := r.PathValue("user_id")
+	if sess.UserID != userID && !sess.HasPermission(perms.ScopeAdminUsers) {
+		responses.Forbidden(w, r, msgNoPermissionToUnlinkPlatforms)
+		return
+	}
+	platform := Platform(r.PathValue("platform"))
+	err := h.service.UnlinkPlatform(r.Context(), userID, platform)
+	switch err {
+	case nil:
+		responses.NoContent(w, r)
+	case account.ErrNotFound:
+		responses.NotFound(w, r, msgPlatformNotLinked)
+	case account.ErrWouldLockAccount:
+		responses.BadRequest(w, r, msgSetPasswordOrLinkBeforeUnlinking)
+	default:
+		responses.InternalServerError(w, r, msgFailedToUnlinkPlatform)
 	}
 }
 
-// UnlinkPlatformHandler - Unlink a platform from a user
-func UnlinkPlatformHandler(service Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		sess := r.Context().Value(reqctx.SessionKey).(*session.Session)
-		userID := r.PathValue("user_id")
-		if sess.UserID != userID && !sess.HasPermission(perms.ScopeAdminUsers) {
-			responses.Forbidden(w, r, msgNoPermissionToUnlinkPlatforms)
-			return
-		}
-		platform := Platform(r.PathValue("platform"))
-		err := service.UnlinkPlatform(r.Context(), userID, platform)
-		switch err {
-		case nil:
-			responses.NoContent(w, r)
-		case account.ErrNotFound:
-			responses.NotFound(w, r, msgPlatformNotLinked)
-		case account.ErrWouldLockAccount:
-			responses.BadRequest(w, r, msgSetPasswordOrLinkBeforeUnlinking)
-		default:
-			responses.InternalServerError(w, r, msgFailedToUnlinkPlatform)
-		}
-	}
-}
-
-// SetPlatformLoginEnabledRequest - Body for SetPlatformLoginEnabledHandler
+// SetPlatformLoginEnabledRequest - Body for SetPlatformLoginEnabled
 type SetPlatformLoginEnabledRequest struct {
 	// LoginEnabled is a pointer so a missing field is rejected instead of
 	// silently defaulting to false.
 	LoginEnabled *bool `json:"login_enabled" xml:"login_enabled"`
 }
 
-// SetPlatformLoginEnabledHandler - Toggle whether a linked platform can log in
-func SetPlatformLoginEnabledHandler(service Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		sess := r.Context().Value(reqctx.SessionKey).(*session.Session)
-		userID := r.PathValue("user_id")
-		if sess.UserID != userID && !sess.HasPermission(perms.ScopeAdminUsers) {
-			responses.Forbidden(w, r, msgNoPermissionToUpdatePlatforms)
-			return
-		}
-		platform := Platform(r.PathValue("platform"))
-		var body SetPlatformLoginEnabledRequest
-		if err := responses.DecodeStruct(r, &body); err != nil || body.LoginEnabled == nil {
-			responses.BadRequest(w, r, msgInvalidRequestBody)
-			return
-		}
+// SetPlatformLoginEnabled - Toggle whether a linked platform can log in
+func (h *handler) SetPlatformLoginEnabled(w http.ResponseWriter, r *http.Request) {
+	sess := r.Context().Value(reqctx.SessionKey).(*session.Session)
+	userID := r.PathValue("user_id")
+	if sess.UserID != userID && !sess.HasPermission(perms.ScopeAdminUsers) {
+		responses.Forbidden(w, r, msgNoPermissionToUpdatePlatforms)
+		return
+	}
+	platform := Platform(r.PathValue("platform"))
+	var body SetPlatformLoginEnabledRequest
+	if err := responses.DecodeStruct(r, &body); err != nil || body.LoginEnabled == nil {
+		responses.BadRequest(w, r, msgInvalidRequestBody)
+		return
+	}
 
-		err := service.SetPlatformLoginEnabled(r.Context(), userID, platform, *body.LoginEnabled)
-		switch err {
-		case nil:
-			responses.NoContent(w, r)
-		case account.ErrNotFound:
-			responses.NotFound(w, r, msgPlatformNotLinked)
-		case account.ErrWouldLockAccount:
-			responses.BadRequest(w, r, msgSetPasswordOrLinkBeforeDisabling)
-		case ErrLinkedAccountUnverified:
-			responses.BadRequest(w, r, msgLinkedAccountUnverified)
-		default:
-			responses.InternalServerError(w, r, msgFailedToUpdatePlatform)
-		}
+	err := h.service.SetPlatformLoginEnabled(r.Context(), userID, platform, *body.LoginEnabled)
+	switch err {
+	case nil:
+		responses.NoContent(w, r)
+	case account.ErrNotFound:
+		responses.NotFound(w, r, msgPlatformNotLinked)
+	case account.ErrWouldLockAccount:
+		responses.BadRequest(w, r, msgSetPasswordOrLinkBeforeDisabling)
+	case ErrLinkedAccountUnverified:
+		responses.BadRequest(w, r, msgLinkedAccountUnverified)
+	default:
+		responses.InternalServerError(w, r, msgFailedToUpdatePlatform)
 	}
 }
