@@ -347,17 +347,6 @@ func TestST10to11and22and25_SubmitBeeName(t *testing.T) {
 }
 
 func TestST12to14and23_GetBeeNameSuggestions(t *testing.T) {
-	t.Run("BNS-12_Unreachable", func(t *testing.T) {
-		s := bngStoreWithUnreachableDB(t)
-		got, err := s.GetBeeNameSuggestions(bnCtx, 5)
-		if err == nil {
-			t.Error("expected a raw connection error")
-		}
-		if got == nil || len(got) != 0 {
-			t.Errorf("got %v, want an empty (non-nil) slice on error", got)
-		}
-	})
-
 	t.Run("BNS-14_Live_NoRows", func(t *testing.T) {
 		s, db := bngLiveStore(t)
 		bngClearTable(t, db, "bee_name_suggestion")

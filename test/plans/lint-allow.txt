@@ -1,0 +1,44 @@
+# Tokens that plan cells may put in backticks because a caller or an operator sees them: permission nodes, configuration keys, request and response fields, media types, cookies and headers. One per line. Each ticket adds its tokens under its own marker line.
+# 02 auth-link
+openid.mode
+openid.signed
+openid.claimed_id
+STEAM_API_KEY
+
+# 03 minecraft, datastore, datastore-numbers
+datastore.admin
+numberstore.admin
+
+# 04 pet_pictures, projects, responses, teapot, cct_turtle
+petpictures.admin
+group
+project
+format
+promos
+homepage
+application/x-protobuf
+null
+
+# 05 auth-account, auth-session, auth-user, auth-ratelimit
+NN_SITE_URL
+NN_API_URL
+
+# 06 mcstatus, game_server_status, discord
+query_port
+application/json
+text/plain
+event.type
+data.integration_type
+data.user
+data.guild
+APPLICATION_AUTHORIZED
+APPLICATION_DEAUTHORIZED
+ENTITLEMENT_CREATE
+
+# 07 middleware, rbac, bee_name_generator
+session
+X-Signature-Ed25519
+X-Signature-Timestamp
+roles.admin
+ratelimit:1000
+beenamegenerator.admin
