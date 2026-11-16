@@ -2,11 +2,13 @@ package minecraft
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -1084,6 +1086,15 @@ func mcGeyserSkinFixture(t *testing.T) (string, string) {
 	return mcMustJSON(t, GeyserSkin{Hash: "skinhash", Value: value}), value
 }
 
+func mcStoredTexturesService(t *testing.T, textures *TexturesValue) *service {
+	t.Helper()
+	store := mcFreshGeyserStore()
+	store.getTextures = func(string, string, string) (*TexturesValue, error) { return textures, nil }
+	return mcNewService(t, store, func(http.ResponseWriter, *http.Request) {
+		t.Fatal("should not call Geyser")
+	})
+}
+
 func mcFreshGeyserStore() *mcMockStore {
 	player := func() (*GeyserPlayer, error) {
 		return &GeyserPlayer{ID: xuidToUUID(42), XUID: 42, Name: "Notch", LastSeen: mcNow()}, nil
@@ -1100,6 +1111,88 @@ func mcSkinEndpoint(status int, body string) http.HandlerFunc {
 		w.WriteHeader(status)
 		io.WriteString(w, body)
 	}
+}
+
+func TestSV152to154_GetGeyserSkinFromStoredTextures(t *testing.T) {
+	t.Run("SV-152_ModelDecidesIsSteve", func(t *testing.T) {
+		classic := &TexturesValue{Textures: Textures{SKIN: &Texture{URL: "http://textures.minecraft.net/texture/classichash"}}}
+		got, err := mcStoredTexturesService(t, classic).Geyser().GetGeyserSkin(mcCtx, 42)
+		if err != nil {
+			t.Fatalf("GetGeyserSkin() classic error = %v", err)
+		}
+		if !got.IsSteve {
+			t.Error("classic skin: IsSteve = false, want true")
+		}
+
+		slim := &TexturesValue{Textures: Textures{SKIN: &Texture{URL: "http://textures.minecraft.net/texture/slimhash", Metadata: &Metadata{Model: SLIM}}}}
+		got, err = mcStoredTexturesService(t, slim).Geyser().GetGeyserSkin(mcCtx, 42)
+		if err != nil {
+			t.Fatalf("GetGeyserSkin() slim error = %v", err)
+		}
+		if got.IsSteve {
+			t.Error("slim skin: IsSteve = true, want false")
+		}
+	})
+
+	t.Run("SV-153_CapeOnlyIsSkinNotFound", func(t *testing.T) {
+		capeOnly := &TexturesValue{Textures: Textures{CAPE: &Texture{URL: "http://textures.minecraft.net/texture/capehash"}}}
+		got, err := mcStoredTexturesService(t, capeOnly).Geyser().GetGeyserSkin(mcCtx, 42)
+		if !errors.Is(err, ErrSkinNotFound) {
+			t.Fatalf("error = %v, want %v", err, ErrSkinNotFound)
+		}
+		if got != nil && *got != (GeyserSkin{}) {
+			t.Errorf("skin = %+v, want none", got)
+		}
+	})
+
+	t.Run("SV-154_SkinCarriesHashValueAndTimes", func(t *testing.T) {
+		in := &TexturesValue{
+			Timestamp:   1700000000000,
+			ProfileID:   "0123456789abcdef0123456789abcdef",
+			ProfileName: "Notch",
+			Textures: Textures{
+				SKIN: &Texture{URL: "http://textures.minecraft.net/texture/skinhash", Metadata: &Metadata{Model: SLIM}},
+				CAPE: &Texture{URL: "http://textures.minecraft.net/texture/capehash"},
+			},
+		}
+		got, err := mcStoredTexturesService(t, in).Geyser().GetGeyserSkin(mcCtx, 42)
+		if err != nil {
+			t.Fatalf("GetGeyserSkin() error = %v", err)
+		}
+		if got.Hash != "skinhash" {
+			t.Errorf("Hash = %q, want skinhash", got.Hash)
+		}
+		if got.FirstSeen != in.Timestamp || got.LastSeen != in.Timestamp {
+			t.Errorf("FirstSeen = %d, LastSeen = %d, want both %d", got.FirstSeen, got.LastSeen, in.Timestamp)
+		}
+		raw, err := base64.StdEncoding.DecodeString(got.Value)
+		if err != nil {
+			t.Fatalf("Value is not standard base64: %v", err)
+		}
+		var doc map[string]any
+		if err := json.Unmarshal(raw, &doc); err != nil {
+			t.Fatalf("Value is not JSON: %v", err)
+		}
+		if doc["timestamp"] != float64(in.Timestamp) || doc["profileId"] != in.ProfileID || doc["profileName"] != in.ProfileName {
+			t.Errorf("header = %v, want the input timestamp, profileId and profileName", doc)
+		}
+		if _, ok := doc["signatureRequired"]; ok {
+			t.Error("signatureRequired key present, want none")
+		}
+		textures, _ := doc["textures"].(map[string]any)
+		skin, _ := textures["SKIN"].(map[string]any)
+		cape, _ := textures["CAPE"].(map[string]any)
+		meta, _ := skin["metadata"].(map[string]any)
+		if skin["url"] != in.Textures.SKIN.URL || meta["model"] != "slim" {
+			t.Errorf("SKIN = %v, want url %s and model slim", skin, in.Textures.SKIN.URL)
+		}
+		if cape["url"] != in.Textures.CAPE.URL {
+			t.Errorf("CAPE url = %v, want %s", cape["url"], in.Textures.CAPE.URL)
+		}
+		if _, ok := cape["metadata"]; ok {
+			t.Error("CAPE has a metadata key, want none")
+		}
+	})
 }
 
 func TestSV72to78_GetGeyserSkin(t *testing.T) {
@@ -1617,6 +1710,11 @@ func (m *mcWriteCtxStore) UpsertTextures(ctx context.Context, table string, valu
 	return nil
 }
 
+func (m *mcWriteCtxStore) UpsertGeyserPlayer(ctx context.Context, player *GeyserPlayer) error {
+	m.record(ctx, "UpsertGeyserPlayer")
+	return nil
+}
+
 func (m *mcWriteCtxStore) PutTextureInS3(ctx context.Context, hash string, body io.ReadCloser) error {
 	m.record(ctx, "PutTextureInS3")
 	return nil
@@ -1682,6 +1780,17 @@ func mcMojangBody(s *service, body string, cancel context.CancelFunc) {
 	})})
 }
 
+func mcMarkedCtx() (context.Context, context.CancelFunc) {
+	return context.WithCancel(context.WithValue(mcCtx, mcCtxKey{}, "marker"))
+}
+
+func mcRequireWrites(t *testing.T, store *mcWriteCtxStore, want ...string) {
+	t.Helper()
+	if !slices.Equal(store.calls, want) {
+		t.Fatalf("writes = %v, want %v", store.calls, want)
+	}
+}
+
 func mcRequireDetachedWrites(t *testing.T, ctx context.Context, store *mcWriteCtxStore) {
 	t.Helper()
 	if ctx.Err() == nil {
@@ -1698,9 +1807,6 @@ func mcRequireDetachedWrites(t *testing.T, ctx context.Context, store *mcWriteCt
 }
 
 func TestSV138to146_JavaWritesSurviveCtxCancel(t *testing.T) {
-	newCtx := func() (context.Context, context.CancelFunc) {
-		return context.WithCancel(context.WithValue(mcCtx, mcCtxKey{}, "marker"))
-	}
 	skinAndCape := TexturesValue{Textures: Textures{SKIN: &Texture{URL: "http://mojang/texture/skinhash"}, CAPE: &Texture{URL: "http://mojang/texture/capehash"}}}
 
 	t.Run("SV-138_NameDBHitCachesAfterCancel", func(t *testing.T) {
@@ -1710,7 +1816,7 @@ func TestSV138to146_JavaWritesSurviveCtxCancel(t *testing.T) {
 			},
 		}}
 		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) {})
-		ctx, cancel := newCtx()
+		ctx, cancel := mcMarkedCtx()
 		cancel()
 
 		if _, err := s.Mojang().GetMojangPlayerByName(ctx, "Steve"); err != nil {
@@ -1726,7 +1832,7 @@ func TestSV138to146_JavaWritesSurviveCtxCancel(t *testing.T) {
 			},
 		}}
 		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) {})
-		ctx, cancel := newCtx()
+		ctx, cancel := mcMarkedCtx()
 		cancel()
 
 		if _, err := s.Mojang().GetMojangPlayerByUUID(ctx, "id"); err != nil {
@@ -1738,7 +1844,7 @@ func TestSV138to146_JavaWritesSurviveCtxCancel(t *testing.T) {
 	t.Run("SV-140_UUIDMojangFetchWritesAfterCancel", func(t *testing.T) {
 		store := &mcWriteCtxStore{mcMockStore: &mcMockStore{}}
 		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) {})
-		ctx, cancel := newCtx()
+		ctx, cancel := mcMarkedCtx()
 		defer cancel()
 		mcMojangBody(s, mcMustJSON(t, MojangPlayer{ID: "id", Name: "Steve"}), cancel)
 
@@ -1755,7 +1861,7 @@ func TestSV138to146_JavaWritesSurviveCtxCancel(t *testing.T) {
 			},
 		}}
 		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) {})
-		ctx, cancel := newCtx()
+		ctx, cancel := mcMarkedCtx()
 		cancel()
 
 		if _, err := s.Mojang().GetMojangPlayersByNames(ctx, []string{"Steve"}); err != nil {
@@ -1767,7 +1873,7 @@ func TestSV138to146_JavaWritesSurviveCtxCancel(t *testing.T) {
 	t.Run("SV-142_BulkMojangFetchWritesAfterCancel", func(t *testing.T) {
 		store := &mcWriteCtxStore{mcMockStore: &mcMockStore{}}
 		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) {})
-		ctx, cancel := newCtx()
+		ctx, cancel := mcMarkedCtx()
 		defer cancel()
 		mcMojangBody(s, mcMustJSON(t, []MojangPlayer{{ID: "id", Name: "Steve"}}), cancel)
 
@@ -1784,7 +1890,7 @@ func TestSV138to146_JavaWritesSurviveCtxCancel(t *testing.T) {
 			},
 		}}
 		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) {})
-		ctx, cancel := newCtx()
+		ctx, cancel := mcMarkedCtx()
 		cancel()
 
 		if _, err := s.mojangService.resolveProfile(ctx, "id"); err != nil {
@@ -1796,7 +1902,7 @@ func TestSV138to146_JavaWritesSurviveCtxCancel(t *testing.T) {
 	t.Run("SV-144_UnsignedProfileFetchWritesAfterCancel", func(t *testing.T) {
 		store := &mcWriteCtxStore{mcMockStore: &mcMockStore{}}
 		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) {})
-		ctx, cancel := newCtx()
+		ctx, cancel := mcMarkedCtx()
 		defer cancel()
 		mcMojangBody(s, mcMustJSON(t, MojangPlayer{ID: "id", Properties: []Property{mcMustProperty(t, skinAndCape)}}), cancel)
 
@@ -1809,7 +1915,7 @@ func TestSV138to146_JavaWritesSurviveCtxCancel(t *testing.T) {
 	t.Run("SV-145_SignedProfileFetchWritesAfterCancel", func(t *testing.T) {
 		store := &mcWriteCtxStore{mcMockStore: &mcMockStore{}}
 		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) {})
-		ctx, cancel := newCtx()
+		ctx, cancel := mcMarkedCtx()
 		defer cancel()
 		mcMojangBody(s, mcMustJSON(t, MojangPlayer{ID: "id", Properties: []Property{mcMustProperty(t, skinAndCape)}}), cancel)
 
@@ -1822,13 +1928,76 @@ func TestSV138to146_JavaWritesSurviveCtxCancel(t *testing.T) {
 	t.Run("SV-146_TextureArchiveWritesAfterCancel", func(t *testing.T) {
 		store := &mcWriteCtxStore{mcMockStore: &mcMockStore{}}
 		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) {})
-		ctx, cancel := newCtx()
+		ctx, cancel := mcMarkedCtx()
 		defer cancel()
 		mcMojangBody(s, "bytes", cancel)
 
 		if _, err := s.Texture().GetTextureContent(ctx, "hash"); err != nil {
 			t.Fatalf("GetTextureContent() error = %v", err)
 		}
+		mcRequireDetachedWrites(t, ctx, store)
+	})
+}
+
+func TestSV148to151_GeyserWritesSurviveCtxCancel(t *testing.T) {
+	t.Run("SV-148_PlayerByXUIDFetchWritesAfterCancel", func(t *testing.T) {
+		store := &mcWriteCtxStore{mcMockStore: &mcMockStore{}}
+		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) {})
+		ctx, cancel := mcMarkedCtx()
+		defer cancel()
+		mcMojangBody(s, `{"gamertag": "Notch"}`, cancel)
+
+		if _, err := s.Geyser().GetGeyserPlayerByXUID(ctx, 42); err != nil {
+			t.Fatalf("GetGeyserPlayerByXUID() error = %v", err)
+		}
+		mcRequireWrites(t, store, "UpsertGeyserPlayer")
+		mcRequireDetachedWrites(t, ctx, store)
+	})
+
+	t.Run("SV-149_PlayerByGamertagFetchWritesAfterCancel", func(t *testing.T) {
+		store := &mcWriteCtxStore{mcMockStore: &mcMockStore{}}
+		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) {})
+		ctx, cancel := mcMarkedCtx()
+		defer cancel()
+		mcMojangBody(s, `{"xuid": 42}`, cancel)
+
+		if _, err := s.Geyser().GetGeyserPlayerByGamertag(ctx, "Notch"); err != nil {
+			t.Fatalf("GetGeyserPlayerByGamertag() error = %v", err)
+		}
+		mcRequireWrites(t, store, "UpsertGeyserPlayer")
+		mcRequireDetachedWrites(t, ctx, store)
+	})
+
+	t.Run("SV-150_SkinFetchWritesAfterCancel", func(t *testing.T) {
+		store := &mcWriteCtxStore{mcMockStore: mcFreshGeyserStore()}
+		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) {})
+		ctx, cancel := mcMarkedCtx()
+		defer cancel()
+		body, _ := mcGeyserSkinFixture(t)
+		mcMojangBody(s, body, cancel)
+
+		if _, err := s.Geyser().GetGeyserSkin(ctx, 42); err != nil {
+			t.Fatalf("GetGeyserSkin() error = %v", err)
+		}
+		mcRequireWrites(t, store, "UpsertTextures")
+		mcRequireDetachedWrites(t, ctx, store)
+	})
+
+	t.Run("SV-151_ProfileTexturesWriteAfterCancel", func(t *testing.T) {
+		inner := mcFreshGeyserStore()
+		inner.getTextures = func(string, string, string) (*TexturesValue, error) {
+			return &TexturesValue{Textures: Textures{SKIN: &Texture{URL: "http://textures.minecraft.net/texture/dbhash"}}}, nil
+		}
+		store := &mcWriteCtxStore{mcMockStore: inner}
+		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) {})
+		ctx, cancel := mcMarkedCtx()
+		cancel()
+
+		player := &GeyserPlayer{ID: xuidToUUID(42), XUID: 42, Name: "Notch", LastSeen: mcNow()}
+		if _, err := s.geyserService.getGeyserProfileFromPlayer(ctx, player); err != nil {
+			t.Fatalf("getGeyserProfileFromPlayer() error = %v", err)
+		}
+		mcRequireWrites(t, store, "UpsertTextures")
 		mcRequireDetachedWrites(t, ctx, store)
 	})
 }
