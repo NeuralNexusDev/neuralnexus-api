@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -20,7 +19,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/redis/go-redis/v9"
 )
 
 func mcMojangStore(db *pgxpool.Pool) *mojangStore {
@@ -48,21 +46,6 @@ func mcFakeS3(t *testing.T, handler http.HandlerFunc) *s3.Client {
 		o.UsePathStyle = true
 		o.RetryMaxAttempts = 1
 	})
-}
-
-func mcLiveRedis(t *testing.T) *redis.Client {
-	t.Helper()
-	url := os.Getenv("TEST_REDIS_URL")
-	if url == "" {
-		t.Skip("TEST_REDIS_URL not set; skipping live-Redis test")
-	}
-	opts, err := redis.ParseURL(url)
-	if err != nil {
-		t.Fatalf("failed to parse TEST_REDIS_URL: %v", err)
-	}
-	c := redis.NewClient(opts)
-	t.Cleanup(func() { _ = c.Close() })
-	return c
 }
 
 var mcXUIDCounter = time.Now().UnixNano()
@@ -486,7 +469,7 @@ func TestST29to32_GetPlayerFromCache(t *testing.T) {
 	})
 
 	t.Run("ST-30_Live_Hit", func(t *testing.T) {
-		s := &cacheStore{rdb: mcLiveRedis(t)}
+		s := &cacheStore{rdb: testutil.LiveRedis(t)}
 		id := uuid.New().String()
 		p := &MojangPlayer{ID: id, Name: "Steve_" + mcUniqueHash("n")}
 		if err := s.SetPlayerInCache(mcCtx, p); err != nil {
@@ -499,7 +482,7 @@ func TestST29to32_GetPlayerFromCache(t *testing.T) {
 	})
 
 	t.Run("ST-31_Live_Miss", func(t *testing.T) {
-		s := &cacheStore{rdb: mcLiveRedis(t)}
+		s := &cacheStore{rdb: testutil.LiveRedis(t)}
 		_, err := s.GetPlayerFromCache(mcCtx, "no-such-key-"+mcUniqueHash("k"))
 		if !errors.Is(err, ErrCacheMiss) {
 			t.Errorf("err = %v, want %v", err, ErrCacheMiss)
@@ -507,7 +490,7 @@ func TestST29to32_GetPlayerFromCache(t *testing.T) {
 	})
 
 	t.Run("ST-32_Live_MalformedJSON", func(t *testing.T) {
-		s := &cacheStore{rdb: mcLiveRedis(t)}
+		s := &cacheStore{rdb: testutil.LiveRedis(t)}
 		key := "malformed-" + mcUniqueHash("k")
 		if err := s.rdb.Set(context.Background(), CachePlayer+key, "not json", time.Minute).Err(); err != nil {
 			t.Fatalf("seed Set() error = %v", err)
@@ -521,7 +504,7 @@ func TestST29to32_GetPlayerFromCache(t *testing.T) {
 
 func TestST33to34_SetPlayerInCache(t *testing.T) {
 	t.Run("ST-34_Live_SetsBothKeys", func(t *testing.T) {
-		s := &cacheStore{rdb: mcLiveRedis(t)}
+		s := &cacheStore{rdb: testutil.LiveRedis(t)}
 		id := uuid.New().String()
 		name := "Steve_" + mcUniqueHash("n")
 		p := &MojangPlayer{ID: id, Name: name}
@@ -541,7 +524,7 @@ func TestST33to34_SetPlayerInCache(t *testing.T) {
 
 func TestST35to37_GetProfileFromCache(t *testing.T) {
 	t.Run("ST-36_Live_Hit", func(t *testing.T) {
-		s := &cacheStore{rdb: mcLiveRedis(t)}
+		s := &cacheStore{rdb: testutil.LiveRedis(t)}
 		id := uuid.New().String()
 		if err := s.SetProfileInCache(mcCtx, &MojangProfile{ID: id, Name: "Steve"}); err != nil {
 			t.Fatalf("seed SetProfileInCache() error = %v", err)
@@ -553,7 +536,7 @@ func TestST35to37_GetProfileFromCache(t *testing.T) {
 	})
 
 	t.Run("ST-37_Live_Miss", func(t *testing.T) {
-		s := &cacheStore{rdb: mcLiveRedis(t)}
+		s := &cacheStore{rdb: testutil.LiveRedis(t)}
 		_, err := s.GetProfileFromCache(mcCtx, uuid.New().String())
 		if !errors.Is(err, ErrCacheMiss) {
 			t.Errorf("err = %v, want %v", err, ErrCacheMiss)
@@ -563,7 +546,7 @@ func TestST35to37_GetProfileFromCache(t *testing.T) {
 
 func TestST38to39_SetProfileInCache(t *testing.T) {
 	t.Run("ST-39_Live_ReadableBack", func(t *testing.T) {
-		s := &cacheStore{rdb: mcLiveRedis(t)}
+		s := &cacheStore{rdb: testutil.LiveRedis(t)}
 		id := uuid.New().String()
 		if err := s.SetProfileInCache(mcCtx, &MojangProfile{ID: id, Name: "Steve"}); err != nil {
 			t.Fatalf("SetProfileInCache() error = %v", err)
@@ -577,7 +560,7 @@ func TestST38to39_SetProfileInCache(t *testing.T) {
 
 func TestST40to42_GetSignedProfileFromCache(t *testing.T) {
 	t.Run("ST-41_Live_Hit", func(t *testing.T) {
-		s := &cacheStore{rdb: mcLiveRedis(t)}
+		s := &cacheStore{rdb: testutil.LiveRedis(t)}
 		id := uuid.New().String()
 		if err := s.SetSignedProfileInCache(mcCtx, &MojangPlayer{ID: id, Name: "Steve"}); err != nil {
 			t.Fatalf("seed SetSignedProfileInCache() error = %v", err)
@@ -589,7 +572,7 @@ func TestST40to42_GetSignedProfileFromCache(t *testing.T) {
 	})
 
 	t.Run("ST-42_Live_Miss", func(t *testing.T) {
-		s := &cacheStore{rdb: mcLiveRedis(t)}
+		s := &cacheStore{rdb: testutil.LiveRedis(t)}
 		_, err := s.GetSignedProfileFromCache(mcCtx, uuid.New().String())
 		if !errors.Is(err, ErrCacheMiss) {
 			t.Errorf("err = %v, want %v", err, ErrCacheMiss)
@@ -599,7 +582,7 @@ func TestST40to42_GetSignedProfileFromCache(t *testing.T) {
 
 func TestST43to44_SetSignedProfileInCache(t *testing.T) {
 	t.Run("ST-44_Live_ReadableBack", func(t *testing.T) {
-		s := &cacheStore{rdb: mcLiveRedis(t)}
+		s := &cacheStore{rdb: testutil.LiveRedis(t)}
 		id := uuid.New().String()
 		if err := s.SetSignedProfileInCache(mcCtx, &MojangPlayer{ID: id, Name: "Steve"}); err != nil {
 			t.Fatalf("SetSignedProfileInCache() error = %v", err)

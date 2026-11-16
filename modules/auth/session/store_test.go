@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/redis/go-redis/v9"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
@@ -79,16 +78,7 @@ func TestST76_GetSessionFromDBNotFound(t *testing.T) {
 }
 
 func TestST80_GetSessionFromCacheMiss(t *testing.T) {
-	url := os.Getenv("TEST_REDIS_URL")
-	if url == "" {
-		t.Skip("TEST_REDIS_URL not set; skipping live-Redis test")
-	}
-	opts, err := redis.ParseURL(url)
-	if err != nil {
-		t.Fatalf("failed to parse TEST_REDIS_URL: %v", err)
-	}
-	rdb := redis.NewClient(opts)
-	t.Cleanup(func() { rdb.Close() })
+	rdb := testutil.LiveRedis(t)
 	s := &store{rdb: rdb}
 
 	t.Run("SES-80_GetSessionFromCacheNotFound", func(t *testing.T) {
