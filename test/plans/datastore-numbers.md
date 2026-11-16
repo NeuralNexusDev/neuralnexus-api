@@ -32,3 +32,13 @@
 | NDH-08 | DeleteNumber | Error Path | Service returns `ErrNumberNotFound` | Service fails with the error; valid body; session holds `numberstore.admin` | 404 with detail `Number not found` | P1 |  |
 | NDH-09 | DeleteNumber | Error Path | Service returns an unexpected error | Service fails with the error; valid body; session holds `numberstore.admin` | 500 with detail `Failed to delete numberstore` | P1 |  |
 | NDH-10 | CreateNumber | Error Path | Service returns `ErrNumberInvalidID` | Service fails with the error; valid body; session holds `numberstore.admin` | Each handler answers 400 with detail `Data store and user ids must be numbers` | P1 | Runs for the create, read, update and delete handlers |
+| NDH-11 | CreateNumber | Happy Path | A number is created | Session with the number store admin permission; body names store 1, user 2 and value 3; the service accepts it | Status 200; the body is the number for store 1, user 2 and value 3 | P1 |  |
+| NDH-12 | CreateNumber | Error Path | A session without the number store admin permission creates a number | Session with no permissions; valid body | Status 403 with detail `msgNoPermissionToCreateNumberstore` | P1 |  |
+| NDH-13 | CreateNumber | Error Path | The request body is not valid JSON | Session with the number store admin permission; body `{` | Status 400 | P1 |  |
+| NDH-14 | ReadNumber | Happy Path | A number is read | Valid body; the service returns the number | Status 200; the body is the number for store 1, user 2 and value 3 | P1 |  |
+| NDH-15 | ReadNumber | Error Path | The request body is not valid JSON | Body `{` | Status 400 | P1 |  |
+| NDH-16 | UpdateNumber | Happy Path | A number is updated | Session with the number store admin permission; valid body; the service accepts the update | Status 200; the body is the number for store 1, user 2 and value 3 | P1 |  |
+| NDH-17 | UpdateNumber | Error Path | A session without the number store admin permission updates a number | Session with no permissions; valid body | Status 403 with detail `msgNoPermissionToUpdateNumberstore` | P1 |  |
+| NDH-18 | UpdateNumber | Error Path | The request body is not valid JSON | Session with the number store admin permission; body `{` | Status 400 | P1 |  |
+| NDH-19 | DeleteNumber | Happy Path | A number is deleted | Valid body; the service accepts the delete | Status 200; the body is the deleted number (store 1, user 2, value 3) | P1 |  |
+| NDH-20 | DeleteNumber | Error Path | The request body is not valid JSON | Body `{` | Status 400 | P1 |  |
