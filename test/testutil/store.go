@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"testing"
 	"time"
 
@@ -54,6 +55,22 @@ func UnreachableRedis(t *testing.T) *redis.Client {
 		DialTimeout: 2 * time.Second,
 		MaxRetries:  -1,
 	})
+	t.Cleanup(func() { _ = c.Close() })
+	return c
+}
+
+// LiveRedis returns a client for the server in TEST_REDIS_URL, closes it when the test ends, and skips the test when the variable is unset.
+func LiveRedis(t *testing.T) *redis.Client {
+	t.Helper()
+	url := os.Getenv("TEST_REDIS_URL")
+	if url == "" {
+		t.Skip("TEST_REDIS_URL not set; skipping live-Redis test")
+	}
+	opts, err := redis.ParseURL(url)
+	if err != nil {
+		t.Fatalf("failed to parse TEST_REDIS_URL: %v", err)
+	}
+	c := redis.NewClient(opts)
 	t.Cleanup(func() { _ = c.Close() })
 	return c
 }
