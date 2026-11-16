@@ -26,3 +26,12 @@
 | DSH-09 | DeleteDataStore | Error Path | Service returns an unexpected error | Session holds `datastore.admin` | Status 500 | P1 |  |
 | DSH-10 | DeleteDataStore | Happy Path | Service returns nil | Session holds `datastore.admin` | Status 204 | P1 |  |
 | DSH-11 | ReadDataStore | Error Path | Service returns `ErrDataStoreInvalidID` | Session holds `datastore.admin` | Each handler answers status 400 | P1 | Runs for the read, update and delete handlers |
+| DSH-12 | CreateDataStore | Happy Path | A session with the data store admin permission creates a store | Session of user 2 with the data store admin permission; the service accepts the store | Status 200; the body is a store owned by user 2 with a generated, non-empty store id | P1 |  |
+| DSH-13 | CreateDataStore | Error Path | A session without the data store admin permission creates a store | Session with no permissions | Status 403 with detail `msgNoPermissionToCreateDatastore` | P1 |  |
+| DSH-14 | CreateDataStore | Error Path | The service fails | Session with the data store admin permission; the service returns an unexpected error | Status 500 with detail `msgFailedToCreateDatastore` | P1 |  |
+| DSH-15 | UpdateDataStore | Error Path | A session without the data store admin permission updates a store | Session with no permissions; valid body | Status 403 with detail `msgNoPermissionToUpdateDatastore` | P1 |  |
+| DSH-16 | DeleteDataStore | Error Path | A session without the data store admin permission deletes a store | Session with no permissions; valid body | Status 403 with detail `msgNoPermissionToDeleteDatastore` | P1 |  |
+| DSH-17 | ReadDataStore | Error Path | The request body is not valid JSON | Body `{` | Status 400 | P1 |  |
+| DSH-18 | UpdateDataStore | Error Path | The request body is not valid JSON | Session with the data store admin permission; body `{` | Status 400 | P1 |  |
+| DSH-19 | DeleteDataStore | Error Path | The request body is not valid JSON | Session with the data store admin permission; body `{` | Status 400 | P1 |  |
+| DSH-20 | UpdateDataStore | Happy Path | A store is updated | Session with the data store admin permission; body names store 1 and owner 2; the service accepts the update | Status 200; the body is store 1 owned by user 2 | P1 |  |

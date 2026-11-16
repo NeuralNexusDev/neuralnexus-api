@@ -17,3 +17,8 @@
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
 | RLS-40 | GetRateLimit | Error Path | The cache is unreachable | Reading the counter fails with a connection error, not with "the cache holds no entry" | Returns 0 and the connection error | P1 |  |
+| RLS-43 | GetRateLimit | Happy Path (live) | A key with no stored count is read | No count stored for the key | Returns 1 and nil; the count 1 is now stored for the key and expires within the window | P1 |  |
+| RLS-44 | GetRateLimit | Happy Path (live) | A key with a stored count is read | Count 7 stored for the key | Returns 7 and nil | P1 |  |
+| RLS-45 | SetRateLimit | Happy Path (live) | A count is stored for a key | No count stored for the key | The count is stored and expires within the window | P1 |  |
+| RLS-46 | IncrementRateLimit | Happy Path (live) | A key with no stored count is incremented | No count stored for the key | The stored count is 1 and expires within the window | P1 |  |
+| RLS-47 | IncrementRateLimit | Edge Case (live) | A key that has 30 seconds left is incremented | Count 3 stored for the key with 30 seconds left | The stored count is 4 and the key still expires within those 30 seconds, so the window does not restart | P1 |  |
