@@ -657,6 +657,35 @@ func TestST48to50_GetGeyserPlayerByGamertag(t *testing.T) {
 	})
 }
 
+func TestST80to81_GetGeyserPlayerByUUID(t *testing.T) {
+	t.Run("ST-80_Live_Found", func(t *testing.T) {
+		s := mcGeyserStore(testutil.LivePool(t, "archive"))
+		xuid := mcUniqueXUID()
+		gamertag := "gt-" + mcUniqueHash("g")
+		if err := s.UpsertGeyserPlayer(mcCtx, &GeyserPlayer{ID: xuidToUUID(xuid), XUID: xuid, Name: gamertag}); err != nil {
+			t.Fatalf("seed UpsertGeyserPlayer() error = %v", err)
+		}
+		got, err := s.GetGeyserPlayerByUUID(mcCtx, xuidToUUID(xuid))
+		if err != nil {
+			t.Fatalf("GetGeyserPlayerByUUID() error = %v", err)
+		}
+		if got.ID != xuidToUUID(xuid) || got.XUID != xuid || got.Name != gamertag {
+			t.Errorf("got %+v, want id=%s xuid=%d gamertag=%s", got, xuidToUUID(xuid), xuid, gamertag)
+		}
+		if got.LastSeen == 0 {
+			t.Error("LastSeen = 0, want a last-seen time")
+		}
+	})
+
+	t.Run("ST-81_Live_NotFound", func(t *testing.T) {
+		s := mcGeyserStore(testutil.LivePool(t, "archive"))
+		_, err := s.GetGeyserPlayerByUUID(mcCtx, xuidToUUID(mcUniqueXUID()))
+		if !errors.Is(err, ErrPlayerNotFound) {
+			t.Errorf("error = %v, want %v", err, ErrPlayerNotFound)
+		}
+	})
+}
+
 func TestST51to53_GetGeyserPlayerByXUID(t *testing.T) {
 	t.Run("ST-52_Live_Found", func(t *testing.T) {
 		s := mcGeyserStore(testutil.LivePool(t, "archive"))
