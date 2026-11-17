@@ -131,10 +131,7 @@ func TestTY22to23_Profile_IsStale(t *testing.T) {
 func TestTY16to17_TexturesValue_ToProperty(t *testing.T) {
 	t.Run("TY-16_Populated", func(t *testing.T) {
 		tv := &TexturesValue{ProfileID: "abc", ProfileName: "Steve"}
-		prop, err := tv.ToProperty()
-		if err != nil {
-			t.Fatalf("ToProperty() error = %v", err)
-		}
+		prop := tv.ToProperty()
 		if prop == nil || prop.Name != TEXTURES {
 			t.Fatalf("ToProperty() = %+v, want a TEXTURES property", prop)
 		}
@@ -153,9 +150,8 @@ func TestTY16to17_TexturesValue_ToProperty(t *testing.T) {
 
 	t.Run("TY-17_NilReceiver", func(t *testing.T) {
 		var tv *TexturesValue
-		prop, err := tv.ToProperty()
-		if prop != nil || err != nil {
-			t.Errorf("ToProperty() = (%+v, %v), want (nil, nil)", prop, err)
+		if prop := tv.ToProperty(); prop != nil {
+			t.Errorf("ToProperty() = %+v, want nil", prop)
 		}
 	})
 }
@@ -186,10 +182,7 @@ func TestTY24to25_Profile_ToPlayer(t *testing.T) {
 			ID: "id", Name: "name",
 			Textures: &TexturesValue{Textures: Textures{SKIN: &Texture{URL: "http://x/hash"}}},
 		}
-		player, err := p.ToPlayer()
-		if err != nil {
-			t.Fatalf("ToPlayer() error = %v", err)
-		}
+		player := p.ToPlayer()
 		if len(player.Properties) != 1 || player.Properties[0].Name != TEXTURES {
 			t.Errorf("ToPlayer().Properties = %+v, want exactly one TEXTURES entry", player.Properties)
 		}
@@ -197,10 +190,7 @@ func TestTY24to25_Profile_ToPlayer(t *testing.T) {
 
 	t.Run("TY-25_NoTextures", func(t *testing.T) {
 		p := &MojangProfile{ID: "id", Name: "name", Textures: nil}
-		player, err := p.ToPlayer()
-		if err != nil {
-			t.Fatalf("ToPlayer() error = %v", err)
-		}
+		player := p.ToPlayer()
 		if len(player.Properties) != 0 {
 			t.Errorf("ToPlayer().Properties = %+v, want empty", player.Properties)
 		}

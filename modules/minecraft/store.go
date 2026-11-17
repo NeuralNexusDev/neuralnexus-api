@@ -419,7 +419,7 @@ func (c *cacheStore) GetPlayerFromCache(ctx context.Context, key string) (*Mojan
 func (c *cacheStore) SetPlayerInCache(ctx context.Context, player *MojangPlayer) error {
 	data, err := json.Marshal(player)
 	if err != nil {
-		return err
+		panic("minecraft: json.Marshal of a MojangPlayer failed: " + err.Error())
 	}
 	blob := string(data)
 
@@ -446,7 +446,7 @@ func (c *cacheStore) GetProfileFromCache(ctx context.Context, id string) (*Mojan
 func (c *cacheStore) SetProfileInCache(ctx context.Context, profile *MojangProfile) error {
 	data, err := json.Marshal(profile)
 	if err != nil {
-		return err
+		panic("minecraft: json.Marshal of a MojangProfile failed: " + err.Error())
 	}
 	return c.rdb.Set(ctx, CacheProfile+profile.ID, string(data), redisTTL).Err()
 }
@@ -468,7 +468,7 @@ func (c *cacheStore) GetSignedProfileFromCache(ctx context.Context, id string) (
 func (c *cacheStore) SetSignedProfileInCache(ctx context.Context, player *MojangPlayer) error {
 	data, err := json.Marshal(player)
 	if err != nil {
-		return err
+		panic("minecraft: json.Marshal of a MojangPlayer failed: " + err.Error())
 	}
 	return c.rdb.Set(ctx, CacheProfileSigned+player.ID, string(data), redisTTL).Err()
 }
