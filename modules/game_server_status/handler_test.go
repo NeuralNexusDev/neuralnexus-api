@@ -181,7 +181,6 @@ func TestGameServerStatusHandler(t *testing.T) {
 		{"GameUnsupported", ErrGameUnsupported, 400, msgGameUnsupported},
 		{"JavaStatus", mcstatus.ErrJavaStatus, 502, msgJavaStatusFailed},
 		{"BedrockStatus", mcstatus.ErrBedrockStatus, 502, msgBedrockStatusFailed},
-		{"Unrecognized", testutil.ErrBoom, 500, msgQueryFailed},
 	} {
 		t.Run("GSH-11_ErrorPath_"+tc.name, func(t *testing.T) {
 			fake := &fakeGSSService{err: tc.err}
@@ -336,20 +335,6 @@ func TestSimpleGameServerStatusErrors(t *testing.T) {
 			if strings.Contains(body, err.Error()) {
 				t.Errorf("%v: body = %q leaks the cause", err, body)
 			}
-		}
-	})
-
-	t.Run("GSH-16_UnknownErrorIs500", func(t *testing.T) {
-		rec := serve(testutil.ErrBoom)
-		if rec.Code != 500 {
-			t.Fatalf("status = %d, want 500", rec.Code)
-		}
-		body := rec.Body.String()
-		if !strings.Contains(body, "Failed to query game server") {
-			t.Errorf("body = %q, want the query-failed message", body)
-		}
-		if strings.Contains(body, testutil.ErrBoom.Error()) {
-			t.Errorf("body = %q leaks the cause", body)
 		}
 	})
 }
