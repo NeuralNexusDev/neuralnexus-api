@@ -98,7 +98,7 @@ func (s *store) queryRoles(ctx context.Context, where string, args ...any) ([]*R
 			dec := json.NewDecoder(bytes.NewReader(row.Value))
 			dec.UseNumber()
 			if err := dec.Decode(&granted.Value); err != nil {
-				return nil, err
+				panic("rbac: role_permissions.value holds invalid JSON although only AttachPermission writes it: " + err.Error())
 			}
 		}
 		role := roles[len(roles)-1]
