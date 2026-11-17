@@ -154,6 +154,23 @@ func rrRequirePanicMessage(t *testing.T, recovered any) {
 	}
 }
 
+func rrRequireProblem(t *testing.T, w *httptest.ResponseRecorder, status int, detail string) {
+	t.Helper()
+	if w.Code != status {
+		t.Fatalf("status = %d, want %d", w.Code, status)
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/problem+json" {
+		t.Fatalf("Content-Type = %q, want application/problem+json", ct)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("body is not JSON: %v", err)
+	}
+	if got["detail"] != detail {
+		t.Errorf("detail = %v, want %q", got["detail"], detail)
+	}
+}
+
 func TestDecodeStruct(t *testing.T) {
 	protoBody, err := proto.Marshal(wrapperspb.String("hello"))
 	if err != nil {
@@ -172,7 +189,7 @@ func TestDecodeStruct(t *testing.T) {
 		}
 	})
 
-	t.Run("RR-08_HugeContentLengthPanics", func(t *testing.T) {
+	t.Run("RR-08_HugeContentLengthAnswers413", func(t *testing.T) {
 		cases := []struct {
 			name        string
 			contentType string
@@ -186,20 +203,30 @@ func TestDecodeStruct(t *testing.T) {
 				var got rrDecoded
 				r := rrDecodeRequest(c.contentType, 1<<40, strings.NewReader(`{"a":1}`))
 
-				recovered := rrRecovered(func() { _ = DecodeStruct(r, &got) })
+				err := DecodeStruct(r, &got)
+				if err == nil {
+					t.Fatal("err = nil, want an error")
+				}
+				w := httptest.NewRecorder()
+				DecodeError(w, r, err, "caller message")
 
-				rrRequirePanicMessage(t, recovered)
+				rrRequireProblem(t, w, http.StatusRequestEntityTooLarge, "The request body is larger than 1 MiB.")
 			})
 		}
 	})
 
-	t.Run("RR-09_BodyOverLimitWithoutContentLengthPanics", func(t *testing.T) {
+	t.Run("RR-09_BodyOverLimitWithoutContentLengthAnswers413", func(t *testing.T) {
 		var got string
 		r := rrDecodeRequest("application/json", -1, bytes.NewReader(bytes.Repeat([]byte("a"), maxBodyBytes+1)))
 
-		recovered := rrRecovered(func() { _ = DecodeStruct(r, &got) })
+		err := DecodeStruct(r, &got)
+		if err == nil {
+			t.Fatal("err = nil, want an error")
+		}
+		w := httptest.NewRecorder()
+		DecodeError(w, r, err, "caller message")
 
-		rrRequirePanicMessage(t, recovered)
+		rrRequireProblem(t, w, http.StatusRequestEntityTooLarge, "The request body is larger than 1 MiB.")
 	})
 
 	t.Run("RR-10_BodyExactlyAtLimitDecodes", func(t *testing.T) {
@@ -233,13 +260,18 @@ func TestDecodeStruct(t *testing.T) {
 		}
 	})
 
-	t.Run("RR-12_NullBodyPanics", func(t *testing.T) {
+	t.Run("RR-12_NullBodyAnswers400", func(t *testing.T) {
 		var got *rrDecoded
 		r := rrDecodeRequest("application/json", -1, strings.NewReader("null"))
 
-		recovered := rrRecovered(func() { _ = DecodeStruct(r, &got) })
+		err := DecodeStruct(r, &got)
+		if err == nil {
+			t.Fatal("err = nil, want an error")
+		}
+		w := httptest.NewRecorder()
+		DecodeError(w, r, err, "caller message")
 
-		rrRequirePanicMessage(t, recovered)
+		rrRequireProblem(t, w, http.StatusBadRequest, "caller message")
 
 		var empty *rrDecoded
 		r = rrDecodeRequest("application/json", -1, strings.NewReader("{}"))
@@ -251,13 +283,18 @@ func TestDecodeStruct(t *testing.T) {
 		}
 	})
 
-	t.Run("RR-13_ProtobufIntoUnsupportedTypePanics", func(t *testing.T) {
+	t.Run("RR-13_ProtobufIntoUnsupportedTypeAnswers415", func(t *testing.T) {
 		var got rrDecoded
 		r := rrDecodeRequest("application/x-protobuf", int64(len(protoBody)), bytes.NewReader(protoBody))
 
-		recovered := rrRecovered(func() { _ = DecodeStruct(r, &got) })
+		err := DecodeStruct(r, &got)
+		if err == nil {
+			t.Fatal("err = nil, want an error")
+		}
+		w := httptest.NewRecorder()
+		DecodeError(w, r, err, "caller message")
 
-		rrRequirePanicMessage(t, recovered)
+		rrRequireProblem(t, w, http.StatusUnsupportedMediaType, "This endpoint does not accept a protobuf body.")
 	})
 
 	t.Run("RR-14_OrdinaryBodiesStillDecode", func(t *testing.T) {
