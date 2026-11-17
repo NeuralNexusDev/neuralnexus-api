@@ -3,7 +3,7 @@ package responses
 import (
 	"bytes"
 	"encoding/xml"
-	"fmt"
+	"errors"
 	"io"
 	"net/http"
 	"reflect"
@@ -50,7 +50,17 @@ func SendStruct[T any](w http.ResponseWriter, r *http.Request, statusCode int, d
 	w.Write(structBytes)
 }
 
-const maxBodyBytes = 1 << 20
+const (
+	maxBodyBytes           = 1 << 20
+	msgBodyTooLarge        = "The request body is larger than 1 MiB."
+	msgProtobufUnsupported = "This endpoint does not accept a protobuf body."
+)
+
+var (
+	errBodyTooLarge        = errors.New("the request body is larger than the limit")
+	errNullBody            = errors.New("the request body decoded to a nil pointer")
+	errProtobufUnsupported = errors.New("the target type cannot be decoded from protobuf")
+)
 
 // DecodeStruct -- Decode a struct from JSON, XML or Protobuf
 func DecodeStruct[T any](r *http.Request, data *T) error {
@@ -58,14 +68,14 @@ func DecodeStruct[T any](r *http.Request, data *T) error {
 		panic("responses.DecodeStruct: data must be a non-nil pointer")
 	}
 	if r.ContentLength > maxBodyBytes {
-		panic(fmt.Sprintf("responses.DecodeStruct: the request body is larger than the %d byte limit", maxBodyBytes))
+		return errBodyTooLarge
 	}
 	b, err := io.ReadAll(io.LimitReader(r.Body, maxBodyBytes+1))
 	if err != nil {
 		return err
 	}
 	if len(b) > maxBodyBytes {
-		panic(fmt.Sprintf("responses.DecodeStruct: the request body is larger than the %d byte limit", maxBodyBytes))
+		return errBodyTooLarge
 	}
 	switch contentType := r.Header.Get("Content-Type"); contentType {
 	case "application/x-protobuf":
@@ -75,7 +85,7 @@ func DecodeStruct[T any](r *http.Request, data *T) error {
 		} else if encoder, ok := any(*data).(ProtoEncoder); ok {
 			message = encoder.ToProto()
 		} else {
-			panic(fmt.Sprintf("responses.DecodeStruct: %T cannot be decoded from protobuf", *data))
+			return errProtobufUnsupported
 		}
 		err = proto.Unmarshal(b, message)
 	case "application/xml":
@@ -85,7 +95,7 @@ func DecodeStruct[T any](r *http.Request, data *T) error {
 	}
 	if err == nil {
 		if v := reflect.ValueOf(*data); v.Kind() == reflect.Pointer && v.IsNil() {
-			panic(fmt.Sprintf("responses.DecodeStruct: the request body decoded to a nil %T", *data))
+			return errNullBody
 		}
 	}
 	return err
@@ -186,6 +196,32 @@ func UnsupportedMediaType(w http.ResponseWriter, r *http.Request, message string
 		message,
 		"https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/415",
 	).SendProblem(w, r)
+}
+
+// PayloadTooLarge -- Send a PayloadTooLargeResponse as JSON or XML
+func PayloadTooLarge(w http.ResponseWriter, r *http.Request, message string) {
+	if message == "" {
+		message = "The request body is too large."
+	}
+	NewProblem(
+		"about:blank",
+		http.StatusRequestEntityTooLarge,
+		"Payload Too Large",
+		message,
+		"https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/413",
+	).SendProblem(w, r)
+}
+
+// DecodeError -- Answer an error from DecodeStruct with a 413, 415 or 400 problem
+func DecodeError(w http.ResponseWriter, r *http.Request, err error, message string) {
+	switch err {
+	case errBodyTooLarge:
+		PayloadTooLarge(w, r, msgBodyTooLarge)
+	case errProtobufUnsupported:
+		UnsupportedMediaType(w, r, msgProtobufUnsupported)
+	default:
+		BadRequest(w, r, message)
+	}
 }
 
 // TooManyRequests -- Send a TooManyRequestsResponse as JSON or XML

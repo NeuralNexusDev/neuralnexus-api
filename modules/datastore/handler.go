@@ -70,7 +70,7 @@ func (h *handler) ReadDataStore(w http.ResponseWriter, r *http.Request) {
 	err := responses.DecodeStruct(r, &ds)
 	if err != nil {
 		reqctx.Log(r.Context(), logBadBody, err.Error())
-		responses.BadRequest(w, r, "")
+		responses.DecodeError(w, r, err, "")
 		return
 	}
 	ds, err = h.s.Read(r.Context(), ds)
@@ -99,7 +99,7 @@ func (h *handler) UpdateDataStore(w http.ResponseWriter, r *http.Request) {
 	err := responses.DecodeStruct(r, &ds)
 	if err != nil {
 		reqctx.Log(r.Context(), logBadBody, err.Error())
-		responses.BadRequest(w, r, "")
+		responses.DecodeError(w, r, err, "")
 		return
 	}
 
@@ -131,7 +131,7 @@ func (h *handler) DeleteDataStore(w http.ResponseWriter, r *http.Request) {
 	err := responses.DecodeStruct(r, &ds)
 	if err != nil {
 		reqctx.Log(r.Context(), logBadBody, err.Error())
-		responses.BadRequest(w, r, "")
+		responses.DecodeError(w, r, err, "")
 		return
 	}
 
