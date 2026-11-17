@@ -82,11 +82,10 @@ func ParseTextureValue(ctx context.Context, value string) *TexturesValue {
 }
 
 // EncodeTextureValue encodes a TexturesValue into a base64'd JSON string
-func EncodeTextureValue(ctx context.Context, textures *TexturesValue) string {
+func EncodeTextureValue(textures *TexturesValue) string {
 	encoded, err := json.Marshal(*textures)
 	if err != nil {
-		reqctx.Log(ctx, "Failed to marshal texture property:\n\t", err.Error())
-		return ""
+		panic("minecraft: failed to marshal texture property although a TexturesValue holds only strings, integers, booleans and pointers to such structs: " + err.Error())
 	}
 	return base64.StdEncoding.EncodeToString(encoded)
 }
@@ -153,15 +152,15 @@ type TexturesValue struct {
 }
 
 // ToProperty Converts a TextureValue to base64'd JSON and stores it in a TEXTURES property
-func (t *TexturesValue) ToProperty() (*Property, error) {
+func (t *TexturesValue) ToProperty() *Property {
 	if t == nil {
-		return nil, nil
+		return nil
 	}
 	encoded, err := json.Marshal(*t)
 	if err != nil {
-		return nil, err
+		panic("minecraft: failed to marshal texture property although a TexturesValue holds only strings, integers, booleans and pointers to such structs: " + err.Error())
 	}
-	return &Property{Name: TEXTURES, Value: base64.StdEncoding.EncodeToString(encoded)}, nil
+	return &Property{Name: TEXTURES, Value: base64.StdEncoding.EncodeToString(encoded)}
 }
 
 // Textures - The player's textures
@@ -218,11 +217,8 @@ func (p *MojangProfile) IsStale() bool {
 }
 
 // ToPlayer converts a MojangProfile into Mojang's raw session-server mirror shape.
-func (p *MojangProfile) ToPlayer() (*MojangPlayer, error) {
-	prop, err := p.Textures.ToProperty()
-	if err != nil {
-		return nil, err
-	}
+func (p *MojangProfile) ToPlayer() *MojangPlayer {
+	prop := p.Textures.ToProperty()
 	player := &MojangPlayer{
 		ID:             p.ID,
 		Name:           p.Name,
@@ -233,7 +229,7 @@ func (p *MojangProfile) ToPlayer() (*MojangPlayer, error) {
 	if prop != nil {
 		player.Properties = []Property{*prop}
 	}
-	return player, nil
+	return player
 }
 
 // TexturesRow represents a texture in the database
@@ -305,7 +301,7 @@ type GeyserSkin struct {
 	LastSeen         int64  `json:"last_update"`
 }
 
-func (s *GeyserSkin) FromTexturesValue(ctx context.Context, t *TexturesValue) error {
+func (s *GeyserSkin) FromTexturesValue(t *TexturesValue) error {
 	if t == nil || t.Textures.SKIN == nil {
 		return ErrSkinNotFound
 	}
@@ -313,7 +309,7 @@ func (s *GeyserSkin) FromTexturesValue(ctx context.Context, t *TexturesValue) er
 	s.TextureBytesHash = "NOT_A_HASH_USE_TEXTURE_ID"
 	s.IsSteve = t.Textures.SKIN.Metadata == nil || t.Textures.SKIN.Metadata.Model != SLIM
 	s.Hash = t.Textures.SKIN.Hash()
-	s.Value = EncodeTextureValue(ctx, t)
+	s.Value = EncodeTextureValue(t)
 	s.FirstSeen = t.Timestamp
 	s.LastSeen = t.Timestamp
 	return nil

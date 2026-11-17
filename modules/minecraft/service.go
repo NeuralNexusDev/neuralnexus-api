@@ -265,12 +265,12 @@ func (m *mojangService) GetMojangPlayersByNames(ctx context.Context, names []str
 	// Fetch stale entries from Mojang
 	body, err := json.Marshal(misses)
 	if err != nil {
-		return nil, err
+		panic("minecraft: json.Marshal of a []string failed: " + err.Error())
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, m.cfg.LookupBulk, strings.NewReader(string(body)))
 	if err != nil {
-		return nil, err
+		panic("minecraft: building the bulk lookup request failed although the method is a constant and LookupBulk is a literal URL: " + err.Error())
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := m.client.Do(req)
@@ -320,7 +320,7 @@ func (m *mojangService) GetMojangProfile(ctx context.Context, id string, signed 
 	if err != nil {
 		return nil, err
 	}
-	return profile.ToPlayer()
+	return profile.ToPlayer(), nil
 }
 
 // GetProfile gets a player's profile with textures decoded as native JSON,
@@ -551,7 +551,7 @@ func (g *geyserService) GetGeyserSkin(ctx context.Context, xuid int64) (*GeyserS
 
 	var skin GeyserSkin
 	if !player.IsStale() && textures != nil {
-		err := skin.FromTexturesValue(ctx, textures)
+		err := skin.FromTexturesValue(textures)
 		return &skin, err
 	}
 
