@@ -145,7 +145,7 @@ func (h *handler) CreateRole(w http.ResponseWriter, r *http.Request) {
 	}
 	var body createRoleRequest
 	if err := responses.DecodeStruct(r, &body); err != nil {
-		responses.BadRequest(w, r, msgUnableToParseBody)
+		responses.DecodeError(w, r, err, msgUnableToParseBody)
 		return
 	}
 	role, err := h.s.CreateRole(r.Context(), body.Name, body.Description)
@@ -171,7 +171,7 @@ func (h *handler) UpdateRole(w http.ResponseWriter, r *http.Request) {
 	}
 	var body updateRoleRequest
 	if err := responses.DecodeStruct(r, &body); err != nil {
-		responses.BadRequest(w, r, msgUnableToParseBody)
+		responses.DecodeError(w, r, err, msgUnableToParseBody)
 		return
 	}
 	role, err := h.s.UpdateRole(r.Context(), r.PathValue("id"), body.Name, body.Description)
@@ -276,7 +276,7 @@ func (h *handler) CreatePermission(w http.ResponseWriter, r *http.Request) {
 	}
 	var body createPermissionRequest
 	if err := responses.DecodeStruct(r, &body); err != nil {
-		responses.BadRequest(w, r, msgUnableToParseBody)
+		responses.DecodeError(w, r, err, msgUnableToParseBody)
 		return
 	}
 	permission, err := h.s.CreatePermission(r.Context(), body.Node, body.Description, body.ValueType, body.Merge)
