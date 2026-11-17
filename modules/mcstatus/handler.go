@@ -28,7 +28,6 @@ const (
 const (
 	msgJavaStatusFailed        = "failed to get java server status"
 	msgBedrockStatusFailed     = "failed to get bedrock server status"
-	msgFailedToGetServerStatus = "Failed to get server status"
 	msgInvalidHost             = "The host must be a domain name, an IPv4 address or an IPv6 address, optionally followed by a port."
 	logUnableToGetServerStatus = "[Error]: Unable to get server status:\n\t"
 )
@@ -215,7 +214,7 @@ func (h *handler) ServerStatus(w http.ResponseWriter, r *http.Request) {
 			problem := responses.NewNotFoundProblem(msgBedrockStatusFailed)
 			responses.SendProblemStruct(w, r, problem, offlineProblem{Problem: problem, Host: host, Port: port})
 		default:
-			responses.InternalServerError(w, r, msgFailedToGetServerStatus)
+			panic("mcstatus: GetServerStatus returned an error other than ErrJavaStatus and ErrBedrockStatus: " + err.Error())
 		}
 		return
 	}
@@ -259,9 +258,7 @@ func (h *handler) Icon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		reqctx.Log(r.Context(), logUnableToGetServerStatus, err.Error())
-		responses.InternalServerError(w, r, msgFailedToGetServerStatus)
-		return
+		panic("mcstatus: GetJavaServerStatus returned an error other than ErrJavaStatus: " + err.Error())
 	}
 	if status.Icon == nil {
 		name := defaultIconFile

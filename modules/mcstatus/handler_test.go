@@ -186,30 +186,6 @@ func TestServerStatusHandler(t *testing.T) {
 	})
 
 	for _, tc := range []struct {
-		name       string
-		err        error
-		wantStatus int
-		want       string
-	}{
-		{"Unrecognized", testutil.ErrBoom, http.StatusInternalServerError, msgFailedToGetServerStatus},
-	} {
-		t.Run("CSH-16_"+tc.name, func(t *testing.T) {
-			mock := &hdMockService{serverErr: tc.err}
-			req := hdRequest(t, "mc.example.com:25565", "")
-			w := httptest.NewRecorder()
-
-			NewHandler(mock).ServerStatus(w, req)
-
-			if w.Code != tc.wantStatus {
-				t.Fatalf("expected %d, got %d", tc.wantStatus, w.Code)
-			}
-			if p := hdDecodeProblem(t, w.Body.Bytes()); p.Detail != tc.want {
-				t.Fatalf("expected detail %q, got %q", tc.want, p.Detail)
-			}
-		})
-	}
-
-	for _, tc := range []struct {
 		name  string
 		value string
 	}{
@@ -390,25 +366,6 @@ func TestServerStatusHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("CSH-48_UnrecognizedErrorProblemHasNoHostOrPort", func(t *testing.T) {
-		mock := &hdMockService{serverErr: testutil.ErrBoom}
-		req := hdRequest(t, "example.com:25570", "")
-		w := httptest.NewRecorder()
-
-		NewHandler(mock).ServerStatus(w, req)
-
-		var body map[string]any
-		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
-			t.Fatalf("body is not JSON: %v", err)
-		}
-		if _, ok := body["host"]; ok {
-			t.Fatalf("body = %v, want no host member on an internal error", body)
-		}
-		if _, ok := body["port"]; ok {
-			t.Fatalf("body = %v, want no port member on an internal error", body)
-		}
-	})
-
 	t.Run("CSH-52_OfflineProblemXmlHasProblemRoot", func(t *testing.T) {
 		mock := &hdMockService{serverErr: ErrJavaStatus}
 		req := hdRequest(t, "example.com:25570", "")
@@ -516,21 +473,6 @@ func TestIconHandler(t *testing.T) {
 		}
 		if len(mock.javaCalls) != 1 {
 			t.Fatalf("expected exactly 1 call, got %d", len(mock.javaCalls))
-		}
-	})
-
-	t.Run("CSH-17_UnrecognizedErrorReturnsInternalServerError", func(t *testing.T) {
-		mock := &hdMockService{javaErr: testutil.ErrBoom}
-		req := hdRequest(t, "example.com:25565", "")
-		w := httptest.NewRecorder()
-
-		NewHandler(mock).Icon(w, req)
-
-		if w.Code != http.StatusInternalServerError {
-			t.Fatalf("expected 500, got %d", w.Code)
-		}
-		if p := hdDecodeProblem(t, w.Body.Bytes()); p.Detail != msgFailedToGetServerStatus {
-			t.Fatalf("expected detail %q, got %q", msgFailedToGetServerStatus, p.Detail)
 		}
 	})
 
