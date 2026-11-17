@@ -56,7 +56,7 @@ func (h *handler) Login(w http.ResponseWriter, r *http.Request) {
 	var login Login
 	err := responses.DecodeStruct(r, &login)
 	if err != nil {
-		responses.BadRequest(w, r, msgInvalidUsernameOrPassword)
+		responses.DecodeError(w, r, err, msgInvalidUsernameOrPassword)
 		return
 	}
 	ctx := r.Context()
