@@ -205,7 +205,7 @@ func (h *handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	var update UserUpdate
 	err := responses.DecodeStruct(r, &update)
 	if err != nil {
-		responses.BadRequest(w, r, msgInvalidRequestBody)
+		responses.DecodeError(w, r, err, msgInvalidRequestBody)
 		return
 	}
 	err = h.s.UpdateUser(r.Context(), userID, &update)
@@ -236,35 +236,35 @@ func (h *handler) UpdateUserFromPlatform(w http.ResponseWriter, r *http.Request)
 	case link.PlatformDiscord:
 		var d link.DiscordData
 		if err := responses.DecodeStruct(r, &d); err != nil {
-			responses.BadRequest(w, r, msgInvalidRequestBody)
+			responses.DecodeError(w, r, err, msgInvalidRequestBody)
 			return
 		}
 		data = &d
 	case link.PlatformMinecraft:
 		var d link.MinecraftData
 		if err := responses.DecodeStruct(r, &d); err != nil {
-			responses.BadRequest(w, r, msgInvalidRequestBody)
+			responses.DecodeError(w, r, err, msgInvalidRequestBody)
 			return
 		}
 		data = &d
 	case link.PlatformTwitch:
 		var d link.TwitchData
 		if err := responses.DecodeStruct(r, &d); err != nil {
-			responses.BadRequest(w, r, msgInvalidRequestBody)
+			responses.DecodeError(w, r, err, msgInvalidRequestBody)
 			return
 		}
 		data = &d
 	case link.PlatformXboxLive:
 		var d link.XboxLiveData
 		if err := responses.DecodeStruct(r, &d); err != nil {
-			responses.BadRequest(w, r, msgInvalidRequestBody)
+			responses.DecodeError(w, r, err, msgInvalidRequestBody)
 			return
 		}
 		data = &d
 	case link.PlatformMicrosoft:
 		var d link.MicrosoftUserData
 		if err := responses.DecodeStruct(r, &d); err != nil {
-			responses.BadRequest(w, r, msgInvalidRequestBody)
+			responses.DecodeError(w, r, err, msgInvalidRequestBody)
 			return
 		}
 		data = &d
@@ -335,7 +335,11 @@ func (h *handler) UpdateAccountSettings(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	var body UpdateAccountSettingsRequest
-	if err := responses.DecodeStruct(r, &body); err != nil || body.PasswordAuthEnabled == nil {
+	if err := responses.DecodeStruct(r, &body); err != nil {
+		responses.DecodeError(w, r, err, msgInvalidRequestBody)
+		return
+	}
+	if body.PasswordAuthEnabled == nil {
 		responses.BadRequest(w, r, msgInvalidRequestBody)
 		return
 	}

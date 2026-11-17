@@ -360,7 +360,11 @@ func (h *handler) SetPlatformLoginEnabled(w http.ResponseWriter, r *http.Request
 	}
 	platform := Platform(r.PathValue("platform"))
 	var body SetPlatformLoginEnabledRequest
-	if err := responses.DecodeStruct(r, &body); err != nil || body.LoginEnabled == nil {
+	if err := responses.DecodeStruct(r, &body); err != nil {
+		responses.DecodeError(w, r, err, msgInvalidRequestBody)
+		return
+	}
+	if body.LoginEnabled == nil {
 		responses.BadRequest(w, r, msgInvalidRequestBody)
 		return
 	}
