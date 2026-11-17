@@ -52,7 +52,7 @@ func (h *handler) CreateNumber(w http.ResponseWriter, r *http.Request) {
 	err := responses.DecodeStruct(r, &n)
 	if err != nil {
 		reqctx.Log(r.Context(), logBadBody, err.Error())
-		responses.BadRequest(w, r, "")
+		responses.DecodeError(w, r, err, "")
 		return
 	}
 
@@ -78,7 +78,7 @@ func (h *handler) ReadNumber(w http.ResponseWriter, r *http.Request) {
 	err := responses.DecodeStruct(r, &n)
 	if err != nil {
 		reqctx.Log(r.Context(), logBadBody, err.Error())
-		responses.BadRequest(w, r, "")
+		responses.DecodeError(w, r, err, "")
 		return
 	}
 
@@ -108,7 +108,7 @@ func (h *handler) UpdateNumber(w http.ResponseWriter, r *http.Request) {
 	err := responses.DecodeStruct(r, &n)
 	if err != nil {
 		reqctx.Log(r.Context(), logBadBody, err.Error())
-		responses.BadRequest(w, r, "")
+		responses.DecodeError(w, r, err, "")
 		return
 	}
 
@@ -132,7 +132,7 @@ func (h *handler) DeleteNumber(w http.ResponseWriter, r *http.Request) {
 	err := responses.DecodeStruct(r, &n)
 	if err != nil {
 		reqctx.Log(r.Context(), logBadBody, err.Error())
-		responses.BadRequest(w, r, "")
+		responses.DecodeError(w, r, err, "")
 		return
 	}
 
