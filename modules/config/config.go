@@ -143,16 +143,14 @@ func FromEnv() *Config {
 	// ---------- Snowflake ----------
 	nodeID, err := strconv.ParseUint(checkEnvVar("SNOWFLAKE_NODE_ID"), 10, 64)
 	if err != nil {
-		nodeID = 1
-		log.Println("Failed to parse SNOWFLAKE_NODE_ID, defaulting to 1")
+		log.Fatal("SNOWFLAKE_NODE_ID is not a number: " + err.Error())
 	}
 	if nodeID > spaceflake.MAX5BITS {
 		log.Fatal("SNOWFLAKE_NODE_ID is above 31")
 	}
 	workerID, err := strconv.ParseUint(checkEnvVar("SNOWFLAKE_WORKER_ID"), 10, 64)
 	if err != nil {
-		workerID = 1
-		log.Println("Failed to parse SNOWFLAKE_WORKER_ID, defaulting to 1")
+		log.Fatal("SNOWFLAKE_WORKER_ID is not a number: " + err.Error())
 	}
 	if workerID > spaceflake.MAX5BITS {
 		log.Fatal("SNOWFLAKE_WORKER_ID is above 31")
