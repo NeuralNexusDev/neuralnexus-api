@@ -71,9 +71,11 @@ func (h *handler) CreatePet(w http.ResponseWriter, r *http.Request) {
 	if petName == "" {
 		var pet Pet
 		err := responses.DecodeStruct(r, &pet)
-		if err == nil {
-			petName = pet.Name
+		if err != nil {
+			responses.DecodeError(w, r, err, msgPetNameIsRequired)
+			return
 		}
+		petName = pet.Name
 	}
 	if petName == "" {
 		responses.BadRequest(w, r, msgPetNameIsRequired)
@@ -114,9 +116,11 @@ func (h *handler) GetPet(w http.ResponseWriter, r *http.Request) {
 	if petID == 0 {
 		var pet Pet
 		err := responses.DecodeStruct(r, &pet)
-		if err == nil {
-			petID = pet.ID
+		if err != nil {
+			responses.DecodeError(w, r, err, msgPetIDIsRequired)
+			return
 		}
+		petID = pet.ID
 	}
 	if petID == 0 {
 		responses.BadRequest(w, r, msgPetIDIsRequired)
@@ -141,7 +145,7 @@ func (h *handler) UpdatePet(w http.ResponseWriter, r *http.Request) {
 	var pet *Pet
 	err := responses.DecodeStruct(r, &pet)
 	if err != nil {
-		responses.BadRequest(w, r, msgUnableToParseBody)
+		responses.DecodeError(w, r, err, msgUnableToParseBody)
 		return
 	}
 
@@ -179,9 +183,11 @@ func (h *handler) GetRandPetPictureByName(w http.ResponseWriter, r *http.Request
 	if petName == "" {
 		var pet Pet
 		err := responses.DecodeStruct(r, &pet)
-		if err == nil {
-			petName = pet.Name
+		if err != nil {
+			responses.DecodeError(w, r, err, msgPetNameIsRequired)
+			return
 		}
+		petName = pet.Name
 	}
 	if petName == "" {
 		responses.BadRequest(w, r, msgPetNameIsRequired)
@@ -210,9 +216,11 @@ func (h *handler) GetPetPicture(w http.ResponseWriter, r *http.Request) {
 	if petPictureID == "" {
 		var petPicture PetPicture
 		err := responses.DecodeStruct(r, &petPicture)
-		if err == nil {
-			petPictureID = string(petPicture.ID)
+		if err != nil {
+			responses.DecodeError(w, r, err, msgPetPictureIDIsRequired)
+			return
 		}
+		petPictureID = string(petPicture.ID)
 	}
 	if petPictureID == "" {
 		responses.BadRequest(w, r, msgPetPictureIDIsRequired)
@@ -237,7 +245,7 @@ func (h *handler) UpdatePetPicture(w http.ResponseWriter, r *http.Request) {
 	var petPicture PetPicture
 	err := responses.DecodeStruct(r, &petPicture)
 	if err != nil {
-		responses.BadRequest(w, r, msgUnableToParseBody)
+		responses.DecodeError(w, r, err, msgUnableToParseBody)
 		return
 	}
 
@@ -277,9 +285,11 @@ func (h *handler) DeletePetPicture(w http.ResponseWriter, r *http.Request) {
 	if petPictureID == "" {
 		var petPicture PetPicture
 		err := responses.DecodeStruct(r, &petPicture)
-		if err == nil {
-			petPictureID = string(petPicture.ID)
+		if err != nil {
+			responses.DecodeError(w, r, err, msgPetPictureIDIsRequired)
+			return
 		}
+		petPictureID = string(petPicture.ID)
 	}
 	if petPictureID == "" {
 		responses.BadRequest(w, r, msgPetPictureIDIsRequired)
