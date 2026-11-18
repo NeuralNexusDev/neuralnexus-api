@@ -215,11 +215,7 @@ func mcNow() int64 { return time.Now().UnixMilli() }
 
 func mcMustProperty(t *testing.T, tv TexturesValue) Property {
 	t.Helper()
-	prop, err := tv.ToProperty()
-	if err != nil {
-		t.Fatalf("failed to build property fixture: %v", err)
-	}
-	return *prop
+	return *tv.ToProperty()
 }
 
 func TestSV01to02_NewService(t *testing.T) {
@@ -1082,7 +1078,7 @@ func TestSV79to84_GetGeyserPlayerByXUID(t *testing.T) {
 func mcGeyserSkinFixture(t *testing.T) (string, string) {
 	t.Helper()
 	tex := TexturesValue{Textures: Textures{SKIN: &Texture{URL: "http://textures.minecraft.net/texture/skinhash"}}}
-	value := EncodeTextureValue(mcCtx, &tex)
+	value := EncodeTextureValue(&tex)
 	return mcMustJSON(t, GeyserSkin{Hash: "skinhash", Value: value}), value
 }
 

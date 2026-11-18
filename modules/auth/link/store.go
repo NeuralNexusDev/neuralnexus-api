@@ -79,7 +79,7 @@ func (s *store) GetLinkedAccountByPlatformID(ctx context.Context, platform Platf
 			return nil, account.ErrNotFound
 		}
 		if errors.Is(err, pgx.ErrTooManyRows) {
-			return nil, ErrDuplicateLinkedAccount
+			panic("link: multiple linked accounts found for platform ID although linked_accounts_platform_unique is unique on (platform, platform_id)")
 		}
 		return nil, err
 	}
@@ -119,7 +119,7 @@ func (s *store) GetLinkedAccountByUserID(ctx context.Context, userID string, pla
 			return nil, account.ErrNotFound
 		}
 		if errors.Is(err, pgx.ErrTooManyRows) {
-			return nil, ErrDuplicateLinkedAccount
+			panic("link: multiple linked accounts found for user ID and platform although linked_accounts_unique is unique on (user_id, platform)")
 		}
 		return nil, err
 	}

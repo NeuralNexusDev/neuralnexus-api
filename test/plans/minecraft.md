@@ -28,8 +28,8 @@
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| TY-16 | ToProperty | Happy Path | Populated TexturesValue | TexturesValue{...} | Returns *Property{Name: TEXTURES, Value: base64(JSON(t))}, nil error | P1 |  |
-| TY-17 | ToProperty | Edge Case | Receiver is nil | var t *TexturesValue = nil | Returns (nil, nil) | P2 |  |
+| TY-16 | ToProperty | Happy Path | Populated TexturesValue | TexturesValue{...} | Returns *Property{Name: TEXTURES, Value: base64(JSON(t))} | P1 |  |
+| TY-17 | ToProperty | Edge Case | Receiver is nil | var t *TexturesValue = nil | Returns nil | P2 |  |
 
 ## Texture
 
@@ -45,8 +45,8 @@
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
 | TY-23 | IsStale | Edge Case | LastSeen older than stalenessThreshold | LastSeen = now - 25h | Returns true | P2 |  |
-| TY-24 | ToPlayer | Happy Path | Profile has Textures | populated Profile | Returned Player.Properties has exactly one TEXTURES entry, nil error | P1 |  |
-| TY-25 | ToPlayer | Edge Case | Profile.Textures is nil | MojangProfile{Textures: nil} | Returned Player.Properties is empty/nil, nil error | P3 |  |
+| TY-24 | ToPlayer | Happy Path | Profile has Textures | populated Profile | Returned Player.Properties has exactly one TEXTURES entry | P1 |  |
+| TY-25 | ToPlayer | Edge Case | Profile.Textures is nil | MojangProfile{Textures: nil} | Returned Player.Properties is empty/nil | P3 |  |
 
 ## TexturesRow
 

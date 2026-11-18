@@ -117,7 +117,7 @@ func (s *store) ClearExpiredSessions(ctx context.Context) {
 func (s *store) AddSessionToCache(ctx context.Context, session *Session) error {
 	stringSession, err := json.Marshal(session)
 	if err != nil {
-		return err
+		panic("session: json.Marshal of a Session failed although it holds only strings and integers: " + err.Error())
 	}
 
 	// ExpiresAt == 0 means never-expires (TTL 0); a past ExpiresAt would

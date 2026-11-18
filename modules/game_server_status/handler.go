@@ -21,7 +21,6 @@ const (
 	msgGameUnsupported         = "this game is not supported, or the given query type doesn't support this game"
 	msgJavaStatusFailed        = "failed to get java server status"
 	msgBedrockStatusFailed     = "failed to get bedrock server status"
-	msgQueryFailed             = "Failed to query game server"
 	msgUpstreamQueryFailed     = "Failed to reach the game server query backend"
 	logUnableToQueryGameServer = "[Error]: Unable to query game server:\n\t"
 )
@@ -79,7 +78,7 @@ func (h *handler) GameServerStatus(w http.ResponseWriter, r *http.Request) {
 		case mcstatus.ErrBedrockStatus:
 			responses.BadGateway(w, r, msgBedrockStatusFailed)
 		default:
-			responses.InternalServerError(w, r, msgQueryFailed)
+			panic("game_server_status: QueryGameServer returned an error other than the sentinels handled above: " + err.Error())
 		}
 		return
 	}
@@ -122,7 +121,6 @@ func (h *handler) SimpleGameServerStatus(w http.ResponseWriter, r *http.Request)
 		reqctx.Log(r.Context(), "Unable to query game server:\n\t", err.Error())
 		responses.BadGateway(w, r, msgUpstreamQueryFailed)
 	default:
-		reqctx.Log(r.Context(), "Unable to query game server:\n\t", err.Error())
-		responses.InternalServerError(w, r, msgQueryFailed)
+		panic("game_server_status: QueryGameServer returned an error other than the sentinels handled above: " + err.Error())
 	}
 }
