@@ -71,8 +71,8 @@
 | HD-08 | GetMojangPlayerByUUID | Error Path | Service returns a generic error | Service fails with an error | 500 Internal Server Error, `detail` is `msgFailedToGetPlayer` | P2 |  |
 | HD-09 | GetMojangPlayersByNames | Error Path | Content-Type header is not application/json | header omitted | 415 Unsupported Media Type (`msgRequestMustBeJSON`) | P2 |  |
 | HD-10 | GetMojangPlayersByNames | Error Path | Body is not valid JSON | body = "{not json" | 400 Bad Request (`msgInvalidRequestBody`) | P2 |  |
-| HD-11 | GetMojangPlayersByNames | Error Path | names array is empty | body = "[]" | 400 Bad Request (`msgInvalidSize`) | P2 |  |
-| HD-12 | GetMojangPlayersByNames | Error Path | names array has more than 10 entries | 11 names | 400 Bad Request (`msgInvalidSize`) | P2 |  |
+| HD-11 | GetMojangPlayersByNames | Error Path | The service rejects an empty names array | body = "[]"; the service returns `ErrNoNamesProvided` | 400 Bad Request (`msgInvalidSize`) | P2 |  |
+| HD-12 | GetMojangPlayersByNames | Error Path | The service rejects a names array of more than 10 entries | 11 names; the service returns `ErrBatchLimit` | 400 Bad Request (`msgInvalidSize`) | P2 |  |
 | HD-13 | GetMojangPlayersByNames | Error Path | names array contains an empty string | ["a", ""] | 400 Bad Request (`msgInvalidProfileName`) | P3 |  |
 | HD-14 | GetMojangPlayersByNames | Happy Path | Valid names, service succeeds | Service returns a list of Mojang players | 200 OK with players JSON body | P1 |  |
 | HD-15 | GetMojangPlayersByNames | Error Path | Service returns an error | Service fails with an error | 500 Internal Server Error (`msgFailedToGetPlayers`) | P2 |  |
