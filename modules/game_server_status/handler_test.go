@@ -147,6 +147,86 @@ func TestGameServerStatusHandler(t *testing.T) {
 		}
 	})
 
+	for _, tc := range []struct{ name, query string }{
+		{"Zero", "host=1.2.3.4&port=0"},
+		{"TooLarge", "host=1.2.3.4&port=65536"},
+		{"Negative", "host=1.2.3.4&port=-1"},
+		{"Huge", "host=1.2.3.4&port=99999999999999999999"},
+	} {
+		t.Run("GSH-17_ErrorPath_PortOutOfRange_"+tc.name, func(t *testing.T) {
+			fake := &fakeGSSService{status: newTestStatus(nil)}
+			req := testutil.NewRequest("GET", "/gss/minecraft/status?"+tc.query, nil)
+			req.SetPathValue("game", "minecraft")
+			rec := httptest.NewRecorder()
+
+			NewHandler(fake).GameServerStatus(rec, req)
+
+			var body map[string]any
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if rec.Code != 400 || body["detail"] != msgInvalidPort {
+				t.Errorf("status = %d, detail = %v, want 400 and %q", rec.Code, body["detail"], msgInvalidPort)
+			}
+			if fake.called {
+				t.Error("QueryGameServer should not have been called")
+			}
+		})
+	}
+
+	for _, tc := range []struct{ name, query string }{
+		{"Space", "host=not%20a%20host&port=25565"},
+		{"PortInHost", "host=example.com:25565&port=25565"},
+		{"LeadingHyphen", "host=-bad.example.com&port=25565"},
+		{"NoDot", "host=localhost&port=25565"},
+		{"Slash", "host=example.com/path&port=25565"},
+	} {
+		t.Run("GSH-18_ErrorPath_InvalidHost_"+tc.name, func(t *testing.T) {
+			fake := &fakeGSSService{status: newTestStatus(nil)}
+			req := testutil.NewRequest("GET", "/gss/minecraft/status?"+tc.query, nil)
+			req.SetPathValue("game", "minecraft")
+			rec := httptest.NewRecorder()
+
+			NewHandler(fake).GameServerStatus(rec, req)
+
+			var body map[string]any
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if rec.Code != 400 || body["detail"] != msgInvalidHost {
+				t.Errorf("status = %d, detail = %v, want 400 and %q", rec.Code, body["detail"], msgInvalidHost)
+			}
+			if fake.called {
+				t.Error("QueryGameServer should not have been called")
+			}
+		})
+	}
+
+	for _, tc := range []struct {
+		name, query string
+		port        int
+	}{
+		{"LowestPort", "host=1.2.3.4&port=1", 1},
+		{"HighestPort", "host=example.com&port=65535", 65535},
+		{"IPv6", "host=::1&port=25565", 25565},
+	} {
+		t.Run("GSH-21_EdgeCase_ValidAddress_"+tc.name, func(t *testing.T) {
+			fake := &fakeGSSService{status: newTestStatus(nil)}
+			req := testutil.NewRequest("GET", "/gss/minecraft/status?"+tc.query, nil)
+			req.SetPathValue("game", "minecraft")
+			rec := httptest.NewRecorder()
+
+			NewHandler(fake).GameServerStatus(rec, req)
+
+			if rec.Code != 200 {
+				t.Fatalf("status = %d, want 200", rec.Code)
+			}
+			if !fake.called || fake.calledPort != tc.port {
+				t.Errorf("called = %v, port = %d, want a query with port %d", fake.called, fake.calledPort, tc.port)
+			}
+		})
+	}
+
 	t.Run("GSH-05_ErrorPath_ServiceError", func(t *testing.T) {
 		fake := &fakeGSSService{err: ErrServerOffline}
 		req := testutil.NewRequest("GET", "/gss/minecraft/status?host=1.2.3.4&port=25565", nil)
@@ -285,6 +365,86 @@ func TestSimpleGameServerStatus(t *testing.T) {
 			t.Error("QueryGameServer should not have been called")
 		}
 	})
+
+	for _, tc := range []struct{ name, query string }{
+		{"Zero", "host=1.2.3.4&port=0"},
+		{"TooLarge", "host=1.2.3.4&port=65536"},
+		{"Negative", "host=1.2.3.4&port=-1"},
+		{"Huge", "host=1.2.3.4&port=99999999999999999999"},
+	} {
+		t.Run("GSH-19_ErrorPath_PortOutOfRange_"+tc.name, func(t *testing.T) {
+			fake := &fakeGSSService{status: newTestStatus(nil)}
+			req := testutil.NewRequest("GET", "/gss/minecraft/simple?"+tc.query, nil)
+			req.SetPathValue("game", "minecraft")
+			rec := httptest.NewRecorder()
+
+			NewHandler(fake).SimpleGameServerStatus(rec, req)
+
+			var body map[string]any
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if rec.Code != 400 || body["detail"] != msgInvalidPort {
+				t.Errorf("status = %d, detail = %v, want 400 and %q", rec.Code, body["detail"], msgInvalidPort)
+			}
+			if fake.called {
+				t.Error("QueryGameServer should not have been called")
+			}
+		})
+	}
+
+	for _, tc := range []struct{ name, query string }{
+		{"Space", "host=not%20a%20host&port=25565"},
+		{"PortInHost", "host=example.com:25565&port=25565"},
+		{"LeadingHyphen", "host=-bad.example.com&port=25565"},
+		{"NoDot", "host=localhost&port=25565"},
+		{"Slash", "host=example.com/path&port=25565"},
+	} {
+		t.Run("GSH-20_ErrorPath_InvalidHost_"+tc.name, func(t *testing.T) {
+			fake := &fakeGSSService{status: newTestStatus(nil)}
+			req := testutil.NewRequest("GET", "/gss/minecraft/simple?"+tc.query, nil)
+			req.SetPathValue("game", "minecraft")
+			rec := httptest.NewRecorder()
+
+			NewHandler(fake).SimpleGameServerStatus(rec, req)
+
+			var body map[string]any
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if rec.Code != 400 || body["detail"] != msgInvalidHost {
+				t.Errorf("status = %d, detail = %v, want 400 and %q", rec.Code, body["detail"], msgInvalidHost)
+			}
+			if fake.called {
+				t.Error("QueryGameServer should not have been called")
+			}
+		})
+	}
+
+	for _, tc := range []struct {
+		name, query string
+		port        int
+	}{
+		{"LowestPort", "host=1.2.3.4&port=1", 1},
+		{"HighestPort", "host=example.com&port=65535", 65535},
+		{"IPv6", "host=::1&port=25565", 25565},
+	} {
+		t.Run("GSH-22_EdgeCase_ValidAddress_"+tc.name, func(t *testing.T) {
+			fake := &fakeGSSService{status: newTestStatus(nil)}
+			req := testutil.NewRequest("GET", "/gss/minecraft/simple?"+tc.query, nil)
+			req.SetPathValue("game", "minecraft")
+			rec := httptest.NewRecorder()
+
+			NewHandler(fake).SimpleGameServerStatus(rec, req)
+
+			if rec.Code != 200 {
+				t.Fatalf("status = %d, want 200", rec.Code)
+			}
+			if !fake.called || fake.calledPort != tc.port {
+				t.Errorf("called = %v, port = %d, want a query with port %d", fake.called, fake.calledPort, tc.port)
+			}
+		})
+	}
 }
 
 func TestSimpleGameServerStatusErrors(t *testing.T) {
