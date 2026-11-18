@@ -17,6 +17,12 @@
 | GSH-13 | SimpleGameServerStatus | Error Path | The game server query reports the server as offline | the query fails with `ErrServerOffline`, or with `ErrJavaStatus` or `ErrBedrockStatus` of the mcstatus package | 404 Not Found, `Content-Type: text/plain`, body `"Offline"` | P1 |  |
 | GSH-14 | SimpleGameServerStatus | Error Path | The game server query fails with `ErrGameUnsupported` | the query fails with `ErrGameUnsupported` | 400 Bad Request with `msgGameUnsupported` | P1 |  |
 | GSH-15 | SimpleGameServerStatus | Error Path | The game server query fails with an upstream query error | the query fails with `ErrGameQQuery`, `ErrGameDigQuery`, `ErrReadBody`, `ErrDecodeBody` or `ErrNoGameQResponse` | 502 Bad Gateway with `msgUpstreamQueryFailed`; no cause text | P1 |  |
+| GSH-17 | GameServerStatus | Error Path | The port is outside 1 to 65535 | host is valid, the port query parameter is zero, 65536, negative or a number too large for an integer | 400 Bad Request, problem detail `msgInvalidPort`, and the game server query does not run | P1 |  |
+| GSH-18 | GameServerStatus | Error Path | The host is not a domain name or an IP address | the host query parameter contains a space, carries a port, starts a label with a hyphen, has no dot or contains a slash; port valid | 400 Bad Request, problem detail `msgInvalidHost`, and the game server query does not run | P1 |  |
+| GSH-19 | SimpleGameServerStatus | Error Path | The port is outside 1 to 65535 | host is valid, the port query parameter is zero, 65536, negative or a number too large for an integer | 400 Bad Request, problem detail `msgInvalidPort`, and the game server query does not run | P1 |  |
+| GSH-20 | SimpleGameServerStatus | Error Path | The host is not a domain name or an IP address | the host query parameter contains a space, carries a port, starts a label with a hyphen, has no dot or contains a slash; port valid | 400 Bad Request, problem detail `msgInvalidHost`, and the game server query does not run | P1 |  |
+| GSH-21 | GameServerStatus | Edge Case | A valid address at the edges of the allowed range | port 1 with an IPv4 host, port 65535 with a domain name, an IPv6 host | 200 OK, and the game server query runs with that port | P2 |  |
+| GSH-22 | SimpleGameServerStatus | Edge Case | A valid address at the edges of the allowed range | port 1 with an IPv4 host, port 65535 with a domain name, an IPv6 host | 200 OK, and the game server query runs with that port | P2 |  |
 
 ## service.go
 

@@ -5,6 +5,7 @@ import (
 	"image"
 	"image/png"
 	"io/fs"
+	"net"
 	"net/http"
 	"net/netip"
 	"path"
@@ -164,6 +165,12 @@ func parseHost(address string, isBedrock bool) (string, int, bool) {
 		name = strings.ToLower(name)
 	}
 	return name, port, true
+}
+
+// ValidHost reports whether host is a domain name, an IPv4 address or an IPv6 address with no port.
+func ValidHost(host string) bool {
+	_, _, ok := parseHost(net.JoinHostPort(host, "1"), false)
+	return ok
 }
 
 func queryPortOrDefault(raw string, port int) int {
