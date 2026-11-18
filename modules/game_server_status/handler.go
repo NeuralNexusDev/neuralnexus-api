@@ -10,6 +10,11 @@ import (
 )
 
 const (
+	minPort = 1
+	maxPort = 65535
+)
+
+const (
 	msgInvalidHost             = "Invalid host"
 	msgInvalidPort             = "Invalid port"
 	msgGameQQueryFailed        = "failed to query GameQ API"
@@ -40,17 +45,26 @@ func NewHandler(s GSSService) Handler {
 	return &handler{s}
 }
 
+// hostAndPort reads the host and port query parameters and answers 400 when either is not a valid address
+func hostAndPort(w http.ResponseWriter, r *http.Request) (string, int, bool) {
+	host := r.URL.Query().Get("host")
+	if host == "" || !mcstatus.ValidHost(host) {
+		responses.BadRequest(w, r, msgInvalidHost)
+		return "", 0, false
+	}
+	port, err := strconv.Atoi(r.URL.Query().Get("port"))
+	if err != nil || port < minPort || port > maxPort {
+		responses.BadRequest(w, r, msgInvalidPort)
+		return "", 0, false
+	}
+	return host, port, true
+}
+
 // GameServerStatus - Get the game server status
 func (h *handler) GameServerStatus(w http.ResponseWriter, r *http.Request) {
 	game := r.PathValue("game")
-	host := r.URL.Query().Get("host")
-	if host == "" {
-		responses.BadRequest(w, r, msgInvalidHost)
-		return
-	}
-	port, err := strconv.Atoi(r.URL.Query().Get("port"))
-	if err != nil {
-		responses.BadRequest(w, r, msgInvalidPort)
+	host, port, ok := hostAndPort(w, r)
+	if !ok {
 		return
 	}
 
@@ -92,14 +106,8 @@ func (h *handler) GameServerStatus(w http.ResponseWriter, r *http.Request) {
 // SimpleGameServerStatus - Get the simple game server status
 func (h *handler) SimpleGameServerStatus(w http.ResponseWriter, r *http.Request) {
 	game := r.PathValue("game")
-	host := r.URL.Query().Get("host")
-	if host == "" {
-		responses.BadRequest(w, r, msgInvalidHost)
-		return
-	}
-	port, err := strconv.Atoi(r.URL.Query().Get("port"))
-	if err != nil {
-		responses.BadRequest(w, r, msgInvalidPort)
+	host, port, ok := hostAndPort(w, r)
+	if !ok {
 		return
 	}
 
@@ -109,7 +117,7 @@ func (h *handler) SimpleGameServerStatus(w http.ResponseWriter, r *http.Request)
 		w.Write([]byte(text))
 	}
 	queryType := ParseQueryType(r.URL.Query().Get("query_type"))
-	_, err = h.s.QueryGameServer(r.Context(), game, host, port, queryType)
+	_, err := h.s.QueryGameServer(r.Context(), game, host, port, queryType)
 	switch err {
 	case nil:
 		plain(http.StatusOK, "Online")
