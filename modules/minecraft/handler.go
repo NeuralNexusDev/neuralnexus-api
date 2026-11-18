@@ -116,11 +116,6 @@ func (h *handler) GetMojangPlayersByNames(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if len(names) == 0 || len(names) > 10 {
-		responses.BadRequest(w, r, msgInvalidSize)
-		return
-	}
-
 	for _, name := range names {
 		if name == "" {
 			responses.BadRequest(w, r, msgInvalidProfileName)
@@ -129,12 +124,15 @@ func (h *handler) GetMojangPlayersByNames(w http.ResponseWriter, r *http.Request
 	}
 
 	players, err := h.s.Mojang().GetMojangPlayersByNames(r.Context(), names)
-	if err != nil {
+	switch err {
+	case nil:
+		responses.StructOK(w, r, players)
+	case ErrNoNamesProvided, ErrBatchLimit:
+		responses.BadRequest(w, r, msgInvalidSize)
+	default:
 		reqctx.Log(r.Context(), "Failed to get players by names:\n\t", err.Error())
 		responses.InternalServerError(w, r, msgFailedToGetPlayers)
-		return
 	}
-	responses.StructOK(w, r, players)
 }
 
 // GetMojangProfile - Get a player's full profile from their UUID

@@ -191,7 +191,8 @@ func TestHD09to15_GetMojangPlayersByNamesHandler(t *testing.T) {
 	})
 
 	t.Run("HD-11_Empty", func(t *testing.T) {
-		h := NewHandler(&mcMockService{}).GetMojangPlayersByNames
+		svc := &mcMockService{getMojangPlayersByNames: func([]string) ([]*MojangPlayer, error) { return nil, ErrNoNamesProvided }}
+		h := NewHandler(svc).GetMojangPlayersByNames
 		w := httptest.NewRecorder()
 		h(w, post(t, `[]`, "application/json"))
 		testutil.ExpectStatus(t, w, http.StatusBadRequest)
@@ -199,7 +200,8 @@ func TestHD09to15_GetMojangPlayersByNamesHandler(t *testing.T) {
 	})
 
 	t.Run("HD-12_TooMany", func(t *testing.T) {
-		h := NewHandler(&mcMockService{}).GetMojangPlayersByNames
+		svc := &mcMockService{getMojangPlayersByNames: func([]string) ([]*MojangPlayer, error) { return nil, ErrBatchLimit }}
+		h := NewHandler(svc).GetMojangPlayersByNames
 		w := httptest.NewRecorder()
 		names := `["a","b","c","d","e","f","g","h","i","j","k"]`
 		h(w, post(t, names, "application/json"))
