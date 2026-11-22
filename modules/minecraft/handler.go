@@ -49,15 +49,11 @@ func validJavaName(name string) bool {
 		return false
 	}
 	for _, r := range name {
-		if !isJavaNameRune(r) {
+		if r != '_' && (r < '0' || r > '9') && (r < 'A' || r > 'Z') && (r < 'a' || r > 'z') {
 			return false
 		}
 	}
 	return true
-}
-
-func isJavaNameRune(r rune) bool {
-	return r == '_' || r >= '0' && r <= '9' || r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z'
 }
 
 func validGamertag(gamertag string) bool {

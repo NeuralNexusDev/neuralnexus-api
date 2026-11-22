@@ -122,10 +122,6 @@ func NewService(cfg config.Minecraft, store Store, client *http.Client, s3Textur
 
 const logFailedToReadCache = "Failed to read from cache:\n\t"
 
-func logCacheError(ctx context.Context, err error) {
-	reqctx.Log(ctx, logFailedToReadCache, err.Error())
-}
-
 // get issues a GET that is cancelled with ctx.
 func get(ctx context.Context, client *http.Client, url string) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -142,7 +138,7 @@ func (m *mojangService) GetMojangPlayerByName(ctx context.Context, name string) 
 		return cached, nil
 	}
 	if err != ErrCacheMiss {
-		logCacheError(ctx, err)
+		reqctx.Log(ctx, logFailedToReadCache, err.Error())
 	}
 
 	// Cache miss — fetch from DB
@@ -192,7 +188,7 @@ func (m *mojangService) GetMojangPlayerByUUID(ctx context.Context, id string) (*
 		return cached, nil
 	}
 	if err != ErrCacheMiss {
-		logCacheError(ctx, err)
+		reqctx.Log(ctx, logFailedToReadCache, err.Error())
 	}
 
 	// Cache miss — fetch from DB
@@ -254,7 +250,7 @@ func (m *mojangService) GetMojangPlayersByNames(ctx context.Context, names []str
 			players = append(players, player)
 		} else {
 			if err != ErrCacheMiss {
-				logCacheError(ctx, err)
+				reqctx.Log(ctx, logFailedToReadCache, err.Error())
 			}
 			// Cache miss — fetch from DB
 			player, _ := m.store.GetPlayerByName(ctx, name)
@@ -325,7 +321,7 @@ func (m *mojangService) GetMojangProfile(ctx context.Context, id string, signed 
 			return cached, nil
 		}
 		if err != ErrCacheMiss {
-			logCacheError(ctx, err)
+			reqctx.Log(ctx, logFailedToReadCache, err.Error())
 		}
 		player, _, err := m.fetchProfileFromMojang(ctx, id, true)
 		return player, err
@@ -375,7 +371,7 @@ func (m *mojangService) resolveProfile(ctx context.Context, id string) (*MojangP
 		return cached, nil
 	}
 	if err != ErrCacheMiss {
-		logCacheError(ctx, err)
+		reqctx.Log(ctx, logFailedToReadCache, err.Error())
 	}
 
 	dbProfile, err := m.store.GetProfileByUUID(ctx, id)
