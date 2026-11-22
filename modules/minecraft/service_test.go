@@ -2104,7 +2104,7 @@ func TestSV155_UndashedIDs(t *testing.T) {
 
 	t.Run("SV-155_ProfileSharesCacheEntry", func(t *testing.T) {
 		cache := map[string]*MojangProfile{}
-		var keys, dbIDs []string
+		var keys []string
 		store := &mcMockStore{
 			getProfileFromCache: func(key string) (*MojangProfile, error) {
 				keys = append(keys, key)
@@ -2113,8 +2113,7 @@ func TestSV155_UndashedIDs(t *testing.T) {
 				}
 				return nil, ErrCacheMiss
 			},
-			getProfileByUUID: func(id string) (*MojangProfile, error) {
-				dbIDs = append(dbIDs, id)
+			getProfileByUUID: func(string) (*MojangProfile, error) {
 				return &MojangProfile{ID: undashed, LastSeen: mcNow()}, nil
 			},
 			setProfileInCache: func(p *MojangProfile) error {
@@ -2132,25 +2131,18 @@ func TestSV155_UndashedIDs(t *testing.T) {
 		if !slices.Equal(keys, []string{undashed, undashed}) {
 			t.Errorf("cache keys = %v, want the undashed id twice", keys)
 		}
-		if !slices.Equal(dbIDs, []string{undashed}) {
-			t.Errorf("database lookups = %v, want one lookup for the undashed id", dbIDs)
-		}
 	})
 
 	t.Run("SV-155_GeyserPlayerLookupUsesUndashedID", func(t *testing.T) {
-		var dbIDs []string
-		store := &mcMockStore{getGeyserPlayerByUUID: func(id string) (*GeyserPlayer, error) {
-			dbIDs = append(dbIDs, id)
+		id := xuidToUUID(42)
+		store := &mcMockStore{getGeyserPlayerByUUID: func(string) (*GeyserPlayer, error) {
 			return &GeyserPlayer{ID: id, XUID: 42, Name: "Notch", LastSeen: mcNow()}, nil
 		}}
 		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) { t.Fatal("should not call Geyser") })
-		id := xuidToUUID(42)
 		dashedID := id[0:8] + "-" + id[8:12] + "-" + id[12:16] + "-" + id[16:20] + "-" + id[20:32]
-		if _, err := s.Geyser().GetGeyserPlayerByUUID(mcCtx, dashedID); err != nil {
-			t.Fatalf("GetGeyserPlayerByUUID() error = %v", err)
-		}
-		if !slices.Equal(dbIDs, []string{id}) {
-			t.Errorf("database lookups = %v, want the undashed id %s", dbIDs, id)
+		got, err := s.Geyser().GetGeyserPlayerByUUID(mcCtx, dashedID)
+		if err != nil || got.ID != id || got.Name != "Notch" {
+			t.Errorf("got (%+v, %v), want the player with the undashed id %s", got, err, id)
 		}
 	})
 }

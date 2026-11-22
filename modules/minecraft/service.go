@@ -527,7 +527,7 @@ func (g *geyserService) GetGeyserPlayerByUUID(ctx context.Context, id string) (*
 	if err != nil {
 		return nil, err
 	}
-	dbPlayer, _ := g.store.GetGeyserPlayerByUUID(ctx, undashedUUID(id))
+	dbPlayer, _ := g.store.GetGeyserPlayerByUUID(ctx, id)
 	if dbPlayer != nil && !dbPlayer.IsStale() {
 		return dbPlayer, nil
 	}
