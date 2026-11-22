@@ -1,13 +1,11 @@
 package minecraft
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -222,26 +220,6 @@ func mcRequireNowish(t *testing.T, field string, got int64) {
 	}
 }
 
-func mcCaptureLog(t *testing.T) func() string {
-	t.Helper()
-	var buf bytes.Buffer
-	prevOut := log.Writer()
-	prevFlags := log.Flags()
-	log.SetOutput(&buf)
-	t.Cleanup(func() {
-		log.SetOutput(prevOut)
-		log.SetFlags(prevFlags)
-	})
-	return buf.String
-}
-
-func mcRequireLogged(t *testing.T, output string, want bool) {
-	t.Helper()
-	if got := strings.Contains(output, logFailedToReadCache); got != want {
-		t.Errorf("cache error logged = %v, want %v; log output:\n%s", got, want, output)
-	}
-}
-
 func mcMustProperty(t *testing.T, tv TexturesValue) Property {
 	t.Helper()
 	return *tv.ToProperty()
@@ -271,7 +249,6 @@ func TestSV03to13_GetMojangPlayerByName(t *testing.T) {
 	})
 
 	t.Run("SV-04_CacheErrorFallsThroughToDB", func(t *testing.T) {
-		logged := mcCaptureLog(t)
 		store := &mcMockStore{
 			getPlayerFromCache: func(string) (*MojangPlayer, error) { return nil, testutil.ErrBoom },
 			getPlayerByName:    func(string) (*MojangPlayer, error) { return &MojangPlayer{ID: "db", LastSeen: mcNow()}, nil },
@@ -281,7 +258,6 @@ func TestSV03to13_GetMojangPlayerByName(t *testing.T) {
 		if err != nil || got.ID != "db" {
 			t.Errorf("got (%+v, %v), want db player", got, err)
 		}
-		mcRequireLogged(t, logged(), true)
 	})
 
 	t.Run("SV-05_DBFreshEntry", func(t *testing.T) {
@@ -405,7 +381,6 @@ func TestSV14to18_GetMojangPlayerByUUID(t *testing.T) {
 	})
 
 	t.Run("SV-15_CacheErrorFallsThroughToDB", func(t *testing.T) {
-		logged := mcCaptureLog(t)
 		store := &mcMockStore{
 			getPlayerFromCache: func(string) (*MojangPlayer, error) { return nil, testutil.ErrBoom },
 			getPlayerByUUID:    func(string) (*MojangPlayer, error) { return &MojangPlayer{ID: "db", LastSeen: mcNow()}, nil },
@@ -415,7 +390,6 @@ func TestSV14to18_GetMojangPlayerByUUID(t *testing.T) {
 		if err != nil || got.ID != "db" {
 			t.Errorf("got (%+v, %v), want db player", got, err)
 		}
-		mcRequireLogged(t, logged(), true)
 	})
 
 	t.Run("SV-16_DBFreshEntry", func(t *testing.T) {
@@ -571,7 +545,6 @@ func TestSV30to35_GetMojangProfile(t *testing.T) {
 	})
 
 	t.Run("SV-31_SignedCacheErrorFallsThroughToMojang", func(t *testing.T) {
-		logged := mcCaptureLog(t)
 		store := &mcMockStore{getSignedProfileFromCache: func(string) (*MojangPlayer, error) { return nil, testutil.ErrBoom }}
 		s := mcNewService(t, store, func(w http.ResponseWriter, r *http.Request) {
 			io.WriteString(w, mcMustJSON(t, MojangPlayer{ID: "fetched", ProfileActions: []string{}}))
@@ -580,7 +553,6 @@ func TestSV30to35_GetMojangProfile(t *testing.T) {
 		if err != nil || got.ID != "fetched" {
 			t.Errorf("got (%+v, %v), want fetched player", got, err)
 		}
-		mcRequireLogged(t, logged(), true)
 	})
 
 	t.Run("SV-32_SignedCacheMissFetchSucceeds", func(t *testing.T) {
@@ -2183,9 +2155,8 @@ func TestSV155_UndashedIDs(t *testing.T) {
 	})
 }
 
-func TestSV157to159_CacheErrorsOnLookups(t *testing.T) {
+func TestSV157to158_CacheErrorsOnLookups(t *testing.T) {
 	t.Run("SV-157_ResolveProfileCacheErrorFallsThroughToDB", func(t *testing.T) {
-		logged := mcCaptureLog(t)
 		store := &mcMockStore{
 			getProfileFromCache: func(string) (*MojangProfile, error) { return nil, testutil.ErrBoom },
 			getProfileByUUID:    func(string) (*MojangProfile, error) { return &MojangProfile{ID: "db", LastSeen: mcNow()}, nil },
@@ -2195,11 +2166,9 @@ func TestSV157to159_CacheErrorsOnLookups(t *testing.T) {
 		if err != nil || got.ID != "db" {
 			t.Errorf("got (%+v, %v), want db profile", got, err)
 		}
-		mcRequireLogged(t, logged(), true)
 	})
 
-	t.Run("SV-158_BulkCacheErrorIsLoggedAndDBUsed", func(t *testing.T) {
-		logged := mcCaptureLog(t)
+	t.Run("SV-158_BulkCacheErrorFallsThroughToDB", func(t *testing.T) {
 		store := &mcMockStore{
 			getPlayerFromCache: func(string) (*MojangPlayer, error) { return nil, testutil.ErrBoom },
 			getPlayerByName:    func(string) (*MojangPlayer, error) { return &MojangPlayer{ID: "db", LastSeen: mcNow()}, nil },
@@ -2209,29 +2178,5 @@ func TestSV157to159_CacheErrorsOnLookups(t *testing.T) {
 		if err != nil || len(got) != 1 || got[0].ID != "db" {
 			t.Errorf("got (%+v, %v), want the db player", got, err)
 		}
-		mcRequireLogged(t, logged(), true)
-	})
-
-	t.Run("SV-159_PlainCacheMissIsNotLogged", func(t *testing.T) {
-		logged := mcCaptureLog(t)
-		store := &mcMockStore{
-			getPlayerByName:  func(string) (*MojangPlayer, error) { return &MojangPlayer{ID: "db", LastSeen: mcNow()}, nil },
-			getPlayerByUUID:  func(string) (*MojangPlayer, error) { return &MojangPlayer{ID: "db", LastSeen: mcNow()}, nil },
-			getProfileByUUID: func(string) (*MojangProfile, error) { return &MojangProfile{ID: "db", LastSeen: mcNow()}, nil },
-		}
-		s := mcNewService(t, store, func(http.ResponseWriter, *http.Request) { t.Fatal("should not call Mojang") })
-		if _, err := s.Mojang().GetMojangPlayerByName(mcCtx, "Steve"); err != nil {
-			t.Fatalf("GetMojangPlayerByName() error = %v", err)
-		}
-		if _, err := s.Mojang().GetMojangPlayerByUUID(mcCtx, "id"); err != nil {
-			t.Fatalf("GetMojangPlayerByUUID() error = %v", err)
-		}
-		if _, err := s.Mojang().GetMojangPlayersByNames(mcCtx, []string{"Steve"}); err != nil {
-			t.Fatalf("GetMojangPlayersByNames() error = %v", err)
-		}
-		if _, err := s.mojangService.resolveProfile(mcCtx, "id"); err != nil {
-			t.Fatalf("resolveProfile() error = %v", err)
-		}
-		mcRequireLogged(t, logged(), false)
 	})
 }

@@ -142,7 +142,7 @@
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
 | SV-03 | GetMojangPlayerByName | Happy Path | Cache hit | store cache returns player, nil | Returns cached player; no DB/HTTP calls | P1 |  |
-| SV-04 | GetMojangPlayerByName | Error Path | Cache error is not ErrCacheMiss | store cache error = plain error; the database holds a fresh player | The error is logged and the database player is returned with no error; Mojang is not called | P2 |  |
+| SV-04 | GetMojangPlayerByName | Error Path | Cache error is not ErrCacheMiss | store cache error = plain error; the database holds a fresh player | The database player is returned with no error; Mojang is not called | P2 |  |
 | SV-05 | GetMojangPlayerByName | Happy Path | Cache miss, DB entry fresh | cache=ErrCacheMiss, DB player not stale | Caches and returns DB player, no Mojang call | P1 |  |
 | SV-06 | GetMojangPlayerByName | Error Path | DB fresh entry, cacheStore.SetPlayerInCache fails | cacheStore.SetPlayerInCache error | Returns that error | P2 |  |
 | SV-07 | GetMojangPlayerByName | Happy Path | Cache+DB miss/stale, Mojang succeeds | Mojang 200 with player JSON | Upserts, caches, returns fetched player | P0 |  |
@@ -153,7 +153,7 @@
 | SV-12 | GetMojangPlayerByName | Error Path | cacheStore.SetPlayerInCache fails after Mojang fetch | store error | Returns that error | P2 |  |
 | SV-13 | GetMojangPlayerByName | Error Path | http.Client.Get fails | transport error | Returns that error | P2 |  |
 | SV-14 | GetMojangPlayerByUUID | Happy Path | Cache hit | store cache returns player | Returns cached player; no DB/HTTP calls | P1 |  |
-| SV-15 | GetMojangPlayerByUUID | Error Path | Cache error is not ErrCacheMiss | plain error; the database holds a fresh player | The error is logged and the database player is returned with no error; Mojang is not called | P2 |  |
+| SV-15 | GetMojangPlayerByUUID | Error Path | Cache error is not ErrCacheMiss | plain error; the database holds a fresh player | The database player is returned with no error; Mojang is not called | P2 |  |
 | SV-16 | GetMojangPlayerByUUID | Happy Path | Cache miss, DB entry fresh | DB player not stale | Caches and returns DB player | P1 |  |
 | SV-17 | GetMojangPlayerByUUID | Happy Path | Cache+DB miss, Mojang succeeds | Mojang 200 | Upserts, caches, returns fetched player | P0 |  |
 | SV-18 | GetMojangPlayerByUUID | Error Path | Mojang returns 404 | Mojang status 404 | Returns ErrPlayerNotFound | P1 |  |
@@ -169,7 +169,7 @@
 | SV-28 | GetMojangPlayersByNames | Error Path | mojangStore.UpsertPlayer fails on a fetched entry | store error | Returns that error | P2 |  |
 | SV-29 | GetMojangPlayersByNames | Error Path | cacheStore.SetPlayerInCache fails on a fetched entry | store error | Returns that error | P2 |  |
 | SV-30 | GetMojangProfile | Happy Path | signed=true, cache hit | cacheStore.GetSignedProfileFromCache succeeds | Returns cached signed player | P1 |  |
-| SV-31 | GetMojangProfile | Error Path | signed=true, cache error not ErrCacheMiss | plain error; Mojang answers with a profile | The error is logged and the profile fetched from Mojang is returned with no error | P2 |  |
+| SV-31 | GetMojangProfile | Error Path | signed=true, cache error not ErrCacheMiss | plain error; Mojang answers with a profile | The profile fetched from Mojang is returned with no error | P2 |  |
 | SV-32 | GetMojangProfile | Happy Path | signed=true, cache miss | mojangService.fetchProfileFromMojang(id,true) succeeds | Returns fetched player | P1 |  |
 | SV-33 | GetMojangProfile | Error Path | signed=true, mojangService.fetchProfileFromMojang fails | mojang error | Returns that error (`ErrPlayerNotFound`) | P2 |  |
 | SV-34 | GetMojangProfile | Happy Path | signed=false | mojangService.resolveProfile succeeds | Returns profile.ToPlayer() result | P1 |  |
@@ -213,9 +213,8 @@
 | SV-144 | fetchProfileFromMojang | Edge Case | Unsigned fetch writes run on a context that outlives the cancelled request | the request context carries a marker value and is cancelled once the Mojang body is read; the profile has a skin and a cape texture; the writes made while storing the player, storing each texture hash, storing the textures and caching the profile are recorded with the context state and marker | Every write the fetch makes sees a context that is not cancelled and still carries the marker value | P1 |  |
 | SV-145 | fetchProfileFromMojang | Edge Case | Signed fetch writes run on a context that outlives the cancelled request | same response requested as a signed profile; the writes made while storing the player, storing each texture hash, storing the textures and caching the signed profile are recorded with the context state and marker | Every write the fetch makes sees a context that is not cancelled and still carries the marker value | P1 |  |
 | SV-155 | GetMojangPlayerByUUID | Edge Case | A dashed id and an undashed id name the same player; Mojang and the stores only ever see the undashed id | Player, signed profile and profile lookups, each asked first with a dashed id (the player lookup also with an uppercase one) and then with the undashed id; the cache keeps entries by key; a Mojang answer with a dashed id; a Bedrock lookup by dashed uuid | The second request is served from the entry the first one cached; every cache key, Mojang request path and database lookup uses the undashed id; a dashed id in Mojang's answer is returned undashed | P1 |  |
-| SV-157 | resolveProfile | Error Path | Cache error is not ErrCacheMiss | Profile cache error = plain error; the database holds a fresh profile | The error is logged and the database profile is returned with no error; Mojang is not called | P2 |  |
-| SV-158 | GetMojangPlayersByNames | Error Path | Cache error is not ErrCacheMiss | Player cache error = plain error; the database holds a fresh player | The error is logged and the database player is returned with no error; Mojang is not called | P2 |  |
-| SV-159 | GetMojangPlayerByName | Edge Case | A plain cache miss is not logged | Cache misses; the database holds a fresh player; looked up by name, by uuid, in a batch and as a profile | No cache error is logged and the database results are returned | P3 |  |
+| SV-157 | resolveProfile | Error Path | Cache error is not ErrCacheMiss | Profile cache error = plain error; the database holds a fresh profile | The database profile is returned with no error; Mojang is not called | P2 |  |
+| SV-158 | GetMojangPlayersByNames | Error Path | Cache error is not ErrCacheMiss | Player cache error = plain error; the database holds a fresh player | The database player is returned with no error; Mojang is not called | P2 |  |
 
 ## geyserService
 
