@@ -203,6 +203,9 @@ func TestTY34to35_XuidToUUID(t *testing.T) {
 		if _, err := uuid.Parse(got); err != nil {
 			t.Fatalf("xuidToUUID() = %q is not a valid UUID: %v", got, err)
 		}
+		if len(got) != 32 || strings.ContainsAny(got, "-ABCDEF") {
+			t.Errorf("xuidToUUID() = %q, want 32 lowercase hex characters without dashes", got)
+		}
 		back, err := uuidToXUID(got)
 		if err != nil || back != 123456789 {
 			t.Errorf("round trip failed: uuidToXUID(%q) = (%d, %v), want (123456789, nil)", got, back, err)
@@ -210,7 +213,7 @@ func TestTY34to35_XuidToUUID(t *testing.T) {
 	})
 
 	t.Run("TY-35_Zero", func(t *testing.T) {
-		want := "00000000-0000-0000-0000-000000000000"
+		want := "00000000000000000000000000000000"
 		if got := xuidToUUID(0); got != want {
 			t.Errorf("xuidToUUID(0) = %q, want %q", got, want)
 		}

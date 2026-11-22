@@ -168,13 +168,14 @@ func (m *mojangStore) GetPlayerByUUID(ctx context.Context, id string) (*MojangPl
 	if err != nil {
 		return nil, playerNotFound(err)
 	}
+	player.ID = undashedUUID(player.ID)
 	return player, nil
 }
 
 // GetPlayerByName gets a player by name from the database
 func (m *mojangStore) GetPlayerByName(ctx context.Context, name string) (*MojangPlayer, error) {
 	rows, err := m.db.Query(ctx,
-		"SELECT id, name, legacy, demo, first_seen, last_seen FROM players WHERE name = $1", name)
+		"SELECT id, name, legacy, demo, first_seen, last_seen FROM players WHERE name = $1 ORDER BY last_seen DESC LIMIT 1", name)
 	if err != nil {
 		return nil, err
 	}
@@ -182,6 +183,7 @@ func (m *mojangStore) GetPlayerByName(ctx context.Context, name string) (*Mojang
 	if err != nil {
 		return nil, playerNotFound(err)
 	}
+	player.ID = undashedUUID(player.ID)
 	return player, nil
 }
 
@@ -210,7 +212,7 @@ func (m *mojangStore) GetProfileByUUID(ctx context.Context, id string) (*MojangP
 	}
 
 	return &MojangProfile{
-		ID:             player.ID,
+		ID:             undashedUUID(player.ID),
 		Name:           player.Name,
 		Legacy:         player.Legacy,
 		Demo:           player.Demo,
@@ -283,6 +285,7 @@ func (g *geyserStore) GetGeyserPlayerByUUID(ctx context.Context, floodgateUUID s
 	if err != nil {
 		return nil, playerNotFound(err)
 	}
+	player.ID = undashedUUID(player.ID)
 	return player, nil
 }
 
@@ -301,6 +304,7 @@ func (g *geyserStore) GetGeyserPlayerByGamertag(ctx context.Context, gamertag st
 	if err != nil {
 		return nil, playerNotFound(err)
 	}
+	player.ID = undashedUUID(player.ID)
 	return player, nil
 }
 
