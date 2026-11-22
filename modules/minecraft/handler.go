@@ -37,15 +37,8 @@ const (
 	logFailedToGetPlayerProfile  = "Failed to get player profile:\n\t"
 )
 
-const (
-	javaNameMinLength = 3
-	javaNameMaxLength = 16
-	gamertagMaxRunes  = 16
-	gamertagMaxBytes  = 128
-)
-
 func validJavaName(name string) bool {
-	if len(name) < javaNameMinLength || len(name) > javaNameMaxLength {
+	if len(name) < 3 || len(name) > 16 {
 		return false
 	}
 	for _, r := range name {
@@ -57,7 +50,7 @@ func validJavaName(name string) bool {
 }
 
 func validGamertag(gamertag string) bool {
-	if len(gamertag) > gamertagMaxBytes || !utf8.ValidString(gamertag) {
+	if len(gamertag) > 128 || !utf8.ValidString(gamertag) {
 		return false
 	}
 	base := 0
@@ -69,7 +62,7 @@ func validGamertag(gamertag string) bool {
 			base++
 		}
 	}
-	return base >= 1 && base <= gamertagMaxRunes
+	return base >= 1 && base <= 16
 }
 
 type Handler interface {
