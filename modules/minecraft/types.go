@@ -79,7 +79,6 @@ func ParseTextureValue(ctx context.Context, value string) *TexturesValue {
 		reqctx.Log(ctx, "Failed to unmarshal texture property:\n\t", err.Error())
 		return nil
 	}
-	textures.ProfileID = undashedUUID(textures.ProfileID)
 	return &textures
 }
 
@@ -262,7 +261,7 @@ func (t *TexturesRow) Value(playerName, textureUrl string) *TexturesValue {
 
 	return &TexturesValue{
 		Timestamp:   t.LastSeen,
-		ProfileID:   undashedUUID(t.PlayerId),
+		ProfileID:   t.PlayerId,
 		ProfileName: playerName,
 		Textures:    textures,
 	}

@@ -363,6 +363,7 @@ func (t *textureStore) GetTextures(ctx context.Context, table, id, name string) 
 		}
 		return nil, err
 	}
+	row.PlayerId = undashedUUID(row.PlayerId)
 	return row.Value(name, t.cfg.LookupTexture), nil
 }
 

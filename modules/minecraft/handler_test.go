@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/goccy/go-json"
+	"github.com/google/uuid"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/test/testutil"
 )
@@ -971,4 +972,70 @@ func TestHD73to79_NameValidationHandlers(t *testing.T) {
 			})
 		}
 	})
+}
+
+func TestHD80to81_UUIDRoutesPassUndashedID(t *testing.T) {
+	routes := []struct {
+		name       string
+		id         string
+		invalidMsg string
+		serve      func(got *string) http.HandlerFunc
+	}{
+		{"MojangPlayerByUUID", "550e8400e29b41d4a716446655440000", msgNotAValidUUID, func(got *string) http.HandlerFunc {
+			return NewHandler(&mcMockService{getMojangPlayerByUUID: func(id string) (*MojangPlayer, error) {
+				*got = id
+				return &MojangPlayer{ID: id}, nil
+			}}).GetMojangPlayerByUUID
+		}},
+		{"MojangProfile", "550e8400e29b41d4a716446655440000", msgNotAValidUUID, func(got *string) http.HandlerFunc {
+			return NewHandler(&mcMockService{getMojangProfile: func(id string, _ bool) (*MojangPlayer, error) {
+				*got = id
+				return &MojangPlayer{ID: id}, nil
+			}}).GetMojangProfile
+		}},
+		{"Profile", "550e8400e29b41d4a716446655440000", msgNotAValidUUID, func(got *string) http.HandlerFunc {
+			return NewHandler(&mcMockService{getProfile: func(id string) (*MojangProfile, error) {
+				*got = id
+				return &MojangProfile{ID: id}, nil
+			}}).GetProfile
+		}},
+		{"GeyserProfile", xuidToUUID(42), msgNotAValidBedrockUUID, func(got *string) http.HandlerFunc {
+			return NewHandler(&mcMockService{getGeyserProfile: func(id string) (*GeyserProfile, error) {
+				*got = id
+				return &GeyserProfile{ID: id}, nil
+			}}).GetGeyserProfile
+		}},
+	}
+
+	for _, route := range routes {
+		dashed := uuid.MustParse(route.id).String()
+		spellings := map[string]string{
+			"Dashed":     dashed,
+			"UpperDash":  strings.ToUpper(dashed),
+			"Undashed":   route.id,
+			"UpperPlain": strings.ToUpper(route.id),
+		}
+		for spelling, value := range spellings {
+			t.Run("HD-80_"+route.name+"_"+spelling, func(t *testing.T) {
+				var got string
+				w := httptest.NewRecorder()
+				route.serve(&got)(w, mcRequest(t, http.MethodGet, "/id", nil, map[string]string{"uuid": value}))
+				testutil.ExpectStatus(t, w, http.StatusOK)
+				if got != route.id {
+					t.Errorf("service id = %q, want %q", got, route.id)
+				}
+			})
+		}
+
+		t.Run("HD-81_"+route.name+"_InvalidUUID", func(t *testing.T) {
+			var got string
+			w := httptest.NewRecorder()
+			route.serve(&got)(w, mcRequest(t, http.MethodGet, "/id", nil, map[string]string{"uuid": "not-a-uuid"}))
+			testutil.ExpectStatus(t, w, http.StatusBadRequest)
+			testutil.ExpectDetail(t, w, route.invalidMsg+"not-a-uuid")
+			if got != "" {
+				t.Errorf("service was called with %q for an invalid uuid", got)
+			}
+		})
+	}
 }
