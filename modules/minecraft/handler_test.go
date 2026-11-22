@@ -110,7 +110,7 @@ func TestHD01to04_GetMojangPlayerByNameHandler(t *testing.T) {
 		svc := &mcMockService{getMojangPlayerByName: func(string) (*MojangPlayer, error) { return nil, ErrPlayerNotFound }}
 		h := NewHandler(svc).GetMojangPlayerByName
 		w := httptest.NewRecorder()
-		h(w, mcRequest(t, http.MethodGet, "/name/x", nil, map[string]string{"name": "x"}))
+		h(w, mcRequest(t, http.MethodGet, "/name/Alex", nil, map[string]string{"name": "Alex"}))
 		testutil.ExpectStatus(t, w, http.StatusNotFound)
 		testutil.ExpectDetail(t, w, msgPlayerNotFound)
 	})
@@ -119,7 +119,7 @@ func TestHD01to04_GetMojangPlayerByNameHandler(t *testing.T) {
 		svc := &mcMockService{getMojangPlayerByName: func(string) (*MojangPlayer, error) { return nil, testutil.ErrBoom }}
 		h := NewHandler(svc).GetMojangPlayerByName
 		w := httptest.NewRecorder()
-		h(w, mcRequest(t, http.MethodGet, "/name/x", nil, map[string]string{"name": "x"}))
+		h(w, mcRequest(t, http.MethodGet, "/name/Alex", nil, map[string]string{"name": "Alex"}))
 		testutil.ExpectStatus(t, w, http.StatusInternalServerError)
 		testutil.ExpectDetail(t, w, msgFailedToGetPlayer)
 	})
@@ -203,7 +203,7 @@ func TestHD09to15_GetMojangPlayersByNamesHandler(t *testing.T) {
 		svc := &mcMockService{getMojangPlayersByNames: func([]string) ([]*MojangPlayer, error) { return nil, ErrBatchLimit }}
 		h := NewHandler(svc).GetMojangPlayersByNames
 		w := httptest.NewRecorder()
-		names := `["a","b","c","d","e","f","g","h","i","j","k"]`
+		names := `["aaa","bbb","ccc","ddd","eee","fff","ggg","hhh","iii","jjj","kkk"]`
 		h(w, post(t, names, "application/json"))
 		testutil.ExpectStatus(t, w, http.StatusBadRequest)
 		testutil.ExpectDetail(t, w, msgInvalidSize)
@@ -212,7 +212,7 @@ func TestHD09to15_GetMojangPlayersByNamesHandler(t *testing.T) {
 	t.Run("HD-13_EmptyNameInBatch", func(t *testing.T) {
 		h := NewHandler(&mcMockService{}).GetMojangPlayersByNames
 		w := httptest.NewRecorder()
-		h(w, post(t, `["a",""]`, "application/json"))
+		h(w, post(t, `["abc",""]`, "application/json"))
 		testutil.ExpectStatus(t, w, http.StatusBadRequest)
 		testutil.ExpectDetail(t, w, msgInvalidProfileName)
 	})
@@ -227,7 +227,7 @@ func TestHD09to15_GetMojangPlayersByNamesHandler(t *testing.T) {
 		}}
 		h := NewHandler(svc).GetMojangPlayersByNames
 		w := httptest.NewRecorder()
-		h(w, post(t, `["a","b"]`, "application/json"))
+		h(w, post(t, `["abc","def"]`, "application/json"))
 		testutil.ExpectStatus(t, w, http.StatusOK)
 		var got []MojangPlayer
 		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil || len(got) != 2 {
@@ -239,7 +239,7 @@ func TestHD09to15_GetMojangPlayersByNamesHandler(t *testing.T) {
 		svc := &mcMockService{getMojangPlayersByNames: func([]string) ([]*MojangPlayer, error) { return nil, testutil.ErrBoom }}
 		h := NewHandler(svc).GetMojangPlayersByNames
 		w := httptest.NewRecorder()
-		h(w, post(t, `["a"]`, "application/json"))
+		h(w, post(t, `["abc"]`, "application/json"))
 		testutil.ExpectStatus(t, w, http.StatusInternalServerError)
 		testutil.ExpectDetail(t, w, msgFailedToGetPlayers)
 	})
@@ -355,7 +355,7 @@ func TestHD25to28_GetProfileByNameHandler(t *testing.T) {
 		svc := &mcMockService{getProfileByName: func(string) (*MojangProfile, error) { return nil, ErrPlayerNotFound }}
 		h := NewHandler(svc).GetProfileByName
 		w := httptest.NewRecorder()
-		h(w, mcRequest(t, http.MethodGet, "/pn/x", nil, map[string]string{"name": "x"}))
+		h(w, mcRequest(t, http.MethodGet, "/pn/Alex", nil, map[string]string{"name": "Alex"}))
 		testutil.ExpectStatus(t, w, http.StatusNotFound)
 		testutil.ExpectDetail(t, w, msgPlayerNotFound)
 	})
@@ -364,7 +364,7 @@ func TestHD25to28_GetProfileByNameHandler(t *testing.T) {
 		svc := &mcMockService{getProfileByName: func(string) (*MojangProfile, error) { return nil, testutil.ErrBoom }}
 		h := NewHandler(svc).GetProfileByName
 		w := httptest.NewRecorder()
-		h(w, mcRequest(t, http.MethodGet, "/pn/x", nil, map[string]string{"name": "x"}))
+		h(w, mcRequest(t, http.MethodGet, "/pn/Alex", nil, map[string]string{"name": "Alex"}))
 		testutil.ExpectStatus(t, w, http.StatusInternalServerError)
 		testutil.ExpectDetail(t, w, msgFailedToGetPlayerProfile)
 	})
@@ -638,6 +638,7 @@ func TestHD59to65_GetGeyserPlayerByXUIDHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		h(w, mcRequest(t, http.MethodGet, "/gx/42", nil, map[string]string{"xuid": "42"}))
 		testutil.ExpectStatus(t, w, http.StatusBadRequest)
+		testutil.ExpectDetail(t, w, msgInvalidXuid)
 	})
 
 	t.Run("HD-64_OK", func(t *testing.T) {
@@ -750,5 +751,224 @@ func TestHD66to72_GetGeyserProfileByXUIDHandler(t *testing.T) {
 		h(w, mcRequest(t, http.MethodGet, "/gpx/42", nil, map[string]string{"xuid": "42"}))
 		testutil.ExpectStatus(t, w, http.StatusInternalServerError)
 		testutil.ExpectDetail(t, w, msgFailedToGetGeyserProfile)
+	})
+}
+
+type nameCase struct {
+	name  string
+	value string
+}
+
+var invalidJavaNames = []nameCase{
+	{"TooShort", "ab"},
+	{"TooLong", "Abcdefghij_123456"},
+	{"Space", "bad name"},
+	{"Symbols", "_E++EEEE"},
+	{"NonASCII", "Ste\u00e9ve"},
+}
+
+var validJavaNames = []nameCase{
+	{"MinLength", "abc"},
+	{"MaxLength", "Abcdefghij_12345"},
+}
+
+var invalidGamertags = []nameCase{
+	{"TooManyCharacters", "Abcdefghijklmnopq"},
+	{"ControlCharacter", "a\u0007b"},
+	{"TooManyBytes", strings.Repeat("a", 129)},
+	{"InvalidUTF8", "a\xffb"},
+}
+
+var validGamertags = []nameCase{
+	{"SixteenASCII", "Abcdefghijklmnop"},
+	{"WithDiscriminator", "Name#1234"},
+	{"ThaiWithDiacritics", strings.Repeat("\u0e01\u0e34", 12)},
+	{"SingleCharacter", "x"},
+}
+
+func serveName(t *testing.T, serve http.HandlerFunc, key, value string) *httptest.ResponseRecorder {
+	t.Helper()
+	w := httptest.NewRecorder()
+	serve(w, mcRequest(t, http.MethodGet, "/n", nil, map[string]string{key: value}))
+	return w
+}
+
+func TestHD73to79_NameValidationHandlers(t *testing.T) {
+	t.Run("HD-73_GetMojangPlayerByNameInvalid", func(t *testing.T) {
+		for _, c := range invalidJavaNames {
+			t.Run("HD-73_"+c.name, func(t *testing.T) {
+				var called bool
+				svc := &mcMockService{getMojangPlayerByName: func(string) (*MojangPlayer, error) {
+					called = true
+					return &MojangPlayer{}, nil
+				}}
+				w := serveName(t, NewHandler(svc).GetMojangPlayerByName, "name", c.value)
+				testutil.ExpectStatus(t, w, http.StatusBadRequest)
+				testutil.ExpectDetail(t, w, msgInvalidName)
+				if called {
+					t.Error("service was called for an invalid name")
+				}
+			})
+		}
+	})
+
+	t.Run("HD-74_ValidJavaNamesReachService", func(t *testing.T) {
+		for _, c := range validJavaNames {
+			t.Run("HD-74_MojangPlayer"+c.name, func(t *testing.T) {
+				var got string
+				svc := &mcMockService{getMojangPlayerByName: func(name string) (*MojangPlayer, error) {
+					got = name
+					return &MojangPlayer{Name: name}, nil
+				}}
+				w := serveName(t, NewHandler(svc).GetMojangPlayerByName, "name", c.value)
+				testutil.ExpectStatus(t, w, http.StatusOK)
+				if got != c.value {
+					t.Errorf("service name = %q, want %q", got, c.value)
+				}
+			})
+
+			t.Run("HD-74_MojangPlayerNotFound"+c.name, func(t *testing.T) {
+				svc := &mcMockService{getMojangPlayerByName: func(string) (*MojangPlayer, error) { return nil, ErrPlayerNotFound }}
+				w := serveName(t, NewHandler(svc).GetMojangPlayerByName, "name", c.value)
+				testutil.ExpectStatus(t, w, http.StatusNotFound)
+				testutil.ExpectDetail(t, w, msgPlayerNotFound)
+			})
+
+			t.Run("HD-74_Profile"+c.name, func(t *testing.T) {
+				var got string
+				svc := &mcMockService{getProfileByName: func(name string) (*MojangProfile, error) {
+					got = name
+					return &MojangProfile{Name: name}, nil
+				}}
+				w := serveName(t, NewHandler(svc).GetProfileByName, "name", c.value)
+				testutil.ExpectStatus(t, w, http.StatusOK)
+				if got != c.value {
+					t.Errorf("service name = %q, want %q", got, c.value)
+				}
+			})
+		}
+	})
+
+	t.Run("HD-75_GetProfileByNameInvalid", func(t *testing.T) {
+		for _, c := range invalidJavaNames {
+			t.Run("HD-75_"+c.name, func(t *testing.T) {
+				var called bool
+				svc := &mcMockService{getProfileByName: func(string) (*MojangProfile, error) {
+					called = true
+					return &MojangProfile{}, nil
+				}}
+				w := serveName(t, NewHandler(svc).GetProfileByName, "name", c.value)
+				testutil.ExpectStatus(t, w, http.StatusBadRequest)
+				testutil.ExpectDetail(t, w, msgInvalidName)
+				if called {
+					t.Error("service was called for an invalid name")
+				}
+			})
+		}
+	})
+
+	t.Run("HD-76_BulkNamesValidation", func(t *testing.T) {
+		post := func(body string) *http.Request {
+			r := testutil.NewRequest(http.MethodPost, "/names", strings.NewReader(body))
+			r.Header.Set("Content-Type", "application/json")
+			return r
+		}
+
+		for _, c := range invalidJavaNames {
+			t.Run("HD-76_"+c.name, func(t *testing.T) {
+				var called bool
+				svc := &mcMockService{getMojangPlayersByNames: func([]string) ([]*MojangPlayer, error) {
+					called = true
+					return nil, nil
+				}}
+				w := httptest.NewRecorder()
+				NewHandler(svc).GetMojangPlayersByNames(w, post(`["Steve","`+c.value+`","Alex"]`))
+				testutil.ExpectStatus(t, w, http.StatusBadRequest)
+				testutil.ExpectDetail(t, w, msgInvalidProfileName)
+				if called {
+					t.Error("service was called with an invalid name in the batch")
+				}
+			})
+		}
+
+		t.Run("HD-76_ValidBatch", func(t *testing.T) {
+			var got []string
+			svc := &mcMockService{getMojangPlayersByNames: func(names []string) ([]*MojangPlayer, error) {
+				got = names
+				return []*MojangPlayer{{Name: names[0]}, {Name: names[1]}}, nil
+			}}
+			w := httptest.NewRecorder()
+			NewHandler(svc).GetMojangPlayersByNames(w, post(`["abc","Abcdefghij_12345"]`))
+			testutil.ExpectStatus(t, w, http.StatusOK)
+			if len(got) != 2 || got[0] != "abc" || got[1] != "Abcdefghij_12345" {
+				t.Errorf("service names = %v, want [abc Abcdefghij_12345]", got)
+			}
+		})
+	})
+
+	t.Run("HD-77_GetGeyserPlayerByGamertagInvalid", func(t *testing.T) {
+		for _, c := range invalidGamertags {
+			t.Run("HD-77_"+c.name, func(t *testing.T) {
+				var called bool
+				svc := &mcMockService{getGeyserXUID: func(string) (*GeyserPlayer, error) {
+					called = true
+					return &GeyserPlayer{}, nil
+				}}
+				w := serveName(t, NewHandler(svc).GetGeyserPlayerByGamertag, "gamertag", c.value)
+				testutil.ExpectStatus(t, w, http.StatusBadRequest)
+				testutil.ExpectDetail(t, w, msgInvalidGamertag)
+				if called {
+					t.Error("service was called for an invalid gamertag")
+				}
+			})
+		}
+	})
+
+	t.Run("HD-78_GetGeyserProfileByNameInvalid", func(t *testing.T) {
+		for _, c := range invalidGamertags {
+			t.Run("HD-78_"+c.name, func(t *testing.T) {
+				var called bool
+				svc := &mcMockService{getGeyserProfileByName: func(string) (*GeyserProfile, error) {
+					called = true
+					return &GeyserProfile{}, nil
+				}}
+				w := serveName(t, NewHandler(svc).GetGeyserProfileByName, "name", c.value)
+				testutil.ExpectStatus(t, w, http.StatusBadRequest)
+				testutil.ExpectDetail(t, w, msgInvalidGamertag)
+				if called {
+					t.Error("service was called for an invalid gamertag")
+				}
+			})
+		}
+	})
+
+	t.Run("HD-79_ValidGamertagsReachService", func(t *testing.T) {
+		for _, c := range validGamertags {
+			t.Run("HD-79_Player"+c.name, func(t *testing.T) {
+				var got string
+				svc := &mcMockService{getGeyserXUID: func(gamertag string) (*GeyserPlayer, error) {
+					got = gamertag
+					return &GeyserPlayer{Name: gamertag}, nil
+				}}
+				w := serveName(t, NewHandler(svc).GetGeyserPlayerByGamertag, "gamertag", c.value)
+				testutil.ExpectStatus(t, w, http.StatusOK)
+				if got != c.value {
+					t.Errorf("service gamertag = %q, want %q", got, c.value)
+				}
+			})
+
+			t.Run("HD-79_Profile"+c.name, func(t *testing.T) {
+				var got string
+				svc := &mcMockService{getGeyserProfileByName: func(gamertag string) (*GeyserProfile, error) {
+					got = gamertag
+					return &GeyserProfile{Name: gamertag}, nil
+				}}
+				w := serveName(t, NewHandler(svc).GetGeyserProfileByName, "name", c.value)
+				testutil.ExpectStatus(t, w, http.StatusOK)
+				if got != c.value {
+					t.Errorf("service gamertag = %q, want %q", got, c.value)
+				}
+			})
+		}
 	})
 }
