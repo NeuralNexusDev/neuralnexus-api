@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -78,6 +79,7 @@ func ParseTextureValue(ctx context.Context, value string) *TexturesValue {
 		reqctx.Log(ctx, "Failed to unmarshal texture property:\n\t", err.Error())
 		return nil
 	}
+	textures.ProfileID = undashedUUID(textures.ProfileID)
 	return &textures
 }
 
@@ -260,7 +262,7 @@ func (t *TexturesRow) Value(playerName, textureUrl string) *TexturesValue {
 
 	return &TexturesValue{
 		Timestamp:   t.LastSeen,
-		ProfileID:   t.PlayerId,
+		ProfileID:   undashedUUID(t.PlayerId),
 		ProfileName: playerName,
 		Textures:    textures,
 	}
@@ -316,10 +318,17 @@ func (s *GeyserSkin) FromTexturesValue(t *TexturesValue) error {
 }
 
 // xuidToUUID derives a synthetic UUID from an Xbox XUID: its zero-padded hex
-// representation, formatted as a standard UUID.
+// representation, as 32 undashed characters.
 func xuidToUUID(xuid int64) string {
-	hex := fmt.Sprintf("%032x", uint64(xuid))
-	return hex[0:8] + "-" + hex[8:12] + "-" + hex[12:16] + "-" + hex[16:20] + "-" + hex[20:32]
+	return fmt.Sprintf("%032x", uint64(xuid))
+}
+
+func undashedUUID(id string) string {
+	parsed, err := uuid.Parse(id)
+	if err != nil {
+		return id
+	}
+	return hex.EncodeToString(parsed[:])
 }
 
 // uuidToXUID reverses xuidToUUID. It errors on a malformed UUID or one whose

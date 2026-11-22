@@ -96,15 +96,16 @@ func TestST02to04_GetPlayerByUUID(t *testing.T) {
 	t.Run("ST-03_Live_Found", func(t *testing.T) {
 		s := mcMojangStore(testutil.LivePool(t, "archive"))
 		id := uuid.New().String()
+		undashed := strings.ReplaceAll(id, "-", "")
 		if err := s.UpsertPlayer(mcCtx, &MojangPlayer{ID: id, Name: "Steve"}, false); err != nil {
 			t.Fatalf("seed UpsertPlayer() error = %v", err)
 		}
-		got, err := s.GetPlayerByUUID(mcCtx, id)
+		got, err := s.GetPlayerByUUID(mcCtx, undashed)
 		if err != nil {
 			t.Fatalf("GetPlayerByUUID() error = %v", err)
 		}
-		if got.ID != id || got.Name != "Steve" {
-			t.Errorf("got %+v, want id=%s name=Steve", got, id)
+		if got.ID != undashed || got.Name != "Steve" {
+			t.Errorf("got %+v, want id=%s name=Steve", got, undashed)
 		}
 	})
 
@@ -129,8 +130,8 @@ func TestST05to07_GetPlayerByName(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetPlayerByName() error = %v", err)
 		}
-		if got.ID != id {
-			t.Errorf("got %+v, want id=%s", got, id)
+		if want := strings.ReplaceAll(id, "-", ""); got.ID != want {
+			t.Errorf("got %+v, want id=%s", got, want)
 		}
 	})
 
@@ -139,6 +140,33 @@ func TestST05to07_GetPlayerByName(t *testing.T) {
 		_, err := s.GetPlayerByName(mcCtx, "definitely-not-a-real-name-"+mcUniqueHash("n"))
 		if !errors.Is(err, ErrPlayerNotFound) {
 			t.Errorf("error = %v, want %v", err, ErrPlayerNotFound)
+		}
+	})
+}
+
+func TestST82_GetPlayerByNameDuplicates(t *testing.T) {
+	t.Run("ST-82_Live_NewestLastSeenWins", func(t *testing.T) {
+		db := testutil.LivePool(t, "archive")
+		name := "Name_" + mcUniqueHash("n")
+		older, newer := uuid.New().String(), uuid.New().String()
+		now := time.Now().UnixMilli()
+		for _, row := range []struct {
+			id       string
+			lastSeen int64
+		}{{newer, now}, {older, now - 1000}} {
+			_, err := db.Exec(mcCtx, `
+				INSERT INTO players (id, name, legacy, demo, profile_actions, first_seen, last_seen)
+				VALUES ($1, $2, false, false, '[]', $3, $3)`, row.id, name, row.lastSeen)
+			if err != nil {
+				t.Fatalf("seed players error = %v", err)
+			}
+		}
+		got, err := mcMojangStore(db).GetPlayerByName(mcCtx, name)
+		if err != nil {
+			t.Fatalf("GetPlayerByName() error = %v", err)
+		}
+		if want := strings.ReplaceAll(newer, "-", ""); got.ID != want {
+			t.Errorf("got id %s, want the most recently seen player %s", got.ID, want)
 		}
 	})
 }
@@ -229,6 +257,29 @@ func TestST12to14_GetTextures(t *testing.T) {
 		}
 		if got == nil || got.Textures.SKIN == nil || !strings.HasSuffix(got.Textures.SKIN.URL, skin) || got.Textures.CAPE != nil {
 			t.Errorf("got %+v, want skin %q and nil CAPE", got, skin)
+		}
+	})
+}
+
+func TestST83_UndashedIDs(t *testing.T) {
+	t.Run("ST-83_Live_ProfileAndTexturesUseUndashedIDs", func(t *testing.T) {
+		db := testutil.LivePool(t, "archive")
+		skin := mcUniqueHash("skin")
+		id := mcSeedPlayerWithHashes(t, db, skin)
+		undashed := strings.ReplaceAll(id, "-", "")
+		value := &TexturesValue{ProfileID: id, Timestamp: time.Now().UnixMilli(), Textures: Textures{SKIN: &Texture{URL: "http://t/" + skin}}}
+		if err := mcTextureStore(db).UpsertTextures(mcCtx, JavaPlayerTexturesTable, value); err != nil {
+			t.Fatalf("seed UpsertTextures() error = %v", err)
+		}
+		got, err := mcMojangStore(db).GetProfileByUUID(mcCtx, undashed)
+		if err != nil {
+			t.Fatalf("GetProfileByUUID() error = %v", err)
+		}
+		if got.ID != undashed {
+			t.Errorf("profile id = %q, want %q", got.ID, undashed)
+		}
+		if got.Textures == nil || got.Textures.ProfileID != undashed {
+			t.Errorf("Textures = %+v, want the profile id %q", got.Textures, undashed)
 		}
 	})
 }
