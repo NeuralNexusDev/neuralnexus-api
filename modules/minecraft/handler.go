@@ -4,6 +4,8 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
 	"github.com/NeuralNexusDev/neuralnexus-api/responses"
@@ -34,6 +36,45 @@ const (
 	msgNotAValidBedrockUUID      = "Not a valid Bedrock UUID: "
 	logFailedToGetPlayerProfile  = "Failed to get player profile:\n\t"
 )
+
+const (
+	javaNameMinLength = 3
+	javaNameMaxLength = 16
+	gamertagMaxRunes  = 16
+	gamertagMaxBytes  = 128
+)
+
+func validJavaName(name string) bool {
+	if len(name) < javaNameMinLength || len(name) > javaNameMaxLength {
+		return false
+	}
+	for _, r := range name {
+		if !isJavaNameRune(r) {
+			return false
+		}
+	}
+	return true
+}
+
+func isJavaNameRune(r rune) bool {
+	return r == '_' || r >= '0' && r <= '9' || r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z'
+}
+
+func validGamertag(gamertag string) bool {
+	if len(gamertag) > gamertagMaxBytes || !utf8.ValidString(gamertag) {
+		return false
+	}
+	base := 0
+	for _, r := range gamertag {
+		if unicode.IsControl(r) {
+			return false
+		}
+		if !unicode.Is(unicode.M, r) {
+			base++
+		}
+	}
+	return base >= 1 && base <= gamertagMaxRunes
+}
 
 type Handler interface {
 	GetMojangPlayerByName(w http.ResponseWriter, r *http.Request)
@@ -66,7 +107,7 @@ func NewHandler(mcs Service) Handler {
 // GetMojangPlayerByName - Get a player by name
 func (h *handler) GetMojangPlayerByName(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
-	if name == "" {
+	if !validJavaName(name) {
 		responses.BadRequest(w, r, msgInvalidName)
 		return
 	}
@@ -117,7 +158,7 @@ func (h *handler) GetMojangPlayersByNames(w http.ResponseWriter, r *http.Request
 	}
 
 	for _, name := range names {
-		if name == "" {
+		if !validJavaName(name) {
 			responses.BadRequest(w, r, msgInvalidProfileName)
 			return
 		}
@@ -180,7 +221,7 @@ func (h *handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 // GetProfileByName - Get a player's profile by name
 func (h *handler) GetProfileByName(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
-	if name == "" {
+	if !validJavaName(name) {
 		responses.BadRequest(w, r, msgInvalidName)
 		return
 	}
@@ -217,7 +258,7 @@ func (h *handler) GetGeyserPlayerByXUID(w http.ResponseWriter, r *http.Request) 
 	case ErrPlayerNotFound:
 		responses.NotFound(w, r, msgPlayerNotFound)
 	case ErrInvalidGeyserRequest:
-		responses.BadRequest(w, r, msgInvalidGamertag)
+		responses.BadRequest(w, r, msgInvalidXuid)
 	case nil:
 		responses.StructOK(w, r, player)
 	default:
@@ -229,7 +270,7 @@ func (h *handler) GetGeyserPlayerByXUID(w http.ResponseWriter, r *http.Request) 
 // GetGeyserPlayerByGamertag - Look up a Bedrock player by gamertag
 func (h *handler) GetGeyserPlayerByGamertag(w http.ResponseWriter, r *http.Request) {
 	gamertag := r.PathValue("gamertag")
-	if gamertag == "" {
+	if !validGamertag(gamertag) {
 		responses.BadRequest(w, r, msgInvalidGamertag)
 		return
 	}
@@ -324,7 +365,7 @@ func (h *handler) GetGeyserProfileByXUID(w http.ResponseWriter, r *http.Request)
 // GetGeyserProfileByName - Get a Bedrock player's full profile by gamertag
 func (h *handler) GetGeyserProfileByName(w http.ResponseWriter, r *http.Request) {
 	gamertag := r.PathValue("name")
-	if gamertag == "" {
+	if !validGamertag(gamertag) {
 		responses.BadRequest(w, r, msgInvalidGamertag)
 		return
 	}

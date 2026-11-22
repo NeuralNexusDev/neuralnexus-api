@@ -885,7 +885,7 @@
         "/mc/mojang/lookup/bulk/byname": {
             "post": {
                 "summary": "Look up players by name in batch",
-                "description": "Body must be a JSON array of 1 to 10 non-empty names; Content-Type must be application/json.",
+                "description": "Body must be a JSON array of 1 to 10 names of 3 to 16 characters (letters, digits, underscore); Content-Type must be application/json.",
                 "security": [],
                 "requestBody": {
                     "required": true,
@@ -940,7 +940,7 @@
                 "security": [],
                 "parameters": [
                     {
-                        "$ref": "#/components/parameters/MCNameSlug"
+                        "$ref": "#/components/parameters/MCJavaNameSlug"
                     }
                 ],
                 "responses": {
@@ -953,6 +953,9 @@
                                 }
                             }
                         }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
                     },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
@@ -1173,7 +1176,7 @@
                 "security": [],
                 "parameters": [
                     {
-                        "$ref": "#/components/parameters/MCNameSlug"
+                        "$ref": "#/components/parameters/MCJavaNameSlug"
                     }
                 ],
                 "responses": {
@@ -1186,6 +1189,9 @@
                                 }
                             }
                         }
+                    },
+                    "400": {
+                        "$ref": "#/components/responses/400BadRequest"
                     },
                     "401": {
                         "$ref": "#/components/responses/401Unauthorized"
@@ -4232,6 +4238,18 @@
                     "type": "string"
                 },
                 "description": "Minecraft in-game name."
+            },
+            "MCJavaNameSlug": {
+                "name": "name",
+                "in": "path",
+                "required": true,
+                "schema": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 16,
+                    "pattern": "^[A-Za-z0-9_]+$"
+                },
+                "description": "Minecraft Java in-game name: 3 to 16 characters, letters, digits and underscore."
             },
             "MCUUIDSlug": {
                 "name": "uuid",

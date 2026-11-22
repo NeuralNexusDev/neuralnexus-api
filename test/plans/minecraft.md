@@ -72,8 +72,8 @@
 | HD-09 | GetMojangPlayersByNames | Error Path | Content-Type header is not application/json | header omitted | 415 Unsupported Media Type (`msgRequestMustBeJSON`) | P2 |  |
 | HD-10 | GetMojangPlayersByNames | Error Path | Body is not valid JSON | body = "{not json" | 400 Bad Request (`msgInvalidRequestBody`) | P2 |  |
 | HD-11 | GetMojangPlayersByNames | Error Path | The service rejects an empty names array | body = "[]"; the service returns `ErrNoNamesProvided` | 400 Bad Request (`msgInvalidSize`) | P2 |  |
-| HD-12 | GetMojangPlayersByNames | Error Path | The service rejects a names array of more than 10 entries | 11 names; the service returns `ErrBatchLimit` | 400 Bad Request (`msgInvalidSize`) | P2 |  |
-| HD-13 | GetMojangPlayersByNames | Error Path | names array contains an empty string | ["a", ""] | 400 Bad Request (`msgInvalidProfileName`) | P3 |  |
+| HD-12 | GetMojangPlayersByNames | Error Path | The service rejects a names array of more than 10 entries | 11 valid names; the service returns `ErrBatchLimit` | 400 Bad Request (`msgInvalidSize`) | P2 |  |
+| HD-13 | GetMojangPlayersByNames | Error Path | names array contains an empty string | ["abc", ""] | 400 Bad Request (`msgInvalidProfileName`); service not called | P3 |  |
 | HD-14 | GetMojangPlayersByNames | Happy Path | Valid names, service succeeds | Service returns a list of Mojang players | 200 OK with players JSON body | P1 |  |
 | HD-15 | GetMojangPlayersByNames | Error Path | Service returns an error | Service fails with an error | 500 Internal Server Error (`msgFailedToGetPlayers`) | P2 |  |
 | HD-16 | GetMojangProfile | Error Path | Invalid UUID path value | r.PathValue("uuid") invalid | 400 Bad Request, `detail` is `msgNotAValidUUID` followed by the id | P2 |  |
@@ -113,7 +113,7 @@
 | HD-60 | GetGeyserPlayerByXUID | Edge Case | A Floodgate UUID path value | xuid == xuidToUUID(42) | Service receives 42; 200 OK | P1 |  |
 | HD-61 | GetGeyserPlayerByXUID | Error Path | An invalid xuid path value | xuid == "zz" | 400 Bad Request, `detail` is `msgInvalidXuid`; service not called | P2 |  |
 | HD-62 | GetGeyserPlayerByXUID | Error Path | Service returns ErrPlayerNotFound | Service fails with ErrPlayerNotFound | 404 Not Found, `detail` is `msgPlayerNotFound` | P1 |  |
-| HD-63 | GetGeyserPlayerByXUID | Error Path | Service returns ErrInvalidGeyserRequest | Service fails with ErrInvalidGeyserRequest | 400 Bad Request | P2 |  |
+| HD-63 | GetGeyserPlayerByXUID | Error Path | Service returns ErrInvalidGeyserRequest | Service fails with ErrInvalidGeyserRequest | 400 Bad Request, `detail` is `msgInvalidXuid` | P2 |  |
 | HD-64 | GetGeyserPlayerByXUID | Happy Path | Service succeeds | Service returns the result | 200 OK with the JSON body | P1 |  |
 | HD-65 | GetGeyserPlayerByXUID | Error Path | Service returns a generic error | Service fails with an error | 500 Internal Server Error | P2 |  |
 | HD-66 | GetGeyserProfileByXUID | Happy Path | A decimal xuid path value | xuid == "42" | Service receives 42; 200 OK | P1 |  |
@@ -123,6 +123,13 @@
 | HD-70 | GetGeyserProfileByXUID | Error Path | Service returns ErrInvalidGeyserRequest | Service fails with ErrInvalidGeyserRequest | 400 Bad Request | P2 |  |
 | HD-71 | GetGeyserProfileByXUID | Happy Path | Service succeeds | Service returns the result | 200 OK with the JSON body | P1 |  |
 | HD-72 | GetGeyserProfileByXUID | Error Path | Service returns a generic error | Service fails with an error | 500 Internal Server Error | P2 |  |
+| HD-73 | GetMojangPlayerByName | Error Path | Name is not a valid Java name: too short, too long, contains a space, contains symbols, or contains a non-ASCII letter | Path name is one of ab, a 17-character name, "bad name", "_E++EEEE", or a name with an accented letter | 400 Bad Request, `detail` is `msgInvalidName`; service not called | P1 |  |
+| HD-74 | GetMojangPlayerByName | Edge Case | Name is a valid Java name at the length limits, for both the player lookup and the profile lookup by name | Path name is a 3-character name or a 16-character name containing letters, digits and an underscore | Service receives the name unchanged; 200 OK when the service succeeds, 404 Not Found with `msgPlayerNotFound` when it fails with ErrPlayerNotFound | P1 |  |
+| HD-75 | GetProfileByName | Error Path | Name is not a valid Java name: too short, too long, contains a space, contains symbols, or contains a non-ASCII letter | Same five invalid names as the player lookup by name | 400 Bad Request, `detail` is `msgInvalidName`; service not called | P1 |  |
+| HD-76 | GetMojangPlayersByNames | Error Path | One invalid Java name in the batch rejects the whole request; a batch of valid names is served | Names array holds valid names around one invalid name (each of the five invalid kinds in turn); separately a batch of a 3-character and a 16-character valid name | 400 Bad Request, `detail` is `msgInvalidProfileName`, service not called; the valid batch reaches the service and answers 200 OK | P1 |  |
+| HD-77 | GetGeyserPlayerByGamertag | Error Path | Gamertag is invalid: more than 16 non-combining characters, contains a control character, is not valid UTF-8, or is longer than 128 bytes | Path gamertag is 17 letters, "a" followed by a bell character and "b", 129 ASCII letters, or the bytes a, 0xFF, b | 400 Bad Request, `detail` is `msgInvalidGamertag`; service not called | P1 |  |
+| HD-78 | GetGeyserProfileByName | Error Path | Gamertag is invalid: more than 16 non-combining characters, contains a control character, is not valid UTF-8, or is longer than 128 bytes | Same four invalid gamertags as the player lookup by gamertag | 400 Bad Request, `detail` is `msgInvalidGamertag`; service not called | P1 |  |
+| HD-79 | GetGeyserPlayerByGamertag | Edge Case | Gamertag is valid at the limits, for both the player lookup and the profile lookup by name: 16 ASCII characters, a name with a discriminator, a Thai name whose combining marks are not counted, or a single character | Path gamertag is one of 16 letters, "Name#1234", twelve Thai base characters each followed by one combining mark (24 characters in all), or "x" | Service receives the gamertag unchanged; 200 OK | P2 |  |
 
 ## service.go
 
