@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/config"
 	"github.com/NeuralNexusDev/neuralnexus-api/modules/reqctx"
@@ -119,6 +120,8 @@ func NewService(cfg config.Minecraft, store Store, client *http.Client, s3Textur
 	}
 }
 
+const logFailedToReadCache = "Failed to read from cache:\n\t"
+
 // get issues a GET that is cancelled with ctx.
 func get(ctx context.Context, client *http.Client, url string) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -135,7 +138,7 @@ func (m *mojangService) GetMojangPlayerByName(ctx context.Context, name string) 
 		return cached, nil
 	}
 	if err != ErrCacheMiss {
-		return nil, err
+		reqctx.Log(ctx, logFailedToReadCache, err.Error())
 	}
 
 	// Cache miss — fetch from DB
@@ -183,7 +186,7 @@ func (m *mojangService) GetMojangPlayerByUUID(ctx context.Context, id string) (*
 		return cached, nil
 	}
 	if err != ErrCacheMiss {
-		return nil, err
+		reqctx.Log(ctx, logFailedToReadCache, err.Error())
 	}
 
 	// Cache miss — fetch from DB
@@ -243,6 +246,9 @@ func (m *mojangService) GetMojangPlayersByNames(ctx context.Context, names []str
 		if err == nil {
 			players = append(players, player)
 		} else {
+			if err != ErrCacheMiss {
+				reqctx.Log(ctx, logFailedToReadCache, err.Error())
+			}
 			// Cache miss — fetch from DB
 			player, _ := m.store.GetPlayerByName(ctx, name)
 			if player != nil && !player.IsStale() {
@@ -310,7 +316,7 @@ func (m *mojangService) GetMojangProfile(ctx context.Context, id string, signed 
 			return cached, nil
 		}
 		if err != ErrCacheMiss {
-			return nil, err
+			reqctx.Log(ctx, logFailedToReadCache, err.Error())
 		}
 		player, _, err := m.fetchProfileFromMojang(ctx, id, true)
 		return player, err
@@ -359,7 +365,7 @@ func (m *mojangService) resolveProfile(ctx context.Context, id string) (*MojangP
 		return cached, nil
 	}
 	if err != ErrCacheMiss {
-		return nil, err
+		reqctx.Log(ctx, logFailedToReadCache, err.Error())
 	}
 
 	dbProfile, err := m.store.GetProfileByUUID(ctx, id)
@@ -463,10 +469,13 @@ func (g *geyserService) GetGeyserPlayerByXUID(ctx context.Context, xuid int64) (
 		return nil, ErrPlayerNotFound
 	}
 
+	now := time.Now().UnixMilli()
 	player := &GeyserPlayer{
-		ID:   xuidToUUID(xuid),
-		XUID: xuid,
-		Name: result.Gamertag,
+		ID:        xuidToUUID(xuid),
+		XUID:      xuid,
+		Name:      result.Gamertag,
+		FirstSeen: now,
+		LastSeen:  now,
 	}
 
 	if err := g.store.UpsertGeyserPlayer(context.WithoutCancel(ctx), player); err != nil {
@@ -490,10 +499,13 @@ func (g *geyserService) GetGeyserPlayerByGamertag(ctx context.Context, gamertag 
 		return nil, ErrPlayerNotFound
 	}
 
+	now := time.Now().UnixMilli()
 	player := &GeyserPlayer{
-		ID:   xuidToUUID(result.XUID),
-		Name: gamertag,
-		XUID: result.XUID,
+		ID:        xuidToUUID(result.XUID),
+		Name:      gamertag,
+		XUID:      result.XUID,
+		FirstSeen: now,
+		LastSeen:  now,
 	}
 
 	if err := g.store.UpsertGeyserPlayer(context.WithoutCancel(ctx), player); err != nil {
@@ -576,6 +588,7 @@ func (g *geyserService) GetGeyserSkin(ctx context.Context, xuid int64) (*GeyserS
 	if skin.Hash == "" {
 		return nil, ErrSkinNotFound
 	}
+	skin.LastSeen = time.Now().UnixMilli()
 
 	textures = ParseTextureValue(ctx, skin.Value)
 	if textures != nil {

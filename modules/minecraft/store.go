@@ -168,13 +168,14 @@ func (m *mojangStore) GetPlayerByUUID(ctx context.Context, id string) (*MojangPl
 	if err != nil {
 		return nil, playerNotFound(err)
 	}
+	player.ID = undashedUUID(player.ID)
 	return player, nil
 }
 
 // GetPlayerByName gets a player by name from the database
 func (m *mojangStore) GetPlayerByName(ctx context.Context, name string) (*MojangPlayer, error) {
 	rows, err := m.db.Query(ctx,
-		"SELECT id, name, legacy, demo, first_seen, last_seen FROM players WHERE name = $1", name)
+		"SELECT id, name, legacy, demo, first_seen, last_seen FROM players WHERE name = $1 ORDER BY last_seen DESC LIMIT 1", name)
 	if err != nil {
 		return nil, err
 	}
@@ -182,6 +183,7 @@ func (m *mojangStore) GetPlayerByName(ctx context.Context, name string) (*Mojang
 	if err != nil {
 		return nil, playerNotFound(err)
 	}
+	player.ID = undashedUUID(player.ID)
 	return player, nil
 }
 
@@ -210,7 +212,7 @@ func (m *mojangStore) GetProfileByUUID(ctx context.Context, id string) (*MojangP
 	}
 
 	return &MojangProfile{
-		ID:             player.ID,
+		ID:             undashedUUID(player.ID),
 		Name:           player.Name,
 		Legacy:         player.Legacy,
 		Demo:           player.Demo,
@@ -283,6 +285,7 @@ func (g *geyserStore) GetGeyserPlayerByUUID(ctx context.Context, floodgateUUID s
 	if err != nil {
 		return nil, playerNotFound(err)
 	}
+	player.ID = undashedUUID(player.ID)
 	return player, nil
 }
 
@@ -301,6 +304,7 @@ func (g *geyserStore) GetGeyserPlayerByGamertag(ctx context.Context, gamertag st
 	if err != nil {
 		return nil, playerNotFound(err)
 	}
+	player.ID = undashedUUID(player.ID)
 	return player, nil
 }
 
@@ -359,6 +363,7 @@ func (t *textureStore) GetTextures(ctx context.Context, table, id, name string) 
 		}
 		return nil, err
 	}
+	row.PlayerId = undashedUUID(row.PlayerId)
 	return row.Value(name, t.cfg.LookupTexture), nil
 }
 
@@ -404,7 +409,7 @@ func cacheMiss(err error) error {
 
 // GetPlayerFromCache gets a player from the cache by key (uuid or name)
 func (c *cacheStore) GetPlayerFromCache(ctx context.Context, key string) (*MojangPlayer, error) {
-	val, err := c.rdb.Get(ctx, CachePlayer+key).Result()
+	val, err := c.rdb.Get(ctx, CachePlayer+undashedUUID(key)).Result()
 	if err != nil {
 		return nil, cacheMiss(err)
 	}
@@ -423,7 +428,7 @@ func (c *cacheStore) SetPlayerInCache(ctx context.Context, player *MojangPlayer)
 	}
 	blob := string(data)
 
-	if err := c.rdb.Set(ctx, CachePlayer+player.ID, blob, redisTTL).Err(); err != nil {
+	if err := c.rdb.Set(ctx, CachePlayer+undashedUUID(player.ID), blob, redisTTL).Err(); err != nil {
 		return err
 	}
 	return c.rdb.Set(ctx, CachePlayer+player.Name, blob, redisTTL).Err()
@@ -431,7 +436,7 @@ func (c *cacheStore) SetPlayerInCache(ctx context.Context, player *MojangPlayer)
 
 // GetProfileFromCache gets a player's profile from the cache
 func (c *cacheStore) GetProfileFromCache(ctx context.Context, id string) (*MojangProfile, error) {
-	val, err := c.rdb.Get(ctx, CacheProfile+id).Result()
+	val, err := c.rdb.Get(ctx, CacheProfile+undashedUUID(id)).Result()
 	if err != nil {
 		return nil, cacheMiss(err)
 	}
@@ -448,12 +453,12 @@ func (c *cacheStore) SetProfileInCache(ctx context.Context, profile *MojangProfi
 	if err != nil {
 		panic("minecraft: json.Marshal of a MojangProfile failed: " + err.Error())
 	}
-	return c.rdb.Set(ctx, CacheProfile+profile.ID, string(data), redisTTL).Err()
+	return c.rdb.Set(ctx, CacheProfile+undashedUUID(profile.ID), string(data), redisTTL).Err()
 }
 
 // GetSignedProfileFromCache gets a player's signed profile from the cache
 func (c *cacheStore) GetSignedProfileFromCache(ctx context.Context, id string) (*MojangPlayer, error) {
-	val, err := c.rdb.Get(ctx, CacheProfileSigned+id).Result()
+	val, err := c.rdb.Get(ctx, CacheProfileSigned+undashedUUID(id)).Result()
 	if err != nil {
 		return nil, cacheMiss(err)
 	}
@@ -470,7 +475,7 @@ func (c *cacheStore) SetSignedProfileInCache(ctx context.Context, player *Mojang
 	if err != nil {
 		panic("minecraft: json.Marshal of a MojangPlayer failed: " + err.Error())
 	}
-	return c.rdb.Set(ctx, CacheProfileSigned+player.ID, string(data), redisTTL).Err()
+	return c.rdb.Set(ctx, CacheProfileSigned+undashedUUID(player.ID), string(data), redisTTL).Err()
 }
 
 // IsTextureInS3 check if the texture is in S3

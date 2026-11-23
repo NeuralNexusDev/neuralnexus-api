@@ -4,8 +4,8 @@
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
-| TY-34 | xuidToUUID | Happy Path | xuid is a nonzero int64 | xuid = 123456789 | Returns zero-padded-hex value formatted as a dashed UUID string | P1 |  |
-| TY-35 | xuidToUUID | Edge Case | xuid is 0 | xuid = 0 | Returns "00000000-0000-0000-0000-000000000000" | P3 |  |
+| TY-34 | xuidToUUID | Happy Path | xuid is a nonzero int64 | xuid = 123456789 | Returns the zero-padded hex value as 32 lowercase hex characters without dashes; uuidToXUID parses it back to the xuid | P1 |  |
+| TY-35 | xuidToUUID | Edge Case | xuid is 0 | xuid = 0 | Returns 32 zero characters without dashes | P3 |  |
 | TY-37 | uuidToXUID | Error Path | id is not a valid UUID string | id = "not-a-uuid" | Returns (0, non-nil parse error) | P2 |  |
 | TY-38 | uuidToXUID | Error Path | id is a well-formed UUID whose high 64 bits are nonzero | a real random uuid.New() | Returns (0, `ErrNotDerivedBedrockUUID`) | P2 |  |
 
@@ -72,8 +72,8 @@
 | HD-09 | GetMojangPlayersByNames | Error Path | Content-Type header is not application/json | header omitted | 415 Unsupported Media Type (`msgRequestMustBeJSON`) | P2 |  |
 | HD-10 | GetMojangPlayersByNames | Error Path | Body is not valid JSON | body = "{not json" | 400 Bad Request (`msgInvalidRequestBody`) | P2 |  |
 | HD-11 | GetMojangPlayersByNames | Error Path | The service rejects an empty names array | body = "[]"; the service returns `ErrNoNamesProvided` | 400 Bad Request (`msgInvalidSize`) | P2 |  |
-| HD-12 | GetMojangPlayersByNames | Error Path | The service rejects a names array of more than 10 entries | 11 names; the service returns `ErrBatchLimit` | 400 Bad Request (`msgInvalidSize`) | P2 |  |
-| HD-13 | GetMojangPlayersByNames | Error Path | names array contains an empty string | ["a", ""] | 400 Bad Request (`msgInvalidProfileName`) | P3 |  |
+| HD-12 | GetMojangPlayersByNames | Error Path | The service rejects a names array of more than 10 entries | 11 valid names; the service returns `ErrBatchLimit` | 400 Bad Request (`msgInvalidSize`) | P2 |  |
+| HD-13 | GetMojangPlayersByNames | Error Path | names array contains an empty string | ["abc", ""] | 400 Bad Request (`msgInvalidProfileName`); service not called | P3 |  |
 | HD-14 | GetMojangPlayersByNames | Happy Path | Valid names, service succeeds | Service returns a list of Mojang players | 200 OK with players JSON body | P1 |  |
 | HD-15 | GetMojangPlayersByNames | Error Path | Service returns an error | Service fails with an error | 500 Internal Server Error (`msgFailedToGetPlayers`) | P2 |  |
 | HD-16 | GetMojangProfile | Error Path | Invalid UUID path value | r.PathValue("uuid") invalid | 400 Bad Request, `detail` is `msgNotAValidUUID` followed by the id | P2 |  |
@@ -113,7 +113,7 @@
 | HD-60 | GetGeyserPlayerByXUID | Edge Case | A Floodgate UUID path value | xuid == xuidToUUID(42) | Service receives 42; 200 OK | P1 |  |
 | HD-61 | GetGeyserPlayerByXUID | Error Path | An invalid xuid path value | xuid == "zz" | 400 Bad Request, `detail` is `msgInvalidXuid`; service not called | P2 |  |
 | HD-62 | GetGeyserPlayerByXUID | Error Path | Service returns ErrPlayerNotFound | Service fails with ErrPlayerNotFound | 404 Not Found, `detail` is `msgPlayerNotFound` | P1 |  |
-| HD-63 | GetGeyserPlayerByXUID | Error Path | Service returns ErrInvalidGeyserRequest | Service fails with ErrInvalidGeyserRequest | 400 Bad Request | P2 |  |
+| HD-63 | GetGeyserPlayerByXUID | Error Path | Service returns ErrInvalidGeyserRequest | Service fails with ErrInvalidGeyserRequest | 400 Bad Request, `detail` is `msgInvalidXuid` | P2 |  |
 | HD-64 | GetGeyserPlayerByXUID | Happy Path | Service succeeds | Service returns the result | 200 OK with the JSON body | P1 |  |
 | HD-65 | GetGeyserPlayerByXUID | Error Path | Service returns a generic error | Service fails with an error | 500 Internal Server Error | P2 |  |
 | HD-66 | GetGeyserProfileByXUID | Happy Path | A decimal xuid path value | xuid == "42" | Service receives 42; 200 OK | P1 |  |
@@ -123,6 +123,14 @@
 | HD-70 | GetGeyserProfileByXUID | Error Path | Service returns ErrInvalidGeyserRequest | Service fails with ErrInvalidGeyserRequest | 400 Bad Request | P2 |  |
 | HD-71 | GetGeyserProfileByXUID | Happy Path | Service succeeds | Service returns the result | 200 OK with the JSON body | P1 |  |
 | HD-72 | GetGeyserProfileByXUID | Error Path | Service returns a generic error | Service fails with an error | 500 Internal Server Error | P2 |  |
+| HD-73 | GetMojangPlayerByName | Error Path | Name is not a valid Java name: too short, too long, contains a space, contains symbols, or contains a non-ASCII letter | Path name is one of ab, a 17-character name, "bad name", "_E++EEEE", or a name with an accented letter | 400 Bad Request, `detail` is `msgInvalidName`; service not called | P1 |  |
+| HD-74 | GetMojangPlayerByName | Edge Case | Name is a valid Java name at the length limits, for both the player lookup and the profile lookup by name | Path name is a 3-character name or a 16-character name containing letters, digits and an underscore | Service receives the name unchanged; 200 OK when the service succeeds, 404 Not Found with `msgPlayerNotFound` when it fails with ErrPlayerNotFound | P1 |  |
+| HD-75 | GetProfileByName | Error Path | Name is not a valid Java name: too short, too long, contains a space, contains symbols, or contains a non-ASCII letter | Same five invalid names as the player lookup by name | 400 Bad Request, `detail` is `msgInvalidName`; service not called | P1 |  |
+| HD-76 | GetMojangPlayersByNames | Error Path | One invalid Java name in the batch rejects the whole request; a batch of valid names is served | Names array holds valid names around one invalid name (each of the five invalid kinds in turn); separately a batch of a 3-character and a 16-character valid name | 400 Bad Request, `detail` is `msgInvalidProfileName`, service not called; the valid batch reaches the service and answers 200 OK | P1 |  |
+| HD-77 | GetGeyserPlayerByGamertag | Error Path | Gamertag is invalid: more than 16 non-combining characters, contains a control character, is not valid UTF-8, or is longer than 128 bytes | Path gamertag is 17 letters, "a" followed by a bell character and "b", 129 ASCII letters, or the bytes a, 0xFF, b | 400 Bad Request, `detail` is `msgInvalidGamertag`; service not called | P1 |  |
+| HD-78 | GetGeyserProfileByName | Error Path | Gamertag is invalid: more than 16 non-combining characters, contains a control character, is not valid UTF-8, or is longer than 128 bytes | Same four invalid gamertags as the player lookup by gamertag | 400 Bad Request, `detail` is `msgInvalidGamertag`; service not called | P1 |  |
+| HD-79 | GetGeyserPlayerByGamertag | Edge Case | Gamertag is valid at the limits, for both the player lookup and the profile lookup by name: 16 ASCII characters, a name with a discriminator, a Thai name whose combining marks are not counted, or a single character | Path gamertag is one of 16 letters, "Name#1234", twelve Thai base characters each followed by one combining mark (24 characters in all), or "x" | Service receives the gamertag unchanged; 200 OK | P2 |  |
+| HD-81 | GetMojangPlayerByUUID | Error Path | An invalid uuid is sent to each route that takes a uuid | Path uuid is "not-a-uuid" | 400 Bad Request, `detail` is `msgNotAValidUUID` (`msgNotAValidBedrockUUID` for the Bedrock profile lookup) followed by the id; service not called | P2 |  |
 
 ## service.go
 
@@ -135,7 +143,7 @@
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
 | SV-03 | GetMojangPlayerByName | Happy Path | Cache hit | store cache returns player, nil | Returns cached player; no DB/HTTP calls | P1 |  |
-| SV-04 | GetMojangPlayerByName | Error Path | Cache error is not ErrCacheMiss | store cache error = plain error | Returns that error, no fallback | P2 |  |
+| SV-04 | GetMojangPlayerByName | Error Path | Cache error is not ErrCacheMiss | store cache error = plain error; the database holds a fresh player | The database player is returned with no error; Mojang is not called | P2 |  |
 | SV-05 | GetMojangPlayerByName | Happy Path | Cache miss, DB entry fresh | cache=ErrCacheMiss, DB player not stale | Caches and returns DB player, no Mojang call | P1 |  |
 | SV-06 | GetMojangPlayerByName | Error Path | DB fresh entry, cacheStore.SetPlayerInCache fails | cacheStore.SetPlayerInCache error | Returns that error | P2 |  |
 | SV-07 | GetMojangPlayerByName | Happy Path | Cache+DB miss/stale, Mojang succeeds | Mojang 200 with player JSON | Upserts, caches, returns fetched player | P0 |  |
@@ -146,7 +154,7 @@
 | SV-12 | GetMojangPlayerByName | Error Path | cacheStore.SetPlayerInCache fails after Mojang fetch | store error | Returns that error | P2 |  |
 | SV-13 | GetMojangPlayerByName | Error Path | http.Client.Get fails | transport error | Returns that error | P2 |  |
 | SV-14 | GetMojangPlayerByUUID | Happy Path | Cache hit | store cache returns player | Returns cached player; no DB/HTTP calls | P1 |  |
-| SV-15 | GetMojangPlayerByUUID | Error Path | Cache error is not ErrCacheMiss | plain error | Returns that error | P2 |  |
+| SV-15 | GetMojangPlayerByUUID | Error Path | Cache error is not ErrCacheMiss | plain error; the database holds a fresh player | The database player is returned with no error; Mojang is not called | P2 |  |
 | SV-16 | GetMojangPlayerByUUID | Happy Path | Cache miss, DB entry fresh | DB player not stale | Caches and returns DB player | P1 |  |
 | SV-17 | GetMojangPlayerByUUID | Happy Path | Cache+DB miss, Mojang succeeds | Mojang 200 | Upserts, caches, returns fetched player | P0 |  |
 | SV-18 | GetMojangPlayerByUUID | Error Path | Mojang returns 404 | Mojang status 404 | Returns ErrPlayerNotFound | P1 |  |
@@ -162,18 +170,18 @@
 | SV-28 | GetMojangPlayersByNames | Error Path | mojangStore.UpsertPlayer fails on a fetched entry | store error | Returns that error | P2 |  |
 | SV-29 | GetMojangPlayersByNames | Error Path | cacheStore.SetPlayerInCache fails on a fetched entry | store error | Returns that error | P2 |  |
 | SV-30 | GetMojangProfile | Happy Path | signed=true, cache hit | cacheStore.GetSignedProfileFromCache succeeds | Returns cached signed player | P1 |  |
-| SV-31 | GetMojangProfile | Error Path | signed=true, cache error not ErrCacheMiss | plain error | Returns that error | P2 |  |
+| SV-31 | GetMojangProfile | Error Path | signed=true, cache error not ErrCacheMiss | plain error; Mojang answers with a profile | The profile fetched from Mojang is returned with no error | P2 |  |
 | SV-32 | GetMojangProfile | Happy Path | signed=true, cache miss | mojangService.fetchProfileFromMojang(id,true) succeeds | Returns fetched player | P1 |  |
 | SV-33 | GetMojangProfile | Error Path | signed=true, mojangService.fetchProfileFromMojang fails | mojang error | Returns that error (`ErrPlayerNotFound`) | P2 |  |
 | SV-34 | GetMojangProfile | Happy Path | signed=false | mojangService.resolveProfile succeeds | Returns profile.ToPlayer() result | P1 |  |
-| SV-35 | GetMojangProfile | Error Path | signed=false, mojangService.resolveProfile fails | mojangService.resolveProfile error | Returns that error | P2 |  |
+| SV-35 | GetMojangProfile | Error Path | signed=false, mojangService.resolveProfile fails | cache and database miss; Mojang answers with a server error | Returns `ErrMojangAPI` | P2 |  |
 | SV-36 | GetProfile | Happy Path | mojangService.resolveProfile succeeds, SKIN+CAPE present | Textures with both | Both URLs rewritten to s3TextureUrl+"texture/"+hash | P1 |  |
 | SV-37 | GetProfile | Edge Case | mojangService.resolveProfile succeeds, Textures nil | Profile.Textures == nil | Returned unmodified, no panic | P2 |  |
-| SV-38 | GetProfile | Error Path | mojangService.resolveProfile fails | mojangService.resolveProfile error | Returns that error | P2 |  |
+| SV-38 | GetProfile | Error Path | mojangService.resolveProfile fails | cache and database miss; Mojang answers with a server error | Returns `ErrMojangAPI` | P2 |  |
 | SV-39 | GetProfile | Edge Case | Textures present, CAPE nil | only SKIN set | Only SKIN.URL rewritten | P3 |  |
 | SV-40 | GetProfileByName | Happy Path | Name resolves, then profile resolves | both succeed | Returns resolved profile | P1 |  |
 | SV-41 | GetProfileByName | Error Path | mojangService.GetMojangPlayerByName fails | e.g. ErrPlayerNotFound | Returns `ErrPlayerNotFound` | P2 |  |
-| SV-42 | GetProfileByName | Error Path | mojangService.GetProfile fails after name resolves | mojangService.GetProfile error | Returns that error | P2 |  |
+| SV-42 | GetProfileByName | Error Path | mojangService.GetProfile fails after name resolves | name found in the cache; profile cache and database miss; Mojang answers with a server error | Returns `ErrMojangAPI` | P2 |  |
 | SV-43 | resolveProfile | Happy Path | Cache hit | cacheStore.GetProfileFromCache succeeds | Returns cached profile | P1 |  |
 | SV-45 | resolveProfile | Happy Path | DB profile fresh | not stale | Caches and returns DB profile | P1 |  |
 | SV-46 | resolveProfile | Edge Case | DB profile fresh, ProfileActions nil | ProfileActions == nil | Normalized to []string{} before caching/return | P2 |  |
@@ -205,13 +213,15 @@
 | SV-143 | resolveProfile | Edge Case | Cache write after a DB hit runs on a context that outlives the cancelled request | the request context carries a marker value and is already cancelled; cache miss; DB returns a fresh profile; the write made while caching the profile is recorded with the context state and marker | The write sees a context that is not cancelled and still carries the marker value | P1 |  |
 | SV-144 | fetchProfileFromMojang | Edge Case | Unsigned fetch writes run on a context that outlives the cancelled request | the request context carries a marker value and is cancelled once the Mojang body is read; the profile has a skin and a cape texture; the writes made while storing the player, storing each texture hash, storing the textures and caching the profile are recorded with the context state and marker | Every write the fetch makes sees a context that is not cancelled and still carries the marker value | P1 |  |
 | SV-145 | fetchProfileFromMojang | Edge Case | Signed fetch writes run on a context that outlives the cancelled request | same response requested as a signed profile; the writes made while storing the player, storing each texture hash, storing the textures and caching the signed profile are recorded with the context state and marker | Every write the fetch makes sees a context that is not cancelled and still carries the marker value | P1 |  |
+| SV-157 | resolveProfile | Error Path | Cache error is not ErrCacheMiss | Profile cache error = plain error; the database holds a fresh profile | The database profile is returned with no error; Mojang is not called | P2 |  |
+| SV-158 | GetMojangPlayersByNames | Error Path | Cache error is not ErrCacheMiss | Player cache error = plain error; the database holds a fresh player | The database player is returned with no error; Mojang is not called | P2 |  |
 
 ## geyserService
 
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
 | SV-64 | GetGeyserPlayerByGamertag | Happy Path | DB entry fresh | not stale | Returned without HTTP call | P1 |  |
-| SV-65 | GetGeyserPlayerByGamertag | Happy Path | DB stale/missing, Geyser succeeds | XUID nonzero | Upserted and returned with derived UUID | P0 |  |
+| SV-65 | GetGeyserPlayerByGamertag | Happy Path | DB stale/missing, Geyser succeeds | XUID nonzero | Upserted and returned with derived UUID; first and last seen are the current time in milliseconds | P0 |  |
 | SV-66 | GetGeyserPlayerByGamertag | Error Path | Geyser returns 400 | status 400 | Returns ErrInvalidGeyserRequest | P1 |  |
 | SV-67 | GetGeyserPlayerByGamertag | Error Path | Geyser returns non-200/400 | status 500 | Returns an error wrapping `ErrGeyserAPI` | P2 |  |
 | SV-68 | GetGeyserPlayerByGamertag | Error Path | Geyser body is not valid JSON | malformed body | Returns decode error | P2 |  |
@@ -219,12 +229,12 @@
 | SV-70 | GetGeyserPlayerByGamertag | Error Path | geyserStore.UpsertGeyserPlayer fails | store error | Returns that error | P2 |  |
 | SV-71 | GetGeyserPlayerByGamertag | Edge Case | Gamertag contains special characters | gamertag = "a b#c" | Request path is url.PathEscape'd | P2 |  |
 | SV-72 | GetGeyserSkin | Happy Path | Player not stale and textures present | not stale | Returned without an HTTP call | P1 |  |
-| SV-73 | GetGeyserSkin | Happy Path | DB stale/missing, Geyser succeeds | hash present | Upserted and returned | P0 |  |
+| SV-73 | GetGeyserSkin | Happy Path | DB stale/missing, Geyser succeeds | hash present | Upserted and returned; the skin last seen is the current time in milliseconds | P0 |  |
 | SV-76 | GetGeyserSkin | Error Path | Geyser body is not valid JSON | malformed body | Returns decode error | P2 |  |
 | SV-77 | GetGeyserSkin | Edge Case | Response hash == "" | unconverted player | Returns ErrSkinNotFound | P1 |  |
 | SV-78 | GetGeyserSkin | Error Path | textureStore.UpsertTextures fails | store error | Returns that error | P2 |  |
 | SV-79 | GetGeyserPlayerByXUID | Happy Path | DB entry fresh | not stale | Returned without HTTP call | P1 |  |
-| SV-80 | GetGeyserPlayerByXUID | Happy Path | DB stale/missing, Geyser succeeds | gamertag present | Upserted and returned | P1 |  |
+| SV-80 | GetGeyserPlayerByXUID | Happy Path | DB stale/missing, Geyser succeeds | gamertag present | Upserted and returned; first and last seen are the current time in milliseconds | P1 |  |
 | SV-81 | GetGeyserPlayerByXUID | Error Path | Geyser returns 400 | status 400 | Returns ErrInvalidGeyserRequest | P2 |  |
 | SV-82 | GetGeyserPlayerByXUID | Error Path | Geyser returns non-200 | status 500 | Returns an error wrapping `ErrGeyserAPI` | P2 |  |
 | SV-83 | GetGeyserPlayerByXUID | Edge Case | Response gamertag == "" | unknown xuid | Returns ErrPlayerNotFound | P1 |  |
@@ -242,7 +252,7 @@
 | SV-147 | GetGeyserPlayerByUUID | Happy Path | A fresh DB player is returned without an HTTP call; a stale one falls through to looking up the Geyser player by Xbox user id | player by uuid fresh in the DB; then stale in the DB with the Geyser gamertag endpoint answering | Fresh: the DB player, no HTTP call. Stale: the player fetched for the uuid's xuid | P1 |  |
 | SV-148 | GetGeyserPlayerByXUID | Edge Case | The player is fetched from Geyser and stored after the request was cancelled | Player not stored; the request carries a marker value and is cancelled once Geyser's answer has been read | The player is stored by a write that sees a live context still carrying the marker value | P1 |  |
 | SV-149 | GetGeyserPlayerByGamertag | Edge Case | The player is fetched from Geyser and stored after the request was cancelled | Player not stored; the request carries a marker value and is cancelled once Geyser's answer has been read | The player is stored by a write that sees a live context still carrying the marker value | P1 |  |
-| SV-150 | GetGeyserSkin | Edge Case | The skin is fetched from Geyser and its textures are stored after the request was cancelled | Fresh player stored, no textures stored; the request carries a marker value and is cancelled once Geyser's answer has been read | The textures are stored by a write that sees a live context still carrying the marker value | P1 |  |
+| SV-150 | GetGeyserSkin | Edge Case | The skin is fetched from Geyser and its textures are stored after the request was cancelled | Fresh player stored, no textures stored; the request carries a marker value and is cancelled once Geyser's answer has been read | The textures are stored by a write that sees a live context still carrying the marker value; the returned skin last seen is the current time in milliseconds | P1 |  |
 | SV-151 | getGeyserProfileFromPlayer | Edge Case | The profile of a player with stored textures is built after the request was cancelled | Fresh player with stored textures; the request carries a marker value and is already cancelled | The textures are stored by a write that sees a live context still carrying the marker value | P1 |  |
 | SV-152 | GetGeyserSkin | Edge Case | The stored skin of a fresh player is read for a classic skin and for a slim skin | Fresh player with stored textures whose skin has no model, and another whose skin has the slim model | The classic skin is marked as a Steve skin and the slim skin is not | P1 |  |
 | SV-153 | GetGeyserSkin | Error Path | The stored textures of a fresh player hold a cape and no skin | Fresh player; stored textures with a cape only | Returns `ErrSkinNotFound` and no skin | P2 |  |
@@ -277,9 +287,9 @@ Rows marked "(live)" require `TEST_POSTGRES_URL` and/or `TEST_REDIS_URL` and `t.
 | ID | Function | Scenario Type | Scenario | Precondition | Expected Result | Priority | Notes |
 |----|----------|---------------|----------|---------------|------------------|----------|-------|
 | ST-02 | GetPlayerByUUID | Error Path | DB unreachable | closed-port pool | Raw connection error passed through unchanged (not `ErrPlayerNotFound`) | P2 |  |
-| ST-03 | GetPlayerByUUID | Happy Path (live) | Row seeded via mojangStore.UpsertPlayer | live DB | Returns matching Player (ProfileActions left zero-value: lax mapping) | P1 |  |
+| ST-03 | GetPlayerByUUID | Happy Path (live) | Row seeded via mojangStore.UpsertPlayer with a dashed id, read by the undashed id | live DB | Returns matching Player with the id in its undashed form (ProfileActions left zero-value: lax mapping) | P1 |  |
 | ST-04 | GetPlayerByUUID | Error Path (live) | No matching id | live DB, unknown id | Returns `ErrPlayerNotFound` | P2 |  |
-| ST-06 | GetPlayerByName | Happy Path (live) | Row seeded via mojangStore.UpsertPlayer | live DB | Returns matching Player | P1 |  |
+| ST-06 | GetPlayerByName | Happy Path (live) | Row seeded via mojangStore.UpsertPlayer | live DB | Returns matching Player with the id in its undashed form | P1 |  |
 | ST-07 | GetPlayerByName | Error Path (live) | No matching name | live DB, unknown name | Returns `ErrPlayerNotFound` | P2 |  |
 | ST-09 | GetProfileByUUID | Happy Path (live) | Player+textures seeded | live DB | Returns Profile with decoded Textures | P1 |  |
 | ST-10 | GetProfileByUUID | Edge Case (live) | Player seeded, no textures row | live DB | Returns Profile with Textures == nil | P2 |  |
@@ -288,6 +298,8 @@ Rows marked "(live)" require `TEST_POSTGRES_URL` and/or `TEST_REDIS_URL` and `t.
 | ST-17 | UpsertPlayer | Happy Path (live) | updateProfile=false, new id | live DB | Row inserted with legacy=false, demo=false, profile_actions=[] | P1 |  |
 | ST-18 | UpsertPlayer | Edge Case (live) | Same id upserted twice | live DB | Second call updates in place; exactly one row for that id | P2 |  |
 | ST-19 | UpsertPlayer | Concurrency Invariant (live) | N goroutines store the same player id concurrently | live DB | No unique-violation errors from any goroutine; the player can then be looked up by that id | P0 | 50 concurrent writers — fewer wouldn't reliably reproduce a broken ON CONFLICT guard's race on every run |
+| ST-82 | GetPlayerByName | Edge Case (live) | Two players share one name with different last-seen times | Two rows with the same name inserted, the newer first | Returns the player that was seen most recently | P1 |  |
+| ST-83 | GetProfileByUUID | Happy Path (live) | A stored profile with textures is read by an undashed id | Player and textures seeded with a dashed id | Returns the profile and its textures; the profile id and the textures profile id have no dashes | P1 |  |
 
 ## textureStore
 
