@@ -409,7 +409,7 @@ func cacheMiss(err error) error {
 
 // GetPlayerFromCache gets a player from the cache by key (uuid or name)
 func (c *cacheStore) GetPlayerFromCache(ctx context.Context, key string) (*MojangPlayer, error) {
-	val, err := c.rdb.Get(ctx, CachePlayer+key).Result()
+	val, err := c.rdb.Get(ctx, CachePlayer+undashedUUID(key)).Result()
 	if err != nil {
 		return nil, cacheMiss(err)
 	}
@@ -428,7 +428,7 @@ func (c *cacheStore) SetPlayerInCache(ctx context.Context, player *MojangPlayer)
 	}
 	blob := string(data)
 
-	if err := c.rdb.Set(ctx, CachePlayer+player.ID, blob, redisTTL).Err(); err != nil {
+	if err := c.rdb.Set(ctx, CachePlayer+undashedUUID(player.ID), blob, redisTTL).Err(); err != nil {
 		return err
 	}
 	return c.rdb.Set(ctx, CachePlayer+player.Name, blob, redisTTL).Err()
@@ -436,7 +436,7 @@ func (c *cacheStore) SetPlayerInCache(ctx context.Context, player *MojangPlayer)
 
 // GetProfileFromCache gets a player's profile from the cache
 func (c *cacheStore) GetProfileFromCache(ctx context.Context, id string) (*MojangProfile, error) {
-	val, err := c.rdb.Get(ctx, CacheProfile+id).Result()
+	val, err := c.rdb.Get(ctx, CacheProfile+undashedUUID(id)).Result()
 	if err != nil {
 		return nil, cacheMiss(err)
 	}
@@ -453,12 +453,12 @@ func (c *cacheStore) SetProfileInCache(ctx context.Context, profile *MojangProfi
 	if err != nil {
 		panic("minecraft: json.Marshal of a MojangProfile failed: " + err.Error())
 	}
-	return c.rdb.Set(ctx, CacheProfile+profile.ID, string(data), redisTTL).Err()
+	return c.rdb.Set(ctx, CacheProfile+undashedUUID(profile.ID), string(data), redisTTL).Err()
 }
 
 // GetSignedProfileFromCache gets a player's signed profile from the cache
 func (c *cacheStore) GetSignedProfileFromCache(ctx context.Context, id string) (*MojangPlayer, error) {
-	val, err := c.rdb.Get(ctx, CacheProfileSigned+id).Result()
+	val, err := c.rdb.Get(ctx, CacheProfileSigned+undashedUUID(id)).Result()
 	if err != nil {
 		return nil, cacheMiss(err)
 	}
@@ -475,7 +475,7 @@ func (c *cacheStore) SetSignedProfileInCache(ctx context.Context, player *Mojang
 	if err != nil {
 		panic("minecraft: json.Marshal of a MojangPlayer failed: " + err.Error())
 	}
-	return c.rdb.Set(ctx, CacheProfileSigned+player.ID, string(data), redisTTL).Err()
+	return c.rdb.Set(ctx, CacheProfileSigned+undashedUUID(player.ID), string(data), redisTTL).Err()
 }
 
 // IsTextureInS3 check if the texture is in S3

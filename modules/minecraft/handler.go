@@ -121,7 +121,7 @@ func (h *handler) GetMojangPlayerByUUID(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	player, err := h.s.Mojang().GetMojangPlayerByUUID(r.Context(), undashedUUID(id))
+	player, err := h.s.Mojang().GetMojangPlayerByUUID(r.Context(), id)
 	switch err {
 	case ErrPlayerNotFound:
 		responses.NotFound(w, r, msgPlayerNotFound)
@@ -175,7 +175,7 @@ func (h *handler) GetMojangProfile(w http.ResponseWriter, r *http.Request) {
 
 	signed := r.URL.Query().Get("unsigned") == "false"
 
-	player, err := h.s.Mojang().GetMojangProfile(r.Context(), undashedUUID(id), signed)
+	player, err := h.s.Mojang().GetMojangProfile(r.Context(), id, signed)
 	switch err {
 	case ErrPlayerNotFound:
 		responses.NoContent(w, r)
@@ -195,7 +195,7 @@ func (h *handler) GetProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	profile, err := h.s.Mojang().GetProfile(r.Context(), undashedUUID(id))
+	profile, err := h.s.Mojang().GetProfile(r.Context(), id)
 	switch err {
 	case ErrPlayerNotFound:
 		responses.NotFound(w, r, msgPlayerNotFound)
@@ -308,7 +308,7 @@ func (h *handler) GetGeyserProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	profile, err := h.s.Geyser().GetGeyserProfile(r.Context(), undashedUUID(id))
+	profile, err := h.s.Geyser().GetGeyserProfile(r.Context(), id)
 	switch err {
 	case ErrPlayerNotFound:
 		responses.NotFound(w, r, msgPlayerNotFound)
